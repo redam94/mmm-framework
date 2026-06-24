@@ -8,3 +8,4 @@ export { AdminPage } from './Admin';
 export { TeamPage } from './Team';
 export { KnowledgePage } from './Knowledge';
 export { AgentPage } from './Agent';
+export { ModelGardenPage } from './ModelGarden';

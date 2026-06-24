@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Variable Selection | MMM Framework</title>
-    <meta name="description" content="A python-based Marketing Mix Modeling framework to calculate adstock, saturation, and ROI using Bayesian inference.">
+    <meta name="description" content="Choosing what an MMM controls for by causal structure — telling confounders, mediators, and colliders apart — instead of stepwise selection or specification shopping.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/variable-selection.html">
     <meta property="og:title" content="Variable Selection | MMM Framework">
-    <meta property="og:description" content="A comprehensive reference for data scientists implementing Bayesian Marketing Mix Models. This guide covers mathematical foundations, model specifications, and practical considerations for each model type in the framework.">
+    <meta property="og:description" content="Choosing what an MMM controls for by causal structure — telling confounders, mediators, and colliders apart — instead of stepwise selection or specification shopping.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/variable-selection.html">
     <meta property="og:type" content="website">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
@@ -28,6 +28,91 @@
         .hero::before { display: none; }
         .control-value { font-family: 'JetBrains Mono', monospace; background: var(--color-bg-alt); padding: 0.25rem 0.75rem; border-radius: 4px; min-width: 60px; text-align: center; }
     </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Variable Selection | MMM Framework">
+    <meta name="twitter:description" content="Choosing what an MMM controls for by causal structure — telling confounders, mediators, and colliders apart — instead of stepwise selection or specification shopping.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta name="author" content="Matthew Reda">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/variable-selection.html",
+          "name": "Variable Selection | MMM Framework",
+          "description": "Choosing what an MMM controls for by causal structure — telling confounders, mediators, and colliders apart — instead of stepwise selection or specification shopping.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-12",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/variable-selection.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/variable-selection.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Variable Selection",
+          "datePublished": "2026-06-12",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/variable-selection.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/variable-selection.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Variable Selection",
+              "item": "https://redam94.github.io/mmm-framework/variable-selection.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
 </head>
 <body>
     <!-- Navigation injected by shared/components.js -->

@@ -81,10 +81,11 @@ def get_prior_posterior_comparison(
     prior_samples = {}
     if pymc_model is not None and pm is not None:
         try:
+            from ...utils import arviz_compat
+
             with pymc_model:
-                prior = pm.sample_prior_predictive(
-                    samples=n_prior_samples,
-                    random_seed=random_seed,
+                prior = arviz_compat.sample_prior_predictive(
+                    n_prior_samples, random_seed
                 )
             if hasattr(prior, "prior"):
                 prior_samples = {

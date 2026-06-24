@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Activity, BarChart2, BookOpen, Database, Download,
   ExternalLink, Layers, Maximize2, Minimize2, Network,
@@ -25,9 +25,28 @@ import { PriorConfigWidget } from '../widgets/PriorConfigWidget';
 import { SeasonalityTrendWidget } from '../widgets/SeasonalityTrendWidget';
 import { WorkspaceFilesWidget } from '../widgets/WorkspaceFilesWidget';
 import { ExperimentsTab } from '../widgets/ExperimentsTab';
+import { ModeSwitcher } from '../widgets/ModeSwitcher';
+import { GardenModelConfigWidget } from '../widgets/GardenModelConfigWidget';
+import { DatasetRolesWidget } from '../widgets/DatasetRolesWidget';
 import { useExperimentRegistry } from '../../../../api/hooks/useMeasurement';
+import { useGardenModel } from '../../../../api/hooks/useModelGarden';
 import { EdaTab } from './EdaTab';
-import type { Artifact, DashboardData, OutlierAction, PythonOutput } from '../../types';
+import type { ModelingMode } from '../../../../api/services/sessionService';
+import type { Artifact, DashboardData, ModelSpec, OutlierAction, PythonOutput } from '../../types';
+
+// Native dashboard ROI table row (server-driven; all metrics optional). Distinct
+// from the experiment-priority PriorityChannel shape — this carries prob_profitable.
+interface RoiMetricRow {
+  channel: string;
+  roi_mean?: number;
+  roi_hdi_low?: number;
+  roi_hdi_high?: number;
+  prob_profitable?: number;
+}
+
+// A captured plot ref handed straight to PlotCard (which reads the loose figure
+// blob internally); we only touch `id` here for the React key.
+interface PlotRef { id?: string; [key: string]: unknown }
 
 export function WorkspaceTabs({
   rightExpanded, onToggleExpand, activeTab, onTabChange,
@@ -52,7 +71,7 @@ export function WorkspaceTabs({
   projectId: string | null;
   workspaceRefreshKey: number;
   chatLoading: boolean;
-  onApplySpec: (newSpec: any) => void;
+  onApplySpec: (newSpec: ModelSpec) => void;
   onUnlockField: (path: string | string[]) => void;
   onQuickAction: (msg: string) => void;
   onRerunArtifact: (a: Artifact) => void;
@@ -62,14 +81,32 @@ export function WorkspaceTabs({
   onResolveOutlierAction: (action: OutlierAction) => Promise<string | null>;
 }) {
   const [brandingOpen, setBrandingOpen] = useState(false);
+  // Modeling mode (hydrated from the session by ModeSwitcher). MMM keeps the full
+  // ROI/experiment surface; non-MMM modes hide the Experiments tab.
+  const [modelingMode, setModelingMode] = useState<ModelingMode>('mmm');
+  const isMmm = modelingMode === 'mmm';
+  // If the Experiments tab is hidden by a mode switch while it's active, fall back.
+  useEffect(() => {
+    if (!isMmm && activeTab === 'experiments') onTabChange('results');
+  }, [isMmm, activeTab, onTabChange]);
   // Experiment registry (read-only here; lifecycle work is chat- or /experiments-driven)
   const { data: registryExperiments = [] } = useExperimentRegistry(projectId);
   const activeExperiments = registryExperiments.filter(
     (e) => !['abandoned', 'cancelled'].includes(e.status),
   );
   const modelCompleted = dashboardData.model_status === 'completed';
-  const hasSpec = !!dashboardData.model_spec;
+  const modelSpec = dashboardData.model_spec as ModelSpec | undefined;
+  const hasSpec = !!modelSpec;
   const hasDecomp = dashboardData.decomposition?.length > 0;
+
+  // A loaded garden model carries a garden_ref; its manifest (fetched here) tells
+  // us the family kind + its config_schema / required roles. model_kind drives
+  // whether the MMM config widgets apply (an awareness model is still mmm-kind +
+  // has bespoke params; a CFA/LCA is non-MMM, so the channel/adstock widgets hide).
+  const gardenRef = modelSpec?.garden_ref;
+  const { data: gardenModel } = useGardenModel(gardenRef?.name ?? null, gardenRef?.version ?? null);
+  const modelKind = (gardenModel?.manifest?.model_kind as string) ?? 'mmm';
+  const showMmmConfig = modelKind === 'mmm';
 
   // Structured tables, bucketed by group (unknown groups fall into "repl").
   const edaTables = selectTables(dashboardData.tables, 'eda');
@@ -111,9 +148,11 @@ export function WorkspaceTabs({
             { id: 'results',   label: 'Results',   icon: <BarChart2 size={14} />,
               badge: (dashboardData.plots?.length || 0) > 0 ? String(dashboardData.plots.length) : null,
               dot: modelCompleted || hasDecomp || !!dashboardData.roi_metrics },
-            { id: 'experiments', label: 'Experiments', icon: <TestTubes size={14} />,
+            // Experiments are an MMM-only surface (lift tests on media channels);
+            // hidden in the general / causal / descriptive modes.
+            ...(isMmm ? [{ id: 'experiments', label: 'Experiments', icon: <TestTubes size={14} />,
               badge: activeExperiments.length > 0 ? String(activeExperiments.length) : null,
-              dot: activeExperiments.some(e => e.status === 'completed') },
+              dot: activeExperiments.some(e => e.status === 'completed') }] : []),
             { id: 'library',   label: 'Library',   icon: <BookOpen size={14} />,
               badge: (artifacts.length + pythonOutputs.length) > 0
                 ? String(artifacts.length + pythonOutputs.length) : null },
@@ -150,7 +189,8 @@ export function WorkspaceTabs({
             </div>
           );
         })()}
-        <div className="flex items-center gap-1 pb-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 pb-1.5 shrink-0">
+          <ModeSwitcher threadId={threadId} value={modelingMode} onChange={setModelingMode} />
           <button
             onClick={() => setBrandingOpen(true)}
             title="Branding & preferences"
@@ -209,6 +249,7 @@ export function WorkspaceTabs({
                 modelName={modelName}
                 refreshKey={workspaceRefreshKey}
               />
+              <DatasetRolesWidget spec={modelSpec} gardenModel={gardenModel} />
               {dashboardData.dataset ? (
                 <DatasetPanel dataset={dashboardData.dataset} threadId={threadId} />
               ) : (
@@ -251,23 +292,45 @@ export function WorkspaceTabs({
             <>
               {hasSpec ? (
                 <>
-                  <ModelSpecWidget
-                    spec={dashboardData.model_spec}
-                    editable={!modelCompleted}
-                    onApplySpec={onApplySpec}
-                    lockedFields={dashboardData.locked_fields || []}
-                    onUnlock={modelCompleted ? undefined : onUnlockField}
-                  />
-                  <SeasonalityTrendWidget
-                    spec={dashboardData.model_spec}
-                    onQuickAction={onQuickAction}
-                    modelCompleted={modelCompleted}
-                  />
-                  <PriorConfigWidget
-                    spec={dashboardData.model_spec}
-                    editable={!modelCompleted}
-                    onApplySpec={onApplySpec}
-                  />
+                  {/* A bespoke garden model: show its identity + model_params +
+                      likelihood. For non-MMM kinds this REPLACES the MMM widgets;
+                      for an mmm-kind garden model (e.g. awareness) it sits above
+                      them and the inference section stays with the MMM widget. */}
+                  {gardenRef && (
+                    <GardenModelConfigWidget
+                      spec={modelSpec as ModelSpec}
+                      gardenModel={gardenModel}
+                      modelKind={modelKind}
+                      // A bespoke model can be reconfigured + re-fit even after a
+                      // fit (unlike the MMM widgets, which lock post-fit); only a
+                      // streaming turn disables editing.
+                      editable={!chatLoading}
+                      fitted={modelCompleted}
+                      onApplySpec={onApplySpec}
+                      showInference={!showMmmConfig}
+                    />
+                  )}
+                  {showMmmConfig && (
+                    <>
+                      <ModelSpecWidget
+                        spec={dashboardData.model_spec}
+                        editable={!modelCompleted}
+                        onApplySpec={onApplySpec}
+                        lockedFields={dashboardData.locked_fields || []}
+                        onUnlock={modelCompleted ? undefined : onUnlockField}
+                      />
+                      <SeasonalityTrendWidget
+                        spec={dashboardData.model_spec}
+                        onQuickAction={onQuickAction}
+                        modelCompleted={modelCompleted}
+                      />
+                      <PriorConfigWidget
+                        spec={dashboardData.model_spec}
+                        editable={!modelCompleted}
+                        onApplySpec={onApplySpec}
+                      />
+                    </>
+                  )}
                   {modelCompleted && (
                     <DashWidget title="Model Successfully Fit" dotColor="bg-green-500 animate-pulse" color="green">
                       <p className="text-sm text-ink-700">{dashboardData.summary}</p>
@@ -308,7 +371,7 @@ export function WorkspaceTabs({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-line-200">
-                        {dashboardData.roi_metrics.map((row: any) => (
+                        {(dashboardData.roi_metrics as RoiMetricRow[]).map((row) => (
                           <tr key={row.channel} className="bg-white hover:bg-cream-100 transition-colors">
                             <td className="px-4 py-3 font-medium text-ink-900">{row.channel}</td>
                             <td className="px-4 py-3 text-emerald-600 font-semibold">{row.roi_mean?.toFixed(2)}x</td>
@@ -379,7 +442,7 @@ export function WorkspaceTabs({
               {dashboardData.plots?.length > 0 ? (
                 <DashWidget title={`Visualizations (${dashboardData.plots.length})`} dotColor="bg-fuchsia-500" color="fuchsia">
                   <div className="space-y-4">
-                    {dashboardData.plots.map((plot: any, idx: number) => (
+                    {(dashboardData.plots as PlotRef[]).map((plot, idx: number) => (
                       <PlotCard key={plot?.id ?? idx} plot={plot} idx={idx} />
                     ))}
                   </div>

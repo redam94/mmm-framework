@@ -7,8 +7,10 @@ import {
   ANY_DISTS, DIST_DEFS, POSITIVE_DISTS, PRIOR_DEFAULTS, UNIT_DISTS,
   asVarArray, computeDensity, initPriors,
 } from '../../utils/priors';
-import type { DistKey, PriorValue } from '../../utils/priors';
+import type { DistKey, InitializedPriors, PriorValue } from '../../utils/priors';
 import { normalizeTrendType } from '../../utils/spec';
+import type { SpecVar } from '../../utils/spec';
+import type { ModelSpec } from '../../types';
 
 // --- DensitySparkline ---
 
@@ -108,31 +110,51 @@ function PriorEditor({ label, hint, value, onChange, disabled, allowed = ANY_DIS
 
 // ─── PriorConfigWidget ────────────────────────────────────────────────────────
 
-interface PriorConfigWidgetProps { spec: any; editable: boolean; onApplySpec: (s: any) => void }
+interface PriorConfigWidgetProps { spec: ModelSpec; editable: boolean; onApplySpec: (s: ModelSpec) => void }
+
+// The trend / seasonality leaves are spec-driven and not declared on ModelSpec
+// (they fall through its index signature as `unknown`). This narrows just the
+// nested keys this widget reads, without widening the exported prop type.
+interface PriorSpecView {
+  // Read only `.length` here (mirrors the original `spec?.x?.length` deps); the
+  // value may be an array, dict, or string at runtime, all coerced via asVarArray.
+  media_channels?: { length?: number };
+  control_variables?: { length?: number };
+  trend?: { type?: unknown };
+  seasonality?: { yearly?: unknown; monthly?: unknown; weekly?: unknown };
+}
 
 export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWidgetProps) {
+  const specView = spec as PriorSpecView | undefined;
   const [priors, setPriors] = useState(() => initPriors(spec));
   const [tab, setTab] = useState<'media' | 'controls' | 'trend' | 'seasonality'>('media');
   const [openChannel, setOpenChannel] = useState<string | null>(null);
   const [openControl, setOpenControl] = useState<string | null>(null);
 
-  // Re-sync when spec changes (new channels added via ModelSpecWidget)
-  useEffect(() => { setPriors(initPriors(spec)); }, [spec?.media_channels?.length, spec?.control_variables?.length, spec?.trend?.type, spec?.seasonality?.yearly, spec?.seasonality?.monthly, spec?.seasonality?.weekly]);
+  // Re-sync when spec changes (new channels added via ModelSpecWidget). Deps are
+  // intentionally the structural keys only — re-initializing on every `spec`
+  // reference change would wipe in-progress prior edits, so `spec` is omitted.
+  // The setState here resets derived state to a fresh spec snapshot.
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
+  useEffect(() => { setPriors(initPriors(spec)); }, [specView?.media_channels?.length, specView?.control_variables?.length, specView?.trend?.type, specView?.seasonality?.yearly, specView?.seasonality?.monthly, specView?.seasonality?.weekly]);
 
   const setMediaPrior = (channel: string, key: string, val: PriorValue) =>
-    setPriors((p: any) => ({ ...p, media: { ...p.media, [channel]: { ...p.media[channel], [key]: val } } }));
+    setPriors((p: InitializedPriors) => ({ ...p, media: { ...p.media, [channel]: { ...p.media[channel], [key]: val } } } as InitializedPriors));
 
-  const setControlPrior = (control: string, key: string, val: any) =>
-    setPriors((p: any) => ({ ...p, controls: { ...p.controls, [control]: { ...p.controls[control], [key]: val } } }));
+  const setControlPrior = (control: string, key: string, val: unknown) =>
+    setPriors((p: InitializedPriors) => ({ ...p, controls: { ...p.controls, [control]: { ...p.controls[control], [key]: val } } } as InitializedPriors));
 
-  const setTrendPrior = (key: string, val: any) =>
-    setPriors((p: any) => ({ ...p, trend: { ...p.trend, [key]: val } }));
+  const setTrendPrior = (key: string, val: unknown) =>
+    setPriors((p: InitializedPriors) => ({ ...p, trend: { ...p.trend, [key]: val } }));
 
-  const setSeasonalityPrior = (key: string, val: any) =>
-    setPriors((p: any) => ({ ...p, seasonality: { ...p.seasonality, [key]: val } }));
+  const setSeasonalityPrior = (key: string, val: number | null) =>
+    setPriors((p: InitializedPriors) => ({ ...p, seasonality: { ...p.seasonality, [key]: val } }));
 
   const handleApply = () => {
-    const { _type, ...trendPriors } = priors.trend;
+    // Strip the internal `_type` marker added by initPriors before applying.
+    const trendPriors = Object.fromEntries(
+      Object.entries(priors.trend).filter(([k]) => k !== '_type')
+    );
     // null overrides mean "inherit the shared sigma" — don't write them
     const seasPriors = Object.fromEntries(
       Object.entries(priors.seasonality).filter(([, v]) => v !== null)
@@ -144,9 +166,9 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
   // array of objects, or an array of bare strings (see asVarArray).
   const channels = asVarArray(spec?.media_channels);
   const ctrls = asVarArray(spec?.control_variables);
-  const trendType = normalizeTrendType(spec?.trend?.type);
+  const trendType = normalizeTrendType(specView?.trend?.type);
   const seasonalityComponents = (['yearly', 'monthly', 'weekly'] as const)
-    .filter(c => (spec?.seasonality?.[c] ?? 0) > 0);
+    .filter(c => (Number(specView?.seasonality?.[c] ?? 0)) > 0);
 
   const TABS = [
     { key: 'media' as const,    label: `Media (${channels.length})` },
@@ -155,10 +177,13 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
     { key: 'seasonality' as const, label: 'Seasonality' },
   ];
 
+  const findChannel = (chName: string) =>
+    channels.find(c => c.name === chName) as
+      (SpecVar & { adstock?: { type?: string }; saturation?: { type?: string } }) | undefined;
   const adstockType = (chName: string) =>
-    (channels.find((c: any) => c.name === chName)?.adstock?.type ?? 'geometric').toLowerCase();
+    (findChannel(chName)?.adstock?.type ?? 'geometric').toLowerCase();
   const satType = (chName: string) =>
-    (channels.find((c: any) => c.name === chName)?.saturation?.type ?? 'hill').toLowerCase();
+    (findChannel(chName)?.saturation?.type ?? 'hill').toLowerCase();
 
   const content = (
     <div className="space-y-3">
@@ -182,7 +207,7 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
       {tab === 'media' && (
         <div className="space-y-2">
           {channels.length === 0 && <p className="text-xs text-ink-300 italic py-2">No media channels configured yet.</p>}
-          {channels.map((ch: any) => {
+          {channels.map((ch) => {
             const isOpen = openChannel === ch.name;
             const aSat = satType(ch.name);
             const aAds = adstockType(ch.name);
@@ -243,7 +268,7 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
       {tab === 'controls' && (
         <div className="space-y-2">
           {ctrls.length === 0 && <p className="text-xs text-ink-300 italic py-2">No control variables configured yet.</p>}
-          {ctrls.map((cv: any) => {
+          {ctrls.map((cv) => {
             const isOpen = openControl === cv.name;
             const cvPriors = priors.controls[cv.name] ?? {};
             const allowNeg = cvPriors.allow_negative ?? true;

@@ -4,6 +4,21 @@ import { normalizeContent } from '../utils/text';
 import { extractPythonOutput } from '../utils/python';
 import type { Artifact, ChatMessage, DashboardData, PythonOutput, ToolCall } from '../types';
 
+/** Raw message shape from the persisted thread state (`GET /state/{tid}`). */
+interface RawStateMessage {
+  type?: string;
+  content?: unknown;
+  tool_calls?: RawToolCall[];
+  tool_call_id?: string;
+}
+
+/** Raw tool-call shape from a persisted AI message. */
+interface RawToolCall {
+  id?: string;
+  name?: string;
+  args?: Record<string, unknown>;
+}
+
 export function useChatStream({ threadId, apiKey, modelName, onTurnSettled, onArtifactsLoaded }: {
   threadId: string | null;
   apiKey: string | null;
@@ -34,13 +49,13 @@ export function useChatStream({ threadId, apiKey, modelName, onTurnSettled, onAr
       // Maps tool_call_id → index in parsed so tool results can be stitched back in.
       const tcIdToMsgIdx: Record<string, number> = {};
 
-      (stateRes.messages || []).forEach((m: any, i: number) => {
+      (stateRes.messages || []).forEach((m: RawStateMessage, i: number) => {
         if (m.type === 'human') {
           const content = normalizeContent(m.content);
           if (content) parsed.push({ id: `loaded-${tid}-${i}`, type: 'human', content });
         } else if (m.type === 'ai') {
           const content = normalizeContent(m.content);
-          const toolCalls: ToolCall[] = (m.tool_calls || []).map((tc: any) => ({
+          const toolCalls: ToolCall[] = (m.tool_calls || []).map((tc: RawToolCall) => ({
             id: tc.id ?? `tc-${i}-${tc.name}`,
             name: tc.name ?? 'unknown',
             args: tc.args ?? {},
@@ -164,7 +179,7 @@ export function useChatStream({ threadId, apiKey, modelName, onTurnSettled, onAr
           try {
             const data = JSON.parse(line.substring(6));
             if (data.dashboard_data && Object.keys(data.dashboard_data).length > 0)
-              setDashboardData((prev: any) => ({ ...prev, ...data.dashboard_data }));
+              setDashboardData((prev: DashboardData) => ({ ...prev, ...data.dashboard_data }));
             if (data.type === 'dashboard_update') continue;
             if (data.type === 'error') {
               // Replace the pending AI bubble with an error notice
@@ -212,8 +227,10 @@ export function useChatStream({ threadId, apiKey, modelName, onTurnSettled, onAr
           } catch { /* ignore parse errors */ }
         }
       }
-    } catch (e: any) {
-      const aborted = e?.name === 'AbortError';
+    } catch (e: unknown) {
+      // AbortError may arrive as a DOMException (not always `instanceof Error`),
+      // so read `.name` structurally to match the prior `e?.name` behavior exactly.
+      const aborted = (e as { name?: unknown } | null | undefined)?.name === 'AbortError';
       if (!aborted) console.error(e);
       const runningKeys = Object.keys(toolCallMap).filter(k => toolCallMap[k].status === 'running');
       if (runningKeys.length > 0) {

@@ -10,3 +10,5 @@ export type { KbDocument, KbDocumentListResponse, KbSearchResult } from './kbSer
 export type { ProjectResponse, ProjectListResponse, ProjectCreateRequest, ProjectUpdateRequest, ProjectOnboardingRequest, ProjectOnboardingResponse } from './projectService';
 export type { TeamRole, TeamUser, TeamUserListResponse, UserCreateRequest, UserUpdateRequest, ProjectMember, ProjectMemberInput, ProjectMembersResponse } from './teamService';
 export type { SessionInfo, SessionDetail, SessionListResponse, SessionCreateRequest, SessionUpdateRequest } from './sessionService';
+export { modelGardenService } from './modelGardenService';
+export type { GardenModel, CompatReport, CompatTier, GardenTestJob, GardenRegisterRequest } from './modelGardenService';

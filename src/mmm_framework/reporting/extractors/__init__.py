@@ -42,6 +42,7 @@ from .mixins import (
 # Concrete extractors
 from .bayesian import BayesianMMMExtractor
 from .extended import ExtendedMMMExtractor
+from .factor_analysis import FactorAnalysisExtractor
 from .pymc_marketing import PyMCMarketingExtractor
 
 
@@ -56,6 +57,17 @@ def create_extractor(model: Any, **kwargs) -> DataExtractor:
     Returns:
         Appropriate extractor for the model type.
     """
+    # Non-MMM families (a CFA, latent-class model, …) declare a
+    # ``__garden_model_kind__`` != "mmm" — route them to the latent-structure
+    # extractor (loadings + fit indices), not the channel/ROI MMM extractor.
+    try:
+        from ...garden.contract import is_mmm_model
+
+        if not is_mmm_model(model):
+            return FactorAnalysisExtractor(model, **kwargs)
+    except Exception:  # noqa: BLE001 — never block report generation on detection
+        pass
+
     model_type = type(model).__name__
 
     if model_type == "BayesianMMM":
@@ -84,6 +96,7 @@ __all__ = [
     # Concrete extractors
     "BayesianMMMExtractor",
     "ExtendedMMMExtractor",
+    "FactorAnalysisExtractor",
     "PyMCMarketingExtractor",
     # Factory
     "create_extractor",

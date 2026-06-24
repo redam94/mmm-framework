@@ -132,9 +132,10 @@ function DrawerBody({ exp }: { exp: ExperimentRecord }) {
     try {
       await transition.mutateAsync({ id: exp.id, body });
       setShowReadoutForm(false);
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : (e?.message ?? 'Transition failed'));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: unknown } }; message?: string };
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : (err?.message ?? 'Transition failed'));
     }
   };
 

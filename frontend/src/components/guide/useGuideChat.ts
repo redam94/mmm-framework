@@ -61,6 +61,11 @@ export function useGuideChat(projectId: string | null) {
     Object.assign(h, expertHeaders());
     Object.assign(h, bearerHeader());
     return h;
+    // expertHeaders() reads expert settings from storage internally, so the
+    // expert* store values aren't referenced in the body — but they MUST stay
+    // in the deps so `headers` (and the init/send callbacks that depend on it)
+    // is recreated when expert settings change, picking up the fresh values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey, modelName, baseUrl, provider, expertModel, expertProvider, expertBaseUrl]);
 
   // Re-hydrate when the project changes.

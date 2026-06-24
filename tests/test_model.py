@@ -63,6 +63,24 @@ from mmm_framework.data_loader import (
 )
 
 # =============================================================================
+# Helpers
+# =============================================================================
+
+
+def _has_group(idata, name: str) -> bool:
+    """True if an arviz container exposes the named group.
+
+    Robust across the arviz container migration: legacy ``InferenceData``
+    exposes ``groups()`` as a method returning bare names (``"prior"``); the
+    newer xarray ``DataTree`` (arviz >=0.22) exposes ``groups`` as a property
+    of slash-prefixed paths (``"/prior"``).
+    """
+    groups = idata.groups
+    names = groups() if callable(groups) else groups
+    return name in names or f"/{name}" in names
+
+
+# =============================================================================
 # Fixtures
 # =============================================================================
 
@@ -1010,7 +1028,7 @@ class TestBayesianMMMPriorPredictive:
         prior = mmm.sample_prior_predictive(samples=50)
 
         assert prior is not None
-        assert "prior_predictive" in prior.groups()
+        assert _has_group(prior, "prior_predictive")
 
     def test_prior_predictive_shape(self, simple_panel, model_config, trend_config):
         """Test prior predictive output shape."""
@@ -1625,7 +1643,7 @@ class TestBayesianMMMGetPrior:
         prior = mmm.get_prior(samples=10, random_seed=42)
 
         assert isinstance(prior, az.InferenceData)
-        assert "prior" in prior.groups()
+        assert _has_group(prior, "prior")
 
     def test_get_prior_sample_count(self, simple_panel, model_config, trend_config):
         """Test that get_prior returns correct number of samples."""
@@ -1634,7 +1652,7 @@ class TestBayesianMMMGetPrior:
         prior = mmm.get_prior(samples=50, random_seed=42)
 
         # Check prior predictive shape
-        if "prior_predictive" in prior.groups():
+        if _has_group(prior, "prior_predictive"):
             y_prior = prior.prior_predictive["y_obs"]
             # Last dimension should be n_obs
             assert y_prior.shape[-1] == mmm.n_obs

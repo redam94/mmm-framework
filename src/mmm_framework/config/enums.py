@@ -108,8 +108,84 @@ class InferenceMethod(str, Enum):
     FREQUENTIST_CVXPY = "frequentist_cvxpy"
 
 
+class FitMethod(str, Enum):
+    """How the posterior is obtained at fit time.
+
+    ``NUTS`` is full MCMC (the default, the only one suitable for final
+    inference). The remaining methods are *approximate* and exist to fit a
+    model in seconds so you can spot problems — bad priors, broken geometry,
+    pathological saturation/adstock — before paying for a full sample. Treat
+    their uncertainty as unreliable.
+    """
+
+    NUTS = "nuts"
+    MAP = "map"
+    ADVI = "advi"
+    FULLRANK_ADVI = "fullrank_advi"
+    PATHFINDER = "pathfinder"
+
+    @property
+    def is_approximate(self) -> bool:
+        return self is not FitMethod.NUTS
+
+
 class ModelSpecification(str, Enum):
     """Model functional form."""
 
     ADDITIVE = "additive"
     MULTIPLICATIVE = "multiplicative"
+
+
+class LikelihoodFamily(str, Enum):
+    """Observation (likelihood) family for the KPI.
+
+    ``NORMAL`` is the historical default and the only family the **built-in
+    additive** model fits directly on standardized ``y`` (all of its component
+    priors are calibrated in KPI standard deviations). ``STUDENT_T`` is a safe,
+    heavier-tailed drop-in on the same standardized, identity-link scale.
+
+    The remaining families (``LOGNORMAL`` and the count/bounded
+    ``BINOMIAL``/``BETA_BINOMIAL``/``POISSON``/``NEGATIVE_BINOMIAL``/``BETA``)
+    change the observation scale and require a non-identity link, so the
+    additive model does **not** fit them directly — they are read by models that
+    define their own observation block (override ``_build_model`` / subclass
+    ``CustomMMM``), e.g. a binomial awareness model. ``is_gaussian`` /
+    ``standardizes_y`` route this in :class:`LikelihoodConfig` and the model.
+    """
+
+    NORMAL = "normal"
+    STUDENT_T = "student_t"
+    LOGNORMAL = "lognormal"
+    BINOMIAL = "binomial"
+    BETA_BINOMIAL = "beta_binomial"
+    POISSON = "poisson"
+    NEGATIVE_BINOMIAL = "negative_binomial"
+    BETA = "beta"
+
+    @property
+    def is_gaussian(self) -> bool:
+        """Identity-link, continuous families the additive model fits directly
+        on standardized ``y`` (the built-in dispatch supports these)."""
+        return self in (LikelihoodFamily.NORMAL, LikelihoodFamily.STUDENT_T)
+
+    @property
+    def standardizes_y(self) -> bool:
+        """Whether ``y`` is z-scored before entering the graph. Count/bounded
+        families work in their natural (link) scale and are **not** standardized;
+        ``LOGNORMAL`` is fit on standardized ``log(y)`` upstream, so the in-graph
+        observation is still standardized."""
+        return self in (
+            LikelihoodFamily.NORMAL,
+            LikelihoodFamily.STUDENT_T,
+            LikelihoodFamily.LOGNORMAL,
+        )
+
+
+class LinkFunction(str, Enum):
+    """Link mapping the linear predictor ``mu`` to the observation's natural
+    parameter. ``IDENTITY`` for Gaussian families; ``LOGIT`` for bounded
+    proportions (binomial/beta); ``LOG`` for counts (Poisson/neg-binomial)."""
+
+    IDENTITY = "identity"
+    LOGIT = "logit"
+    LOG = "log"

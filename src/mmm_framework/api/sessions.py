@@ -58,13 +58,19 @@ def init_db() -> None:
                 name       TEXT NOT NULL,
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL,
-                project_id TEXT
+                project_id TEXT,
+                modeling_mode TEXT
             )
             """
         )
         # Migrate existing installs that predate the project_id column
         try:
             c.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT")
+        except Exception:
+            pass
+        # Migrate installs that predate the modeling_mode column (NULL == "mmm")
+        try:
+            c.execute("ALTER TABLE sessions ADD COLUMN modeling_mode TEXT")
         except Exception:
             pass
         c.execute(
@@ -237,6 +243,44 @@ def init_db() -> None:
             " ON run_metrics(project_id, created_at)"
         )
 
+        # Model Garden registry: bespoke, oracle-compatible MMM models authored
+        # by experts, versioned + documented so the agent can re-fit them on any
+        # project's data and they can be shared across a tenant's projects.
+        # ORG-scoped (NOT project-scoped) so sharing is cross-project by
+        # construction. manifest_json carries {contract_version, class_name,
+        # dataset_schema, recommended_fit, tags}; source lives on disk at
+        # source_path (workspace garden_dir); status_history_json is append-only.
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS garden_models (
+                id                      TEXT PRIMARY KEY,
+                org_id                  TEXT NOT NULL,
+                name                    TEXT NOT NULL,
+                version                 INTEGER NOT NULL,
+                owner_user_id           TEXT,
+                status                  TEXT NOT NULL DEFAULT 'draft',
+                docs                    TEXT,
+                manifest_json           TEXT,
+                source_path             TEXT,
+                compat_report_json      TEXT,
+                base_run_id             TEXT,
+                reference_artifact_path TEXT,
+                status_history_json     TEXT,
+                created_at              REAL NOT NULL,
+                updated_at              REAL NOT NULL,
+                UNIQUE(org_id, name, version)
+            )
+            """
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_garden_models_org"
+            " ON garden_models(org_id, status, updated_at)"
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_garden_models_name"
+            " ON garden_models(org_id, name, version)"
+        )
+
         # Saved data-source connections (project-scoped). config_json holds ONLY
         # a non-secret reference (bucket/prefix/object, or project/dataset/query/
         # table) — NEVER credentials. Auth stays ambient (ADC / the server's
@@ -393,16 +437,19 @@ def init_db() -> None:
 
 def list_sessions(project_id: str | None = None) -> list[dict[str, Any]]:
     with _conn() as c:
+        _cols = (
+            "thread_id, name, created_at, updated_at, project_id,"
+            " COALESCE(modeling_mode, 'mmm') AS modeling_mode"
+        )
         if project_id is not None:
             rows = c.execute(
-                "SELECT thread_id, name, created_at, updated_at, project_id FROM sessions"
+                f"SELECT {_cols} FROM sessions"
                 " WHERE project_id = ? ORDER BY updated_at DESC",
                 (project_id,),
             ).fetchall()
         else:
             rows = c.execute(
-                "SELECT thread_id, name, created_at, updated_at, project_id FROM sessions"
-                " ORDER BY updated_at DESC"
+                f"SELECT {_cols} FROM sessions ORDER BY updated_at DESC"
             ).fetchall()
         return [dict(r) for r in rows]
 
@@ -411,7 +458,9 @@ def get_session(thread_id: str) -> dict[str, Any] | None:
     """Return a single session row with artifact_count, or None if not found."""
     with _conn() as c:
         row = c.execute(
-            "SELECT thread_id, name, created_at, updated_at, project_id FROM sessions WHERE thread_id = ?",
+            "SELECT thread_id, name, created_at, updated_at, project_id,"
+            " COALESCE(modeling_mode, 'mmm') AS modeling_mode"
+            " FROM sessions WHERE thread_id = ?",
             (thread_id,),
         ).fetchone()
         if row is None:
@@ -425,17 +474,21 @@ def get_session(thread_id: str) -> dict[str, Any] | None:
 
 
 def create_session(
-    name: str | None = None, project_id: str | None = None
+    name: str | None = None,
+    project_id: str | None = None,
+    modeling_mode: str | None = None,
 ) -> dict[str, Any]:
     thread_id = uuid.uuid4().hex
     now = _now()
     display_name = (
         name or f"Session {time.strftime('%Y-%m-%d %H:%M', time.localtime(now))}"
     )
+    mode = modeling_mode or "mmm"
     with _conn() as c:
         c.execute(
-            "INSERT INTO sessions (thread_id, name, created_at, updated_at, project_id) VALUES (?, ?, ?, ?, ?)",
-            (thread_id, display_name, now, now, project_id),
+            "INSERT INTO sessions (thread_id, name, created_at, updated_at, project_id,"
+            " modeling_mode) VALUES (?, ?, ?, ?, ?, ?)",
+            (thread_id, display_name, now, now, project_id, mode),
         )
     return {
         "thread_id": thread_id,
@@ -443,13 +496,17 @@ def create_session(
         "created_at": now,
         "updated_at": now,
         "project_id": project_id,
+        "modeling_mode": mode,
     }
 
 
 def update_session(
-    thread_id: str, name: str | None = None, project_id: str | None = None
+    thread_id: str,
+    name: str | None = None,
+    project_id: str | None = None,
+    modeling_mode: str | None = None,
 ) -> bool:
-    """Update session name and/or project_id. Returns True if session was found."""
+    """Update session name, project_id and/or modeling_mode. Returns True if found."""
     updates = []
     params: list[Any] = []
     if name is not None:
@@ -458,6 +515,9 @@ def update_session(
     if project_id is not None:
         updates.append("project_id = ?")
         params.append(project_id)
+    if modeling_mode is not None:
+        updates.append("modeling_mode = ?")
+        params.append(modeling_mode)
     if not updates:
         return False
     updates.append("updated_at = ?")
@@ -1316,6 +1376,355 @@ def list_experiments(
 def delete_experiment(experiment_id: str) -> bool:
     with _conn() as c:
         cur = c.execute("DELETE FROM experiments WHERE id = ?", (experiment_id,))
+        return cur.rowcount > 0
+
+
+# ── Model Garden registry ────────────────────────────────────────────────────
+
+#: Lifecycle states for a registered garden model.
+GARDEN_STATUSES = ("draft", "tested", "published", "deprecated")
+
+#: Allowed status transitions (mirrors ALLOWED_TRANSITIONS for experiments).
+#: ``draft -> tested`` is gated on a passing compatibility report; the human
+#: publish gate is ``tested -> published``. Published versions are immutable.
+GARDEN_TRANSITIONS: dict[str, set[str]] = {
+    "draft": {"tested", "deprecated"},
+    "tested": {"published", "draft", "deprecated"},
+    "published": {"deprecated"},
+    "deprecated": {"draft"},
+}
+
+
+#: Org id used in the single-tenant dev posture (no auth) — MUST match the
+#: ``_DEV_PRINCIPAL.org_id`` in api/main.py and ``AuthSettings.dev_org_id`` so the
+#: agent (resolves org from the project) and the REST layer (resolves org from
+#: the principal) agree on where garden models live.
+DEFAULT_ORG_ID = "dev-org"
+
+
+def resolve_org_id(project_id: str | None) -> str:
+    """Owning org for a project — the garden registry's sharing boundary.
+
+    Falls back to :data:`DEFAULT_ORG_ID` in the single-tenant dev posture (or
+    when the auth schema's ``projects.org_id`` column isn't present yet)."""
+    if not project_id:
+        return DEFAULT_ORG_ID
+    try:
+        with _conn() as c:
+            r = c.execute(
+                "SELECT org_id FROM projects WHERE project_id = ?", (project_id,)
+            ).fetchone()
+        org = (r["org_id"] if r and "org_id" in r.keys() else None) if r else None
+        return org or DEFAULT_ORG_ID
+    except Exception:  # noqa: BLE001 — org_id column may be absent pre-auth-init
+        return DEFAULT_ORG_ID
+
+
+def _garden_row_to_dict(r: sqlite3.Row | None) -> dict[str, Any] | None:
+    if r is None:
+        return None
+    keys = set(r.keys())
+    return {
+        "id": r["id"],
+        "org_id": r["org_id"],
+        "name": r["name"],
+        "version": r["version"],
+        "owner_user_id": r["owner_user_id"] if "owner_user_id" in keys else None,
+        "status": r["status"],
+        "docs": r["docs"],
+        "manifest": _json_or_none(r["manifest_json"]) or {},
+        "source_path": r["source_path"],
+        "compat_report": _json_or_none(r["compat_report_json"]),
+        "base_run_id": r["base_run_id"] if "base_run_id" in keys else None,
+        "reference_artifact_path": (
+            r["reference_artifact_path"] if "reference_artifact_path" in keys else None
+        ),
+        "status_history": _json_or_none(r["status_history_json"]) or [],
+        "created_at": r["created_at"],
+        "updated_at": r["updated_at"],
+    }
+
+
+def next_garden_version(org_id: str, name: str) -> int:
+    """Next monotonic version for ``(org, name)`` — 1 when none exist yet."""
+    with _conn() as c:
+        r = c.execute(
+            "SELECT MAX(version) AS v FROM garden_models WHERE org_id = ? AND name = ?",
+            (org_id, name),
+        ).fetchone()
+    return int((r["v"] or 0)) + 1
+
+
+def upsert_garden_model(
+    *,
+    org_id: str,
+    name: str,
+    version: int | None = None,
+    model_id: str | None = None,
+    owner_user_id: str | None = None,
+    docs: str | None = None,
+    manifest: dict[str, Any] | None = None,
+    source_path: str | None = None,
+    base_run_id: str | None = None,
+    reference_artifact_path: str | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    """Create a new draft (no ``model_id``) or partially update an existing row.
+
+    On create, ``version`` auto-increments per ``(org, name)`` when omitted and
+    the row starts as ``draft``. PUBLISHED versions are immutable — editing a
+    published row raises ``ValueError`` (re-publish requires a new version).
+    """
+    now = _now()
+    with _conn() as c:
+        if model_id is None:
+            ver = (
+                int(version)
+                if version is not None
+                else next_garden_version(org_id, name)
+            )
+            model_id = uuid.uuid4().hex
+            init_status = status or "draft"
+            if init_status not in GARDEN_STATUSES:
+                raise ValueError(f"Invalid status '{init_status}'.")
+            try:
+                c.execute(
+                    "INSERT INTO garden_models (id, org_id, name, version,"
+                    " owner_user_id, status, docs, manifest_json, source_path,"
+                    " base_run_id, reference_artifact_path, status_history_json,"
+                    " created_at, updated_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        model_id,
+                        org_id,
+                        name,
+                        ver,
+                        owner_user_id,
+                        init_status,
+                        docs,
+                        json.dumps(manifest) if manifest is not None else None,
+                        source_path,
+                        base_run_id,
+                        reference_artifact_path,
+                        json.dumps([{"status": init_status, "at": now}]),
+                        now,
+                        now,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError(
+                    f"garden model '{name}' v{ver} already exists for this org"
+                ) from exc
+        else:
+            row = c.execute(
+                "SELECT * FROM garden_models WHERE id = ?", (model_id,)
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Unknown garden model id '{model_id}'")
+            if row["status"] == "published":
+                raise ValueError(
+                    "published garden versions are immutable — register a new "
+                    "version instead of editing"
+                )
+            updates = {
+                k: v
+                for k, v in {
+                    "owner_user_id": owner_user_id,
+                    "docs": docs,
+                    "manifest_json": (
+                        json.dumps(manifest) if manifest is not None else None
+                    ),
+                    "source_path": source_path,
+                    "base_run_id": base_run_id,
+                    "reference_artifact_path": reference_artifact_path,
+                }.items()
+                if v is not None
+            }
+            updates["updated_at"] = now
+            sets = ", ".join(f"{k} = ?" for k in updates)
+            c.execute(
+                f"UPDATE garden_models SET {sets} WHERE id = ?",
+                (*updates.values(), model_id),
+            )
+        row = c.execute(
+            "SELECT * FROM garden_models WHERE id = ?", (model_id,)
+        ).fetchone()
+    return _garden_row_to_dict(row)
+
+
+def get_garden_model(
+    *,
+    model_id: str | None = None,
+    org_id: str | None = None,
+    name: str | None = None,
+    version: int | None = None,
+) -> dict[str, Any] | None:
+    """Fetch by id, or by ``(org_id, name, version)``."""
+    with _conn() as c:
+        if model_id is not None:
+            row = c.execute(
+                "SELECT * FROM garden_models WHERE id = ?", (model_id,)
+            ).fetchone()
+        elif org_id is not None and name is not None and version is not None:
+            row = c.execute(
+                "SELECT * FROM garden_models WHERE org_id = ? AND name = ? AND version = ?",
+                (org_id, name, int(version)),
+            ).fetchone()
+        else:
+            raise ValueError(
+                "get_garden_model needs model_id or (org_id, name, version)"
+            )
+    return _garden_row_to_dict(row)
+
+
+def get_latest_garden_model(
+    org_id: str, name: str, *, status: str | None = None
+) -> dict[str, Any] | None:
+    """Highest-version row for ``(org, name)``, optionally filtered by status
+    (e.g. ``"published"`` to resolve what a consumer should load)."""
+    q = "SELECT * FROM garden_models WHERE org_id = ? AND name = ?"
+    params: list[Any] = [org_id, name]
+    if status is not None:
+        q += " AND status = ?"
+        params.append(status)
+    q += " ORDER BY version DESC LIMIT 1"
+    with _conn() as c:
+        row = c.execute(q, params).fetchone()
+    return _garden_row_to_dict(row)
+
+
+def list_garden_models(
+    org_id: str,
+    *,
+    name: str | None = None,
+    status: str | None = None,
+    latest_only: bool = False,
+) -> list[dict[str, Any]]:
+    """Garden models for an org, newest-updated first; optional name/status
+    filter. ``latest_only`` collapses to the highest version per name."""
+    q = "SELECT * FROM garden_models WHERE org_id = ?"
+    params: list[Any] = [org_id]
+    if name is not None:
+        q += " AND name = ?"
+        params.append(name)
+    if status is not None:
+        q += " AND status = ?"
+        params.append(status)
+    q += " ORDER BY updated_at DESC"
+    with _conn() as c:
+        rows = [_garden_row_to_dict(r) for r in c.execute(q, params).fetchall()]
+    if latest_only:
+        best: dict[str, dict] = {}
+        for r in rows:
+            cur = best.get(r["name"])
+            if cur is None or r["version"] > cur["version"]:
+                best[r["name"]] = r
+        rows = sorted(best.values(), key=lambda r: r["updated_at"], reverse=True)
+    return rows
+
+
+def list_garden_versions(org_id: str, name: str) -> list[dict[str, Any]]:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM garden_models WHERE org_id = ? AND name = ?"
+            " ORDER BY version DESC",
+            (org_id, name),
+        ).fetchall()
+    return [_garden_row_to_dict(r) for r in rows]
+
+
+def set_garden_compat_report(
+    model_id: str, report: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Store the compatibility-suite report for a model (used to gate testing)."""
+    with _conn() as c:
+        cur = c.execute(
+            "UPDATE garden_models SET compat_report_json = ?, updated_at = ?"
+            " WHERE id = ?",
+            (json.dumps(report), _now(), model_id),
+        )
+        if cur.rowcount == 0:
+            return None
+        row = c.execute(
+            "SELECT * FROM garden_models WHERE id = ?", (model_id,)
+        ).fetchone()
+    return _garden_row_to_dict(row)
+
+
+def transition_garden_model(
+    model_id: str,
+    new_status: str,
+    *,
+    note: str | None = None,
+    base_run_id: str | None = None,
+) -> dict[str, Any]:
+    """Validated lifecycle move with an append-only audit trail.
+
+    Enforces :data:`GARDEN_TRANSITIONS`. ``draft -> tested`` additionally
+    requires a stored compatibility report whose blocking tiers passed (the
+    automated testing gate); ``tested -> published`` is the human publish gate.
+    """
+    if new_status not in GARDEN_STATUSES:
+        raise ValueError(f"Invalid status '{new_status}'.")
+    now = _now()
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM garden_models WHERE id = ?", (model_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Unknown garden model id '{model_id}'")
+        current = row["status"]
+        if new_status not in GARDEN_TRANSITIONS.get(current, set()):
+            raise ValueError(
+                f"Illegal transition {current}->{new_status}. Allowed from "
+                f"'{current}': {', '.join(sorted(GARDEN_TRANSITIONS.get(current, set()))) or '(none)'}"
+            )
+        if current == "draft" and new_status == "tested":
+            report = _json_or_none(row["compat_report_json"])
+            if not (report and report.get("blocking_passed")):
+                raise ValueError(
+                    "cannot promote to 'tested': the compatibility suite has not "
+                    "passed its blocking tiers (run test_garden_model first)"
+                )
+        history = _json_or_none(row["status_history_json"]) or [
+            {"status": current, "at": row["created_at"]}
+        ]
+        entry: dict[str, Any] = {"status": new_status, "at": now}
+        if note:
+            entry["note"] = note
+        history.append(entry)
+        updates: dict[str, Any] = {
+            "status": new_status,
+            "status_history_json": json.dumps(history),
+            "updated_at": now,
+        }
+        if base_run_id is not None:
+            updates["base_run_id"] = base_run_id
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        c.execute(
+            f"UPDATE garden_models SET {sets} WHERE id = ?",
+            (*updates.values(), model_id),
+        )
+        row = c.execute(
+            "SELECT * FROM garden_models WHERE id = ?", (model_id,)
+        ).fetchone()
+    return _garden_row_to_dict(row)
+
+
+def delete_garden_model(model_id: str) -> bool:
+    """Delete a garden row. Only ``draft`` / ``deprecated`` rows are deletable —
+    published history is immutable (deprecate it instead)."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT status FROM garden_models WHERE id = ?", (model_id,)
+        ).fetchone()
+        if row is None:
+            return False
+        if row["status"] not in ("draft", "deprecated"):
+            raise ValueError(
+                f"cannot delete a '{row['status']}' model; deprecate it first"
+            )
+        cur = c.execute("DELETE FROM garden_models WHERE id = ?", (model_id,))
         return cur.rowcount > 0
 
 

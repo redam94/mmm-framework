@@ -637,3 +637,67 @@ class TestReportBuilder:
 
         assert isinstance(generator, MMMReportGenerator)
         mock_create_extractor.assert_called_once()
+
+
+# =============================================================================
+# TestEstimandsAndPPCSections (default-on for MMM, gated off for non-MMM)
+# =============================================================================
+
+
+def _bundle_with_estimands_and_ppc(model_kind: str = "mmm") -> MMMDataBundle:
+    rng = np.random.default_rng(3)
+    n = 30
+    observed = 1000 + rng.normal(0, 80, n)
+    y_rep = 1000 + rng.normal(0, 80, (100, n))
+    bundle = MMMDataBundle()
+    bundle.model_kind = model_kind
+    bundle.channel_names = ["TV", "Search"]
+    bundle.estimands = {
+        "contribution_roi:TV": {
+            "mean": 2.1,
+            "lower": 1.4,
+            "upper": 2.9,
+            "kind": "roi",
+            "units": "",
+            "hdi_prob": 0.94,
+        },
+    }
+    bundle.posterior_predictive = {
+        "observed": observed,
+        "pred_mean": y_rep.mean(axis=0),
+        "pred_lower": np.percentile(y_rep, 10, axis=0),
+        "pred_upper": np.percentile(y_rep, 90, axis=0),
+        "samples": y_rep[:20],
+        "coverage": [{"nominal": 0.8, "empirical": 0.81}],
+        "bayes_p": {"mean": 0.5},
+        "ci_level": 0.8,
+        "r2": 0.9,
+    }
+    return bundle
+
+
+class TestEstimandsAndPPCSections:
+    def test_mmm_report_includes_both_sections(self):
+        html = MMMReportGenerator(data=_bundle_with_estimands_and_ppc("mmm")).render()
+        assert 'id="estimands"' in html
+        assert 'id="posterior-predictive"' in html
+        assert "Contribution ROI" in html
+        assert html.count("Plotly.newPlot") >= 4
+
+    def test_non_mmm_report_gates_both_off(self):
+        html = MMMReportGenerator(data=_bundle_with_estimands_and_ppc("cfa")).render()
+        assert 'id="estimands"' not in html
+        assert 'id="posterior-predictive"' not in html
+
+    def test_sections_disabled_via_config(self):
+        from mmm_framework.reporting.config import ReportConfig, SectionConfig
+
+        config = ReportConfig(
+            estimands=SectionConfig(enabled=False),
+            posterior_predictive=SectionConfig(enabled=False),
+        )
+        html = MMMReportGenerator(
+            data=_bundle_with_estimands_and_ppc("mmm"), config=config
+        ).render()
+        assert 'id="estimands"' not in html
+        assert 'id="posterior-predictive"' not in html

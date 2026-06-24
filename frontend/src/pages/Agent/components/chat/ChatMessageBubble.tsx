@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { Bot, User } from 'lucide-react';
 import { mdComponents } from '../common/markdown';
+import { remarkPlugins, rehypePlugins, normalizeMath } from '../../../../lib/markdownMath';
 import { ToolCallBlock } from './ToolCallBlock';
 import type { ChatMessage } from '../../types';
 
@@ -54,8 +54,8 @@ export const ChatMessageBubble = React.memo(function ChatMessageBubble({
               {msg.type === 'human'
                 ? <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                 : <div className="prose prose-sm max-w-none text-sm">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-                      {msg.content || (pending ? 'Thinking…' : '')}
+                    <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
+                      {normalizeMath(msg.content || (pending ? 'Thinking…' : ''))}
                     </ReactMarkdown>
                   </div>}
             </div>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { Config, Data } from 'plotly.js';
 import Plot from 'react-plotly.js';
 import { Card } from '../../components/ui';
 import { COLORS } from '../../theme/colors';
@@ -35,7 +36,7 @@ export function ResponseCurvesPanel({ projectId }: { projectId: string }) {
   const curve = selectedChannel ? curves?.channels?.[selectedChannel] : null;
   const currentIdx = curves?.current_index ?? -1;
 
-  const curveTraces = useMemo(() => {
+  const curveTraces = useMemo<Data[]>(() => {
     if (!curve) return [];
     return [
       {
@@ -69,7 +70,7 @@ export function ResponseCurvesPanel({ projectId }: { projectId: string }) {
         marker: { size: 6 },
         showlegend: false,
       },
-    ];
+    ] as Data[];
   }, [curve]);
 
   if (isLoading) return <p className="text-sm text-ink-400">Loading response curves…</p>;
@@ -187,7 +188,7 @@ export function ResponseCurvesPanel({ projectId }: { projectId: string }) {
         <div className="mt-2">
           {curve ? (
             <Plot
-              data={curveTraces as any}
+              data={curveTraces}
               layout={mmmPlotlyLayout({
                 height: 360,
                 margin: { t: 30, l: 60, r: 30, b: 45 },
@@ -220,7 +221,7 @@ export function ResponseCurvesPanel({ projectId }: { projectId: string }) {
                     }
                   : {}),
               })}
-              config={PLOTLY_CONFIG as any}
+              config={PLOTLY_CONFIG as Partial<Config>}
               useResizeHandler
               style={{ width: '100%' }}
             />

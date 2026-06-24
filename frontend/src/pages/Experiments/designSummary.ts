@@ -16,7 +16,7 @@ function fin(v: unknown): number | null {
  * MDE (ROAS) at 80% power — the smallest true ROAS effect the design can
  * detect. Always recorded on a studio/agent design payload (`mde_roas`).
  */
-export function designMDE(design: Record<string, any> | null | undefined): number | null {
+export function designMDE(design: Record<string, unknown> | null | undefined): number | null {
   return fin(design?.mde_roas);
 }
 
@@ -51,13 +51,14 @@ const EMPTY: DesignPower = {
  * two-sided assurance is the fallback. Both are genuine "will this test detect
  * what we expect" numbers, not posterior width — `basis` records which one.
  */
-export function designPower(design: Record<string, any> | null | undefined): DesignPower {
-  const ma = design?.model_anchor;
-  if (ma == null || typeof ma !== 'object') return EMPTY;
+export function designPower(design: Record<string, unknown> | null | undefined): DesignPower {
+  const rawMa = design?.model_anchor;
+  if (rawMa == null || typeof rawMa !== 'object') return EMPTY;
+  const ma = rawMa as Record<string, unknown>;
   // nested anchor stores a `verdict` sub-object; a flat ExperimentAnchor keeps
   // the verdict as a string and the numbers at the top level.
   const nested = ma.verdict != null && typeof ma.verdict === 'object';
-  const src = nested ? ma.verdict : ma;
+  const src = (nested ? ma.verdict : ma) as Record<string, unknown>;
   const verdictLabel =
     typeof ma.verdict === 'string'
       ? ma.verdict

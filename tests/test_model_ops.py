@@ -14,6 +14,9 @@ from mmm_framework.agents import model_ops as M
 def test_ops_registry_complete():
     assert set(M.OPS) == {
         "roi_metrics",
+        "compute_estimands",
+        "garden_compat",
+        "garden_tune_suggestions",
         "component_decomposition",
         "model_diagnostics",
         "adstock_weights",

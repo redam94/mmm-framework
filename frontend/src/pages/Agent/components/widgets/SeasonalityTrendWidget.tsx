@@ -1,16 +1,33 @@
 import { useMemo, useState } from 'react';
+import type { Data, PlotData, Shape } from 'plotly.js';
 import { TrendingUp } from 'lucide-react';
 import Plot from 'react-plotly.js';
+import type { ModelSpec } from '../../types';
 import { DashWidget } from '../common/DashWidget';
 import { applyLightModeLayout } from '../../utils/plotly';
 import { normalizeTrendType } from '../../utils/spec';
 
 // ─── SeasonalityTrendWidget ───────────────────────────────────────────────────
 
-function generateFourierTraces(order: number, period: number, label: string): any[] {
+// Dynamic trend sub-spec — server-driven, only the fields this widget reads.
+interface TrendSpec {
+  type?: unknown;
+  n_changepoints?: number;
+  changepoint_range?: number;
+  n_knots?: number;
+}
+
+// Dynamic seasonality sub-spec — server-driven, only the fields this widget reads.
+interface SeasonalitySpec {
+  yearly?: number;
+  monthly?: number;
+  weekly?: number;
+}
+
+function generateFourierTraces(order: number, period: number, label: string): Data[] {
   const t = Array.from({ length: period }, (_, i) => i);
   const PALETTE = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
-  const traces: any[] = [];
+  const traces: Partial<PlotData>[] = [];
   const combined = t.map(() => 0);
 
   for (let k = 1; k <= Math.min(order, 6); k++) {
@@ -37,7 +54,7 @@ function generateFourierTraces(order: number, period: number, label: string): an
   return traces;
 }
 
-function generateTrendTrace(type: string, spec: any): { traces: any[]; shapes: any[] } {
+function generateTrendTrace(type: string, spec: TrendSpec | undefined): { traces: Data[]; shapes: Partial<Shape>[] } {
   const t = Array.from({ length: 100 }, (_, i) => i / 99);
 
   if (type === 'linear' || !type) {
@@ -118,7 +135,7 @@ function generateTrendTrace(type: string, spec: any): { traces: any[]; shapes: a
 }
 
 interface SeasonalityTrendWidgetProps {
-  spec: any;
+  spec: ModelSpec | undefined;
   onQuickAction: (msg: string) => void;
   modelCompleted: boolean;
 }
@@ -126,22 +143,23 @@ interface SeasonalityTrendWidgetProps {
 export function SeasonalityTrendWidget({ spec, onQuickAction, modelCompleted }: SeasonalityTrendWidgetProps) {
   const [tab, setTab] = useState<'trend' | 'yearly' | 'monthly' | 'weekly'>('trend');
 
-  const trendType = normalizeTrendType(spec?.trend?.type);
-  const seasonality = spec?.seasonality;
-  const granularity = spec?.time_granularity ?? 'weekly';
+  // Narrow the server-driven, dynamically-shaped sub-specs at the boundary.
+  const seasonality = spec?.seasonality as SeasonalitySpec | undefined;
+  const trendType = normalizeTrendType((spec?.trend as TrendSpec | undefined)?.type);
+  const granularity = (spec?.time_granularity as string | undefined) ?? 'weekly';
   const period = granularity === 'daily' ? 365 : granularity === 'monthly' ? 12 : 52;
 
   const allTabs: { key: typeof tab; label: string; disabled?: boolean }[] = [
     { key: 'trend' as const, label: 'Trend' },
-    { key: 'yearly' as const, label: 'Yearly Season', disabled: !(seasonality?.yearly > 0) },
-    { key: 'monthly' as const, label: 'Monthly Season', disabled: !(seasonality?.monthly > 0) },
-    { key: 'weekly' as const, label: 'Weekly Season', disabled: !(seasonality?.weekly > 0) },
+    { key: 'yearly' as const, label: 'Yearly Season', disabled: !((seasonality?.yearly ?? 0) > 0) },
+    { key: 'monthly' as const, label: 'Monthly Season', disabled: !((seasonality?.monthly ?? 0) > 0) },
+    { key: 'weekly' as const, label: 'Weekly Season', disabled: !((seasonality?.weekly ?? 0) > 0) },
   ];
   const tabs = allTabs.filter(t => !t.disabled || t.key === 'trend');
 
   const chartData = useMemo(() => {
     if (tab === 'trend') {
-      const { traces, shapes } = generateTrendTrace(trendType, spec?.trend);
+      const { traces, shapes } = generateTrendTrace(trendType, spec?.trend as TrendSpec | undefined);
       return {
         data: traces,
         layout: applyLightModeLayout({
@@ -149,7 +167,7 @@ export function SeasonalityTrendWidget({ spec, onQuickAction, modelCompleted }: 
           xaxis: { title: { text: 'Relative Time' }, showticklabels: false },
           yaxis: { title: { text: 'Trend Value' } },
           legend: { orientation: 'h', y: -0.25 },
-          title: `Trend Model: ${trendType.charAt(0).toUpperCase() + trendType.slice(1).replace('_', ' ')}${shapes.length ? ` (${shapes.length} changepoints)` : ''}`,
+          title: { text: `Trend Model: ${trendType.charAt(0).toUpperCase() + trendType.slice(1).replace('_', ' ')}${shapes.length ? ` (${shapes.length} changepoints)` : ''}` },
           margin: { t: 55, b: 55 },
         }),
       };
@@ -169,7 +187,7 @@ export function SeasonalityTrendWidget({ spec, onQuickAction, modelCompleted }: 
         xaxis: { title: { text: tab === 'yearly' ? `Week of Year (period = ${p})` : tab === 'monthly' ? 'Week of Month' : 'Day of Week' } },
         yaxis: { title: { text: 'Normalised Amplitude' } },
         legend: { orientation: 'h', y: -0.3, font: { size: 10 } },
-        title: `${tab.charAt(0).toUpperCase() + tab.slice(1)} Seasonality — ${order} Fourier Term${order !== 1 ? 's' : ''}`,
+        title: { text: `${tab.charAt(0).toUpperCase() + tab.slice(1)} Seasonality — ${order} Fourier Term${order !== 1 ? 's' : ''}` },
         margin: { t: 55, b: 70 },
       }),
     };

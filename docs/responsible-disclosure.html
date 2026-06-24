@@ -24,6 +24,83 @@
         .hero::before { display: none; }
         table code { white-space: nowrap; }
     </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Responsible Disclosure | MMM Framework">
+    <meta name="twitter:description" content="How to report a security vulnerability in the MMM Framework: contact channels, scope, what to expect, safe-harbor guidance, and the machine-readable security.txt.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta name="author" content="Matthew Reda">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/responsible-disclosure.html",
+          "name": "Responsible Disclosure | MMM Framework",
+          "description": "How to report a security vulnerability in the MMM Framework: contact channels, scope, what to expect, safe-harbor guidance, and the machine-readable security.txt. This is self-hosted, open-source software — there is no vendor-operated SaaS.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-18",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/responsible-disclosure.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/responsible-disclosure.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/responsible-disclosure.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Responsible Disclosure",
+              "item": "https://redam94.github.io/mmm-framework/responsible-disclosure.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
 </head>
 <body>
     <!-- Navigation injected by shared/components.js -->

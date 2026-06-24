@@ -10,17 +10,20 @@ export function WorkspaceFilesWidget({ threadId, apiKey, modelName, refreshKey }
   modelName: string | null;
   refreshKey: number;
 }) {
-  const [files, setFiles] = useState<WorkspaceFile[]>([]);
+  const [fetchedFiles, setFetchedFiles] = useState<WorkspaceFile[]>([]);
 
   useEffect(() => {
-    if (!threadId) { setFiles([]); return; }
+    if (!threadId) { return; }
     let cancelled = false;
-    fetch(`${API_BASE}/workspace/${encodeURIComponent(threadId ?? "")}/files`, { headers: authHeaders(apiKey, modelName) })
+    fetch(`${API_BASE}/workspace/${encodeURIComponent(threadId)}/files`, { headers: authHeaders(apiKey, modelName) })
       .then(r => r.json())
-      .then(data => { if (!cancelled) setFiles(Array.isArray(data?.files) ? data.files : []); })
-      .catch(() => { if (!cancelled) setFiles([]); });
+      .then(data => { if (!cancelled) setFetchedFiles(Array.isArray(data?.files) ? data.files : []); })
+      .catch(() => { if (!cancelled) setFetchedFiles([]); });
     return () => { cancelled = true; };
   }, [threadId, apiKey, modelName, refreshKey]);
+
+  // Derive during render: with no thread there are no files to show.
+  const files = threadId ? fetchedFiles : [];
 
   if (files.length === 0) {
     return (

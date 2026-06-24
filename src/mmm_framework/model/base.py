@@ -35,18 +35,24 @@ import pandas as pd
 import pymc as pm
 import pytensor.tensor as pt
 
+from pydantic import BaseModel
+
 from ..config import (
     AdstockConfig,
     AdstockType,
     CausalControlRole,
+    FitMethod,
+    LikelihoodFamily,
     ModelConfig,
     PriorConfig,
     PriorType,
     SaturationConfig,
     SaturationType,
 )
+from ..config.dataset import DatasetSchema
+from ..config.roles import DatasetRole
 from ..data_loader import PanelDataset
-from ..utils import compute_hdi_bounds
+from ..utils import arviz_compat, compute_hdi_bounds
 from ..transforms import (
     adstock_weights,
     geometric_adstock_2d,
@@ -72,6 +78,9 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from ..calibration.likelihood import ExperimentMeasurement
+    from ..dataset import Dataset
+    from ..estimands.spec import Estimand, EstimandResult, Intervention
+
 
 # Map an AdstockType to the kernel name used by the parametric adstock kernels.
 _ADSTOCK_KIND = {
@@ -234,20 +243,65 @@ class BayesianMMM:
 
     _VERSION = "1.0.0"
 
+    #: Per-model config schema (Pydantic) declaring bespoke fields + defaults.
+    #: ``None`` on the base model (it is fully configured by ``ModelConfig``).
+    #: A subclass / garden ``CustomMMM`` sets this to a ``BaseModel`` subclass so
+    #: it can declare its own settable, defaulted, validated parameters (e.g. a
+    #: binomial awareness model's ``number_of_trials``); the agent/spec layer
+    #: validates ``spec["model_params"]`` against it and passes the result to the
+    #: ``model_params`` constructor argument, where the model reads
+    #: ``self.model_params.<field>`` in ``_build_model``. See
+    #: ``technical-docs/custom-model-config.md``.
+    CONFIG_SCHEMA: "type[BaseModel] | None" = None
+
+    #: Per-model **data** schema (a :class:`DatasetSchema` subclass) declaring the
+    #: role mapping a bespoke family expects, mirroring ``CONFIG_SCHEMA`` for
+    #: params. ``None`` on the base model (the default MMM roles: kpi→target,
+    #: media→predictor, control→control). See ``technical-docs/flexible-dataset.md``.
+    DATASET_SCHEMA: "type[DatasetSchema] | None" = None
+
+    #: Dataset roles this model *requires* the data to provide. Enforced at
+    #: construction (a clear ``ValueError`` when missing) **only when non-empty** —
+    #: the base model leaves it empty so existing flows are never gated. A family
+    #: that genuinely needs e.g. a target + predictors declares
+    #: ``REQUIRED_ROLES = (DatasetRole.TARGET, DatasetRole.PREDICTOR)``.
+    REQUIRED_ROLES: "tuple[DatasetRole, ...]" = ()
+
+    #: Optional duck-typed data-capability needs (e.g. ``"HAS_INDICATORS"``,
+    #: ``"GEO_PANEL"``), checked against :meth:`dataset_capabilities`. Enforced only
+    #: when non-empty. Mirrors an estimand's ``required_capabilities`` gating.
+    REQUIRED_DATASET_CAPABILITIES: "tuple[str, ...]" = ()
+
     def __init__(
         self,
-        panel: PanelDataset,
+        panel: "PanelDataset | Dataset",
         model_config: ModelConfig,
         trend_config: TrendConfig | None = None,
         adstock_alphas: list[float] | None = None,
         experiments: "Sequence[ExperimentMeasurement] | None" = None,
+        model_params: "BaseModel | dict | None" = None,
     ):
-        self.panel = panel
+        # Generalized data layer: keep ``self.panel`` a ``PanelDataset`` (every
+        # existing reader is unchanged) and expose the role-tagged ``self.dataset``
+        # for families that read by role (CFA/LCA indicators). ``_coerce_dataset``
+        # validates the data against this model's declared needs.
+        self.dataset = self._coerce_dataset(panel)
+        self.panel = (
+            panel if isinstance(panel, PanelDataset) else self.dataset.as_panel()
+        )
         self.model_config = model_config
         self.trend_config = trend_config or TrendConfig()
         self.adstock_alphas = adstock_alphas or [0.0, 0.3, 0.5, 0.7, 0.9]
 
-        self.mff_config = panel.config
+        # Bespoke per-model parameters (validated against ``CONFIG_SCHEMA`` by
+        # the caller, or supplied directly). A plain dict is coerced through the
+        # schema when one is declared so defaults/validators always apply; with
+        # no schema the dict is kept as-is. ``None`` -> the schema's defaults
+        # (when declared) or ``None`` (base model). Read via ``self.model_params``
+        # in ``_build_model``.
+        self.model_params = self._coerce_model_params(model_params)
+
+        self.mff_config = self.panel.config
         self.hierarchical_config = model_config.hierarchical
         self.seasonality_config = model_config.seasonality
         self.use_parametric_adstock = getattr(
@@ -260,6 +314,12 @@ class BayesianMMM:
             list(experiments) if experiments else []
         )
 
+        # Declarative estimands associated with this model. Populated from a
+        # spec (agents.fitting), a reloaded model (serialization), or left empty
+        # -- in which case evaluate_estimands() falls back to the capability
+        # defaults. See mmm_framework.estimands.
+        self.declared_estimands: list["Estimand"] = []
+
         self._model: pm.Model | None = None
         self._trace: az.InferenceData | None = None
 
@@ -267,6 +327,88 @@ class BayesianMMM:
         self._scaling_params: dict[str, Any] = {}
 
         self._prepare_data()
+
+    def _coerce_model_params(
+        self, model_params: "BaseModel | dict | None"
+    ) -> "BaseModel | dict | None":
+        """Resolve bespoke ``model_params`` against this model's ``CONFIG_SCHEMA``.
+
+        With no schema declared (the base model), the value is kept verbatim
+        (``None`` or a passthrough dict). With a schema declared, a dict / other
+        ``BaseModel`` is validated through it so the schema's defaults and
+        validators always apply, and ``None`` yields the schema's defaults — so a
+        garden model can rely on ``self.model_params.<field>`` being present and
+        typed regardless of how it was constructed.
+        """
+        schema = type(self).CONFIG_SCHEMA
+        if schema is None:
+            return model_params
+        if isinstance(model_params, schema):
+            return model_params
+        if model_params is None:
+            return schema()
+        if isinstance(model_params, BaseModel):
+            return schema.model_validate(model_params.model_dump())
+        if isinstance(model_params, dict):
+            return schema.model_validate(model_params)
+        raise TypeError(
+            f"model_params must be a dict, a {schema.__name__}, or None; got "
+            f"{type(model_params).__name__}"
+        )
+
+    def _coerce_dataset(self, data: "PanelDataset | Dataset") -> "Dataset":
+        """Normalize the constructor's data argument to a :class:`Dataset` and
+        validate it against this model's declared needs.
+
+        A ``PanelDataset`` is wrapped (no data motion); a ``Dataset`` is taken as
+        is. ``REQUIRED_ROLES`` / ``REQUIRED_DATASET_CAPABILITIES`` are enforced
+        only when the class declares them (non-empty), so the base model — which
+        declares neither — never raises and existing flows are byte-for-byte
+        unchanged. Mirrors :meth:`_coerce_model_params`.
+        """
+        from ..dataset import Dataset
+
+        ds = data if isinstance(data, Dataset) else Dataset.from_panel(data)
+
+        required = type(self).REQUIRED_ROLES
+        if required:
+            present = {b.role for b in ds.schema.bindings}
+            missing = [r.value for r in required if r not in present]
+            if missing:
+                have = sorted({r.value for r in present})
+                raise ValueError(
+                    f"{type(self).__name__} requires dataset roles {missing}; the "
+                    f"provided data only has roles {have}. Map the needed columns "
+                    f"to those roles in the dataset schema."
+                )
+
+        req_caps = type(self).REQUIRED_DATASET_CAPABILITIES
+        if req_caps:
+            caps = self.dataset_capabilities(ds)
+            miss = [c for c in req_caps if c not in caps]
+            if miss:
+                raise ValueError(
+                    f"{type(self).__name__} requires dataset capabilities {miss}; "
+                    f"the provided data has {sorted(caps)}."
+                )
+        return ds
+
+    @staticmethod
+    def dataset_capabilities(ds: "Dataset") -> set[str]:
+        """Cheap, duck-typed flags about the *data* (no graph build).
+
+        Mirrors ``estimands.capabilities.model_capabilities`` but for the dataset:
+        ``GEO_PANEL`` (geo/product dimensions), ``HAS_INDICATORS`` (indicator
+        columns), ``HAS_TRIALS`` (a binomial-denominator column).
+        """
+        caps: set[str] = set()
+        if ds.coords.has_geo or ds.coords.has_product:
+            caps.add("GEO_PANEL")
+        if ds.columns_for(DatasetRole.INDICATOR):
+            caps.add("HAS_INDICATORS")
+        if ds.columns_for(DatasetRole.TRIALS):
+            caps.add("HAS_TRIALS")
+        return caps
 
     def add_experiment_calibration(
         self, experiments: "Sequence[ExperimentMeasurement]"
@@ -280,6 +422,20 @@ class BayesianMMM:
         self.experiments = list(experiments)
         self._model = None  # force a rebuild that includes the new likelihoods
         return self
+
+    @property
+    def _likelihood_config(self):
+        """The model's :class:`LikelihoodConfig` (defaults to normal/identity for
+        a ``model_config`` predating the field or lacking it)."""
+        from ..config.likelihood import LikelihoodConfig
+
+        return getattr(self.model_config, "likelihood", None) or LikelihoodConfig()
+
+    @property
+    def _standardizes_y(self) -> bool:
+        """Whether ``y`` is z-scored before entering the graph (Gaussian-scale
+        families). Count/bounded families keep the natural scale."""
+        return self._likelihood_config.standardizes_y
 
     def _prepare_data(self):
         """Prepare and standardize all data."""
@@ -304,10 +460,21 @@ class BayesianMMM:
             list(self.panel.coords.controls) if self.n_controls > 0 else []
         )
 
-        # === Standardize target ===
-        self.y_mean = float(self.y_raw.mean())
-        self.y_std = float(self.y_raw.std()) + 1e-8
-        self.y = (self.y_raw - self.y_mean) / self.y_std
+        # === Target: standardize (Gaussian) or keep natural scale (else) ===
+        # Gaussian-scale families (normal/student_t/lognormal) z-score ``y`` so
+        # the component priors — all calibrated in KPI standard deviations — apply
+        # regardless of units. Count/bounded families (binomial/poisson/beta) work
+        # in their natural scale and are NOT standardized; ``y_mean=0, y_std=1``
+        # then makes ``y_obs_scaled`` and every downstream ``* y_std`` bridge an
+        # identity no-op. Default likelihood is normal -> byte-identical to before.
+        if self._standardizes_y:
+            self.y_mean = float(self.y_raw.mean())
+            self.y_std = float(self.y_raw.std()) + 1e-8
+            self.y = (self.y_raw - self.y_mean) / self.y_std
+        else:
+            self.y_mean = 0.0
+            self.y_std = 1.0
+            self.y = self.y_raw
 
         # Store scaling parameters
         self._scaling_params["y_mean"] = self.y_mean
@@ -1380,12 +1547,44 @@ class BayesianMMM:
             # the selection path it was already created above for the horseshoe.
             if sigma is None:
                 sigma = pm.HalfNormal("sigma", sigma=0.5)
-            y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
+            y_obs = self._build_likelihood(mu, sigma)
             pm.Deterministic(
                 "y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs"
             )
 
         return model
+
+    def _build_likelihood(self, mu, sigma):
+        """Create the observation node ``y_obs`` for the configured likelihood.
+
+        The built-in additive model fits only the **Gaussian** families on its
+        standardized, identity-link scale: ``normal`` (the historical default —
+        this branch is byte-identical to the old hard-coded ``pm.Normal``) and
+        ``student_t`` (a heavier-tailed drop-in; same priors, just a robust
+        observation). Non-Gaussian families change the observation scale and need
+        a link the additive model's standardized component priors are not
+        calibrated for, so they are **not** fit here — a model that wants one
+        (e.g. a binomial awareness model) defines its own observation block by
+        overriding ``_build_model`` and reading ``self.model_config.likelihood`` /
+        ``self.model_params`` itself. Called inside the ``pm.Model`` context.
+        """
+        family = self._likelihood_config.family
+        if family is LikelihoodFamily.NORMAL:
+            return pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
+        if family is LikelihoodFamily.STUDENT_T:
+            nu = float(self._likelihood_config.params.get("nu", 4.0))
+            return pm.StudentT(
+                "y_obs", nu=nu, mu=mu, sigma=sigma, observed=self.y, dims="obs"
+            )
+        raise NotImplementedError(
+            f"the built-in additive model does not fit the {family.value!r} "
+            "likelihood directly: its component priors are calibrated for "
+            "standardized-Normal y on an identity link. A model that needs a "
+            f"{family.value!r} observation must define its own observation block "
+            "— override `_build_model` (subclass `mmm_framework.garden.CustomMMM`) "
+            "and write the likelihood there, reading `self.model_config.likelihood`"
+            " and `self.model_params`. See technical-docs/custom-model-config.md."
+        )
 
     # =====================================================================
     # Experiment (incrementality / lift / ROAS) calibration likelihoods
@@ -1737,9 +1936,7 @@ class BayesianMMM:
     ) -> az.InferenceData:
         """Sample from the prior distribution of the model."""
         with self.model:
-            prior_trace = pm.sample_prior_predictive(
-                samples=samples, random_seed=random_seed
-            )
+            prior_trace = arviz_compat.sample_prior_predictive(samples, random_seed)
         return prior_trace
 
     def fit(
@@ -1749,68 +1946,216 @@ class BayesianMMM:
         chains: int | None = None,
         target_accept: float | None = None,
         random_seed: int | None = None,
+        method: FitMethod | str | None = None,
         **kwargs,
     ) -> MMMResults:
         """
-        Fit the model using MCMC.
+        Fit the model.
+
+        By default this runs full NUTS MCMC. Pass ``method`` to use an
+        *approximate* algorithm instead — these fit in seconds and are intended
+        for quickly checking a model (bad priors, broken geometry, pathological
+        saturation/adstock) before committing to a full sample. Their
+        uncertainty is **not** calibrated and convergence diagnostics
+        (R-hat / ESS) do not apply, so do not use them for final inference.
 
         Args:
-            draws: Number of posterior draws per chain. Default from config.
-            tune: Number of tuning samples. Default from config.
-            chains: Number of MCMC chains. Default from config.
+            draws: Posterior draws per chain (NUTS) or number of approximate
+                draws to take from the fitted approximation. Default from config.
+            tune: Number of tuning samples (NUTS only). Default from config.
+            chains: Number of MCMC chains (NUTS only). Default from config.
             target_accept: Target acceptance rate for NUTS. Default 0.9.
             random_seed: Random seed for reproducibility.
-            **kwargs: Additional arguments passed to pm.sample().
+            method: Fit method — ``"nuts"`` (default, full MCMC), ``"map"``
+                (maximum a posteriori point), ``"advi"`` / ``"fullrank_advi"``
+                (variational inference), or ``"pathfinder"`` (requires the
+                optional ``pymc_extras`` package). Defaults to
+                ``model_config.fit_method``.
+            **kwargs: Additional arguments passed to the underlying sampler
+                (``pm.sample`` for NUTS).
 
         Returns:
-            Fitted model results with diagnostics.
+            Fitted model results with diagnostics. For approximate methods
+            ``MMMResults.approximate`` is ``True``.
         """
-        draws = draws or self.model_config.n_draws
-        tune = tune or self.model_config.n_tune
-        chains = chains or self.model_config.n_chains
-        target_accept = target_accept or 0.9
+        method = (
+            FitMethod(method) if method is not None else self.model_config.fit_method
+        )
+
         random_seed = random_seed or self.model_config.optim_seed
 
-        nuts_sampler = "numpyro" if self.model_config.use_numpyro else "pymc"
+        if method is FitMethod.NUTS:
+            draws = draws or self.model_config.n_draws
+            tune = tune or self.model_config.n_tune
+            chains = chains or self.model_config.n_chains
+            target_accept = target_accept or 0.9
 
-        prior = self.get_prior(samples=1000, random_seed=random_seed)
+            nuts_sampler = "numpyro" if self.model_config.use_numpyro else "pymc"
 
-        with self.model:
-            trace: az.InferenceData = pm.sample(
-                draws=draws,
-                tune=tune,
-                chains=chains,
-                target_accept=target_accept,
-                random_seed=random_seed,
-                nuts_sampler=nuts_sampler,
-                init="adapt_diag",
-                **kwargs,
+            prior = self.get_prior(samples=1000, random_seed=random_seed)
+
+            with self.model:
+                trace: az.InferenceData = pm.sample(
+                    draws=draws,
+                    tune=tune,
+                    chains=chains,
+                    target_accept=target_accept,
+                    random_seed=random_seed,
+                    nuts_sampler=nuts_sampler,
+                    init="adapt_diag",
+                    **kwargs,
+                )
+            trace = arviz_compat.attach_prior(trace, prior)
+
+            self._trace = trace
+
+            try:
+                div_count = int(trace.sample_stats.diverging.sum().values)
+            except Exception:
+                div_count = 0
+
+            diagnostics = {
+                "fit_method": method.value,
+                "approximate": False,
+                "divergences": div_count,
+                "rhat_max": float(arviz_compat.dataset_extremum(az.rhat(trace), "max")),
+                "ess_bulk_min": float(
+                    arviz_compat.dataset_extremum(az.ess(trace, method="bulk"), "min")
+                ),
+            }
+
+            return self._attach_declared_estimands(
+                MMMResults(
+                    trace=trace,
+                    model=self.model,
+                    panel=self.panel,
+                    diagnostics=diagnostics,
+                    y_mean=self.y_mean,
+                    y_std=self.y_std,
+                    approximate=False,
+                )
             )
-        trace.extend(prior)
+
+        # ---- Approximate inference (MAP / ADVI / full-rank ADVI / Pathfinder) ----
+        draws = draws or self.model_config.n_draws
+        trace, extra_diagnostics = self._fit_approx(
+            method=method,
+            draws=draws,
+            random_seed=random_seed,
+            **kwargs,
+        )
+
+        # Attach the prior so prior-vs-posterior tooling still works.
+        try:
+            prior = self.get_prior(samples=1000, random_seed=random_seed)
+            trace = arviz_compat.attach_prior(trace, prior)
+        except Exception:  # noqa: BLE001 - prior is best-effort for approx fits
+            pass
 
         self._trace = trace
 
-        try:
-            div_count = int(trace.sample_stats.diverging.sum().values)
-        except Exception:
-            div_count = 0
-
         diagnostics = {
-            "divergences": div_count,
-            "rhat_max": float(az.rhat(trace).max().to_array().max()),
-            "ess_bulk_min": float(az.ess(trace, method="bulk").min().to_array().min()),
+            "fit_method": method.value,
+            "approximate": True,
+            # R-hat / ESS are undefined for a single-path approximation.
+            "rhat_max": None,
+            "ess_bulk_min": None,
         }
+        diagnostics.update(extra_diagnostics)
 
-        results = MMMResults(
-            trace=trace,
-            model=self.model,
-            panel=self.panel,
-            diagnostics=diagnostics,
-            y_mean=self.y_mean,
-            y_std=self.y_std,
+        return self._attach_declared_estimands(
+            MMMResults(
+                trace=trace,
+                model=self.model,
+                panel=self.panel,
+                diagnostics=diagnostics,
+                y_mean=self.y_mean,
+                y_std=self.y_std,
+                approximate=True,
+            )
         )
 
+    def _attach_declared_estimands(self, results: MMMResults) -> MMMResults:
+        """Best-effort populate ``results.estimands`` from ``declared_estimands``.
+
+        Only runs when estimands are explicitly declared (so a default fit pays
+        no extra posterior-predictive passes), and never lets an estimand failure
+        break a fit -- the estimands are a convenience layer over the trace.
+        """
+        if not self.declared_estimands:
+            return results
+        try:
+            results.estimands = self.evaluate_estimands(self.declared_estimands)
+        except Exception:  # noqa: BLE001 - estimands must never break a fit
+            warnings.warn(
+                "Declared estimands could not be evaluated at fit time; "
+                "call model.evaluate_estimands() to see the error.",
+                stacklevel=2,
+            )
         return results
+
+    def _fit_approx(
+        self,
+        method: FitMethod,
+        draws: int,
+        random_seed: int | None,
+        **kwargs,
+    ) -> tuple[az.InferenceData, dict]:
+        """Run an approximate fit and return ``(idata, extra_diagnostics)``.
+
+        The returned ``InferenceData`` always carries a ``posterior`` group with
+        ``chain``/``draw`` dims and the model's deterministics, so it is a
+        drop-in for the NUTS trace everywhere downstream (summaries, ArviZ,
+        ``predict``, reporting).
+        """
+        if method is FitMethod.MAP:
+            with self.model:
+                point = pm.find_MAP(seed=random_seed, **kwargs)
+            return arviz_compat.point_to_idata(point), {"map": True}
+
+        if method in (FitMethod.ADVI, FitMethod.FULLRANK_ADVI):
+            advi_method = "advi" if method is FitMethod.ADVI else "fullrank_advi"
+            # n = number of optimization iterations; allow override via kwargs.
+            n_iter = int(kwargs.pop("n", 30000))
+            with self.model:
+                approx = pm.fit(
+                    n=n_iter,
+                    method=advi_method,
+                    random_seed=random_seed,
+                    progressbar=kwargs.pop("progressbar", False),
+                    **kwargs,
+                )
+                idata = approx.sample(draws)
+            final_elbo = None
+            try:
+                final_elbo = float(-approx.hist[-1])
+            except Exception:  # noqa: BLE001
+                pass
+            return idata, {"vi_iterations": n_iter, "elbo": final_elbo}
+
+        if method is FitMethod.PATHFINDER:
+            try:
+                import pymc_extras as pmx
+            except ImportError as exc:  # pragma: no cover - optional dep
+                raise ImportError(
+                    "Pathfinder requires the optional 'pymc_extras' package "
+                    "(and 'blackjax' for the fast path), which is not a declared "
+                    "dependency because it currently pins pymc>=6 and would "
+                    "force-upgrade the core stack. Install it manually with "
+                    "`pip install pymc-extras blackjax` (note: this upgrades "
+                    "pymc/pytensor/arviz in that environment). MAP and ADVI "
+                    "need no extra dependencies."
+                ) from exc
+            with self.model:
+                idata = pmx.fit(
+                    method="pathfinder",
+                    num_draws=draws,
+                    random_seed=random_seed,
+                    **kwargs,
+                )
+            return idata, {"pathfinder": True}
+
+        raise ValueError(f"Unsupported approximate fit method: {method}")
 
     def predict(
         self,
@@ -2207,6 +2552,119 @@ class BayesianMMM:
 
         return pd.DataFrame(results)
 
+    # ------------------------------------------------------------------
+    # Declarative estimands (counterfactual causal lens)
+    # ------------------------------------------------------------------
+
+    def _intervention_to_X_media(
+        self, intervention: "Intervention"
+    ) -> np.ndarray | None:
+        """Materialize an :class:`Intervention` as a media matrix for ``predict``.
+
+        Returns ``None`` for the factual world (``Observed``) so ``predict``
+        reuses the training media; otherwise a transformed copy of
+        ``X_media_raw``. ``predict`` already routes the raw matrix through the
+        per-channel normalization / adstock path, so these are raw-scale edits.
+        """
+        kind = getattr(intervention, "type", None)
+        if kind == "observed":
+            return None
+        X = self.X_media_raw.copy()
+        target = getattr(intervention, "target", None)
+        if kind in ("zero_input", "scale_input", "set_input"):
+            if target not in self.channel_names:
+                raise ValueError(f"Unknown intervention target: {target!r}")
+            idx = self.channel_names.index(target)
+            if kind == "zero_input":
+                X[:, idx] = 0.0
+            elif kind == "scale_input":
+                X[:, idx] *= float(intervention.factor)
+            else:  # set_input
+                X[:, idx] = float(intervention.value)
+            return X
+        if kind == "custom":
+            from ..estimands.interventions import apply_custom_intervention
+
+            return apply_custom_intervention(self, intervention, X)
+        raise ValueError(f"Unsupported intervention: {intervention!r}")
+
+    def predict_under(
+        self,
+        intervention: "Intervention",
+        time_period: tuple[int, int] | None = None,
+        random_seed: int | None = None,
+    ) -> PredictionResults:
+        """Posterior-predictive outcome under a counterfactual ``intervention``.
+
+        A thin wrapper over :meth:`predict` that transforms ``X_media_raw`` per
+        the intervention. ``time_period`` is accepted for interface symmetry
+        (:class:`mmm_framework.estimands.spec.SupportsEstimands`); windowing is
+        applied by the estimand reducer, so the full series is returned here.
+        """
+        X = self._intervention_to_X_media(intervention)
+        return self.predict(
+            X_media=X, return_original_scale=True, random_seed=random_seed
+        )
+
+    def model_capabilities(self) -> set[str]:
+        """Capability flags used to gate which estimands this model supports."""
+        from ..estimands.capabilities import model_capabilities as _caps
+
+        return _caps(self)
+
+    @staticmethod
+    def _resolve_estimand(e: "Estimand | str | dict") -> "Estimand":
+        """Coerce an estimand reference to an :class:`Estimand`: a built-in name
+        (resolved via the registry), a serialized dict, or an instance."""
+        from ..estimands import registry
+        from ..estimands.spec import Estimand
+
+        if isinstance(e, Estimand):
+            return e
+        if isinstance(e, str):
+            return registry.get(e)
+        return Estimand.from_dict(e)
+
+    def _default_estimands(self) -> list["Estimand"]:
+        """Estimands to evaluate when none are declared on the instance.
+
+        A garden subclass can set a class-level ``DEFAULT_ESTIMANDS`` (list of
+        built-in names, serialized dicts, or :class:`Estimand` instances);
+        otherwise the framework defaults filtered by this model's capabilities
+        are used.
+        """
+        from ..estimands import registry
+
+        cls_defaults = getattr(type(self), "DEFAULT_ESTIMANDS", None)
+        if cls_defaults:
+            return [self._resolve_estimand(e) for e in cls_defaults]
+        return registry.defaults_for(self.model_capabilities())
+
+    def evaluate_estimands(
+        self,
+        estimands: "list[Estimand | str | dict] | None" = None,
+        *,
+        random_seed: int | None = None,
+    ) -> "dict[str, EstimandResult]":
+        """Realize estimands from the fitted posterior as mean + HDI.
+
+        ``estimands`` items may be :class:`Estimand` instances, built-in names
+        (resolved via the registry), or serialized dicts. With ``estimands=None``
+        uses :attr:`declared_estimands` if non-empty, else
+        :meth:`_default_estimands`. Returns a dict keyed by estimand name
+        (wildcard-channel estimands expand to ``"{name}:{channel}"``). Never
+        raises for an unsupported estimand -- it is returned with
+        ``status="unsupported"``.
+        """
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+        from ..estimands.evaluate import EstimandEvaluator
+
+        if estimands is None:
+            estimands = self.declared_estimands or self._default_estimands()
+        resolved = [self._resolve_estimand(e) for e in estimands]
+        return EstimandEvaluator(self, random_seed=random_seed).evaluate(resolved)
+
     def what_if_scenario(
         self,
         spend_changes: dict[str, float],
@@ -2313,12 +2771,47 @@ class BayesianMMM:
         contrib = contrib.reshape(-1, *contrib.shape[2:])  # (draws, obs, channel)
         return contrib * self.y_std  # contributions scale by y_std (no mean shift)
 
+    def sample_latent_under(
+        self,
+        var_name: str,
+        intervention: "Intervention | None" = None,
+        random_seed: int | None = None,
+    ) -> np.ndarray:
+        """Posterior draws of a named deterministic ``var_name`` under a
+        counterfactual ``intervention`` on the media inputs.
+
+        Generalizes :meth:`sample_channel_contributions` to *any* registered
+        deterministic: ``set_data`` swaps in the intervention-transformed media
+        (training media for ``Observed`` / ``None``), then re-evaluates
+        ``var_name`` via posterior-predictive. Returned shape is
+        ``(n_draws, *var_shape)`` in the deterministic's **native (model) scale**
+        — the engine forms latent *contrasts* (intervention − baseline) from this,
+        so any constant scale cancels. This is what powers latent-variable
+        estimand contrasts (see :mod:`mmm_framework.estimands.evaluate`)."""
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+        X_media = self._intervention_to_X_media(intervention) if intervention else None
+        with self.model:
+            if self.use_parametric_adstock:
+                pm.set_data({"X_media_raw": self._prepare_raw_media_for_model(X_media)})
+            else:
+                X_low, X_high = self._prepare_media_data_for_model(X_media)
+                pm.set_data({"X_media_low": X_low, "X_media_high": X_high})
+            pp = pm.sample_posterior_predictive(
+                self._trace,
+                var_names=[var_name],
+                random_seed=random_seed,
+                progressbar=False,
+            )
+        vals = pp.posterior_predictive[var_name].values
+        return vals.reshape(-1, *vals.shape[2:])  # (draws, *var_shape)
+
     def sample_prior_predictive(
         self, samples: int = 500, random_seed: int | None = None
     ) -> az.InferenceData:
         """Sample from prior predictive distribution."""
         with self.model:
-            return pm.sample_prior_predictive(samples=samples, random_seed=random_seed)
+            return arviz_compat.sample_prior_predictive(samples, random_seed)
 
     def compute_parameter_learning(
         self,

@@ -1,3 +1,10 @@
+// A normalized spec variable: a `{ name, ... }` object whose remaining fields
+// (adstock, saturation, role, …) are spec-driven and only loosely typed.
+export interface SpecVar {
+  name: string;
+  [key: string]: unknown;
+}
+
 // Canonical trend-type names (api/types.ts TrendType). The agent LLM sometimes
 // writes aliases like "piecewise_linear" or "gp" into the spec; map them back
 // so widget type-switches (and the trend preview plot) don't fall through.
@@ -6,7 +13,7 @@ const TREND_TYPE_ALIASES: Record<string, string> = {
   gp: 'gaussian_process',
 };
 
-export function normalizeTrendType(raw: any): string {
+export function normalizeTrendType(raw: unknown): string {
   const t = String(raw ?? 'linear').toLowerCase().replace(/-/g, '_');
   return TREND_TYPE_ALIASES[t] ?? t;
 }
@@ -18,14 +25,14 @@ export function normalizeTrendType(raw: any): string {
  * calling `.map` / `for...of` on the dict form throws ("not a function" /
  * "object is not iterable"). This coerces all three shapes to one array.
  */
-export function asVarArray(v: any): any[] {
+export function asVarArray(v: unknown): SpecVar[] {
   if (Array.isArray(v)) {
     return v
       .map((item) => (typeof item === 'string' ? { name: item } : item))
-      .filter((x) => x && x.name);
+      .filter((x): x is SpecVar => !!x && typeof x === 'object' && 'name' in x && !!x.name);
   }
   if (v && typeof v === 'object') {
-    return Object.entries(v).map(([name, val]) => ({
+    return Object.entries(v as Record<string, unknown>).map(([name, val]) => ({
       name,
       ...(val && typeof val === 'object' ? (val as object) : {}),
     }));
@@ -33,8 +40,32 @@ export function asVarArray(v: any): any[] {
   return [];
 }
 
+// The accessed surface of an incoming spec. Leaves are optional with their
+// expected primitive type (the agent/backend may serialize a minimal or partial
+// spec); typing them concretely — rather than `unknown` — lets the `?? default`
+// fallbacks below produce a concretely-typed DraftSpec instead of `{} | T`.
+interface RawSpec {
+  kpi?: string;
+  kpi_level?: string;
+  time_granularity?: string;
+  inference?: {
+    chains?: number; draws?: number; tune?: number;
+    target_accept?: number; random_seed?: number;
+  };
+  trend?: {
+    type?: unknown; n_changepoints?: number; changepoint_range?: number;
+    n_knots?: number; spline_degree?: number;
+  };
+  seasonality?: { yearly?: number; monthly?: number; weekly?: number };
+  media_channels?: unknown;
+  control_variables?: unknown;
+}
+
 // Normalize an incoming (possibly minimal) spec into a full editable form
-export function specWithDefaults(raw: any) {
+export function specWithDefaults(rawSpec: unknown) {
+  // The incoming spec is genuinely dynamic (agent/backend-serialized); narrow
+  // to a loose record once at the boundary and read leaves defensively.
+  const raw = (rawSpec ?? {}) as RawSpec;
   return {
     kpi: raw?.kpi ?? '',
     kpi_level: raw?.kpi_level ?? 'national',
@@ -58,11 +89,15 @@ export function specWithDefaults(raw: any) {
       monthly: raw?.seasonality?.monthly ?? 0,
       weekly: raw?.seasonality?.weekly ?? 0,
     },
-    media_channels: asVarArray(raw?.media_channels).map((ch: any) => ({
-      name: ch.name,
-      adstock: { type: ch.adstock?.type ?? 'geometric', l_max: ch.adstock?.l_max ?? 8 },
-      saturation: { type: ch.saturation?.type ?? 'hill' },
-    })),
+    media_channels: asVarArray(raw?.media_channels).map((ch) => {
+      const adstock = (ch.adstock ?? {}) as { type?: string; l_max?: number };
+      const saturation = (ch.saturation ?? {}) as { type?: string };
+      return {
+        name: ch.name,
+        adstock: { type: adstock.type ?? 'geometric', l_max: adstock.l_max ?? 8 },
+        saturation: { type: saturation.type ?? 'hill' },
+      };
+    }),
     control_variables: asVarArray(raw?.control_variables),
   };
 }
@@ -70,16 +105,17 @@ export function specWithDefaults(raw: any) {
 // Flatten a spec into {dot_path: leaf}, mirroring the server's spec_locks
 // semantics (named lists keyed by item name). Used to lock ONLY the leaves the
 // user actually changed in the editor, not every materialized default.
-export function flattenLeaves(obj: any, prefix = ''): Record<string, any> {
-  const out: Record<string, any> = {};
+export function flattenLeaves(obj: unknown, prefix = ''): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
   const isNamedList = Array.isArray(obj) && obj.length > 0 &&
-    obj.every((x: any) => x && typeof x === 'object' && 'name' in x);
+    obj.every((x: unknown) => !!x && typeof x === 'object' && 'name' in x);
   if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-    const keys = Object.keys(obj);
+    const rec = obj as Record<string, unknown>;
+    const keys = Object.keys(rec);
     if (keys.length === 0 && prefix) { out[prefix] = obj; return out; }
-    for (const k of keys) Object.assign(out, flattenLeaves(obj[k], prefix ? `${prefix}.${k}` : k));
+    for (const k of keys) Object.assign(out, flattenLeaves(rec[k], prefix ? `${prefix}.${k}` : k));
   } else if (isNamedList) {
-    for (const item of obj) {
+    for (const item of obj as SpecVar[]) {
       const p = prefix ? `${prefix}.${item.name}` : String(item.name);
       for (const k of Object.keys(item)) Object.assign(out, flattenLeaves(item[k], `${p}.${k}`));
     }
@@ -90,7 +126,7 @@ export function flattenLeaves(obj: any, prefix = ''): Record<string, any> {
 }
 
 // Leaf paths that differ between a baseline spec and an edited spec.
-export function specLeafDiff(baseline: any, edited: any): string[] {
+export function specLeafDiff(baseline: unknown, edited: unknown): string[] {
   const a = flattenLeaves(baseline ?? {});
   const b = flattenLeaves(edited ?? {});
   const changed: string[] = [];
@@ -110,5 +146,5 @@ export function lockPathLabel(path: string): string {
   return parts.join(' · ');
 }
 
-export const fmtVal = (v: any): string =>
+export const fmtVal = (v: unknown): string =>
   v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v);

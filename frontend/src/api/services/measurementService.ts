@@ -16,9 +16,10 @@ export interface ExperimentRecord extends Omit<ExperimentInfo, 'status'> {
   status: LifecycleStatus;
   recommending_run_id: string | null;
   calibrated_run_id: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic JSON blob; ExperimentDrawer renders fields like design.design_type/min_duration_periods directly as ReactNode, which `unknown` is not assignable to (narrowing here would break that consumer, which this cleanup must not edit)
   design: Record<string, any> | null;
-  readout: Record<string, any> | null;
-  priority: Record<string, any> | null;
+  readout: Record<string, unknown> | null;
+  priority: Record<string, unknown> | null;
   preregistered_at: number | null;
   status_history: StatusHistoryEntry[];
 }
@@ -31,7 +32,7 @@ export interface ExperimentTransition {
   estimand?: string;
   start_date?: string;
   end_date?: string;
-  readout?: Record<string, any>;
+  readout?: Record<string, unknown>;
   calibrated_run_id?: string;
 }
 

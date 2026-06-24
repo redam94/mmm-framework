@@ -538,12 +538,20 @@ async def chat_endpoint(
         if _sess is not None and _sess.get("project_id"):
             ensure_project_access(principal, _sess["project_id"], Role.ANALYST)
 
-    # The expert override rides in `configurable` alongside thread_id; LangGraph
-    # propagates it to delegate_to_expert via the injected RunnableConfig, where it
-    # builds the expert sub-agent's LLM (X-Expert-* headers, chat-tier precedence).
+    # The session's modeling mode selects the prompt framing + tool set. Unset /
+    # legacy sessions read as "mmm" (historical behavior).
+    from mmm_framework.agents.modes import normalize_mode
+
+    _mode = normalize_mode(
+        (sessions_store.get_session(request.thread_id) or {}).get("modeling_mode")
+    )
+    # The expert override + modeling mode ride in `configurable` alongside thread_id;
+    # LangGraph propagates them to delegate_to_expert via the injected RunnableConfig,
+    # where the expert sub-agent's LLM (X-Expert-* headers) and mode-gated tools are built.
     config = {
         "configurable": {
             "thread_id": request.thread_id,
+            "modeling_mode": _mode,
             "expert_model": x_expert_model,
             "expert_provider": x_expert_provider,
             "expert_api_key": x_expert_api_key,
@@ -560,10 +568,14 @@ async def chat_endpoint(
     # code-gen tools removed) and must delegate hard work to the expert tier via
     # the delegate_to_expert tool. The expert sub-agent (strong model, full
     # toolset) is built lazily inside that tool, sharing this thread's session.
-    from mmm_framework.agents.tools import ORCHESTRATOR_TOOLS
+    from mmm_framework.agents.tools import get_tools_for_mode
 
     agent_graph = create_agent_graph(
-        llm, checkpointer=memory, tools=ORCHESTRATOR_TOOLS, role="orchestrator"
+        llm,
+        checkpointer=memory,
+        tools=get_tools_for_mode(_mode, role="orchestrator"),
+        role="orchestrator",
+        mode=_mode,
     )
 
     # The "400 => corrupted history => hard reset" recovery is an Anthropic
@@ -1053,10 +1065,15 @@ async def rewind(thread_id: str, body: RewindRequest):
 class CreateSessionRequest(BaseModel):
     name: str | None = None
     project_id: str | None = None
+    modeling_mode: str | None = None
 
 
 class RenameSessionRequest(BaseModel):
     name: str
+
+
+class SetSessionModeRequest(BaseModel):
+    modeling_mode: str
 
 
 @app.get("/sessions")
@@ -1088,8 +1105,14 @@ async def create_session_endpoint(
     # Can't plant a session inside another org's project.
     if not principal.is_dev and body.project_id is not None:
         ensure_project_access(principal, body.project_id, Role.ANALYST)
+    from mmm_framework.agents.modes import normalize_mode
+
     return JSONResponse(
-        content=sessions_store.create_session(body.name, project_id=body.project_id)
+        content=sessions_store.create_session(
+            body.name,
+            project_id=body.project_id,
+            modeling_mode=normalize_mode(body.modeling_mode),
+        )
     )
 
 
@@ -1116,6 +1139,19 @@ async def rename_session_endpoint(thread_id: str, body: RenameSessionRequest):
     if not sessions_store.rename_session(thread_id, body.name):
         raise HTTPException(status_code=404, detail="session not found")
     return JSONResponse(content={"status": "ok"})
+
+
+@app.patch("/sessions/{thread_id}/mode", dependencies=[_sess_write])
+async def set_session_mode_endpoint(thread_id: str, body: SetSessionModeRequest):
+    """Switch a session's modeling mode (mmm | causal_inference | general_bayes |
+    descriptive). The next /chat turn reads it to select the prompt framing + tools."""
+    from mmm_framework.agents.modes import is_valid_mode
+
+    if not is_valid_mode(body.modeling_mode):
+        raise HTTPException(status_code=400, detail="invalid modeling_mode")
+    if not sessions_store.update_session(thread_id, modeling_mode=body.modeling_mode):
+        raise HTTPException(status_code=404, detail="session not found")
+    return JSONResponse(content={"status": "ok", "modeling_mode": body.modeling_mode})
 
 
 @app.delete("/sessions/{thread_id}", dependencies=[_sess_write])
@@ -2725,6 +2761,1032 @@ async def get_experiment_simulation(project_id: str, job_id: str):
     if art is None or (art.get("payload") or {}).get("project_id") != project_id:
         raise HTTPException(status_code=404, detail="Simulation job not found.")
     return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
+# ── Model Garden registry (org-scoped) ───────────────────────────────────────
+# Backs the Atelier UI + governance: register (from the editor), discover,
+# re-test, the human PUBLISH gate, and retirement. Registration shares its core
+# with the agent's `register_garden_model` tool (agents/garden_registry.py).
+
+
+class GardenPromoteRequest(BaseModel):
+    note: str = ""
+
+
+class GardenRegisterRequest(BaseModel):
+    source_code: str
+    name: str
+    docs: str = ""
+    version: int | None = None
+    tags: list | None = None
+    dataset_schema: dict | None = None
+    recommended_fit: dict | None = None
+
+
+class GardenSourceRequest(BaseModel):
+    """A bare source payload for the editor's IDE tools (lint / format)."""
+
+    source_code: str = ""
+
+
+class GardenDocsRequest(BaseModel):
+    """In-place docs (markdown) edit for a non-published garden version."""
+
+    docs: str = ""
+
+
+class CopilotTurn(BaseModel):
+    role: str = "user"  # "user" | "assistant"
+    content: str = ""
+
+
+class NotebookCopilotContext(BaseModel):
+    """Notebook context attached to a copilot turn so the assistant can diagnose
+    a failed cell: the cell's code + traceback, the dataset preview, and the
+    sibling cells (variables flow between cells in one shared kernel)."""
+
+    cell_code: str = ""
+    traceback: str = ""
+    dataset_preview: str | None = None
+    other_cells: list[str] = []
+    is_error: bool = False
+
+
+class GardenCopilotRequest(BaseModel):
+    """A modeling-copilot turn: the running chat plus the current editor source
+    so the assistant grounds its answer in the user's actual code. When invoked
+    from the Atelier notebook, ``notebook`` carries the failing/active cell so the
+    same copilot diagnoses cell-execution errors and rewrites the cell."""
+
+    messages: list[CopilotTurn] = []
+    source_code: str = ""
+    notebook: NotebookCopilotContext | None = None
+
+
+class CopilotChatSaveRequest(BaseModel):
+    """Persist the Atelier copilot chat for one ``(model, version, surface)``.
+
+    The chat is scoped per model/version so each model keeps its own running
+    conversation; ``surface`` separates the editor copilot from the notebook
+    copilot. PUT an empty ``messages`` to clear it. ``messages`` are stored as
+    free-form dicts (id/role/content/targetCellId) so the client owns the shape.
+    """
+
+    name: str
+    version: int | None = None
+    surface: str = "editor"  # "editor" | "notebook"
+    messages: list[dict[str, Any]] = []
+
+
+def _garden_org(principal: AuthContext) -> str:
+    """Org that scopes garden visibility — matches the agent-side resolution
+    (``sessions_store.resolve_org_id``) so both surfaces see the same models."""
+    return principal.org_id or sessions_store.DEFAULT_ORG_ID
+
+
+@app.post("/model-garden")
+async def register_garden_model_endpoint(
+    body: GardenRegisterRequest, principal: PrincipalDep
+):
+    """Register a bespoke model (source defining a BayesianMMM subclass) as a
+    DRAFT. Analyst+ role. The source is AST-validated (never executed here) and
+    stored in the org's garden; POST the test endpoint next to fit + grade it."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Registering a model requires an analyst+ role."
+        )
+    from mmm_framework.agents.garden_registry import register_garden_model_core
+
+    try:
+        row = register_garden_model_core(
+            org_id=_garden_org(principal),
+            source_code=body.source_code,
+            name=body.name,
+            docs=body.docs,
+            version=body.version,
+            tags=body.tags,
+            dataset_schema=body.dataset_schema,
+            recommended_fit=body.recommended_fit,
+            owner_user_id=principal.user_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return JSONResponse(status_code=201, content=safe_json_dumps_load(row))
+
+
+def _merge_lint_problems(
+    contract_problems: list[dict], ruff_problems: list[dict]
+) -> list[dict]:
+    """Combine the AST contract checks with ruff's real Python diagnostics.
+
+    - When the source doesn't parse, ruff's E999 (which carries a column) is the
+      precise marker, so drop the contract's generic "Syntax error" stand-in.
+    - Drop the contract "No issues found" all-clear note once ruff has anything
+      to say.
+    - Sort line-anchored problems first (by line), global notes last.
+    """
+    ruff_has_error = any(p.get("severity") == "error" for p in ruff_problems)
+    contract = list(contract_problems)
+    if ruff_has_error:
+        contract = [
+            p
+            for p in contract
+            if not str(p.get("message", "")).startswith("Syntax error")
+        ]
+    if ruff_problems:
+        contract = [
+            p
+            for p in contract
+            if not (
+                p.get("severity") == "info"
+                and str(p.get("message", "")).startswith("No issues found")
+            )
+        ]
+    combined = ruff_problems + contract
+    combined.sort(key=lambda p: (p.get("line") is None, p.get("line") or 0))
+    return combined
+
+
+@app.post("/model-garden/lint")
+async def garden_lint_endpoint(body: GardenSourceRequest, principal: PrincipalDep):
+    """"Problems" check for the Atelier editor: real Python diagnostics (ruff —
+    undefined names, unused imports, redefinitions, syntax, with line/column
+    spans) merged with the AST-only garden-contract conventions. Neither path
+    executes the source. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Linting requires an analyst+ role."
+        )
+    from mmm_framework.agents.garden_authoring import ruff_lint, static_authoring_lint
+
+    # Offload the AST parse + blocking ruff subprocess off the event loop — the
+    # editor fires this on an 800 ms debounced auto-lint loop, so a synchronous
+    # subprocess.run would stall concurrent SSE/fit requests (module convention).
+    def _lint() -> tuple[str | None, list[dict]]:
+        cls, contract = static_authoring_lint(body.source_code)
+        return cls, _merge_lint_problems(contract, ruff_lint(body.source_code))
+
+    class_name, problems = await asyncio.to_thread(_lint)
+    return JSONResponse(
+        content={
+            "class_name": class_name,
+            "problems": problems,
+            "ok": not any(p["severity"] == "error" for p in problems),
+        }
+    )
+
+
+@app.post("/model-garden/format")
+async def garden_format_endpoint(body: GardenSourceRequest, principal: PrincipalDep):
+    """Format the editor source (ruff, black fallback) for the IDE *Format*
+    button. Returns the formatted source or a one-line error. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Formatting requires an analyst+ role."
+        )
+    from mmm_framework.agents.garden_authoring import format_source
+
+    # Offload the blocking ruff/black subprocess off the event loop (see lint).
+    formatted, error = await asyncio.to_thread(format_source, body.source_code)
+    return JSONResponse(content={"formatted": formatted, "error": error})
+
+
+@app.post("/model-garden/copilot", dependencies=[_rl_chat])
+async def garden_copilot_endpoint(
+    body: GardenCopilotRequest,
+    raw_request: Request,
+    x_api_key: str | None = Header(None),
+    x_model_name: str | None = Header(None),
+    x_base_url: str | None = Header(None),
+    x_provider: str | None = Header(None),
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
+    """Stream a Bayesian-modeling copilot answer (SSE) for the Atelier editor.
+
+    Stateless: the client sends the running chat + the current editor source each
+    turn; the server grounds a focused expert system prompt (the oracle contract
+    + PyMC/MMM authoring knowledge) on that source and streams the model's tokens
+    using the SAME ``data: {...}\\n\\n`` / ``[DONE]`` framing as ``/chat``.
+    Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="The modeling copilot requires an analyst+ role."
+        )
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+    from mmm_framework.agents.garden_authoring import build_copilot_system_prompt
+
+    system_prompt = build_copilot_system_prompt(
+        body.source_code,
+        notebook=body.notebook.model_dump() if body.notebook else None,
+    )
+    lc_messages: list = [SystemMessage(content=system_prompt)]
+    # Keep the last dozen turns; drop empties.
+    for turn in [t for t in body.messages if (t.content or "").strip()][-12:]:
+        if turn.role == "assistant":
+            lc_messages.append(AIMessage(content=turn.content))
+        else:
+            lc_messages.append(HumanMessage(content=turn.content))
+    if len(lc_messages) == 1:
+        raise HTTPException(status_code=400, detail="No message to answer.")
+
+    async def event_generator():
+        try:
+            llm = get_llm(x_model_name, x_api_key, x_base_url, x_provider)
+            async for chunk in llm.astream(lc_messages):
+                if await raw_request.is_disconnected():
+                    break
+                text = _copilot_chunk_text(getattr(chunk, "content", ""))
+                if text:
+                    payload = {"type": "token", "content": text}
+                    yield f"data: {safe_json_dumps(payload)}\n\n"
+        except Exception as e:  # noqa: BLE001 — surface as an in-stream error event
+            logger.exception("garden copilot stream failed")
+            yield f"data: {safe_json_dumps({'type': 'error', 'content': str(e)})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+def _copilot_chunk_text(content: Any) -> str:
+    """Flatten a streamed chunk's content to text — handles a plain string or
+    Anthropic-style lists of content blocks (``{"type": "text", "text": ...}``)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        out = []
+        for block in content:
+            if isinstance(block, str):
+                out.append(block)
+            elif isinstance(block, dict):
+                out.append(block.get("text") or block.get("content") or "")
+        return "".join(out)
+    return ""
+
+
+# ── Atelier notebook ──────────────────────────────────────────────────────────
+# A Jupyter-like demo/test space scoped to one bespoke model: upload a dataset,
+# run free-form Python cells against the model (the LIVE editor buffer or a
+# registered version), and track plot/table/markdown outputs. Cells execute in
+# the same sandboxed session kernel the compatibility suite uses (so untrusted
+# author source never imports in the host), via the existing non-blocking job
+# machinery (mirrors the garden-test pattern). NB: these routes are registered
+# BEFORE the parametric ``/model-garden/{name}/...`` routes so ``notebook`` is
+# never captured as a ``{name}``.
+
+# Per-notebook source revision last staged+imported into the kernel — lets us
+# skip the (re)import setup cell when the author hasn't edited the model.
+_NOTEBOOK_SOURCE_REV: dict[str, str] = {}
+
+
+class NotebookCellRequest(BaseModel):
+    """Run one code cell against the model. ``version=None`` => the live editor
+    buffer in ``source_code`` (re-imported when ``source_rev`` changes); else a
+    registered version (source resolved from the registry)."""
+
+    name: str = "untitled"
+    version: int | None = None
+    source_code: str | None = None
+    source_rev: str = ""
+    code: str = ""
+    dataset_path: str | None = None
+
+
+class NotebookSaveRequest(BaseModel):
+    name: str = "untitled"
+    version: int | None = None
+    cells: list[dict] = []
+    dataset: dict | None = None
+
+
+def _notebook_tid(org_id: str, name: str, version: int | None) -> str:
+    """Deterministic synthetic thread id for a notebook (one warm kernel +
+    workspace per (org, model, source)). Consistent with the existing
+    ``__gardenjobs__{org}`` synthetic-context pattern."""
+    import re
+
+    raw = f"{name}__v{version}" if version is not None else f"{name}__draft"
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw)[:80]
+    return f"__atelier_nb__{org_id}__{safe}"
+
+
+# The staged model source is written as a NON-``.py`` file so a dev server run
+# with ``uvicorn --reload`` (which watches ``*.py`` under the repo) does NOT
+# restart on every cell — a restart wipes the warm in-process kernel mid-session
+# (the `data` from an earlier cell would vanish). We import it via an explicit
+# ``SourceFileLoader``, which reads Python source regardless of extension.
+_NOTEBOOK_SRC_FILE = "notebook_model_source.txt"
+
+
+def _notebook_stage_source(name: str, ver_seg: str, tid: str, text: str) -> str:
+    """Write the model source into the notebook workspace as a non-``.py`` file.
+    Content-aware: skips the write when the file is already identical (avoids
+    disk churn and any reload watcher firing). Returns the staged path."""
+    from mmm_framework.agents import workspace as _ws
+
+    dest = _ws.garden_loaded_dir(name, ver_seg, tid) / _NOTEBOOK_SRC_FILE
+    try:
+        if dest.exists() and dest.read_text(encoding="utf-8") == (text or ""):
+            return str(dest)
+    except Exception:
+        pass
+    dest.write_text(text or "", encoding="utf-8")
+    return str(dest)
+
+
+def _notebook_setup_code(staged_path: str, rev: str) -> str:
+    """Kernel-side cell that (re)imports the staged model source under a fresh
+    module name and binds ``GardenModel`` to the resolved class. Runs ONLY in the
+    session kernel — untrusted source never imports in the host. Uses an explicit
+    ``SourceFileLoader`` so the non-``.py`` staged file still imports as Python."""
+    import re
+
+    mod = "garden_user_model_" + (re.sub(r"[^A-Za-z0-9_]+", "_", rev or "") or "x")
+    return (
+        "import importlib.util as _ilu, importlib.machinery as _ilm, sys as _sys\n"
+        f"_loader = _ilm.SourceFileLoader({mod!r}, {staged_path!r})\n"
+        f"_spec = _ilu.spec_from_loader({mod!r}, _loader)\n"
+        "_mod = _ilu.module_from_spec(_spec)\n"
+        f"_sys.modules[{mod!r}] = _mod\n"
+        "_loader.exec_module(_mod)\n"
+        "from mmm_framework.garden.contract import find_garden_class as _fgc\n"
+        "GardenModel = _fgc(_mod)\n"
+        "print('Loaded garden model class:', GardenModel.__name__)\n"
+    )
+
+
+def _notebook_cell_sync(req: dict) -> dict:
+    """SYNC worker (ONE asyncio.to_thread per the ContextVar rule): set the
+    thread, (re)stage+import the model source if it changed, then run the user
+    cell in the session kernel and map its ExecuteResult to JSON-safe output
+    refs (the same content-addressing ``execute_python`` uses)."""
+    from mmm_framework.agents import tools as _tools
+    from mmm_framework.agents import workspace as _ws
+    from mmm_framework.agents.kernels import KernelContext
+    from mmm_framework.agents.runtime import set_current_thread
+    from mmm_framework.agents.tables import publish_tables
+
+    tid = req["tid"]
+    set_current_thread(tid)
+    work_dir = str(_ws.thread_dir(tid))
+    kernel = _tools._KERNELS.get_or_spawn(tid)
+
+    # 1. (Re)stage + import the model source when the buffer/version changed.
+    # Resolve the source TEXT: the live editor buffer, or the registered
+    # version's file read off disk.
+    src_text = req.get("source_code")
+    if src_text is None and req.get("source_path"):
+        try:
+            with open(req["source_path"], "r", encoding="utf-8") as _f:
+                src_text = _f.read()
+        except Exception:
+            src_text = None
+    if src_text is not None and _NOTEBOOK_SOURCE_REV.get(tid) != req.get("source_rev"):
+        staged = _notebook_stage_source(req["name"], req["ver_seg"], tid, src_text)
+        setup = kernel.execute(
+            _notebook_setup_code(staged, req.get("source_rev") or ""),
+            KernelContext(
+                thread_id=tid,
+                work_dir=work_dir,
+                dataset_path=req.get("dataset_path"),
+            ),
+        )
+        if setup.is_error:
+            # The model source itself failed to import — that IS the test
+            # result the author needs. Don't cache the rev (retry next run).
+            return {
+                "stdout": setup.stdout,
+                "plots": [],
+                "tables": [],
+                "is_error": True,
+                "setup_error": True,
+            }
+        _NOTEBOOK_SOURCE_REV[tid] = req.get("source_rev") or ""
+
+    # 2. Run the user cell.
+    result = kernel.execute(
+        req.get("code") or "",
+        KernelContext(
+            thread_id=tid, work_dir=work_dir, dataset_path=req.get("dataset_path")
+        ),
+    )
+
+    # 3. Content-address plots/tables; keep only lightweight refs.
+    plot_refs: list[dict] = []
+    for fig in result.plots or []:
+        try:
+            pid = _ws.store_plot(fig, tid)
+        except Exception:  # noqa: BLE001 — oversize/invalid figure: drop it
+            continue
+        layout = fig.get("layout") or {}
+        t = layout.get("title")
+        title = (
+            t.get("text") if isinstance(t, dict) else (t if isinstance(t, str) else "")
+        )
+        plot_refs.append({"id": pid, "title": title or ""})
+    table_refs: list[dict] = []
+    if result.tables:
+        table_refs, _dropped = publish_tables(result.tables, {}, tid)
+
+    return {
+        "stdout": result.stdout,
+        "plots": plot_refs,
+        "tables": table_refs,
+        "is_error": bool(result.is_error),
+    }
+
+
+async def _run_notebook_cell_job(job_id: str, req: dict) -> None:
+    try:
+        _sim_job_patch(job_id, status="running")
+        res = await asyncio.to_thread(_notebook_cell_sync, req)
+        _sim_job_patch(job_id, status="done", result=safe_json_dumps_load(res))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("notebook cell job failed: %s", job_id)
+        _sim_job_patch(job_id, status="error", error=str(e))
+
+
+def _notebook_starter(name: str) -> list[dict]:
+    """A runnable starter notebook: it fits the model on a labelled synthetic
+    world out of the box, and points the author at their uploaded data."""
+    intro = (
+        f"# Demo & test: **{name}**\n\n"
+        "Run the cells below to fit your model and inspect what it recovers. "
+        "Upload an **MFF long-format** CSV with the control above to test it on "
+        "your own data — otherwise it runs on a labelled synthetic world. "
+        "`GardenModel` is your model class (the live editor source); `df` is your "
+        "uploaded data; `show_table(...)` and `fig.show()` render into this notebook."
+    )
+    load = (
+        "# Use your uploaded dataset if present, else a labelled synthetic world\n"
+        "# (so this notebook runs out of the box).\n"
+        "try:\n"
+        "    data, src = df, dataset_path\n"
+        "    kpi, channels = 'Sales', None  # set/edit `channels` below if not MFF\n"
+        "except NameError:\n"
+        "    from mmm_framework.synth import generate_mff\n"
+        "    data, _ans = generate_mff('realistic')\n"
+        "    src = 'demo.csv'; data.to_csv(src, index=False)\n"
+        "    kpi, channels = 'Sales', list(_ans.get('channels') or [])\n"
+        "show_table(data.head(20), title='Input data (first 20 rows)')\n"
+        "print('rows:', len(data), '| variables:', "
+        "list(dict.fromkeys(data['VariableName'])) if 'VariableName' in data else list(data.columns))\n"
+    )
+    fit = (
+        "# Build a spec from the data's MFF structure and fit your model (fast MAP).\n"
+        "# Edit `channels`/`controls` to map your columns if it isn't standard MFF.\n"
+        "all_vars = list(dict.fromkeys(data['VariableName'].tolist()))\n"
+        "if not channels:\n"
+        "    channels = [v for v in all_vars if v != kpi][: max(1, len(all_vars) // 2)]\n"
+        "controls = [v for v in all_vars if v != kpi and v not in channels]\n"
+        "spec = {\n"
+        "    'kpi': kpi,\n"
+        "    'media_channels': [{'name': c} for c in channels],\n"
+        "    'control_variables': [{'name': c} for c in controls],\n"
+        "    'trend': {'type': 'linear'},\n"
+        "    'seasonality': {'yearly': 0, 'monthly': 0, 'weekly': 0},\n"
+        "    'inference': {'method': 'map', 'chains': 1, 'draws': 200, 'tune': 200},\n"
+        "}\n"
+        "from mmm_framework.agents.fitting import build_model\n"
+        "mmm = build_model(spec, src, model_cls=GardenModel)\n"
+        "results = mmm.fit(method='map')\n"
+        "print('Fitted', GardenModel.__name__, 'on channels:', channels)\n"
+    )
+    roi = (
+        "# Recovered ROI by channel (with uncertainty) + a quick bar chart.\n"
+        "from mmm_framework.reporting.helpers import compute_roi_with_uncertainty\n"
+        "roi = compute_roi_with_uncertainty(mmm, hdi_prob=0.9)\n"
+        "show_table(roi, title='Recovered ROI by channel')\n"
+        "import plotly.express as px\n"
+        "cols = list(roi.columns)\n"
+        "ycol = next((c for c in cols if 'roi' in c.lower() or 'roas' in c.lower()), cols[1])\n"
+        "fig = px.bar(roi, x=cols[0], y=ycol, title='Recovered ROI by channel')\n"
+        "fig.show()\n"
+    )
+    estimands = (
+        "# Declarative estimands: the counterfactual quantities your model declares\n"
+        "# (DEFAULT_ESTIMANDS) or its built-in defaults, realized as mean + HDI.\n"
+        "# Each is a pre-specified causal contrast (not a post-hoc summary).\n"
+        "import pandas as pd\n"
+        "res = mmm.evaluate_estimands()  # dict[name -> EstimandResult]\n"
+        "rows = []\n"
+        "for nm, r in res.items():\n"
+        "    if r.status != 'ok':\n"
+        "        # Still surface unsupported estimands with the reason (missing capability).\n"
+        "        rows.append({'estimand': nm, 'mean': None, 'hdi_low': None,\n"
+        "                     'hdi_high': None, 'status': r.status,\n"
+        "                     'units': r.reason or r.units})\n"
+        "        continue\n"
+        "    rows.append({'estimand': nm, 'mean': r.mean, 'hdi_low': r.hdi_low,\n"
+        "                 'hdi_high': r.hdi_high, 'status': r.status, 'units': r.units})\n"
+        "df_est = pd.DataFrame(rows, columns=['estimand', 'mean', 'hdi_low',\n"
+        "                                     'hdi_high', 'status', 'units'])\n"
+        "show_table(df_est, title='Declared estimands (counterfactual quantities of interest)')\n"
+    )
+    return [
+        {"id": "c1", "type": "markdown", "source": intro, "outputs": None},
+        {"id": "c2", "type": "code", "source": load, "outputs": None},
+        {"id": "c3", "type": "code", "source": fit, "outputs": None},
+        {"id": "c4", "type": "code", "source": roi, "outputs": None},
+        {"id": "c5", "type": "code", "source": estimands, "outputs": None},
+    ]
+
+
+@app.post("/model-garden/notebook/dataset", dependencies=[_rl_heavy])
+async def notebook_upload_dataset(
+    name: str,
+    principal: PrincipalDep,
+    file: UploadFile = File(...),
+    version: int | None = None,
+):
+    """Stage a dataset into the notebook's workspace (so cells auto-bind it as
+    ``df``). Analyst+ role; org-scoped synthetic thread (not a session, so no
+    ``_sess_write``)."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Uploading requires an analyst+ role."
+        )
+    from mmm_framework.agents import workspace as _ws
+
+    org_id = _garden_org(principal)
+    tid = _notebook_tid(org_id, name, version)
+    upload_dir = str(_ws.thread_dir(tid))
+    safe_name = _safe_upload_name(file.filename, "data.csv")
+    dest = str(_ws.safe_join(Path(upload_dir), safe_name))
+    with open(dest, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    preview: str | None = None
+    kind = "upload"
+    if safe_name.lower().endswith((".csv", ".tsv", ".txt")):
+        kind = "dataset"
+        try:
+            import itertools
+
+            with open(dest, "r", errors="ignore") as f:
+                preview = "".join(itertools.islice(f, 6))  # EOF-safe (short files)
+        except Exception:
+            preview = None
+    elif safe_name.lower().endswith((".xlsx", ".xls", ".parquet")):
+        kind = "dataset"
+    return {
+        "path": dest,
+        "filename": safe_name,
+        "kind": kind,
+        "preview": preview,
+        "size_bytes": os.path.getsize(dest),
+    }
+
+
+@app.post("/model-garden/notebook/cell", dependencies=[_rl_heavy])
+async def start_notebook_cell(body: NotebookCellRequest, principal: PrincipalDep):
+    """Start a NON-BLOCKING run of one code cell against the model. Returns a
+    ``job_id`` to poll. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Running cells requires an analyst+ role."
+        )
+    org_id = _garden_org(principal)
+    tid = _notebook_tid(org_id, body.name, body.version)
+    req: dict = {
+        "tid": tid,
+        "name": body.name,
+        "ver_seg": "draft" if body.version is None else str(body.version),
+        "source_code": body.source_code,
+        "source_path": None,
+        "source_rev": body.source_rev or "",
+        "dataset_path": body.dataset_path,
+        "code": body.code,
+    }
+    if body.version is not None:
+        row = sessions_store.get_garden_model(
+            org_id=org_id, name=body.name, version=int(body.version)
+        )
+        if row is None:
+            raise HTTPException(
+                status_code=404, detail="Garden model version not found."
+            )
+        req["source_code"] = None
+        req["source_path"] = row["source_path"]
+        req["source_rev"] = f"v{body.version}"
+    job = sessions_store.add_artifact(
+        tid,
+        "notebook_cell_job",
+        {"status": "pending", "org_id": org_id, "result": None, "error": None},
+    )
+    _spawn_job_task(_run_notebook_cell_job(job["id"], req))
+    return JSONResponse(
+        status_code=202, content={"job_id": job["id"], "status": "pending"}
+    )
+
+
+@app.get("/model-garden/notebook/cell/{job_id}")
+async def get_notebook_cell(job_id: str, principal: PrincipalDep):
+    """Poll a notebook cell run: {status, result|null, error|null}. result =
+    {stdout, plots:[{id,title}], tables:[{id,title,...}], is_error}."""
+    art = sessions_store.get_artifact(job_id)
+    org_id = _garden_org(principal)
+    if art is None or (art.get("payload") or {}).get("org_id") != org_id:
+        raise HTTPException(status_code=404, detail="Cell job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
+@app.get("/model-garden/notebook")
+async def get_notebook(name: str, principal: PrincipalDep, version: int | None = None):
+    """The persisted notebook doc for this (model, source), or a seeded starter
+    when none exists yet. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="The notebook requires an analyst+ role."
+        )
+    org_id = _garden_org(principal)
+    tid = _notebook_tid(org_id, name, version)
+    docs = [
+        a
+        for a in sessions_store.list_artifacts(tid)
+        if a.get("kind") == "atelier_notebook"
+    ]
+    if docs:
+        return JSONResponse(content=safe_json_dumps_load(docs[-1]["payload"]))
+    # No persisted doc yet: seed the model's CURATED demo notebook from its
+    # manifest (a registration-time walkthrough), else the generic starter.
+    cells = _model_demo_notebook(org_id, name, version) or _notebook_starter(name)
+    return JSONResponse(
+        content={
+            "cells": cells,
+            "dataset": None,
+            "name": name,
+            "version": version,
+            "seeded": True,
+        }
+    )
+
+
+def _model_demo_notebook(org_id: str, name: str, version: int | None) -> list | None:
+    """A model's curated demo notebook (``manifest["demo_notebook"]``) if it
+    declared one at registration, else ``None`` (use the generic starter)."""
+    try:
+        if version is not None:
+            row = sessions_store.get_garden_model(
+                org_id=org_id, name=name, version=int(version)
+            )
+        else:
+            row = sessions_store.get_latest_garden_model(org_id, name)
+    except Exception:  # noqa: BLE001 — never block the notebook on lookup
+        return None
+    cells = (row or {}).get("manifest", {}).get("demo_notebook")
+    return cells if isinstance(cells, list) and cells else None
+
+
+@app.put("/model-garden/notebook")
+async def save_notebook(body: NotebookSaveRequest, principal: PrincipalDep):
+    """Upsert the notebook doc (one ``atelier_notebook`` artifact per notebook).
+    Outputs are stored as content-addressed refs, so they survive. Analyst+."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(status_code=403, detail="Saving requires an analyst+ role.")
+    org_id = _garden_org(principal)
+    tid = _notebook_tid(org_id, body.name, body.version)
+    payload = {
+        "cells": body.cells,
+        "dataset": body.dataset,
+        "name": body.name,
+        "version": body.version,
+        "org_id": org_id,
+    }
+    docs = [
+        a
+        for a in sessions_store.list_artifacts(tid)
+        if a.get("kind") == "atelier_notebook"
+    ]
+    if docs:
+        sessions_store.update_artifact_payload(docs[-1]["id"], payload)
+        art_id = docs[-1]["id"]
+    else:
+        art_id = sessions_store.add_artifact(tid, "atelier_notebook", payload)["id"]
+    return JSONResponse(content={"saved": True, "id": art_id})
+
+
+# --------------------------------------------------------------------------- #
+# Atelier copilot chat persistence — one singleton chat per
+# (org, model, version, surface), stored as a `copilot_chat` artifact under a
+# synthetic thread id (mirrors the notebook-doc pattern). Scoping the chat per
+# model/version is the whole point: each model keeps its own conversation, and
+# Clear (PUT with empty messages) wipes only that model's chat.
+# --------------------------------------------------------------------------- #
+_COPILOT_CHAT_KIND = "copilot_chat"
+#: Cap on persisted turns — bounds artifact size on a long-running conversation.
+_COPILOT_CHAT_MAX_MESSAGES = 200
+
+
+def _copilot_surface(surface: str | None) -> str:
+    """Normalize the copilot surface to the two known values (default editor)."""
+    return "notebook" if surface == "notebook" else "editor"
+
+
+def _copilot_tid(org_id: str, name: str, version: int | None, surface: str) -> str:
+    """Synthetic thread id scoping a persisted copilot chat to one
+    (org, model, version, surface) — consistent with ``_notebook_tid``."""
+    import re
+
+    raw = f"{name}__v{version}" if version is not None else f"{name}__draft"
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw)[:80]
+    return f"__atelier_copilot__{org_id}__{_copilot_surface(surface)}__{safe}"
+
+
+@app.get("/model-garden/copilot/chat")
+async def get_copilot_chat(
+    name: str,
+    principal: PrincipalDep,
+    version: int | None = None,
+    surface: str = "editor",
+):
+    """The persisted Atelier copilot chat for this (model, version, surface), or
+    an empty chat when none exists yet. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="The copilot requires an analyst+ role."
+        )
+    org_id = _garden_org(principal)
+    tid = _copilot_tid(org_id, name, version, surface)
+    docs = [
+        a
+        for a in sessions_store.list_artifacts(tid)
+        if a.get("kind") == _COPILOT_CHAT_KIND
+    ]
+    if docs:
+        return JSONResponse(content=safe_json_dumps_load(docs[-1]["payload"]))
+    return JSONResponse(
+        content={
+            "messages": [],
+            "name": name,
+            "version": version,
+            "surface": _copilot_surface(surface),
+        }
+    )
+
+
+@app.put("/model-garden/copilot/chat")
+async def save_copilot_chat(body: CopilotChatSaveRequest, principal: PrincipalDep):
+    """Upsert the Atelier copilot chat (one artifact per model/version/surface).
+    PUT an empty ``messages`` to clear it. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(status_code=403, detail="Saving requires an analyst+ role.")
+    org_id = _garden_org(principal)
+    surface = _copilot_surface(body.surface)
+    tid = _copilot_tid(org_id, body.name, body.version, surface)
+    messages = [m for m in (body.messages or []) if isinstance(m, dict)][
+        -_COPILOT_CHAT_MAX_MESSAGES:
+    ]
+    payload = {
+        "messages": messages,
+        "name": body.name,
+        "version": body.version,
+        "surface": surface,
+        "org_id": org_id,
+    }
+    docs = [
+        a
+        for a in sessions_store.list_artifacts(tid)
+        if a.get("kind") == _COPILOT_CHAT_KIND
+    ]
+    if docs:
+        sessions_store.update_artifact_payload(docs[-1]["id"], payload)
+        art_id = docs[-1]["id"]
+    else:
+        art_id = sessions_store.add_artifact(tid, _COPILOT_CHAT_KIND, payload)["id"]
+    return JSONResponse(content={"saved": True, "id": art_id})
+
+
+@app.get("/model-garden")
+async def list_garden_models_endpoint(
+    principal: PrincipalDep,
+    status: str | None = None,
+    name: str | None = None,
+    all_versions: bool = False,
+):
+    """List the org's Model Garden models (latest version per name by default)."""
+    org_id = _garden_org(principal)
+    rows = sessions_store.list_garden_models(
+        org_id,
+        name=name,
+        status=status,
+        latest_only=(name is None and not all_versions),
+    )
+    return JSONResponse(content=safe_json_dumps_load({"models": rows}))
+
+
+@app.get("/model-garden/{name}/versions")
+async def list_garden_versions_endpoint(name: str, principal: PrincipalDep):
+    """Every version of one garden model, newest first."""
+    org_id = _garden_org(principal)
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            {"versions": sessions_store.list_garden_versions(org_id, name)}
+        )
+    )
+
+
+@app.get("/model-garden/{name}/{version}")
+async def get_garden_model_endpoint(name: str, version: int, principal: PrincipalDep):
+    """One garden model version (incl. its manifest + compatibility report)."""
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    return JSONResponse(content=safe_json_dumps_load(row))
+
+
+@app.get("/model-garden/{name}/{version}/source")
+async def get_garden_source(name: str, version: int, principal: PrincipalDep):
+    """The stored model source text (for the Atelier editor)."""
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    from mmm_framework.agents.garden_registry import read_garden_source
+
+    return JSONResponse(content={"source_code": read_garden_source(row) or ""})
+
+
+@app.patch("/model-garden/{name}/{version}")
+async def update_garden_docs_endpoint(
+    name: str, version: int, body: GardenDocsRequest, principal: PrincipalDep
+):
+    """Edit a garden version's docs (markdown) IN PLACE — no new version. Analyst+
+    role. Docs are metadata, so this does not touch the source, manifest, or
+    compatibility status. PUBLISHED versions are immutable (the store rejects the
+    edit -> 409); use "Edit as new version" to change a published model's docs."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="Editing docs requires an analyst+ role."
+        )
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    try:
+        updated = sessions_store.upsert_garden_model(
+            org_id=org_id, name=name, model_id=row["id"], docs=body.docs
+        )
+    except ValueError as e:  # published versions are immutable
+        raise HTTPException(status_code=409, detail=str(e))
+    return JSONResponse(content=safe_json_dumps_load(updated))
+
+
+def _garden_test_sync(synthetic_tid: str, row: dict) -> dict:
+    """One asyncio.to_thread context (per the ContextVar rule): stage the source
+    into the session workspace and run the compatibility suite via the kernel —
+    sandboxed in the hosted profile, so untrusted source never imports in the
+    host process."""
+    from mmm_framework.agents import tools as _tools
+    from mmm_framework.agents.runtime import set_current_thread
+
+    set_current_thread(synthetic_tid)
+    dest = _tools._garden_copy_source_to_session(row, synthetic_tid)
+    return _tools._KERNELS.get_or_spawn(synthetic_tid).run_model_op(
+        "garden_compat",
+        {
+            "source_path": dest,
+            "class_name": (row.get("manifest") or {}).get("class_name"),
+        },
+    )
+
+
+async def _run_garden_test_job(job_id: str, synthetic_tid: str, model_id: str) -> None:
+    try:
+        _sim_job_patch(job_id, status="running")
+        row = sessions_store.get_garden_model(model_id=model_id)
+        if not row:
+            _sim_job_patch(job_id, status="error", error="garden model not found")
+            return
+        res = await asyncio.to_thread(_garden_test_sync, synthetic_tid, row)
+        if res.get("error"):
+            _sim_job_patch(job_id, status="error", error=res["error"])
+            return
+        report = res.get("compat_report") or (res.get("dashboard") or {}).get(
+            "garden_compat"
+        )
+        if report:
+            sessions_store.set_garden_compat_report(model_id, report)
+        promoted = False
+        if report and report.get("blocking_passed") and row["status"] == "draft":
+            try:
+                sessions_store.transition_garden_model(model_id, "tested")
+                promoted = True
+            except ValueError:
+                pass
+        _sim_job_patch(
+            job_id,
+            status="done",
+            result=safe_json_dumps_load(
+                {
+                    "blocking_passed": bool(report and report.get("blocking_passed")),
+                    "score": (report or {}).get("score"),
+                    "promoted": promoted,
+                    "summary": (report or {}).get("summary"),
+                    "tiers": (report or {}).get("tiers"),
+                }
+            ),
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("garden test job failed: %s", job_id)
+        _sim_job_patch(job_id, status="error", error=str(e))
+
+
+@app.post("/model-garden/{name}/{version}/test", dependencies=[_rl_heavy])
+async def start_garden_test(name: str, version: int, principal: PrincipalDep):
+    """Start a NON-BLOCKING compatibility test; on pass the model is promoted
+    draft→tested. Returns a job_id to poll."""
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    synthetic_tid = f"__gardenjobs__{org_id}"
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        "garden_test_job",
+        {
+            "status": "pending",
+            "org_id": org_id,
+            "model_id": row["id"],
+            "name": name,
+            "version": int(version),
+            "result": None,
+            "error": None,
+        },
+    )
+    _spawn_job_task(_run_garden_test_job(job["id"], synthetic_tid, row["id"]))
+    return JSONResponse(
+        status_code=202, content={"job_id": job["id"], "status": "pending"}
+    )
+
+
+@app.get("/model-garden/{name}/{version}/test/{job_id}")
+async def get_garden_test(
+    name: str, version: int, job_id: str, principal: PrincipalDep
+):
+    """Poll a garden test job: {status, result|null, error|null}."""
+    art = sessions_store.get_artifact(job_id)
+    org_id = _garden_org(principal)
+    if art is None or (art.get("payload") or {}).get("org_id") != org_id:
+        raise HTTPException(status_code=404, detail="Test job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
+@app.post("/model-garden/{name}/{version}/promote")
+async def promote_garden_model(
+    name: str, version: int, body: GardenPromoteRequest, principal: PrincipalDep
+):
+    """Human publish gate: promote a TESTED model to PUBLISHED so every project
+    in the org can load it. Org admin/owner only; the model must be `tested`."""
+    if not principal.has_role(Role.ADMIN):
+        raise HTTPException(
+            status_code=403, detail="Publishing requires an org admin/owner role."
+        )
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    try:
+        updated = sessions_store.transition_garden_model(
+            row["id"], "published", note=body.note or None
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return JSONResponse(content=safe_json_dumps_load(updated))
+
+
+@app.delete("/model-garden/{name}/{version}")
+async def delete_garden_model_endpoint(
+    name: str, version: int, principal: PrincipalDep
+):
+    """Delete a draft/deprecated garden model (org admin/owner only). Published
+    history is immutable — deprecate instead."""
+    if not principal.has_role(Role.ADMIN):
+        raise HTTPException(
+            status_code=403, detail="Deleting requires an org admin/owner role."
+        )
+    org_id = _garden_org(principal)
+    row = sessions_store.get_garden_model(
+        org_id=org_id, name=name, version=int(version)
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Garden model not found.")
+    try:
+        ok = sessions_store.delete_garden_model(row["id"])
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return JSONResponse(content={"deleted": bool(ok)})
 
 
 class ExperimentOptimizeRequest(BaseModel):

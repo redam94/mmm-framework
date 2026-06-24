@@ -24,7 +24,10 @@ from .data_extractors import (
 from .sections import (
     Section,
     ExecutiveSummarySection,
+    FactorAnalysisSection,
     ModelFitSection,
+    PosteriorPredictiveSection,
+    EstimandsSection,
     ChannelROISection,
     DecompositionSection,
     SaturationSection,
@@ -109,20 +112,57 @@ class MMMReportGenerator:
 
     def _initialize_sections(self):
         """Initialize report sections based on configuration."""
+        # MMM-specific sections (channels/ROI/decomposition/saturation/geo/
+        # mediators/cannibalization) gate OFF for a non-MMM family (e.g. a CFA);
+        # the factor-analysis section gates ON only for non-MMM. Detected from the
+        # bundle's model_kind (set by the extractor).
+        is_mmm = getattr(self.data, "model_kind", "mmm") == "mmm"
+        _off = SectionConfig(enabled=False)
+
+        # The factor-analysis section is DATA-driven, not MMM-kind-driven: it turns
+        # on whenever the bundle carries latent-structure data (a pure CFA/LCA via
+        # the FactorAnalysisExtractor, OR a hybrid MMM that also estimates a latent
+        # factor — both fill these fields). FactorAnalysisSection.render() no-ops on
+        # empty data, so a plain MMM (empty fields) leaves it off.
+        has_latent = bool(getattr(self.data, "factor_loadings", None)) or bool(
+            getattr(self.data, "cfa_fit_indices", None)
+        )
+
+        def _mmm(cfg: SectionConfig) -> SectionConfig:
+            return cfg if is_mmm else _off
+
+        def _latent(cfg: SectionConfig) -> SectionConfig:
+            return cfg if has_latent else _off
+
         section_configs = [
             (
                 "executive_summary",
                 ExecutiveSummarySection,
                 self.config.executive_summary,
             ),
+            (
+                "factor_analysis",
+                FactorAnalysisSection,
+                _latent(self.config.factor_analysis),
+            ),
             ("model_fit", ModelFitSection, self.config.model_fit),
-            ("channel_roi", ChannelROISection, self.config.channel_roi),
-            ("geographic", GeographicSection, self.config.geographic),
-            ("decomposition", DecompositionSection, self.config.decomposition),
-            ("mediators", MediatorSection, self.config.mediators),
-            ("cannibalization", CannibalizationSection, self.config.cannibalization),
-            ("saturation", SaturationSection, self.config.saturation),
-            ("sensitivity", SensitivitySection, self.config.sensitivity),
+            (
+                "posterior_predictive",
+                PosteriorPredictiveSection,
+                _mmm(self.config.posterior_predictive),
+            ),
+            ("channel_roi", ChannelROISection, _mmm(self.config.channel_roi)),
+            ("estimands", EstimandsSection, _mmm(self.config.estimands)),
+            ("geographic", GeographicSection, _mmm(self.config.geographic)),
+            ("decomposition", DecompositionSection, _mmm(self.config.decomposition)),
+            ("mediators", MediatorSection, _mmm(self.config.mediators)),
+            (
+                "cannibalization",
+                CannibalizationSection,
+                _mmm(self.config.cannibalization),
+            ),
+            ("saturation", SaturationSection, _mmm(self.config.saturation)),
+            ("sensitivity", SensitivitySection, _mmm(self.config.sensitivity)),
             (
                 "causal_assumptions",
                 CausalAssumptionsSection,

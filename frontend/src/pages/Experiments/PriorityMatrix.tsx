@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import Plot from 'react-plotly.js';
+import type { Annotations, Config, Data, Shape } from 'plotly.js';
 import { AlertTriangle } from 'lucide-react';
 import { Card, TierBadge } from '../../components/ui';
 import { COLORS, EVIDENCE_TIER, type EvidenceTier } from '../../theme/colors';
@@ -125,18 +126,18 @@ export function PriorityMatrix({ priorities }: { priorities: PrioritiesPayload }
       height: 480,
       xaxis: { title: { text: 'EIG — expected information gain (nats)' }, range: [xMin, xMax] },
       yaxis: { title: { text: 'EVOI — expected value of information (KPI units)' }, range: [yMin, yMax] },
-      shapes,
+      shapes: shapes as Partial<Shape>[],
       annotations: [
         corner(0.99, 0.98, 'right', 'Test now'),
         corner(0.01, 0.98, 'left', 'Monitor'),
         corner(0.99, 0.03, 'right', 'Learn cheaply'),
         corner(0.01, 0.03, 'left', 'Deprioritize'),
-      ],
+      ] as Partial<Annotations>[],
       margin: { l: 70, r: 30, t: 30, b: 60 },
       showlegend: false,
     });
 
-    return { data: [trace as any], layout };
+    return { data: [trace as Data], layout };
   }, [channels, priorities.portfolio]);
 
   return (
@@ -157,7 +158,7 @@ export function PriorityMatrix({ priorities }: { priorities: PrioritiesPayload }
           <Plot
             data={data}
             layout={layout}
-            config={PLOTLY_CONFIG as any}
+            config={PLOTLY_CONFIG as Partial<Config>}
             useResizeHandler
             style={{ width: '100%', height: 480 }}
           />

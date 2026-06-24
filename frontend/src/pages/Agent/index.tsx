@@ -8,9 +8,17 @@ import { useChatStream } from './hooks/useChatStream';
 import { ChatPanel } from './components/chat/ChatPanel';
 import { WorkspaceTabs } from './components/tabs/WorkspaceTabs';
 import { PendingSpecChangesModal } from './components/widgets/PendingSpecChangesModal';
-import type { Artifact, OutlierAction } from './types';
+import type { Artifact, DashboardData, ModelSpec, OutlierAction } from './types';
 
 // ─── Main AgentPage ───────────────────────────────────────────────────────────
+
+// A single entry in the agent's checkpoint timeline (GET /history/:threadId).
+// Server-driven JSON; only the fields this page reads are typed.
+interface TimelineCheckpoint {
+  checkpoint_id: string;
+  message_count: number;
+  last_human_index?: number;
+}
 
 export function AgentPage() {
   const [input, setInput] = useState('');
@@ -77,14 +85,14 @@ export function AgentPage() {
     if (!threadId || loading) return;
     // Fetch timeline, find a checkpoint before the latest human message
     try {
-      const timeline: any[] = await fetch(`${API_BASE}/history/${threadId}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
+      const timeline: TimelineCheckpoint[] = await fetch(`${API_BASE}/history/${threadId}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
       if (!Array.isArray(timeline) || timeline.length < 2) return;
       // timeline is newest-first. Find checkpoints in chronological order
       // and rewind to the one before the latest user-visible state change.
       // Strategy: target = the checkpoint where message_count drops by ≥1
       // compared to current head — equivalent to "previous turn boundary".
       const head = timeline[0];
-      let target: any = null;
+      let target: TimelineCheckpoint | null = null;
       for (let i = 1; i < timeline.length; i++) {
         if (timeline[i].message_count < head.message_count) {
           target = timeline[i];
@@ -106,7 +114,7 @@ export function AgentPage() {
     const lastHuman = [...messages].reverse().find(m => m.type === 'human');
     if (!lastHuman) return;
     try {
-      const timeline: any[] = await fetch(`${API_BASE}/history/${threadId}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
+      const timeline: TimelineCheckpoint[] = await fetch(`${API_BASE}/history/${threadId}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
       if (!Array.isArray(timeline)) return;
       // Rewind to the checkpoint with the smallest message_count that is
       // still ≥ (messages_before_last_human). That's the state right before
@@ -115,7 +123,7 @@ export function AgentPage() {
       const targetCount = messages.findIndex(m => m.id === lastHuman.id);
       // Find first checkpoint whose message_count ≥ targetCount but whose
       // last_human_index < targetCount (i.e. the human is not yet in it).
-      let chosen: any = null;
+      let chosen: TimelineCheckpoint | null = null;
       for (const cp of ordered) {
         if ((cp.last_human_index ?? -1) < targetCount) chosen = cp;
         else break;
@@ -163,13 +171,13 @@ export function AgentPage() {
   // Manual edits are server-authoritative: PATCH the spec straight into agent
   // state. The server diffs what changed and locks those leaf fields so the LLM
   // can't silently overwrite them. (No LLM round-trip — manual takes priority.)
-  const handleApplySpec = useCallback(async (newSpec: any) => {
+  const handleApplySpec = useCallback(async (newSpec: ModelSpec) => {
     // Lock ONLY the leaves the user actually changed in the editor. The widget's
     // draft starts from specWithDefaults(current), so diffing against that same
     // defaulted baseline cancels default-vs-default and yields just the edits.
     const baseline = specWithDefaults(dashboardData.model_spec);
     const lock_paths = specLeafDiff(baseline, newSpec);
-    setDashboardData((prev: any) => ({ ...prev, model_spec: newSpec }));  // optimistic
+    setDashboardData((prev: DashboardData) => ({ ...prev, model_spec: newSpec }));  // optimistic
     try {
       const res = await fetch(`${API_BASE}/spec/${encodeURIComponent(threadId ?? "")}`, {
         method: 'PATCH',
@@ -178,7 +186,7 @@ export function AgentPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'spec update failed');
-      setDashboardData((prev: any) => ({
+      setDashboardData((prev: DashboardData) => ({
         ...prev,
         model_spec: data.model_spec,
         locked_fields: data.locked_fields,
@@ -199,7 +207,7 @@ export function AgentPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'resolve failed');
-      setDashboardData((prev: any) => ({
+      setDashboardData((prev: DashboardData) => ({
         ...prev,
         model_spec: data.model_spec,
         locked_fields: data.locked_fields,
@@ -222,7 +230,7 @@ export function AgentPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'unlock failed');
-      setDashboardData((prev: any) => ({
+      setDashboardData((prev: DashboardData) => ({
         ...prev,
         locked_fields: data.locked_fields,
         pending_spec_changes: data.pending_spec_changes,
@@ -286,14 +294,15 @@ export function AgentPage() {
       });
       const body = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(body?.detail || 'Load failed');
-      setDashboardData((prev: any) => ({
+      setDashboardData((prev: DashboardData) => ({
         ...prev,
         model_status: 'completed',
         summary: body?.message ?? `Model ${runName} loaded.`,
         error: undefined,
       }));
-    } catch (e: any) {
-      setDashboardData((prev: any) => ({ ...prev, error: String(e?.message ?? e) }));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setDashboardData((prev: DashboardData) => ({ ...prev, error: message }));
     }
   };
 

@@ -245,6 +245,17 @@ class PanelDataset:
         X_controls = self.X_controls.values if self.X_controls is not None else None
         return y, X_media, X_controls
 
+    def as_dataset(self) -> "Dataset":  # noqa: F821 - lazy import to avoid a cycle
+        """View this panel through the flexible role-tagged :class:`Dataset`.
+
+        Additive adapter for the generalized data layer: the MMM roles are tagged
+        (kpi→target, media→predictor, control→control) and every reader keeps
+        working via the ``Dataset`` MMM views. See :mod:`mmm_framework.dataset`.
+        """
+        from .dataset import Dataset
+
+        return Dataset.from_panel(self)
+
     def get_media_for_channel(self, channel: str) -> pd.Series:
         """Get media series for a specific channel."""
         if channel not in self.X_media.columns:

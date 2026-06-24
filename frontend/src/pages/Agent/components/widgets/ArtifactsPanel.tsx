@@ -12,22 +12,11 @@ import type { Artifact } from '../../types';
 
 // ─── ProjectDocsWidget ───────────────────────────────────────────────────────
 
-function ProjectDocsWidget({ artifacts, onDelete }: {
-  artifacts: Artifact[];
-  onDelete: (id: string) => void;
+function DocCard({ art, icon, label, viewUrl, downloadUrl, onDelete }: {
+  art: Artifact; icon: React.ReactNode; label: string;
+  viewUrl: string; downloadUrl: string; onDelete: (id: string) => void;
 }) {
-  const reports = artifacts.filter(a => a.kind === 'project_report');
-  const slides  = artifacts.filter(a => a.kind === 'project_slides');
-  if (reports.length === 0 && slides.length === 0) return null;
-
-  const latest = (arr: Artifact[]) => arr.sort((a, b) => b.created_at - a.created_at)[0];
-  const reportArt = latest(reports);
-  const slidesArt = latest(slides);
-
-  const DocCard = ({ art, icon, label, viewUrl, downloadUrl }: {
-    art: Artifact; icon: React.ReactNode; label: string;
-    viewUrl: string; downloadUrl: string;
-  }) => (
+  return (
     <div className="flex items-center gap-3 p-4 bg-white rounded-xl border border-line-200 shadow-sm">
       <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
         {icon}
@@ -62,6 +51,19 @@ function ProjectDocsWidget({ artifacts, onDelete }: {
       </div>
     </div>
   );
+}
+
+function ProjectDocsWidget({ artifacts, onDelete }: {
+  artifacts: Artifact[];
+  onDelete: (id: string) => void;
+}) {
+  const reports = artifacts.filter(a => a.kind === 'project_report');
+  const slides  = artifacts.filter(a => a.kind === 'project_slides');
+  if (reports.length === 0 && slides.length === 0) return null;
+
+  const latest = (arr: Artifact[]) => arr.sort((a, b) => b.created_at - a.created_at)[0];
+  const reportArt = latest(reports);
+  const slidesArt = latest(slides);
 
   return (
     <DashWidget
@@ -78,6 +80,7 @@ function ProjectDocsWidget({ artifacts, onDelete }: {
             label="Project Report (HTML)"
             viewUrl={`${API_BASE}/project-report`}
             downloadUrl={`${API_BASE}/project-report/download`}
+            onDelete={onDelete}
           />
         )}
         {slidesArt && (
@@ -87,6 +90,7 @@ function ProjectDocsWidget({ artifacts, onDelete }: {
             label="Presentation Slides (Reveal.js)"
             viewUrl={`${API_BASE}/project-slides`}
             downloadUrl={`${API_BASE}/project-slides/download`}
+            onDelete={onDelete}
           />
         )}
         {(reports.length > 1 || slides.length > 1) && (

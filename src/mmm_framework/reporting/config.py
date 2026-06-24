@@ -188,6 +188,10 @@ class ReportConfig:
     # Section configurations
     executive_summary: SectionConfig = field(default_factory=SectionConfig)
     model_fit: SectionConfig = field(default_factory=SectionConfig)
+    # Posterior-predictive goodness-of-fit checks (default ON for MMM models).
+    posterior_predictive: SectionConfig = field(default_factory=SectionConfig)
+    # Declared / default estimand results with credible intervals.
+    estimands: SectionConfig = field(default_factory=SectionConfig)
     channel_roi: SectionConfig = field(default_factory=SectionConfig)
     decomposition: SectionConfig = field(default_factory=SectionConfig)
     saturation: SectionConfig = field(default_factory=SectionConfig)
@@ -199,6 +203,8 @@ class ReportConfig:
     geographic: SectionConfig = field(default_factory=SectionConfig)
     mediators: SectionConfig = field(default_factory=SectionConfig)
     cannibalization: SectionConfig = field(default_factory=SectionConfig)
+    # Non-MMM family sections
+    factor_analysis: SectionConfig = field(default_factory=SectionConfig)
 
     # Output settings
     include_plotly_js: bool = True  # Embed Plotly.js (larger file, fully portable)
@@ -224,6 +230,7 @@ class ReportConfig:
             title=title,
             client=client,
             model_fit=SectionConfig(enabled=False),
+            posterior_predictive=SectionConfig(enabled=False),
             saturation=SectionConfig(enabled=False),
             sensitivity=SectionConfig(enabled=False),
             diagnostics=SectionConfig(enabled=False),
@@ -245,6 +252,9 @@ class ReportConfig:
             title=title,
             client=client,
             large_number_format="short",
+            # Technical goodness-of-fit checks are noise for a stakeholder deck;
+            # the estimand results (with CI) stay on as the headline numbers.
+            posterior_predictive=SectionConfig(enabled=False),
             diagnostics=SectionConfig(enabled=False),
             methodology=SectionConfig(
                 enabled=True,

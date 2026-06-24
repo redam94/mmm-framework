@@ -12,8 +12,10 @@ from ..config import (
     AllocationMethod,
     ControlSelectionConfig,
     DimensionAlignmentConfig,
+    FitMethod,
     HierarchicalConfig,
     InferenceMethod,
+    LikelihoodConfig,
     ModelConfig,
     ModelSpecification,
     PriorConfig,
@@ -284,6 +286,8 @@ class ModelConfigBuilder:
         self._optim_maxiter: int = 500
         self._optim_seed: int | None = 42
         self._use_parametric_adstock: bool = True
+        self._fit_method: FitMethod = FitMethod.NUTS
+        self._likelihood: LikelihoodConfig | None = None
 
     # Model specification
     def additive(self) -> Self:
@@ -353,6 +357,37 @@ class ModelConfigBuilder:
         if not 0 < rate < 1:
             raise ValueError(f"Target accept must be between 0 and 1, got {rate}")
         self._target_accept = rate
+        return self
+
+    # Fit method (full MCMC vs. fast approximate checks)
+    def with_fit_method(self, method: FitMethod | str) -> Self:
+        """Set the default fit method used by ``BayesianMMM.fit()``.
+
+        ``"nuts"`` (default) runs full MCMC. The approximate methods — ``"map"``,
+        ``"advi"``, ``"fullrank_advi"``, ``"pathfinder"`` — fit in seconds for
+        quick model checks but produce uncalibrated uncertainty.
+        """
+        self._fit_method = FitMethod(method)
+        return self
+
+    def map_fit(self) -> Self:
+        """Default to a maximum a posteriori (MAP) point estimate — fastest check."""
+        self._fit_method = FitMethod.MAP
+        return self
+
+    def advi(self, full_rank: bool = False) -> Self:
+        """Default to variational inference (ADVI, or full-rank ADVI)."""
+        self._fit_method = FitMethod.FULLRANK_ADVI if full_rank else FitMethod.ADVI
+        return self
+
+    def pathfinder(self) -> Self:
+        """Default to Pathfinder VI (requires the optional ``pymc_extras`` package)."""
+        self._fit_method = FitMethod.PATHFINDER
+        return self
+
+    def with_likelihood(self, likelihood: LikelihoodConfig) -> Self:
+        """Set the observation (likelihood) family. Default is normal/identity."""
+        self._likelihood = likelihood
         return self
 
     def with_intercept_prior(self, mu: float = 0.0, sigma: float = 0.5) -> Self:
@@ -442,6 +477,8 @@ class ModelConfigBuilder:
             optim_maxiter=self._optim_maxiter,
             optim_seed=self._optim_seed,
             use_parametric_adstock=self._use_parametric_adstock,
+            fit_method=self._fit_method,
+            **({"likelihood": self._likelihood} if self._likelihood else {}),
         )
 
 

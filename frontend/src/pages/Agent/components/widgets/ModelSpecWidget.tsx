@@ -6,6 +6,11 @@ import {
 import { Badge } from '../common/Badge';
 import { FLabel, iCls, sCls } from '../common/form';
 import { lockPathLabel, specWithDefaults } from '../../utils/spec';
+import type { ModelSpec } from '../../types';
+
+// The fully-defaulted, editable working model produced by specWithDefaults. Its
+// leaves are concrete (numbers/strings/arrays), unlike the loose incoming spec.
+type DraftSpec = ReturnType<typeof specWithDefaults>;
 
 function SpecRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -51,9 +56,9 @@ function EditSection({ title, icon, children }: { title: string; icon: React.Rea
 // ─── ModelSpecWidget ──────────────────────────────────────────────────────────
 
 interface ModelSpecWidgetProps {
-  spec: any;
+  spec: ModelSpec;
   editable: boolean;
-  onApplySpec: (newSpec: any) => void;
+  onApplySpec: (newSpec: ModelSpec) => void;
   lockedFields?: string[];
   onUnlock?: (path: string | string[]) => void;
 }
@@ -64,37 +69,42 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
   const [newChannel, setNewChannel] = useState('');
   const [newControl, setNewControl] = useState('');
 
-  // Re-sync draft when spec prop changes (e.g. agent updates it)
+  // Re-sync draft when spec prop changes (e.g. agent updates it). View mode
+  // already reads the live prop (displaySpec), so this only seeds the editable
+  // draft; resetting it here is intentional and must not move to render (it
+  // would clobber in-progress edits) — keep the effect.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- seed editable draft from the external spec; deferring to render would discard in-progress edits
     if (!editMode) setDraft(specWithDefaults(spec));
   }, [spec, editMode]);
 
-  const setDraftField = (path: string[], value: any) =>
-    setDraft((prev: any) => {
-      const next = { ...prev };
-      let cur: any = next;
+  const setDraftField = (path: string[], value: unknown) =>
+    setDraft((prev) => {
+      const next = { ...prev } as Record<string, unknown>;
+      let cur: Record<string, unknown> = next;
       for (let i = 0; i < path.length - 1; i++) {
-        cur[path[i]] = { ...cur[path[i]] };
-        cur = cur[path[i]];
+        cur[path[i]] = { ...(cur[path[i]] as Record<string, unknown>) };
+        cur = cur[path[i]] as Record<string, unknown>;
       }
       cur[path[path.length - 1]] = value;
-      return next;
+      return next as DraftSpec;
     });
 
-  const setChannel = (idx: number, field: string, subfield: string | null, value: any) =>
-    setDraft((prev: any) => {
-      const channels = prev.media_channels.map((ch: any, i: number) => {
+  const setChannel = (idx: number, field: string, subfield: string | null, value: unknown) =>
+    setDraft((prev) => {
+      const channels = prev.media_channels.map((ch, i) => {
         if (i !== idx) return ch;
-        if (subfield) return { ...ch, [field]: { ...ch[field], [subfield]: value } };
-        return { ...ch, [field]: value };
+        const chRec = ch as Record<string, unknown>;
+        if (subfield) return { ...chRec, [field]: { ...(chRec[field] as Record<string, unknown>), [subfield]: value } };
+        return { ...chRec, [field]: value };
       });
-      return { ...prev, media_channels: channels };
+      return { ...prev, media_channels: channels } as DraftSpec;
     });
 
   const addChannel = () => {
     const name = newChannel.trim();
     if (!name) return;
-    setDraft((prev: any) => ({
+    setDraft((prev) => ({
       ...prev,
       media_channels: [
         ...prev.media_channels,
@@ -105,28 +115,30 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
   };
 
   const removeChannel = (idx: number) =>
-    setDraft((prev: any) => ({ ...prev, media_channels: prev.media_channels.filter((_: any, i: number) => i !== idx) }));
+    setDraft((prev) => ({ ...prev, media_channels: prev.media_channels.filter((_, i) => i !== idx) }));
 
   const addControl = () => {
     const name = newControl.trim();
     if (!name) return;
-    setDraft((prev: any) => ({ ...prev, control_variables: [...prev.control_variables, { name }] }));
+    setDraft((prev) => ({ ...prev, control_variables: [...prev.control_variables, { name }] }));
     setNewControl('');
   };
 
   const setControlRole = (idx: number, role: string) =>
-    setDraft((prev: any) => ({
+    setDraft((prev) => ({
       ...prev,
-      control_variables: prev.control_variables.map((c: any, i: number) =>
+      control_variables: prev.control_variables.map((c, i) =>
         i === idx ? { ...c, role: role || undefined } : c,
       ),
     }));
 
   const removeControl = (idx: number) =>
-    setDraft((prev: any) => ({ ...prev, control_variables: prev.control_variables.filter((_: any, i: number) => i !== idx) }));
+    setDraft((prev) => ({ ...prev, control_variables: prev.control_variables.filter((_, i) => i !== idx) }));
 
   const handleApply = () => {
-    onApplySpec(draft);
+    // draft is the fully-defaulted working model; its leaves are typed `{}`
+    // (from `unknown ?? default`) so we cast at the boundary to ModelSpec.
+    onApplySpec(draft as unknown as ModelSpec);
     setEditMode(false);
   };
 
@@ -168,7 +180,7 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
       </SpecSection>
       {displaySpec.media_channels?.length > 0 && (
         <SpecSection title="Media Channels" icon={<Zap size={13} />}>
-          {displaySpec.media_channels.map((ch: any) => (
+          {displaySpec.media_channels.map((ch) => (
             <div key={ch.name} className="py-2 border-b border-line-200 last:border-0">
               <p className="text-xs font-semibold text-ink-900 mb-1">{ch.name}</p>
               <div className="flex flex-wrap gap-1.5">
@@ -183,7 +195,7 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
       {displaySpec.control_variables?.length > 0 && (
         <SpecSection title="Controls" icon={<Layers size={13} />}>
           <div className="flex flex-wrap gap-1.5 py-1">
-            {displaySpec.control_variables.map((c: any) => (
+            {displaySpec.control_variables.map((c) => (
               <span key={c.name} className="flex items-center gap-1">
                 <Badge label={c.name} />
                 {c.role === 'confounder' ? (
@@ -196,7 +208,7 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
               </span>
             ))}
           </div>
-          {displaySpec.control_variables.some((c: any) => !c.role) && (
+          {displaySpec.control_variables.some((c) => !c.role) && (
             <p className="text-[11px] text-amber-700 py-1">
               Declare each control's causal role: confounders (drive both spend and the KPI)
               block back-door paths and must always stay in the model; precision controls only
@@ -331,7 +343,7 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
       {/* Media Channels */}
       <EditSection title="Media Channels" icon={<Zap size={13} />}>
         <div className="space-y-2">
-          {draft.media_channels.map((ch: any, idx: number) => (
+          {draft.media_channels.map((ch, idx) => (
             <div key={idx} className="flex gap-2 items-end bg-cream-50 rounded-lg p-2 border border-line-200">
               <div className="flex-1">
                 <FLabel>Name</FLabel>
@@ -389,12 +401,12 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
           drop one. Precision controls only soak up outcome noise and are safe to regularize.
         </p>
         <div className="space-y-1.5">
-          {draft.control_variables.map((c: any, idx: number) => (
+          {draft.control_variables.map((c, idx) => (
             <div key={idx} className="flex items-center gap-2 bg-cream-50 rounded-lg px-2.5 py-1.5 border border-line-200">
               <span className="flex-1 text-xs text-ink-700 truncate">{c.name}</span>
               <select
                 className={sCls + ' w-44'}
-                value={c.role ?? ''}
+                value={typeof c.role === 'string' ? c.role : ''}
                 onChange={e => setControlRole(idx, e.target.value)}
               >
                 <option value="">Role not declared</option>

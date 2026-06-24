@@ -38,8 +38,10 @@ class MMMSerializer:
     >>> model = MMMSerializer.load("models/my_mmm", panel)
     """
 
-    # Version for saved model format
-    _FORMAT_VERSION = "1.0"
+    # Version for saved model format. "1.1" adds `garden_ref` /
+    # `model_class_qualname` (Model Garden: a saved model may be a bespoke
+    # BayesianMMM subclass, so `load()` reconstructs THAT class, not the base).
+    _FORMAT_VERSION = "1.1"
 
     @classmethod
     def save(
@@ -69,35 +71,69 @@ class MMMSerializer:
         ValueError
             If the model has no trace and save_trace is True.
         """
-        path = Path(path)
-        path.mkdir(parents=True, exist_ok=True)
+        final = Path(path)
+        final.parent.mkdir(parents=True, exist_ok=True)
 
-        # 1. Save metadata
-        metadata = cls._collect_metadata(model)
-        with open(path / "metadata.json", "w") as f:
-            json.dump(metadata, f, indent=2)
+        # Write everything into a temp sibling dir, then atomically swap it in.
+        # A crash mid-save leaves the PREVIOUS model intact rather than a
+        # half-written directory — important now that models are shared
+        # cross-project through the Model Garden registry.
+        work = final.parent / f".{final.name}.tmp"
+        if work.exists():
+            shutil.rmtree(work, ignore_errors=True)
+        work.mkdir(parents=True)
+        try:
+            # 1. Save metadata
+            metadata = cls._collect_metadata(model)
+            with open(work / "metadata.json", "w") as f:
+                json.dump(metadata, f, indent=2)
 
-        # 2. Save configurations
-        configs = cls._collect_configs(model)
-        with open(path / "configs.json", "w") as f:
-            json.dump(configs, f, indent=2, default=str)
+            # 2. Save configurations
+            configs = cls._collect_configs(model)
+            with open(work / "configs.json", "w") as f:
+                json.dump(configs, f, indent=2, default=str)
 
-        # 3. Save scaling parameters
-        scaling_params = cls._collect_scaling_params(model)
-        with open(path / "scaling_params.json", "w") as f:
-            json.dump(scaling_params, f, indent=2)
+            # 3. Save scaling parameters
+            scaling_params = cls._collect_scaling_params(model)
+            with open(work / "scaling_params.json", "w") as f:
+                json.dump(scaling_params, f, indent=2)
 
-        # 4. Save trace (if fitted and requested)
-        if save_trace and model._trace is not None:
-            cls._save_trace(model._trace, path, compress)
+            # 4. Save trace (if fitted and requested)
+            if save_trace and model._trace is not None:
+                cls._save_trace(model._trace, work, compress)
 
-        # 5. Save trend features if they exist
-        cls._save_trend_features(model, path)
+            # 5. Save trend features if they exist
+            cls._save_trend_features(model, work)
 
-        # 6. Save seasonality features
-        cls._save_seasonality_features(model, path)
+            # 6. Save seasonality features
+            cls._save_seasonality_features(model, work)
 
-        print(f"Model saved to {path}")
+            cls._atomic_swap(work, final)
+        finally:
+            if work.exists():
+                shutil.rmtree(work, ignore_errors=True)
+
+        print(f"Model saved to {final}")
+
+    @staticmethod
+    def _atomic_swap(work: Path, final: Path) -> None:
+        """Promote the fully-written temp dir ``work`` to ``final``, preserving
+        the prior model on failure (rename-based, atomic within one filesystem)."""
+        backup = final.parent / f".{final.name}.bak"
+        if backup.exists():
+            shutil.rmtree(backup, ignore_errors=True)
+        had_prior = final.exists()
+        if had_prior:
+            os.replace(final, backup)  # move the old model aside
+        try:
+            os.replace(work, final)  # promote the new model
+        except Exception:
+            if had_prior and backup.exists():
+                os.replace(backup, final)  # roll back
+            raise
+        finally:
+            if backup.exists():
+                shutil.rmtree(backup, ignore_errors=True)
 
     @classmethod
     def load(
@@ -171,13 +207,49 @@ class MMMSerializer:
                 ExperimentMeasurement.from_dict(e) for e in metadata["experiments"]
             ]
 
-        instance = BayesianMMM(
+        # Model Garden: reconstruct the bespoke subclass recorded at save time
+        # (falls back to BayesianMMM if its source can't be resolved).
+        model_cls = cls._resolve_model_class(metadata, BayesianMMM)
+        # Bespoke per-model params: the constructor re-validates the saved dict
+        # against the resolved class's CONFIG_SCHEMA (defaults/validators applied),
+        # so a schema added/relaxed since save still loads. None for base models.
+        instance = model_cls(
             panel=panel,
             model_config=model_config,
             trend_config=trend_config,
             adstock_alphas=adstock_alphas,
             experiments=experiments,
+            model_params=metadata.get("model_params"),
         )
+        if metadata.get("garden_ref"):
+            try:
+                instance._garden_ref = dict(metadata["garden_ref"])
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Declarative estimands (mirrors the experiments round-trip above).
+        if metadata.get("declared_estimands"):
+            from .estimands.spec import Estimand
+
+            instance.declared_estimands = [
+                Estimand.from_dict(e) for e in metadata["declared_estimands"]
+            ]
+
+        # Dataset role-mapping schema: re-validate the saved role contract against
+        # the resolved class's DATASET_SCHEMA (drift-visible, mirroring the
+        # model_params re-validation) and re-tag the loaded dataset when the saved
+        # column names match. Best-effort: the panel-derived schema is the
+        # fallback, so a missing/incompatible saved schema never blocks a load.
+        saved_schema = metadata.get("dataset_schema")
+        if saved_schema:
+            try:
+                from .config.dataset import DatasetSchema
+
+                schema_cls = getattr(model_cls, "DATASET_SCHEMA", None) or DatasetSchema
+                validated = schema_cls.model_validate(saved_schema)
+                instance.dataset = instance.dataset.retag(validated)
+            except Exception:  # noqa: BLE001
+                pass
 
         # 5. Load scaling parameters
         with open(path / "scaling_params.json", "r") as f:
@@ -185,24 +257,29 @@ class MMMSerializer:
 
         cls._restore_scaling_params(instance, scaling_params)
 
-        # Re-standardize y with loaded params
-        instance.y = (instance.y_raw - instance.y_mean) / instance.y_std
+        # The y / media / control re-standardization below is MMM-specific (single
+        # standardized KPI + per-channel adstock pre-compute). A non-MMM family
+        # (e.g. a CFA) re-derived its own data in ``_prepare_data`` during
+        # reconstruction, so skip it.
+        if metadata.get("model_kind", "mmm") == "mmm":
+            # Re-standardize y with loaded params
+            instance.y = (instance.y_raw - instance.y_mean) / instance.y_std
 
-        # Re-normalize media with loaded max values
-        for alpha in instance.adstock_alphas:
-            adstocked = geometric_adstock_2d(instance.X_media_raw, alpha)
-            normalized = np.zeros_like(adstocked)
-            for c, ch_name in enumerate(instance.channel_names):
-                normalized[:, c] = adstocked[:, c] / (
-                    instance._media_max[ch_name] + 1e-8
-                )
-            instance.X_media_adstocked[alpha] = normalized
+            # Re-normalize media with loaded max values
+            for alpha in instance.adstock_alphas:
+                adstocked = geometric_adstock_2d(instance.X_media_raw, alpha)
+                normalized = np.zeros_like(adstocked)
+                for c, ch_name in enumerate(instance.channel_names):
+                    normalized[:, c] = adstocked[:, c] / (
+                        instance._media_max[ch_name] + 1e-8
+                    )
+                instance.X_media_adstocked[alpha] = normalized
 
-        # Re-standardize controls with loaded params
-        if instance.X_controls_raw is not None and "control_mean" in scaling_params:
-            instance.X_controls = (
-                instance.X_controls_raw - instance.control_mean
-            ) / instance.control_std
+            # Re-standardize controls with loaded params
+            if instance.X_controls_raw is not None and "control_mean" in scaling_params:
+                instance.X_controls = (
+                    instance.X_controls_raw - instance.control_mean
+                ) / instance.control_std
 
         # 6. Load trend features if present
         cls._load_trend_features(instance, path)
@@ -319,10 +396,67 @@ class MMMSerializer:
         if model.has_product:
             metadata["product_names"] = model.product_names
 
+        # Model Garden provenance: when the model is a bespoke BayesianMMM
+        # subclass, record the registry ref + qualified class name so load()
+        # rebuilds the SAME class (and a cold kernel can find its source).
+        garden_ref = getattr(model, "_garden_ref", None)
+        if garden_ref:
+            metadata["garden_ref"] = dict(garden_ref)
+        cls = type(model)
+        if cls.__name__ != "BayesianMMM":
+            metadata["model_class_qualname"] = f"{cls.__module__}.{cls.__qualname__}"
+
+        # Garden model family kind — non-MMM families (e.g. a CFA) skip the
+        # channel/control panel-compatibility match on reload.
+        from .garden.contract import model_kind as _model_kind
+
+        metadata["model_kind"] = _model_kind(model)
+
         # Experiment calibration likelihoods (so a reloaded model can be re-fit
         # with the same incrementality anchoring it was originally built with).
         if getattr(model, "experiments", None):
             metadata["experiments"] = [e.to_dict() for e in model.experiments]
+
+        # Declarative estimands associated with the model (the counterfactual
+        # causal lens); round-tripped with a schema_version so drift is visible.
+        if getattr(model, "declared_estimands", None):
+            metadata["declared_estimands"] = [
+                e.to_dict() for e in model.declared_estimands
+            ]
+
+        # Bespoke per-model parameters (validated against the model's
+        # CONFIG_SCHEMA). Stored as a plain dict so the reloaded model re-validates
+        # it against the (possibly evolved) schema. ``schema_version`` makes drift
+        # visible; the model class owns its CONFIG_SCHEMA shape.
+        mp = getattr(model, "model_params", None)
+        if mp is not None:
+            from pydantic import BaseModel as _BaseModel
+
+            metadata["model_params"] = (
+                mp.model_dump() if isinstance(mp, _BaseModel) else dict(mp)
+            )
+            schema = getattr(type(model), "CONFIG_SCHEMA", None)
+            metadata["model_params_schema_version"] = (
+                getattr(schema, "SCHEMA_VERSION", 1) if schema is not None else None
+            )
+
+        # Dataset role-mapping schema (the flexible data layer): record the role
+        # contract the model actually used so a reloaded — or garden-listed —
+        # model carries its data needs, re-validated on load against the class's
+        # DATASET_SCHEMA. Present for every model (auto-derived for plain MMM).
+        ds = getattr(model, "dataset", None)
+        ds_schema = getattr(ds, "schema", None)
+        if ds_schema is not None:
+            try:
+                metadata["dataset_schema"] = ds_schema.model_dump(mode="json")
+                dsc = getattr(type(model), "DATASET_SCHEMA", None)
+                metadata["dataset_schema_version"] = getattr(
+                    ds_schema,
+                    "SCHEMA_VERSION",
+                    getattr(dsc, "SCHEMA_VERSION", "1.0"),
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
         return metadata
 
@@ -396,6 +530,55 @@ class MMMSerializer:
                 json.dump(season_features_to_save, f, indent=2)
 
     @classmethod
+    def _resolve_model_class(cls, metadata: dict[str, Any], default: type) -> type:
+        """Resolve the class to reconstruct on load.
+
+        Model Garden models are bespoke ``BayesianMMM`` subclasses; their source
+        is imported from the ``garden_ref`` recorded at save time. If the source
+        can't be found (e.g. loaded in a different session), fall back to the
+        base class with a warning — the trace + scaling still load for read-only
+        inspection, the custom build hooks are just not reapplied.
+        """
+        ref = metadata.get("garden_ref")
+        if ref:
+            # Garden-registered models resolve via their stored source; if that
+            # can't be found (e.g. a different session), degrade to ``default``.
+            try:
+                from .garden.loader import load_garden_class_from_path
+
+                return load_garden_class_from_path(
+                    ref.get("source_path"), ref.get("class_name")
+                )
+            except Exception as exc:  # noqa: BLE001
+                warnings.warn(
+                    f"Could not load garden model class {ref.get('name')!r} "
+                    f"({exc}); falling back to {default.__name__} for trace "
+                    "inspection."
+                )
+                return default
+
+        # No garden_ref: a bespoke ``BayesianMMM`` subclass constructed directly
+        # (e.g. a CFA). Import it by its recorded fully-qualified name so it
+        # round-trips whenever its module is importable; else degrade.
+        qualname = metadata.get("model_class_qualname")
+        if qualname and "." in qualname:
+            module_path, _, cls_name = qualname.rpartition(".")
+            try:
+                import importlib
+
+                candidate = getattr(
+                    importlib.import_module(module_path), cls_name, None
+                )
+                if isinstance(candidate, type):
+                    return candidate
+            except Exception as exc:  # noqa: BLE001
+                warnings.warn(
+                    f"Could not import model class {qualname!r} ({exc}); "
+                    f"falling back to {default.__name__} for trace inspection."
+                )
+        return default
+
+    @classmethod
     def _check_version(cls, metadata: dict[str, Any]) -> None:
         """Check version compatibility and warn if needed."""
         from .model import BayesianMMM
@@ -415,6 +598,12 @@ class MMMSerializer:
         metadata: dict[str, Any],
     ) -> None:
         """Validate that the panel is compatible with the saved model."""
+        # Channel/control identity is MMM-specific. A non-MMM family (e.g. a CFA)
+        # carries an indicator matrix, not channels — it sets ``channel_names=[]``
+        # while the panel still lists its observed columns, so skip the match.
+        if metadata.get("model_kind", "mmm") != "mmm":
+            return
+
         if panel.coords.channels != metadata["channel_names"]:
             raise ValueError(
                 f"Panel channels {panel.coords.channels} don't match "

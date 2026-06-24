@@ -10,9 +10,21 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from loguru import logger
 
 if TYPE_CHECKING:
     from .bundle import MMMDataBundle
+
+
+def _finite(x: Any) -> float | None:
+    """Coerce to a finite float, or ``None`` (for missing / non-finite values)."""
+    if x is None:
+        return None
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return None
+    return v if np.isfinite(v) else None
 
 
 class AggregationMixin:
@@ -403,8 +415,162 @@ class ProductExtractionMixin:
         return None
 
 
+class EstimandPPCMixin:
+    """Shared extraction of estimand results (mean + CI) and the
+    posterior-predictive goodness-of-fit summary.
+
+    Both ``BayesianMMMExtractor`` and ``ExtendedMMMExtractor`` inherit this. Two
+    hooks adapt it per model family:
+
+    - :meth:`_estimand_model` — the model object exposing ``evaluate_estimands``
+      (defaults to ``self.mmm`` or ``self.model``).
+    - :meth:`_ppc_arrays` — returns aligned, original-scale
+      ``(observed, y_rep, pred_mean, pred_lower, pred_upper)`` posterior-predictive
+      arrays, or ``(None,)*5`` when the model cannot produce them. Each extractor
+      implements this differently (a core MMM resamples via ``predict``; an
+      extended model samples its PyMC graph).
+
+    Both ``_extract_*`` methods are best-effort: any failure leaves the bundle
+    field empty so the corresponding section simply no-ops.
+    """
+
+    #: Nominal interval widths sampled for the calibration curve.
+    _PPC_NOMINAL_LEVELS = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95)
+    #: Number of replicate density curves kept for the overlay chart.
+    _PPC_OVERLAY_CURVES = 40
+
+    # -- hooks ----------------------------------------------------------------
+
+    def _estimand_model(self) -> Any:
+        """The model object exposing ``evaluate_estimands`` (family-specific)."""
+        return getattr(self, "mmm", None) or getattr(self, "model", None)
+
+    def _ppc_arrays(self):
+        """Aligned ``(observed, y_rep, pred_mean, pred_lower, pred_upper)`` in
+        original KPI scale at the observation level, or ``(None,)*5``. Subclasses
+        override; the default produces nothing."""
+        return (None, None, None, None, None)
+
+    # -- estimands ------------------------------------------------------------
+
+    def _extract_estimands(self, bundle: "MMMDataBundle") -> "MMMDataBundle":
+        """Realize the model's declared / default estimands as mean + CI.
+
+        Prefers estimands already realized on the fit results (computed at fit
+        time when the model declares them); otherwise evaluates them on demand via
+        ``model.evaluate_estimands()``. A model that does not implement the
+        estimand engine (e.g. an extended model without ``evaluate_estimands``)
+        leaves ``bundle.estimands`` empty.
+        """
+        try:
+            results = getattr(self.results, "estimands", None) if self.results else None
+            if not results:
+                model = self._estimand_model()
+                fn = getattr(model, "evaluate_estimands", None)
+                if not callable(fn):
+                    return bundle
+                results = fn()
+            if not results:
+                return bundle
+
+            out: dict[str, dict[str, Any]] = {}
+            for key, r in results.items():
+                mean = _finite(getattr(r, "mean", None))
+                if getattr(r, "status", "ok") != "ok" or mean is None:
+                    continue
+                entry: dict[str, Any] = {
+                    "mean": mean,
+                    "lower": _finite(getattr(r, "hdi_low", None)),
+                    "upper": _finite(getattr(r, "hdi_high", None)),
+                    "kind": getattr(r, "kind", "") or "",
+                    "units": getattr(r, "units", "") or "",
+                    "hdi_prob": float(getattr(r, "hdi_prob", 0.94) or 0.94),
+                }
+                extra = getattr(r, "extra", None) or {}
+                for k in ("contribution_pct", "prob_positive", "prob_profitable"):
+                    val = _finite(extra.get(k)) if isinstance(extra, dict) else None
+                    if val is not None:
+                        entry[k] = val
+                out[str(key)] = entry
+
+            if out:
+                bundle.estimands = out
+        except Exception:  # noqa: BLE001 — reporting must never hard-fail
+            logger.debug("estimands extraction skipped", exc_info=True)
+        return bundle
+
+    # -- posterior-predictive goodness-of-fit ---------------------------------
+
+    def _extract_posterior_predictive(self, bundle: "MMMDataBundle") -> "MMMDataBundle":
+        """Compute the posterior-predictive goodness-of-fit summary.
+
+        Pulls aligned posterior-predictive replicates (original KPI scale,
+        observation level) via :meth:`_ppc_arrays`, then derives the compact,
+        chart-ready summary the PosteriorPredictiveSection consumes: per-obs mean
+        + interval, a down-sampled replicate cloud, an interval-calibration curve,
+        and posterior-predictive p-values for summary statistics. Best-effort.
+        """
+        try:
+            observed, y_rep, pred_mean, pred_lower, pred_upper = self._ppc_arrays()
+            if observed is None or y_rep is None:
+                return bundle
+
+            ci = float(self.ci_prob)
+            coverage = []
+            for p in self._PPC_NOMINAL_LEVELS:
+                lo = np.percentile(y_rep, (1 - p) / 2 * 100, axis=0)
+                hi = np.percentile(y_rep, (1 + p) / 2 * 100, axis=0)
+                emp = float(np.mean((observed >= lo) & (observed <= hi)))
+                coverage.append({"nominal": float(p), "empirical": emp})
+
+            ss_res = float(np.sum((observed - pred_mean) ** 2))
+            ss_tot = float(np.sum((observed - observed.mean()) ** 2))
+            r2 = (1.0 - ss_res / ss_tot) if ss_tot > 0 else None
+
+            bundle.posterior_predictive = {
+                "observed": observed,
+                "pred_mean": pred_mean,
+                "pred_lower": pred_lower,
+                "pred_upper": pred_upper,
+                "samples": self._downsample_rows(y_rep, self._PPC_OVERLAY_CURVES),
+                "coverage": coverage,
+                "bayes_p": self._ppc_bayes_p(observed, y_rep),
+                "ci_level": ci,
+                "r2": r2,
+            }
+        except Exception:  # noqa: BLE001 — reporting must never hard-fail
+            logger.debug("posterior-predictive extraction skipped", exc_info=True)
+        return bundle
+
+    @staticmethod
+    def _ppc_bayes_p(observed: np.ndarray, y_rep: np.ndarray) -> dict[str, float]:
+        """Posterior-predictive p-values: P(T(y_rep) >= T(y_obs)) per statistic."""
+        stat_fns = {
+            "mean": lambda a, axis=None: np.mean(a, axis=axis),
+            "std": lambda a, axis=None: np.std(a, axis=axis),
+            "min": lambda a, axis=None: np.min(a, axis=axis),
+            "max": lambda a, axis=None: np.max(a, axis=axis),
+        }
+        out: dict[str, float] = {}
+        for name, fn in stat_fns.items():
+            obs_stat = float(fn(observed))
+            rep_stat = fn(y_rep, axis=1)
+            out[name] = float(np.mean(rep_stat >= obs_stat))
+        return out
+
+    @staticmethod
+    def _downsample_rows(arr: np.ndarray, n: int) -> np.ndarray:
+        """Deterministically thin rows to at most ``n`` (evenly spaced)."""
+        if arr.shape[0] <= n:
+            return arr
+        idx = np.linspace(0, arr.shape[0] - 1, n).astype(int)
+        return arr[idx]
+
+
 __all__ = [
     "AggregationMixin",
     "GeoExtractionMixin",
     "ProductExtractionMixin",
+    "EstimandPPCMixin",
+    "_finite",
 ]

@@ -16,6 +16,11 @@ export function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; thre
   const activeDims = dataset.active_dimensions ?? [];
   const variables = dataset.variable_names ?? [];
 
+  // Serialize value-based deps so the fetch effect re-runs on filter/dimension
+  // content changes (not identity), keeping the original effect cadence.
+  const dimFiltersKey = JSON.stringify(dimFilters);
+  const activeDimsKey = JSON.stringify(activeDims);
+
   useEffect(() => {
     if (!selectedVar || !threadId) return;
     setLoadingSeries(true);
@@ -27,10 +32,12 @@ export function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; thre
     }
     fetch(`${API_BASE}/dataset/preview/${encodeURIComponent(threadId ?? "")}?${params}`, { headers: bearerHeader() })
       .then(r => r.json())
-      .then(data => { setSeries(data.series ?? null); })
+      .then((data: { series?: { date: string; value: number }[] | null }) => { setSeries(data.series ?? null); })
       .catch(() => setSeries(null))
       .finally(() => setLoadingSeries(false));
-  }, [selectedVar, JSON.stringify(dimFilters), threadId]);
+    // activeDims/dimFilters are tracked via their serialized content keys.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVar, dimFiltersKey, activeDimsKey, threadId]);
 
   const plotData = series ? [{
     x: series.map(p => p.date),
@@ -42,9 +49,9 @@ export function DatasetPanel({ dataset, threadId }: { dataset: DatasetInfo; thre
   }] : [];
 
   const plotLayout = applyLightModeLayout({
-    title: selectedVar ? `${selectedVar}${dimFilters && Object.keys(dimFilters).length ? ` — ${Object.entries(dimFilters).map(([k, v]) => `${k}: ${v}`).join(', ')}` : ''}` : '',
-    xaxis: { title: 'Date' },
-    yaxis: { title: 'Value' },
+    title: { text: selectedVar ? `${selectedVar}${dimFilters && Object.keys(dimFilters).length ? ` — ${Object.entries(dimFilters).map(([k, v]) => `${k}: ${v}`).join(', ')}` : ''}` : '' },
+    xaxis: { title: { text: 'Date' } },
+    yaxis: { title: { text: 'Value' } },
     height: 280,
     margin: { l: 60, r: 20, t: 40, b: 60 },
   });

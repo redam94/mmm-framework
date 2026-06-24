@@ -262,32 +262,52 @@ def _canonical_trend_type(trend_spec: dict) -> str:
     )
 
 
-def build_model(spec: dict, dataset_path: str) -> BayesianMMM:
+def build_model(
+    spec: dict, dataset_path: str, *, model_cls: type | None = None
+) -> BayesianMMM:
     """Build an UNFITTED ``BayesianMMM`` from a normalized spec + dataset —
     the panel/config/trend stages of ``build_and_fit`` without any sampling.
     The PyMC graph builds lazily on first use, so this is cheap enough for
-    pre-fit prior predictive checks. Raises on failure."""
-    # 1. MFFConfig + panel
-    mff_config = _mff_config_from_spec(spec)
-    try:
-        panel = load_mff(dataset_path, mff_config)
-    except Exception as e:
-        msg = str(e)
-        latent = [
-            c.get("name")
-            for c in spec.get("control_variables", [])
-            if str(c.get("name", "")).strip().lower()
-            in ("trend", "seasonality", "season")
-        ]
-        if "Missing expected variables" in msg and latent:
-            raise ValueError(
-                f"{msg} — Hint: {', '.join(repr(n) for n in latent)} in "
-                "control_variables look like latent baseline components, not "
-                "dataset variables. Remove them from control_variables and use "
-                "the built-in `trend` / `seasonality` settings instead "
-                "(e.g. update_model_setting('seasonality.yearly', 4))."
-            ) from e
-        raise
+    pre-fit prior predictive checks. Raises on failure.
+
+    ``model_cls`` (Model Garden): construct a bespoke ``BayesianMMM`` SUBCLASS
+    instead of the base class — the entire spec→config→trend→experiment pipeline
+    is reused, only the class is swapped. Resolution order: an explicit
+    ``model_cls`` arg wins; else ``spec["garden_ref"]`` (``{source_path,
+    class_name, ...}``) is imported kernel-side via the garden loader; else
+    plain ``BayesianMMM``. The resolved ``garden_ref`` is stamped onto the
+    instance (``mmm._garden_ref``) so serialization records the model's identity
+    and a cold kernel can reload the right class."""
+    # 1. Data: a native role-tagged dataset (spec["dataset"]) loads as a wide table
+    # directly (the non-MMM path — CFA/LCA indicators, surveys); otherwise the MFF
+    # loader builds the MMM panel. The native branch is resolved after the model
+    # class is known (its DATASET_SCHEMA validates the role mapping), so only build
+    # the MMM panel here when no native dataset is declared.
+    native_dataset = bool(spec.get("dataset"))
+    panel = None
+    if not native_dataset:
+        # The MFF config requires a kpi/media classification; a native dataset
+        # (which may have neither) skips it entirely.
+        mff_config = _mff_config_from_spec(spec)
+        try:
+            panel = load_mff(dataset_path, mff_config)
+        except Exception as e:
+            msg = str(e)
+            latent = [
+                c.get("name")
+                for c in spec.get("control_variables", [])
+                if str(c.get("name", "")).strip().lower()
+                in ("trend", "seasonality", "season")
+            ]
+            if "Missing expected variables" in msg and latent:
+                raise ValueError(
+                    f"{msg} — Hint: {', '.join(repr(n) for n in latent)} in "
+                    "control_variables look like latent baseline components, not "
+                    "dataset variables. Remove them from control_variables and use "
+                    "the built-in `trend` / `seasonality` settings instead "
+                    "(e.g. update_model_setting('seasonality.yearly', 4))."
+                ) from e
+            raise
 
     # 2. Inference + model config
     inf = spec.get("inference", {})
@@ -332,6 +352,21 @@ def build_model(spec: dict, dataset_path: str) -> BayesianMMM:
         if weekly > 0:
             sb.with_weekly(order=weekly, prior_sigma=_seas_sigma("weekly"))
         model_config_builder.with_seasonality_builder(sb)
+    # Observation model: the spec may declare a non-default likelihood family
+    # (e.g. binomial for an awareness model). Default is normal/identity.
+    lik_spec = spec.get("likelihood")
+    if lik_spec:
+        from mmm_framework.config import LikelihoodConfig
+
+        try:
+            model_config_builder.with_likelihood(
+                LikelihoodConfig.model_validate(lik_spec)
+            )
+        except Exception as e:  # noqa: BLE001
+            raise ValueError(
+                f"Invalid spec.likelihood: {e}. Expected {{family, link?, params?}} "
+                "— e.g. {'family': 'binomial', 'params': {'n_trials': 1000}}."
+            ) from e
     model_config = model_config_builder.build()
 
     # 3. Trend config
@@ -394,7 +429,80 @@ def build_model(spec: dict, dataset_path: str) -> BayesianMMM:
         )
     trend_config = tb.build()
 
-    mmm = BayesianMMM(panel, model_config, trend_config)
+    # Model Garden: resolve a bespoke subclass (explicit arg or spec.garden_ref),
+    # falling back to the base BayesianMMM. The garden source is imported here —
+    # i.e. kernel-side when this runs inside the session kernel — so untrusted
+    # expert code never executes in the host API process.
+    garden_ref = spec.get("garden_ref") or None
+    resolved_cls = model_cls
+    if resolved_cls is None and garden_ref:
+        from mmm_framework.garden.loader import load_garden_class_from_path
+
+        resolved_cls = load_garden_class_from_path(
+            garden_ref.get("source_path"), garden_ref.get("class_name")
+        )
+    if resolved_cls is None:
+        resolved_cls = BayesianMMM
+
+    # Bespoke per-model parameters: validate spec["model_params"] against the
+    # resolved class's declared CONFIG_SCHEMA (defaults + validators applied),
+    # then hand the result to the constructor. Same clear-error shape as the
+    # experiments/estimands blocks below. When the class declares no schema, the
+    # value is passed through untouched (the base model ignores it).
+    model_params = spec.get("model_params")
+    config_schema = getattr(resolved_cls, "CONFIG_SCHEMA", None)
+    if config_schema is not None:
+        try:
+            model_params = config_schema.model_validate(model_params or {})
+        except Exception as e:  # noqa: BLE001
+            fields = ", ".join(config_schema.model_fields)
+            raise ValueError(
+                f"Invalid model_params for {resolved_cls.__name__}: {e}. "
+                f"Expected a subset of: {fields}."
+            ) from e
+
+    # Optional explicit dataset role mapping (the flexible data layer). Validated
+    # against the resolved class's DATASET_SCHEMA when one is declared (clear error,
+    # mirroring model_params), else against the base DatasetSchema. Applied to the
+    # constructed model's dataset below. Absent on the common MMM path, where roles
+    # are auto-derived from the MFFConfig.
+    dataset_spec = spec.get("dataset")
+    resolved_dataset_schema = None
+    if dataset_spec is not None:
+        dataset_schema_cls = getattr(resolved_cls, "DATASET_SCHEMA", None)
+        if dataset_schema_cls is None:
+            from mmm_framework.config.dataset import DatasetSchema as dataset_schema_cls
+        try:
+            resolved_dataset_schema = dataset_schema_cls.model_validate(dataset_spec)
+        except Exception as e:  # noqa: BLE001
+            fields = ", ".join(dataset_schema_cls.model_fields)
+            raise ValueError(
+                f"Invalid spec.dataset for {resolved_cls.__name__}: {e}. "
+                f"Expected a subset of: {fields}."
+            ) from e
+
+    # Resolve the data to hand the constructor: a native role-tagged dataset loads
+    # the wide table directly (no MMM kpi/media classification); otherwise the MFF
+    # panel built above is used.
+    if native_dataset and resolved_dataset_schema is not None:
+        from mmm_framework.dataset_loader import load_dataset
+
+        try:
+            data = load_dataset(dataset_path, resolved_dataset_schema)
+        except Exception as e:  # noqa: BLE001
+            raise ValueError(
+                f"Could not load spec.dataset for {resolved_cls.__name__}: {e}."
+            ) from e
+    else:
+        data = panel
+
+    mmm = resolved_cls(data, model_config, trend_config, model_params=model_params)
+    if garden_ref:
+        # Provenance for the serializer + cold-kernel reload (best-effort attr).
+        try:
+            mmm._garden_ref = dict(garden_ref)
+        except Exception:  # noqa: BLE001
+            pass
 
     # 4. Experiment calibration (closes the measurement loop): the spec carries
     # completed lift readouts as ExperimentMeasurement dicts; they become
@@ -412,6 +520,23 @@ def build_model(spec: dict, dataset_path: str) -> BayesianMMM:
                 "and estimand (contribution | roas | mroas)."
             ) from e
         mmm.add_experiment_calibration(measurements)
+
+    # 5. Declarative estimands (the counterfactual causal lens): the spec may
+    # carry named Estimand dicts to associate with the model; they are realized
+    # from the posterior at fit time and round-tripped by the serializer. Same
+    # from_dict + try/except shape as the experiments block above.
+    est_spec = spec.get("estimands") or []
+    if est_spec:
+        from mmm_framework.estimands.spec import Estimand
+
+        try:
+            mmm.declared_estimands = [Estimand.from_dict(e) for e in est_spec]
+        except Exception as e:  # noqa: BLE001
+            raise ValueError(
+                f"Invalid estimand entry in spec.estimands: {e}. Each entry must "
+                "be a serialized Estimand (see mmm_framework.estimands.registry "
+                "for the built-in shapes)."
+            ) from e
 
     return mmm
 
@@ -431,6 +556,9 @@ def build_and_fit(spec: dict, dataset_path: str):
     tune = int(inf.get("tune", 1000))
     target_accept = float(inf.get("target_accept", 0.85))
     random_seed = int(inf.get("random_seed", 42))
+    # Approximate methods (map/advi/fullrank_advi/pathfinder) fit in seconds for
+    # quick model checks; "nuts" (default) is full MCMC for real inference.
+    method = str(inf.get("method", "nuts")).lower()
     season = spec.get("seasonality", {})
     yearly = int(season.get("yearly", 0))
     monthly = int(season.get("monthly", 0))
@@ -438,15 +566,24 @@ def build_and_fit(spec: dict, dataset_path: str):
     trend_type = _canonical_trend_type(spec.get("trend", {}))
 
     # 4. Fit
-    results = mmm.fit(random_seed=random_seed)
+    results = mmm.fit(method=method, random_seed=random_seed)
 
     # 5. Summary
-    summary = (
-        f"Model fitted successfully! "
-        f"Observations: {mmm.n_obs}, Channels: {mmm.n_channels}. "
-        f"Trend: {trend_type}, Seasonality: yearly={yearly}/monthly={monthly}/weekly={weekly}, "
-        f"Inference: {chains} chains × {draws} draws."
-    )
+    if getattr(results, "approximate", False):
+        summary = (
+            f"Model fitted with the **{method}** approximate method (fast check — "
+            f"uncertainty is NOT calibrated; re-fit with NUTS before trusting "
+            f"intervals/decisions). "
+            f"Observations: {mmm.n_obs}, Channels: {mmm.n_channels}. "
+            f"Trend: {trend_type}, Seasonality: yearly={yearly}/monthly={monthly}/weekly={weekly}."
+        )
+    else:
+        summary = (
+            f"Model fitted successfully! "
+            f"Observations: {mmm.n_obs}, Channels: {mmm.n_channels}. "
+            f"Trend: {trend_type}, Seasonality: yearly={yearly}/monthly={monthly}/weekly={weekly}, "
+            f"Inference: {chains} chains × {draws} draws."
+        )
 
     # 6. Report (best-effort)
     report_path = "agent_mmm_report.html"
@@ -487,6 +624,7 @@ def build_and_fit(spec: dict, dataset_path: str):
         "trend": trend_type,
         "seasonality": {"yearly": yearly, "monthly": monthly, "weekly": weekly},
         "inference": {
+            "method": method,
             "chains": chains,
             "draws": draws,
             "tune": tune,

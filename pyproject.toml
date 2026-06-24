@@ -52,19 +52,29 @@ gcp = [
     "db-dtypes>=1.2.0",
     "pyarrow>=14.0.0",
 ]
+# NOTE: Pathfinder VI (fit(method="pathfinder")) needs `pymc-extras` + `blackjax`.
+# It is intentionally NOT declared as an extra here: the current `pymc-extras`
+# requires pymc>=6, so locking it would force-upgrade the whole core stack
+# (pymc/pytensor/arviz) for every install. Pathfinder is lazy-imported with a
+# clear install hint; install it manually if you want it (and accept the pymc
+# upgrade in that environment). MAP + ADVI need no extra deps.
 
 [dependency-groups]
 dev = [
+    "beautifulsoup4>=4.15.0",
     "ipykernel>=7.1.0",
     "ipywidgets>=8.1.8",
     "mmm-framework",
     "networkx>=3.0",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
+    "ruff>=0.13.0",
 ]
 app = [
     "plotly>=6.5.0",
     "streamlit>=1.52.1",
+    # Powers the Atelier editor's Format + live lint endpoints (ruff check/format).
+    "ruff>=0.13.0",
 ]
 docs = [
     "sphinx>=7.0,<8.0",

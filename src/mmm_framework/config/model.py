@@ -6,7 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .enums import InferenceMethod, ModelSpecification, PriorType
+from .enums import FitMethod, InferenceMethod, ModelSpecification, PriorType
+from .likelihood import LikelihoodConfig
 from .priors import PriorConfig
 
 
@@ -87,6 +88,13 @@ class ModelConfig(BaseModel):
     # Functional form
     specification: ModelSpecification = ModelSpecification.ADDITIVE
 
+    # Observation model (likelihood family + link + family params). Default
+    # normal/identity reproduces the historical hard-coded pm.Normal likelihood
+    # byte-for-byte. The built-in additive model fits only the Gaussian families
+    # (normal/student_t) directly; non-Gaussian families (e.g. binomial for an
+    # awareness model) are read by models that define their own observation block.
+    likelihood: LikelihoodConfig = Field(default_factory=LikelihoodConfig)
+
     # Intercept prior: Normal(mu, sigma) on standardized y, so mu is measured in
     # KPI standard deviations from the mean (values beyond ±2 are extreme).
     intercept_prior_mu: float = 0.0
@@ -100,6 +108,12 @@ class ModelConfig(BaseModel):
     n_draws: int = 1000
     n_tune: int = 1000
     target_accept: float = 0.9
+
+    # Default fit method when ``fit()`` is called without an explicit ``method``.
+    # NUTS (full MCMC) is the default; the approximate methods (MAP / ADVI /
+    # full-rank ADVI / Pathfinder) trade calibrated uncertainty for speed and
+    # are meant for fast model checks, not final inference.
+    fit_method: FitMethod = FitMethod.NUTS
 
     # Hierarchical structure
     hierarchical: HierarchicalConfig = Field(default_factory=HierarchicalConfig)

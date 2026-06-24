@@ -347,6 +347,89 @@ def marginal_analysis(
         return _err(f"Marginal analysis failed: {e}")
 
 
+def compute_estimands(
+    mmm: Any, results: Any = None, *, estimands=None, random_seed=None
+) -> dict:
+    """Realize the model's declarative estimands (the counterfactual causal lens).
+
+    Uses the model's ``declared_estimands`` if any, else the capability defaults
+    (``contribution_roi`` / ``marginal_roas`` / ``contribution``). Returns one row
+    per realized estimand (wildcard-channel estimands expand per channel) with
+    mean + HDI + units; unsupported estimands are reported, not dropped. This is
+    the registry-driven surface that subsumes the framework's scattered estimand
+    logic — ``get_roi_metrics`` is left as-is.
+    """
+    try:
+        out = mmm.evaluate_estimands(estimands=estimands, random_seed=random_seed)
+        rows = []
+        for key, r in out.items():
+            name, _, channel = key.partition(":")
+            extra = r.extra or {}
+            rows.append(
+                {
+                    "estimand": name,
+                    "channel": channel or "—",
+                    "kind": r.kind,
+                    "status": r.status,
+                    "mean": None if r.mean is None else float(r.mean),
+                    "hdi_low": None if r.hdi_low is None else float(r.hdi_low),
+                    "hdi_high": None if r.hdi_high is None else float(r.hdi_high),
+                    "units": r.units,
+                    "prob_positive": extra.get("prob_positive"),
+                    "prob_profitable": extra.get("prob_profitable"),
+                }
+            )
+        if not rows:
+            return _err(
+                "No estimands to compute (model declares none and the "
+                "capability defaults are empty)."
+            )
+
+        content = (
+            "### Estimands\n\n"
+            "| Estimand | Channel | Mean | 94% HDI | Units | Status |\n"
+            "|---|---|---|---|---|---|\n"
+        )
+        for row in rows:
+            if row["status"] != "ok" or row["mean"] is None:
+                ci = "—"
+                mean = "—"
+            else:
+                mean = f"{row['mean']:.3f}"
+                lo, hi = row["hdi_low"], row["hdi_high"]
+                ci = (
+                    f"[{lo:.3f}, {hi:.3f}]"
+                    if lo is not None and hi is not None
+                    else "—"
+                )
+            content += (
+                f"| {row['estimand']} | {row['channel']} | {mean} | {ci} | "
+                f"{row['units']} | {row['status']} |\n"
+            )
+
+        res = _ok(content, {"estimands": rows})
+        res["tables"] = [
+            records_to_table_json(
+                rows,
+                title="Estimands",
+                source="compute_estimands",
+                group="results",
+                columns=[
+                    {"key": "estimand", "label": "Estimand", "type": "string"},
+                    {"key": "channel", "label": "Channel", "type": "string"},
+                    {"key": "mean", "label": "Mean", "type": "number"},
+                    {"key": "hdi_low", "label": "HDI Low", "type": "number"},
+                    {"key": "hdi_high", "label": "HDI High", "type": "number"},
+                    {"key": "units", "label": "Units", "type": "string"},
+                    {"key": "prob_positive", "label": "P(>0)", "type": "percent"},
+                ],
+            )
+        ]
+        return res
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Error computing estimands: {e}")
+
+
 def prior_predictive_check(
     mmm: Any,
     results: Any = None,
@@ -1340,7 +1423,11 @@ def _structural_anchor(mmm: Any, channel: str) -> tuple[dict | None, str]:
     post = _get_posterior(mmm)
     if post is None:
         return None, "no posterior on the fitted model"
-    keys = {"beta": f"beta_{channel}", "alpha": f"adstock_alpha_{channel}", "lam": f"sat_lam_{channel}"}
+    keys = {
+        "beta": f"beta_{channel}",
+        "alpha": f"adstock_alpha_{channel}",
+        "lam": f"sat_lam_{channel}",
+    }
     draws: dict[str, np.ndarray] = {}
     for p, k in keys.items():
         if k not in post:
@@ -1530,7 +1617,11 @@ def identify_structural_parameters(
         f"levels, {blk}-week blocks "
         f"({'>=' if payload['block_ge_cooldown'] else '<'} {cool.get('cooldown_weeks')}w "
         "adstock washout"
-        + ("" if payload["block_ge_cooldown"] else " — block too short, carryover smears the contrast")
+        + (
+            ""
+            if payload["block_ge_cooldown"]
+            else " — block too short, carryover smears the contrast"
+        )
         + ").",
     ]
     if extrap:
@@ -1599,9 +1690,11 @@ def identify_structural_parameters(
             hint = (
                 "add ≥3 in-support spend levels"
                 if key == "lam"
-                else "sharpen / lengthen the spend pulses"
-                if key == "alpha"
-                else "widen the spend contrast"
+                else (
+                    "sharpen / lengthen the spend pulses"
+                    if key == "alpha"
+                    else "widen the spend contrast"
+                )
             )
             return f"- **{name}**: not identified by this design — {hint}."
         # Lead with contraction (the honest experiment-driven identification
@@ -1609,7 +1702,11 @@ def identify_structural_parameters(
         return (
             f"- **{name}**: contraction {_pct(d['contraction'])} of the prior "
             f"(MDE {d['mde']:.3g}"
-            + (f" = {_pct(d['mde_relative'])} of the estimate" if d.get("mde_relative") else "")
+            + (
+                f" = {_pct(d['mde_relative'])} of the estimate"
+                if d.get("mde_relative")
+                else ""
+            )
             + f"; power {_pct(d['power'])} to resolve from 0)."
         )
 
@@ -1650,7 +1747,11 @@ def identify_structural_parameters(
         d = p[key]
         rows.append(
             {
-                "parameter": {"beta": "coefficient", "alpha": "adstock", "lam": "saturation"}[key],
+                "parameter": {
+                    "beta": "coefficient",
+                    "alpha": "adstock",
+                    "lam": "saturation",
+                }[key],
                 "claimed": d["claimed"],
                 "identified": d["identified"],
                 "power": d["power"],
@@ -1672,8 +1773,209 @@ def identify_structural_parameters(
 
 
 # Registry: the name -> op map the kernel dispatch (PR-B) resolves against.
+def garden_compat(
+    mmm: Any = None,
+    results: Any = None,
+    *,
+    source_path: str | None = None,
+    class_name: str | None = None,
+    scenarios: Any = ("clean",),
+    fit_method: str = "map",
+    n_weeks: int = 104,
+    check_carryover: bool = True,
+) -> dict:
+    """Run the Model Garden compatibility suite on a candidate model class.
+
+    Resolves the class from its stored source (a KERNEL-SIDE import — untrusted
+    expert code runs only inside the session kernel, never the host) and grades
+    it against synthetic worlds with known causal truth. Returns the standard
+    payload plus a ``compat_report`` key the host tool stores on the registry
+    row to gate ``draft -> tested``. ``allow_unfitted`` — it builds + fits its
+    own candidate, so no session model is required.
+    """
+    if not source_path:
+        return _err("garden_compat requires a `source_path` to the model source.")
+    try:
+        from mmm_framework.garden.compat import run_compatibility_check
+        from mmm_framework.garden.loader import load_garden_class_from_path
+
+        cls = load_garden_class_from_path(source_path, class_name)
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Could not load garden model: {e}")
+    try:
+        report = run_compatibility_check(
+            cls,
+            scenarios=tuple(scenarios) if scenarios else ("clean",),
+            fit_method=fit_method,
+            n_weeks=int(n_weeks),
+            check_carryover=bool(check_carryover),
+        )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Compatibility check crashed: {e}")
+
+    res = _ok(report["summary"], {"garden_compat": report})
+    res["compat_report"] = report
+    try:
+        res["tables"] = [
+            records_to_table_json(
+                [
+                    {
+                        "tier": t["name"],
+                        "result": (
+                            "skip"
+                            if t["skipped"]
+                            else ("pass" if t["passed"] else "FAIL")
+                        ),
+                        "blocking": "yes" if t["blocking"] else "",
+                        "detail": t["detail"],
+                    }
+                    for t in report.get("tiers", [])
+                ],
+                title=f"Compatibility tiers — {report.get('class_name', 'model')}",
+                source="garden_compat",
+                group="garden",
+            )
+        ]
+    except Exception:  # noqa: BLE001
+        pass
+    return res
+
+
+garden_compat.allow_unfitted = True  # builds + fits its own candidate model
+
+
+def garden_tune_suggestions(mmm: Any, results: Any = None) -> dict:
+    """Inspect a fitted model's convergence + parameter-learning diagnostics and
+    propose concrete changes to improve fit quality and fitting time — the
+    helper-agent signal source for ``suggest_model_improvements``."""
+    if mmm is None:
+        return _err(NO_MODEL_MSG)
+    try:
+        from mmm_framework.diagnostics import compute_fit_diagnostics
+
+        diag = compute_fit_diagnostics(mmm, results)
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Could not compute diagnostics: {e}")
+
+    conv = diag.get("convergence") or {}
+    learn = diag.get("learning") or {}
+    # A non-fitted model yields an all-null convergence block (ok=true) and a
+    # learning_error — which would otherwise read as "fit looks healthy". Treat
+    # "no usable convergence metric AND no learning block" as un-diagnosable and
+    # return the failure as data. (A MAP fit has null convergence metrics but a
+    # real learning block, so it is not caught here.)
+    conv_has_metrics = any(
+        conv.get(k) is not None for k in ("divergences", "rhat_max", "ess_bulk_min")
+    )
+    if not learn and not conv_has_metrics:
+        detail = diag.get("learning_error") or diag.get("convergence_error") or ""
+        return _err(
+            "Could not compute fit diagnostics — pass a fitted model"
+            + (f" ({detail})" if detail else ".")
+        )
+    suggestions: list[dict] = []  # {area, priority, issue, action}
+
+    if bool(getattr(results, "approximate", False)):
+        suggestions.append(
+            {
+                "area": "inference",
+                "priority": "high",
+                "issue": "This is an APPROXIMATE fit (MAP/ADVI/Pathfinder) — uncertainty is not calibrated.",
+                "action": "Re-fit with NUTS (method='nuts') before trusting intervals or making decisions.",
+            }
+        )
+
+    divergences = conv.get("divergences")
+    if divergences:
+        suggestions.append(
+            {
+                "area": "accuracy",
+                "priority": "high",
+                "issue": f"{divergences} divergent transition(s) — the sampler hit difficult geometry.",
+                "action": "Raise target_accept to 0.95–0.99, increase tune, and tighten / reparameterize the worst priors.",
+            }
+        )
+    rhat = conv.get("rhat_max")
+    rhat_thr = conv.get("rhat_threshold", 1.01)
+    if rhat is not None and rhat > rhat_thr:
+        suggestions.append(
+            {
+                "area": "accuracy",
+                "priority": "high",
+                "issue": f"Max R-hat {rhat:.3f} > {rhat_thr} — chains have not converged.",
+                "action": "Increase tune and draws, run ≥4 chains, and address prior-dominated parameters.",
+            }
+        )
+    ess = conv.get("ess_bulk_min")
+    ess_thr = conv.get("ess_threshold", 400)
+    if ess is not None and ess < ess_thr:
+        suggestions.append(
+            {
+                "area": "accuracy",
+                "priority": "medium",
+                "issue": f"Min bulk ESS {ess:.0f} < {ess_thr} — effective sample size is low.",
+                "action": "Increase draws; if ESS stays low, reparameterize the slow parameters.",
+            }
+        )
+
+    counts = learn.get("verdict_counts") or {}
+    prior_dom = sum(v for k, v in counts.items() if "prior" in str(k).lower())
+    if prior_dom:
+        worst = ", ".join(
+            str(p.get("parameter")) for p in (learn.get("parameters") or [])[:5]
+        )
+        suggestions.append(
+            {
+                "area": "accuracy",
+                "priority": "medium",
+                "issue": f"{prior_dom} parameter(s) look prior-dominated (the data barely moved them): {worst}",
+                "action": "Supply more informative priors, add calibrating experiments, or collect more spend variation in those channels.",
+            }
+        )
+
+    suggestions.append(
+        {
+            "area": "speed",
+            "priority": "low",
+            "issue": "Fitting-time levers.",
+            "action": "Use a fast NUTS backend (nuts_sampler='numpyro' or 'nutpie'); for quick model checks use method='map'/'advi' (seconds) before a full NUTS run.",
+        }
+    )
+
+    has_issue = any(s["priority"] in ("high", "medium") for s in suggestions)
+    headline = (
+        "⚠️ The fit has issues worth addressing:"
+        if has_issue
+        else "✅ No convergence or learning problems detected — the fit looks healthy."
+    )
+    lines = ["### Model improvement suggestions", "", headline, ""]
+    for s in suggestions:
+        lines.append(
+            f"- **[{s['priority']}] {s['area']}** — {s['issue']}\n  → {s['action']}"
+        )
+    res = _ok(
+        "\n".join(lines),
+        {"garden_tune_suggestions": {"diagnostics": diag, "suggestions": suggestions}},
+    )
+    try:
+        res["tables"] = [
+            records_to_table_json(
+                suggestions,
+                title="Improvement suggestions",
+                source="garden_tune_suggestions",
+                group="garden",
+            )
+        ]
+    except Exception:  # noqa: BLE001
+        pass
+    return res
+
+
 OPS = {
     "roi_metrics": roi_metrics,
+    "compute_estimands": compute_estimands,
+    "garden_compat": garden_compat,
+    "garden_tune_suggestions": garden_tune_suggestions,
     "component_decomposition": component_decomposition,
     "model_diagnostics": model_diagnostics,
     "adstock_weights": adstock_weights,

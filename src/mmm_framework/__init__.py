@@ -15,6 +15,7 @@ from .config import (
     PriorType,
     AllocationMethod,
     InferenceMethod,
+    FitMethod,
     ModelSpecification,
     # Config classes
     PriorConfig,
@@ -72,6 +73,9 @@ from .data_loader import (
     mff_from_wide_format,
     load_ragged_mff,
 )
+
+from .dataset import Dataset
+from .dataset_loader import load_dataset
 
 from .model import (
     # Model classes
@@ -153,6 +157,7 @@ __all__ = [
     "PriorType",
     "AllocationMethod",
     "InferenceMethod",
+    "FitMethod",
     "ModelSpecification",
     "TrendType",
     # Config classes
@@ -201,6 +206,8 @@ __all__ = [
     "validate_variable_dimensions",
     "PanelCoordinates",
     "PanelDataset",
+    "Dataset",
+    "load_dataset",
     "MFFLoader",
     "load_mff",
     "mff_from_wide_format",

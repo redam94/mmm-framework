@@ -102,3 +102,29 @@ export {
   useAnalysisPlans,
 } from './useSessions';
 export type { AnalysisPlanInfo } from './useSessions';
+
+// Model Garden hooks
+export {
+  gardenKeys,
+  useGardenModels,
+  useGardenVersions,
+  useGardenModel,
+  useGardenSource,
+  useRegisterGardenModel,
+  usePromoteGardenModel,
+  useUpdateGardenDocs,
+  useDeleteGardenModel,
+  useGardenTest,
+} from './useModelGarden';
+
+// Atelier notebook hooks
+export { notebookKeys, useNotebookDoc, useSaveNotebook } from './useAtelierNotebook';
+
+// Atelier copilot chat hooks
+export {
+  copilotChatKeys,
+  useCopilotChat,
+  useSaveCopilotChat,
+  useCopilotChatState,
+  type PersistedMsg,
+} from './useCopilotChat';

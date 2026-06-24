@@ -981,14 +981,14 @@ async def get_prior_vs_posterior(
                 detail="Model trace not available",
             )
 
-        import pymc as pm
+        from mmm_framework.utils import arviz_compat
 
         trace = mmm._trace
         posterior = trace.posterior
 
         # Sample from prior
         with mmm._model:
-            prior = pm.sample_prior_predictive(samples=n_samples, random_seed=42)
+            prior = arviz_compat.sample_prior_predictive(n_samples, 42)
 
         prior_data = prior.prior
 

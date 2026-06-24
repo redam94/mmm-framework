@@ -70,6 +70,14 @@ from .extended import (
     create_cannibalization_heatmap,
 )
 
+# Posterior-predictive check (goodness-of-fit) charts
+from .ppc import (
+    create_ppc_observed_vs_predicted,
+    create_ppc_density_overlay,
+    create_ppc_interval_calibration,
+    create_ppc_residual_plot,
+)
+
 # Also import ChartConfig for convenience
 from ..config import ChartConfig
 
@@ -111,4 +119,9 @@ __all__ = [
     "create_mediator_pathway_chart",
     "create_mediator_time_series",
     "create_cannibalization_heatmap",
+    # Posterior-predictive check charts
+    "create_ppc_observed_vs_predicted",
+    "create_ppc_density_overlay",
+    "create_ppc_interval_calibration",
+    "create_ppc_residual_plot",
 ]

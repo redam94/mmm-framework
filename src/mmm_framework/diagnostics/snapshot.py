@@ -47,14 +47,16 @@ def _convergence_block(mmm: Any, results: Any) -> dict[str, Any]:
         if trace is not None:
             import arviz as az
 
+            from ..utils import arviz_compat
+
             try:
                 diag["divergences"] = int(trace.sample_stats.diverging.sum().values)
             except Exception:
                 diag["divergences"] = None
             try:
-                diag["rhat_max"] = float(az.rhat(trace).max().to_array().max())
-                diag["ess_bulk_min"] = float(
-                    az.ess(trace, method="bulk").min().to_array().min()
+                diag["rhat_max"] = arviz_compat.dataset_extremum(az.rhat(trace), "max")
+                diag["ess_bulk_min"] = arviz_compat.dataset_extremum(
+                    az.ess(trace, method="bulk"), "min"
                 )
             except Exception:
                 pass
@@ -81,11 +83,12 @@ def _convergence_block(mmm: Any, results: Any) -> dict[str, Any]:
 
 
 def _learning_block(mmm: Any, max_parameters: int) -> dict[str, Any] | None:
+    from ..utils import arviz_compat
     from .learning import parameter_learning
 
     trace = getattr(mmm, "_trace", None)
     var_names = [rv.name for rv in mmm.model.free_RVs]
-    if trace is not None and "prior" in trace.groups():
+    if trace is not None and arviz_compat.has_group(trace, "prior"):
         # fit() extends the trace with a prior draw — reuse it.
         df = parameter_learning(trace, trace, var_names=var_names)
     else:

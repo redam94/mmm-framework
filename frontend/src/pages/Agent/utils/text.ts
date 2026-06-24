@@ -1,10 +1,12 @@
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-export function normalizeContent(content: any): string {
+export function normalizeContent(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     return content
-      .map(b => (typeof b === 'string' ? b : b?.text ?? ''))
+      .map(b =>
+        typeof b === 'string' ? b : (b as { text?: string } | null | undefined)?.text ?? ''
+      )
       .filter(Boolean)
       .join('\n');
   }

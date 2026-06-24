@@ -27,7 +27,10 @@ from .data_extractors import (
 from .sections import (
     Section,
     ExecutiveSummarySection,
+    FactorAnalysisSection,
     ModelFitSection,
+    PosteriorPredictiveSection,
+    EstimandsSection,
     ChannelROISection,
     DecompositionSection,
     SaturationSection,
@@ -54,6 +57,10 @@ from .charts import (
     create_mediator_pathway_chart,
     create_mediator_time_series,
     create_cannibalization_heatmap,
+    create_ppc_observed_vs_predicted,
+    create_ppc_density_overlay,
+    create_ppc_interval_calibration,
+    create_ppc_residual_plot,
 )
 from .helpers import (
     compute_roi_with_uncertainty,
@@ -104,7 +111,10 @@ __all__ = [
     # Sections
     "Section",
     "ExecutiveSummarySection",
+    "FactorAnalysisSection",
     "ModelFitSection",
+    "PosteriorPredictiveSection",
+    "EstimandsSection",
     "ChannelROISection",
     "DecompositionSection",
     "SaturationSection",
@@ -130,4 +140,8 @@ __all__ = [
     "create_mediator_pathway_chart",
     "create_mediator_time_series",
     "create_cannibalization_heatmap",
+    "create_ppc_observed_vs_predicted",
+    "create_ppc_density_overlay",
+    "create_ppc_interval_calibration",
+    "create_ppc_residual_plot",
 ]

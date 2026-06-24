@@ -199,6 +199,88 @@ def generate_mff(
     return scenario_to_mff(sc), truth_summary(sc)
 
 
+def make_awareness_survey(
+    *,
+    n_weeks: int = 104,
+    n_trials: int = 500,
+    retention: float = 0.8,
+    intercept: float = -0.3,
+    amplitude: float = 1.2,
+    seed: int | None = 7,
+) -> tuple[pd.DataFrame, dict]:
+    """A synthetic **brand-awareness survey** dataset for the awareness model.
+
+    The KPI is a weekly **aware-count** ``n_aware ~ Binomial(n_trials, p_t)`` from
+    a survey of ``n_trials`` people, where the aware-rate ``p_t = sigmoid(intercept
+    + goodwill_t)`` and ``goodwill_t`` is a **media goodwill stock** that decays at
+    ``retention`` ρ each week (Σ_c Σ_{τ≤t} ρ^(t-τ)·βc·sat(spend_τ,c)) — i.e. the
+    exact generative structure the ``AwarenessStructuralMMM`` recovers. Two media
+    channels (TV, Search). Returned as an MFF long-format dataframe (KPI
+    ``Awareness`` = the count) + an answer key carrying the true ρ / half-life /
+    ``n_trials`` / per-channel goodwill coefficients.
+
+    Fit it with ``likelihood={"family": "binomial"}`` and
+    ``model_params={"number_of_trials": n_trials}`` — see the awareness model's
+    Atelier demo notebook.
+    """
+    rng = np.random.default_rng(seed)
+    if not 0.0 < retention < 1.0:
+        raise ValueError(f"retention must be in (0, 1), got {retention!r}")
+
+    periods = pd.date_range("2021-01-04", periods=n_weeks, freq="W-MON").strftime(
+        "%Y-%m-%d"
+    )
+    channels = {
+        "TV": (rng.normal(110, 28, n_weeks), 1.4),
+        "Search": (rng.normal(70, 18, n_weeks), 0.9),
+    }
+
+    t = np.arange(n_weeks)
+    lag = t[:, None] - t[None, :]
+    decay = np.where(lag >= 0, retention ** np.maximum(lag, 0), 0.0)  # un-normalized
+
+    goodwill = np.zeros(n_weeks)
+    spend_cols: dict[str, np.ndarray] = {}
+    betas: dict[str, float] = {}
+    for name, (raw, beta) in channels.items():
+        spend = np.clip(raw, 0.0, None)
+        spend_cols[name] = spend
+        x_norm = spend / (spend.max() + 1e-9)
+        sat = 1.0 - np.exp(-3.0 * x_norm)  # diminishing returns (1-exp saturation)
+        goodwill = goodwill + decay @ (beta * sat)  # geometric goodwill stock at ρ
+        betas[name] = beta
+
+    # Center + scale the goodwill so the aware-rate VARIES in a realistic band
+    # (no saturation at 0/100%); the temporal decay structure — hence ρ — is
+    # preserved (amplitude scaling only rescales the effective coefficients).
+    gw = (goodwill - goodwill.mean()) / (goodwill.std() + 1e-9)
+    aware_logit = intercept + amplitude * gw
+    aware_rate = np.clip(1.0 / (1.0 + np.exp(-aware_logit)), 0.03, 0.97)
+    n_aware = rng.binomial(int(n_trials), aware_rate).astype(float)
+
+    variables = {"Awareness": n_aware, **spend_cols}
+    df = _blocks(np.asarray(periods), variables)
+    half_life = float(np.log(0.5) / np.log(retention))
+    answer = {
+        "scenario": "awareness_survey",
+        "kpi": "Awareness",
+        "kpi_kind": "binomial_count",
+        "n_trials": int(n_trials),
+        "channels": list(channels),
+        "true_retention": float(retention),
+        "true_half_life_weeks": half_life,
+        "true_intercept_logit": float(intercept),
+        "true_goodwill_betas": betas,
+        "mean_aware_rate": float(aware_rate.mean()),
+        "notes": (
+            "Awareness as a survey aware-count: n_aware ~ Binomial(n_trials, "
+            "sigmoid(intercept + media goodwill stock)); goodwill decays at the "
+            "retention ρ. Fit with likelihood=binomial + model_params.number_of_trials."
+        ),
+    }
+    return df, answer
+
+
 __all__ = [
     "MFF_COLUMNS",
     "MIN_WEEKS",
@@ -206,4 +288,5 @@ __all__ = [
     "geo_scenario_to_mff",
     "truth_summary",
     "generate_mff",
+    "make_awareness_survey",
 ]

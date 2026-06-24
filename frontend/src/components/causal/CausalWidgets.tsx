@@ -24,6 +24,30 @@ const API_BASE = API_BASE_URL;
 
 // ── Shared types ────────────────────────────────────────────────────────────
 
+// A dynamic JSON value (assumption payloads, spec blobs) whose shape is
+// backend-/agent-driven and only known at runtime.
+type JsonValue =
+  | string | number | boolean | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+// The `data` blob on a React Flow DAG node. The agent/backend attach a small
+// set of known fields; an index signature keeps it permissive for extras.
+interface DagNodeData {
+  label?: React.ReactNode;
+  nodeType?: string;
+  variableName?: string;
+  type?: string;
+  badge?: string;
+  [key: string]: unknown;
+}
+
+// The `data` blob on a React Flow DAG edge.
+interface DagEdgeData {
+  edgeType?: string;
+  [key: string]: unknown;
+}
+
 export interface WorkflowStep {
   step: number;
   title: string;
@@ -40,7 +64,7 @@ export interface Assumption {
   thread_id: string;
   key: string;
   category: string;
-  value: any;
+  value: JsonValue;
   rationale: string;
   change_note: string | null;
   version: number;
@@ -56,15 +80,15 @@ export interface DataFile {
   kind: string;
   size_bytes: number | null;
   preview: string | null;
-  meta: Record<string, any>;
+  meta: Record<string, unknown>;
   created_at: number;
 }
 
 export interface DagPayload {
-  spec: any;
+  spec: JsonValue;
   react_flow: {
-    nodes: Array<{ id: string; position: { x: number; y: number }; data: any; type?: string }>;
-    edges: Array<{ id: string; source: string; target: string; data?: any }>;
+    nodes: Array<{ id: string; position: { x: number; y: number }; data: DagNodeData; type?: string }>;
+    edges: Array<{ id: string; source: string; target: string; data?: DagEdgeData }>;
   };
   validation: { valid: boolean; errors: string[]; warnings: string[] };
   identification?: {
@@ -352,8 +376,8 @@ const hStyle = (color: string, visible: boolean) => ({
   ...(visible ? {} : { opacity: 0, pointerEvents: 'none' as const }),
 });
 
-export function MMMNode({ data }: { data: any }) {
-  const s = NODE_STYLE[data.nodeType] ?? NODE_STYLE.control;
+export function MMMNode({ data }: { data: DagNodeData }) {
+  const s = NODE_STYLE[data.nodeType ?? ''] ?? NODE_STYLE.control;
   return (
     <div style={{
       background: s.bg, border: `2px solid ${s.border}`, borderRadius: 12,
@@ -381,7 +405,7 @@ const MMM_NODE_TYPES = { mmmNode: MMMNode };
 export function SemanticCallouts({
   rfNodes, rfEdges, identification,
 }: {
-  rfNodes: Array<{ id: string; data: any }>;
+  rfNodes: Array<{ id: string; data: DagNodeData }>;
   rfEdges: Array<{ source: string; target: string }>;
   identification?: DagPayload['identification'];
 }) {
@@ -514,8 +538,8 @@ export function SemanticCallouts({
 }
 
 export function DAGViewer({ dag }: { dag: DagPayload | null }) {
-  const rfNodes = dag?.react_flow?.nodes ?? [];
-  const rfEdges = dag?.react_flow?.edges ?? [];
+  const rfNodes = useMemo(() => dag?.react_flow?.nodes ?? [], [dag]);
+  const rfEdges = useMemo(() => dag?.react_flow?.edges ?? [], [dag]);
 
   const posMap = useMemo(() => computeDAGLayout(rfNodes, rfEdges), [rfNodes, rfEdges]);
 
@@ -599,6 +623,7 @@ export function DAGViewer({ dag }: { dag: DagPayload | null }) {
 
 // ── Data-loading hook used by AgentPage ─────────────────────────────────────
 
+// eslint-disable-next-line react-refresh/only-export-components -- shared data-loading hook imported by Agent page + WorkspaceTabs; not a component, kept here with the panel components it feeds.
 export function useCausalPanels(threadId: string | null) {
   const [workflow, setWorkflow] = useState<WorkflowStep[]>([]);
   const [assumptions, setAssumptions] = useState<Assumption[]>([]);
@@ -625,6 +650,7 @@ export function useCausalPanels(threadId: string | null) {
     } catch (e) { console.error('Causal panels refresh failed', e); }
   }, [threadId]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- refresh() fetches panel data over the network and sets it on mount / when threadId changes; state is not derivable during render and an event handler would not fire on thread switch.
   useEffect(() => { refresh(); }, [refresh]);
 
   const overrideWorkflow = useCallback(async (step: number, status: WorkflowStep['status'], notes?: string) => {

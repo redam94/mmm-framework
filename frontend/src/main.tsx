@@ -10,6 +10,8 @@ import '@fontsource/ibm-plex-sans/500.css'
 import '@fontsource/ibm-plex-sans/600.css'
 import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/500.css'
+// KaTeX styles for rendered LaTeX in chat / copilot / guide messages.
+import 'katex/dist/katex.min.css'
 import './index.css'
 import App from './App.tsx'
 

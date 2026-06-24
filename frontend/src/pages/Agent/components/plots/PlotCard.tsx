@@ -1,34 +1,55 @@
 import React, { useMemo, useState } from 'react';
 import { Maximize2 } from 'lucide-react';
 import Plot from 'react-plotly.js';
+import type { Data, Layout } from 'plotly.js';
 import { Modal } from '../common/Modal';
 import { useInView } from '../../hooks/useInView';
 import { usePlotFigure } from '../../hooks/usePlotFigure';
 import { applyLightModeLayout } from '../../utils/plotly';
 import { stripHtml } from '../../utils/text';
 
+// A server-driven dashboard plot blob. It arrives either as a content-addressed
+// ref ({ id, title }) or as a legacy inline figure ({ data, layout, title }).
+// The shape is otherwise driven by the backend, so unknown extra keys are
+// permitted to keep this at least as permissive as the loosely-typed call sites.
+interface DashboardPlot {
+  id?: string;
+  title?: string;
+  data?: unknown;
+  layout?: unknown;
+  [key: string]: unknown;
+}
+
 // React.memo: a plot object keeps its identity once appended to dashboardData
 // (we merge, never rebuild existing refs), so memoization stops every chart from
 // re-rendering — and react-plotly from re-running Plotly.react() — on every SSE
 // chunk while the agent streams. Combined with the viewport gate below, this is
 // what fixes the "freezes as more outputs accumulate" symptom.
-export const PlotCard = React.memo(function PlotCard({ plot, idx }: { plot: any; idx: number }) {
+export const PlotCard = React.memo(function PlotCard({ plot, idx }: { plot: DashboardPlot; idx: number }) {
   const [fullscreen, setFullscreen] = useState(false);
   // The observed wrapper is ALWAYS in the DOM (even before reveal) so the
   // IntersectionObserver can fire; only the heavy <Plot> mounts once in view.
   const [wrapRef, inView] = useInView<HTMLDivElement>();
   const fig = usePlotFigure(plot, inView);
 
+  // fig.data / fig.layout are server-driven JSON (typed `unknown`); cast at the
+  // Plotly boundary. `title` may arrive as a string or a {text} object.
+  const figLayout = fig?.layout as { title?: { text?: string } | string } | undefined;
   const rawTitle =
-    fig?.layout?.title?.text ?? fig?.layout?.title ?? plot?.title ?? `Chart ${idx + 1}`;
+    (typeof figLayout?.title === 'object' ? figLayout?.title?.text : figLayout?.title) ??
+    plot?.title ??
+    `Chart ${idx + 1}`;
   const title = stripHtml(String(rawTitle || `Chart ${idx + 1}`));
 
-  const fixedLayout = useMemo(() => applyLightModeLayout(fig?.layout), [fig]);
+  const fixedLayout = useMemo(
+    () => applyLightModeLayout(fig?.layout as Partial<Layout> | undefined),
+    [fig],
+  );
 
   const plotEl = (height: string) =>
     fig ? (
       <Plot
-        data={fig.data}
+        data={fig.data as Data[]}
         layout={{ ...fixedLayout, autosize: true }}
         useResizeHandler
         style={{ width: '100%', height }}

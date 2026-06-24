@@ -78,14 +78,14 @@ __all__ = [
 _DEFAULT_BINS = 60
 # Verdict colors (matplotlib-friendly), surfaced so plots read consistently.
 _VERDICT_COLORS = {
-    "strong": "#3f7d5e",       # green  -- data clearly informed the parameter
-    "moderate": "#3b6ea5",     # blue
-    "weak": "#d98a2b",         # amber
-    "relocated": "#7b5ea5",    # purple -- moved >= 1 prior-sd without narrowing:
-                               #   evidence dominated the LOCATION; width may be
-                               #   likelihood flatness or tail/mixing inflation
+    "strong": "#3f7d5e",  # green  -- data clearly informed the parameter
+    "moderate": "#3b6ea5",  # blue
+    "weak": "#d98a2b",  # amber
+    "relocated": "#7b5ea5",  # purple -- moved >= 1 prior-sd without narrowing:
+    #   evidence dominated the LOCATION; width may be
+    #   likelihood flatness or tail/mixing inflation
     "prior-dominated": "#a63a50",  # red -- posterior ~ prior
-    "undetermined": "#8a8079", # grey   -- degenerate prior (sd 0)
+    "undetermined": "#8a8079",  # grey   -- degenerate prior (sd 0)
 }
 
 
@@ -107,10 +107,13 @@ def _extract(obj: Any, group: str) -> dict[str, np.ndarray]:
     try:
         import arviz as az
 
+        from ..utils import arviz_compat
+
         if isinstance(obj, az.InferenceData):
-            if group not in obj.groups():
+            if not arviz_compat.has_group(obj, group):
+                names = arviz_compat.group_names(obj)
                 raise KeyError(
-                    f"InferenceData has no '{group}' group (groups: {obj.groups()})"
+                    f"InferenceData has no '{group}' group (groups: {names})"
                 )
             obj = obj[group]
     except ImportError:  # pragma: no cover - arviz is a hard dep in practice
@@ -130,7 +133,9 @@ def _extract(obj: Any, group: str) -> dict[str, np.ndarray]:
             n_samples = int(np.prod([da.sizes[d] for d in sample_dims]))
             param_shape = tuple(da.sizes[d] for d in param_dims)
             flat = values.reshape((n_samples, *param_shape))
-            out.update(_flatten_array(str(name), flat, n_samples_axis=0, samples_first=True))
+            out.update(
+                _flatten_array(str(name), flat, n_samples_axis=0, samples_first=True)
+            )
         return out
 
     if isinstance(obj, Mapping):  # plain dict of arrays (sample axis first)
@@ -387,8 +392,13 @@ def parameter_learning(
                 "shift_z": shift_z,
                 "post_ess_bulk": ess.get(name, float("nan")),
                 "verdict": _verdict(
-                    contraction, overlap, shift_z,
-                    c_strong, c_weak, ovl_dominated, z_relocated,
+                    contraction,
+                    overlap,
+                    shift_z,
+                    c_strong,
+                    c_weak,
+                    ovl_dominated,
+                    z_relocated,
                 ),
             }
         )
@@ -396,9 +406,17 @@ def parameter_learning(
     df = pd.DataFrame(
         rows,
         columns=[
-            "parameter", "prior_mean", "prior_sd", "post_mean", "post_sd",
-            "contraction", "contraction_robust", "overlap", "shift_z",
-            "post_ess_bulk", "verdict",
+            "parameter",
+            "prior_mean",
+            "prior_sd",
+            "post_mean",
+            "post_sd",
+            "contraction",
+            "contraction_robust",
+            "overlap",
+            "shift_z",
+            "post_ess_bulk",
+            "verdict",
         ],
     )
     if not df.empty:
@@ -446,7 +464,9 @@ def plot_parameter_learning(
     if present:
         ax.legend(
             handles=[Patch(color=_VERDICT_COLORS[v], label=v) for v in present],
-            loc="lower right", fontsize=8, frameon=False,
+            loc="lower right",
+            fontsize=8,
+            frameon=False,
         )
     return ax
 
