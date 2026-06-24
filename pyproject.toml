@@ -59,6 +59,11 @@ gcp = [
 # clear install hint; install it manually if you want it (and accept the pymc
 # upgrade in that environment). MAP + ADVI need no extra deps.
 
+[project.urls]
+Homepage = "https://redam94.github.io/mmm-framework/"
+Documentation = "https://redam94.github.io/mmm-framework/"
+Repository = "https://github.com/redam94/mmm-framework"
+
 [dependency-groups]
 dev = [
     "beautifulsoup4>=4.15.0",
@@ -86,5 +91,34 @@ docs = [
 
 [tool.uv.sources]
 mmm-framework = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mmm_framework"]
+
+# Keep the sdist lean: ship the library + metadata only, not the monorepo
+# (frontend/, docs/, nbs/, api/, app/, tests/ are not needed to `pip install`).
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/mmm_framework",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
+
+# Never ship dev cruft or the 3.2 GB runtime session DB that lives in the
+# package tree. Applies to every build target.
+[tool.hatch.build]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/*.db",
+    "**/*.db-shm",
+    "**/*.db-wal",
+    "**/*.egg-info",
+]
 
 

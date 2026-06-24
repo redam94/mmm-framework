@@ -2,6 +2,8 @@
 
 A modular Marketing Mix Model framework built on PyMC-Marketing with full Bayesian uncertainty quantification, async model fitting, and interactive visualization.
 
+📖 **[Read the documentation →](https://redam94.github.io/mmm-framework/)**
+
 ## Overview
 
 This framework provides a production-ready implementation for marketing mix modeling that emphasizes methodological rigor over specification shopping. It handles variable-dimension MFF (Master Flat File) data, multiplicative specifications with Hill/logistic saturation, hierarchical panel structures, and offers fast frequentist alternatives for rapid iteration.
