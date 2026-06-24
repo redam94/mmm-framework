@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ExternalLink, MessageCircleQuestion, Send, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
+import { remarkPlugins, rehypePlugins, normalizeMath } from '../../lib/markdownMath';
 import { useProjectStore } from '../../stores/projectStore';
 import { useGuideChat } from './useGuideChat';
 import type { GuideMessage } from './useGuideChat';
@@ -111,8 +111,8 @@ function MessageBubble({ msg }: { msg: GuideMessage }) {
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%] rounded-2xl rounded-bl-md border border-line-200 bg-white px-3.5 py-2 text-sm text-ink-700">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
-          {msg.content}
+        <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={MD_COMPONENTS}>
+          {normalizeMath(msg.content)}
         </ReactMarkdown>
       </div>
     </div>

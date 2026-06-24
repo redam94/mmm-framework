@@ -55,6 +55,83 @@
         table.compute code { white-space: nowrap; }
         .assumption-tag { display: inline-block; font-size: .68rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; padding: .1rem .45rem; border-radius: 999px; background: #fdf0e2; color: #8a5413; vertical-align: middle; }
     </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Pricing | MMM Framework">
+    <meta name="twitter:description" content="Free, self-hosted OSS core with no limits — plus managed Team / Business / Enterprise tiers. Limits and feature gates match the code; dollar prices are proposed and illustrative.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta name="author" content="Matthew Reda">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/pricing.html",
+          "name": "Pricing | MMM Framework",
+          "description": "Open-core pricing for the MMM Framework: a free, self-hosted OSS core with no limits, plus paid managed tiers (Free / Team / Business / Enterprise) whose seat, project, and monthly-fit limits and feature gates are exactly the ones enforced in code. Dollar prices are proposed and illustrative; billing is per-seat plus metered fits.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-18",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/pricing.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/pricing.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/pricing.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Pricing",
+              "item": "https://redam94.github.io/mmm-framework/pricing.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
 </head>
 <body>
     <!-- Navigation injected by shared/components.js -->
@@ -123,7 +200,7 @@
                     <span class="tier-badge">Most popular</span>
                     <h3>Team</h3>
                     <p class="blurb">Managed multi-tenant workspace for a single team.</p>
-                    <div class="price">~$X<span class="unit">per seat / month</span></div>
+                    <div class="price">$50<span class="unit">per seat / month</span></div>
                     <p class="price-note">Proposed / illustrative — final per-seat price TBD</p>
                     <ul class="limits">
                         <li><span class="k">Seats</span><span class="v">5</span></li>
@@ -145,7 +222,7 @@
                 <div class="tier">
                     <h3>Business</h3>
                     <p class="blurb">SSO, audit export, and headroom for an agency or larger org.</p>
-                    <div class="price">~$Y<span class="unit">per seat / month</span></div>
+                    <div class="price">$200<span class="unit">per seat / month</span></div>
                     <p class="price-note">Proposed / illustrative — higher per-seat than Team; final TBD</p>
                     <ul class="limits">
                         <li><span class="k">Seats</span><span class="v">25</span></li>
@@ -252,7 +329,7 @@
             <div class="warning-box">
                 <h4>Honest footnotes (this is the whole pitch)</h4>
                 <ul>
-                    <li><strong>Dollar prices are proposed / illustrative.</strong> The <code>~$X</code> / <code>~$Y</code> per-seat figures and the "$0 Free" are a starting sketch; the founder sets the finals. The enforceable contract is the limits and feature gates in <code>auth/plans.py</code>, which this page mirrors exactly.</li>
+                    <li><strong>Dollar prices are proposed / illustrative.</strong> The <code>$50</code> / <code>$200</code> per-seat figures and the "$0 Free" are a starting sketch; the founder sets the finals. The enforceable contract is the limits and feature gates in <code>auth/plans.py</code>, which this page mirrors exactly.</li>
                     <li><strong>Self-hosting is free and unlimited.</strong> The OSS core under Apache&nbsp;2.0 has no seat, project, or fit limits when you run it yourself with auth off. The billed Free plan is the managed-platform entry point, a different thing.</li>
                     <li><strong>SOC&nbsp;2: readiness, not certified.</strong> The control set is built toward SOC&nbsp;2-style expectations (access control, audit, isolation), but the platform is <strong>not SOC&nbsp;2 certified</strong> and no audit has been performed — see the <a href="trust.html#main-content">Trust &amp; Security</a> page. Treat it as readiness evidence, not an attestation.</li>
                     <li><strong>Compute rates are assumptions.</strong> The runtime numbers (~17&nbsp;s fit, 6.0× NumPyro) are measured; the per-vCPU-hour dollar band is a representative assumption that depends on your instance and region.</li>

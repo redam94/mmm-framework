@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import Editor from '@monaco-editor/react';
 import ReactMarkdown, { type Components } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { remarkPlugins, rehypePlugins, normalizeMath } from '../../lib/markdownMath';
 import {
   ChevronDown,
   ChevronUp,
@@ -16,7 +16,7 @@ import { PlotCard } from '../../pages/Agent/components/plots/PlotCard';
 import { TableCard } from '../../pages/Agent/components/tables/TableCard';
 import type { TableRef } from '../../pages/Agent/types';
 import type { NotebookCell as Cell } from '../../api/services/atelierNotebookService';
-import { registerGardenCompletions } from './gardenCompletions';
+import { registerGardenCompletions, defineAtelierTheme } from './gardenCompletions';
 
 export type CellStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -110,7 +110,8 @@ function CodeEditor({
         language="python"
         value={value}
         onChange={(v) => onChange(v ?? '')}
-        theme="vs"
+        beforeMount={defineAtelierTheme}
+        theme="atelier-light"
         onMount={(editor, monaco) => {
           registerGardenCompletions(editor, monaco);
           editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () =>
@@ -133,6 +134,8 @@ function CodeEditor({
           tabCompletion: 'on',
           quickSuggestions: true,
           suggestOnTriggerCharacters: true,
+          parameterHints: { enabled: true },
+          bracketPairColorization: { enabled: true },
           automaticLayout: true,
           padding: { top: 8, bottom: 8 },
           fontFamily: 'JetBrains Mono, ui-monospace, monospace',
@@ -289,8 +292,8 @@ export function NotebookCell({
           onDoubleClick={() => setEditing(true)}
         >
           {cell.source.trim() ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={CELL_MD}>
-              {cell.source}
+            <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={CELL_MD}>
+              {normalizeMath(cell.source)}
             </ReactMarkdown>
           ) : (
             <p className="italic text-ink-300">Empty markdown — double-click to edit.</p>

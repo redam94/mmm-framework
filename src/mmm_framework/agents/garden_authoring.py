@@ -19,6 +19,7 @@ import at module load):
 from __future__ import annotations
 
 import ast
+import json
 import shutil
 import subprocess
 from typing import Any
@@ -381,8 +382,118 @@ _EXPECTED_DETERMINISTICS = ("channel_contributions", "media_total")
 _GARDEN_BASES = ("CustomMMM", "BayesianMMM", "BaseExtendedMMM")
 
 
-def _problem(severity: str, message: str, line: int | None = None) -> dict[str, Any]:
-    return {"severity": severity, "message": message, "line": line}
+def _problem(
+    severity: str,
+    message: str,
+    line: int | None = None,
+    *,
+    column: int | None = None,
+    end_line: int | None = None,
+    end_column: int | None = None,
+    code: str | None = None,
+) -> dict[str, Any]:
+    """A single Problems entry. ``line``/``column`` (1-based) + the optional
+    ``end_*`` span drive the editor's inline squiggle; ``code`` is the rule id
+    (e.g. a ruff ``F821``) when one applies."""
+    return {
+        "severity": severity,
+        "message": message,
+        "line": line,
+        "column": column,
+        "end_line": end_line,
+        "end_column": end_column,
+        "code": code,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Real Python linting via ruff — undefined names, unused imports, redefinitions,
+# and syntax. Layered ON TOP of the AST contract checks below so the editor shows
+# genuine code errors (with precise line/column spans), not just conventions.
+# Host-safe: ruff parses, never executes, the candidate source. Style rules are
+# intentionally excluded (the Format button handles those) so the Problems panel
+# stays focused on correctness.
+# --------------------------------------------------------------------------- #
+
+#: ruff rule selection for live diagnostics: pyflakes (F — undefined names,
+#: unused imports/vars, redefinitions, bad f-strings) + syntax errors (E9).
+_RUFF_SELECT = "F,E9"
+
+#: ruff codes treated as blocking errors; the rest of F is advisory (warning).
+_RUFF_ERROR_CODES = frozenset({"E999", "F821", "F822", "F823", "F831", "F706"})
+
+
+def _ruff_severity(code: str) -> str:
+    # ruff tags syntax / parse errors with a missing code or "invalid-syntax".
+    if not code or "syntax" in code.lower():
+        return "error"
+    if code in _RUFF_ERROR_CODES or code.startswith("E9"):
+        return "error"
+    return "warning" if code.startswith("F") else "info"
+
+
+def ruff_lint(source_code: str) -> list[dict[str, Any]]:
+    """Run ``ruff check`` over the editor source and map its JSON diagnostics to
+    Problems entries (with line/column spans for inline markers).
+
+    Returns ``[]`` when ruff is unavailable or anything goes wrong — the AST
+    contract lint always runs regardless, so the Problems panel degrades, never
+    fails. ruff only parses the source; it never imports or executes it.
+    """
+    ruff = shutil.which("ruff")
+    if not ruff:
+        return []
+    try:
+        proc = subprocess.run(
+            [
+                ruff,
+                "check",
+                "--stdin-filename",
+                "atelier_model.py",
+                "--output-format",
+                "json",
+                "--select",
+                _RUFF_SELECT,
+                "--no-cache",
+                "-",
+            ],
+            input=source_code,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except Exception:  # noqa: BLE001 — degrade to no ruff diagnostics
+        return []
+    out = (proc.stdout or "").strip()
+    if not out:
+        return []
+    try:
+        diags = json.loads(out)
+    except Exception:  # noqa: BLE001 — unexpected (non-JSON) output
+        return []
+    problems: list[dict[str, Any]] = []
+    for d in diags:
+        if not isinstance(d, dict):
+            continue
+        code = str(d.get("code") or "")
+        msg = str(d.get("message") or "").strip()
+        loc = d.get("location") or {}
+        end = d.get("end_location") or {}
+        # A real rule id (e.g. F821) prefixes the message; a syntax-error
+        # pseudo-code ("invalid-syntax") doesn't read as a code, so omit it.
+        is_rule = bool(code) and "syntax" not in code.lower()
+        problems.append(
+            _problem(
+                _ruff_severity(code),
+                f"{code}: {msg}" if is_rule else msg,
+                loc.get("row"),
+                column=loc.get("column"),
+                end_line=end.get("row"),
+                end_column=end.get("column"),
+                code=code if is_rule else None,
+            )
+        )
+    return problems
 
 
 def static_authoring_lint(source_code: str) -> tuple[str | None, list[dict[str, Any]]]:
@@ -583,5 +694,6 @@ __all__ = [
     "NOTEBOOK_DIAGNOSIS_KNOWLEDGE",
     "build_copilot_system_prompt",
     "static_authoring_lint",
+    "ruff_lint",
     "format_source",
 ]

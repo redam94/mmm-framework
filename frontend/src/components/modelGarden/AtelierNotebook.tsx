@@ -45,12 +45,19 @@ export function AtelierNotebook({
   name,
   liveSource,
   version = null,
+  copilotName,
+  copilotVersion = null,
   onApplyToEditor,
   fill = false,
 }: {
   name: string;
   liveSource: string;
   version?: number | null;
+  /** Stable scope for the notebook copilot chat (per model/version memory).
+   * Decoupled from `name`, which during authoring tracks the live draft-name
+   * field and would churn the chat key on every keystroke. Defaults to `name`. */
+  copilotName?: string | null;
+  copilotVersion?: number | null;
   /** Write a copilot model-source fix back to the editor buffer (the kernel
    * imports the model from there, so model-class rewrites can't live in a cell). */
   onApplyToEditor?: (code: string) => void;
@@ -60,6 +67,10 @@ export function AtelierNotebook({
   fill?: boolean;
 }) {
   const nbName = name?.trim() || "untitled";
+  // Copilot chat scope (stable across authoring keystrokes); the notebook DOC
+  // still keys off nbName/version.
+  const copilotChatName = (copilotName ?? name)?.trim() || "untitled";
+  const copilotChatVersion = copilotVersion ?? version;
   const docQuery = useNotebookDoc(nbName, version);
   const save = useSaveNotebook();
 
@@ -382,17 +393,21 @@ export function AtelierNotebook({
         <div
           className={
             copilotOpen
-              ? "w-[21rem] shrink-0 overflow-hidden rounded-md border border-line-200 bg-white"
+              ? "w-[25rem] shrink-0 overflow-hidden rounded-md border border-line-200 bg-white"
               : "hidden"
           }
         >
           <NotebookCopilotPanel
+            key={`nbcopilot-${copilotChatName}-${copilotChatVersion ?? 'draft'}`}
             sourceCode={liveSource}
             datasetPreview={dataset?.preview ?? null}
             cells={cells}
             diagnoseRequest={diagnose}
             onApplyCode={applyCopilotCode}
             onApplyToEditor={onApplyToEditor}
+            name={copilotChatName}
+            version={copilotChatVersion}
+            active={copilotOpen}
             onClose={() => setCopilotOpen(false)}
             className="h-full"
           />

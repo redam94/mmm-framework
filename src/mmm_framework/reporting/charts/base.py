@@ -48,11 +48,71 @@ def _to_json(data: Any) -> str:
     return json.dumps(data, cls=NumpyEncoder)
 
 
-def _hex_to_rgb(hex_color: str) -> str:
-    """Convert hex color to RGB string for Plotly rgba()."""
-    hex_color = hex_color.lstrip("#")
-    r, g, b = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-    return f"{r}, {g}, {b}"
+def _hsl_to_rgb(h: float, s: float, lightness: float) -> tuple[int, int, int]:
+    """HSL (``h`` in degrees, ``s``/``lightness`` in ``[0, 1]``) -> 8-bit RGB."""
+    c = (1 - abs(2 * lightness - 1)) * s
+    h_ = (h % 360) / 60.0
+    x = c * (1 - abs(h_ % 2 - 1))
+    if h_ < 1:
+        rp, gp, bp = c, x, 0.0
+    elif h_ < 2:
+        rp, gp, bp = x, c, 0.0
+    elif h_ < 3:
+        rp, gp, bp = 0.0, c, x
+    elif h_ < 4:
+        rp, gp, bp = 0.0, x, c
+    elif h_ < 5:
+        rp, gp, bp = x, 0.0, c
+    else:
+        rp, gp, bp = c, 0.0, x
+    m = lightness - c / 2
+    return (
+        round((rp + m) * 255),
+        round((gp + m) * 255),
+        round((bp + m) * 255),
+    )
+
+
+def _hex_to_rgb(color: str) -> str:
+    """Convert a CSS color to an ``"r, g, b"`` string for Plotly ``rgba()``.
+
+    Robust to every format ``ChannelColors.get`` (and callers) can produce: hex
+    (``#rrggbb`` / ``rrggbb`` / ``#rgb``), ``hsl(h, s%, l%)`` (the hash-based
+    fallback for channels outside the palette), and ``rgb(...)`` / ``rgba(...)``.
+    Anything unparseable falls back to neutral gray so a report never crashes on
+    an unexpected color string.
+    """
+    fallback = "128, 128, 128"
+    if not isinstance(color, str):
+        return fallback
+    c = color.strip().lower()
+
+    if c.startswith("hsl"):
+        try:
+            inside = c[c.index("(") + 1 : c.index(")")]
+            h_s, s_s, l_s = (p.strip().rstrip("%") for p in inside.split(",")[:3])
+            r, g, b = _hsl_to_rgb(float(h_s), float(s_s) / 100.0, float(l_s) / 100.0)
+            return f"{r}, {g}, {b}"
+        except Exception:  # noqa: BLE001
+            return fallback
+
+    if c.startswith("rgb"):
+        try:
+            inside = c[c.index("(") + 1 : c.index(")")]
+            parts = [p.strip() for p in inside.split(",")[:3]]
+            r, g, b = (int(round(float(p))) for p in parts)
+            return f"{r}, {g}, {b}"
+        except Exception:  # noqa: BLE001
+            return fallback
+
+    h = c.lstrip("#")
+    if len(h) == 3:  # shorthand #rgb -> #rrggbb
+        h = "".join(ch * 2 for ch in h)
+    try:
+        r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+        return f"{r}, {g}, {b}"
+    except (ValueError, IndexError):
+        return fallback
 
 
 def _dates_to_strings(dates: list | np.ndarray | pd.DatetimeIndex) -> list[str]:

@@ -15,6 +15,8 @@ from mmm_framework.reporting.sections import (
     Section,
     ExecutiveSummarySection,
     ModelFitSection,
+    PosteriorPredictiveSection,
+    EstimandsSection,
     ChannelROISection,
     DecompositionSection,
     SaturationSection,
@@ -737,3 +739,244 @@ class TestSectionRegistry:
             )
             html = section.render()
             assert isinstance(html, str)
+
+
+# =============================================================================
+# TestEstimandsSection
+# =============================================================================
+
+
+def _estimands_bundle():
+    bundle = MMMDataBundle()
+    bundle.channel_names = ["TV", "Search"]
+    bundle.estimands = {
+        "contribution_roi:TV": {
+            "mean": 2.1,
+            "lower": 1.4,
+            "upper": 2.9,
+            "kind": "roi",
+            "units": "",
+            "hdi_prob": 0.94,
+        },
+        "contribution_roi:Search": {
+            "mean": 0.8,
+            "lower": 0.3,
+            "upper": 1.3,
+            "kind": "roi",
+            "units": "",
+            "hdi_prob": 0.94,
+        },
+        "marginal_roas:TV": {
+            "mean": 1.5,
+            "lower": 0.9,
+            "upper": 2.2,
+            "kind": "marginal_roas",
+            "units": "",
+            "hdi_prob": 0.94,
+        },
+        "contribution:TV": {
+            "mean": 50000.0,
+            "lower": 30000.0,
+            "upper": 70000.0,
+            "kind": "contribution",
+            "units": "",
+            "hdi_prob": 0.94,
+        },
+    }
+    return bundle
+
+
+class TestEstimandsSection:
+    """Tests for EstimandsSection."""
+
+    def test_disabled_returns_empty(self, sample_config, disabled_section_config):
+        section = EstimandsSection(
+            data=_estimands_bundle(),
+            config=sample_config,
+            section_config=disabled_section_config,
+        )
+        assert section.render() == ""
+
+    def test_missing_data_returns_empty(self, empty_data_bundle, sample_config):
+        section = EstimandsSection(
+            data=empty_data_bundle,
+            config=sample_config,
+            section_config=SectionConfig(enabled=True),
+        )
+        assert section.render() == ""
+
+    def test_render_table_with_ci(self, sample_config):
+        section = EstimandsSection(
+            data=_estimands_bundle(),
+            config=sample_config,
+            section_config=SectionConfig(enabled=True),
+        )
+        html = section.render()
+        assert isinstance(html, str)
+        # Human label, ROI value, CI bracket, and a target channel all present.
+        assert "Contribution ROI" in html
+        assert "Marginal ROAS" in html
+        assert "2.10" in html  # ROI mean formatted as ratio
+        assert "[1.40, 2.90]" in html  # CI bracket
+        assert "TV" in html
+        assert "94% CI" in html
+
+    def test_evidence_flag_reference(self, sample_config):
+        """ROI CI above 1.0 -> Strong; CI straddling 1.0 -> Uncertain."""
+        section = EstimandsSection(
+            data=_estimands_bundle(),
+            config=sample_config,
+            section_config=SectionConfig(enabled=True),
+        )
+        html = section.render()
+        assert "Strong" in html  # TV ROI CI [1.4, 2.9] excludes 1.0
+        assert "Uncertain" in html  # Search ROI CI [0.3, 1.3] straddles 1.0
+
+    def test_skips_unsupported_none_mean(self, sample_config):
+        bundle = MMMDataBundle()
+        bundle.estimands = {
+            "bad": {"mean": None, "kind": "contribution_roi"},
+        }
+        section = EstimandsSection(
+            data=bundle,
+            config=sample_config,
+            section_config=SectionConfig(enabled=True),
+        )
+        # All rows filtered out -> no table -> empty section.
+        assert section.render() == ""
+
+    def test_skips_nan_mean(self, sample_config):
+        bundle = MMMDataBundle()
+        bundle.estimands = {
+            "roi:TV": {
+                "mean": float("nan"),
+                "lower": 1.0,
+                "upper": 2.0,
+                "kind": "roi",
+            },
+        }
+        section = EstimandsSection(
+            data=bundle,
+            config=sample_config,
+            section_config=SectionConfig(enabled=True),
+        )
+        html_out = section.render()
+        # A non-finite mean must not render as a literal "nan" cell.
+        assert "nan" not in html_out.lower()
+        assert html_out == ""
+
+    def test_escapes_html_in_channel_and_label(self, sample_config):
+        bundle = MMMDataBundle()
+        bundle.estimands = {
+            "contribution_roi:<script>alert(1)</script>": {
+                "mean": 2.0,
+                "lower": 1.5,
+                "upper": 2.5,
+                "kind": "roi",
+                "units": "",
+                "hdi_prob": 0.94,
+            },
+        }
+        section = EstimandsSection(
+            data=bundle,
+            config=sample_config,
+            section_config=SectionConfig(enabled=True),
+        )
+        html_out = section.render()
+        # The raw script tag must be escaped, not rendered as live markup.
+        assert "<script>alert(1)</script>" not in html_out
+        assert "&lt;script&gt;" in html_out
+
+
+# =============================================================================
+# TestPosteriorPredictiveSection
+# =============================================================================
+
+
+def _ppc_bundle():
+    rng = np.random.default_rng(11)
+    n = 36
+    observed = 1000 + rng.normal(0, 80, n)
+    y_rep = 1000 + rng.normal(0, 80, (120, n))
+    bundle = MMMDataBundle()
+    bundle.posterior_predictive = {
+        "observed": observed,
+        "pred_mean": y_rep.mean(axis=0),
+        "pred_lower": np.percentile(y_rep, 10, axis=0),
+        "pred_upper": np.percentile(y_rep, 90, axis=0),
+        "samples": y_rep[:30],
+        "coverage": [
+            {"nominal": 0.5, "empirical": 0.51},
+            {"nominal": 0.8, "empirical": 0.80},
+            {"nominal": 0.95, "empirical": 0.94},
+        ],
+        "bayes_p": {"mean": 0.50, "std": 0.46, "min": 0.30, "max": 0.70},
+        "ci_level": 0.8,
+        "r2": 0.88,
+    }
+    return bundle
+
+
+class TestPosteriorPredictiveSection:
+    """Tests for PosteriorPredictiveSection."""
+
+    def test_disabled_returns_empty(self, sample_config, disabled_section_config):
+        section = PosteriorPredictiveSection(
+            data=_ppc_bundle(),
+            config=sample_config,
+            section_config=disabled_section_config,
+        )
+        assert section.render() == ""
+
+    def test_missing_data_returns_empty(self, empty_data_bundle, sample_config):
+        section = PosteriorPredictiveSection(
+            data=empty_data_bundle,
+            config=sample_config,
+            section_config=SectionConfig(enabled=True),
+        )
+        assert section.render() == ""
+
+    def test_render_includes_all_views(self, sample_config):
+        section = PosteriorPredictiveSection(
+            data=_ppc_bundle(),
+            config=sample_config,
+            section_config=SectionConfig(enabled=True),
+        )
+        html = section.render()
+        assert isinstance(html, str)
+        # Four PPC charts embedded.
+        assert html.count("Plotly.newPlot") == 4
+        assert "ppcObservedVsPredicted" in html
+        assert "ppcDensityOverlay" in html
+        assert "ppcCalibration" in html
+        assert "ppcResiduals" in html
+        # Summary surfaces: R^2 card, coverage card, bayes-p table.
+        assert "0.880" in html  # R^2
+        assert "Predictive p-values" in html
+
+    def test_render_without_samples_skips_overlay(self, sample_config):
+        bundle = _ppc_bundle()
+        bundle.posterior_predictive["samples"] = None
+        section = PosteriorPredictiveSection(
+            data=bundle,
+            config=sample_config,
+            section_config=SectionConfig(enabled=True),
+        )
+        html = section.render()
+        # Overlay dropped, but obs-vs-pred + calibration + residuals remain.
+        assert "ppcDensityOverlay" not in html
+        assert "ppcObservedVsPredicted" in html
+        assert "ppcResiduals" in html
+
+    def test_mismatched_pred_mean_returns_empty(self, sample_config):
+        bundle = MMMDataBundle()
+        bundle.posterior_predictive = {
+            "observed": np.arange(10.0),
+            "pred_mean": np.arange(5.0),  # wrong length
+        }
+        section = PosteriorPredictiveSection(
+            data=bundle,
+            config=sample_config,
+            section_config=SectionConfig(enabled=True),
+        )
+        assert section.render() == ""

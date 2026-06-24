@@ -3,27 +3,33 @@
  * lives beside the Atelier editor. It streams from `POST /model-garden/copilot`
  * (grounded in the current editor source) and surfaces an "Apply to editor"
  * action on any code block it returns.
+ *
+ * The chat is STATEFUL and scoped per model/version: it loads/persists through
+ * `useCopilotChatState` so each model remembers its own conversation, survives
+ * closing the panel / switching tabs, and Clear wipes only the current model's.
  */
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { ClipboardCheck, RotateCcw, Send, Sparkles, Square, X } from 'lucide-react';
+import { remarkPlugins, rehypePlugins, normalizeMath } from '../../lib/markdownMath';
+import { ClipboardCheck, Loader2, RotateCcw, Send, Sparkles, Square, X } from 'lucide-react';
 import {
   copilotService,
   readCopilotStream,
   type CopilotTurn,
 } from '../../api/services/copilotService';
+import { useCopilotChatState, type PersistedMsg } from '../../api/hooks';
 import { lastCodeBlock, MD_COMPONENTS } from './copilotMarkdown';
 
-interface Msg {
-  id: string;
-  role: 'user' | 'assistant' | 'error';
-  content: string;
-}
+type Msg = PersistedMsg;
 
 interface Props {
   sourceCode: string;
   onApplyCode: (code: string) => void;
+  /** Model identity the chat is scoped to (per model/version memory). */
+  name: string | null;
+  version?: number | null;
+  /** Whether the panel is open — gates loading the persisted chat. */
+  active?: boolean;
   onClose?: () => void;
   className?: string;
 }
@@ -39,7 +45,7 @@ function CopilotMessage({ msg, onApplyCode }: { msg: Msg; onApplyCode: (c: strin
   if (msg.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-sage-700 px-3.5 py-2 text-sm leading-relaxed text-white">
+        <div className="max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-sage-700 px-3.5 py-2 text-sm leading-relaxed text-white">
           {msg.content}
         </div>
       </div>
@@ -48,7 +54,7 @@ function CopilotMessage({ msg, onApplyCode }: { msg: Msg; onApplyCode: (c: strin
   if (msg.role === 'error') {
     return (
       <div className="flex justify-start">
-        <div className="max-w-[92%] rounded-2xl rounded-bl-md border border-rust-600/30 bg-rust-100 px-3.5 py-2 text-sm leading-relaxed text-rust-700">
+        <div className="max-w-[94%] rounded-2xl rounded-bl-md border border-rust-600/30 bg-rust-100 px-3.5 py-2 text-sm leading-relaxed text-rust-700">
           {msg.content || 'Something went wrong.'}
         </div>
       </div>
@@ -57,9 +63,9 @@ function CopilotMessage({ msg, onApplyCode }: { msg: Msg; onApplyCode: (c: strin
   const code = lastCodeBlock(msg.content);
   return (
     <div className="flex flex-col items-start gap-1.5">
-      <div className="max-w-full rounded-2xl rounded-bl-md border border-line-200 bg-white px-3.5 py-2 text-sm text-ink-700">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
-          {msg.content || '…'}
+      <div className="max-w-full rounded-2xl rounded-bl-md border border-line-200 bg-white px-3.5 py-2 text-sm leading-relaxed text-ink-700">
+        <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={MD_COMPONENTS}>
+          {normalizeMath(msg.content || '…')}
         </ReactMarkdown>
       </div>
       {code && (
@@ -74,8 +80,21 @@ function CopilotMessage({ msg, onApplyCode }: { msg: Msg; onApplyCode: (c: strin
   );
 }
 
-export function CopilotPanel({ sourceCode, onApplyCode, onClose, className }: Props) {
-  const [messages, setMessages] = useState<Msg[]>([]);
+export function CopilotPanel({
+  sourceCode,
+  onApplyCode,
+  name,
+  version = null,
+  active = true,
+  onClose,
+  className,
+}: Props) {
+  const {
+    messages,
+    setMessages,
+    clear: clearChat,
+    loading: chatLoading,
+  } = useCopilotChatState({ name, version, surface: 'editor', enabled: active });
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -134,8 +153,10 @@ export function CopilotPanel({ sourceCode, onApplyCode, onClose, className }: Pr
   const stop = () => abortRef.current?.abort();
   const clear = () => {
     abortRef.current?.abort();
-    setMessages([]);
+    clearChat();
   };
+
+  const empty = messages.length === 0 && !streaming;
 
   return (
     <div className={`flex flex-col bg-cream-50 ${className ?? ''}`}>
@@ -144,10 +165,13 @@ export function CopilotPanel({ sourceCode, onApplyCode, onClose, className }: Pr
         <Sparkles size={16} className="text-sage-700" />
         <div className="min-w-0 flex-1">
           <h3 className="font-display text-sm font-semibold text-ink-900">Modeling copilot</h3>
-          <p className="truncate text-[11px] text-ink-500">Bayesian + PyMC + this framework's contract</p>
+          <p className="truncate text-[11px] text-ink-500">
+            Bayesian + PyMC + this framework's contract
+            {name && name !== '__draft__' ? ` · ${name}${version != null ? ` v${version}` : ''}` : ''}
+          </p>
         </div>
         {messages.length > 0 && (
-          <button onClick={clear} title="Clear" className="text-ink-400 hover:text-ink-700">
+          <button onClick={clear} title="Clear this model's chat" className="text-ink-400 hover:text-ink-700">
             <RotateCcw size={14} />
           </button>
         )}
@@ -159,11 +183,17 @@ export function CopilotPanel({ sourceCode, onApplyCode, onClose, className }: Pr
       </div>
 
       {/* Messages */}
-      <div className="flex-1 space-y-3 overflow-y-auto p-3 scrollbar-thin">
-        {messages.length === 0 && !streaming && (
+      <div className="flex-1 space-y-3 overflow-y-auto p-3.5 scrollbar-thin">
+        {chatLoading && empty && (
+          <div className="flex items-center gap-2 px-1 pt-2 text-xs text-ink-400">
+            <Loader2 size={13} className="animate-spin" /> Loading chat…
+          </div>
+        )}
+        {empty && !chatLoading && (
           <p className="px-1 pt-2 text-xs leading-relaxed text-ink-400">
             Ask about priors, identifiability, adstock/saturation, or the Model Garden contract.
-            I read your editor source — when I write code you can apply it in one click.
+            I read your editor source — when I write code you can apply it in one click. This chat is
+            saved with this model.
           </p>
         )}
         {messages.map((m) => (
@@ -183,7 +213,7 @@ export function CopilotPanel({ sourceCode, onApplyCode, onClose, className }: Pr
       </div>
 
       {/* Quick prompts */}
-      {messages.length === 0 && !streaming && (
+      {empty && !chatLoading && (
         <div className="flex flex-col gap-1 border-t border-line-200 bg-white px-3 py-2">
           {QUICK_PROMPTS.map((p) => (
             <button
@@ -208,10 +238,10 @@ export function CopilotPanel({ sourceCode, onApplyCode, onClose, className }: Pr
               send(input);
             }
           }}
-          rows={2}
-          placeholder="Ask the modeling copilot…  (Enter to send)"
+          rows={3}
+          placeholder="Ask the modeling copilot…  (Enter to send, Shift+Enter for newline)"
           disabled={streaming}
-          className="max-h-28 min-h-[2.5rem] flex-1 resize-none rounded-md border border-line-300 bg-cream-50 px-3 py-2 text-sm text-ink-900 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-sage-600 disabled:opacity-60"
+          className="max-h-40 min-h-[3.25rem] flex-1 resize-none rounded-md border border-line-300 bg-cream-50 px-3 py-2 text-sm text-ink-900 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-sage-600 disabled:opacity-60"
         />
         {streaming ? (
           <button

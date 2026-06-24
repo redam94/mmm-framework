@@ -8,7 +8,16 @@
  * applyLightModeLayout (which re-exports from here).
  */
 
+import type { Annotations, Layout, ModeBarDefaultButtons } from 'plotly.js';
+
 import { CHART_COLORWAY, COLORS, FONTS } from './colors';
+
+/**
+ * Loose layout blob: agent/backend figures carry arbitrary extra keys (subplot
+ * axes, custom annotations, etc.) on top of the typed Plotly layout, and we
+ * index/merge them dynamically — so we treat the working copy as an open record.
+ */
+type LayoutBlob = Partial<Layout> & Record<string, unknown>;
 
 export function isLightOnWhite(hex: string): boolean {
   const clean = hex.replace('#', '');
@@ -21,8 +30,8 @@ export function isLightOnWhite(hex: string): boolean {
 }
 
 /** Theme an existing (possibly agent-authored) layout. Caller values win. */
-export function applyMmmTheme(rawLayout: any): any {
-  const layout = { ...(rawLayout || {}) };
+export function applyMmmTheme(rawLayout?: Partial<Layout> | null): Partial<Layout> {
+  const layout: LayoutBlob = { ...(rawLayout || {}) };
 
   layout.paper_bgcolor = 'rgba(0,0,0,0)';
   layout.plot_bgcolor = COLORS.cream50;
@@ -63,7 +72,7 @@ export function applyMmmTheme(rawLayout: any): any {
 
   Object.keys(layout).forEach((key) => {
     if (/^[xy]axis\d*$/.test(key)) {
-      const existing = layout[key] || {};
+      const existing = (layout[key] || {}) as Record<string, unknown>;
       layout[key] = {
         ...axisBase,
         ...existing,
@@ -71,8 +80,8 @@ export function applyMmmTheme(rawLayout: any): any {
         gridcolor: COLORS.line200,
         linecolor: COLORS.line300,
         zerolinecolor: COLORS.line300,
-        tickfont: { color: COLORS.ink600, size: 11, ...(existing.tickfont || {}) },
-        titlefont: { color: COLORS.ink600, size: 12, ...(existing.titlefont || {}) },
+        tickfont: { color: COLORS.ink600, size: 11, ...((existing.tickfont as object) || {}) },
+        titlefont: { color: COLORS.ink600, size: 12, ...((existing.titlefont as object) || {}) },
       };
     }
   });
@@ -96,17 +105,20 @@ export function applyMmmTheme(rawLayout: any): any {
   };
 
   if (Array.isArray(layout.annotations)) {
-    layout.annotations = layout.annotations.map((a: any) => ({
-      ...a,
-      font: {
-        size: 11,
-        ...(a.font || {}),
-        color:
-          a.font?.color && !isLightOnWhite(a.font.color)
-            ? a.font.color
-            : COLORS.ink600,
-      },
-    }));
+    layout.annotations = layout.annotations.map((a: Partial<Annotations>) => {
+      const fontColor = a.font?.color;
+      return {
+        ...a,
+        font: {
+          size: 11,
+          ...(a.font || {}),
+          color:
+            typeof fontColor === 'string' && !isLightOnWhite(fontColor)
+              ? fontColor
+              : COLORS.ink600,
+        },
+      };
+    });
   }
 
   if (!layout.colorway) {
@@ -119,12 +131,18 @@ export function applyMmmTheme(rawLayout: any): any {
 }
 
 /** Fresh layout for charts the app authors itself (Plotly `layout` prop). */
-export function mmmPlotlyLayout(overrides: any = {}): any {
+export function mmmPlotlyLayout(overrides: Partial<Layout> = {}): Partial<Layout> {
   return applyMmmTheme(overrides);
 }
+
+const MODE_BAR_BUTTONS_TO_REMOVE: ModeBarDefaultButtons[] = [
+  'lasso2d',
+  'select2d',
+  'autoScale2d',
+];
 
 export const PLOTLY_CONFIG = {
   displaylogo: false,
   responsive: true,
-  modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'] as any[],
+  modeBarButtonsToRemove: MODE_BAR_BUTTONS_TO_REMOVE,
 };

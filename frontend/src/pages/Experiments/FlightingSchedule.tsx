@@ -1,4 +1,5 @@
 import { clsx } from 'clsx';
+import type { Config, Data } from 'plotly.js';
 import Plot from 'react-plotly.js';
 import { COLORS } from '../../theme/colors';
 import { mmmPlotlyLayout, PLOTLY_CONFIG } from '../../theme/plotlyTheme';
@@ -14,14 +15,16 @@ const EPS = 1e-3;
  * multi-level) spend pulses. Geo designs carry treatment/control groups instead
  * and have no schedule, so this returns null for them (and for malformed blobs).
  */
+// eslint-disable-next-line react-refresh/only-export-components -- helper imported by ExperimentDrawer/LifecycleBoard; keep colocated with the chart components it feeds (do not edit importers in this cleanup)
 export function flightingSchedule(
-  design: Record<string, any> | null | undefined,
+  design: Record<string, unknown> | null | undefined,
 ): SchedulePoint[] | null {
   const raw = design?.schedule;
   if (!Array.isArray(raw) || raw.length === 0) return null;
-  const pts = raw
+  const pts = (raw as unknown[])
+    .map((p) => p as { week_offset?: unknown; multiplier?: unknown } | null)
     .filter(
-      (p) =>
+      (p): p is { week_offset?: unknown; multiplier?: unknown } =>
         p != null &&
         Number.isFinite(Number(p.week_offset)) &&
         Number.isFinite(Number(p.multiplier)),
@@ -92,7 +95,7 @@ export function FlightingScheduleChart({
                 s.multiplier > 1 + EPS ? COLORS.sage600 : COLORS.steel300,
               ),
             },
-          } as any,
+          } as Data,
         ]}
         layout={mmmPlotlyLayout({
           height: 180,
@@ -101,7 +104,7 @@ export function FlightingScheduleChart({
           yaxis: { title: { text: 'spend ×' } },
           showlegend: false,
         })}
-        config={PLOTLY_CONFIG as any}
+        config={PLOTLY_CONFIG as Partial<Config>}
         style={{ width: '100%' }}
         useResizeHandler
       />

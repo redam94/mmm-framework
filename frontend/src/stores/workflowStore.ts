@@ -172,7 +172,7 @@ export const useWorkflowStore = create<WorkflowState>()(
             }
             break;
 
-          case 'fit':
+          case 'fit': {
             // Fit is complete if we have a completed iteration
             const completedIterations = state.iterations.filter(
               (it) => it.status === 'completed'
@@ -182,8 +182,9 @@ export const useWorkflowStore = create<WorkflowState>()(
               completion.items.push(`${completedIterations.length} model(s) fitted`);
             }
             break;
+          }
 
-          case 'diagnostics':
+          case 'diagnostics': {
             // Diagnostics is complete if we've reviewed at least one model
             const reviewedModels = state.decisions.filter(
               (d) => d.phase === 'diagnostics'
@@ -202,6 +203,7 @@ export const useWorkflowStore = create<WorkflowState>()(
               );
             }
             break;
+          }
 
           case 'results':
             completion.complete = state.decisions.some((d) => d.phase === 'results');

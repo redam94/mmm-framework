@@ -24,6 +24,7 @@ from loguru import logger
 from ...transforms.adstock import adstock_weights, apply_adstock
 from .base import DataExtractor
 from .bundle import MMMDataBundle
+from .mixins import EstimandPPCMixin
 
 # Adstock kernel length used by the extension models' media transform. Mirrors
 # mmm_extensions.models.base._ADSTOCK_L_MAX (not imported here to keep PyMC out
@@ -31,7 +32,7 @@ from .bundle import MMMDataBundle
 _ADSTOCK_L_MAX = 8
 
 
-class ExtendedMMMExtractor(DataExtractor):
+class ExtendedMMMExtractor(DataExtractor, EstimandPPCMixin):
     """
     Extract data from mmm-framework's extended MMM models.
 
@@ -111,6 +112,14 @@ class ExtendedMMMExtractor(DataExtractor):
                 bundle.total_revenue = float(np.asarray(bundle.actual).sum())
 
             self._extract_summary_metrics(bundle)
+
+            # Estimand results (mean + CI) and posterior-predictive goodness-of-fit
+            # (shared with the core extractor via EstimandPPCMixin). Both
+            # best-effort: an extended model without ``evaluate_estimands`` simply
+            # yields no estimands table, and a model whose graph cannot be sampled
+            # yields no PPC section.
+            bundle = self._extract_estimands(bundle)
+            bundle = self._extract_posterior_predictive(bundle)
 
         bundle.model_specification = self._get_model_specification()
 
@@ -221,6 +230,79 @@ class ExtendedMMMExtractor(DataExtractor):
             float(getattr(self.model, "y_mean", 0.0)),
             float(getattr(self.model, "y_std", 1.0)),
         )
+
+    # ------------------------------------------------------------------
+    # Estimand + posterior-predictive hooks (EstimandPPCMixin)
+    # ------------------------------------------------------------------
+
+    def _estimand_model(self) -> Any:
+        return self.model
+
+    def _ppc_arrays(self):
+        """Posterior-predictive arrays for an extended model.
+
+        Extended models register only the expected-value ``mu`` deterministic and
+        do not expose ``predict()``; their fit does not sample a posterior-
+        predictive group either. So we sample the model's PyMC graph directly for
+        the observed likelihood (``y_obs``) — drawing genuine replicates *with*
+        observation noise — then unstandardize to original KPI units via the
+        primary outcome's scale. Multi-outcome models map to their PRIMARY outcome
+        (matching :meth:`_get_actual`); anything that cannot be aligned degrades to
+        ``(None,)*5`` so the PPC section simply no-ops.
+        """
+        none = (None, None, None, None, None)
+        observed = self._get_actual()
+        if observed is None:
+            return none
+        observed = np.asarray(observed, dtype=float).ravel()
+
+        trace = getattr(self.model, "_trace", None)
+        graph = getattr(self.model, "model", None)
+        if trace is None or graph is None:
+            return none
+        try:
+            named = set(getattr(graph, "named_vars", {}) or {})
+        except Exception:  # noqa: BLE001
+            return none
+        var = next((v for v in ("y_obs", "y", "likelihood") if v in named), None)
+        if var is None:
+            return none
+
+        try:
+            import pymc as pm
+
+            with graph:
+                pp = pm.sample_posterior_predictive(
+                    trace,
+                    var_names=[var],
+                    progressbar=False,
+                    random_seed=0,
+                )
+            arr = np.asarray(pp.posterior_predictive[var].values, dtype=float)
+        except Exception:  # noqa: BLE001 — sampling failures degrade gracefully
+            logger.debug("extended PPC sampling skipped", exc_info=True)
+            return none
+
+        # (chain, draw, obs[, outcome]) -> (n_samples, n_obs) on the primary outcome.
+        if arr.ndim == 3:
+            y_rep_std = arr.reshape(arr.shape[0] * arr.shape[1], arr.shape[2])
+        elif arr.ndim == 4:
+            y_rep_std = arr[..., 0].reshape(arr.shape[0] * arr.shape[1], arr.shape[2])
+        else:
+            return none
+
+        y_mean, y_std = self._outcome_scale()
+        y_rep = y_rep_std * y_std + y_mean
+        if y_rep.shape[1] != observed.shape[0]:
+            return none
+        if not (np.all(np.isfinite(observed)) and np.all(np.isfinite(y_rep))):
+            return none
+
+        pred_mean = y_rep.mean(axis=0)
+        p = float(self.ci_prob)
+        pred_lower = np.percentile(y_rep, (1 - p) / 2 * 100, axis=0)
+        pred_upper = np.percentile(y_rep, (1 + p) / 2 * 100, axis=0)
+        return observed, y_rep, pred_mean, pred_lower, pred_upper
 
     def _total_effect_samples(self, channel: str) -> np.ndarray | None:
         """Posterior samples of a channel's total effect coefficient on the

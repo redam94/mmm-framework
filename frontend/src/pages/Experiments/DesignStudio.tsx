@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Plot from 'react-plotly.js';
+import type { Config, Data, PlotMouseEvent } from 'plotly.js';
 import { Dices, Lock, FlaskConical, Loader2, Sparkles } from 'lucide-react';
 import { Button, Drawer, TierBadge } from '../../components/ui';
 import { COLORS } from '../../theme/colors';
@@ -560,7 +561,7 @@ export function DesignStudio({
                           type: 'scatter', mode: 'lines+markers',
                           line: { color: COLORS.sage600 },
                           name: 'MDE (ROAS)',
-                        } as any,
+                        } as Data,
                       ]}
                       layout={mmmPlotlyLayout({
                         height: 220, margin: { t: 10, l: 50, r: 20, b: 40 },
@@ -568,7 +569,7 @@ export function DesignStudio({
                         yaxis: { title: { text: 'MDE (ROAS)' } },
                         showlegend: false,
                       })}
-                      config={PLOTLY_CONFIG as any}
+                      config={PLOTLY_CONFIG as Partial<Config>}
                       style={{ width: '100%' }}
                       useResizeHandler
                     />
@@ -601,7 +602,7 @@ export function DesignStudio({
                           s.multiplier > 1 ? COLORS.sage600 : COLORS.steel300,
                         ),
                       },
-                    } as any,
+                    } as Data,
                   ]}
                   layout={mmmPlotlyLayout({
                     height: 200, margin: { t: 10, l: 50, r: 20, b: 40 },
@@ -609,7 +610,7 @@ export function DesignStudio({
                     yaxis: { title: { text: 'spend ×' } },
                     showlegend: false,
                   })}
-                  config={PLOTLY_CONFIG as any}
+                  config={PLOTLY_CONFIG as Partial<Config>}
                   style={{ width: '100%' }}
                   useResizeHandler
                 />
@@ -990,7 +991,7 @@ function MethodologyPanel({ sim }: { sim: ExperimentSimulation }) {
                 mode: 'lines+markers',
                 line: { color: COLORS.sage600 },
                 name: 'power',
-              } as any,
+              } as Data,
             ]}
             layout={mmmPlotlyLayout({
               height: 200,
@@ -999,7 +1000,7 @@ function MethodologyPanel({ sim }: { sim: ExperimentSimulation }) {
               yaxis: { title: { text: 'power' }, range: [0, 1] },
               showlegend: false,
             })}
-            config={PLOTLY_CONFIG as any}
+            config={PLOTLY_CONFIG as Partial<Config>}
             style={{ width: '100%' }}
             useResizeHandler
           />
@@ -1211,7 +1212,7 @@ function ParetoScatter({
   const front = result.candidates.filter((c) => c.on_pareto && !c.is_recommended);
   const recommended = result.recommended;
 
-  const data: any[] = [
+  const data: Data[] = [
     {
       x: dominated.map((c) => c.mde_roas),
       y: dominated.map((c) => c.tradeoff),
@@ -1337,10 +1338,10 @@ function ParetoScatter({
       <Plot
         data={data}
         layout={layout}
-        config={PLOTLY_CONFIG as any}
+        config={PLOTLY_CONFIG as Partial<Config>}
         style={{ width: '100%' }}
         useResizeHandler
-        onClick={(e: any) => {
+        onClick={(e: Readonly<PlotMouseEvent>) => {
           const p = e?.points?.[0];
           if (!p) return;
           // Map the clicked point back to its candidate by (trace, point) — the

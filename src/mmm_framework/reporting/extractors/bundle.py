@@ -199,6 +199,29 @@ class MMMDataBundle:
     latent_table_title: str | None = None
     latent_estimands_title: str | None = None
 
+    # Declared / default estimands realized from the posterior as mean + credible
+    # interval, keyed by estimand name (wildcard-channel estimands expand to
+    # "{name}:{channel}"). Each value is a flat dict carrying at least
+    # {"mean", "lower", "upper"} plus display metadata
+    # ("kind", "units", "hdi_prob", "label") and any surfaced tail probabilities
+    # ("contribution_pct", "prob_positive"). Populated by the extractor for MMM
+    # models; non-MMM latent families surface their estimands via
+    # ``cfa_fit_indices`` (rendered by the FactorAnalysisSection) instead.
+    estimands: dict[str, dict[str, Any]] | None = None
+
+    # Posterior-predictive goodness-of-fit summary (original KPI scale), computed
+    # once by the extractor so the section/charts stay data-only. Keys:
+    #   "observed"    : (n_obs,) observed KPI values
+    #   "pred_mean"   : (n_obs,) posterior-predictive mean
+    #   "pred_lower"  : (n_obs,) lower bound of the predictive interval (at ci_level)
+    #   "pred_upper"  : (n_obs,) upper bound of the predictive interval (at ci_level)
+    #   "samples"     : (m, n_obs) down-sampled replicate draws (m small) for overlays
+    #   "coverage"    : list[{"nominal", "empirical"}] calibration curve points
+    #   "bayes_p"     : {"mean","std","min","max": float} posterior-predictive p-values
+    #   "ci_level"    : float nominal interval width used for pred_lower/upper + coverage
+    #   "r2"          : float observed-vs-mean coefficient of determination (optional)
+    posterior_predictive: dict[str, Any] | None = None
+
     # MCMC diagnostics
     diagnostics: dict[str, Any] | None = (
         None  # {"divergences", "rhat_max", "ess_bulk_min"}
@@ -298,6 +321,17 @@ class MMMDataBundle:
             and len(self.product_names) > 1
             and self.component_time_series_by_product is not None
         )
+
+    @property
+    def has_estimands(self) -> bool:
+        """Check if realized estimand results (mean + CI) are available."""
+        return bool(self.estimands)
+
+    @property
+    def has_posterior_predictive(self) -> bool:
+        """Check if posterior-predictive goodness-of-fit data is available."""
+        pp = self.posterior_predictive
+        return bool(pp) and pp.get("observed") is not None
 
     @property
     def has_mediator_data(self) -> bool:

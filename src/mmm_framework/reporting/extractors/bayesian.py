@@ -13,15 +13,24 @@ from loguru import logger
 
 from ..helpers import _safe_get_column
 from .base import DataExtractor
+from .mixins import (
+    AggregationMixin,
+    EstimandPPCMixin,
+    GeoExtractionMixin,
+    ProductExtractionMixin,
+)
 from .bundle import MMMDataBundle
-from .mixins import AggregationMixin, GeoExtractionMixin, ProductExtractionMixin
 
 if TYPE_CHECKING:
     pass
 
 
 class BayesianMMMExtractor(
-    DataExtractor, AggregationMixin, GeoExtractionMixin, ProductExtractionMixin
+    DataExtractor,
+    AggregationMixin,
+    GeoExtractionMixin,
+    ProductExtractionMixin,
+    EstimandPPCMixin,
 ):
     """
     Extract data from mmm-framework's BayesianMMM class.
@@ -108,6 +117,12 @@ class BayesianMMMExtractor(
 
             # Prior/posterior
             bundle.prior_samples, bundle.posterior_samples = self._get_prior_posterior()
+
+            # Estimand results (mean + CI) and posterior-predictive goodness-of-fit.
+            # Both are best-effort so a report never fails on them.
+            bundle = self._extract_estimands(bundle)
+            bundle = self._extract_posterior_predictive(bundle)
+
             bundle = self._extract_aggregated_fit_data(bundle)
             bundle = self._extract_aggregated_decomposition(bundle)
 
@@ -126,6 +141,37 @@ class BayesianMMMExtractor(
         # always-on CausalAssumptionsSection come alive with model-specific data.
         bundle = self._extract_causal_assumptions(bundle)
 
+        # Latent-structure (hybrid models): an MMM that ALSO estimates a latent
+        # factor (e.g. LatentFactorMMM) gets a factor-loadings section ALONGSIDE
+        # the channel/ROI sections. Best-effort; never blocks report generation.
+        bundle = self._extract_latent_structure(bundle)
+
+        return bundle
+
+    def _extract_latent_structure(self, bundle: MMMDataBundle) -> MMMDataBundle:
+        """Populate the latent-structure bundle fields when this MMM also exposes a
+        factor/class summary (duck-typed ``factor_loadings_summary`` /
+        ``class_profile_summary``). Leaves ``bundle.model_kind == "mmm"`` so every
+        MMM section stays on; the factor-analysis section is gated separately on
+        the presence of these fields (see ``generator._initialize_sections``)."""
+        try:
+            from ...garden.contract import has_latent_structure
+
+            if not has_latent_structure(self.mmm):
+                return bundle
+            # Reuse the family-agnostic latent extractor's table/estimands logic.
+            from .factor_analysis import FactorAnalysisExtractor
+
+            fx = FactorAnalysisExtractor(self.mmm, ci_prob=self.ci_prob)
+            bundle.factor_loadings = fx._table("factor_loadings_summary")
+            bundle.cfa_fit_indices = fx._estimands()
+            bundle.latent_section_title = (
+                getattr(self.mmm, "LATENT_SECTION_TITLE", None) or "Latent Factor"
+            )
+            bundle.latent_table_title = "Factor loadings"
+            bundle.latent_estimands_title = "Latent estimands"
+        except Exception:  # noqa: BLE001 — reporting must never hard-fail
+            logger.debug("latent-structure extraction skipped", exc_info=True)
         return bundle
 
     def _extract_causal_assumptions(self, bundle: MMMDataBundle) -> MMMDataBundle:
@@ -320,6 +366,67 @@ class BayesianMMMExtractor(
             pass
         logger.debug("Predictions not found")
         return None
+
+    # -------------------------------------------------------------------------
+    # Estimand results + posterior-predictive goodness-of-fit
+    #
+    # The orchestration (``_extract_estimands`` / ``_extract_posterior_predictive``
+    # / ``_ppc_bayes_p`` / ``_downsample_rows``) lives in ``EstimandPPCMixin``;
+    # this extractor only supplies the model hook + the predict-based PPC arrays.
+    # -------------------------------------------------------------------------
+
+    def _estimand_model(self) -> Any:
+        return self.mmm
+
+    def _ppc_arrays(self):
+        """Aligned ``(observed, y_rep, pred_mean, pred_lower, pred_upper)`` in
+        original KPI scale at the observation level, or ``(None,)*5`` if the model
+        cannot produce posterior-predictive draws. ``y_rep`` is ``(n_draws, n_obs)``.
+        A core ``BayesianMMM`` resamples via ``predict`` (original scale).
+        """
+        none = (None, None, None, None, None)
+        observed = self._get_actual()
+        if observed is None:
+            return none
+        observed = np.asarray(observed, dtype=float).ravel()
+
+        predict = getattr(self.mmm, "predict", None)
+        if not callable(predict):
+            return none
+        try:
+            pred = predict(return_original_scale=True, hdi_prob=self.ci_prob)
+        except TypeError:
+            pred = predict()
+
+        y_rep = getattr(pred, "y_pred_samples", None)
+        pred_mean = getattr(pred, "y_pred_mean", None)
+        if y_rep is None or pred_mean is None:
+            return none
+        y_rep = np.asarray(y_rep, dtype=float)
+        pred_mean = np.asarray(pred_mean, dtype=float).ravel()
+        if y_rep.ndim != 2 or y_rep.shape[1] != observed.shape[0]:
+            return none
+
+        # Non-finite values (a pathological / non-converged fit) would silently
+        # propagate NaN through coverage / p-values and serialize as literal NaN
+        # in the report. Bail out of the whole PPC instead — the section no-ops.
+        if not (
+            np.all(np.isfinite(observed))
+            and np.all(np.isfinite(y_rep))
+            and np.all(np.isfinite(pred_mean))
+        ):
+            return none
+
+        lo = getattr(pred, "y_pred_hdi_low", None)
+        hi = getattr(pred, "y_pred_hdi_high", None)
+        pred_lower = np.asarray(lo, dtype=float).ravel() if lo is not None else None
+        pred_upper = np.asarray(hi, dtype=float).ravel() if hi is not None else None
+        # Drop interval bounds that are non-finite rather than fail the whole view.
+        if pred_lower is not None and not np.all(np.isfinite(pred_lower)):
+            pred_lower = None
+        if pred_upper is not None and not np.all(np.isfinite(pred_upper)):
+            pred_upper = None
+        return observed, y_rep, pred_mean, pred_lower, pred_upper
 
     # -------------------------------------------------------------------------
     # Aggregated fit data extraction

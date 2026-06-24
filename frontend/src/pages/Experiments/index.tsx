@@ -31,7 +31,7 @@ export function ExperimentsPage() {
   const registry = useExperimentRegistry(projectId);
   const prioritiesQuery = useExperimentPriorities(projectId);
 
-  const experiments = registry.data ?? [];
+  const experiments = useMemo(() => registry.data ?? [], [registry.data]);
   const priorities = prioritiesQuery.data ?? null;
   const loading = registry.isLoading || prioritiesQuery.isLoading;
 

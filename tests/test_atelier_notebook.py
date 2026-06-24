@@ -418,3 +418,150 @@ class TestDemoNotebookCellsCompile:
             assert cell["type"] in ("markdown", "code")
             if cell["type"] == "code":
                 compile(cell["source"], cell["id"], "exec")  # valid Python
+
+
+class TestCopilotChat:
+    """GET/PUT /model-garden/copilot/chat: stateful, per-(model, version,
+    surface) chat persistence — load empty, save, reload, upsert singleton,
+    clear (empty messages), surface + version isolation, and the message cap."""
+
+    @pytest.mark.asyncio
+    async def test_get_empty_when_absent(self, main):
+        resp = await main.get_copilot_chat("BrandNew", main._DEV_PRINCIPAL, None, "editor")
+        doc = json.loads(resp.body)
+        assert doc["messages"] == []
+        assert doc["surface"] == "editor"
+
+    @pytest.mark.asyncio
+    async def test_save_reload_and_upsert(self, main):
+        msgs = [
+            {"id": "u1", "role": "user", "content": "why unidentified?"},
+            {"id": "a1", "role": "assistant", "content": "collinear spend…"},
+        ]
+        save = await main.save_copilot_chat(
+            main.CopilotChatSaveRequest(name="M", version=2, surface="editor", messages=msgs),
+            main._DEV_PRINCIPAL,
+        )
+        first_id = json.loads(save.body)["id"]
+        resp = await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 2, "editor")
+        assert json.loads(resp.body)["messages"] == msgs
+
+        # Second save upserts the SAME artifact (singleton per key).
+        save2 = await main.save_copilot_chat(
+            main.CopilotChatSaveRequest(name="M", version=2, surface="editor", messages=msgs[:1]),
+            main._DEV_PRINCIPAL,
+        )
+        assert json.loads(save2.body)["id"] == first_id
+        from mmm_framework.api import sessions as S
+
+        tid = main._copilot_tid("dev-org", "M", 2, "editor")
+        docs = [a for a in S.list_artifacts(tid) if a["kind"] == "copilot_chat"]
+        assert len(docs) == 1
+        assert json.loads((await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 2, "editor")).body)["messages"] == msgs[:1]
+
+    @pytest.mark.asyncio
+    async def test_clear_with_empty_messages(self, main):
+        await main.save_copilot_chat(
+            main.CopilotChatSaveRequest(
+                name="M", version=1, surface="editor",
+                messages=[{"id": "u1", "role": "user", "content": "hi"}],
+            ),
+            main._DEV_PRINCIPAL,
+        )
+        await main.save_copilot_chat(
+            main.CopilotChatSaveRequest(name="M", version=1, surface="editor", messages=[]),
+            main._DEV_PRINCIPAL,
+        )
+        resp = await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 1, "editor")
+        assert json.loads(resp.body)["messages"] == []
+
+    @pytest.mark.asyncio
+    async def test_surface_and_version_isolation(self, main):
+        editor_msg = [{"id": "e", "role": "user", "content": "editor turn"}]
+        nb_msg = [{"id": "n", "role": "user", "content": "notebook turn"}]
+        await main.save_copilot_chat(
+            main.CopilotChatSaveRequest(name="M", version=1, surface="editor", messages=editor_msg),
+            main._DEV_PRINCIPAL,
+        )
+        await main.save_copilot_chat(
+            main.CopilotChatSaveRequest(name="M", version=1, surface="notebook", messages=nb_msg),
+            main._DEV_PRINCIPAL,
+        )
+        # Different surface → different chat.
+        assert json.loads((await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 1, "editor")).body)["messages"] == editor_msg
+        assert json.loads((await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 1, "notebook")).body)["messages"] == nb_msg
+        # Different version → empty.
+        assert json.loads((await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 9, "editor")).body)["messages"] == []
+
+    @pytest.mark.asyncio
+    async def test_message_cap(self, main):
+        many = [{"id": f"m{i}", "role": "user", "content": str(i)} for i in range(250)]
+        await main.save_copilot_chat(
+            main.CopilotChatSaveRequest(name="M", version=1, surface="editor", messages=many),
+            main._DEV_PRINCIPAL,
+        )
+        resp = await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 1, "editor")
+        kept = json.loads(resp.body)["messages"]
+        assert len(kept) == main._COPILOT_CHAT_MAX_MESSAGES
+        assert kept[-1]["content"] == "249"  # newest kept
+
+    @pytest.mark.asyncio
+    async def test_unknown_surface_defaults_to_editor(self, main):
+        # A junk surface normalizes to "editor" (so it can't fork a third store).
+        await main.save_copilot_chat(
+            main.CopilotChatSaveRequest(
+                name="M", version=1, surface="weird",
+                messages=[{"id": "u", "role": "user", "content": "x"}],
+            ),
+            main._DEV_PRINCIPAL,
+        )
+        resp = await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 1, "editor")
+        assert json.loads(resp.body)["messages"][0]["content"] == "x"
+
+
+class TestGardenLint:
+    """POST /model-garden/lint: real ruff diagnostics merged with the AST
+    contract checks, with line/column spans for inline markers."""
+
+    @pytest.mark.asyncio
+    async def test_undefined_name_is_an_error_with_position(self, main):
+        src = (
+            "from mmm_framework.garden import CustomMMM\n"
+            "\n"
+            "class M(CustomMMM):\n"
+            "    def _build_model(self):\n"
+            "        return undefined_thing\n"
+        )
+        resp = await main.garden_lint_endpoint(
+            main.GardenSourceRequest(source_code=src), main._DEV_PRINCIPAL
+        )
+        out = json.loads(resp.body)
+        assert out["ok"] is False
+        f821 = [p for p in out["problems"] if p.get("code") == "F821"]
+        assert f821, out["problems"]
+        assert f821[0]["severity"] == "error"
+        assert f821[0]["line"] == 5 and f821[0]["column"] is not None
+
+    @pytest.mark.asyncio
+    async def test_clean_source_is_ok(self, main):
+        src = (
+            "from mmm_framework.garden import CustomMMM\n"
+            "import pymc as pm\n"
+            "import pytensor.tensor as pt\n"
+            "\n"
+            "class CleanMMM(CustomMMM):\n"
+            "    def _build_model(self) -> pm.Model:\n"
+            "        with pm.Model(coords=self._build_coords()) as model:\n"
+            '            b = pm.Gamma("beta_tv", mu=1.0, sigma=1.0)\n'
+            '            pm.Deterministic("channel_contributions", b * pt.ones(self.n_obs))\n'
+            '            pm.Deterministic("media_total", b * pt.ones(self.n_obs))\n'
+            "        return model\n"
+            "\n"
+            "GARDEN_MODEL = CleanMMM\n"
+        )
+        resp = await main.garden_lint_endpoint(
+            main.GardenSourceRequest(source_code=src), main._DEV_PRINCIPAL
+        )
+        out = json.loads(resp.body)
+        assert out["ok"] is True
+        assert not any(p["severity"] == "error" for p in out["problems"])

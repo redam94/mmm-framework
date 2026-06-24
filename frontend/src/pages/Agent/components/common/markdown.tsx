@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { type ComponentPropsWithoutRef } from 'react';
+import type { Components } from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -9,7 +10,7 @@ import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 const TAB_LINK_RE = /^#tab:([\w-]+)$/;
 
-export function mdComponents(onNavigate?: (tab: string) => void): any {
+export function mdComponents(onNavigate?: (tab: string) => void): Components {
   return {
     a: ({ href, children, title }: { href?: string; children?: React.ReactNode; title?: string }) => {
       const m = TAB_LINK_RE.exec(href || '');
@@ -29,16 +30,16 @@ export function mdComponents(onNavigate?: (tab: string) => void): any {
       // Non-tab links: keep the default <a> behavior (same as before this factory).
       return <a href={href} title={title}>{children}</a>;
     },
-    table: ({ children }: any) => (
+    table: ({ children }: ComponentPropsWithoutRef<'table'>) => (
       <div className="overflow-x-auto my-2">
         <table className="min-w-full text-sm border-collapse">{children}</table>
       </div>
     ),
-    thead: ({ children }: any) => <thead className="bg-cream-100">{children}</thead>,
-    th: ({ children }: any) => <th className="px-3 py-2 text-left font-semibold text-sage-800 border border-line-200">{children}</th>,
-    td: ({ children }: any) => <td className="px-3 py-2 text-ink-700 border border-line-200">{children}</td>,
-    tr: ({ children }: any) => <tr className="even:bg-cream-50">{children}</tr>,
-    code: ({ inline, className, children }: any) => {
+    thead: ({ children }: ComponentPropsWithoutRef<'thead'>) => <thead className="bg-cream-100">{children}</thead>,
+    th: ({ children }: ComponentPropsWithoutRef<'th'>) => <th className="px-3 py-2 text-left font-semibold text-sage-800 border border-line-200">{children}</th>,
+    td: ({ children }: ComponentPropsWithoutRef<'td'>) => <td className="px-3 py-2 text-ink-700 border border-line-200">{children}</td>,
+    tr: ({ children }: ComponentPropsWithoutRef<'tr'>) => <tr className="even:bg-cream-50">{children}</tr>,
+    code: ({ inline, className, children }: ComponentPropsWithoutRef<'code'> & { inline?: boolean }) => {
       const raw = String(children ?? '').replace(/\n$/, '');
       const langMatch = /language-(\w+)/.exec(className || '');
       // react-markdown v10 no longer passes `inline`; fall back to detecting a

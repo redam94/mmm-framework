@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { remarkPlugins, rehypePlugins, normalizeMath } from '../../lib/markdownMath';
 import { ClipboardCheck, FileCode, Plus, RotateCcw, Send, Sparkles, Square, X } from 'lucide-react';
 import {
   copilotService,
@@ -15,6 +15,7 @@ import {
   type CopilotTurn,
   type NotebookCopilotContext,
 } from '../../api/services/copilotService';
+import { useCopilotChatState, type PersistedMsg } from '../../api/hooks';
 import { lastCodeBlock, MD_COMPONENTS } from './copilotMarkdown';
 import type { NotebookCell as Cell } from '../../api/services/atelierNotebookService';
 
@@ -28,13 +29,8 @@ export interface DiagnoseRequest {
   traceback: string;
 }
 
-interface Msg {
-  id: string;
-  role: 'user' | 'assistant' | 'error';
-  content: string;
-  /** For assistant turns: the cell this answer targets (Apply writes back here). */
-  targetCellId?: string | null;
-}
+/** Assistant turns carry the cell they target (Apply writes back there). */
+type Msg = PersistedMsg;
 
 interface Props {
   sourceCode: string;
@@ -45,6 +41,11 @@ interface Props {
   /** Apply a code block back to the MODEL SOURCE editor (for model-class fixes —
    * the diagnosis prompt can return a corrected `_build_model`). */
   onApplyToEditor?: (code: string) => void;
+  /** Model identity the chat is scoped to (per model/version memory). */
+  name: string | null;
+  version?: number | null;
+  /** Whether the rail is open — gates loading the persisted chat. */
+  active?: boolean;
   onClose?: () => void;
   className?: string;
 }
@@ -164,8 +165,8 @@ function NotebookCopilotMessage({
   return (
     <div className="flex flex-col items-start gap-1.5">
       <div className="max-w-full rounded-2xl rounded-bl-md border border-line-200 bg-white px-3.5 py-2 text-sm text-ink-700">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
-          {msg.content || '…'}
+        <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={MD_COMPONENTS}>
+          {normalizeMath(msg.content || '…')}
         </ReactMarkdown>
       </div>
       {code && (
@@ -188,10 +189,18 @@ export function NotebookCopilotPanel({
   diagnoseRequest,
   onApplyCode,
   onApplyToEditor,
+  name,
+  version = null,
+  active = true,
   onClose,
   className,
 }: Props) {
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const { messages, setMessages, clear: clearChat } = useCopilotChatState({
+    name,
+    version,
+    surface: 'notebook',
+    enabled: active,
+  });
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -307,7 +316,7 @@ export function NotebookCopilotPanel({
   const stop = () => abortRef.current?.abort();
   const clear = () => {
     abortRef.current?.abort();
-    setMessages([]);
+    clearChat();
   };
 
   return (
@@ -320,7 +329,7 @@ export function NotebookCopilotPanel({
           <p className="truncate text-[11px] text-ink-500">Diagnose cell errors · tips · rewrites</p>
         </div>
         {messages.length > 0 && (
-          <button onClick={clear} title="Clear" className="text-ink-400 hover:text-ink-700">
+          <button onClick={clear} title="Clear this model's chat" className="text-ink-400 hover:text-ink-700">
             <RotateCcw size={14} />
           </button>
         )}

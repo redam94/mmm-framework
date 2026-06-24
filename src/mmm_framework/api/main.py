@@ -2823,6 +2823,21 @@ class GardenCopilotRequest(BaseModel):
     notebook: NotebookCopilotContext | None = None
 
 
+class CopilotChatSaveRequest(BaseModel):
+    """Persist the Atelier copilot chat for one ``(model, version, surface)``.
+
+    The chat is scoped per model/version so each model keeps its own running
+    conversation; ``surface`` separates the editor copilot from the notebook
+    copilot. PUT an empty ``messages`` to clear it. ``messages`` are stored as
+    free-form dicts (id/role/content/targetCellId) so the client owns the shape.
+    """
+
+    name: str
+    version: int | None = None
+    surface: str = "editor"  # "editor" | "notebook"
+    messages: list[dict[str, Any]] = []
+
+
 def _garden_org(principal: AuthContext) -> str:
     """Org that scopes garden visibility — matches the agent-side resolution
     (``sessions_store.resolve_org_id``) so both surfaces see the same models."""
@@ -2859,17 +2874,59 @@ async def register_garden_model_endpoint(
     return JSONResponse(status_code=201, content=safe_json_dumps_load(row))
 
 
+def _merge_lint_problems(
+    contract_problems: list[dict], ruff_problems: list[dict]
+) -> list[dict]:
+    """Combine the AST contract checks with ruff's real Python diagnostics.
+
+    - When the source doesn't parse, ruff's E999 (which carries a column) is the
+      precise marker, so drop the contract's generic "Syntax error" stand-in.
+    - Drop the contract "No issues found" all-clear note once ruff has anything
+      to say.
+    - Sort line-anchored problems first (by line), global notes last.
+    """
+    ruff_has_error = any(p.get("severity") == "error" for p in ruff_problems)
+    contract = list(contract_problems)
+    if ruff_has_error:
+        contract = [
+            p
+            for p in contract
+            if not str(p.get("message", "")).startswith("Syntax error")
+        ]
+    if ruff_problems:
+        contract = [
+            p
+            for p in contract
+            if not (
+                p.get("severity") == "info"
+                and str(p.get("message", "")).startswith("No issues found")
+            )
+        ]
+    combined = ruff_problems + contract
+    combined.sort(key=lambda p: (p.get("line") is None, p.get("line") or 0))
+    return combined
+
+
 @app.post("/model-garden/lint")
 async def garden_lint_endpoint(body: GardenSourceRequest, principal: PrincipalDep):
-    """Static (AST-only, never executed) "Problems" check for the Atelier editor:
-    syntax, the garden class, and the contract conventions. Analyst+ role."""
+    """"Problems" check for the Atelier editor: real Python diagnostics (ruff —
+    undefined names, unused imports, redefinitions, syntax, with line/column
+    spans) merged with the AST-only garden-contract conventions. Neither path
+    executes the source. Analyst+ role."""
     if not principal.has_role(Role.ANALYST):
         raise HTTPException(
             status_code=403, detail="Linting requires an analyst+ role."
         )
-    from mmm_framework.agents.garden_authoring import static_authoring_lint
+    from mmm_framework.agents.garden_authoring import ruff_lint, static_authoring_lint
 
-    class_name, problems = static_authoring_lint(body.source_code)
+    # Offload the AST parse + blocking ruff subprocess off the event loop — the
+    # editor fires this on an 800 ms debounced auto-lint loop, so a synchronous
+    # subprocess.run would stall concurrent SSE/fit requests (module convention).
+    def _lint() -> tuple[str | None, list[dict]]:
+        cls, contract = static_authoring_lint(body.source_code)
+        return cls, _merge_lint_problems(contract, ruff_lint(body.source_code))
+
+    class_name, problems = await asyncio.to_thread(_lint)
     return JSONResponse(
         content={
             "class_name": class_name,
@@ -2889,7 +2946,8 @@ async def garden_format_endpoint(body: GardenSourceRequest, principal: Principal
         )
     from mmm_framework.agents.garden_authoring import format_source
 
-    formatted, error = format_source(body.source_code)
+    # Offload the blocking ruff/black subprocess off the event loop (see lint).
+    formatted, error = await asyncio.to_thread(format_source, body.source_code)
     return JSONResponse(content={"formatted": formatted, "error": error})
 
 
@@ -3405,6 +3463,97 @@ async def save_notebook(body: NotebookSaveRequest, principal: PrincipalDep):
         art_id = docs[-1]["id"]
     else:
         art_id = sessions_store.add_artifact(tid, "atelier_notebook", payload)["id"]
+    return JSONResponse(content={"saved": True, "id": art_id})
+
+
+# --------------------------------------------------------------------------- #
+# Atelier copilot chat persistence — one singleton chat per
+# (org, model, version, surface), stored as a `copilot_chat` artifact under a
+# synthetic thread id (mirrors the notebook-doc pattern). Scoping the chat per
+# model/version is the whole point: each model keeps its own conversation, and
+# Clear (PUT with empty messages) wipes only that model's chat.
+# --------------------------------------------------------------------------- #
+_COPILOT_CHAT_KIND = "copilot_chat"
+#: Cap on persisted turns — bounds artifact size on a long-running conversation.
+_COPILOT_CHAT_MAX_MESSAGES = 200
+
+
+def _copilot_surface(surface: str | None) -> str:
+    """Normalize the copilot surface to the two known values (default editor)."""
+    return "notebook" if surface == "notebook" else "editor"
+
+
+def _copilot_tid(org_id: str, name: str, version: int | None, surface: str) -> str:
+    """Synthetic thread id scoping a persisted copilot chat to one
+    (org, model, version, surface) — consistent with ``_notebook_tid``."""
+    import re
+
+    raw = f"{name}__v{version}" if version is not None else f"{name}__draft"
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw)[:80]
+    return f"__atelier_copilot__{org_id}__{_copilot_surface(surface)}__{safe}"
+
+
+@app.get("/model-garden/copilot/chat")
+async def get_copilot_chat(
+    name: str,
+    principal: PrincipalDep,
+    version: int | None = None,
+    surface: str = "editor",
+):
+    """The persisted Atelier copilot chat for this (model, version, surface), or
+    an empty chat when none exists yet. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(
+            status_code=403, detail="The copilot requires an analyst+ role."
+        )
+    org_id = _garden_org(principal)
+    tid = _copilot_tid(org_id, name, version, surface)
+    docs = [
+        a
+        for a in sessions_store.list_artifacts(tid)
+        if a.get("kind") == _COPILOT_CHAT_KIND
+    ]
+    if docs:
+        return JSONResponse(content=safe_json_dumps_load(docs[-1]["payload"]))
+    return JSONResponse(
+        content={
+            "messages": [],
+            "name": name,
+            "version": version,
+            "surface": _copilot_surface(surface),
+        }
+    )
+
+
+@app.put("/model-garden/copilot/chat")
+async def save_copilot_chat(body: CopilotChatSaveRequest, principal: PrincipalDep):
+    """Upsert the Atelier copilot chat (one artifact per model/version/surface).
+    PUT an empty ``messages`` to clear it. Analyst+ role."""
+    if not principal.has_role(Role.ANALYST):
+        raise HTTPException(status_code=403, detail="Saving requires an analyst+ role.")
+    org_id = _garden_org(principal)
+    surface = _copilot_surface(body.surface)
+    tid = _copilot_tid(org_id, body.name, body.version, surface)
+    messages = [m for m in (body.messages or []) if isinstance(m, dict)][
+        -_COPILOT_CHAT_MAX_MESSAGES:
+    ]
+    payload = {
+        "messages": messages,
+        "name": body.name,
+        "version": body.version,
+        "surface": surface,
+        "org_id": org_id,
+    }
+    docs = [
+        a
+        for a in sessions_store.list_artifacts(tid)
+        if a.get("kind") == _COPILOT_CHAT_KIND
+    ]
+    if docs:
+        sessions_store.update_artifact_payload(docs[-1]["id"], payload)
+        art_id = docs[-1]["id"]
+    else:
+        art_id = sessions_store.add_artifact(tid, _COPILOT_CHAT_KIND, payload)["id"]
     return JSONResponse(content={"saved": True, "id": art_id})
 
 

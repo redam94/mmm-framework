@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { Data } from 'plotly.js';
 import Plot from 'react-plotly.js';
 import { Card, StatHero } from '../../components/ui';
 import { CHART_COLORWAY, COLORS } from '../../theme/colors';
@@ -50,7 +51,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
   const last = portfolio[portfolio.length - 1];
 
   // ── chart a: CI contraction per channel ──
-  const ciTraces = useMemo(
+  const ciTraces = useMemo<Data[]>(
     () =>
       channels.map((ch, i) => {
         const byRun = new Map((series.roi[ch] ?? []).map((p) => [p.run_id, p]));
@@ -62,13 +63,13 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
           y: runs.map((r) => byRun.get(r.run_id)?.ci_width ?? null),
           line: { color: CHART_COLORWAY[i % CHART_COLORWAY.length], width: 2 },
           marker: { size: 6 },
-        };
+        } as Data;
       }),
     [channels, series.roi, runs, xIdx],
   );
 
   // ── chart b: budget-share migration (normalized stacked area) ──
-  const shareTraces = useMemo(
+  const shareTraces = useMemo<Data[]>(
     () =>
       channels.map((ch, i) => {
         const byRun = new Map((series.spend_share[ch] ?? []).map((p) => [p.run_id, p]));
@@ -81,13 +82,13 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
           stackgroup: 'one',
           groupnorm: 'percent',
           line: { width: 0.5, color: CHART_COLORWAY[i % CHART_COLORWAY.length] },
-        };
+        } as Data;
       }),
     [channels, series.spend_share, runs, xIdx],
   );
 
   // ── chart c: misallocation (expected uplift) ──
-  const upliftTrace = {
+  const upliftTrace: Data = {
     type: 'scatter',
     mode: 'lines+markers',
     name: 'Expected uplift',
@@ -100,7 +101,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
   // ── chart d: portfolio mROI (+ EVPI on a secondary axis when present) ──
   const portfolioX = portfolio.map((p) => runs.findIndex((r) => r.run_id === p.run_id));
   const hasEvpi = portfolio.some((p) => p.evpi != null);
-  const mroiTraces: any[] = [
+  const mroiTraces: Data[] = [
     {
       type: 'scatter',
       mode: 'lines+markers',
@@ -120,7 +121,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
       y: portfolio.map((p) => p.evpi),
       yaxis: 'y2',
       line: { color: COLORS.steel300, width: 1.5, dash: 'dash' },
-    });
+    } as Data);
   }
 
   // ── full-width ROI band chart for the selected channel ──
@@ -135,7 +136,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
     return m;
   }, [series.calibration, selectedChannel]);
 
-  const bandTraces: any[] = [
+  const bandTraces: Data[] = [
     {
       type: 'scatter',
       mode: 'lines',
@@ -210,7 +211,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
           caption="Width of each channel's 90% ROI interval per cycle — falling lines mean sharper estimates."
         >
           <Plot
-            data={ciTraces as any}
+            data={ciTraces}
             layout={mmmPlotlyLayout({
               height: 340,
               margin: CHART_MARGIN,
@@ -218,7 +219,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
               xaxis: runAxis,
               yaxis: { title: { text: 'CI width' }, rangemode: 'tozero' },
             })}
-            config={PLOTLY_CONFIG as any}
+            config={PLOTLY_CONFIG}
             useResizeHandler
             style={{ width: '100%' }}
           />
@@ -229,7 +230,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
           caption="How spend allocation shifted across channels as the model's recommendations evolved."
         >
           <Plot
-            data={shareTraces as any}
+            data={shareTraces}
             layout={mmmPlotlyLayout({
               height: 340,
               margin: CHART_MARGIN,
@@ -237,7 +238,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
               xaxis: runAxis,
               yaxis: { title: { text: 'Share of spend (%)' }, ticksuffix: '%' },
             })}
-            config={PLOTLY_CONFIG as any}
+            config={PLOTLY_CONFIG}
             useResizeHandler
             style={{ width: '100%' }}
           />
@@ -248,7 +249,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
           caption="KPI left on the table vs the optimal allocation — should fall as estimates sharpen."
         >
           <Plot
-            data={[upliftTrace] as any}
+            data={[upliftTrace]}
             layout={mmmPlotlyLayout({
               height: 340,
               margin: CHART_MARGIN,
@@ -256,7 +257,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
               xaxis: runAxis,
               yaxis: { title: { text: 'Expected uplift' }, rangemode: 'tozero' },
             })}
-            config={PLOTLY_CONFIG as any}
+            config={PLOTLY_CONFIG}
             useResizeHandler
             style={{ width: '100%' }}
           />
@@ -267,7 +268,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
           caption="Marginal ROI of the recommended allocation per cycle; dashed line is the expected value of perfect information."
         >
           <Plot
-            data={mroiTraces as any}
+            data={mroiTraces}
             layout={mmmPlotlyLayout({
               height: 340,
               margin: { ...CHART_MARGIN, r: hasEvpi ? 50 : 30 },
@@ -285,7 +286,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
                   }
                 : {}),
             })}
-            config={PLOTLY_CONFIG as any}
+            config={PLOTLY_CONFIG}
             useResizeHandler
             style={{ width: '100%' }}
           />
@@ -321,7 +322,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
         </div>
         <div className="mt-2">
           <Plot
-            data={bandTraces as any}
+            data={bandTraces}
             layout={mmmPlotlyLayout({
               height: 340,
               margin: CHART_MARGIN,
@@ -329,7 +330,7 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
               xaxis: runAxis,
               yaxis: { title: { text: 'ROI' } },
             })}
-            config={PLOTLY_CONFIG as any}
+            config={PLOTLY_CONFIG}
             useResizeHandler
             style={{ width: '100%' }}
           />

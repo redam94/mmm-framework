@@ -64,7 +64,7 @@ export function RecentActivity({ projectId }: { projectId: string | null }) {
             <p className="mt-1.5 text-sm text-ink-300">No sessions yet.</p>
           ) : (
             <ul className="mt-1 divide-y divide-line-200">
-              {sessions.map((s: any) => (
+              {sessions.map((s) => (
                 <li key={s.thread_id} className="group flex items-center gap-2.5 py-2">
                   <MessageSquareText
                     className="h-4 w-4 shrink-0 text-sage-700"

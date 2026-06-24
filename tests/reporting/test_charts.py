@@ -28,6 +28,10 @@ from mmm_framework.reporting.charts import (
     create_prior_posterior_chart,
     create_decomposition_chart,
     create_plotly_div,
+    create_ppc_observed_vs_predicted,
+    create_ppc_density_overlay,
+    create_ppc_interval_calibration,
+    create_ppc_residual_plot,
 )
 from mmm_framework.reporting.config import (
     ReportConfig,
@@ -239,6 +243,26 @@ class TestChartUtilities:
         """Test hex to RGB with lowercase."""
         result = _hex_to_rgb("#00ff00")
         assert "255" in result
+
+    def test_hex_to_rgb_without_hash(self):
+        assert _hex_to_rgb("00ff00") == "0, 255, 0"
+
+    def test_hex_to_rgb_shorthand(self):
+        assert _hex_to_rgb("#0f0") == "0, 255, 0"
+
+    def test_hex_to_rgb_hsl(self):
+        # The hash-based ChannelColors fallback returns hsl(...) for channels
+        # outside the palette — _hex_to_rgb must not crash on it.
+        result = _hex_to_rgb("hsl(104, 55%, 55%)")
+        r, g, b = (int(x) for x in result.split(","))
+        assert all(0 <= v <= 255 for v in (r, g, b))
+
+    def test_hex_to_rgb_rgb_string(self):
+        assert _hex_to_rgb("rgb(100, 150, 200)") == "100, 150, 200"
+
+    def test_hex_to_rgb_invalid_falls_back(self):
+        assert _hex_to_rgb("not-a-color") == "128, 128, 128"
+        assert _hex_to_rgb(None) == "128, 128, 128"
 
 
 # =============================================================================
@@ -642,3 +666,90 @@ class TestChartConfiguration:
         )
 
         assert isinstance(html, str)
+
+
+# =============================================================================
+# TestPPCCharts (posterior-predictive goodness-of-fit)
+# =============================================================================
+
+
+@pytest.fixture
+def sample_ppc_arrays():
+    """Observed + replicate posterior-predictive draws (original scale)."""
+    rng = np.random.default_rng(7)
+    n_obs = 40
+    observed = 1000 + rng.normal(0, 90, n_obs)
+    y_rep = 1000 + rng.normal(0, 90, (150, n_obs))
+    pred_mean = y_rep.mean(axis=0)
+    pred_lower = np.percentile(y_rep, 10, axis=0)
+    pred_upper = np.percentile(y_rep, 90, axis=0)
+    return observed, y_rep, pred_mean, pred_lower, pred_upper
+
+
+@pytest.fixture
+def sample_coverage():
+    return [
+        {"nominal": 0.5, "empirical": 0.52},
+        {"nominal": 0.8, "empirical": 0.79},
+        {"nominal": 0.95, "empirical": 0.93},
+    ]
+
+
+class TestPPCCharts:
+    """Tests for posterior-predictive check chart functions."""
+
+    def test_observed_vs_predicted_returns_plotly(
+        self, sample_ppc_arrays, sample_config, sample_chart_config
+    ):
+        observed, _, pred_mean, pred_lower, pred_upper = sample_ppc_arrays
+        html = create_ppc_observed_vs_predicted(
+            observed,
+            pred_mean,
+            pred_lower,
+            pred_upper,
+            sample_config,
+            sample_chart_config,
+        )
+        assert isinstance(html, str)
+        assert "Plotly.newPlot" in html
+        assert "ppcObservedVsPredicted" in html
+
+    def test_observed_vs_predicted_without_intervals(
+        self, sample_ppc_arrays, sample_config
+    ):
+        observed, _, pred_mean, _, _ = sample_ppc_arrays
+        html = create_ppc_observed_vs_predicted(
+            observed, pred_mean, None, None, sample_config
+        )
+        assert isinstance(html, str)
+        assert "Plotly" in html
+
+    def test_density_overlay_returns_plotly(
+        self, sample_ppc_arrays, sample_config, sample_chart_config
+    ):
+        observed, y_rep, *_ = sample_ppc_arrays
+        html = create_ppc_density_overlay(
+            observed, y_rep, sample_config, sample_chart_config
+        )
+        assert isinstance(html, str)
+        assert "Plotly.newPlot" in html
+        assert "Observed" in html
+
+    def test_density_overlay_handles_no_samples(self, sample_ppc_arrays, sample_config):
+        observed, *_ = sample_ppc_arrays
+        html = create_ppc_density_overlay(observed, None, sample_config)
+        assert isinstance(html, str)
+        assert "Plotly" in html
+
+    def test_calibration_returns_plotly(self, sample_coverage, sample_config):
+        html = create_ppc_interval_calibration(sample_coverage, sample_config)
+        assert isinstance(html, str)
+        assert "Plotly.newPlot" in html
+        assert "ppcCalibration" in html
+
+    def test_residual_plot_returns_plotly(self, sample_ppc_arrays, sample_config):
+        observed, _, pred_mean, *_ = sample_ppc_arrays
+        html = create_ppc_residual_plot(observed, pred_mean, sample_config)
+        assert isinstance(html, str)
+        assert "Plotly.newPlot" in html
+        assert "ppcResiduals" in html

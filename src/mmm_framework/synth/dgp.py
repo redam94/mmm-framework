@@ -1345,6 +1345,109 @@ def make_realistic(seed: int = 42, *, n_weeks: int | None = None) -> Scenario:
 # registry
 # ---------------------------------------------------------------------------
 
+
+def make_economic_health(seed: int = 14, *, n_weeks: int | None = None) -> Scenario:
+    """A latent ECONOMIC-HEALTH factor confounds spend and sales — and it is
+    *measured* by several noisy indicators.
+
+    The classic unobserved-confounding world (:func:`make_unobserved_confounding`)
+    leaves the common cause latent. Here the common cause is **economic health**,
+    and it is observed indirectly through a handful of macro indicators
+    (GDP growth, consumer confidence, unemployment, retail sales). That is exactly
+    the setup a *joint latent-factor MMM* is built for: estimate the latent factor
+    from its indicators inside the same graph and condition on it, closing the
+    back-door ``spend ← economic health → sales`` that inflates a naive MMM's ROI.
+
+    Ground truth recorded on ``notes`` (the array-valued ones are dropped from the
+    JSON answer key but available to a Python test):
+
+    * ``latent_econ`` — the standardized true factor ``E_t`` (shape ``n``),
+    * ``indicators`` — ``{name: array}`` of the 4 measured indicators,
+    * ``true_loadings`` — the planted loadings (incl. a **negative** one on
+      unemployment, to test sign + ordering recovery),
+    * ``confound_kappa`` / ``confound_theta`` — the econ→spend / econ→sales
+      confounding strengths,
+    * ``chasers`` — the channels whose spend chases the economy hardest (where a
+      naive MMM is most biased).
+
+    The 4 indicators are NOT placed in ``controls`` (a naive MMM only sees Price):
+    they belong to the measurement block and are tagged ``INDICATOR`` by the
+    role-tagged dataset the joint model consumes.
+    """
+    rng, weeks, n, _, _, _, _ = _base_world(seed, n_weeks)
+    t = np.arange(n)
+
+    # Latent economic health: AR(1) cycle + slow growth + seasonal wobble. This is
+    # the only slow signal in the baseline (besides Price), so the factor is the
+    # de-confounder a joint model must recover.
+    en = rng.normal(0, 0.18, n)
+    for k in range(1, n):
+        en[k] += 0.6 * en[k - 1]
+    econ = 1.0 + 0.30 * np.cos(2 * np.pi * t / 52.0) + 0.50 * (t / n) + en
+    econ_c = (econ - econ.mean()) / (econ.std() + 1e-8)  # standardized truth
+
+    # Indicators loading on econ. gdp_growth is listed FIRST and loads positively:
+    # it anchors the factor's orientation for the joint model (whose first loading
+    # is sign-pinned). unemployment carries the planted NEGATIVE loading.
+    loadings = {
+        "gdp_growth": 0.9,
+        "consumer_confidence": 0.8,
+        "unemployment": -0.7,
+        "retail_sales": 0.6,
+    }
+    psi = 0.5  # idiosyncratic indicator noise (std on the standardized scale)
+    indicators = {
+        name: lam * econ_c + rng.normal(0, psi, n) for name, lam in loadings.items()
+    }
+
+    # econ -> spend: booms drive higher spend; Search/Social chase hardest.
+    kappa = {"TV": 0.20, "Search": 1.2, "Social": 1.0, "Display": 0.20}
+    levels = _pulsed_levels(rng, n)
+    spend = {}
+    for c in CHANNELS:
+        factor = np.clip(1.0 + kappa[c] * econ_c, 0.1, None)
+        spend[c] = np.clip(_BASE_SPEND[c] * levels[c] * factor, 0.5, None)
+    spend = pd.DataFrame(spend, columns=CHANNELS)
+    maxes = {c: float(spend[c].max()) for c in CHANNELS}
+
+    # econ -> sales: booms raise baseline sales (the open back-door). The baseline
+    # is intentionally simple (intercept + price + econ) so the latent factor is
+    # the dominant slow signal and is cleanly recoverable.
+    price = 12.0 + 0.5 * np.cos(2 * np.pi * t / 52.0)
+    price_effect = -28.0 * (price - price.mean())
+    theta = 110.0
+    baseline = 300.0 + price_effect + theta * econ_c
+    fn = _media_response_fn(_ALPHA, _LAM, _AMP, maxes, baseline)
+    mu = fn(spend.to_numpy(float))
+    noise = rng.normal(0, 22.0, n)
+
+    controls = pd.DataFrame({"Price": price})
+    return _finish(
+        "economic_health",
+        "no unobserved confounding (exogeneity of spend)",
+        "A latent economic-health factor drives both spend (Search/Social chase "
+        "it) and baseline sales; it is measured by 4 noisy indicators so a joint "
+        "latent-factor MMM can recover and condition on it (closing the back-door "
+        "an indicator-free MMM leaves open).",
+        weeks,
+        spend,
+        mu,
+        noise,
+        controls,
+        fn,
+        control_roles=None,
+        notes={
+            "latent_econ": econ_c,
+            "indicators": indicators,
+            "true_loadings": loadings,
+            "confound_kappa": kappa,
+            "confound_theta": theta,
+            "chasers": ["Search", "Social"],
+            "econ_indicators": list(loadings),
+        },
+    )
+
+
 SCENARIOS: dict[str, Callable[..., Scenario]] = {
     "realistic": make_realistic,
     "clean": make_clean,
@@ -1365,6 +1468,7 @@ SCENARIOS: dict[str, Callable[..., Scenario]] = {
     "trend_break": make_trend_break,
     "seasonality_misspec": make_seasonality_misspec,
     "dense_controls": make_dense_controls,
+    "economic_health": make_economic_health,
     "aurora_kitchen_sink": make_aurora_kitchen_sink,
 }
 
@@ -1385,6 +1489,7 @@ PRIORITY = [
     "trend_break",
     "seasonality_misspec",
     "dense_controls",
+    "economic_health",
     "confounding_controlled",
     "aurora_kitchen_sink",
 ]

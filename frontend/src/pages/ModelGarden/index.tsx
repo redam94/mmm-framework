@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import Editor from '@monaco-editor/react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import Editor, { type OnMount } from '@monaco-editor/react';
 import ReactMarkdown, { type Components } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { remarkPlugins, rehypePlugins, normalizeMath } from '../../lib/markdownMath';
 import {
   AlignLeft,
   CircleCheck,
@@ -35,7 +35,9 @@ import {
   type Column,
 } from '../../components/ui';
 import { GARDEN_STATUS, type GardenStatus } from '../../theme/colors';
+import { useQueryClient } from '@tanstack/react-query';
 import {
+  copilotChatKeys,
   useDeleteGardenModel,
   useGardenModel,
   useGardenModels,
@@ -47,10 +49,37 @@ import {
   useUpdateGardenDocs,
 } from '../../api/hooks';
 import type { CompatTier, GardenModel } from '../../api/services/modelGardenService';
+import type { CopilotSurface } from '../../api/services/copilotService';
 import { CopilotPanel } from '../../components/modelGarden/CopilotPanel';
 import { AtelierNotebook } from '../../components/modelGarden/AtelierNotebook';
-import { registerGardenCompletions } from '../../components/modelGarden/gardenCompletions';
+import {
+  registerGardenCompletions,
+  defineAtelierTheme,
+  applyLintMarkers,
+} from '../../components/modelGarden/gardenCompletions';
 import { copilotService, type LintProblem } from '../../api/services/copilotService';
+
+// Production-grade Monaco options shared by the Atelier code editor: framework
+// IntelliSense triggers, bracket-pair colorization, hints, and live linting.
+const CODE_EDITOR_OPTIONS = {
+  scrollBeyondLastLine: false,
+  fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+  fontLigatures: true,
+  renderLineHighlight: 'line' as const,
+  automaticLayout: true,
+  tabCompletion: 'on' as const,
+  quickSuggestions: { other: true, comments: false, strings: false },
+  suggestOnTriggerCharacters: true,
+  parameterHints: { enabled: true, cycle: true },
+  hover: { enabled: true, above: false },
+  bracketPairColorization: { enabled: true },
+  guides: { bracketPairs: 'active' as const, indentation: true },
+  stickyScroll: { enabled: true },
+  smoothScrolling: true,
+  cursorBlinking: 'smooth' as const,
+  padding: { top: 10, bottom: 10 },
+  suggest: { showWords: false },
+};
 
 const STARTER_TEMPLATE = `from mmm_framework.garden import CustomMMM
 
@@ -193,7 +222,17 @@ export function ModelGardenPage() {
   const [fontSize, setFontSize] = useState(13);
   const [problems, setProblems] = useState<LintProblem[]>([]);
   const [showProblems, setShowProblems] = useState(false);
+  const [lintedOnce, setLintedOnce] = useState(false);
   const [ideBusy, setIdeBusy] = useState<null | 'lint' | 'format'>(null);
+
+  // Monaco refs so live linting can paint inline markers + jump to a problem.
+  const codeEditorRef = useRef<import('monaco-editor').editor.IStandaloneCodeEditor | null>(
+    null,
+  );
+  const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
+  const lastLintSrcRef = useRef<string | null>(null);
+
+  const qc = useQueryClient();
 
   // Data
   const { data: listData, isLoading: listLoading } = useGardenModels();
@@ -214,6 +253,60 @@ export function ModelGardenPage() {
   // Editor shows the editable draft while authoring, else the fetched (read-only)
   // source — derived (no effect) to avoid a setState-in-effect cascade.
   const editorValue = authoring ? code : sourceData?.source_code ?? '';
+
+  // The copilot chat is scoped to the model being worked on (per model/version
+  // memory); a brand-new unsaved draft uses a stable '__draft__' key so the
+  // conversation survives while authoring (the editor copilot uses this too).
+  const DRAFT_KEY = '__draft__';
+  const copilotName = selName ?? DRAFT_KEY;
+  const copilotVersion = selVersion;
+
+  // Reset the shared draft-chat bucket (both surfaces) so a fresh authoring
+  // session doesn't inherit a previous abandoned draft's conversation.
+  const clearDraftChat = () => {
+    (['editor', 'notebook'] as CopilotSurface[]).forEach((surface) => {
+      copilotService
+        .saveChat({ name: DRAFT_KEY, version: null, surface, messages: [] })
+        .catch(() => {});
+      qc.setQueryData(copilotChatKeys.doc(DRAFT_KEY, null, surface), {
+        messages: [],
+        name: DRAFT_KEY,
+        version: null,
+        surface,
+      });
+    });
+  };
+
+  // On register, carry the authoring conversation (the '__draft__' chat) over to
+  // the new (name, version) key so it continues seamlessly into v1, then clear
+  // the draft bucket. Primes the query cache so the panel (which remounts on the
+  // key change) reads the migrated chat immediately. Best-effort.
+  const migrateDraftChat = async (newName: string, newVersion: number) => {
+    for (const surface of ['editor', 'notebook'] as CopilotSurface[]) {
+      try {
+        const draft = await copilotService.getChat(DRAFT_KEY, null, surface);
+        const messages = draft.messages ?? [];
+        if (messages.length) {
+          await copilotService.saveChat({ name: newName, version: newVersion, surface, messages });
+          qc.setQueryData(copilotChatKeys.doc(newName, newVersion, surface), {
+            messages,
+            name: newName,
+            version: newVersion,
+            surface,
+          });
+        }
+        await copilotService.saveChat({ name: DRAFT_KEY, version: null, surface, messages: [] });
+        qc.setQueryData(copilotChatKeys.doc(DRAFT_KEY, null, surface), {
+          messages: [],
+          name: DRAFT_KEY,
+          version: null,
+          surface,
+        });
+      } catch {
+        /* best-effort migration — never block registration */
+      }
+    }
+  };
 
   // Docs editing mirrors the code editor: the editable draft while authoring,
   // else an in-place buffer over the fetched docs (null = mirror unchanged).
@@ -238,6 +331,8 @@ export function ModelGardenPage() {
     setDraftName('');
     setDraftDocs('');
     setDocsDraft(null);
+    clearDraftChat();
+    resetDiagnostics();
     test.reset();
   };
 
@@ -246,6 +341,7 @@ export function ModelGardenPage() {
     setSelName(m.name);
     setSelVersion(m.version);
     setDocsDraft(null);
+    resetDiagnostics();
     updateDocs.reset();
     test.reset();
   };
@@ -254,10 +350,14 @@ export function ModelGardenPage() {
     register.mutate(
       { source_code: code, name: draftName.trim(), docs: draftDocs.trim() },
       {
-        onSuccess: (row) => {
+        onSuccess: async (row) => {
+          // Migrate the authoring chat to the new version BEFORE flipping the
+          // selection, so the remounted panel reads the carried-over chat.
+          await migrateDraftChat(row.name, row.version);
           setAuthoring(false);
           setSelName(row.name);
           setSelVersion(row.version);
+          resetDiagnostics();
         },
       },
     );
@@ -269,6 +369,7 @@ export function ModelGardenPage() {
     setDraftName(selName ?? '');
     setDraftDocs(detail?.docs ?? '');
     setDocsDraft(null);
+    resetDiagnostics();
     test.reset();
   };
 
@@ -281,6 +382,44 @@ export function ModelGardenPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [fullscreen]);
+
+  // Live linting: debounced re-lint as the source changes (code tab only) →
+  // inline squiggles + an up-to-date Problems count, without forcing the panel
+  // open. Manual "Validate" still opens it. Identical source isn't re-fetched.
+  useEffect(() => {
+    if (editorTab !== 'code') return;
+    const src = editorValue;
+    if (!src.trim()) {
+      lastLintSrcRef.current = src;
+      setProblems([]);
+      return;
+    }
+    if (src === lastLintSrcRef.current) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const r = await copilotService.lint(src);
+        if (cancelled) return;
+        lastLintSrcRef.current = src;
+        setLintedOnce(true);
+        setProblems(r.problems ?? []);
+      } catch {
+        /* auto-lint failures are non-fatal — manual Validate surfaces them */
+      }
+    }, 800);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [editorValue, editorTab]);
+
+  // Paint inline markers from the latest problems (code tab + editor mounted).
+  useEffect(() => {
+    const ed = codeEditorRef.current;
+    const monaco = monacoRef.current;
+    if (ed && monaco && editorTab === 'code') applyLintMarkers(monaco, ed, problems);
+  }, [problems, editorTab]);
+
 
   // The copilot is an inline panel that shares the right side with the
   // compatibility report; opening it collapses that panel so the editor keeps
@@ -328,6 +467,8 @@ export function ModelGardenPage() {
     setIdeBusy('lint');
     try {
       const r = await copilotService.lint(editorValue);
+      lastLintSrcRef.current = editorValue;
+      setLintedOnce(true);
       setProblems(r.problems ?? []);
       setShowProblems(true);
     } catch (e) {
@@ -337,6 +478,45 @@ export function ModelGardenPage() {
       setIdeBusy(null);
     }
   };
+
+  // Store the Monaco editor + namespace on mount so live lint can paint inline
+  // markers and the Problems panel can jump to a line.
+  const handleCodeEditorMount: OnMount = (editor, monaco) => {
+    registerGardenCompletions(editor, monaco);
+    codeEditorRef.current = editor;
+    monacoRef.current = monaco;
+    applyLintMarkers(monaco, editor, problems);
+    // Null the ref when the editor is disposed (switching to docs/notebook tab
+    // unmounts it) so marker/jump code never touches a dead editor.
+    editor.onDidDispose(() => {
+      if (codeEditorRef.current === editor) codeEditorRef.current = null;
+    });
+  };
+
+  const jumpToProblem = (p: LintProblem) => {
+    const ed = codeEditorRef.current;
+    // Bail if the code editor is gone (e.g. opened from another tab) or disposed.
+    if (editorTab !== 'code' || !ed || ed.getModel() == null || p.line == null) return;
+    ed.revealLineInCenter(p.line);
+    ed.setPosition({ lineNumber: p.line, column: p.column ?? 1 });
+    ed.focus();
+  };
+
+  // Clear diagnostics (squiggles + Problems list) — called at every model/
+  // version/authoring switch, since the code editor is NOT remounted on a switch
+  // and would otherwise keep the previous source's markers until the next lint.
+  const resetDiagnostics = () => {
+    setProblems([]);
+    setLintedOnce(false);
+    setShowProblems(false);
+    lastLintSrcRef.current = null;
+    const ed = codeEditorRef.current;
+    const monaco = monacoRef.current;
+    if (ed && monaco && ed.getModel() != null) applyLintMarkers(monaco, ed, []);
+  };
+
+  const errCount = problems.filter((p) => p.severity === 'error').length;
+  const warnCount = problems.filter((p) => p.severity === 'warning').length;
 
   // The compat report shown on the right: a live test job (if running) else the
   // stored report on the selected version.
@@ -549,6 +729,28 @@ export function ModelGardenPage() {
               <ZoomIn size={15} />
             </ToolButton>
             <div className="ml-auto flex items-center gap-0.5">
+              {editorTab === 'code' && (lintedOnce || problems.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => setShowProblems((v) => !v)}
+                  title="Toggle Problems"
+                  className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors hover:bg-cream-100 ${
+                    errCount ? 'text-rust-700' : warnCount ? 'text-gold-700' : 'text-sage-700'
+                  }`}
+                >
+                  {errCount || warnCount ? (
+                    <span>
+                      {errCount > 0 && `${errCount} error${errCount > 1 ? 's' : ''}`}
+                      {errCount > 0 && warnCount > 0 && ' · '}
+                      {warnCount > 0 && `${warnCount} warning${warnCount > 1 ? 's' : ''}`}
+                    </span>
+                  ) : (
+                    <>
+                      <CircleCheck size={13} /> No problems
+                    </>
+                  )}
+                </button>
+              )}
               {editorTab === 'code' && (
                 <ToolButton title="Modeling copilot" active={copilotOpen} onClick={() => toggleCopilot(!copilotOpen)}>
                   <Sparkles size={15} className="mr-1" />
@@ -565,7 +767,7 @@ export function ModelGardenPage() {
           </div>
 
           {/* Problems */}
-          {showProblems && problems.length > 0 && (
+          {editorTab === 'code' && showProblems && problems.length > 0 && (
             <div className="rounded-md border border-line-200 bg-white px-3 py-2 text-xs">
               <div className="mb-1 flex items-center justify-between">
                 <span className="font-semibold uppercase tracking-wide text-ink-400">Problems</span>
@@ -573,24 +775,32 @@ export function ModelGardenPage() {
                   <X size={13} />
                 </button>
               </div>
-              <ul className="max-h-28 space-y-1 overflow-y-auto">
+              <ul className="max-h-32 space-y-0.5 overflow-y-auto">
                 {problems.map((p, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span
-                      className={
-                        p.severity === 'error'
-                          ? 'font-medium text-rust-700'
-                          : p.severity === 'warning'
-                            ? 'font-medium text-gold-700'
-                            : 'font-medium text-sage-700'
-                      }
+                  <li key={i}>
+                    <button
+                      type="button"
+                      onClick={() => jumpToProblem(p)}
+                      disabled={p.line == null}
+                      title={p.line != null ? 'Jump to line' : undefined}
+                      className="flex w-full gap-2 rounded px-1 py-0.5 text-left transition-colors enabled:hover:bg-cream-100 disabled:cursor-default"
                     >
-                      {p.severity}
-                    </span>
-                    <span className="text-ink-600">
-                      {p.line ? `L${p.line}: ` : ''}
-                      {p.message}
-                    </span>
+                      <span
+                        className={
+                          p.severity === 'error'
+                            ? 'font-medium text-rust-700'
+                            : p.severity === 'warning'
+                              ? 'font-medium text-gold-700'
+                              : 'font-medium text-sage-700'
+                        }
+                      >
+                        {p.severity}
+                      </span>
+                      <span className="text-ink-600">
+                        {p.line ? `L${p.line}: ` : ''}
+                        {p.message}
+                      </span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -607,30 +817,38 @@ export function ModelGardenPage() {
                   language="python"
                   value={editorValue}
                   onChange={(v) => authoring && setCode(v ?? '')}
-                  onMount={registerGardenCompletions}
-                  theme="vs"
+                  beforeMount={defineAtelierTheme}
+                  onMount={handleCodeEditorMount}
+                  theme="atelier-light"
                   options={{
+                    ...CODE_EDITOR_OPTIONS,
                     readOnly: !authoring,
                     minimap: { enabled: minimap },
                     fontSize,
                     wordWrap: wrap ? 'on' : 'off',
-                    scrollBeyondLastLine: false,
-                    fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-                    renderLineHighlight: 'line',
-                    automaticLayout: true,
                   }}
                 />
               </div>
-              {copilotOpen && (
-                <div className="w-[23rem] shrink-0 overflow-hidden rounded-md border border-line-200 bg-white">
-                  <CopilotPanel
-                    sourceCode={editorValue}
-                    onApplyCode={applyCode}
-                    onClose={() => toggleCopilot(false)}
-                    className="h-full"
-                  />
-                </div>
-              )}
+              {/* Kept mounted (toggled via `hidden`) so an in-flight stream and
+                  freshly-typed input survive closing/reopening the panel. */}
+              <div
+                className={
+                  copilotOpen
+                    ? 'w-[30rem] shrink-0 overflow-hidden rounded-md border border-line-200 bg-white'
+                    : 'hidden'
+                }
+              >
+                <CopilotPanel
+                  key={`copilot-${copilotName}-${copilotVersion ?? 'draft'}`}
+                  sourceCode={editorValue}
+                  onApplyCode={applyCode}
+                  name={copilotName}
+                  version={copilotVersion}
+                  active={copilotOpen}
+                  onClose={() => toggleCopilot(false)}
+                  className="h-full"
+                />
+              </div>
             </div>
           ) : editorTab === 'docs' ? (
             <div className={`flex flex-col min-h-0 ${fullscreen ? 'flex-1' : ''}`}>
@@ -645,7 +863,8 @@ export function ModelGardenPage() {
                       if (authoring) setDraftDocs(v ?? '');
                       else if (!isPublished) setDocsDraft(v ?? '');
                     }}
-                    theme="vs"
+                    beforeMount={defineAtelierTheme}
+                    theme="atelier-light"
                     options={{
                       readOnly: !authoring && isPublished,
                       minimap: { enabled: minimap },
@@ -661,8 +880,8 @@ export function ModelGardenPage() {
                 <div className="min-h-0 w-[45%] shrink-0 overflow-y-auto rounded-md border border-line-200 bg-cream-50 p-4">
                   {docsValue.trim() ? (
                     <div className="text-sm text-ink-700">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={DOCS_MD}>
-                        {docsValue}
+                      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={DOCS_MD}>
+                        {normalizeMath(docsValue)}
                       </ReactMarkdown>
                     </div>
                   ) : (
@@ -714,6 +933,8 @@ export function ModelGardenPage() {
               {editorValue.trim() ? (
                 <AtelierNotebook
                   name={(authoring ? draftName : selName) || 'untitled'}
+                  copilotName={copilotName}
+                  copilotVersion={copilotVersion}
                   liveSource={editorValue}
                   onApplyToEditor={applyCode}
                   fill={fullscreen}
@@ -935,8 +1156,8 @@ export function ModelGardenPage() {
                     </div>
                     <dd className="mt-1 text-sm text-ink-700">
                       {detail!.docs ? (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={DOCS_MD}>
-                          {detail!.docs}
+                        <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={DOCS_MD}>
+                          {normalizeMath(detail!.docs)}
                         </ReactMarkdown>
                       ) : (
                         '—'
@@ -967,8 +1188,8 @@ export function ModelGardenPage() {
       >
         {detail?.docs ? (
           <div className="text-sm text-ink-700">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={DOCS_MD}>
-              {detail.docs}
+            <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={DOCS_MD}>
+              {normalizeMath(detail.docs)}
             </ReactMarkdown>
           </div>
         ) : (

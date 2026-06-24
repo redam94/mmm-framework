@@ -62,8 +62,10 @@ export function useExperimentPriorities(projectId: string | null) {
     queryFn: async () => {
       try {
         return await measurementService.getPriorities(projectId!);
-      } catch (e: any) {
-        if (e?.response?.status === 404) return null;
+      } catch (e: unknown) {
+        const status = (e as { response?: { status?: number } } | null | undefined)?.response
+          ?.status;
+        if (status === 404) return null;
         throw e;
       }
     },

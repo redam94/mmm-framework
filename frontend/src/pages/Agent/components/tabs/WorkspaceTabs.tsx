@@ -34,6 +34,20 @@ import { EdaTab } from './EdaTab';
 import type { ModelingMode } from '../../../../api/services/sessionService';
 import type { Artifact, DashboardData, ModelSpec, OutlierAction, PythonOutput } from '../../types';
 
+// Native dashboard ROI table row (server-driven; all metrics optional). Distinct
+// from the experiment-priority PriorityChannel shape — this carries prob_profitable.
+interface RoiMetricRow {
+  channel: string;
+  roi_mean?: number;
+  roi_hdi_low?: number;
+  roi_hdi_high?: number;
+  prob_profitable?: number;
+}
+
+// A captured plot ref handed straight to PlotCard (which reads the loose figure
+// blob internally); we only touch `id` here for the React key.
+interface PlotRef { id?: string; [key: string]: unknown }
+
 export function WorkspaceTabs({
   rightExpanded, onToggleExpand, activeTab, onTabChange,
   causal, dashboardData, artifacts, pythonOutputs,
@@ -57,7 +71,7 @@ export function WorkspaceTabs({
   projectId: string | null;
   workspaceRefreshKey: number;
   chatLoading: boolean;
-  onApplySpec: (newSpec: any) => void;
+  onApplySpec: (newSpec: ModelSpec) => void;
   onUnlockField: (path: string | string[]) => void;
   onQuickAction: (msg: string) => void;
   onRerunArtifact: (a: Artifact) => void;
@@ -357,7 +371,7 @@ export function WorkspaceTabs({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-line-200">
-                        {dashboardData.roi_metrics.map((row: any) => (
+                        {(dashboardData.roi_metrics as RoiMetricRow[]).map((row) => (
                           <tr key={row.channel} className="bg-white hover:bg-cream-100 transition-colors">
                             <td className="px-4 py-3 font-medium text-ink-900">{row.channel}</td>
                             <td className="px-4 py-3 text-emerald-600 font-semibold">{row.roi_mean?.toFixed(2)}x</td>
@@ -428,7 +442,7 @@ export function WorkspaceTabs({
               {dashboardData.plots?.length > 0 ? (
                 <DashWidget title={`Visualizations (${dashboardData.plots.length})`} dotColor="bg-fuchsia-500" color="fuchsia">
                   <div className="space-y-4">
-                    {dashboardData.plots.map((plot: any, idx: number) => (
+                    {(dashboardData.plots as PlotRef[]).map((plot, idx: number) => (
                       <PlotCard key={plot?.id ?? idx} plot={plot} idx={idx} />
                     ))}
                   </div>

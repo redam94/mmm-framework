@@ -58,9 +58,11 @@ export function LogExperimentModal({ onClose }: { onClose: () => void }) {
         notes: notes.trim() || null,
       });
       onClose();
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : (err?.message ?? 'Save failed'));
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: unknown } }; message?: unknown } | null;
+      const detail = e?.response?.data?.detail;
+      const message = typeof e?.message === 'string' ? e.message : 'Save failed';
+      setError(typeof detail === 'string' ? detail : message);
     }
   };
 

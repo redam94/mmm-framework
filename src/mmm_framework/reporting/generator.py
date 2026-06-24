@@ -26,6 +26,8 @@ from .sections import (
     ExecutiveSummarySection,
     FactorAnalysisSection,
     ModelFitSection,
+    PosteriorPredictiveSection,
+    EstimandsSection,
     ChannelROISection,
     DecompositionSection,
     SaturationSection,
@@ -117,11 +119,20 @@ class MMMReportGenerator:
         is_mmm = getattr(self.data, "model_kind", "mmm") == "mmm"
         _off = SectionConfig(enabled=False)
 
+        # The factor-analysis section is DATA-driven, not MMM-kind-driven: it turns
+        # on whenever the bundle carries latent-structure data (a pure CFA/LCA via
+        # the FactorAnalysisExtractor, OR a hybrid MMM that also estimates a latent
+        # factor — both fill these fields). FactorAnalysisSection.render() no-ops on
+        # empty data, so a plain MMM (empty fields) leaves it off.
+        has_latent = bool(getattr(self.data, "factor_loadings", None)) or bool(
+            getattr(self.data, "cfa_fit_indices", None)
+        )
+
         def _mmm(cfg: SectionConfig) -> SectionConfig:
             return cfg if is_mmm else _off
 
-        def _non_mmm(cfg: SectionConfig) -> SectionConfig:
-            return cfg if not is_mmm else _off
+        def _latent(cfg: SectionConfig) -> SectionConfig:
+            return cfg if has_latent else _off
 
         section_configs = [
             (
@@ -132,10 +143,16 @@ class MMMReportGenerator:
             (
                 "factor_analysis",
                 FactorAnalysisSection,
-                _non_mmm(self.config.factor_analysis),
+                _latent(self.config.factor_analysis),
             ),
             ("model_fit", ModelFitSection, self.config.model_fit),
+            (
+                "posterior_predictive",
+                PosteriorPredictiveSection,
+                _mmm(self.config.posterior_predictive),
+            ),
             ("channel_roi", ChannelROISection, _mmm(self.config.channel_roi)),
+            ("estimands", EstimandsSection, _mmm(self.config.estimands)),
             ("geographic", GeographicSection, _mmm(self.config.geographic)),
             ("decomposition", DecompositionSection, _mmm(self.config.decomposition)),
             ("mediators", MediatorSection, _mmm(self.config.mediators)),

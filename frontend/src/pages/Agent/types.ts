@@ -3,6 +3,10 @@
 export interface ToolCall {
   id: string;
   name: string;
+  // Tool args are a server-driven JSON blob; consumers (e.g. useChatStream) read
+  // arbitrary keys (args.code) straight into string positions — keep `any` so this
+  // exported shape stays as permissive as before for un-editable callers.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args?: Record<string, any>;
   result?: string;
   status: 'running' | 'done' | 'error';
@@ -38,6 +42,11 @@ export interface Artifact {
   id: string;
   thread_id: string;
   kind: 'code_snippet' | 'report' | 'model_run' | 'project_report' | 'project_slides' | 'text_output' | string;
+  // Server-driven JSON blob whose shape varies by `kind`; consumers (ArtifactsPanel,
+  // index, useChatStream) read arbitrary nested keys (payload.code, payload.inference?.draws,
+  // payload.call_id as an index) into typed positions — keep `any` so this exported shape
+  // stays as permissive as before for un-editable callers.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload: any;
   created_at: number;
 }

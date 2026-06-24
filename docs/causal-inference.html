@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Causal Inference Guide | MMM Framework</title>
-    <meta name="description" content="A python-based Marketing Mix Modeling framework to calculate adstock, saturation, and ROI using Bayesian inference.">
+    <meta name="description" content="How Marketing Mix Modeling estimates incremental causal effects: potential outcomes, structural causal models, confounding and back-door adjustment, and why correlation is not ROI.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-inference.html">
     <meta property="og:title" content="Causal Inference Guide | MMM Framework">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
-    <meta property="og:description" content="A comprehensive reference for data scientists implementing Bayesian Marketing Mix Models. This guide covers mathematical foundations, model specifications, and practical considerations for each model type in the framework.">
+    <meta property="og:description" content="How Marketing Mix Modeling estimates incremental causal effects: potential outcomes, structural causal models, confounding and back-door adjustment, and why correlation is not ROI.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-inference.html">
     <meta property="og:type" content="website">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -38,6 +38,91 @@
         .rule-box h4 { margin-top: 0; color: var(--color-accent-dark); }
         .rule-box .rule-formula { background: var(--color-bg-alt); padding: 1rem; border-radius: 8px; margin: 1rem 0; font-size: 1.1rem; text-align: center; }
     </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Causal Inference Guide | MMM Framework">
+    <meta name="twitter:description" content="How Marketing Mix Modeling estimates incremental causal effects: potential outcomes, structural causal models, confounding and back-door adjustment, and why correlation is not ROI.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta name="author" content="Matthew Reda">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/causal-inference.html",
+          "name": "Causal Inference Guide | MMM Framework",
+          "description": "How Marketing Mix Modeling estimates incremental causal effects: potential outcomes, structural causal models, confounding and back-door adjustment, and why correlation is not ROI.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-12",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/causal-inference.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/causal-inference.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Causal Inference Guide",
+          "datePublished": "2026-06-12",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/causal-inference.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/causal-inference.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Causal Inference",
+              "item": "https://redam94.github.io/mmm-framework/causal-inference.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
 </head>
 <body>
     <!-- Navigation injected by shared/components.js -->

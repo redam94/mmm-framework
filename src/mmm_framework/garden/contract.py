@@ -135,6 +135,21 @@ def is_mmm_model(obj: Any) -> bool:
     return True
 
 
+def has_latent_structure(obj: Any) -> bool:
+    """Whether ``obj`` exposes a latent-structure summary the report can render.
+
+    Duck-typed (a class or instance): True if it defines a callable
+    ``factor_loadings_summary`` or ``class_profile_summary``. This is orthogonal
+    to :func:`is_mmm_model` — a hybrid family (an MMM that ALSO estimates a latent
+    factor, e.g. ``LatentFactorMMM``) is both ``is_mmm_model`` *and*
+    ``has_latent_structure``, so its report shows the channel/ROI sections **and**
+    a factor-loadings section. A pure CFA/LCA is non-MMM and has latent structure;
+    a plain MMM has neither method, so the latent section stays off."""
+    return callable(getattr(obj, "factor_loadings_summary", None)) or callable(
+        getattr(obj, "class_profile_summary", None)
+    )
+
+
 def _fit_signature_ok(cls: Any) -> bool:
     """``fit`` should accept the standard knobs (method / random_seed) — either
     explicitly or via ``**kwargs``. Lenient: a bad signature is a warning-tier
@@ -352,6 +367,7 @@ __all__ = [
     "is_bayesian_mmm_subclass",
     "model_kind",
     "is_mmm_model",
+    "has_latent_structure",
     "validate_class",
     "validate_instance",
     "validate_fitted",

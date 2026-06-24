@@ -7,6 +7,7 @@ and customized independently.
 
 from __future__ import annotations
 
+import html
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, TYPE_CHECKING
@@ -431,7 +432,7 @@ class ChannelROISection(Section):
             rows.append(
                 f"""
                 <tr>
-                    <td>{ch}</td>
+                    <td>{html.escape(ch)}</td>
                     <td class="mono">{mean:.2f}</td>
                     <td class="mono">[{lower:.2f}, {upper:.2f}]</td>
                     <td class="{conf_class}">{status}</td>
@@ -461,7 +462,7 @@ class ChannelROISection(Section):
             pills.append(
                 f"""
                 <div class="channel-pill">
-                    <span class="dot" style="background: {color}"></span>{ch}
+                    <span class="dot" style="background: {color}"></span>{html.escape(ch)}
                 </div>
             """
             )
@@ -626,7 +627,7 @@ class DecompositionSection(Section):
             rows.append(
                 f"""
                 <tr data-geo="agg">
-                    <td>{comp}</td>
+                    <td>{html.escape(comp)}</td>
                     <td class="mono">{formatted_value}</td>
                     <td class="mono">{pct:.1%}</td>
                 </tr>
@@ -650,8 +651,8 @@ class DecompositionSection(Section):
                         else f"{value:,.0f}"
                     )
                     geo_rows += f"""
-                        <tr data-geo="{geo}" style="display: none;">
-                            <td>{comp}</td>
+                        <tr data-geo="{html.escape(geo)}" style="display: none;">
+                            <td>{html.escape(comp)}</td>
                             <td class="mono">{formatted_value}</td>
                             <td class="mono">{pct:.1%}</td>
                         </tr>
@@ -662,7 +663,7 @@ class DecompositionSection(Section):
         if has_geo:
             options = '<option value="agg" selected>Aggregated (Total)</option>'
             for geo in self.data.geo_names:
-                options += f'<option value="{geo}">{geo}</option>'
+                options += f'<option value="{html.escape(geo)}">{html.escape(geo)}</option>'
 
             dropdown_html = f"""
             <div style="margin-bottom: 1rem;">
@@ -937,7 +938,7 @@ class CausalAssumptionsSection(Section):
 
         confounders = ca.get("assumed_confounders")
         if confounders:
-            items = "".join(f"<li>{c}</li>" for c in confounders)
+            items = "".join(f"<li>{html.escape(c)}</li>" for c in confounders)
             parts.append(
                 f"""
                 <div class="methodology-note">
@@ -966,7 +967,7 @@ class CausalAssumptionsSection(Section):
             rows.append(
                 f"""
                 <tr>
-                    <td>{ch.get("channel", "?")}</td>
+                    <td>{html.escape(ch.get("channel", "?"))}</td>
                     <td class="mono">{rv_s}</td>
                     <td class="mono">{pr2_s}</td>
                     <td class="{cls}">{status}</td>
@@ -1133,7 +1134,7 @@ class GeographicSection(Section):
             table_rows.append(
                 f"""
                 <tr>
-                    <td><strong>{geo}</strong></td>
+                    <td><strong>{html.escape(geo)}</strong></td>
                     <td class="mono">{rev_str}</td>
                     <td class="mono">{roi_str}</td>
                     <td class="mono muted">{roi_ci}</td>
@@ -1279,7 +1280,7 @@ class MediatorSection(Section):
             table_rows.append(
                 f"""
                 <tr>
-                    <td><strong>{channel}</strong></td>
+                    <td><strong>{html.escape(channel)}</strong></td>
                     <td class="mono">{total_str}</td>
                     <td class="mono muted">{total_ci}</td>
                     <td class="mono">{direct_str}</td>
@@ -1408,7 +1409,7 @@ class CannibalizationSection(Section):
                 table_rows.append(
                     f"""
                     <tr>
-                        <td><strong>{product}</strong></td>
+                        <td><strong>{html.escape(product)}</strong></td>
                         <td class="mono">{self._format_currency(direct)}</td>
                         <td class="mono {cannib_class}">{self._format_currency(cannib)}</td>
                         <td class="mono"><strong>{self._format_currency(net)}</strong></td>
@@ -1446,12 +1447,12 @@ class CannibalizationSection(Section):
 
         # Build matrix table
         header_cells = "<th>Source \\ Target</th>" + "".join(
-            f"<th>{p}</th>" for p in self.data.product_names
+            f"<th>{html.escape(p)}</th>" for p in self.data.product_names
         )
 
         matrix_rows = []
         for source in self.data.product_names:
-            row_cells = [f"<td><strong>{source}</strong></td>"]
+            row_cells = [f"<td><strong>{html.escape(source)}</strong></td>"]
             for target in self.data.product_names:
                 if source == target:
                     row_cells.append('<td class="mono muted">—</td>')
@@ -1517,14 +1518,20 @@ class CannibalizationSection(Section):
             insights = []
             if significant_cannib:
                 top_cannib = sorted(significant_cannib, key=lambda x: x[2])[:3]
-                cannib_items = [f"{s} → {t} ({m:.2f})" for s, t, m in top_cannib]
+                cannib_items = [
+                    f"{html.escape(s)} → {html.escape(t)} ({m:.2f})"
+                    for s, t, m in top_cannib
+                ]
                 insights.append(
                     f"<strong>Strongest cannibalization:</strong> {', '.join(cannib_items)}"
                 )
 
             if significant_synergy:
                 top_synergy = sorted(significant_synergy, key=lambda x: -x[2])[:3]
-                synergy_items = [f"{s} → {t} (+{m:.2f})" for s, t, m in top_synergy]
+                synergy_items = [
+                    f"{html.escape(s)} → {html.escape(t)} (+{m:.2f})"
+                    for s, t, m in top_synergy
+                ]
                 insights.append(
                     f"<strong>Strongest synergies:</strong> {', '.join(synergy_items)}"
                 )
@@ -1552,10 +1559,10 @@ class CannibalizationSection(Section):
         if corr.ndim != 2 or corr.shape[0] != len(names):
             return ""
 
-        header_cells = "<th></th>" + "".join(f"<th>{n}</th>" for n in names)
+        header_cells = "<th></th>" + "".join(f"<th>{html.escape(n)}</th>" for n in names)
         rows = []
         for i, source in enumerate(names):
-            cells = [f"<td><strong>{source}</strong></td>"]
+            cells = [f"<td><strong>{html.escape(source)}</strong></td>"]
             for j in range(len(names)):
                 value = corr[i, j]
                 cls = "muted" if i == j else ("mono")
@@ -1643,7 +1650,7 @@ class FactorAnalysisSection(Section):
             cells = []
             for c in cols:
                 v = r.get(c, "")
-                cell = f"{v:.3f}" if isinstance(v, float) else str(v)
+                cell = f"{v:.3f}" if isinstance(v, float) else html.escape(str(v))
                 klass = ' class="mono"' if isinstance(v, float) else ""
                 cells.append(f"<td{klass}>{cell}</td>")
             body.append(f"<tr>{''.join(cells)}</tr>")
@@ -1655,10 +1662,334 @@ class FactorAnalysisSection(Section):
         """
 
 
+class EstimandsSection(Section):
+    """Declared / default estimand results with credible intervals.
+
+    Renders the model's pre-specified causal quantities (e.g. contribution ROI,
+    marginal ROAS, incremental contribution per channel) as a single table of
+    point estimate + credible interval. Data-driven: empty unless the bundle
+    carries ``estimands`` (populated by the extractor for MMM models)."""
+
+    section_id: str = "estimands"
+    default_title: str = "Estimand Results"
+
+    #: Human-friendly labels keyed by the built-in estimand *name* (the result-key
+    #: prefix, e.g. "contribution_roi"); unknown names fall back to a title-cased
+    #: version. Keyed by name, not the result ``kind`` — several built-ins share
+    #: kind "roi" (contribution_roi, counterfactual_roi) but want distinct labels.
+    _KIND_LABELS = {
+        "contribution_roi": "Contribution ROI",
+        "counterfactual_roi": "Counterfactual ROI",
+        "marginal_roas": "Marginal ROAS",
+        "contribution": "Incremental contribution",
+        "awareness_lift": "Awareness lift",
+        "cost_per_conversion": "Cost per conversion",
+    }
+
+    def render(self) -> str:
+        if not self.is_enabled:
+            return ""
+        estimands = self.data.estimands
+        if not estimands:
+            return ""
+
+        intro = (
+            "<p>Each estimand below is a pre-specified causal quantity realized "
+            "from the full posterior, reported as a point estimate with a credible "
+            "interval. The interval — not the point value — is the basis for a "
+            "decision.</p>"
+        )
+        table = self._render_estimand_table(estimands)
+        if not table:
+            return ""
+        note = (
+            '<div class="methodology-note"><p><strong>Reading this table:</strong> '
+            '"Strong" means the credible interval excludes the no-effect reference '
+            '(ROI/ROAS against 1.0, contribution against 0); "Uncertain" means it '
+            "does not, so the sign of the effect is not resolved by the data.</p></div>"
+        )
+        return self._render_section_wrapper(f"{intro}{table}{note}")
+
+    def _kind_label(self, name: str) -> str:
+        return self._KIND_LABELS.get(
+            name, (name or "Estimand").replace("_", " ").title()
+        )
+
+    @staticmethod
+    def _is_ratio_kind(kind: str, units: str) -> bool:
+        k, u = (kind or "").lower(), (units or "").lower()
+        return "roi" in k or "roas" in k or u in {"ratio", "x", "multiple"}
+
+    def _fmt_value(self, kind: str, units: str, value: float) -> str:
+        if self._is_ratio_kind(kind, units):
+            return f"{value:.2f}"
+        if "contribution" in (kind or "").lower() or (units or "").lower() in {
+            "$",
+            "usd",
+            "currency",
+            "dollars",
+            "kpi",
+        }:
+            return self._format_currency(value)
+        return f"{value:.3f}"
+
+    def _render_estimand_table(self, estimands: dict[str, dict]) -> str:
+        items = [
+            (key, v)
+            for key, v in estimands.items()
+            if v.get("mean") is not None and np.isfinite(v.get("mean", float("nan")))
+        ]
+        if not items:
+            return ""
+
+        # Header CI label from the modal hdi_prob across rows (estimands usually
+        # share one; differing probs still get a sensible single header).
+        probs = [v.get("hdi_prob", 0.94) for _, v in items]
+        ci_pct = int(round((max(set(probs), key=probs.count) if probs else 0.94) * 100))
+
+        # Group by estimand name (the dict key prefix, e.g. "contribution_roi"),
+        # then by descending |mean| within each group. The label comes from the
+        # NAME, not the result ``kind`` — several built-ins share kind "roi".
+        def _name_of(key: str) -> str:
+            return key.split(":", 1)[0]
+
+        items.sort(
+            key=lambda kv: (_name_of(kv[0]), -abs(float(kv[1].get("mean", 0.0))))
+        )
+
+        rows = []
+        for key, v in items:
+            kind = str(v.get("kind", ""))
+            units = str(v.get("units", ""))
+            mean = float(v["mean"])
+            lower = v.get("lower")
+            upper = v.get("upper")
+            name, _, channel = key.partition(":")
+            target = channel if channel else "—"
+
+            val_str = self._fmt_value(kind, units, mean)
+            if lower is not None and upper is not None:
+                ci_str = (
+                    f"[{self._fmt_value(kind, units, float(lower))}, "
+                    f"{self._fmt_value(kind, units, float(upper))}]"
+                )
+            else:
+                ci_str = "—"
+
+            ref = 1.0 if self._is_ratio_kind(kind, units) else 0.0
+            if lower is not None and upper is not None and float(lower) > ref:
+                conf_class, status = "positive", "Strong"
+            elif lower is not None and upper is not None and float(upper) < ref:
+                conf_class, status = "negative", "Below reference"
+            else:
+                conf_class, status = "uncertain", "Uncertain"
+
+            rows.append(
+                f"""
+                <tr>
+                    <td>{html.escape(self._kind_label(name))}</td>
+                    <td>{html.escape(target)}</td>
+                    <td class="mono">{val_str}</td>
+                    <td class="mono">{ci_str}</td>
+                    <td class="{conf_class}">{status}</td>
+                </tr>
+            """
+            )
+
+        return f"""
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Estimand</th>
+                        <th>Target</th>
+                        <th>Estimate</th>
+                        <th>{ci_pct}% CI</th>
+                        <th>Evidence</th>
+                    </tr>
+                </thead>
+                <tbody>{''.join(rows)}</tbody>
+            </table>
+        """
+
+
+class PosteriorPredictiveSection(Section):
+    """Posterior-predictive goodness-of-fit checks for MMM models.
+
+    Default-on for MMM models: shows whether the fitted model can reproduce the
+    data it was trained on, via observed-vs-predicted, a density overlay of
+    replicated datasets, predictive-interval calibration, and residual structure.
+    Data-driven: empty unless the bundle carries ``posterior_predictive``."""
+
+    section_id: str = "posterior-predictive"
+    default_title: str = "Posterior Predictive Checks"
+
+    _BAYES_P_LABELS = {
+        "mean": "Mean",
+        "std": "Std. deviation",
+        "min": "Minimum",
+        "max": "Maximum",
+    }
+
+    def render(self) -> str:
+        if not self.is_enabled:
+            return ""
+        pp = self.data.posterior_predictive
+        if not pp or pp.get("observed") is None:
+            return ""
+
+        observed = np.asarray(pp["observed"], dtype=float)
+        pred_mean = pp.get("pred_mean")
+        if pred_mean is None or len(np.asarray(pred_mean)) != len(observed):
+            return ""
+        pred_mean = np.asarray(pred_mean, dtype=float)
+
+        height = self.section_config.chart_height or 400
+        cc = ChartConfig(height=height)
+
+        intro = (
+            "<p>These checks ask the honest question of fit: can the model "
+            "reproduce the data it was trained on? Each view compares the observed "
+            "KPI against the model's posterior-predictive distribution — the band "
+            "of outcomes the model considers plausible, including observation "
+            "noise.</p>"
+        )
+
+        parts = [intro, self._render_summary(pp, observed, pred_mean)]
+
+        # Observed vs predicted (with predictive-interval error bars).
+        parts.append(
+            charts.create_ppc_observed_vs_predicted(
+                observed=observed,
+                pred_mean=pred_mean,
+                pred_lower=pp.get("pred_lower"),
+                pred_upper=pp.get("pred_upper"),
+                config=self.config,
+                chart_config=cc,
+            )
+        )
+
+        # Density overlay (observed vs replicated datasets).
+        if pp.get("samples") is not None:
+            parts.append("<h3>Predictive density overlay</h3>")
+            parts.append(
+                charts.create_ppc_density_overlay(
+                    observed=observed,
+                    samples=np.asarray(pp["samples"], dtype=float),
+                    config=self.config,
+                    chart_config=cc,
+                )
+            )
+
+        # Interval calibration.
+        if pp.get("coverage"):
+            parts.append("<h3>Predictive-interval calibration</h3>")
+            parts.append(
+                "<p>Across nominal interval widths, the share of observations that "
+                "actually fell inside the model's predictive interval. A "
+                "well-calibrated model tracks the diagonal.</p>"
+            )
+            parts.append(
+                charts.create_ppc_interval_calibration(
+                    coverage=pp["coverage"],
+                    config=self.config,
+                    chart_config=ChartConfig(height=min(height, 380)),
+                )
+            )
+
+        # Residual structure.
+        parts.append("<h3>Residual structure</h3>")
+        parts.append(
+            charts.create_ppc_residual_plot(
+                observed=observed,
+                pred_mean=pred_mean,
+                config=self.config,
+                chart_config=ChartConfig(height=min(height, 380)),
+            )
+        )
+
+        # Posterior-predictive p-values for summary statistics.
+        bayes_p = pp.get("bayes_p")
+        if bayes_p:
+            parts.append(self._render_bayes_p(bayes_p))
+
+        parts.append(
+            '<div class="methodology-note"><p><strong>How to read these:</strong> '
+            "observed points should sit near the 45° line and inside their "
+            "predictive intervals; the observed density should nest within the "
+            "replicated cloud; calibration should track the diagonal; residuals "
+            "should scatter structurelessly around zero. Posterior-predictive "
+            "p-values near 0 or 1 flag a summary statistic the model cannot "
+            "reproduce.</p></div>"
+        )
+
+        return self._render_section_wrapper("\n".join(parts))
+
+    def _render_summary(
+        self, pp: dict, observed: np.ndarray, pred_mean: np.ndarray
+    ) -> str:
+        """Headline goodness-of-fit cards: R² and interval coverage."""
+        cards = []
+
+        r2 = pp.get("r2")
+        if r2 is None and self.data.fit_statistics:
+            r2 = self.data.fit_statistics.get("r2")
+        if r2 is not None:
+            cards.append(
+                f'<div class="metric-card"><div class="value">{float(r2):.3f}</div>'
+                '<div class="label">R² (observed vs predicted)</div></div>'
+            )
+
+        coverage = pp.get("coverage") or []
+        if coverage:
+            # Report the headline interval (nominal closest to the report CI).
+            target = float(
+                pp.get("ci_level", self.section_config.credible_interval or 0.8)
+            )
+            best = min(coverage, key=lambda d: abs(float(d.get("nominal", 0)) - target))
+            nominal = float(best.get("nominal", target))
+            empirical = float(best.get("empirical", 0.0))
+            cards.append(
+                f'<div class="metric-card"><div class="value">{empirical:.0%}</div>'
+                f'<div class="label">Observed coverage of the {nominal:.0%} '
+                "interval</div></div>"
+            )
+
+        if not cards:
+            return ""
+        return f'<div class="metrics-grid">{"".join(cards)}</div>'
+
+    def _render_bayes_p(self, bayes_p: dict[str, float]) -> str:
+        rows = []
+        for stat, p in bayes_p.items():
+            if p is None:
+                continue
+            p = float(p)
+            label = self._BAYES_P_LABELS.get(stat, stat.title())
+            ok = 0.05 <= p <= 0.95
+            status = "✅ Reproduced" if ok else "⚠️ Poorly reproduced"
+            rows.append(
+                f'<tr><td>{label}</td><td class="mono">{p:.2f}</td><td>{status}</td></tr>'
+            )
+        if not rows:
+            return ""
+        return f"""
+            <h3>Predictive p-values (summary statistics)</h3>
+            <p>The probability that a replicated dataset is more extreme than the
+            observed data on each statistic. Values near 0.5 indicate the model
+            reproduces that feature; values near 0 or 1 indicate it does not.</p>
+            <table class="data-table" style="max-width: 500px;">
+                <thead><tr><th>Statistic</th><th>p-value</th><th>Status</th></tr></thead>
+                <tbody>{''.join(rows)}</tbody>
+            </table>
+        """
+
+
 SECTION_REGISTRY: dict[str, type[Section]] = {
     "executive_summary": ExecutiveSummarySection,
     "factor_analysis": FactorAnalysisSection,
     "model_fit": ModelFitSection,
+    "posterior_predictive": PosteriorPredictiveSection,
+    "estimands": EstimandsSection,
     "channel_roi": ChannelROISection,
     "decomposition": DecompositionSection,
     "saturation": SaturationSection,

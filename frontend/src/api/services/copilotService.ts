@@ -21,12 +21,36 @@ export interface LintProblem {
   severity: 'error' | 'warning' | 'info';
   message: string;
   line: number | null;
+  /** 1-based column + span + rule id (when present) drive the inline squiggle. */
+  column?: number | null;
+  end_line?: number | null;
+  end_column?: number | null;
+  code?: string | null;
 }
 
 export interface LintResult {
   class_name: string | null;
   problems: LintProblem[];
   ok: boolean;
+}
+
+export type CopilotSurface = 'editor' | 'notebook';
+
+/** A persisted copilot chat turn. `role:'error'` bubbles are transient and not
+ * persisted; only user/assistant turns round-trip. `targetCellId` is set on
+ * notebook-copilot answers so an applied fix targets the right cell. */
+export interface CopilotChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'error';
+  content: string;
+  targetCellId?: string | null;
+}
+
+export interface CopilotChatDoc {
+  messages: CopilotChatMessage[];
+  name?: string;
+  version?: number | null;
+  surface?: CopilotSurface;
 }
 
 export interface FormatResult {
@@ -77,6 +101,32 @@ export const copilotService = {
     const { data } = await apiClient.post<FormatResult>('/model-garden/format', {
       source_code: sourceCode,
     });
+    return data;
+  },
+
+  /** GET the persisted copilot chat for a (model, version, surface). */
+  async getChat(
+    name: string,
+    version: number | null | undefined,
+    surface: CopilotSurface,
+  ): Promise<CopilotChatDoc> {
+    const params: Record<string, unknown> = { name, surface };
+    if (version != null) params.version = version;
+    const { data } = await apiClient.get<CopilotChatDoc>(
+      '/model-garden/copilot/chat',
+      { params },
+    );
+    return data;
+  },
+
+  /** PUT (upsert) the copilot chat. PUT an empty `messages` to clear it. */
+  async saveChat(req: {
+    name: string;
+    version?: number | null;
+    surface: CopilotSurface;
+    messages: CopilotChatMessage[];
+  }): Promise<{ saved: boolean; id: string }> {
+    const { data } = await apiClient.put('/model-garden/copilot/chat', req);
     return data;
   },
 

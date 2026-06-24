@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Boxes, Check, RotateCcw, Sliders } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { remarkPlugins, rehypePlugins, normalizeMath } from '../../../../lib/markdownMath';
 import { DashWidget } from '../common/DashWidget';
 import { Badge } from '../common/Badge';
 import { FLabel, iCls, sCls } from '../common/form';
@@ -113,8 +113,8 @@ export function GardenModelConfigWidget({
       </div>
       {gardenModel?.docs && (
         <div className="prose prose-sm max-w-none text-xs text-ink-600 mb-3 max-h-48 overflow-y-auto rounded-lg border border-line-200 bg-cream-50 px-3 py-2">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComps}>
-            {gardenModel.docs}
+          <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={mdComps}>
+            {normalizeMath(gardenModel.docs)}
           </ReactMarkdown>
         </div>
       )}

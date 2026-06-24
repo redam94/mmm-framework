@@ -73,6 +73,91 @@
         }
         .copy-btn svg { width: 14px; height: 14px; }
     </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Modeling Guide | MMM Framework">
+    <meta name="twitter:description" content="Step-by-step guide for implementing statistically sound marketing mix models using the MMM Framework.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta name="author" content="Matthew Reda">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/modeling-guide.html",
+          "name": "Modeling Guide | MMM Framework",
+          "description": "Step-by-step guide for implementing statistically sound marketing mix models using the MMM Framework.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-12",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/modeling-guide.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/modeling-guide.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Modeling Guide",
+          "datePublished": "2026-06-12",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/modeling-guide.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/modeling-guide.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Modeling Guide",
+              "item": "https://redam94.github.io/mmm-framework/modeling-guide.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
 </head>
 <body>
     <!-- Navigation injected by components.js -->
@@ -128,7 +213,7 @@
         </aside>
 
         <main class="main-content">
-            <h1 id="philosophy">Modeling Philosophy</h1>
+            <h2 id="philosophy">Modeling Philosophy</h2>
             <p class="lead">
                 A good model is not one that produces the results you want. A good model is one whose predictions you can trust&mdash;including when those predictions are uncomfortable.
             </p>

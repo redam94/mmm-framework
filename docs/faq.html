@@ -137,6 +137,290 @@
         }
         .insight-box strong { color: var(--color-primary-dark); }
     </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="FAQ | MMM Framework">
+    <meta name="twitter:description" content="Frequently asked questions about the MMM Framework — answers to common objections and practical questions about Bayesian Marketing Mix Modeling, from data requirements to interpreting results.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta name="author" content="Matthew Reda">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/faq.html",
+          "name": "FAQ — MMM Framework",
+          "description": "Frequently asked questions about the MMM Framework — answers to common objections and practical questions about Bayesian Marketing Mix Modeling, from data requirements to interpreting results.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-12",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/faq.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/faq.html#webpage",
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Why should we use Bayesian methods instead of traditional regression?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Bayesian methods provide genuine uncertainty quantification. Traditional regression gives you confidence intervals that answer: \"If I repeated this sampling process infinitely, 95% of intervals would contain the true value.\" That's a statement about a hypothetical procedure, not about your actual estimate. Bayesian credible intervals answer a more useful question: \"Given our data and prior knowledge, there's a 94% probability the true value lies in this range.\" This is a direct probability statement about the parameter—exactly what decision-makers need. 📊 Interactive: How Data Updates Beliefs Data Strength: 30 observations True Effect: 1.40 How to read this: The prior (dashed) shows beliefs before seeing data. As data accumulates, the posterior (solid) concentrates around the true value. With little data, the prior dominates. With lots of data, the data dominates. Additional advantages: Prior incorporation: External evidence (meta-analyses, experiments, domain expertise) can be formally included Natural regularization: Priors prevent overfitting without ad-hoc penalty terms Hierarchical modeling: Partial pooling across geographies improves sparse estimates Full posterior: You get distributions, not just point estimates—enabling decision analysis under uncertainty"
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What exactly is specification shopping, and why is it a problem?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Specification shopping (also called specification searching, data dredging, or p-hacking) occurs when analysts test multiple model specifications and selectively report the one that produces desired results—typically significant coefficients, expected signs, or \"reasonable\" ROIs. 📊 Interactive: How Selecting \"Positive\" Results Creates Bias When the true effect is zero or small, coefficient estimates scatter around the truth. If you only report specifications with positive results, you systematically overestimate. True Effect: 0.05 Specifications Tested: 20 True effect: 0.05. Testing 20 specifications and reporting only the most positive: expected reported estimate is 0.35 — a 7x overestimate. Common Forms in MMM Testing dozens of lag lengths until coefficients become significant Trying different saturation curves until ROI looks \"right\" Adding control variables based on residual patterns Dropping \"outlier\" observations until fit improves Adjusting adstock until negative coefficients become positive The fundamental problem is that this invalidates all statistical inference. When you test 20 specifications and report the best one, your reported confidence interval dramatically understates true uncertainty. The \"95% confidence\" claim becomes meaningless. 📊 Interactive: Many Analysts, One Dataset This simulates the Silberzahn et al. (2018) finding: give the same data to multiple analysts with flexibility in specification choices, and results vary dramatically. Run 29 Analysts Each bar represents one analyst's estimate. Same data, same question, different (defensible) analytical choices. This variation comes from specification flexibility—not from bad actors or incompetent analysts."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Clients won't accept \"we don't know.\" How do I present uncertainty?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "This conflates two different things: not having an answer, and being honest about confidence in the answer. Clients won't accept \"we don't know\" as a final answer—agreed. But they should accept (and increasingly expect) honest uncertainty bounds. Talking Point \"Our best estimate is that TV ROI is 1.4, with an 80% probability it falls between 1.1 and 1.8. This estimate is based on pre-specified methodology and robust to reasonable alternative specifications. We recommend a geo-holdout test to narrow this range before major budget changes.\" This is not \"we don't know\"—it's a precise, actionable statement that acknowledges uncertainty while providing a clear recommendation. Compare this to the alternative: The Alternative \"TV ROI is 1.4.\" (Based on the third specification we tried, after the first two gave negative coefficients. We have no idea what happens if the client acts on this and it's wrong.) The honest version is more valuable because it enables appropriate decision-making. It also protects the relationship: if the recommendation fails, you acknowledged the uncertainty upfront."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "We got a negative coefficient for a media channel. Should we adjust the model?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "No. A negative coefficient is informative, not a mistake. It might indicate: The channel genuinely has no effect (or negative effect) in this context The effect is too small to detect with available data Measurement error is attenuating estimates toward zero Confounding is biasing estimates (e.g., media increases during low-demand periods) The model is misspecified in ways that obscure the true effect 📊 Interactive: Interpreting Coefficient Posteriors Strong Positive Weak Positive Highly Uncertain Likely Null Negative Strong positive effect: 95% probability effect is positive. Act with confidence. The correct response is to investigate why the estimate is unexpected, not to iterate until it matches expectations. If you require the model to show advertising works, and adjust until it does, you cannot then cite the model as evidence that advertising works. The reasoning is circular. The Bayesian Approach This framework uses informative priors that encode the belief that media effects are positive, if you have a strong prior knowledge that a media effect can not be negative it should be incorporated into the model via priors. Specification shopping to avoid negative coefficients just hides this assumption rather than addressing it directly."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Why do our estimates change so much year-over-year?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Year-over-year instability usually reflects one of two things: Genuine changes in media effectiveness (new creative, changed competitive environment, audience saturation) Sensitivity to specification choices that differ between modeling cycles 📊 Interactive: When is Year-over-Year Change Meaningful? Changes within credible intervals are expected random variation, not real changes. Key insight: The 2024 vs 2023 change looks dramatic when viewing only point estimates, but both estimates are within each other's uncertainty bands. The 2022→2023 change, however, shows intervals that barely overlap—suggesting a potentially real shift. The second is more common and more problematic. If different analysts, or the same analyst with slightly different judgment calls, produce substantially different results, then the \"result\" is an artifact of the process, not a property of reality. This framework addresses instability by: Pre-specifying models before seeing results, reducing researcher degrees of freedom Reporting sensitivity analyses that show how results vary across reasonable specifications Using hierarchical priors that can pool information across time periods Quantifying uncertainty so that changes within credible intervals aren't over-interpreted"
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is this measuring causation or just correlation?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Causation—that is the whole point. A marketing mix model answers a causal question: \"what would sales have been if we hadn't run this media?\" Not just \"what moved together?\" Lots of things move together without one causing the other: ice cream sales and sunburns rise in the same weeks, and holiday demand lifts both ad spend and sales at the same time. A model that only tracks co-movement would hand your media credit for the holiday. This framework is built to separate coincidence from contribution, in three ways: It accounts for confounders—outside forces like underlying demand, seasonality, and pricing that push spend and sales up together—so media only gets credit for what those forces don't explain. The model design is locked in before results are seen (pre-specification), so the answer can't be quietly reshaped until it looks the way someone hoped. Its answers are checked against real-world experiments, such as regional holdout tests, and those results are folded back into the model (experiment calibration)—a taste test for the recipe. The result is an estimate of incremental impact—what your media actually caused. For the full story of how the framework reasons about cause and effect, see the causal inference guide."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What does statistics actually do? I thought it gives us the answer.",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "This is perhaps the most important misconception to address. Statistics does not remove uncertainty—it quantifies uncertainty. 📊 Interactive: Before vs. After Analysis Before Analysis After Analysis (Weak Data) After Analysis (Strong Data) Before analysis: We know almost nothing—ROI could plausibly be anywhere from 0 to 3+. Before analysis, you don't know what TV's ROI is. After analysis, you still don't know for certain—but you have a principled range of plausible values, given your data and assumptions. That range might be narrow (high confidence) or wide (low confidence), but it's always a range, never a single \"true\" value. The Role of Statistical Analysis Statistical analysis tells you: \"Given the data you have and the assumptions you've made, here is the range of values that are consistent with that evidence, and here is how much probability mass falls in different parts of that range.\" It does not tell you: \"The true value is exactly X.\" This matters for decisions. If TV ROI is \"1.4 ± 0.2\" (narrow range), you can confidently increase TV spend. If it's \"1.4 ± 1.2\" (wide range), the same point estimate suggests a very different action—probably running an experiment before making major changes."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do I read the credible intervals in these reports?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "A credible interval gives you a direct probability statement about the parameter. When we report \"TV ROI: 1.4 (1.1–1.8, 80% CI)\", we're saying: \"Given our data and analysis, there is an 80% probability that TV's true ROI falls between 1.1 and 1.8.\" 📊 Interactive: ROI Estimates and Decision Regions Point Estimate: 1.40 Uncertainty (σ): 0.20 Recommendation: Act with confidence. 95% probability ROI > 1.0. The data strongly supports this channel being profitable. This is useful because: If the interval is entirely above 1.0, we're confident the channel is profitable If the interval spans 1.0, we can't confidently say whether it's profitable The width of the interval tells you how precise the estimate is You can make probability statements: \"There's a 90% chance ROI exceeds 1.2\" Scenario Example Interval Interpretation High confidence, positive effect 1.4 (1.2–1.6) Almost certainly profitable; act with confidence Moderate confidence 1.4 (0.9–2.0) Probably profitable; monitor closely or validate High uncertainty 1.4 (0.5–2.5) Too uncertain to act; run experiment first Confident null 0.2 (0.1–0.4) Almost certainly unprofitable; consider cutting"
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Why is uncertainty valuable? It sounds like you're just telling me you don't know.",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Uncertainty is valuable because it enables appropriate decision-making. Without it, you can't distinguish between situations that require different actions. 📊 Interactive: Same Point Estimate, Different Decisions Both channels show TV ROI = 1.4. But should you take the same action for both? Channel A: Tight uncertainty (σ=0.15) → Only 0.4% chance unprofitable → Act with confidence Channel B: Wide uncertainty (σ=0.60) → 25% chance unprofitable → Validate before major changes Consider two scenarios, both with the same point estimate: Scenario A TV ROI: 1.4 (1.2–1.6, 80% CI) Action: Increase TV spend with confidence Scenario B TV ROI: 1.4 (0.5–2.8, 80% CI) Action: Run experiment before major changes If you only see \"TV ROI: 1.4\" without the interval, you'd take the same action in both cases—but that would be a mistake. Scenario B has a 25% probability that TV is actually unprofitable. Increasing spend based on that estimate is gambling, not optimization. Uncertainty also creates opportunities: High-uncertainty parameters are opportunities for experiments—resolving the uncertainty through a geo-test may have high ROI itself Low-uncertainty parameters need less validation—you can act more quickly on robust estimates Portfolio effects matter—you can diversify across channels where you're uncertain"
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "When should we run an experiment instead of relying on the model?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Experiments (geo-holdouts, incrementality tests) should be considered when: Uncertainty is high for a channel that matters. If credible intervals are wide and the channel represents significant spend, an experiment may have high ROI. You're considering a major budget change. Moving 20% of budget based on an estimate with wide uncertainty is risky; an experiment de-risks the decision. The model result is surprising. If the model says a historically strong channel is underperforming, validation provides confidence before acting. Stakeholders need conviction. Sometimes the issue isn't statistical uncertainty but organizational buy-in; experiments create shared evidence. 📊 Interactive: When to Experiment The decision to experiment depends on both uncertainty and stakes. High uncertainty + high stakes = experiment. Low uncertainty + any stakes = act on model. Low stakes + any uncertainty = act on model (reversible decisions don't need validation). Experiments are typically not needed when: Credible intervals are narrow and entirely above/below decision thresholds The decision is easily reversible The channel is small relative to total spend An experiment is logistically infeasible or too expensive relative to the decision value Experiments and Models are Complementary Experiments don't replace models—they validate and calibrate them. A model can answer questions about channels that weren't experimented on, predict effects at spend levels not tested, and generate hypotheses for future experiments. But periodic experimental validation is what keeps models grounded in reality."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How does this compare to other MMM approaches?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Different approaches make different tradeoffs. Here's how to think about the major distinctions—including the tools that earn checkmarks of their own: Approach Uncertainty Prior Knowledge Specification Traditional OLS Understated Not incorporated Often shopped Ridge/LASSO Bootstrap only Ad-hoc penalties Often shopped Robyn (Meta) Bootstrap only Hyperparameter bounds; lift-test calibration Pareto-front selection—the analyst picks a finalist Meridian (Google) Full posterior Principled priors; lift-test calibration Analyst-specified; pre-registration not part of the workflow Bayesian (this framework) Full posterior Principled priors Pre-specified, enforced by the workflow To be clear: Meridian earns its checkmarks—it is a serious Bayesian geo-MMM, and on these three columns it is closer to this framework than to OLS. The remaining differences are in the operating loop around the model, covered honestly in the Robyn / Meridian / PyMC-Marketing comparison below. Key questions to ask about any MMM methodology: Do they report credible/confidence intervals? Point estimates alone are incomplete. How are specifications chosen? If it's \"we tried several and picked the best,\" that's specification shopping. Is there validation? Do model predictions ever get tested against experiments? How is domain knowledge incorporated? Formal priors vs. ad-hoc constraints make a big difference. What happens with negative coefficients? If they're always \"fixed,\" ask how and why."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Do I need to write code to use this?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "No. Augur—the framework's React web app—covers the full measurement loop without code. Orrery (the home page) tracks where you are in the measurement cycle, Auspices prioritizes and manages real-world experiments, and Chronicle shows how estimates sharpen cycle over cycle. At the center is Oracle, the chat-aided modeling workspace—an analyst-assistant that validates your data, configures and fits models, analyzes results, plans experiments, and drafts client-ready reports through conversation. See the page-name guide below, or take the platform tour to see each surface. The Python library underneath is there for analysts and data scientists who want direct control—custom priors, extended and bespoke model types, scripted workflows. And if you want a new model family without waiting on a redeploy, the Model Garden & Atelier lets you author, test, and publish one from the browser. The getting started guide walks through both paths: launching the web app and fitting a first model in code."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What is Augur, and what do all the page names mean?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Augur is the application layer of the MMM Framework—the web app that runs the whole measurement loop in one place, from the first data check to calibrated budget decisions. (The framework is the open-source Python library; Augur is the platform built on top of it, so anything the app does, you can also script directly.) Each page is named for a piece of the augur's craft—reading the signs to decide before committing—with the plain-language job underneath: Page Route What it does Orrery /program Home base—the T₀–T₅ measurement cycle, headline KPIs, calibration coverage map, and the next-best action. Auspices /experiments Design, pre-register, run, and calibrate experiments; the EIG/EVOI priority matrix and lifecycle board. Chronicle /performance The cycle-over-cycle record: how estimates tightened, the model-vs-experiment agreement log, and model health. Constellation /portfolio Every brand benchmarked on the same yardstick across the book of business. Oracle /workspace The chat-aided modeling workspace (the MMM Copilot) that validates data, fits models, analyzes results, and plans experiments as you talk. Codex /knowledge The project's knowledge base—briefs, decks, and reference docs the copilot can retrieve and cite. College & Curia /team · /admin The people on the program and their roles (College); org governance—members and seats (Curia, admins only). Sanctum /settings Account, security, the LLM the agent runs on, and data connections. One color language runs through every page to encode evidence quality: calibrated (experiment-backed), running (experiment in flight), model-only (observational), and stale (evidence has aged out). The full walkthrough—with a screenshot of each page—is the platform overview."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What are the Model Garden and the Atelier?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "The Model Garden is a versioned, shareable library of model families that live beside the built-in MMM rather than inside a redeploy. An author writes a model once; every project in the organization can then load it by reference, fit it, read its estimands, and report on it through the same pipeline as the core model—no engineering ticket, no new release. The Atelier is the in-browser IDE where those models are built and proven: a code editor, a docs tab, and a Jupyter-like Notebook for running cells against a live dataset, with an AI copilot that diagnoses errors and proposes fixes. Before a model can ship it must pass a nine-tier compatibility contract (static checks, build, fit, instance and trace structure, scaling, and read-op smoke tests, among others), and a governance surface tracks it from draft → tested → published. Untrusted model code only ever executes inside the managed kernel—sandboxed and isolated in hosted deployments. The full authoring recipe, the compatibility tiers, and worked examples to fork are in the Model Garden & Atelier guide."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can this model anything besides marketing mix?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. The same garden → fit → estimand → serialize → report pipeline now carries genuinely non-MMM Bayesian families—models with no channels, spend, or single KPI. Shipped worked examples include a confirmatory factor analysis (CFA), a latent class analysis (LCA), and a joint latent-factor MMM that estimates a latent construct (for example, \"economic health\") from many indicators in the same graph as the media model—so the factor's uncertainty propagates into the channel coefficients and closes the back-door where a common cause drives both spend and sales. Each family declares its own config, likelihood, and named estimands, and the report adapts to match—a factor-analysis section for the latent models, the usual ROI and decomposition sections for the MMM, and both for the joint latent-factor model. They are authored and shared through the Model Garden; the authoring guide covers how."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How is this different from Meridian, Robyn, or PyMC-Marketing?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "All three are serious tools, and the honest answer differs by tool. Robyn (Meta) searches thousands of model candidates with an evolutionary optimizer and asks the analyst to pick from a Pareto front of finalists—a workflow where the selection step itself can quietly become specification shopping. This framework fits one pre-registered Bayesian model and reports its full posterior, so uncertainty reflects the data rather than which finalist was chosen. Meridian (Google) is a capable Bayesian geo-MMM with genuine lift-test calibration. The difference is the operating loop around the model: this framework also prices which experiment to run next (expected information gain and expected value of information, in dollars), pre-registers the design, tracks the experiment lifecycle, and folds readouts back into the next fit automatically. It additionally supports mediation structures (TV driving search driving sales) and jointly modeled KPIs. PyMC-Marketing is not a competitor—this framework builds on it, adding causal guardrails (declared variable roles, refutation checks), the experiment planning loop, the Augur web platform with its Oracle analyst workspace, and a Model Garden of versioned, shareable model families (including non-MMM ones) on top of its Bayesian foundations. Two claims you can verify rather than take on faith: model designs are locked before results are seen, and the methodology is pressure-tested in public against synthetic markets with known ground truth—including the scenarios where it struggles."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How does this framework specifically help with these issues?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "This framework is designed from the ground up to enable honest measurement: Full Bayesian inference via PyMC provides genuine posterior distributions, not just point estimates. Every parameter has a complete uncertainty distribution. Structured prior specification through configuration objects means priors are declared before fitting, not adjusted after seeing results. Comprehensive diagnostics (trace plots, R-hat, ESS, posterior predictive checks) ensure the inference is reliable before results are interpreted. Contribution uncertainty propagates coefficient uncertainty through to business metrics (ROI, contributions) rather than reporting only point estimates. Variable selection methods (horseshoe, spike-and-slab) handle uncertainty about which controls to include, rather than requiring manual specification shopping. # The framework computes full posterior distributions for business metrics contrib = model.compute_counterfactual_contributions( compute_uncertainty=True, hdi_prob=0.94 ) # Per-channel contribution with uncertainty bounds print(contrib.summary()) # contribution, share, HDI low/high per channel # ROAS with its interval: contribution / spend tv_roas = contrib.total_contributions[\"TV\"] / tv_spend_total print(f\"TV ROAS: {tv_roas:.2f} \" f\"[{contrib.contribution_hdi_low['TV'] / tv_spend_total:.2f}, \" f\"{contrib.contribution_hdi_high['TV'] / tv_spend_total:.2f}]\")"
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do priors work, and don't they bias the results?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Priors encode what we believe before seeing the data. In marketing, we typically have genuine prior knowledge: Media elasticities are usually small (0.01–0.3 based on meta-analyses) Effects are generally positive (advertising shouldn't decrease sales) Adstock decay rates are bounded (effects don't last forever) This information is valuable and should be used. The alternative—pretending we know nothing—is just as much a choice, and often a worse one. How Priors and Data Interact With enough data, the posterior is dominated by the data and priors have minimal impact. With limited data, priors provide regularization that prevents overfitting. This is exactly the behavior you want: trust data when you have it, fall back on prior knowledge when you don't. The framework includes prior sensitivity analysis to verify that conclusions are robust to reasonable prior alternatives. The key difference from specification shopping is that priors are declared before seeing results. You can't \"prior shop\" in the same way because you commit to priors before fitting. The framework's configuration-based approach enforces this discipline."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What validation capabilities does the framework provide?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "The framework supports multiple forms of validation: Prior predictive checks: Before fitting, simulate data from your priors to verify they imply reasonable data distributions. Posterior predictive checks: After fitting, simulate data from the posterior and compare to actual observations. Systematic discrepancies indicate model misspecification. Out-of-sample prediction: Hold out recent periods and evaluate predictive accuracy on unseen data. Experimental calibration: Compare model-predicted effects to geo-experiment results when available. # Generate posterior predictive samples pred = model.predict() # PredictionResults with full posterior predictive # Compare to observed data az.plot_ppc(pred.posterior_predictive) Validation doesn't prevent specification shopping, but it creates accountability: if a specification-shopped model makes predictions that fail validation, you'll know."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How does the framework communicate uncertainty visually?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Effective uncertainty visualization is critical for stakeholder communication. The framework provides: Response curves with uncertainty bands: Show saturation curves with 80% and 94% credible intervals, so stakeholders see where we're confident vs. uncertain. Contribution waterfall charts: Decompose sales into components with error bars showing contribution uncertainty. ROI forest plots: Display channel ROIs with credible intervals, making it easy to see which channels are confidently above/below profitability thresholds. Prior vs. posterior comparisons: Show how much the data moved beliefs from the prior, indicating data informativeness. 📊 Example: ROI Forest Plot with Decision Regions This visualization makes decisions clear at a glance: Search and TV are confidently profitable (act), Display is uncertain (validate), and Print is confidently unprofitable (cut or reallocate). Design Principle Every visualization in the framework shows uncertainty by default. Hiding uncertainty requires explicit opt-out, not opt-in. This ensures that honest measurement is the path of least resistance."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What license is this released under?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Apache-2.0. The LICENSE file sits at the repository root. It's a permissive license: commercial use, modification, redistribution, and forking are all allowed, with an explicit patent grant. There is no dual-license scheme and no proprietary tier holding features back."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do I install it?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "From source—the framework is not yet published to PyPI. Clone the repository and run uv sync, or pin a specific commit for production use: pip install git+https://github.com/redam94/mmm-framework@<commit> Python 3.12+ is required. The getting started guide walks through setup, and the changelog page explains the pre-1.0 versioning policy and which modules are safe to depend on."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What does a model fit cost in time?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Measured, not estimated: a production-size national fit (156 weeks × 7 channels, NumPyro, 4 chains × 500 draws) completes in ~14 seconds on an Apple M3 laptop, including compilation. Geo panels and extension models scale sub-linearly per row at that size. The full benchmark table—with the caveat that absolute seconds are machine-specific and the ratios are the transferable part—is in the technical guide's Computational Scaling section."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What data do I need?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Weekly data in the MFF (Master Flat File) long format, loaded and validated by MFFLoader. 104+ weeks of weekly history is the comfortable starting point—enough to separate seasonality from media effects. The data requirements page covers granularity, history length, channel coverage, and what to do when your data falls short."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What support exists if something breaks?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Honestly: GitHub issues, with no SLA. There is no commercial support contract currently offered, and the project has a single maintainer. If your procurement process requires a vendor organization, this project does not currently meet that bar; if it requires software your team can own and audit, the Apache-2.0 license and the 2,000+ test suite are designed for exactly that. The Evaluator's Guide lays out the full risk picture, including the bus-factor mitigations."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do we migrate from an OLS or legacy MMM?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Don't switch—run in parallel first. The recommended path is to fit the Bayesian MMM alongside your incumbent OLS model and only decommission the legacy model after two full modeling cycles of comparable answers under audit. That gives stakeholders a side-by-side record of where the two approaches agree, where they diverge, and why—rather than asking them to trust a discontinuous jump in methodology. See the OLS entry in the glossary for the framework's stance."
+              }
+            }
+          ]
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/faq.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "FAQ",
+              "item": "https://redam94.github.io/mmm-framework/faq.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
 </head>
 <body>
     <!-- Navigation injected by shared/components.js -->
@@ -165,6 +449,9 @@
             <h3>Framework Features</h3>
             <ul class="sidebar-nav">
                 <li><a href="#no-code-needed">Do I Need to Write Code?</a></li>
+                <li><a href="#what-is-augur">What is Augur?</a></li>
+                <li><a href="#model-garden">Model Garden &amp; Atelier</a></li>
+                <li><a href="#beyond-mmm">Beyond Marketing Mix</a></li>
                 <li><a href="#vs-alternatives">vs. Meridian, Robyn, PyMC-Marketing</a></li>
                 <li><a href="#how-framework-helps">How This Framework Helps</a></li>
                 <li><a href="#prior-specification">Prior Specification</a></li>
@@ -781,20 +1068,150 @@
                 <div class="faq-question">Do I need to write code to use this?</div>
                 <div class="faq-answer">
                     <p>
-                        No. The modern React web app covers the full measurement loop without code: the
-                        <strong>Program</strong> page tracks where you are in the measurement cycle,
-                        <strong>Experiments</strong> prioritizes and manages real-world tests, and
-                        <strong>Performance</strong> shows how estimates evolve cycle over cycle. Alongside
-                        them sits the <strong>AI agent workspace</strong>—an analyst-assistant that can
-                        validate your data, configure and fit models, analyze results, plan experiments,
-                        and draft client-ready reports through conversation. Take the
-                        <a href="platform-overview.html">platform tour</a> to see each surface.
+                        No. <strong>Augur</strong>—the framework's React web app—covers the full
+                        measurement loop without code. <strong>Orrery</strong> (the home page) tracks where
+                        you are in the measurement cycle, <strong>Auspices</strong> prioritizes and manages
+                        real-world experiments, and <strong>Chronicle</strong> shows how estimates sharpen
+                        cycle over cycle. At the center is <strong>Oracle</strong>, the chat-aided modeling
+                        workspace—an analyst-assistant that validates your data, configures and fits models,
+                        analyzes results, plans experiments, and drafts client-ready reports through
+                        conversation. See <a href="#what-is-augur">the page-name guide</a> below, or take
+                        the <a href="platform-overview.html">platform tour</a> to see each surface.
                     </p>
                     <p>
                         The Python library underneath is there for analysts and data scientists who want
-                        direct control—custom priors, extended model types, scripted workflows. The
-                        <a href="getting-started.html">getting started guide</a> walks through both paths:
-                        launching the web app and fitting a first model in code.
+                        direct control—custom priors, extended and bespoke model types, scripted workflows.
+                        And if you want a new model <em>family</em> without waiting on a redeploy, the
+                        <a href="#model-garden">Model Garden &amp; Atelier</a> lets you author, test, and
+                        publish one from the browser. The <a href="getting-started.html">getting started
+                        guide</a> walks through both paths: launching the web app and fitting a first model
+                        in code.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="what-is-augur">
+                <div class="faq-question">What is Augur, and what do all the page names mean?</div>
+                <div class="faq-answer">
+                    <p>
+                        <strong>Augur</strong> is the application layer of the MMM Framework—the web app
+                        that runs the whole measurement loop in one place, from the first data check to
+                        calibrated budget decisions. (The framework is the open-source Python library; Augur
+                        is the platform built on top of it, so anything the app does, you can also script
+                        directly.) Each page is named for a piece of the augur's craft—reading the signs to
+                        decide before committing—with the plain-language job underneath:
+                    </p>
+
+                    <table class="comparison-table">
+                        <thead>
+                            <tr>
+                                <th>Page</th>
+                                <th>Route</th>
+                                <th>What it does</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Orrery</strong></td>
+                                <td><code>/program</code></td>
+                                <td>Home base—the T₀–T₅ measurement cycle, headline KPIs, calibration coverage map, and the next-best action.</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Auspices</strong></td>
+                                <td><code>/experiments</code></td>
+                                <td>Design, pre-register, run, and calibrate experiments; the EIG/EVOI priority matrix and lifecycle board.</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chronicle</strong></td>
+                                <td><code>/performance</code></td>
+                                <td>The cycle-over-cycle record: how estimates tightened, the model-vs-experiment agreement log, and model health.</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Constellation</strong></td>
+                                <td><code>/portfolio</code></td>
+                                <td>Every brand benchmarked on the same yardstick across the book of business.</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Oracle</strong></td>
+                                <td><code>/workspace</code></td>
+                                <td>The chat-aided modeling workspace (the MMM Copilot) that validates data, fits models, analyzes results, and plans experiments as you talk.</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Codex</strong></td>
+                                <td><code>/knowledge</code></td>
+                                <td>The project's knowledge base—briefs, decks, and reference docs the copilot can retrieve and cite.</td>
+                            </tr>
+                            <tr>
+                                <td><strong>College</strong> &amp; <strong>Curia</strong></td>
+                                <td><code>/team · /admin</code></td>
+                                <td>The people on the program and their roles (College); org governance—members and seats (Curia, admins only).</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Sanctum</strong></td>
+                                <td><code>/settings</code></td>
+                                <td>Account, security, the LLM the agent runs on, and data connections.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>
+                        One color language runs through every page to encode evidence quality:
+                        <strong>calibrated</strong> (experiment-backed), <strong>running</strong>
+                        (experiment in flight), <strong>model-only</strong> (observational), and
+                        <strong>stale</strong> (evidence has aged out). The full walkthrough—with a
+                        screenshot of each page—is the <a href="platform-overview.html">platform
+                        overview</a>.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="model-garden">
+                <div class="faq-question">What are the Model Garden and the Atelier?</div>
+                <div class="faq-answer">
+                    <p>
+                        The <strong>Model Garden</strong> is a versioned, shareable library of model
+                        families that live <em>beside</em> the built-in MMM rather than inside a redeploy.
+                        An author writes a model once; every project in the organization can then load it by
+                        reference, fit it, read its estimands, and report on it through the same pipeline as
+                        the core model—no engineering ticket, no new release.
+                    </p>
+                    <p>
+                        The <strong>Atelier</strong> is the in-browser IDE where those models are built and
+                        proven: a code editor, a docs tab, and a Jupyter-like <strong>Notebook</strong> for
+                        running cells against a live dataset, with an AI <strong>copilot</strong> that
+                        diagnoses errors and proposes fixes. Before a model can ship it must pass a
+                        nine-tier <strong>compatibility contract</strong> (static checks, build, fit,
+                        instance and trace structure, scaling, and read-op smoke tests, among others), and a
+                        governance surface tracks it from <strong>draft → tested → published</strong>. Untrusted model code only ever
+                        executes inside the managed kernel—sandboxed and isolated in hosted deployments.
+                    </p>
+                    <p>
+                        The full authoring recipe, the compatibility tiers, and worked examples to fork are
+                        in the <a href="model-garden.html">Model Garden &amp; Atelier guide</a>.
+                    </p>
+                </div>
+            </div>
+
+            <div class="faq-item" id="beyond-mmm">
+                <div class="faq-question">Can this model anything besides marketing mix?</div>
+                <div class="faq-answer">
+                    <p>
+                        Yes. The same garden → fit → estimand → serialize → report pipeline now carries
+                        genuinely <strong>non-MMM Bayesian families</strong>—models with no channels, spend,
+                        or single KPI. Shipped worked examples include a <strong>confirmatory factor
+                        analysis</strong> (CFA), a <strong>latent class analysis</strong> (LCA), and a
+                        <strong>joint latent-factor MMM</strong> that estimates a latent construct (for
+                        example, "economic health") from many indicators <em>in the same graph</em> as the
+                        media model—so the factor's uncertainty propagates into the channel coefficients and
+                        closes the back-door where a common cause drives both spend and sales.
+                    </p>
+                    <p>
+                        Each family declares its own config, likelihood, and named estimands, and the report
+                        adapts to match—a factor-analysis section for the latent models, the usual ROI and
+                        decomposition sections for the MMM, and both for the joint latent-factor model. They
+                        are authored and shared through the
+                        <a href="#model-garden">Model Garden</a>; the
+                        <a href="model-garden.html#non-mmm">authoring guide</a> covers how.
                     </p>
                 </div>
             </div>
@@ -823,7 +1240,9 @@
                     <p>
                         <strong>PyMC-Marketing</strong> is not a competitor—this framework builds on it,
                         adding causal guardrails (declared variable roles, refutation checks), the
-                        experiment planning loop, a web platform, and an AI analyst workspace on top of its
+                        experiment planning loop, the <strong>Augur</strong> web platform with its
+                        <strong>Oracle</strong> analyst workspace, and a <strong>Model Garden</strong> of
+                        versioned, shareable model families (including non-MMM ones) on top of its
                         Bayesian foundations.
                     </p>
                     <p>

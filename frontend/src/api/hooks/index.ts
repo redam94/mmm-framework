@@ -119,3 +119,12 @@ export {
 
 // Atelier notebook hooks
 export { notebookKeys, useNotebookDoc, useSaveNotebook } from './useAtelierNotebook';
+
+// Atelier copilot chat hooks
+export {
+  copilotChatKeys,
+  useCopilotChat,
+  useSaveCopilotChat,
+  useCopilotChatState,
+  type PersistedMsg,
+} from './useCopilotChat';

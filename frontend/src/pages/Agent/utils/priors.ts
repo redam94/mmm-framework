@@ -106,11 +106,50 @@ export const PRIOR_DEFAULTS = {
   control_coef:      { distribution: 'normal',      params: { mu: 0.0, sigma: 1.0 } },
 };
 
-export function initPriors(spec: any): any {
-  const media: Record<string, any> = {};
-  for (const ch of asVarArray(spec?.media_channels)) {
+// Shape of the priors object produced by initPriors. Each prior is a normalized
+// {distribution, params} value; trend/seasonality are concrete numeric configs.
+export interface MediaPriors {
+  coefficient: PriorValue;
+  adstock_alpha: PriorValue;
+  saturation_kappa: PriorValue;
+  saturation_slope: PriorValue;
+}
+export interface ControlPriors { coefficient: PriorValue; allow_negative: boolean }
+export interface TrendPriors {
+  growth_prior_mu: number;
+  growth_prior_sigma: number;
+  changepoint_prior_scale: number;
+  spline_prior_sigma: number;
+  gp_lengthscale_prior_mu: number;
+  gp_lengthscale_prior_sigma: number;
+  gp_amplitude_prior_sigma: number;
+  _type: string;
+}
+export interface SeasonalityPriors {
+  prior_sigma: number;
+  yearly_prior_sigma: number | null;
+  monthly_prior_sigma: number | null;
+  weekly_prior_sigma: number | null;
+  // Components are read by dynamic key (`${c}_prior_sigma`); all are number|null.
+  [key: string]: number | null;
+}
+export interface InitializedPriors {
+  media: Record<string, MediaPriors>;
+  controls: Record<string, ControlPriors>;
+  trend: TrendPriors;
+  seasonality: SeasonalityPriors;
+}
+
+// `spec` is a dynamic, partially-typed config blob (array / dict / string forms);
+// accept `unknown` (at least as permissive as the prior `any`) and narrow internally.
+export function initPriors(spec: unknown): InitializedPriors {
+  const specObj = (spec ?? {}) as Record<string, unknown>;
+  const specPriors = (specObj.priors ?? {}) as Record<string, unknown>;
+  const media: Record<string, MediaPriors> = {};
+  const mediaPriors = (specPriors.media ?? {}) as Record<string, Partial<MediaPriors>>;
+  for (const ch of asVarArray(specObj.media_channels)) {
     const name = ch.name;
-    const existing = spec?.priors?.media?.[name] ?? {};
+    const existing = mediaPriors[name] ?? {};
     media[name] = {
       coefficient:      existing.coefficient      ?? { ...PRIOR_DEFAULTS.media_coefficient },
       adstock_alpha:    existing.adstock_alpha    ?? { ...PRIOR_DEFAULTS.adstock_alpha },
@@ -119,18 +158,20 @@ export function initPriors(spec: any): any {
     };
   }
 
-  const controls: Record<string, any> = {};
-  for (const cv of asVarArray(spec?.control_variables)) {
+  const controls: Record<string, ControlPriors> = {};
+  const controlPriors = (specPriors.controls ?? {}) as Record<string, Partial<ControlPriors>>;
+  for (const cv of asVarArray(specObj.control_variables)) {
     const name = cv.name;
-    const existing = spec?.priors?.controls?.[name] ?? {};
+    const existing = controlPriors[name] ?? {};
     controls[name] = {
       coefficient:    existing.coefficient  ?? { ...PRIOR_DEFAULTS.control_coef },
       allow_negative: existing.allow_negative ?? true,
     };
   }
 
-  const trendType = normalizeTrendType(spec?.trend?.type);
-  const existingTrend = spec?.priors?.trend ?? {};
+  const specTrend = (specObj.trend ?? {}) as Record<string, unknown>;
+  const trendType = normalizeTrendType(specTrend.type);
+  const existingTrend = (specPriors.trend ?? {}) as Partial<TrendPriors>;
   const trend = {
     growth_prior_mu:            existingTrend.growth_prior_mu            ?? 0.0,
     growth_prior_sigma:         existingTrend.growth_prior_sigma         ?? 0.1,
@@ -144,7 +185,7 @@ export function initPriors(spec: any): any {
 
   // Seasonal amplitude prior: sigma of the Normal prior on Fourier coefficients
   // (standardized-y scale). null override = inherit the shared prior_sigma.
-  const existingSeas = spec?.priors?.seasonality ?? {};
+  const existingSeas = (specPriors.seasonality ?? {}) as Partial<SeasonalityPriors>;
   const seasonality = {
     prior_sigma:         existingSeas.prior_sigma         ?? 0.3,
     yearly_prior_sigma:  existingSeas.yearly_prior_sigma  ?? null,

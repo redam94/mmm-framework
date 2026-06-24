@@ -4,7 +4,7 @@ import { fmtVal, lockPathLabel } from '../../utils/spec';
 // ─── PendingSpecChangesModal ──────────────────────────────────────────────────
 // When the LLM proposes a change to a field the user locked manually, the change
 // is deferred server-side and surfaced here for explicit confirmation.
-export interface PendingChange { path: string; current: any; proposed: any; reason?: string | null }
+export interface PendingChange { path: string; current: unknown; proposed: unknown; reason?: string | null }
 
 export function PendingSpecChangesModal({
   changes, onResolve,

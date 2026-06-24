@@ -12,6 +12,9 @@ export function useInView<T extends Element>(rootMargin = '800px'): [React.RefOb
   useEffect(() => {
     const el = ref.current;
     if (!el || inView) return;
+    // Fallback for environments without IntersectionObserver (e.g. JSDOM): reveal
+    // immediately. Synchronous setState is intentional and one-shot here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (typeof IntersectionObserver === 'undefined') { setInView(true); return; }
     const obs = new IntersectionObserver(
       (entries) => {
