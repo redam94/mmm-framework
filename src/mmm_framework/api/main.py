@@ -264,10 +264,40 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MMM Agent API", lifespan=lifespan)
 
+
+def cors_settings() -> tuple[list[str], bool]:
+    """Resolve CORS (origins, allow_credentials) from ``MMM_CORS_ORIGINS``.
+
+    ``allow_origins=["*"]`` WITH ``allow_credentials=True`` is invalid (browsers
+    reject it) and over-broad. So:
+
+    * ``MMM_CORS_ORIGINS`` = comma-separated allowlist -> those origins, with
+      credentials enabled (the hosted/production posture).
+    * ``MMM_CORS_ORIGINS=*`` -> wildcard, but credentials FORCED OFF (the only
+      valid wildcard combination).
+    * unset -> local-dev origins (Vite 5173 / Streamlit 8501 / API 8000), with
+      credentials enabled.
+    """
+    raw = os.environ.get("MMM_CORS_ORIGINS", "").strip()
+    if raw == "*":
+        return ["*"], False
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()], True
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8501",
+        "http://127.0.0.1:8501",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ], True
+
+
+_cors_origins, _cors_allow_credentials = cors_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

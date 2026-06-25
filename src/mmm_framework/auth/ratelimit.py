@@ -62,6 +62,11 @@ class RateLimitSettings(BaseSettings):
     heavy_per_window: int = 10  # model fits / job spawns / embedding ingest
     auth_per_window: int = 10  # unauthenticated login/signup/refresh per IP
     trust_forwarded: bool = False
+    # "memory" (per-process, default) or "redis" (shared across workers/replicas).
+    # The in-memory limiter is per-process, so multi-worker/replica deployments
+    # should use redis for a correct global limit.
+    backend: str = "memory"
+    redis_url: str = "redis://localhost:6379/0"
 
 
 @lru_cache
@@ -70,16 +75,20 @@ def get_ratelimit_settings() -> RateLimitSettings:
 
 
 class _FixedWindow:
-    """Thread-safe fixed-window counter: key -> (window_start, count)."""
+    """Thread-safe in-process fixed-window counter: key -> (window_start, count).
 
-    def __init__(self) -> None:
+    ``time_func`` is injectable for deterministic testing of window expiry.
+    """
+
+    def __init__(self, time_func=time.time) -> None:
         self._buckets: dict[str, tuple[float, int]] = {}
         self._lock = threading.Lock()
         self._hits = 0
+        self._time = time_func
 
     def hit(self, key: str, limit: int, window: float) -> tuple[bool, int]:
         """Record a hit; return (allowed, retry_after_seconds)."""
-        now = time.time()
+        now = self._time()
         with self._lock:
             self._hits += 1
             if self._hits % _SWEEP_EVERY == 0:
@@ -107,7 +116,62 @@ class _FixedWindow:
             self._hits = 0
 
 
+class _RedisFixedWindow:
+    """Fixed-window counter in Redis (atomic INCR + EXPIRE), shared across all
+    workers/replicas — the correct backend for a multi-process deployment.
+
+    Same ``hit(key, limit, window) -> (allowed, retry)`` contract as
+    :class:`_FixedWindow`. Used only when ``MMM_RATELIMIT_BACKEND=redis``.
+    """
+
+    def __init__(self, client, prefix: str = "mmm:rl:") -> None:
+        self._r = client
+        self._prefix = prefix
+
+    def hit(self, key: str, limit: int, window: float) -> tuple[bool, int]:
+        rkey = self._prefix + key
+        # INCR is atomic; set the TTL on first hit of the window.
+        count = int(self._r.incr(rkey))
+        ttl = int(self._r.ttl(rkey))
+        if ttl < 0:  # key had no expiry (just created or persisted) -> start window
+            self._r.expire(rkey, int(window))
+            ttl = int(window)
+        allowed = count <= limit
+        retry = max(ttl, 1) if not allowed else 0
+        return (allowed, retry)
+
+    def reset(self) -> None:  # pragma: no cover - operational helper
+        try:
+            for k in self._r.scan_iter(self._prefix + "*"):
+                self._r.delete(k)
+        except Exception:
+            pass
+
+
+# Default in-process backend (kept as a module global so tests can reset it).
 _BUCKETS = _FixedWindow()
+_redis_backend: _RedisFixedWindow | None = None
+
+
+def _backend(s: RateLimitSettings):
+    """Select the rate-limit backend: shared Redis if configured + reachable,
+    else the per-process in-memory counter (with a logged fallback)."""
+    global _redis_backend
+    if getattr(s, "backend", "memory") != "redis":
+        return _BUCKETS
+    if _redis_backend is None:
+        try:
+            import redis as _redis
+
+            _redis_backend = _RedisFixedWindow(_redis.from_url(s.redis_url))
+        except Exception:  # noqa: BLE001 - never let limiter setup break a request
+            import logging
+
+            logging.getLogger("mmm_audit").warning(
+                "rate-limit redis backend unavailable; falling back to in-memory"
+            )
+            return _BUCKETS
+    return _redis_backend
 
 
 def _limit_for(category: str, s: RateLimitSettings) -> int:
@@ -125,7 +189,7 @@ def require_org_rate_limit(category: str = "default"):
         s = get_ratelimit_settings()
         if not s.enabled or principal.is_dev:
             return principal
-        allowed, retry = _BUCKETS.hit(
+        allowed, retry = _backend(s).hit(
             f"{category}:{principal.org_id}", _limit_for(category, s), s.window_seconds
         )
         if not allowed:
@@ -159,7 +223,7 @@ def require_ip_rate_limit(category: str = "auth"):
         if not s.enabled:
             return
         ip = _client_ip(request, s.trust_forwarded)
-        allowed, retry = _BUCKETS.hit(
+        allowed, retry = _backend(s).hit(
             f"{category}:ip:{ip}", s.auth_per_window, s.window_seconds
         )
         if not allowed:
