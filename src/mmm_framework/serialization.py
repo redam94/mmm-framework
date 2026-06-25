@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import arviz as az
 import numpy as np
+from loguru import logger
 
 if TYPE_CHECKING:
     from .data_loader import PanelDataset
@@ -113,7 +114,7 @@ class MMMSerializer:
             if work.exists():
                 shutil.rmtree(work, ignore_errors=True)
 
-        print(f"Model saved to {final}")
+        logger.info(f"Model saved to {final}")
 
     @staticmethod
     def _atomic_swap(work: Path, final: Path) -> None:
@@ -296,9 +297,9 @@ class MMMSerializer:
         if rebuild_model:
             instance._model = instance._build_model()
 
-        print(f"Model loaded from {path}")
+        logger.info(f"Model loaded from {path}")
         if instance._trace is not None:
-            print(
+            logger.info(
                 f"  Trace loaded: {instance._trace.posterior.dims['chain']} chains, "
                 f"{instance._trace.posterior.dims['draw']} draws"
             )
@@ -335,7 +336,7 @@ class MMMSerializer:
         else:
             trace.to_netcdf(str(path))
 
-        print(f"Trace saved to {path}")
+        logger.info(f"Trace saved to {path}")
 
     @classmethod
     def load_trace_only(cls, path: str | Path) -> az.InferenceData:
@@ -367,7 +368,7 @@ class MMMSerializer:
         else:
             trace = az.from_netcdf(str(path))
 
-        print(f"Trace loaded from {path}")
+        logger.info(f"Trace loaded from {path}")
         return trace
 
     # =========================================================================
