@@ -31,14 +31,18 @@ dependencies = [
     "statsmodels>=0.14.0",
     "uvicorn>=0.38.0",
     "openpyxl>=3.1.0",
-    "langgraph>=0.2.14",
-    "langgraph-checkpoint-sqlite>=2.0.0",
-    "langchain-core>=0.2.33",
-    "langchain-google-genai>=1.0.8",
-    "langchain-anthropic>=0.1.20",
-    "langchain-openai>=0.1.21",
+    # LLM stack floors are pinned to the locked 1.x line. The agent code targets
+    # the langchain/langgraph 1.x API; the old pre-1.0 floors let a no-lock
+    # `pip install` resolve to incompatible 0.x APIs that break the agent at
+    # import/runtime. Keep these in step with uv.lock when upgrading.
+    "langgraph>=1.2.0",
+    "langgraph-checkpoint-sqlite>=3.1.0",
+    "langchain-core>=1.4.0",
+    "langchain-google-genai>=4.2.2",
+    "langchain-anthropic>=1.4.3",
+    "langchain-openai>=1.2.1",
     "rich>=13.0.0",
-    "langchain-google-vertexai>=2.0.0",
+    "langchain-google-vertexai>=3.2.3",
     "pypdf>=4.0.0",
     "python-docx>=1.1.0",
 ]
