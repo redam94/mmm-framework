@@ -1,14 +1,16 @@
 """
-Complete MMM Workflow: Fit Model and Generate Report
+Reporting-layer demo on SIMULATED posteriors (NOT a real model fit).
 
-This script demonstrates the full workflow:
-1. Generate synthetic marketing data
-2. Configure and fit a Bayesian MMM
-3. Compute reporting metrics with uncertainty
-4. Generate a comprehensive HTML report
+WARNING: This script does NOT fit a model. It hand-constructs simulated posterior
+quantities purely to exercise the reporting/HTML layer quickly, without paying
+for MCMC. Do NOT copy this as a modeling pipeline — the numbers are fabricated
+for illustration only.
 
-Since we don't have access to the full mmm_framework package in this environment,
-we'll create a simulated workflow that demonstrates the reporting capabilities.
+For the CANONICAL end-to-end pipeline (generate data -> fit a real BayesianMMM ->
+generate the report from the fitted model), see `examples/ex_model_workflow.py`.
+
+What this file shows: how the reporting helpers / result containers render once
+you already have model outputs in hand.
 """
 
 import numpy as np
@@ -939,8 +941,13 @@ def generate_html_report(
 
 if __name__ == "__main__":
     print("=" * 70)
-    print("MMM WORKFLOW: FIT MODEL AND GENERATE REPORT")
+    print("REPORTING-LAYER DEMO ON SIMULATED POSTERIORS (NOT a real model fit)")
     print("=" * 70)
+    print(
+        "NOTE: the numbers below are FABRICATED to demo the reporting layer fast.\n"
+        "      For a real fit -> report pipeline, run:"
+        " python examples/ex_model_workflow.py"
+    )
 
     # Step 1: Generate data
     print("\n[1/4] Generating synthetic marketing data...")

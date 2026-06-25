@@ -1,5 +1,5 @@
 """
-Example usage of the MMM Reporting module.
+Example usage of the MMM Reporting module (reporting API surface).
 
 This script demonstrates how to generate reports from:
 1. BayesianMMM (core framework)
@@ -7,8 +7,13 @@ This script demonstrates how to generate reports from:
 3. Manual data bundles (for custom integrations)
 4. PyMC-Marketing MMM class
 
+NOTE: the inputs here are SYNTHETIC / illustrative data built to exercise the
+reporting API — they are not the output of a real fit. For the canonical
+end-to-end pipeline (data -> fit a real BayesianMMM -> report), see
+`examples/ex_model_workflow.py`.
+
 Run with:
-    python examples/ex_reporting.py
+    python examples/ex_reporter.py
 """
 
 import numpy as np
