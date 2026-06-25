@@ -2171,6 +2171,28 @@ async def list_runs_endpoint(
     )
 
 
+@app.get("/runs/compare")
+async def compare_runs_endpoint(
+    run_a: str, run_b: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
+    """Per-channel ROI/spend delta between two runs (B vs A) — the structured
+    answer to "why did this channel change since the last refresh?"."""
+    from mmm_framework.api.runs import compare_runs
+
+    try:
+        result = compare_runs(run_a, run_b)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    allowed = _org_project_ids(principal)
+    if allowed is not None:
+        for side in ("run_a", "run_b"):
+            pid = result.get(side, {}).get("project_id")
+            if pid is not None and pid not in allowed:
+                raise HTTPException(status_code=404, detail="Run not found")
+    return JSONResponse(content=safe_json_dumps_load(result))
+
+
 # ── Portfolio (home page aggregation) ─────────────────────────────────────────
 
 
