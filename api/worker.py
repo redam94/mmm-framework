@@ -25,7 +25,7 @@ from schemas import JobStatus
 from storage import get_storage
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 # =============================================================================
@@ -138,7 +138,6 @@ async def fit_model_task(
         import pytensor
 
         pytensor.config.exception_verbosity = "high"
-        pytensor.config.mode == "NUMBA"
         pytensor.config.cxx = ""
         # Build MFF config from dict
         mff_builder = MFFConfigBuilder()
@@ -340,33 +339,33 @@ async def fit_model_task(
         random_seed = model_settings_dict.get("random_seed", 42)
         results = mmm.fit(random_seed=random_seed)
 
-        print("DEBUG: Model fitted successfully")
+        logger.debug("Model fitted successfully")
 
         await update_status(JobStatus.RUNNING, 85.0, "Processing results...")
 
         # Extract diagnostics
-        print("DEBUG: Extracting diagnostics...")
+        logger.debug("Extracting diagnostics...")
         try:
             diagnostics = {
                 "divergences": int(results.diagnostics.get("divergences", 0)),
                 "rhat_max": float(results.diagnostics.get("rhat_max", 1.0)),
                 "ess_bulk_min": float(results.diagnostics.get("ess_bulk_min", 0)),
             }
-            print(f"DEBUG: Diagnostics extracted: {diagnostics}")
+            logger.debug(f"Diagnostics extracted: {diagnostics}")
         except Exception as e:
-            print(f"DEBUG: Failed at diagnostics: {e}")
+            logger.debug(f"Failed at diagnostics: {e}")
             raise
 
         # Get parameter summary
-        print("DEBUG: Getting parameter summary...")
+        logger.debug("Getting parameter summary...")
         try:
             summary_df = results.summary()
-            print(f"DEBUG: Summary df type: {type(summary_df)}")
+            logger.debug(f"Summary df type: {type(summary_df)}")
         except Exception as e:
-            print(f"DEBUG: Failed at results.summary(): {e}")
+            logger.debug(f"Failed at results.summary(): {e}")
             raise
 
-        print("DEBUG: Building param_summary list...")
+        logger.debug("Building param_summary list...")
         try:
             param_summary = []
             for idx in summary_df.index:
@@ -383,40 +382,40 @@ async def fit_model_task(
                         ),
                     }
                 )
-            print(f"DEBUG: param_summary built, {len(param_summary)} params")
+            logger.debug(f"param_summary built, {len(param_summary)} params")
         except Exception as e:
-            print(f"DEBUG: Failed building param_summary: {e}")
+            logger.debug(f"Failed building param_summary: {e}")
             raise
 
         # Save artifacts
         await update_status(JobStatus.RUNNING, 90.0, "Saving model artifacts...")
 
-        print("DEBUG: Saving mmm artifact...")
+        logger.debug("Saving mmm artifact...")
         try:
             storage.save_model_artifact(model_id, "mmm", mmm)
-            print("DEBUG: mmm saved")
+            logger.debug("mmm saved")
         except Exception as e:
-            print(f"DEBUG: Failed saving mmm: {e}")
+            logger.debug(f"Failed saving mmm: {e}")
             raise
 
-        print("DEBUG: Saving results artifact...")
+        logger.debug("Saving results artifact...")
         try:
             storage.save_model_artifact(model_id, "results", results)
-            print("DEBUG: results saved")
+            logger.debug("results saved")
         except Exception as e:
-            print(f"DEBUG: Failed saving results: {e}")
+            logger.debug(f"Failed saving results: {e}")
             raise
 
-        print("DEBUG: Saving panel artifact...")
+        logger.debug("Saving panel artifact...")
         try:
             storage.save_model_artifact(model_id, "panel", panel)
-            print("DEBUG: panel saved")
+            logger.debug("panel saved")
         except Exception as e:
-            print(f"DEBUG: Failed saving panel: {e}")
+            logger.debug(f"Failed saving panel: {e}")
             raise
 
         # Save results summary
-        print("DEBUG: Saving results summary...")
+        logger.debug("Saving results summary...")
         try:
             results_summary = {
                 "model_id": model_id,
@@ -431,20 +430,20 @@ async def fit_model_task(
                 "y_std": float(mmm.y_std),
             }
             storage.save_results(model_id, "summary", results_summary)
-            print("DEBUG: results_summary saved")
+            logger.debug("results_summary saved")
         except Exception as e:
-            print(f"DEBUG: Failed saving results_summary: {e}")
+            logger.debug(f"Failed saving results_summary: {e}")
             raise
 
         # Update final status
-        print("DEBUG: Updating final status...")
+        logger.debug("Updating final status...")
         await update_status(
             JobStatus.COMPLETED,
             100.0,
             "Model fitting completed successfully",
         )
 
-        print("DEBUG: Updating model metadata...")
+        logger.debug("Updating model metadata...")
         storage.update_model_metadata(
             model_id,
             {
@@ -454,7 +453,7 @@ async def fit_model_task(
             },
         )
 
-        print("DEBUG: All done, returning result")
+        logger.debug("All done, returning result")
         return {
             "model_id": model_id,
             "status": "completed",

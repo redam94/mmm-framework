@@ -167,3 +167,19 @@ def assert_within_project_limit(org_id: str, db_path: Path | str | None = None) 
             f"Project limit reached for the {plan.name} plan ({plan.max_projects}). "
             "Upgrade to create more projects."
         )
+
+
+def assert_within_fit_quota(org_id: str, db_path: Path | str | None = None) -> None:
+    """Enforce the monthly fit quota. The usage was metered (``org_usage``) but
+    never blocked — so a plan's ``monthly_fit_quota`` was advisory only. This
+    closes that gap: a fit beyond the quota raises :class:`PlanLimitError`."""
+    plan = entitlements_for_org(org_id, db_path=db_path)
+    if plan.monthly_fit_quota is None:
+        return  # unlimited tier
+    used = store.count_org_fits_since(org_id, _month_start_ts(), db_path=db_path)
+    if used >= plan.monthly_fit_quota:
+        raise PlanLimitError(
+            f"Monthly fit quota reached for the {plan.name} plan "
+            f"({plan.monthly_fit_quota} fits/month). Upgrade your plan or wait "
+            "for the next billing cycle."
+        )

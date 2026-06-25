@@ -5,7 +5,9 @@ import asyncio
 import logging
 import os
 import shutil
+import uuid
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -301,6 +303,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request correlation id: accept an inbound X-Request-ID (from a proxy/client) or
+# mint one, expose it on request.state + a ContextVar (so any code can tag logs
+# with it), and echo it on the response. The first piece of real request tracing.
+_request_id_ctx: ContextVar[str] = ContextVar("mmm_request_id", default="-")
+
+
+def current_request_id() -> str:
+    """The correlation id of the in-flight request ('-' outside a request)."""
+    return _request_id_ctx.get()
+
+
+@app.middleware("http")
+async def request_id_middleware(request, call_next):
+    rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
+    request.state.request_id = rid
+    token = _request_id_ctx.set(rid)
+    try:
+        response = await call_next(request)
+    finally:
+        _request_id_ctx.reset(token)
+    response.headers["X-Request-ID"] = rid
+    return response
+
 
 # Auth router: /auth/signup, /auth/login, /auth/refresh, /auth/me.
 # Additive and inert until MMM_AUTH_ENABLED=1.
