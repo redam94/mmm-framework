@@ -119,11 +119,22 @@ from .backtest import (
 )
 from .sensitivity_unobserved import UnobservedConfoundingAnalysis
 from .validator import ModelValidator
+from .calibration import (
+    LooPitResult,
+    SBCResult,
+    loo_pit_check,
+    simulation_based_calibration,
+)
 
 __all__ = [
     # Main classes
     "ModelValidator",
     "ValidationConfigBuilder",
+    # Inference-calibration verification (LOO-PIT + SBC)
+    "loo_pit_check",
+    "LooPitResult",
+    "simulation_based_calibration",
+    "SBCResult",
     # Backtesting / forecast accuracy
     "BacktestConfig",
     "BacktestResult",
