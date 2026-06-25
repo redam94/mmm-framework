@@ -114,13 +114,56 @@ class ExecutiveSummarySection(Section):
             </div>
             """
 
+        # Non-convergence banner is stamped at the very top: a non-converged
+        # posterior makes every headline number unreliable, so it must not be
+        # buried in the diagnostics section.
+        convergence_banner = self._render_convergence_banner()
+
         content = f"""
+            {convergence_banner}
             {metrics_html}
             {key_finding}
             {uncertainty_callout}
         """
 
         return self._render_section_wrapper(content)
+
+    def _render_convergence_banner(self) -> str:
+        """Prominent warning when the MCMC fit did not converge.
+
+        Renders only when the convergence verdict is explicitly ``False``
+        (an approximate fit is ``None`` and handled by the uncertainty callout +
+        diagnostics section). Closes the gap where a non-converged model still
+        produced a clean ROI deck with no stop sign on the headline.
+        """
+        diag = getattr(self.data, "diagnostics", None)
+        if not diag:
+            return ""
+        try:
+            from ..diagnostics.convergence import (
+                convergence_warning_message,
+                is_converged,
+            )
+        except Exception:
+            return ""
+        if is_converged(diag) is not False:
+            return ""
+        import html as _html
+
+        msg = convergence_warning_message(diag, label="This model") or (
+            "This model did not pass standard MCMC convergence checks."
+        )
+        return f"""
+            <div class="callout warning" style="border-left:6px solid #c0392b;background:#fdecea;color:#611a15;">
+                <h4>🛑 Model has NOT converged — do not act on these numbers</h4>
+                <p>{_html.escape(msg)}</p>
+                <p style="margin-top:6px;font-size:0.9em;">
+                    The estimates below come from a sampler that failed convergence checks; their
+                    credible intervals are not trustworthy. Re-fit with more tuning/draws/chains
+                    (or a reparameterization) before using these numbers for decisions.
+                </p>
+            </div>
+        """
 
     def _render_metrics_grid(self) -> str:
         """Render key metrics grid."""

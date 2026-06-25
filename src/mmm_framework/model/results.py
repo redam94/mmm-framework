@@ -43,6 +43,26 @@ class MMMResults:
     # final inference. ``diagnostics["fit_method"]`` records which method ran.
     approximate: bool = False
 
+    @property
+    def converged(self) -> bool | None:
+        """MCMC convergence verdict (R-hat / ESS / divergences).
+
+        ``True``/``False`` for NUTS fits; ``None`` when not assessable (an
+        approximate MAP/ADVI fit, or no usable diagnostics). ``None`` is NOT
+        "converged" -- surface it as "N/A". Do not act on intervals/ROI from a
+        fit where this is ``False``.
+        """
+        from ..diagnostics.convergence import is_converged
+
+        return is_converged(self.diagnostics)
+
+    @property
+    def convergence_flags(self) -> list[str]:
+        """Which convergence checks failed: subset of ``{divergences, rhat, ess}``."""
+        from ..diagnostics.convergence import convergence_flags
+
+        return convergence_flags(self.diagnostics)
+
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary statistics."""
         import arviz as az

@@ -82,6 +82,24 @@ class ModelResults:
     config: Any
     diagnostics: dict = field(default_factory=dict)
 
+    @property
+    def converged(self) -> bool | None:
+        """MCMC convergence verdict (R-hat / ESS / divergences).
+
+        ``True``/``False`` for NUTS fits; ``None`` when not assessable. ``None``
+        is NOT "converged". Do not act on a fit where this is ``False``.
+        """
+        from ..diagnostics.convergence import is_converged
+
+        return is_converged(self.diagnostics)
+
+    @property
+    def convergence_flags(self) -> list[str]:
+        """Which convergence checks failed: subset of ``{divergences, rhat, ess}``."""
+        from ..diagnostics.convergence import convergence_flags
+
+        return convergence_flags(self.diagnostics)
+
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary statistics."""
         import arviz as az
