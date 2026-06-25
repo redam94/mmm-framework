@@ -410,10 +410,26 @@ class BaseExtendedMMM:
                 nuts_sampler=nuts_sampler,
                 **kwargs,
             )
+
+        # Compute + stamp convergence diagnostics and WARN on non-convergence.
+        # Extended models (Nested/Multivariate/Combined) previously recorded NO
+        # diagnostics at all -- the most divergence-prone geometries shipped with
+        # no convergence signal. Best-effort: never let diagnostics fail a fit.
+        diagnostics: dict = {"approximate": False}
+        try:
+            from ...diagnostics import convergence as _conv
+
+            diagnostics.update(_conv.compute_convergence(self._trace))
+            _conv.annotate(diagnostics)
+            _conv.warn_if_not_converged(diagnostics, label=type(self).__name__)
+        except Exception:  # noqa: BLE001 - diagnostics are best-effort
+            pass
+
         return ModelResults(
             trace=self._trace,
             model=self.model,
             config=getattr(self, "config", None),
+            diagnostics=diagnostics,
         )
 
     def _check_fitted(self):

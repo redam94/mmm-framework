@@ -2025,6 +2025,14 @@ class BayesianMMM:
                 ),
             }
 
+            # Stamp a convergence verdict and WARN by default if the sampler did
+            # not converge -- a non-converged posterior must never be returned
+            # silently. See diagnostics.convergence / MMMResults.converged.
+            from ..diagnostics import convergence as _conv
+
+            _conv.annotate(diagnostics)
+            _conv.warn_if_not_converged(diagnostics, label="BayesianMMM")
+
             return self._attach_declared_estimands(
                 MMMResults(
                     trace=trace,
@@ -2063,6 +2071,10 @@ class BayesianMMM:
             "ess_bulk_min": None,
         }
         diagnostics.update(extra_diagnostics)
+        # converged -> None ("not assessable"); never warns for approximate fits.
+        from ..diagnostics import convergence as _conv
+
+        _conv.annotate(diagnostics)
 
         return self._attach_declared_estimands(
             MMMResults(
