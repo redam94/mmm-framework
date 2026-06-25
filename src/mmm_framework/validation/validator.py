@@ -6,6 +6,7 @@ Provides the ModelValidator class that coordinates all validation components.
 
 from __future__ import annotations
 
+import warnings
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -35,6 +36,22 @@ from .results import (
 
 if TYPE_CHECKING:
     pass
+
+
+def pareto_k_warning(n_bad_k: int | None) -> str | None:
+    """Message warning that LOO is unreliable when Pareto k > 0.7 for some points.
+
+    Returns ``None`` when there are no bad-k points (nothing to warn about). The
+    bad-k count was previously surfaced but never warned on, so users could quote
+    LOO/ELPD that is not trustworthy for those observations.
+    """
+    if not n_bad_k or n_bad_k <= 0:
+        return None
+    return (
+        f"LOO has {int(n_bad_k)} observation(s) with Pareto k > 0.7: the LOO/ELPD "
+        "estimate is unreliable for those points. Interpret model comparison with "
+        "caution (consider refitting, reloo, or more data) before quoting LOO."
+    )
 
 
 class ModelValidator:
@@ -357,6 +374,10 @@ class ModelValidator:
                         else None
                     ),
                 )
+                _k_msg = pareto_k_warning(loo_results.n_bad_k)
+                if _k_msg:
+                    logger.warning(_k_msg)
+                    warnings.warn(_k_msg, stacklevel=2)
             except Exception as e:
                 logger.warning(f"LOO-CV computation failed: {e}")
 
