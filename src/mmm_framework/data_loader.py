@@ -6,6 +6,7 @@ Handles variable-dimension data, dimension alignment, and panel construction.
 
 from __future__ import annotations
 
+import re
 import warnings
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -36,6 +37,50 @@ class MFFValidationError(Exception):
     """Raised when MFF data fails validation."""
 
     pass
+
+
+# Tokens that mean "missing", not "unparseable", in a value column.
+_NULL_TOKENS = {"", "nan", "none", "null", "na", "n/a", "-", "—"}
+# Currency symbols + thousands separators + whitespace to strip before parsing.
+_NUMERIC_STRIP_RE = re.compile(r"[,\s$€£¥₹]")
+
+
+def coerce_numeric_column(series: pd.Series, *, column: str) -> pd.Series:
+    """Coerce an MFF value column to float, tolerating real-world formatting.
+
+    Client exports routinely carry currency/thousands formatting (``"$1,234"``,
+    ``"1,234"``) or accounting negatives (``"(123)"``). Previously these flowed
+    straight into ``groupby().sum()`` and raised an opaque ``TypeError`` deep in
+    the stack. This normalizes them up front:
+
+    * already-numeric columns pass through unchanged;
+    * ``$ , € £ ¥ ₹`` and whitespace are stripped; ``(123)`` -> ``-123``;
+    * recognized null tokens (and genuinely empty cells) become ``NaN``;
+    * any remaining unparseable value raises :class:`MFFValidationError` naming
+      the column and a few offending samples (an actionable message, not a
+      ``TypeError``).
+    """
+    if pd.api.types.is_numeric_dtype(series):
+        return series.astype(float)
+
+    text = series.astype(str).str.strip()
+    is_nullish = series.isna() | text.str.lower().isin(_NULL_TOKENS)
+    cleaned = text.str.replace(_NUMERIC_STRIP_RE, "", regex=True)
+    cleaned = cleaned.str.replace(r"^\((.*)\)$", r"-\1", regex=True)  # (123) -> -123
+    coerced = pd.to_numeric(cleaned, errors="coerce")
+
+    failed = coerced.isna() & ~is_nullish
+    if failed.any():
+        sample = list(pd.unique(series[failed]))[:5]
+        raise MFFValidationError(
+            f"Column '{column}' contains {int(failed.sum())} non-numeric value(s) "
+            f"that could not be parsed as numbers (e.g. {sample!r}). Fix the "
+            f"currency/text formatting or remove those rows before loading."
+        )
+
+    result = coerced.astype(float)
+    result[is_nullish.to_numpy()] = np.nan
+    return result
 
 
 def validate_mff_structure(df: pd.DataFrame, config: MFFConfig) -> list[str]:
@@ -72,12 +117,18 @@ def validate_mff_structure(df: pd.DataFrame, config: MFFConfig) -> list[str]:
             f"Found {null_counts[cols.variable_value]} null values in {cols.variable_value}"
         )
 
-    # Validate date parsing
-    try:
-        pd.to_datetime(df[cols.period].iloc[0], format=config.date_format)
-    except Exception as e:
+    # Validate date parsing across the WHOLE period column (not just the first
+    # row): a file with one well-formed header date but corrupt later dates used
+    # to pass here and then crash mid-load with a raw pandas ValueError, breaking
+    # the framework's own MFFValidationError contract.
+    period_raw = df[cols.period]
+    parsed = pd.to_datetime(period_raw, format=config.date_format, errors="coerce")
+    bad_dates = parsed.isna() & period_raw.notna()
+    if bad_dates.any():
+        sample = list(pd.unique(period_raw[bad_dates]))[:5]
         raise MFFValidationError(
-            f"Cannot parse dates with format '{config.date_format}': {e}"
+            f"Cannot parse {int(bad_dates.sum())} date(s) in column "
+            f"'{cols.period}' with format '{config.date_format}' (e.g. {sample!r})."
         )
 
     return warnings_list
@@ -351,6 +402,13 @@ class MFFLoader:
             self._raw_data[cols.period], format=self.config.date_format
         )
 
+        # Coerce the value column to numeric up front (tolerating currency /
+        # thousands formatting) so a "$1,234" cell raises a clear validation
+        # error instead of a TypeError deep inside a later groupby().sum().
+        self._raw_data[cols.variable_value] = coerce_numeric_column(
+            self._raw_data[cols.variable_value], column=cols.variable_value
+        )
+
         return self
 
     def set_allocation_weights(
@@ -411,6 +469,39 @@ class MFFLoader:
                 dim_cols.append(cols.outlet)
             if DimensionType.CAMPAIGN in var_config.split_dimensions:
                 dim_cols.append(cols.campaign)
+
+        # Guard against SILENT duplicate-row summing. A true duplicate is two raw
+        # rows sharing the FULL MFF key (period + every dimension column) for this
+        # variable -- the same cell measured twice. Summing those corrupts the
+        # value. (Rows that merely differ on a dimension the model does not split
+        # on are legitimate finer granularity and are aggregated up below.)
+        key_cols = [c for c in cols.dimension_columns if c in var_data.columns]
+        if key_cols and var_data.duplicated(subset=key_cols).any():
+            policy = getattr(self.config, "duplicate_policy", "error")
+            n_dups = int(var_data.duplicated(subset=key_cols).sum())
+            if policy == "error":
+                sample = (
+                    var_data.loc[
+                        var_data.duplicated(subset=key_cols, keep=False), key_cols
+                    ]
+                    .drop_duplicates()
+                    .head(5)
+                    .to_dict("records")
+                )
+                raise MFFValidationError(
+                    f"Variable '{var_config.name}' has {n_dups} duplicate row(s) "
+                    f"sharing the same period/dimension key (e.g. {sample!r}). "
+                    f"Summing them would silently corrupt the value. Deduplicate "
+                    f"the data, or set MFFConfig.duplicate_policy to "
+                    f"'sum'/'mean'/'first' to choose how to combine them."
+                )
+            if policy in ("mean", "first"):
+                # Collapse the duplicated cells first; finer granularity is then
+                # summed by the dim_cols aggregation below.
+                var_data = var_data.groupby(key_cols, as_index=False)[
+                    cols.variable_value
+                ].agg(policy)
+            # policy == "sum": the dim_cols groupby below sums them directly.
 
         # Aggregate to configured dimensions
         result = var_data.groupby(dim_cols, as_index=False)[cols.variable_value].sum()

@@ -17,6 +17,8 @@ kernel can import them without a cycle; ``tools.py`` imports them from here.
 
 from __future__ import annotations
 
+import warnings
+
 from mmm_framework import (
     MFFConfigBuilder,
     KPIConfigBuilder,
@@ -262,6 +264,52 @@ def _canonical_trend_type(trend_spec: dict) -> str:
     )
 
 
+def run_data_quality_gate(dataset_path: str, spec: dict) -> None:
+    """Block a fit on ERROR-tier data-quality issues before any sampling.
+
+    The framework ships a mature EDA validator (date gaps that silently shift
+    adstock carryover, negative spend, severe missingness, panel inconsistency,
+    ...) but it was never called on the fit path -- a corrupt dataset was fit
+    without objection. This wires it in:
+
+    * ERROR-tier issues raise ``ValueError`` (the fit is blocked) unless the spec
+      sets ``skip_quality_gate: true`` (an explicit expert override);
+    * WARN-tier issues are surfaced as warnings and never block;
+    * if the gate machinery itself fails, the fit is NOT blocked (a gate bug must
+      not take down fitting) -- it warns and continues. Loader-level corruption
+      (duplicate rows, currency strings) is still caught downstream in ``load_mff``.
+    """
+    if spec.get("skip_quality_gate"):
+        return
+    try:
+        from mmm_framework.eda import load_eda_panel, validate_dataset
+
+        panel = load_eda_panel(dataset_path, spec)
+        report = validate_dataset(panel, spec=spec)
+    except Exception as e:  # noqa: BLE001 - a gate failure must not block fitting
+        warnings.warn(
+            f"Data-quality gate skipped (could not validate dataset): {e}"
+        )
+        return
+
+    for issue in report.by_severity("warning"):
+        var = f" [{issue.variable}]" if issue.variable else ""
+        warnings.warn(f"Data quality: {issue.check}{var}: {issue.message}")
+
+    errors = report.by_severity("error")
+    if errors:
+        lines = "\n".join(
+            f"  - {i.check}"
+            + (f" [{i.variable}]" if i.variable else "")
+            + f": {i.message}"
+            for i in errors
+        )
+        raise ValueError(
+            "Dataset failed data-quality validation; fix the data or set "
+            "`skip_quality_gate: true` in the spec to override:\n" + lines
+        )
+
+
 def build_model(
     spec: dict, dataset_path: str, *, model_cls: type | None = None
 ) -> BayesianMMM:
@@ -289,6 +337,9 @@ def build_model(
         # The MFF config requires a kpi/media classification; a native dataset
         # (which may have neither) skips it entirely.
         mff_config = _mff_config_from_spec(spec)
+        # Pre-fit data-quality gate: block on error-tier issues (date gaps,
+        # negative spend, severe missingness) before paying for a fit.
+        run_data_quality_gate(dataset_path, spec)
         try:
             panel = load_mff(dataset_path, mff_config)
         except Exception as e:
