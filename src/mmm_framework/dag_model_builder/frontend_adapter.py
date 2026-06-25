@@ -6,7 +6,6 @@ Converts between React Flow frontend JSON format and DAGSpec Python objects.
 
 from __future__ import annotations
 
-from typing import Any
 
 from .dag_spec import DAGEdge, DAGNode, DAGSpec, EdgeType, NodeType
 

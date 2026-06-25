@@ -784,7 +784,6 @@ class SubprocessKernel:
         )
 
     def run_model_op(self, op_name: str, kwargs: dict) -> dict:
-        from mmm_framework.agents.model_ops import NO_MODEL_MSG
 
         with self._lock:
             # Ensure the kernel is live (spawning in the session's work_dir), then

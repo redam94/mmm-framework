@@ -5,7 +5,7 @@ Redis service for job tracking, caching, and pub/sub.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 import redis.asyncio as redis

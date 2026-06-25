@@ -168,7 +168,6 @@ def _flatten_array(
         return {name: arr.reshape(-1)}
     if not samples_first:  # pragma: no cover - kept for symmetry
         arr = np.moveaxis(arr, n_samples_axis, 0)
-    n = arr.shape[0]
     param_shape = arr.shape[1:]
     out: dict[str, np.ndarray] = {}
     for idx in np.ndindex(param_shape):

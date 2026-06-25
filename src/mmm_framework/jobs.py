@@ -23,10 +23,8 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable
 
 import numpy as np
-import pandas as pd
 
 # =============================================================================
 # Configuration
@@ -283,8 +281,6 @@ def _worker_process(
         # Import here to avoid multiprocessing issues
         from mmm_framework import (
             BayesianMMM,
-            TrendConfig,
-            TrendType,
             ModelConfigBuilder,
             HierarchicalConfigBuilder,
             SeasonalityConfigBuilder,

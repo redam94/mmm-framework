@@ -4014,7 +4014,9 @@ async def _infer_workflow_status(thread_id: str) -> list[dict[str, Any]]:
     assumptions = {a["key"]: a for a in sessions_store.list_assumptions(thread_id)}
     overrides = sessions_store.get_workflow_overrides(thread_id)
 
-    has = lambda k: k in assumptions
+    def has(k):
+        return k in assumptions
+
     inferred: dict[int, str] = {i: "pending" for i in range(1, 10)}
     inferred[1] = "done" if has("research_question") else "pending"
     inferred[2] = (
@@ -4410,7 +4412,6 @@ async def update_dag(thread_id: str, body: DAGUpdateRequest):
         dag_spec_to_react_flow,
     )
     from mmm_framework.dag_model_builder.validation import validate_dag
-    from mmm_framework.agents.causal_tools import validate_causal_identification
 
     try:
         spec = react_flow_to_dag_spec(body.nodes, body.edges)

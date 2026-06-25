@@ -22,7 +22,6 @@ from .transforms import (
 if TYPE_CHECKING:
     from numpy.typing import NDArray
     from .data_loader import PanelDataset
-    from .config import SeasonalityConfig, MFFConfig
 
 
 @dataclass

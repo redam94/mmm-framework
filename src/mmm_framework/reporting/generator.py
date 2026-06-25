@@ -15,10 +15,6 @@ from .config import ReportConfig, SectionConfig, ColorScheme
 from .design_tokens import TOKENS
 from .data_extractors import (
     MMMDataBundle,
-    DataExtractor,
-    BayesianMMMExtractor,
-    ExtendedMMMExtractor,
-    PyMCMarketingExtractor,
     create_extractor,
 )
 from .sections import (

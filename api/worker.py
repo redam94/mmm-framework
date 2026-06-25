@@ -11,17 +11,14 @@ from pathlib import Path
 # Add the parent directory containing mmm_framework to the path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import asyncio
 import sys
 import traceback
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 
 from arq import cron
-from arq.connections import RedisSettings
 
 from config import get_settings
 from schemas import JobStatus
@@ -127,8 +124,6 @@ async def fit_model_task(
 
         from mmm_framework import (
             BayesianMMM,
-            TrendConfig,
-            TrendType,
             load_mff,
             MFFConfigBuilder,
             KPIConfigBuilder,
@@ -694,11 +689,6 @@ async def fit_extended_model_task(
             OutcomeConfigBuilder,
             CrossEffectConfigBuilder,
         )
-        from mmm_framework.mmm_extensions.config import (
-            MediatorType,
-            CrossEffectType,
-            EffectConstraint,
-        )
 
         # Prepare data arrays from DataFrame
         await update_status(JobStatus.RUNNING, 20.0, "Preparing data arrays...")
@@ -718,7 +708,9 @@ async def fit_extended_model_task(
             kpi = config.get("kpi", {})
             y = df[kpi.get("name", "Sales")].values
         else:
-            outcome_names = [
+            # NOTE: half-implemented multi-outcome branch (does not yet set `y`);
+            # name list kept for the eventual implementation.
+            _outcome_names = [
                 o["name"] if isinstance(o, dict) else o for o in outcome_columns
             ]
 
@@ -1338,7 +1330,6 @@ class WorkerSettings:
 
 if __name__ == "__main__":
     # For running worker directly
-    import asyncio
     from arq import run_worker
 
     run_worker(WorkerSettings)

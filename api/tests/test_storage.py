@@ -2,7 +2,6 @@
 Tests for storage service.
 """
 
-import json
 import pytest
 
 

@@ -16,7 +16,7 @@ Key features:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import numpy as np
@@ -274,7 +274,6 @@ def _find_data_nodes(model: "pm.Model") -> dict[str, Any]:
     dict[str, TensorVariable]
         Mapping from variable name to pm.Data node.
     """
-    import pytensor.tensor as pt
 
     data_nodes = {}
     for name, var in model.named_vars.items():
@@ -323,9 +322,6 @@ def _find_needed_rvs(
     all_ancestors = set(ancestors([output]))
 
     # Find which RVs are in the ancestry
-    free_rvs_set = set(model.free_RVs)
-    observed_rvs_set = set(model.observed_RVs)
-
     needed_free_rvs = [rv for rv in model.free_RVs if rv in all_ancestors]
     needed_observed_rvs = [rv for rv in model.observed_RVs if rv in all_ancestors]
 
@@ -514,7 +510,6 @@ def create_frozen_predictor(
     ... })
     >>> y_pred = output.y_samples.mean(axis=0)
     """
-    import pymc as pm
     import pytensor
     import pytensor.tensor as pt
     from pytensor.graph import clone_replace

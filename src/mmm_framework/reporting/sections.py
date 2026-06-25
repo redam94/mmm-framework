@@ -8,11 +8,8 @@ and customized independently.
 from __future__ import annotations
 
 import html
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 import numpy as np
-import pandas as pd
 
 from .config import ReportConfig, SectionConfig, ChartConfig
 from . import charts
@@ -92,7 +89,6 @@ class ExecutiveSummarySection(Section):
         if not self.is_enabled:
             return ""
 
-        colors = self.config.color_scheme
         ci_level = int(self.section_config.credible_interval * 100)
 
         # Build metrics grid
@@ -821,7 +817,7 @@ class SensitivitySection(Section):
 
         # Overview text
         content_parts.append(
-            f"""
+            """
             <p>
                 Sensitivity analysis explores how results change under alternative model specifications.
                 Robust findings should be stable across reasonable specification choices.
@@ -1482,7 +1478,7 @@ class CannibalizationSection(Section):
 
         # Detailed cross-effects table
         content_parts.append(
-            f"""
+            """
             <h3>Detailed Cross-Product Matrix</h3>
             <p>Effect of row product's marketing on column product's sales.</p>
         """

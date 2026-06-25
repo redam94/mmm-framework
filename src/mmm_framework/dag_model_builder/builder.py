@@ -18,7 +18,7 @@ from .config_translator import (
     dag_to_multivariate_config,
     dag_to_nested_config,
 )
-from .dag_spec import DAGEdge, DAGNode, DAGSpec, EdgeType, NodeType
+from .dag_spec import DAGEdge, DAGNode, DAGSpec
 from .model_type_resolver import ModelType, get_model_class, resolve_model_type
 from .validation import ValidationResult, validate_complete, validate_dag
 

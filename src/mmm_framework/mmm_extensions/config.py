@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Literal
+from typing import Literal
 
 # Import shared enum from main config to avoid duplication
 from mmm_framework.config import SaturationType

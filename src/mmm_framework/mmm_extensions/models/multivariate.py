@@ -18,9 +18,8 @@ from .base import BaseExtendedMMM
 from ..results import CrossEffectSummary
 
 if TYPE_CHECKING:
-    import arviz as az
 
-    from ..config import MultivariateModelConfig, CrossEffectType
+    from ..config import MultivariateModelConfig
 
 
 class MultivariateMMM(BaseExtendedMMM):

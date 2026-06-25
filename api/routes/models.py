@@ -8,13 +8,13 @@ import json
 import math
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from arq import ArqRedis, create_pool
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse
 from loguru import logger
 
 from config import Settings, get_settings
