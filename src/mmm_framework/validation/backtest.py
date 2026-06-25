@@ -190,13 +190,9 @@ class PosteriorForecaster:
                 "PosteriorForecaster supports national (single-cell) data only; "
                 f"got {model.n_cells} geo x product cells."
             )
-        trend_type = getattr(model.trend_config.type, "value", model.trend_config.type)
-        if str(trend_type).lower() not in ("none", "linear"):
-            raise NotImplementedError(
-                f"Out-of-time extrapolation of trend type {trend_type!r} is not "
-                "supported (only 'none' and 'linear'); refit the backtest clone "
-                "with a linear trend or disable the trend."
-            )
+        self._trend_type = str(
+            getattr(model.trend_config.type, "value", model.trend_config.type)
+        ).lower()
 
         self.model = model
         posterior = model._trace.posterior
@@ -212,6 +208,15 @@ class PosteriorForecaster:
         self._intercept = get("intercept")
         self._sigma = get("sigma")
         self._trend_slope = get("trend_slope")
+        # Flexible trends (spline / GP / piecewise) have no closed-form out-of-time
+        # extrapolation, so we replay the fitted per-period trend component and hold
+        # its LAST value beyond the training window (see _trend_at).
+        self._trend_component = get("trend_component")
+        if self._trend_type not in ("none", "linear") and self._trend_component is None:
+            raise NotImplementedError(
+                f"Trend type {self._trend_type!r} has no 'trend_component' in the "
+                "trace, so out-of-time extrapolation is unavailable."
+            )
         self._beta_controls = get("beta_controls")
         self._season = {
             name: get(f"season_{name}") for name in model.seasonality_features
@@ -224,19 +229,40 @@ class PosteriorForecaster:
     # -- components ---------------------------------------------------------
 
     def _trend_at(self, positions: np.ndarray, train_offset: int = 0) -> np.ndarray:
-        """Linear trend extrapolated on the training time scale.
+        """Trend evaluated at absolute ``positions``.
 
         ``train_offset`` is the absolute position of the trained model's first
         period — nonzero for rolling-window training (e.g. validator CV), where
         the clone's ``t_scaled = 0`` corresponds to that offset, not position 0.
+
+        * ``none``   -> zero.
+        * ``linear`` -> slope extrapolated on the training time scale (closed form).
+        * spline/GP/piecewise -> replay the fitted ``trend_component`` and HOLD ITS
+          LAST value beyond the training window. A flexible basis has no
+          model-defined out-of-time forecast, so this is a documented heuristic
+          (no further trend growth assumed); interpret long-horizon backtests of
+          flexible-trend models with that caveat.
         """
-        if self._trend_slope is None:
+        if self._trend_type == "none":
             return np.zeros((len(positions), self._n_samples))
-        # Training used t_scaled = linspace(0, 1, n_train) = pos / (n_train - 1);
-        # future positions extrapolate past 1 on the same scale.
-        denom = max(self.model.n_periods - 1, 1)
-        t_scaled = (positions - train_offset) / denom
-        return t_scaled[:, None] * self._trend_slope[None, :]
+
+        if self._trend_type == "linear":
+            if self._trend_slope is None:
+                return np.zeros((len(positions), self._n_samples))
+            # Training used t_scaled = linspace(0,1,n_train) = pos/(n_train-1);
+            # future positions extrapolate past 1 on the same scale.
+            denom = max(self.model.n_periods - 1, 1)
+            t_scaled = (positions - train_offset) / denom
+            return t_scaled[:, None] * self._trend_slope[None, :]
+
+        # Flexible trend: index the fitted component, clamping to [0, n_train-1]
+        # so positions beyond the training window hold the last fitted level.
+        tc = self._trend_component  # (n_samples, n_train)
+        if tc is None:
+            return np.zeros((len(positions), self._n_samples))
+        n_train = tc.shape[-1]
+        idx = np.clip(positions - train_offset, 0, n_train - 1)
+        return tc[:, idx].T
 
     def _seasonality_at(self, positions: np.ndarray) -> np.ndarray:
         """Fourier seasonality evaluated at absolute period positions.
