@@ -313,8 +313,8 @@ class BayesianMMMExtractor(
                     if hasattr(periods[0], "strftime"):
                         return [p.strftime("%Y-%m-%d") for p in periods]
                     return list(periods)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"period formatting failed: {e}")
             else:
                 # Simple index (period only)
                 if hasattr(idx[0], "strftime"):
@@ -916,8 +916,8 @@ class BayesianMMMExtractor(
                         return_original_scale=True, hdi_prob=self.ci_prob
                     )
                     return pred_results.y_pred_samples  # (n_samples, n_obs)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"posterior-predictive sampling failed: {e}")
 
             # Method 2: Reconstruct from trace components
             y_samples_orig = self._reconstruct_predictions_from_trace()
@@ -1346,8 +1346,8 @@ class BayesianMMMExtractor(
                             return np.array(
                                 [period_to_idx.get(str(p), 0) for p in period_values]
                             )
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"period index mapping failed: {e}")
                     else:
                         # Simple index - assume it's period only
                         period_to_idx = {
@@ -2087,8 +2087,8 @@ class BayesianMMMExtractor(
                     l_max = getattr(self.mmm.model_config, "adstock_lmax", l_max)
                 try:
                     l_max = self.mmm._get_adstock_config(ch).l_max
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"adstock l_max lookup failed for {ch}: {e}")
 
                 def _mean(name: str) -> float | None:
                     if name in posterior:
@@ -2333,8 +2333,8 @@ class BayesianMMMExtractor(
                                 )
                                 samples = samples[idx]
                             prior_samples[param] = samples
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"prior sample extraction failed for {param}: {e}")
 
             logger.debug(f"Generated {len(prior_samples)} prior sample sets")
 
@@ -2393,8 +2393,8 @@ class BayesianMMMExtractor(
                     # Hill slope: Gamma(3, 1)
                     prior_samples[param] = np.random.gamma(3, 1, n_samples)
 
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"prior-sample synthesis failed: {e}")
 
         return prior_samples
 
