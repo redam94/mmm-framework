@@ -98,6 +98,15 @@ docs = [
 [tool.uv.sources]
 mmm-framework = { workspace = true }
 
+[tool.coverage.run]
+source = ["src/mmm_framework"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+show_missing = true
+# fail_under is enforced in CI via --cov-fail-under (not here), so running a
+# subset of tests locally with --cov doesn't spuriously fail on low total.
+
 [tool.ruff]
 line-length = 88
 target-version = "py312"
