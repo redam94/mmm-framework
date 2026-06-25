@@ -3682,6 +3682,7 @@ def run_budget_optimizer(
     budget_change_pct: float = None,
     min_multiplier: float = 0.0,
     max_multiplier: float = 2.0,
+    channel_bounds: dict = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
     """Find the budget allocation that maximizes expected KPI, using the fitted
@@ -3692,6 +3693,13 @@ def run_budget_optimizer(
     `min_multiplier`/`max_multiplier` bound each channel's spend as multiples of
     its current spend (default 0–2x — beyond observed spend the curves are
     extrapolation, so recommendations stay inside the evidence).
+
+    `channel_bounds` sets PER-CHANNEL spend limits that override the global
+    bounds — `{"TV": [1.0, 1.0], "Social": [0.0, 1.2]}` means "freeze TV at its
+    current spend, cap Social at +20%". Use this to encode real plan constraints
+    (partner-committed caps, contractual floors, a locked line). Each value is
+    `[low, high]` multipliers of that channel's current spend; an unknown channel
+    name is rejected (so a constraint is never silently ignored).
 
     The result includes DECISION uncertainty: the optimizer re-runs under each
     posterior draw, so each channel gets a 90% range of its optimal share. Wide
@@ -3707,6 +3715,8 @@ def run_budget_optimizer(
         kwargs["total_budget"] = float(total_budget)
     if budget_change_pct is not None:
         kwargs["budget_change_pct"] = float(budget_change_pct)
+    if channel_bounds:
+        kwargs["bounds"] = channel_bounds
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
         "optimize_budget", kwargs
     )

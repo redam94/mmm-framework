@@ -611,11 +611,40 @@ def optimize_budget(
     budget_change_pct: float | None = None,
     min_multiplier: float = 0.0,
     max_multiplier: float = 2.0,
+    bounds: dict | None = None,
     max_draws: int = 200,
 ) -> dict:
     """Optimal budget allocation from the fitted model's response curves, with
     per-draw re-optimization for allocation stability. Returns markdown +
-    a dashboard payload + a structured table."""
+    a dashboard payload + a structured table.
+
+    ``bounds`` sets PER-CHANNEL spend limits as ``{channel: [low, high]}``
+    multipliers of current spend (e.g. a partner-committed cap or a frozen line),
+    overriding the global ``min_multiplier``/``max_multiplier`` for those channels.
+    An unknown channel or a malformed range is rejected (a silently-ignored
+    constraint would hand a planner an unexecutable plan)."""
+    norm_bounds: dict[str, tuple[float, float]] | None = None
+    if bounds:
+        names = list(getattr(mmm, "channel_names", []) or [])
+        unknown = [c for c in bounds if c not in names]
+        if unknown:
+            return _err(
+                f"Unknown channel(s) in bounds: {unknown}. Valid channels: {names}."
+            )
+        norm_bounds = {}
+        for c, lohi in bounds.items():
+            try:
+                lo, hi = float(lohi[0]), float(lohi[1])
+            except Exception:  # noqa: BLE001
+                return _err(
+                    f"bounds[{c!r}] must be [low, high] multipliers, got {lohi!r}."
+                )
+            if lo < 0 or hi < lo:
+                return _err(
+                    f"bounds[{c!r}] must satisfy 0 <= low <= high, got [{lo}, {hi}]."
+                )
+            norm_bounds[c] = (lo, hi)
+
     try:
         from mmm_framework.planning import optimize_budget as _optimize
 
@@ -625,6 +654,7 @@ def optimize_budget(
             budget_change_pct=budget_change_pct,
             min_multiplier=min_multiplier,
             max_multiplier=max_multiplier,
+            bounds=norm_bounds,
             max_draws=max_draws,
             random_seed=42,
         )
@@ -651,6 +681,11 @@ def optimize_budget(
             f"{r['optimal_share_pct']:.0f}% of budget ({r['change_pct']:+.0f}% spend); "
             f"optimal share 90% range [{r['optimal_share_p5']:.0f}%, {r['optimal_share_p95']:.0f}%]"
         )
+    if norm_bounds:
+        bound_str = ", ".join(
+            f"`{c}` [{lo:g}x–{hi:g}x]" for c, (lo, hi) in norm_bounds.items()
+        )
+        lines.append(f"- Per-channel constraints applied: {bound_str}")
     for n in res.notes:
         lines.append(f"- ⚠️ {n}")
     lines.append(
