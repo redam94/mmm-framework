@@ -90,6 +90,9 @@ class MFFConfig(BaseModel):
     # Date parsing
     date_format: str = "%Y-%m-%d"
     frequency: Literal["W", "D", "M"] = "W"  # Weekly, daily, monthly
+    # Source decimal mark for numeric parsing: "." (US: 1,234.56), "," (EU:
+    # 1.234,56), or "auto" (best-effort per value). Lets non-US client data load.
+    decimal_separator: Literal[".", ",", "auto"] = "."
 
     # Missing value handling
     fill_missing_media: float = 0.0

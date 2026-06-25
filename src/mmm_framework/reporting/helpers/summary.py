@@ -26,47 +26,6 @@ from .utils import (
 )
 
 
-def debug_posterior_structure(mmm):
-    """Print posterior structure for debugging."""
-    posterior = mmm._trace.posterior
-
-    print("\n" + "=" * 60)
-    print("POSTERIOR STRUCTURE DEBUG")
-    print("=" * 60)
-
-    for var_name in list(posterior.data_vars):
-        da = posterior[var_name]
-        print(f"{var_name}: dims={da.dims}, shape={da.shape}")
-
-    # Test the exact operation that's failing
-    print("\n" + "-" * 40)
-    print("Testing problematic operations:")
-    print("-" * 40)
-
-    if "channel_contributions" in posterior:
-        da = posterior["channel_contributions"]
-        print(f"\nchannel_contributions: dims={da.dims}, shape={da.shape}")
-
-        # The error (slice(None, None, None), 0) means [:, 0] on xarray
-        # Let's test what works
-
-        print("\nTest 1: da.values first, then index...")
-        try:
-            arr = da.values
-            result = arr[:, 0]
-            print(f"  SUCCESS: shape={result.shape}")
-        except Exception as e:
-            print(f"  FAILED: {e}")
-
-        print("\nTest 2: Direct indexing on DataArray...")
-        try:
-            result = da[:, 0]
-            print(f"  SUCCESS: {type(result)}")
-        except Exception as e:
-            print(f"  FAILED: {e}")
-            print("  ^ THIS IS LIKELY YOUR BUG!")
-
-
 def generate_model_summary(
     model: Any,
     hdi_prob: float = 0.94,
@@ -223,7 +182,6 @@ def _get_diagnostics(model: Any) -> dict[str, Any]:
 
 
 __all__ = [
-    "debug_posterior_structure",
     "generate_model_summary",
     "_get_model_info",
     "_get_diagnostics",

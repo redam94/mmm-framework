@@ -40,20 +40,56 @@ class MFFValidationError(Exception):
 
 # Tokens that mean "missing", not "unparseable", in a value column.
 _NULL_TOKENS = {"", "nan", "none", "null", "na", "n/a", "-", "—"}
-# Currency symbols + thousands separators + whitespace to strip before parsing.
-_NUMERIC_STRIP_RE = re.compile(r"[,\s$€£¥₹]")
+# Currency symbols + whitespace to strip before parsing (NOT the , / . separators,
+# which are handled locale-aware by _normalize_decimal).
+_CURRENCY_WS_RE = re.compile(r"[\s$€£¥₹]")
 
 
-def coerce_numeric_column(series: pd.Series, *, column: str) -> pd.Series:
+def _normalize_decimal_separators(cleaned: pd.Series, decimal: str) -> pd.Series:
+    """Map a value column's thousands/decimal separators to a plain ``.`` decimal.
+
+    ``decimal`` is the source's decimal mark: ``"."`` (US: ``1,234.56``), ``","``
+    (EU: ``1.234,56``), or ``"auto"`` (best-effort per value: when both marks
+    appear, the LAST one is the decimal; a lone ``,`` before a 3-digit group is
+    treated as a thousands separator, otherwise as a decimal).
+    """
+    if decimal == ".":
+        return cleaned.str.replace(",", "", regex=False)  # ',' = thousands
+    if decimal == ",":
+        return cleaned.str.replace(".", "", regex=False).str.replace(
+            ",", ".", regex=False
+        )
+
+    def _auto(v: str) -> str:
+        has_dot, has_comma = "." in v, "," in v
+        if has_dot and has_comma:
+            if v.rfind(",") > v.rfind("."):  # comma is the decimal
+                return v.replace(".", "").replace(",", ".")
+            return v.replace(",", "")  # dot is the decimal; comma = thousands
+        if has_comma:
+            tail = v.rsplit(",", 1)[-1]
+            if v.count(",") == 1 and len(tail) == 3:
+                return v.replace(",", "")  # 1,234 -> thousands
+            return v.replace(",", ".")  # 1,5 -> decimal
+        return v
+
+    return cleaned.map(_auto)
+
+
+def coerce_numeric_column(
+    series: pd.Series, *, column: str, decimal: str = "."
+) -> pd.Series:
     """Coerce an MFF value column to float, tolerating real-world formatting.
 
     Client exports routinely carry currency/thousands formatting (``"$1,234"``,
-    ``"1,234"``) or accounting negatives (``"(123)"``). Previously these flowed
+    ``"1.234,56"``) or accounting negatives (``"(123)"``). Previously these flowed
     straight into ``groupby().sum()`` and raised an opaque ``TypeError`` deep in
     the stack. This normalizes them up front:
 
     * already-numeric columns pass through unchanged;
-    * ``$ , € £ ¥ ₹`` and whitespace are stripped; ``(123)`` -> ``-123``;
+    * ``$ € £ ¥ ₹`` and whitespace are stripped; ``(123)`` -> ``-123``;
+    * thousands/decimal separators are normalized per ``decimal`` (``"."`` US,
+      ``","`` EU, or ``"auto"``) so non-US-formatted data ingests;
     * recognized null tokens (and genuinely empty cells) become ``NaN``;
     * any remaining unparseable value raises :class:`MFFValidationError` naming
       the column and a few offending samples (an actionable message, not a
@@ -64,8 +100,9 @@ def coerce_numeric_column(series: pd.Series, *, column: str) -> pd.Series:
 
     text = series.astype(str).str.strip()
     is_nullish = series.isna() | text.str.lower().isin(_NULL_TOKENS)
-    cleaned = text.str.replace(_NUMERIC_STRIP_RE, "", regex=True)
+    cleaned = text.str.replace(_CURRENCY_WS_RE, "", regex=True)
     cleaned = cleaned.str.replace(r"^\((.*)\)$", r"-\1", regex=True)  # (123) -> -123
+    cleaned = _normalize_decimal_separators(cleaned, decimal)
     coerced = pd.to_numeric(cleaned, errors="coerce")
 
     failed = coerced.isna() & ~is_nullish
@@ -410,7 +447,9 @@ class MFFLoader:
         # thousands formatting) so a "$1,234" cell raises a clear validation
         # error instead of a TypeError deep inside a later groupby().sum().
         self._raw_data[cols.variable_value] = coerce_numeric_column(
-            self._raw_data[cols.variable_value], column=cols.variable_value
+            self._raw_data[cols.variable_value],
+            column=cols.variable_value,
+            decimal=getattr(self.config, "decimal_separator", "."),
         )
 
         return self

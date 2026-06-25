@@ -106,7 +106,6 @@ from .mediated import (
 from .summary import (
     _get_diagnostics,
     _get_model_info,
-    debug_posterior_structure,
     generate_model_summary,
 )
 
@@ -162,7 +161,6 @@ __all__ = [
     "_convert_mediation_df",
     "_compute_mediation_from_trace",
     # Summary
-    "debug_posterior_structure",
     "generate_model_summary",
     "_get_model_info",
     "_get_diagnostics",
