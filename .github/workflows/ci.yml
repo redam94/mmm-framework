@@ -1,0 +1,80 @@
+# Continuous integration: lint + fast test suite + coverage + dependency audit.
+# (The slow MCMC-fitting tests run nightly, not on every push — see ci-slow.yml.)
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: Lint + fast tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      - name: Ruff (lint)
+        run: uv run ruff check src api
+
+      # NOTE: `black --check` is intentionally not gated yet — the tree predates
+      # the current black version and needs a one-time reformat first. Run
+      # `make format` and enable this once clean.
+
+      - name: Fast tests + coverage
+        # Floor is well below the current ~70% fast-suite coverage; ratchet up.
+        run: >
+          uv run pytest tests/ -m "not slow" -n auto
+          --cov=mmm_framework --cov-report=xml --cov-report=term-missing
+          --cov-fail-under=60
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 7
+
+  security-audit:
+    name: Dependency audit (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      # Non-blocking for now: surfaces known CVEs in the dependency tree without
+      # failing the build. Promote to a required check once the tree is triaged.
+      - name: pip-audit
+        continue-on-error: true
+        run: uv run --with pip-audit pip-audit --strict

@@ -1,0 +1,31 @@
+# Slow suite: the real MCMC-fitting tests (@pytest.mark.slow). Too expensive for
+# every push, so run nightly + on demand. Keeps the slow path from rotting.
+name: CI (slow tests)
+
+on:
+  schedule:
+    - cron: "0 6 * * *"  # 06:00 UTC nightly
+  workflow_dispatch:
+
+jobs:
+  slow-tests:
+    name: Slow MCMC tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      - name: Slow tests
+        run: uv run pytest tests/ -m slow -n auto
