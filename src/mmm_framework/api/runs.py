@@ -150,6 +150,77 @@ def build_run_timeline(project_id: str | None = None) -> list[dict[str, Any]]:
     return runs
 
 
+_COMPARE_CHANNEL_FIELDS = (
+    "roi_mean",
+    "roi_hdi_low",
+    "roi_hdi_high",
+    "marginal_roi",
+    "spend",
+    "spend_share",
+)
+_COMPARE_PORTFOLIO_FIELDS = (
+    "total_spend",
+    "portfolio_marginal_roi",
+    "mean_ci_width",
+    "expected_uplift",
+)
+
+
+def _delta_cell(a: Any, b: Any) -> dict[str, Any]:
+    delta = (b - a) if isinstance(a, (int, float)) and isinstance(b, (int, float)) else None
+    return {"a": a, "b": b, "delta": delta}
+
+
+def compare_runs(run_a: str, run_b: str) -> dict[str, Any]:
+    """Per-channel ROI/spend delta between two fitted runs (B relative to A).
+
+    Answers the analyst's most frequent question — "why did this channel's ROI
+    change since the last refresh?" — from the persisted ``run_metrics``, as a
+    structured per-channel + portfolio delta (rather than eyeballing two reports).
+    Raises ``ValueError`` if either run has no stored metrics.
+    """
+    ma = sessions_store.get_run_metrics(run_a)
+    mb = sessions_store.get_run_metrics(run_b)
+    missing = [rid for rid, m in ((run_a, ma), (run_b, mb)) if m is None]
+    if missing:
+        raise ValueError(f"No run metrics found for run(s): {missing}")
+
+    a_ch = (ma["metrics"].get("channels") or {}) if ma else {}
+    b_ch = (mb["metrics"].get("channels") or {}) if mb else {}
+    channels = []
+    for name in sorted(set(a_ch) | set(b_ch)):
+        a, b = a_ch.get(name, {}), b_ch.get(name, {})
+        row: dict[str, Any] = {
+            "channel": name,
+            "in_a": name in a_ch,
+            "in_b": name in b_ch,
+        }
+        for f in _COMPARE_CHANNEL_FIELDS:
+            row[f] = _delta_cell(a.get(f), b.get(f))
+        channels.append(row)
+
+    pa = (ma["metrics"].get("portfolio") or {}) if ma else {}
+    pb = (mb["metrics"].get("portfolio") or {}) if mb else {}
+    portfolio = {
+        f: _delta_cell(pa.get(f), pb.get(f)) for f in _COMPARE_PORTFOLIO_FIELDS
+    }
+
+    return {
+        "run_a": {
+            "run_id": run_a,
+            "created_at": ma["created_at"] if ma else None,
+            "project_id": ma["project_id"] if ma else None,
+        },
+        "run_b": {
+            "run_id": run_b,
+            "created_at": mb["created_at"] if mb else None,
+            "project_id": mb["project_id"] if mb else None,
+        },
+        "channels": channels,
+        "portfolio": portfolio,
+    }
+
+
 def run_timeline_markdown(
     project_id: str | None = None, max_runs: int | None = None
 ) -> str:
