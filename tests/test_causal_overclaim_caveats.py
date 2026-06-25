@@ -64,16 +64,18 @@ def _iv_dag() -> DAGSpec:
     return DAGSpec(nodes=nodes, edges=edges)
 
 
-def test_frontdoor_branch_carries_estimation_caveat():
+def test_frontdoor_branch_offers_estimate_and_names_fitted_estimator():
     content = _invoke(_frontdoor_dag())
     assert "Front-door check" in content
-    # The honest caveat: identifiable != estimated via front-door.
+    # An estimate is now available; the fitted MMM still uses the back-door model.
+    assert "estimate is available" in content
+    assert "frontdoor_estimate" in content
     assert "back-door additive estimator" in content
-    assert "NOT the front-door estimate" in content
 
 
-def test_iv_check_carries_estimation_caveat():
+def test_iv_check_offers_estimate_and_names_fitted_estimator():
     content = _invoke(_iv_dag())
     assert "Instrumental-variable check" in content
-    assert "does NOT run 2SLS/IV estimation" in content
+    assert "estimate is available" in content
+    assert "two_stage_least_squares" in content
     assert "back-door additive" in content
