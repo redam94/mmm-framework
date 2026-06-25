@@ -271,6 +271,11 @@ class PanelDataset:
     # Metadata
     media_stats: dict[str, dict] = field(default_factory=dict)
 
+    # Per-variable boolean masks of values that were EXPLICITLY missing (NaN) in
+    # the source, as opposed to filled — populated by RaggedMFFLoader. ``None`` on
+    # the standard (fully-filled) loader path.
+    explicit_nan_mask: dict[str, pd.Series] | None = None
+
     @property
     def n_obs(self) -> int:
         return len(self.y)
