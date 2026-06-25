@@ -2291,7 +2291,7 @@ wheels = [
 [[package]]
 name = "mmm-framework"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "arq" },
     { name = "cloudpickle" },
@@ -2367,13 +2367,13 @@ requires-dist = [
     { name = "google-cloud-bigquery", marker = "extra == 'gcp'", specifier = ">=3.17.0" },
     { name = "google-cloud-storage", marker = "extra == 'gcp'", specifier = ">=2.14.0" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "langchain-anthropic", specifier = ">=0.1.20" },
-    { name = "langchain-core", specifier = ">=0.2.33" },
-    { name = "langchain-google-genai", specifier = ">=1.0.8" },
-    { name = "langchain-google-vertexai", specifier = ">=2.0.0" },
-    { name = "langchain-openai", specifier = ">=0.1.21" },
-    { name = "langgraph", specifier = ">=0.2.14" },
-    { name = "langgraph-checkpoint-sqlite", specifier = ">=2.0.0" },
+    { name = "langchain-anthropic", specifier = ">=1.4.3" },
+    { name = "langchain-core", specifier = ">=1.4.0" },
+    { name = "langchain-google-genai", specifier = ">=4.2.2" },
+    { name = "langchain-google-vertexai", specifier = ">=3.2.3" },
+    { name = "langchain-openai", specifier = ">=1.2.1" },
+    { name = "langgraph", specifier = ">=1.2.0" },
+    { name = "langgraph-checkpoint-sqlite", specifier = ">=3.1.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "numba", specifier = ">=0.63.1" },
     { name = "numpy", specifier = ">=2.3.5" },
@@ -2407,7 +2407,7 @@ dev = [
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "ipykernel", specifier = ">=7.1.0" },
     { name = "ipywidgets", specifier = ">=8.1.8" },
-    { name = "mmm-framework", virtual = "." },
+    { name = "mmm-framework", editable = "." },
     { name = "networkx", specifier = ">=3.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
