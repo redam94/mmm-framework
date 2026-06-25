@@ -100,11 +100,45 @@ export interface RunInfo {
   changes: RunChanges;
 }
 
+// ── Run comparison (per-channel ROI/spend delta, B vs A) ──────────────────────
+
+export interface DeltaCell {
+  a: number | null;
+  b: number | null;
+  delta: number | null;
+}
+
+export interface RunChannelDelta {
+  channel: string;
+  in_a: boolean;
+  in_b: boolean;
+  roi_mean: DeltaCell;
+  roi_hdi_low: DeltaCell;
+  roi_hdi_high: DeltaCell;
+  marginal_roi: DeltaCell;
+  spend: DeltaCell;
+  spend_share: DeltaCell;
+}
+
+export interface RunComparison {
+  run_a: { run_id: string; created_at: number | null; project_id: string | null };
+  run_b: { run_id: string; created_at: number | null; project_id: string | null };
+  channels: RunChannelDelta[];
+  portfolio: Record<string, DeltaCell>;
+}
+
 export const runsService = {
   async listRuns(projectId?: string | null): Promise<RunInfo[]> {
     const { data } = await apiClient.get<{ runs: RunInfo[] }>('/runs', {
       params: projectId ? { project_id: projectId } : {},
     });
     return data.runs;
+  },
+
+  async compareRuns(runA: string, runB: string): Promise<RunComparison> {
+    const { data } = await apiClient.get<RunComparison>('/runs/compare', {
+      params: { run_a: runA, run_b: runB },
+    });
+    return data;
   },
 };
