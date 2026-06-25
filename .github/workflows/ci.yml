@@ -39,6 +39,11 @@ jobs:
       # the current black version and needs a one-time reformat first. Run
       # `make format` and enable this once clean.
 
+      - name: Mypy (type-check, non-blocking)
+        # Informational on a mostly-untyped tree; ratchet toward a required check.
+        continue-on-error: true
+        run: uv run mypy src/mmm_framework
+
       - name: Fast tests + coverage
         # Floor is well below the current ~70% fast-suite coverage; ratchet up.
         run: >

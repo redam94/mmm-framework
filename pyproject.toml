@@ -75,6 +75,7 @@ dev = [
     "ipykernel>=7.1.0",
     "ipywidgets>=8.1.8",
     "mmm-framework",
+    "mypy>=1.11",
     "networkx>=3.0",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.0.0",
@@ -97,6 +98,20 @@ docs = [
 
 [tool.uv.sources]
 mmm-framework = { workspace = true }
+
+[tool.mypy]
+# Lenient baseline: type-checking runs in CI as NON-BLOCKING (informational) on a
+# large, mostly-untyped codebase. Ratchet toward strict over time (enable
+# check_untyped_defs, then disallow_untyped_defs, module by module).
+python_version = "3.12"
+ignore_missing_imports = true
+follow_imports = "silent"
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+check_untyped_defs = false
+disallow_untyped_defs = false
+exclude = '(^|/)(tests|examples|nbs|docs)/'
 
 [tool.coverage.run]
 source = ["src/mmm_framework"]
