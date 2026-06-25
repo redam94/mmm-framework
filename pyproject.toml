@@ -56,6 +56,11 @@ gcp = [
     "db-dtypes>=1.2.0",
     "pyarrow>=14.0.0",
 ]
+# S3 object-store backend (mmm_framework.storage.S3ObjectStore). Lazy-imported;
+# only needed when the storage backend is "s3". Install with: uv sync --extra s3
+s3 = [
+    "boto3>=1.34.0",
+]
 # NOTE: Pathfinder VI (fit(method="pathfinder")) needs `pymc-extras` + `blackjax`.
 # It is intentionally NOT declared as an extra here: the current `pymc-extras`
 # requires pymc>=6, so locking it would force-upgrade the whole core stack
@@ -72,9 +77,11 @@ Repository = "https://github.com/redam94/mmm-framework"
 dev = [
     "beautifulsoup4>=4.15.0",
     "black>=24.0.0",
+    "boto3>=1.34.0",
     "ipykernel>=7.1.0",
     "ipywidgets>=8.1.8",
     "mmm-framework",
+    "moto>=5.0.0",
     "mypy>=1.11",
     "networkx>=3.0",
     "pytest>=9.0.2",
