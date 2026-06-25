@@ -2721,8 +2721,20 @@ class BayesianMMM:
         spend_changes: dict[str, float],
         time_period: tuple[int, int] | None = None,
         random_seed: int | None = None,
+        compute_uncertainty: bool = True,
+        hdi_prob: float = 0.94,
+        max_draws: int = 200,
     ) -> dict:
-        """Run a what-if scenario with custom spend changes."""
+        """Run a what-if scenario with custom spend changes.
+
+        With ``compute_uncertainty`` (default), the outcome change carries
+        DECISION uncertainty: the per-draw change in total media contribution
+        over the window is evaluated from PAIRED posterior draws (same draws for
+        baseline and scenario, no observation noise — the machinery the budget
+        optimizer uses), yielding ``outcome_change_hdi`` and ``prob_positive`` =
+        P(scenario beats baseline). A point estimate alone is not decision-grade
+        in a budget meeting.
+        """
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
@@ -2761,7 +2773,7 @@ class BayesianMMM:
             (outcome_change / baseline_total * 100) if baseline_total != 0 else 0
         )
 
-        return {
+        result = {
             "baseline_outcome": baseline_total,
             "scenario_outcome": scenario_total,
             "outcome_change": outcome_change,
@@ -2770,6 +2782,31 @@ class BayesianMMM:
             "baseline_prediction": baseline_pred.y_pred_mean,
             "scenario_prediction": scenario_pred.y_pred_mean,
         }
+
+        if compute_uncertainty:
+            # Decision uncertainty from PAIRED posterior draws: the change in
+            # total media contribution over the window (additive model -> the only
+            # thing that moves when spend changes). No observation noise; baseline
+            # and scenario share draws, so the difference is properly paired.
+            try:
+                base_contrib = self.sample_channel_contributions(
+                    max_draws=max_draws, random_seed=random_seed
+                )
+                scen_contrib = self.sample_channel_contributions(
+                    X_media=X_media_scenario,
+                    max_draws=max_draws,
+                    random_seed=random_seed,
+                )
+                delta = (scen_contrib - base_contrib)[:, time_mask, :].sum(axis=(1, 2))
+                lo, hi = compute_hdi_bounds(delta, hdi_prob=hdi_prob, axis=0)
+                result["outcome_change_hdi"] = [float(lo), float(hi)]
+                result["prob_positive"] = float(np.mean(delta > 0))
+                result["n_draws"] = int(delta.shape[0])
+                result["hdi_prob"] = hdi_prob
+            except Exception:  # noqa: BLE001 - uncertainty is best-effort
+                pass
+
+        return result
 
     def sample_channel_contributions(
         self,
