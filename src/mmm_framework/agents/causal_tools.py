@@ -551,11 +551,11 @@ def validate_causal_identification(
                 "confounders."
             )
             lines.append(
-                "  - ⚠️ Identifiable *in principle* only: the framework does NOT "
-                "estimate via the front-door formula. The fitted model is the "
-                "**back-door additive estimator**, so the delivered number is NOT "
-                "the front-door estimate — if treatment–outcome confounding is real, "
-                "treat that number with caution and validate with an experiment."
+                "  - A linear front-door **estimate is available** as a cross-check "
+                "via `mmm_framework.estimators.frontdoor_estimate(y, T, M)`. Note the "
+                "fitted MMM itself still uses the **back-door additive estimator**, "
+                "so compare the two: a large gap signals treatment–outcome "
+                "confounding the back-door model can't remove."
             )
         else:
             for note in fd.notes:
@@ -568,10 +568,10 @@ def validate_causal_identification(
         lines.append("")
         lines.append("**Instrumental-variable check:**")
         lines.append(
-            "  - ⚠️ Instruments are used ONLY for this identification check — the "
-            "framework does NOT run 2SLS/IV estimation. A 'valid' verdict means the "
-            "effect is IV-identifiable in principle; the delivered estimate is still "
-            "the back-door additive model, not an IV estimate."
+            "  - A 2SLS **estimate is available** as a cross-check via "
+            "`mmm_framework.estimators.two_stage_least_squares(y, T, Z)` (reports a "
+            "first-stage F for weak instruments). The fitted MMM uses the back-door "
+            "additive estimator; the IV estimate is the confounding-robust comparison."
         )
         for z in spec.instrument_nodes:
             iv = iv_criterion(spec, z.id, t_id, y_id)
