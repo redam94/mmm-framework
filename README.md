@@ -53,16 +53,16 @@ This framework is designed around different principles:
 
 ### Infrastructure
 
-- **FastAPI Backend** — RESTful API with OpenAPI documentation
-- **Async Job Processing** — Redis + ARQ for non-blocking model fitting
-- **Streamlit Frontend** — Interactive dashboards for configuration, fitting, and analysis
-- **LangGraph Integration** — AI-assisted model interpretation with multiple LLM providers
+- **FastAPI Backend** — the MMM Agent API (`mmm_framework.api.main:app`) with OpenAPI documentation
+- **React Frontend** — the supported modern UI (Vite + TypeScript) for the full measurement loop
+- **Async Job Processing** — non-blocking model fitting (agent API runs fits in-kernel; the legacy REST API uses Redis + ARQ)
+- **LangGraph Integration** — AI-assisted modeling and interpretation with multiple LLM providers
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        Streamlit Frontend                           │
+│                     React Frontend (Vite + TS)                      │
 │   ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
 │   │   Data   │ │  Config  │ │  Model   │ │ Results  │ │   Chat   │ │
 │   │  Upload  │ │  Builder │ │  Fitting │ │  Viewer  │ │Interface │ │
@@ -124,38 +124,53 @@ uv sync --group dev --group app
 
 ## Quick Start
 
-### 1. Start Redis
+The supported application is the **React UI** talking to the **MMM Agent API**
+(`mmm_framework.api.main:app`). The agent API runs model fits in-process (in its
+session kernel), so this path needs **no Redis and no separate worker**.
+
+### 1. Start the Agent API
 
 ```bash
-redis-server
+# from the repository root (mmm_framework is installed in the uv environment)
+uv run uvicorn mmm_framework.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 2. Start the API Server
+> **Configure the agent LLM first.** The agent needs an LLM provider (Vertex AI,
+> Anthropic, OpenAI, a local model, …). See
+> [docs/model-configuration.md](docs/model-configuration.md) and
+> `config/model_config.example.yaml`.
+
+### 2. Launch the React UI
 
 ```bash
-cd api
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+cd frontend
+npm install        # first run only
+npm run dev        # Vite dev server; proxies /api/* → http://localhost:8000
 ```
 
-### 3. Start the ARQ Worker
+### 3. Access the Application
 
-```bash
-cd api
-arq worker.WorkerSettings
-```
-
-### 4. Launch the Streamlit App
-
-```bash
-cd app
-streamlit run Home.py
-```
-
-### 5. Access the Application
-
-- **Streamlit UI**: http://localhost:8501
+- **React UI**: http://localhost:5173 (Vite default)
 - **API Documentation**: http://localhost:8000/docs
 - **API Health Check**: http://localhost:8000/health
+
+<details>
+<summary><b>Legacy Streamlit UI (deprecated)</b></summary>
+
+The original Streamlit frontend in `app/` is **deprecated**. It targets the
+separate legacy REST API (`api/main.py` + the ARQ worker), lags the current
+feature set (experiments, model garden, estimands, branding, …), and is kept
+only for reference — it may be removed in a future release. New work should use
+the React UI above.
+
+```bash
+redis-server                                   # Terminal 1: Redis
+cd api && uvicorn main:app --reload            # Terminal 2: legacy REST API (port 8000)
+cd api && arq worker.WorkerSettings            # Terminal 3: ARQ worker
+cd app && streamlit run Home.py                # Terminal 4: Streamlit UI (port 8501)
+```
+
+</details>
 
 ## Usage
 
