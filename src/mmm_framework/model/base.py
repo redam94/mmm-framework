@@ -26,6 +26,7 @@ discussion.
 from __future__ import annotations
 
 import warnings
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Sequence
 
@@ -2157,6 +2158,61 @@ class BayesianMMM:
 
         raise ValueError(f"Unsupported approximate fit method: {method}")
 
+    @contextmanager
+    def _swapped_media_data(
+        self,
+        X_media: np.ndarray | None,
+        X_controls: np.ndarray | None = None,
+    ):
+        """Temporarily swap counterfactual data into the model's ``pm.Data``
+        containers, **restoring the training values on exit**.
+
+        A bare ``pm.set_data`` left the fitted model *dirty* after a
+        counterfactual ``predict`` — the data containers retained the last
+        scenario's values until some later default call happened to reset them,
+        so a counterfactual call followed by a read of any data-dependent
+        quantity saw the wrong inputs. This context manager captures the current
+        container values up front and restores them in a ``finally`` block, so
+        every scenario call leaves the model in its training state.
+
+        Note: this does NOT make the model thread-safe. The underlying PyMC
+        graph and its compiled functions are shared mutable state; concurrent
+        scenario calls on the *same* instance must still be serialized by the
+        caller (or use separate instances). An in-object lock is deliberately
+        avoided so the model stays picklable for the artifact store.
+        """
+        saved: dict[str, np.ndarray] = {}
+        with self.model:
+            if self.use_parametric_adstock:
+                saved["X_media_raw"] = self.model["X_media_raw"].get_value()
+                pm.set_data(
+                    {"X_media_raw": self._prepare_raw_media_for_model(X_media)}
+                )
+            else:
+                saved["X_media_low"] = self.model["X_media_low"].get_value()
+                saved["X_media_high"] = self.model["X_media_high"].get_value()
+                X_adstock_low, X_adstock_high = self._prepare_media_data_for_model(
+                    X_media
+                )
+                pm.set_data(
+                    {
+                        "X_media_low": X_adstock_low,
+                        "X_media_high": X_adstock_high,
+                    }
+                )
+
+            if X_controls is not None and self.n_controls > 0:
+                saved["X_controls"] = self.model["X_controls"].get_value()
+                X_controls_std = (X_controls - self.control_mean) / self.control_std
+                pm.set_data({"X_controls": X_controls_std})
+
+            try:
+                yield
+            finally:
+                # Restore the training inputs so the fitted model is never left
+                # holding a counterfactual scenario's data.
+                pm.set_data(saved)
+
     def predict(
         self,
         X_media: np.ndarray | None = None,
@@ -2189,24 +2245,7 @@ class BayesianMMM:
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
-        with self.model:
-            if self.use_parametric_adstock:
-                pm.set_data({"X_media_raw": self._prepare_raw_media_for_model(X_media)})
-            else:
-                X_adstock_low, X_adstock_high = self._prepare_media_data_for_model(
-                    X_media
-                )
-                pm.set_data(
-                    {
-                        "X_media_low": X_adstock_low,
-                        "X_media_high": X_adstock_high,
-                    }
-                )
-
-            if X_controls is not None and self.n_controls > 0:
-                X_controls_std = (X_controls - self.control_mean) / self.control_std
-                pm.set_data({"X_controls": X_controls_std})
-
+        with self._swapped_media_data(X_media, X_controls):
             pp = pm.sample_posterior_predictive(
                 self._trace,
                 var_names=["y_obs"],
@@ -2750,16 +2789,7 @@ class BayesianMMM:
             step = max(1, trace.posterior.sizes["draw"] // per_chain)
             trace = trace.sel(draw=slice(None, None, step))
 
-        with self.model:
-            if self.use_parametric_adstock:
-                pm.set_data({"X_media_raw": self._prepare_raw_media_for_model(X_media)})
-            else:
-                X_adstock_low, X_adstock_high = self._prepare_media_data_for_model(
-                    X_media
-                )
-                pm.set_data(
-                    {"X_media_low": X_adstock_low, "X_media_high": X_adstock_high}
-                )
+        with self._swapped_media_data(X_media):
             pp = pm.sample_posterior_predictive(
                 trace,
                 var_names=["channel_contributions"],
@@ -2791,12 +2821,7 @@ class BayesianMMM:
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
         X_media = self._intervention_to_X_media(intervention) if intervention else None
-        with self.model:
-            if self.use_parametric_adstock:
-                pm.set_data({"X_media_raw": self._prepare_raw_media_for_model(X_media)})
-            else:
-                X_low, X_high = self._prepare_media_data_for_model(X_media)
-                pm.set_data({"X_media_low": X_low, "X_media_high": X_high})
+        with self._swapped_media_data(X_media):
             pp = pm.sample_posterior_predictive(
                 self._trace,
                 var_names=[var_name],
