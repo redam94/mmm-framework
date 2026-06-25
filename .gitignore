@@ -13,7 +13,9 @@ wheels/
 *.pkl
 *.csv
 .DS_Store
-storage/
+# Runtime storage dir (api/config.py storage_path default "./storage"), anchored
+# to the repo root so it does NOT also ignore the src/mmm_framework/storage/ pkg.
+/storage/
 node_modules/
 
 !package.json

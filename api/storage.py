@@ -35,11 +35,22 @@ class StorageService:
     """
     Storage service for managing data, configs, and models.
 
-    Supports local filesystem storage with optional S3 backend.
+    Supports local filesystem storage only. For S3 use the importable,
+    tested object store: ``mmm_framework.storage.get_object_store("s3", ...)``.
     """
 
     def __init__(self, settings: Settings | None = None):
         self.settings = settings or get_settings()
+        # This legacy service writes via local filesystem paths throughout, so a
+        # non-local backend used to be SILENTLY ignored (data written to local
+        # disk despite storage_backend="s3"). Fail loud instead of losing/
+        # misplacing data; route S3 through mmm_framework.storage.S3ObjectStore.
+        if self.settings.storage_backend != "local":
+            raise NotImplementedError(
+                f"StorageService supports storage_backend='local' only; got "
+                f"'{self.settings.storage_backend}'. For object storage use "
+                "mmm_framework.storage.get_object_store('s3', bucket=..., ...)."
+            )
         self._ensure_dirs()
 
     def _ensure_dirs(self):
