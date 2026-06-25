@@ -3,7 +3,6 @@ Tests for extended model API routes (Nested, Multivariate, Combined MMM).
 """
 
 import io
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import status

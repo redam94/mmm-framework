@@ -826,7 +826,6 @@ def create_pit_histogram(
     """
     # Compute PIT values: proportion of samples below observed value
     # For each observation i: PIT_i = (1/S) * sum(y_rep[:, i] <= y_obs[i])
-    n_samples = y_rep.shape[0]
     pit_values = np.mean(y_rep <= y_obs[np.newaxis, :], axis=0)
 
     # Create histogram

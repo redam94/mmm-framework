@@ -3,7 +3,6 @@ Tests for model management API routes.
 """
 
 import io
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import status
@@ -110,7 +109,7 @@ class TestModelDelete:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-class TestModelFit:
+class TestModelFitData:
     """Tests for model fit data endpoint."""
 
     def test_fit_nonexistent_model(self, test_client):

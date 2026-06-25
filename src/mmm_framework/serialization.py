@@ -20,7 +20,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from .data_loader import PanelDataset
-    from .model import BayesianMMM, TrendConfig
+    from .model import BayesianMMM
 
 
 class MMMSerializer:

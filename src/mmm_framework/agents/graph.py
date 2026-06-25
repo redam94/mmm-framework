@@ -21,8 +21,6 @@ _MODEL_SPEC_MAX_CHARS = int(os.environ.get("MMM_AGENT_MODEL_SPEC_MAX_CHARS", "16
 # Role preambles + the mode/role-aware prompt assembly now live in prompts.py.
 # Re-exported here so any external reference to the old names keeps working.
 from .prompts import (
-    DELEGATION_PREAMBLE as _DELEGATION_PREAMBLE,
-    EXPERT_PREAMBLE as _EXPERT_PREAMBLE,
     assemble_system_prompt,
 )
 from .modes import DEFAULT_MODE
@@ -68,7 +66,7 @@ def create_agent_graph(
         # We want to give the LLM context of the current state so it can pass
         # `dataset_path` and `model_spec` to tools. Large blobs are capped: they
         # are re-injected every turn and otherwise inflate each request.
-        state_context = f"\n\nCURRENT STATE:\n"
+        state_context = "\n\nCURRENT STATE:\n"
         if state.get("dataset_path"):
             state_context += f"Dataset Path: {state['dataset_path']}\n"
         if state.get("dataset_info"):

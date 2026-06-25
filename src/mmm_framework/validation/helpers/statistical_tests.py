@@ -20,8 +20,7 @@ def _check_statsmodels():
     global _statsmodels_available
     if _statsmodels_available is None:
         try:
-            import statsmodels.stats.diagnostic
-            import statsmodels.stats.stattools
+            import statsmodels.stats.diagnostic  # noqa: F401 - availability probe
 
             _statsmodels_available = True
         except ImportError:
@@ -60,7 +59,6 @@ def durbin_watson_test(
     """
     if not _check_statsmodels():
         # Fallback implementation
-        n = len(residuals)
         dw = np.sum(np.diff(residuals) ** 2) / np.sum(residuals**2)
     else:
         from statsmodels.stats.stattools import durbin_watson

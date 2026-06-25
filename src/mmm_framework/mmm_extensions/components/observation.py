@@ -7,7 +7,7 @@ for different types of data (Gaussian, partial, multivariate, survey).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pymc as pm

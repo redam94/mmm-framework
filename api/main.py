@@ -6,7 +6,6 @@ Provides endpoints for data management, configuration, model fitting, and analys
 """
 
 from contextlib import asynccontextmanager
-from typing import Any
 
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,7 +16,7 @@ from auth import verify_api_key
 from config import Settings, get_settings
 from middleware import RequestLoggingMiddleware
 from rate_limiter import limiter, rate_limit_exceeded_handler
-from redis_service import RedisService, get_redis
+from redis_service import get_redis
 from routes import (
     analysis_plans_router,
     budget_plans_router,
@@ -29,7 +28,7 @@ from routes import (
     sessions_router,
     templates_router,
 )
-from schemas import ErrorResponse, HealthResponse
+from schemas import HealthResponse
 from storage import get_storage
 
 try:

@@ -10,7 +10,6 @@ import warnings
 
 from mmm_framework.config import (
     AdstockConfig,
-    AdstockType,
     CausalControlRole,
     ControlVariableConfig,
     DimensionType,
@@ -20,7 +19,6 @@ from mmm_framework.config import (
     PriorConfig,
     PriorType,
     SaturationConfig,
-    SaturationType,
 )
 
 from .dag_spec import DAGSpec, NodeType

@@ -8,13 +8,11 @@ import json
 import math
 from datetime import datetime, timezone
 from typing import Any
-import uuid
 
 import numpy as np
 from arq import ArqRedis, create_pool
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
-from loguru import logger
 
 from config import Settings, get_settings
 from redis_service import RedisService, get_redis
@@ -317,7 +315,7 @@ async def fit_extended_model(
         overrides["random_seed"] = request.random_seed
 
     # Queue the fitting job
-    job = await arq_pool.enqueue_job(
+    await arq_pool.enqueue_job(
         "fit_extended_model_task",
         model_id,
         request.data_id,

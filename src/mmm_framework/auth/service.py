@@ -11,7 +11,7 @@ from typing import Any
 from . import plans, store
 from .audit import audit_event
 from .config import AuthSettings, get_auth_settings
-from .models import AuthContext, Role, TokenResponse, normalize_email
+from .models import Role, TokenResponse, normalize_email
 from .passwords import hash_password, verify_password
 from .tokens import make_claims, encode_jwt, decode_jwt, InvalidToken
 

@@ -5,13 +5,11 @@ Exposes the SQLite-backed session store from mmm_framework.api.sessions
 as a REST API for the frontend session manager.
 """
 
-from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from auth import verify_api_key
 from mmm_framework.api import sessions as session_store
 from mmm_framework.auth import store as auth_store
 from mmm_framework.auth.deps import ensure_project_access, get_current_principal

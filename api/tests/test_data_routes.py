@@ -3,7 +3,6 @@ Tests for data management API routes.
 """
 
 import io
-import pytest
 from fastapi import status
 
 

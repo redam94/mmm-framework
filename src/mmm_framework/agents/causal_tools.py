@@ -37,7 +37,6 @@ from mmm_framework.dag_model_builder.identification import (
     frontdoor_criterion,
     identification_report,
     iv_criterion,
-    propose_adjustment_set,
     report_to_dict,
 )
 from mmm_framework.dag_model_builder.validation import validate_dag
@@ -221,7 +220,6 @@ def propose_dag(
 
     # Mediators with explicit upstream mapping
     mediator_pairs = _normalize_node_ids(mediators)
-    mediator_name_to_id = {name: nid for nid, name in mediator_pairs}
     media_routed_through_mediator: set[str] = set()
     for med_id, med_name in mediator_pairs:
         nodes.append(

@@ -14,7 +14,7 @@ from .config import PPCConfig
 from .results import PPCCheckResult, PPCResults
 
 if TYPE_CHECKING:
-    import arviz as az
+    pass
 
 
 @runtime_checkable

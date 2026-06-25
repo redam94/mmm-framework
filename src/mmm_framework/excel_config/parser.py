@@ -24,7 +24,6 @@ from ..config import (
     InferenceMethod,
     KPIConfig,
     MediaChannelConfig,
-    MFFColumnConfig,
     MFFConfig,
     ModelConfig,
     ModelSpecification,

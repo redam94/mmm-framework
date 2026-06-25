@@ -2,7 +2,6 @@
 Tests for configuration management API routes.
 """
 
-import pytest
 from fastapi import status
 
 

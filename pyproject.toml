@@ -71,11 +71,13 @@ Repository = "https://github.com/redam94/mmm-framework"
 [dependency-groups]
 dev = [
     "beautifulsoup4>=4.15.0",
+    "black>=24.0.0",
     "ipykernel>=7.1.0",
     "ipywidgets>=8.1.8",
     "mmm-framework",
     "networkx>=3.0",
     "pytest>=9.0.2",
+    "pytest-asyncio>=1.0.0",
     "pytest-cov>=7.0.0",
     "ruff>=0.13.0",
 ]
@@ -95,6 +97,22 @@ docs = [
 
 [tool.uv.sources]
 mmm-framework = { workspace = true }
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+# Default rule set (pyflakes F + a subset of pycodestyle E). Kept deliberately
+# small so the gate is enforceable on this codebase today; ratchet up over time.
+[tool.ruff.lint.per-file-ignores]
+# __init__.py legitimately re-exports names (unused-import / star-import) and
+# orders some imports after package setup.
+"__init__.py" = ["F401", "F403", "E402"]
+# Agent entrypoint modules do module-level setup (env/logging) before imports.
+"src/mmm_framework/agents/tools.py" = ["E402"]
+"src/mmm_framework/agents/causal_tools.py" = ["E402"]
+"src/mmm_framework/agents/graph.py" = ["E402"]
 
 [build-system]
 requires = ["hatchling"]

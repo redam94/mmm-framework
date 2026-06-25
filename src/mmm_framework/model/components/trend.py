@@ -221,8 +221,6 @@ class GPTrendStrategy(BaseTrendStrategy):
         """Build HSGP approximation."""
         from pymc.gp.util import HSGP
 
-        n_obs = len(t_centered)
-
         with model:
             # Lengthscale prior
             ls_mu, ls_sigma = config.gp_lengthscale_prior
@@ -263,7 +261,8 @@ class GPTrendStrategy(BaseTrendStrategy):
         with model:
             # Lengthscale
             ls_mu, ls_sigma = config.gp_lengthscale_prior
-            ls = pm.InverseGamma("trend_gp_ls", alpha=ls_mu, beta=ls_sigma)
+            # RV registered in the model graph (side effect); not referenced here.
+            pm.InverseGamma("trend_gp_ls", alpha=ls_mu, beta=ls_sigma)
 
             # Amplitude
             var_mu, var_sigma = config.gp_variance_prior

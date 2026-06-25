@@ -8,16 +8,15 @@ contributions, and what-if scenarios.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
-from .utils import compute_hdi_bounds
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
-    from .model import BayesianMMM, PredictionResults, ContributionResults
+    from .model import BayesianMMM, ContributionResults
 
 
 @dataclass
@@ -385,13 +384,6 @@ class MMMAnalyzer:
                 random_seed=random_seed,
             )
             scenario_total = scenario_pred.y_pred_mean.sum()
-
-            # Contribution at this spend level
-            contribution = (
-                scenario_total
-                - baseline_total
-                + self._model.X_media_raw[:, ch_idx].sum() * 0
-            )  # Placeholder
 
             results.append(
                 {

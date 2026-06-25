@@ -474,7 +474,7 @@ def _roi_fig(roi: list[dict]) -> dict:
                     "type": "data",
                     "symmetric": False,
                     "array": [h - m for h, m in zip(hi, means)],
-                    "arrayminus": [m - l for m, l in zip(means, lo)],
+                    "arrayminus": [m - lo_i for m, lo_i in zip(means, lo)],
                     "color": "#94a3b8",
                     "thickness": 2,
                     "width": 5,
@@ -654,7 +654,10 @@ def _scurves_fig(curves: dict) -> dict:
 def _mroi_roi_fig(roi: list[dict], mroi: dict, fmt_ch=None) -> dict:
     """Grouped horizontal bar: average ROI vs marginal ROI per channel."""
     if fmt_ch is None:
-        fmt_ch = lambda x: x
+
+        def fmt_ch(x):
+            return x
+
     channels_raw = [r["channel"] for r in roi]
     channels_display = [fmt_ch(ch) for ch in channels_raw]
     avg_rois = [r.get("roi_mean", 0) for r in roi]
@@ -837,7 +840,6 @@ def generate_html_report(
     ]
     kpi: str = model_run.get("kpi") or model_spec.get("kpi") or "KPI"
     rows_val = dataset.get("rows")
-    date_range = dataset.get("date_range") or {}
 
     # ── Derive key findings for exec summary ─────────────────────────────────
 
@@ -989,7 +991,7 @@ def generate_html_report(
             not in ("baseline", "trend", "seasonality", "controls")
         ]
 
-        decomp_chart = f'<div class="chart-card"><div class="chart-title">KPI Decomposition</div><div id="chart-decomp" style="height:380px"></div></div>'
+        decomp_chart = '<div class="chart-card"><div class="chart-title">KPI Decomposition</div><div id="chart-decomp" style="height:380px"></div></div>'
 
         ch_cards = ""
         for i, d in enumerate(media_components):
@@ -1044,7 +1046,7 @@ def generate_html_report(
     if roi:
         roi_sorted = sorted(roi, key=lambda x: x.get("roi_mean", 0), reverse=True)
 
-        roi_chart = f'<div class="chart-card"><div class="chart-title">Channel ROI (94% Credible Interval)</div><div id="chart-roi" style="height:380px"></div></div>'
+        roi_chart = '<div class="chart-card"><div class="chart-title">Channel ROI (94% Credible Interval)</div><div id="chart-roi" style="height:380px"></div></div>'
 
         roi_cards = ""
         for r in roi_sorted:
@@ -1114,7 +1116,7 @@ def generate_html_report(
   {roi_insight}
 </section>"""
     else:
-        roi_section = f"""
+        roi_section = """
 <section class="section" id="roi">
   <span class="section-label">Performance</span>
   <h2>Channel Return on Investment</h2>
@@ -1172,7 +1174,7 @@ def generate_html_report(
   {prior_callout}
 </section>"""
     else:
-        diag_section = f"""
+        diag_section = """
 <section class="section" id="diagnostics">
   <span class="section-label">Validation</span>
   <h2>Model Health</h2>

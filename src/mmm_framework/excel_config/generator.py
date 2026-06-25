@@ -16,12 +16,11 @@ import numpy as np
 import pandas as pd
 from openpyxl import Workbook
 
-from ..config import DimensionType, MFFColumnConfig, VariableRole
+from ..config import MFFColumnConfig, VariableRole
 from .heuristics import VariableStats, classify_variable, generate_display_name
 from .styles import (
     ROLE_FILLS,
     THIN_BORDER,
-    WRAP_ALIGNMENT,
     Fills,
     Fonts,
     auto_fit_columns,

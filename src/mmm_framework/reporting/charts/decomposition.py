@@ -12,7 +12,6 @@ import pandas as pd
 from ..config import ChartConfig, ColorScheme, ReportConfig
 from .base import (
     _dates_to_strings,
-    _hex_to_rgb,
     create_plotly_div,
 )
 

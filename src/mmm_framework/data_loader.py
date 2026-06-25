@@ -20,7 +20,6 @@ from .config import (
     MediaChannelConfig,
     MFFConfig,
     VariableConfig,
-    VariableRole,
     MFFColumnConfig,
 )
 
@@ -1050,7 +1049,7 @@ def extract_with_nan_tracking(
     var_data[cols.period] = pd.to_datetime(var_data[cols.period])
 
     # Track which rows have explicit NaN values BEFORE any filling
-    explicit_nan_rows = var_data[cols.variable_value].isna()
+    _explicit_nan_rows = var_data[cols.variable_value].isna()
 
     # Set index on the variable data
     if len(index_cols) == 1:

@@ -62,21 +62,7 @@ def _activate_thread(config) -> str:
 
 
 from mmm_framework import (
-    MFFConfigBuilder,
-    KPIConfigBuilder,
-    MediaChannelConfigBuilder,
-    ControlVariableConfigBuilder,
-    ModelConfigBuilder,
-    TrendConfigBuilder,
-    PriorConfigBuilder,
-    BayesianMMM,
     load_mff,
-)
-from mmm_framework.builders.model import SeasonalityConfigBuilder
-from mmm_framework.builders.prior import (
-    PriorConfigBuilder,
-    AdstockConfigBuilder,
-    SaturationConfigBuilder,
 )
 
 
@@ -85,7 +71,6 @@ from mmm_framework.builders.prior import (
 
 
 from mmm_framework.reporting.helpers import (
-    generate_model_summary,
     compute_saturation_curves_with_uncertainty,
     compute_marginal_roi,
 )
@@ -5168,7 +5153,7 @@ def delegate_to_expert(
 # REST `POST /model-garden` endpoint; re-exported here for the tool + tests.
 from mmm_framework.agents.garden_registry import (  # noqa: E402
     register_garden_model_core as _register_garden_model_core,
-    static_class_name as _garden_static_class_name,
+    static_class_name as _garden_static_class_name,  # noqa: F401 - re-exported for tests
 )
 
 

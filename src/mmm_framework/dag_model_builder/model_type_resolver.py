@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from .dag_spec import DAGSpec, EdgeType, NodeType
+from .dag_spec import DAGSpec, EdgeType
 
 
 class ModelType(str, Enum):
