@@ -550,6 +550,13 @@ def validate_causal_identification(
                 "front-door formula, even without measuring the treatment-outcome "
                 "confounders."
             )
+            lines.append(
+                "  - ⚠️ Identifiable *in principle* only: the framework does NOT "
+                "estimate via the front-door formula. The fitted model is the "
+                "**back-door additive estimator**, so the delivered number is NOT "
+                "the front-door estimate — if treatment–outcome confounding is real, "
+                "treat that number with caution and validate with an experiment."
+            )
         else:
             for note in fd.notes:
                 lines.append(f"  - {note}")
@@ -560,6 +567,12 @@ def validate_causal_identification(
     if spec.has_instruments:
         lines.append("")
         lines.append("**Instrumental-variable check:**")
+        lines.append(
+            "  - ⚠️ Instruments are used ONLY for this identification check — the "
+            "framework does NOT run 2SLS/IV estimation. A 'valid' verdict means the "
+            "effect is IV-identifiable in principle; the delivered estimate is still "
+            "the back-door additive model, not an IV estimate."
+        )
         for z in spec.instrument_nodes:
             iv = iv_criterion(spec, z.id, t_id, y_id)
             verdict = "✅ valid" if iv.identifiable else "❌ invalid"
