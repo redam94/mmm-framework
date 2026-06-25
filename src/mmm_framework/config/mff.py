@@ -95,6 +95,15 @@ class MFFConfig(BaseModel):
     fill_missing_media: float = 0.0
     fill_missing_controls: float | None = None  # None = forward fill
 
+    # Duplicate-row handling. A "duplicate" is two raw rows sharing the FULL MFF
+    # key (period + every dimension column) for the same variable -- i.e. the same
+    # cell measured twice (join fan-out / re-delivery), which must NOT be silently
+    # summed. Rows that differ on a dimension the model does not split on are
+    # legitimate finer granularity and are always aggregated up.
+    #   "error" (default) -> raise and list the offending keys
+    #   "sum" / "mean" / "first" -> combine the duplicated cells that way
+    duplicate_policy: Literal["error", "sum", "mean", "first"] = "error"
+
     model_config = {"extra": "forbid"}
 
     @property
