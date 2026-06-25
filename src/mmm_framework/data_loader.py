@@ -609,9 +609,12 @@ class MFFLoader:
         # Set index on variable data
         var_series = var_data.set_index(var_index_cols)[cols.variable_value]
 
-        # Case 1: Same dimensions - direct reindex
+        # Case 1: Same dimensions - direct reindex. Return WITH NaN for missing
+        # cells; the caller fills (per fill_missing_*) and surfaces how much was
+        # filled. (Previously this hardcoded fillna(0), which both hid the gaps
+        # AND made fill_missing_media/_controls ineffective.)
         if set(var_dims) == set(target_dims):
-            return var_series.reindex(target_index).fillna(0)
+            return var_series.reindex(target_index)
 
         # Case 2: Disaggregation needed - build full cross-product expansion
         expand_geos = target_has_geo and not var_has_geo
@@ -705,8 +708,9 @@ class MFFLoader:
             group_levels = [n for n in var_series.index.names if n != cols.product]
             var_series = var_series.groupby(level=group_levels).sum()
 
-        # Final reindex to target
-        return var_series.reindex(target_index).fillna(0)
+        # Final reindex to target. Return WITH NaN for missing cells; the caller
+        # fills (per fill_missing_*) and surfaces how much was filled.
+        return var_series.reindex(target_index)
 
     def build_panel(self) -> PanelDataset:
         """
@@ -753,6 +757,26 @@ class MFFLoader:
         periods = kpi_data[cols.period].unique()
         periods = pd.DatetimeIndex(sorted(periods))
 
+        # Surface a non-contiguous KPI series: gaps silently shorten the series
+        # and distort adstock/trend. The fit-path EDA gate blocks on this, but
+        # warn at load time too so direct load_mff users are not caught out.
+        if len(periods) >= 3:
+            try:
+                expected = generate_complete_date_range(
+                    periods.min(), periods.max(), self.config.frequency
+                )
+                missing_periods = expected.difference(periods)
+                if len(missing_periods):
+                    sample = [str(d.date()) for d in missing_periods[:3]]
+                    warnings.warn(
+                        f"KPI '{self.config.kpi.name}' has {len(missing_periods)} "
+                        f"missing period(s) at frequency '{self.config.frequency}' "
+                        f"(e.g. {sample}); the series is non-contiguous, which "
+                        "distorts adstock carryover and trend estimation."
+                    )
+            except Exception:  # noqa: BLE001 - contiguity check is best-effort
+                pass
+
         geos = None
         if self.config.kpi.has_geo:
             geos = sorted(kpi_data[cols.geography].unique().tolist())
@@ -779,8 +803,19 @@ class MFFLoader:
                 var_data, media_config, target_index
             )
 
-            # Fill missing media with configured value
+            # Surface (don't silently swallow) gap-filling: count the cells that
+            # were missing in the source and are about to be filled.
+            n_missing = int(aligned.isna().sum())
+            n_total = max(len(aligned), 1)
             aligned = aligned.fillna(self.config.fill_missing_media)
+            if n_missing:
+                warnings.warn(
+                    f"Media '{media_config.name}': {n_missing} of {n_total} cell(s) "
+                    f"({n_missing / n_total * 100:.1f}%) were missing and filled with "
+                    f"fill_missing_media={self.config.fill_missing_media}. Treating "
+                    "absent spend rows as zero affects adstock carryover — confirm "
+                    "they are truly zero-spend periods."
+                )
 
             media_series[media_config.name] = aligned
             media_stats[media_config.name] = {
@@ -788,6 +823,8 @@ class MFFLoader:
                 "mean": float(aligned.mean()),
                 "std": float(aligned.std()),
                 "nonzero_pct": float((aligned > 0).mean()),
+                "filled_count": n_missing,
+                "filled_pct": float(n_missing / n_total),
             }
 
         X_media = pd.DataFrame(media_series)
@@ -804,11 +841,19 @@ class MFFLoader:
                     var_data, control_config, target_index
                 )
 
-                # Fill missing controls
+                # Fill missing controls (surfacing how much was filled)
+                n_missing = int(aligned.isna().sum())
                 if self.config.fill_missing_controls is not None:
                     aligned = aligned.fillna(self.config.fill_missing_controls)
+                    how = f"fill value {self.config.fill_missing_controls}"
                 else:
                     aligned = aligned.ffill().bfill()
+                    how = "forward/backward fill"
+                if n_missing:
+                    warnings.warn(
+                        f"Control '{control_config.name}': {n_missing} missing "
+                        f"cell(s) filled via {how}."
+                    )
 
                 control_series[control_config.name] = aligned
 
