@@ -31,17 +31,16 @@ uv run sphinx-build -b html docs/api/source docs/api/build/html
 
 # Start the application
 
-## Option 1: Streamlit UI (legacy)
+## Option 1: React UI (modern, supported) — talks to the agent API
+# The agent API runs fits in-kernel, so no Redis/ARQ worker is required.
+uv run uvicorn mmm_framework.api.main:app --host 0.0.0.0 --port 8000 --reload  # Terminal 1: Agent API
+cd frontend && npm run dev                # Terminal 2: React UI (Vite, port 5173, proxies /api → :8000)
+
+## Option 2: Streamlit UI (legacy, deprecated) — targets the separate legacy REST API (api/main.py)
 redis-server                              # Terminal 1: Start Redis
-cd api && uvicorn main:app --reload       # Terminal 2: FastAPI backend (port 8000)
+cd api && uvicorn main:app --reload       # Terminal 2: legacy REST API (port 8000)
 cd api && arq worker.WorkerSettings       # Terminal 3: ARQ worker
 cd app && streamlit run Home.py           # Terminal 4: Streamlit UI (port 8501)
-
-## Option 2: React UI (modern)
-redis-server                              # Terminal 1: Start Redis
-cd api && uvicorn main:app --reload       # Terminal 2: FastAPI backend (port 8000)
-cd api && arq worker.WorkerSettings       # Terminal 3: ARQ worker
-cd frontend && npm run dev                # Terminal 4: React UI (Vite)
 
 # Run example
 uv run python examples/ex_model_workflow.py
