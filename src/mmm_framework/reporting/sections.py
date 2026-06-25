@@ -873,6 +873,30 @@ class MethodologySection(Section):
 
         content_parts = []
 
+        # Always disclose the load-bearing default-prior assumption: channel
+        # effects use a non-negative prior, so a channel cannot be shown to have a
+        # negative/zero effect from observational data alone.
+        content_parts.append(
+            """
+                <div class="methodology-note">
+                    <h4>Default prior assumption — read before reallocating</h4>
+                    <p>
+                        Unless a channel is calibrated against an experiment, its
+                        effect uses a <strong>non-negative prior</strong> (Gamma,
+                        placing more mass on ROI&nbsp;&gt;&nbsp;1). This regularises
+                        noisy observational data, but it means a channel
+                        <strong>cannot be shown to have a negative or zero effect
+                        from the model alone</strong> — a genuinely under-performing
+                        channel is pulled toward a small positive effect rather than
+                        flagged as a loser. To let a channel express a negative
+                        effect, set a symmetric prior (e.g. Normal) on its
+                        <code>roi_prior</code>, or run an incrementality experiment
+                        to calibrate it.
+                    </p>
+                </div>
+            """
+        )
+
         # Model specification
         if self.data.model_specification:
             spec = self.data.model_specification
