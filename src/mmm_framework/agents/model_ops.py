@@ -297,6 +297,17 @@ def budget_scenario(
         content = (
             f"### Budget scenario\nApplied: {changes}\n```json\n{text[:4000]}\n```"
         )
+        if isinstance(result, dict) and "outcome_change_hdi" in result:
+            hdi = result["outcome_change_hdi"]
+            pct = int(round(result.get("hdi_prob", 0.94) * 100))
+            p = result.get("prob_positive")
+            content += (
+                f"\n\n**Outcome change:** {result.get('outcome_change', 0):,.0f} "
+                f"({pct}% credible interval [{hdi[0]:,.0f}, {hdi[1]:,.0f}]; "
+                f"P(scenario beats baseline) = {p:.0%}, {result.get('n_draws')} "
+                "paired posterior draws). A point estimate alone is not "
+                "decision-grade."
+            )
         res = _ok(content, {})
         if isinstance(result, dict) and result:
             rows = [
