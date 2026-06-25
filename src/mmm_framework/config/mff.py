@@ -94,6 +94,9 @@ class MFFConfig(BaseModel):
     # Missing value handling
     fill_missing_media: float = 0.0
     fill_missing_controls: float | None = None  # None = forward fill
+    # RaggedMFFLoader: preserve values that were EXPLICITLY missing (NaN) in the
+    # source rather than filling them, tracking them in PanelDataset.explicit_nan_mask.
+    preserve_explicit_nan: bool = True
 
     # Duplicate-row handling. A "duplicate" is two raw rows sharing the FULL MFF
     # key (period + every dimension column) for the same variable -- i.e. the same
