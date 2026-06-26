@@ -1093,6 +1093,24 @@ class BayesianMMM:
             return media_cfg.saturation
         return SaturationConfig.logistic()
 
+    def _build_channel_betas_geo(self, channel_name: str) -> "pt.TensorVariable":
+        """Per-geo channel effectiveness via a non-centered partial-pooled
+        hierarchy on the LOG scale (positive, shrinks toward the population mean
+        when geos are similar). Returns the per-geo coefficient vector, exposed as
+        the Deterministic ``beta_{channel}`` (shape ``n_geos``). V3.
+
+        Must be called inside the ``pm.Model`` context.
+        """
+        hc = self.hierarchical_config
+        logmu = pm.Normal(
+            f"beta_{channel_name}_logmu", mu=float(np.log(1.5)), sigma=0.5
+        )
+        logtau = pm.HalfNormal(
+            f"beta_{channel_name}_logtau", sigma=float(hc.media_geo_sigma)
+        )
+        z = pm.Normal(f"beta_{channel_name}_z", mu=0.0, sigma=1.0, shape=self.n_geos)
+        return pm.Deterministic(f"beta_{channel_name}", pt.exp(logmu + logtau * z))
+
     def _build_channel_saturation(
         self, channel_name: str
     ) -> tuple[SaturationType, dict[str, Any]]:
@@ -1465,17 +1483,32 @@ class BayesianMMM:
                 # (encouraging ROI > 1x).
                 media_cfg = self.mff_config.get_media_config(channel_name)
                 roi_prior = getattr(media_cfg, "roi_prior", None)
-                beta = _sample_from_prior_config(
-                    f"beta_{channel_name}",
-                    roi_prior,
-                    lambda: pm.Gamma(f"beta_{channel_name}", mu=1.5, sigma=1.0),
-                )
-                channel_contrib = beta * x_saturated
+                # V3: per-geo (partial-pooled) effectiveness when enabled + geo data
+                # and no experiment-calibrated prior. `beta_eff` is per-obs (so
+                # contributions/marginals are geo-correct); `beta_pop` is a scalar
+                # population summary for the off-panel (national) estimand.
+                if (
+                    self.has_geo
+                    and getattr(self.hierarchical_config, "vary_media_by_geo", False)
+                    and roi_prior is None
+                ):
+                    beta_geo = self._build_channel_betas_geo(channel_name)
+                    beta_eff = beta_geo[geo_idx_data]
+                    beta_pop = pt.mean(beta_geo)
+                else:
+                    beta_eff = _sample_from_prior_config(
+                        f"beta_{channel_name}",
+                        roi_prior,
+                        lambda: pm.Gamma(f"beta_{channel_name}", mu=1.5, sigma=1.0),
+                    )
+                    beta_pop = beta_eff
+                channel_contrib = beta_eff * x_saturated
                 channel_contribs.append(channel_contrib)
 
                 channel_handles[channel_name] = {
                     "index": c,
-                    "beta": beta,
+                    "beta": beta_eff,
+                    "beta_pop": beta_pop,
                     "sat_kind": sat_kind,
                     "sat_params": sat_params,
                     # Back-compat alias (None unless logistic).
@@ -1768,7 +1801,9 @@ class BayesianMMM:
         above the training max is honest extrapolation of the fitted curve).
         """
         ch_idx = handle["index"]
-        beta = handle["beta"]
+        # Off-panel estimand is national/scalar: use the population beta (a scalar
+        # even under per-geo effectiveness, where handle["beta"] is per-obs). V3.
+        beta = handle.get("beta_pop", handle["beta"])
         sat_kind = handle["sat_kind"]
         sat_params = handle["sat_params"]
         weights = handle.get("adstock_weights")
@@ -2197,9 +2232,7 @@ class BayesianMMM:
         with self.model:
             if self.use_parametric_adstock:
                 saved["X_media_raw"] = self.model["X_media_raw"].get_value()
-                pm.set_data(
-                    {"X_media_raw": self._prepare_raw_media_for_model(X_media)}
-                )
+                pm.set_data({"X_media_raw": self._prepare_raw_media_for_model(X_media)})
             else:
                 saved["X_media_low"] = self.model["X_media_low"].get_value()
                 saved["X_media_high"] = self.model["X_media_high"].get_value()
