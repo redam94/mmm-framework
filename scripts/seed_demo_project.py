@@ -361,12 +361,13 @@ def _seed_chat(thread_id: str, turns: list[tuple[str, str]], extras: dict) -> No
         from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
         from mmm_framework.agents.graph import create_agent_graph
+        from mmm_framework.agents.serde import MsgpackSafeSerializer
         from mmm_framework.api import sessions as store
         from mmm_framework.api.main import safe_json_dumps_load
 
         conn = await aiosqlite.connect(str(store.DB_PATH))
         try:
-            memory = AsyncSqliteSaver(conn)
+            memory = AsyncSqliteSaver(conn, serde=MsgpackSafeSerializer())
             await memory.setup()
             graph = create_agent_graph(_StubLLM(), checkpointer=memory)
             messages = [

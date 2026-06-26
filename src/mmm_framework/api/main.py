@@ -29,6 +29,7 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from mmm_framework.agents.graph import create_agent_graph
+from mmm_framework.agents.serde import MsgpackSafeSerializer
 from mmm_framework.agents.spec_locks import apply_spec_patch, is_spec_patch
 from mmm_framework.api import sessions as sessions_store
 from mmm_framework.auth import store as auth_store
@@ -213,7 +214,10 @@ async def lifespan(app: FastAPI):
     await _aiosqlite_conn.execute("PRAGMA journal_mode=WAL")
     await _aiosqlite_conn.execute("PRAGMA synchronous=NORMAL")
     await _aiosqlite_conn.commit()
-    memory = AsyncSqliteSaver(_aiosqlite_conn)
+    # MsgpackSafeSerializer backstops the checkpoint: a stray numpy scalar / pandas
+    # object that a tool folds into AgentState would otherwise crash the thread
+    # ("Type is not msgpack serializable: numpy.float64"). See agents/serde.py.
+    memory = AsyncSqliteSaver(_aiosqlite_conn, serde=MsgpackSafeSerializer())
     await memory.setup()
     sessions_store.init_db()
     # Org/tenant auth: schema + optional bootstrap owner + one-time backfill of

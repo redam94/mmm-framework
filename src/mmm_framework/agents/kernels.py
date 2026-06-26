@@ -196,12 +196,27 @@ _TABLE_MIME = "application/vnd.mmm-table+json"
 
 
 def _json_safe(o):
-    """Recursively coerce a value to strict-JSON-safe form: non-finite floats
-    (NaN/Inf, e.g. from an HDI on empty samples) -> None, numpy scalars ->
-    python. Applied to a model-op result so the dashboard payload is clean for
-    the frontend regardless of which kernel produced it."""
+    """Recursively coerce a value to strict-JSON-safe form: numpy scalars ->
+    python, non-finite floats (NaN/Inf, e.g. from an HDI on empty samples) ->
+    None. Applied to a model-op result so the dashboard payload is clean for the
+    frontend AND so the LangGraph checkpointer (ormsgpack, no pickle fallback)
+    can persist the agent state regardless of which kernel produced it."""
     import math
 
+    # numpy scalar (np.float64/np.float32/np.int64/np.bool_/np.datetime64/...) or a
+    # 0-d / size-1 array -> recurse on its python value. This MUST precede the
+    # bool/float branches: np.float64 IS a subclass of `float`, so an
+    # `isinstance(o, float)` check would otherwise return it UNCHANGED (still
+    # numpy), and a bare np.float64 then crashes the msgpack checkpoint. Keep the
+    # guard exactly `(str, bytes, int)` — adding `float` re-introduces that bug,
+    # and native float/bool/int have no `.item()` so they never reach here anyway.
+    # Multi-element arrays: `.item()` raises -> the except leaves the ndarray
+    # as-is (ormsgpack serializes ndarrays via an EXT type; don't listify them).
+    if hasattr(o, "item") and not isinstance(o, (str, bytes, int)):  # numpy scalar
+        try:
+            return _json_safe(o.item())
+        except Exception:
+            return o
     if isinstance(o, bool):
         return o
     if isinstance(o, float):
@@ -210,11 +225,6 @@ def _json_safe(o):
         return {k: _json_safe(v) for k, v in o.items()}
     if isinstance(o, (list, tuple)):
         return [_json_safe(v) for v in o]
-    if hasattr(o, "item") and not isinstance(o, (str, bytes, int)):  # numpy scalar
-        try:
-            return _json_safe(o.item())
-        except Exception:
-            return o
     return o
 
 
