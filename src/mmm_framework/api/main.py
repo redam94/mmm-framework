@@ -2858,6 +2858,128 @@ async def get_experiment_simulation(project_id: str, job_id: str):
     return JSONResponse(content=safe_json_dumps_load(art["payload"]))
 
 
+# ── Model validation runner (Phase 2) ────────────────────────────────────────
+# One-click, no-LLM validation: load the project's latest saved model in the
+# background, run a validation op directly (the same ops the chat agent's
+# validate_model / run_* tools use), and persist the full result (markdown
+# verdict + content-addressed table/plot refs) for the Validation UI to poll.
+
+#: check -> (op_name, op_kwargs). Mirrors the Phase-1 agent tools.
+_VALIDATION_CHECKS: dict[str, tuple[str, dict]] = {
+    "validate": ("validate_model", {}),
+    "ppc": ("posterior_predictive_checks", {}),
+    "residuals": ("residual_diagnostics", {}),
+    "channels": ("channel_diagnostics", {}),
+    "refutation": ("refutation_suite", {}),
+    "cross_validation": ("cross_validation", {}),
+}
+
+
+class ValidationRunRequest(BaseModel):
+    check: str = "validate"
+
+
+async def _run_validation_job(
+    job_id: str, synthetic_tid: str, run: dict | None, op_name: str, op_kwargs: dict
+) -> None:
+    """Run a validation op in the background and persist the FULL result —
+    markdown content + content-addressed table/plot refs the UI fetches by id.
+    Never lets the job vanish: a raising worker writes status='error'."""
+    try:
+        _sim_job_patch(job_id, status="running")
+        if not run or not run.get("run_name"):
+            _sim_job_patch(
+                job_id,
+                status="error",
+                error="No saved model run for this project — fit a model first.",
+            )
+            return
+        res = await asyncio.to_thread(
+            _load_and_run_op,
+            synthetic_tid,
+            run.get("run_name"),
+            run.get("spec"),
+            run.get("dataset_path"),
+            op_name,
+            op_kwargs,
+        )
+        if res.get("error"):
+            _sim_job_patch(job_id, status="error", error=res["error"])
+            return
+        from mmm_framework.agents.tables import publish_tables
+        from mmm_framework.agents.tools import _publish_modelop_plots
+
+        dd: dict = {}
+        table_refs: list = []
+        if res.get("tables"):
+            table_refs, _ = publish_tables(res["tables"], dd, synthetic_tid)
+        if res.get("plots"):
+            _publish_modelop_plots(res["plots"], dd, synthetic_tid)
+        result = {
+            "content": res.get("content"),
+            "tables": table_refs,
+            "plots": dd.get("plots", []),
+        }
+        _sim_job_patch(job_id, status="done", result=safe_json_dumps_load(result))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Validation job failed (%s): %s", op_name, job_id)
+        _sim_job_patch(job_id, status="error", error=str(e))
+
+
+@app.post(
+    "/projects/{project_id}/validate",
+    dependencies=[_proj_write, _rl_heavy],
+)
+async def start_model_validation(project_id: str, body: ValidationRunRequest):
+    """Start a NON-BLOCKING validation run on the project's latest saved model.
+    ``check`` selects which validation to run (validate / ppc / residuals /
+    channels / refutation / cross_validation). Poll the returned job_id."""
+    from mmm_framework.api.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    check = (body.check or "validate").lower()
+    if check not in _VALIDATION_CHECKS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown check '{check}'. Valid: {', '.join(_VALIDATION_CHECKS)}.",
+        )
+    op_name, op_kwargs = _VALIDATION_CHECKS[check]
+    run = latest_model_run_payload(project_id)
+
+    synthetic_tid = f"__valjobs__{project_id}"
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        "model_validation",
+        {
+            "status": "pending",
+            "project_id": project_id,
+            "check": check,
+            "result": None,
+            "error": None,
+        },
+    )
+    job_id = job["id"]
+    _spawn_job_task(_run_validation_job(job_id, synthetic_tid, run, op_name, op_kwargs))
+    return JSONResponse(
+        status_code=202, content={"job_id": job_id, "status": "pending"}
+    )
+
+
+@app.get(
+    "/projects/{project_id}/validate/{job_id}",
+    dependencies=[_proj_read],
+)
+async def get_model_validation(project_id: str, job_id: str):
+    """Poll a validation job: {status, check, result|null, error|null}. ``result``
+    is {content, tables:[ref], plots:[ref]} — fetch refs via /tables/{id} and
+    /plots/{id}."""
+    art = sessions_store.get_artifact(job_id)
+    if art is None or (art.get("payload") or {}).get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Validation job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
 # ── Model Garden registry (org-scoped) ───────────────────────────────────────
 # Backs the Atelier UI + governance: register (from the editor), discover,
 # re-test, the human PUBLISH gate, and retirement. Registration shares its core
@@ -3004,7 +3126,7 @@ def _merge_lint_problems(
 
 @app.post("/model-garden/lint")
 async def garden_lint_endpoint(body: GardenSourceRequest, principal: PrincipalDep):
-    """"Problems" check for the Atelier editor: real Python diagnostics (ruff —
+    """ "Problems" check for the Atelier editor: real Python diagnostics (ruff —
     undefined names, unused imports, redefinitions, syntax, with line/column
     spans) merged with the AST-only garden-contract conventions. Neither path
     executes the source. Analyst+ role."""
