@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Activity, BarChart2, BookOpen, Database, Download,
   ExternalLink, Layers, Maximize2, Minimize2, Network,
-  SlidersHorizontal, TestTubes,
+  ShieldCheck, SlidersHorizontal, TestTubes,
 } from 'lucide-react';
 import {
   WorkflowChecklist, AssumptionsLog, DataFilesWidget, useCausalPanels,
@@ -31,6 +31,7 @@ import { DatasetRolesWidget } from '../widgets/DatasetRolesWidget';
 import { useExperimentRegistry } from '../../../../api/hooks/useMeasurement';
 import { useGardenModel } from '../../../../api/hooks/useModelGarden';
 import { EdaTab } from './EdaTab';
+import { ValidationTab } from './ValidationTab';
 import type { ModelingMode } from '../../../../api/services/sessionService';
 import type { Artifact, DashboardData, ModelSpec, OutlierAction, PythonOutput } from '../../types';
 
@@ -148,6 +149,8 @@ export function WorkspaceTabs({
             { id: 'results',   label: 'Results',   icon: <BarChart2 size={14} />,
               badge: (dashboardData.plots?.length || 0) > 0 ? String(dashboardData.plots.length) : null,
               dot: modelCompleted || hasDecomp || !!dashboardData.roi_metrics },
+            { id: 'validation', label: 'Validation', icon: <ShieldCheck size={14} />,
+              dot: modelCompleted },
             // Experiments are an MMM-only surface (lift tests on media channels);
             // hidden in the general / causal / descriptive modes.
             ...(isMmm ? [{ id: 'experiments', label: 'Experiments', icon: <TestTubes size={14} />,
@@ -466,6 +469,8 @@ export function WorkspaceTabs({
               )}
             </>
           )}
+
+          {activeTab === 'validation' && <ValidationTab projectId={projectId} />}
 
           {activeTab === 'library' && (
             <>
