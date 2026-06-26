@@ -347,3 +347,54 @@ def test_compute_estimands_op_still_works():
     rows = res["dashboard"]["estimands"]
     assert any(r["estimand"] == "contribution_roi" for r in rows)
     assert res["tables"]  # a table is attached
+
+
+# ---------------------------------------------------------------------------
+# end-to-end: fit-time persistence (block 8d) + grouping against a real fit
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.slow
+def test_fit_persists_estimands_and_endpoint_groups_them(tmp_path):
+    """A real fit through build_and_fit must stamp estimand rows + model_kind on
+    the model_run record; seeding that record into the store and hitting the
+    grouping must surface a contribution_roi cluster on the KPI."""
+    from mmm_framework.agents.fitting import build_and_fit
+    from mmm_framework.synth import generate_mff
+
+    df, _ = generate_mff("realistic", seed=5, n_weeks=120)  # national
+    path = str(tmp_path / "nat.csv")
+    df.to_csv(path, index=False)
+    spec = {
+        "kpi": "Sales",
+        "media_channels": [{"name": n} for n in ["TV", "Search", "Social"]],
+        "control_variables": [],
+        "inference": {"draws": 60, "tune": 60, "chains": 2, "random_seed": 0},
+        "seasonality": {"yearly": 2},
+        "trend": {"type": "linear"},
+    }
+    _, _, info = build_and_fit(spec, path)
+
+    mr = info["model_run"]
+    assert mr.get("model_kind") == "mmm"
+    rows = mr.get("estimands")
+    assert rows, f"fit did not persist estimands: {mr.get('estimands_error')}"
+    assert any(r["estimand"] == "contribution_roi" for r in rows)
+
+    # The persisted rows flow through the grouping exactly like the endpoint.
+    out = E.group_estimands(
+        [
+            {
+                "run_id": mr["run_id"],
+                "label": mr["run_id"],
+                "model_kind": mr["model_kind"],
+                "model_key": E._model_key("mmm", "Sales", mr["channels"]),
+                "kpi": "Sales",
+                "created_at": 1.0,
+                "estimands": rows,
+            }
+        ]
+    )
+    roi = [g for g in out["groups"] if g["estimand"] == "contribution_roi"]
+    assert roi and roi[0]["kpi"] == "Sales"
+    assert "TV" in roi[0]["channels"]
