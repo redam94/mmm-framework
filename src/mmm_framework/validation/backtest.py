@@ -535,7 +535,9 @@ class PosteriorForecaster:
 
         if include_noise and self._sigma is not None:
             rng = np.random.default_rng(random_seed)
-            mu_obs = mu_obs + rng.normal(0.0, 1.0, size=mu_obs.shape) * self._sigma[None, :]
+            mu_obs = (
+                mu_obs + rng.normal(0.0, 1.0, size=mu_obs.shape) * self._sigma[None, :]
+            )
 
         return (mu_obs * model.y_std + model.y_mean).T  # (n_samples, n_pos)
 

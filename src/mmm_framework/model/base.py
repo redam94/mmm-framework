@@ -1102,14 +1102,14 @@ class BayesianMMM:
         Must be called inside the ``pm.Model`` context.
         """
         hc = self.hierarchical_config
-        logmu = pm.Normal(f"beta_{channel_name}_logmu", mu=float(np.log(1.5)), sigma=0.5)
+        logmu = pm.Normal(
+            f"beta_{channel_name}_logmu", mu=float(np.log(1.5)), sigma=0.5
+        )
         logtau = pm.HalfNormal(
             f"beta_{channel_name}_logtau", sigma=float(hc.media_geo_sigma)
         )
         z = pm.Normal(f"beta_{channel_name}_z", mu=0.0, sigma=1.0, shape=self.n_geos)
-        return pm.Deterministic(
-            f"beta_{channel_name}", pt.exp(logmu + logtau * z)
-        )
+        return pm.Deterministic(f"beta_{channel_name}", pt.exp(logmu + logtau * z))
 
     def _build_channel_saturation(
         self, channel_name: str
@@ -2232,9 +2232,7 @@ class BayesianMMM:
         with self.model:
             if self.use_parametric_adstock:
                 saved["X_media_raw"] = self.model["X_media_raw"].get_value()
-                pm.set_data(
-                    {"X_media_raw": self._prepare_raw_media_for_model(X_media)}
-                )
+                pm.set_data({"X_media_raw": self._prepare_raw_media_for_model(X_media)})
             else:
                 saved["X_media_low"] = self.model["X_media_low"].get_value()
                 saved["X_media_high"] = self.model["X_media_high"].get_value()
