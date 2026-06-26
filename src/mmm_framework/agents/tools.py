@@ -65,7 +65,6 @@ from mmm_framework import (
     load_mff,
 )
 
-
 # _build_prior + _mff_config_from_spec moved to agents/fitting.py (kernel-importable,
 # no cycle) alongside build_and_fit; imported below.
 
@@ -910,8 +909,9 @@ def _modelop_command(res: dict, state: dict, tool_call_id) -> Command:
     content = res["content"]
     dash = res.get("dashboard") or {}
     tables = res.get("tables") or []
+    plots = res.get("plots") or []
     update: dict = {}
-    if dash or tables:
+    if dash or tables or plots:
         dashboard_data = dict(state.get("dashboard_data") or {})
         dashboard_data.update(dash)
         if tables:
@@ -919,9 +919,54 @@ def _modelop_command(res: dict, state: dict, tool_call_id) -> Command:
 
             refs, dropped = publish_tables(tables, dashboard_data, get_current_thread())
             content += tables_note(refs, dropped)
+        if plots:
+            content += _publish_modelop_plots(
+                plots, dashboard_data, get_current_thread()
+            )
         update["dashboard_data"] = dashboard_data
     update["messages"] = [ToolMessage(content=content, tool_call_id=tool_call_id)]
     return Command(update=update)
+
+
+def _publish_modelop_plots(plots: list, dashboard_data: dict, thread_id) -> str:
+    """Store model-op plot dicts (``[{title, figure}]``) as content-addressed refs
+    in ``dashboard_data['plots']`` (branding applied), mirroring the
+    ``execute_python`` plot path so a model-op can return themed figures across
+    the kernel boundary. Returns a short note for the tool message."""
+    from mmm_framework.agents import workspace as _ws
+    from mmm_framework.agents.branding import (
+        apply_brand_colors,
+        is_active as _brand_active,
+        resolve_branding,
+    )
+
+    existing = dashboard_data.get("plots", [])
+    refs: list[dict] = []
+    dropped = 0
+    branding = resolve_branding(thread_id)
+    for p in plots:
+        fig = p.get("figure") if isinstance(p, dict) else None
+        title = (p.get("title") if isinstance(p, dict) else "") or ""
+        if not isinstance(fig, dict):
+            dropped += 1
+            continue
+        try:
+            if _brand_active(branding):
+                fig = apply_brand_colors(fig, branding)
+            pid = _ws.store_plot(fig, thread_id)
+        except (
+            Exception
+        ):  # noqa: BLE001 - oversize/invalid/store fail: drop, don't inline
+            dropped += 1
+            continue
+        refs.append({"id": pid, "title": title})
+    dashboard_data["plots"] = existing + refs
+    note = ""
+    if refs:
+        note += f"\n\n*Generated {len(refs)} chart(s). View them in the Plots tab.*"
+    if dropped:
+        note += f"\n\n*{dropped} chart(s) omitted (too large or invalid).*"
+    return note
 
 
 @tool
@@ -1026,6 +1071,109 @@ def get_saturation_curves(
     _activate_thread(config)
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
         "saturation_curves", {}
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+# ── Model validation / verification tools (Phase 1) ──────────────────────────
+
+
+@tool
+def validate_model(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """
+    Run the full model-validation battery and return a single trust verdict.
+    Call this when the user asks whether the model is good/trustworthy/valid, or to "validate"/"check"/"verify" the fitted model. Runs convergence, posterior-predictive, residual, channel-identifiability, and unobserved-confounding-robustness checks; returns a consolidated verdict table + a PPC plot. Use the specific tools below for detail.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op("validate_model", {})
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def run_posterior_predictive_checks(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """
+    Run posterior predictive checks (PPC): do datasets replicated from the posterior look like the observed KPI?
+    Call this when the user asks about goodness-of-fit, posterior predictive checks, whether the model reproduces the data, or Bayesian p-values. Returns per-check Bayesian p-values + density-overlay and test-statistic plots.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "posterior_predictive_checks", {}
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def run_residual_diagnostics(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """
+    Run residual diagnostics: autocorrelation (Durbin-Watson / Ljung-Box), heteroscedasticity (Breusch-Pagan), and normality (Shapiro / Jarque-Bera) of the model residuals.
+    Call this when the user asks about residuals, autocorrelation, leftover structure, or whether the model is missing something. Returns a test table + residual/ACF/Q-Q plots.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "residual_diagnostics", {}
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def run_channel_diagnostics(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """
+    Run per-channel identifiability diagnostics: VIF / collinearity clusters and per-channel R-hat/ESS.
+    Call this when the user asks whether two channels are confounded/collinear, why a channel's ROI is unstable, or about multicollinearity / identifiability. Returns a VIF table + chart.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "channel_diagnostics", {}
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def run_refutation_suite(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """
+    Test sensitivity to unobserved confounding: the Robustness Value per channel (how much hidden confounding it would take to nullify each effect).
+    Call this when the user asks how robust the results are, whether an omitted variable could overturn a channel's effect, or for a refutation / sensitivity analysis. Returns a per-channel robustness table.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "refutation_suite", {}
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def run_cross_validation(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """
+    Run out-of-time cross-validation (rolling-origin backtest): refit on expanding windows and grade genuine out-of-sample forecasts vs naive baselines.
+    Call this when the user asks about forecast accuracy, out-of-sample / hold-out performance, MAPE, or backtesting. NOTE: this REFITS the model several times and is slow (a minute or more); only run it when explicitly asked. Returns a model-vs-baseline accuracy table.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "cross_validation", {}
     )
     return _modelop_command(res, state, tool_call_id)
 
@@ -4798,7 +4946,6 @@ def identify_structural_parameters(
 
 from mmm_framework.agents.eda_tools import EDA_TOOLS
 
-
 # ── Two-tier delegation: orchestrator (fast) → expert (strong) ──────────────
 
 # Compute/code-gen-heavy tools removed from the fast chat tier so it must
@@ -4821,6 +4968,7 @@ HEAVY_TOOL_NAMES: frozenset[str] = frozenset(
         "run_budget_optimizer",
         "run_budget_scenario",
         "test_garden_model",  # fits the candidate on synthetic worlds
+        "run_cross_validation",  # refits the model once per rolling origin
     }
 )
 
@@ -5581,6 +5729,13 @@ TOOLS = [
     get_model_diagnostics,
     get_adstock_weights,
     get_saturation_curves,
+    # Validation / verification (Phase 1)
+    validate_model,
+    run_posterior_predictive_checks,
+    run_residual_diagnostics,
+    run_channel_diagnostics,
+    run_refutation_suite,
+    run_cross_validation,
     run_budget_scenario,
     run_marginal_analysis,
     # Decision layer: learnings -> budget + next experiment
@@ -5698,6 +5853,10 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "apply_experiment_calibration",
         "log_experiment",
         "list_experiment_log",
+        # validation tools that need media channels / the MMM forward pass
+        "run_channel_diagnostics",
+        "run_refutation_suite",
+        "run_cross_validation",
     }
 )
 
