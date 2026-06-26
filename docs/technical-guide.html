@@ -988,10 +988,10 @@ nested_config = (
 
 # Create and fit the nested model
 nested_model = NestedMMM(
-    panel=panel,
-    mff_config=mff_config,
-    model_config=model_config,
-    nested_config=nested_config,
+    X_media,
+    y,
+    channel_names,
+    nested_config,
 )
 results = nested_model.fit()</code></pre>
 
@@ -1050,16 +1050,14 @@ product_b = OutcomeConfigBuilder("ProductB_Sales").build()
 # Define cross-effects between products
 # Halo effect: Product A lifts Product B
 halo = halo_effect(
-    from_outcome="ProductA_Sales",
-    to_outcome="ProductB_Sales",
-    lag=2,  # 2-week delayed effect
+    source="ProductA_Sales",
+    target="ProductB_Sales",
 )
 
 # Cannibalization: Product B steals from Product A
 cannibalization = cannibalization_effect(
-    from_outcome="ProductB_Sales",
-    to_outcome="ProductA_Sales",
-    lag=0,  # Immediate effect
+    source="ProductB_Sales",
+    target="ProductA_Sales",
 )
 
 # Build multivariate configuration
@@ -1069,16 +1067,16 @@ multivariate_config = (
     .add_outcome(product_b)
     .add_cross_effect(halo)
     .add_cross_effect(cannibalization)
-    .with_correlated_errors(eta=2.0)  # LKJ prior for error correlation
+    .with_lkj_eta(eta=2.0)  # LKJ prior for error correlation
     .build()
 )
 
 # Create and fit
 multivariate_model = MultivariateMMM(
-    panel=panel,
-    mff_config=mff_config,
-    model_config=model_config,
-    multivariate_config=multivariate_config,
+    X_media,
+    outcome_data,
+    channel_names,
+    multivariate_config,
 )
 results = multivariate_model.fit()</code></pre>
 
@@ -1154,17 +1152,16 @@ combined_config = (
 
 # Create and fit the combined model
 combined_model = CombinedMMM(
-    panel=panel,
-    mff_config=mff_config,
-    model_config=model_config,
-    combined_config=combined_config,
+    X_media,
+    outcome_data,
+    channel_names,
+    combined_config,
 )
 results = combined_model.fit()
 
 # Access decomposed effects
-print(results.direct_effects)     # Direct media → outcome
-print(results.indirect_effects)   # Media → mediator → outcome
-print(results.cross_effects)      # Outcome → outcome</code></pre>
+print(nested_model.get_mediation_effects())    # Direct vs mediated per channel
+print(multivariate_model.get_cross_effects_summary())  # Outcome → outcome</code></pre>
 
             <h2 id="hierarchical">Hierarchical Structure</h2>
             <p>
