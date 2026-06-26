@@ -3,6 +3,7 @@ export { Card } from './Card';
 export { DataTable, type Column } from './DataTable';
 export { Drawer } from './Drawer';
 export { EmptyState } from './EmptyState';
+export { IconButton } from './IconButton';
 export { SectionHeader } from './SectionHeader';
 export { StatHero } from './StatHero';
 export { StatusChip } from './StatusChip';
