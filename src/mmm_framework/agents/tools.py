@@ -5196,6 +5196,167 @@ def delegate_to_expert(
     return Command(update=update)
 
 
+# ── Review panel: a team of expert personas (Phase 3) ────────────────────────
+# Each persona is the SAME expert sub-agent (strong model + full tool set, incl.
+# the Phase-1 validation tools) driven by a persona-specific brief, so its
+# feedback is GROUNDED in real tool output rather than vibes. The personas run
+# sequentially against the shared session; their plots/tables fold back into the
+# dashboard and their write-ups are stitched into one panel review.
+
+_REVIEW_PERSONAS: dict[str, dict[str, str]] = {
+    "statistician": {
+        "label": "🔬 Expert statistician",
+        "brief": (
+            "You are an expert Bayesian statistician reviewing a fitted marketing "
+            "mix model. Be skeptical and rigorous. Interrogate whether the model is "
+            "TRUSTWORTHY: run `validate_model` first, then dig in with "
+            "`run_posterior_predictive_checks`, `run_residual_diagnostics`, "
+            "`run_channel_diagnostics` (collinearity/identifiability) and "
+            "`run_refutation_suite` (robustness to unobserved confounding) as "
+            "needed. Report, in a few tight paragraphs: what the diagnostics say, "
+            "which estimates are reliable, which are fragile or weakly identified, "
+            "and the single most important statistical caveat. Cite the numbers you "
+            "saw. Do NOT propose budget changes — that is the planner's job."
+        ),
+    },
+    "media_planner": {
+        "label": "📊 Media planner",
+        "brief": (
+            "You are a seasoned media planner reviewing a fitted marketing mix "
+            "model. Focus on PLANNING implications. Use `get_roi_metrics`, "
+            "`get_saturation_curves`, `run_marginal_analysis` and "
+            "`run_budget_optimizer` to see which channels are saturated, where the "
+            "next dollar works hardest (marginal ROAS), and how budget should "
+            "shift. Recommend, concretely: which channels to scale up or down, "
+            "what to hold, and which one experiment would most reduce the risk in "
+            "the plan (consider `recommend_lift_experiments`). Keep it practical."
+        ),
+    },
+    "cmo": {
+        "label": "🎯 CMO",
+        "brief": (
+            "You are a CMO reviewing a fitted marketing mix model. Translate it "
+            "into the BUSINESS story for an executive audience. Use "
+            "`get_roi_metrics`, `get_estimands` and `get_component_decomposition` "
+            "to ground yourself. In plain language: what is media actually driving, "
+            "how confident should we be, what decision does this support, and what "
+            "is the one risk to watch. No jargon, no MCMC internals — outcomes, "
+            "confidence, and the call to make."
+        ),
+    },
+}
+
+
+@tool
+def convene_review_panel(
+    state: Annotated[dict, InjectedState],
+    focus: str,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Convene a panel of expert personas to review the fitted model and give
+    feedback from their different lenses.
+
+    Calls three expert sub-agents in turn — an expert **statistician** (is the
+    model trustworthy? — runs the validation suite), a **media planner** (what
+    should we do with the budget? — saturation/marginal/optimizer), and a **CMO**
+    (what's the business story and the risk?) — each grounding its feedback in the
+    real analysis/validation tools. Use this when the user wants a rounded
+    review, a second opinion, multi-perspective feedback, or to "ask the team".
+
+    Args:
+        focus: What the panel should review or the question to weigh in on
+            (e.g. "Is this model ready to set next quarter's budget?").
+
+    Returns:
+        A Command whose message stitches together each persona's write-up, with
+        any plots/tables they produced folded back into the dashboard.
+    """
+    from langchain_core.messages import HumanMessage
+    from langgraph.errors import GraphRecursionError
+
+    thread_id = _activate_thread(config)
+    configurable = (config or {}).get("configurable") or {}
+    expert_override = {
+        "model": configurable.get("expert_model"),
+        "provider": configurable.get("expert_provider"),
+        "api_key": configurable.get("expert_api_key"),
+        "base_url": configurable.get("expert_base_url"),
+    }
+    expert_mode = configurable.get("modeling_mode") or state.get("modeling_mode")
+    try:
+        recursion_limit = int(os.environ.get("MMM_AGENT_EXPERT_RECURSION_LIMIT", "60"))
+    except ValueError:
+        recursion_limit = 60
+
+    base_state = {
+        "dataset_path": state.get("dataset_path"),
+        "dataset_info": state.get("dataset_info"),
+        "model_spec": state.get("model_spec") or {},
+        "locked_fields": state.get("locked_fields") or [],
+        "pending_spec_changes": state.get("pending_spec_changes") or [],
+        "model_status": state.get("model_status") or "not_started",
+        "fit_results_summary": state.get("fit_results_summary"),
+        "report_path": state.get("report_path"),
+        "context_summary": None,
+        "context_summary_count": 0,
+        "modeling_mode": expert_mode or "mmm",
+    }
+
+    sections: list[str] = []
+    merged_dashboard = dict(state.get("dashboard_data") or {})
+
+    def _merge(into: dict, extra: dict) -> None:
+        for k, v in (extra or {}).items():
+            if isinstance(v, list) and isinstance(into.get(k), list):
+                into[k] = into[k] + v
+            elif isinstance(v, list):
+                into[k] = list(v)
+            else:
+                into[k] = v
+
+    for persona in _REVIEW_PERSONAS.values():
+        task = (
+            f"{persona['brief']}\n\n## Focus of this review\n{focus}\n\n"
+            "Report ONLY your own perspective, concisely (a few short paragraphs)."
+        )
+        init_state = {
+            **base_state,
+            "messages": [HumanMessage(content=task)],
+            "dashboard_data": {},
+        }
+        text = ""
+        try:
+            graph = _get_expert_graph(expert_override, mode=expert_mode)
+            last_state: dict | None = None
+            for chunk in graph.stream(
+                init_state,
+                config={
+                    "configurable": {"thread_id": thread_id},
+                    "recursion_limit": recursion_limit,
+                },
+                stream_mode="values",
+            ):
+                last_state = chunk
+            result = last_state or {}
+            text = _final_message_text(result.get("messages") or [])
+            _merge(merged_dashboard, result.get("dashboard_data") or {})
+        except GraphRecursionError:
+            text = "(reached the step limit before finishing this review)"
+        except Exception as e:  # noqa: BLE001
+            logger.exception("review panel persona failed for thread %s", thread_id)
+            text = f"(this reviewer could not complete: {e})"
+        sections.append(f"### {persona['label']}\n\n{text or '(no response)'}")
+
+    summary = "## Review panel\n\n" + "\n\n".join(sections)
+    update: dict[str, Any] = {
+        "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)]
+    }
+    if merged_dashboard:
+        update["dashboard_data"] = merged_dashboard
+    return Command(update=update)
+
+
 # ── Model Garden: author / version / test / share bespoke models ─────────────
 
 
@@ -5812,7 +5973,9 @@ TOOLS = [
 #                        MMM_AGENT_ORCHESTRATOR_FULL_TOOLS=1 keeps every tool on
 #                        the orchestrator (prompt-driven delegation instead).
 EXPERT_TOOLS = list(TOOLS)
-TOOLS = TOOLS + [delegate_to_expert]
+# Orchestrator-only tools that spawn expert sub-agents — appended AFTER the
+# EXPERT_TOOLS snapshot so the expert can't recurse into them.
+TOOLS = TOOLS + [delegate_to_expert, convene_review_panel]
 if os.environ.get("MMM_AGENT_ORCHESTRATOR_FULL_TOOLS") == "1":
     ORCHESTRATOR_TOOLS = list(TOOLS)
 else:
@@ -5879,6 +6042,13 @@ _SPINE_TOOL_NAMES: frozenset[str] = (
     _ALL_TOOL_NAMES - _MMM_ONLY_TOOL_NAMES - _CAUSAL_TOOL_NAMES
 )
 
+#: Tools that spawn expert sub-agents — only the orchestrator gets them (the
+#: expert must not recurse). They are NOT in EXPERT_TOOLS / _ALL_TOOL_NAMES, so
+#: get_tools_for_mode special-cases them in (orchestrator) / out (expert).
+_ORCHESTRATOR_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
+    {"delegate_to_expert", "convene_review_panel"}
+)
+
 _MODE_TOOL_NAMES: dict[str, frozenset[str]] = {
     "mmm": _ALL_TOOL_NAMES,  # full surface — identical to today
     "causal_inference": _SPINE_TOOL_NAMES | _CAUSAL_TOOL_NAMES,
@@ -5903,10 +6073,12 @@ def get_tools_for_mode(
     ``delegate_to_expert``; the expert keeps the heavy tools and never gets delegate.
     """
     allowed = _MODE_TOOL_NAMES.get(mode, _MODE_TOOL_NAMES["mmm"])
-    pool = EXPERT_TOOLS if role == "expert" else TOOLS  # TOOLS carries delegate
-    base = [t for t in pool if t.name in allowed or t.name == "delegate_to_expert"]
+    pool = EXPERT_TOOLS if role == "expert" else TOOLS  # TOOLS carries orch-only tools
+    base = [
+        t for t in pool if t.name in allowed or t.name in _ORCHESTRATOR_ONLY_TOOL_NAMES
+    ]
     if role == "expert":
-        return [t for t in base if t.name != "delegate_to_expert"]
+        return [t for t in base if t.name not in _ORCHESTRATOR_ONLY_TOOL_NAMES]
     if role == "orchestrator":
         full = (
             full_orchestrator
@@ -5915,5 +6087,5 @@ def get_tools_for_mode(
         )
         if not full:
             base = [t for t in base if t.name not in HEAVY_TOOL_NAMES]
-        return base  # delegate_to_expert retained
-    return [t for t in base if t.name != "delegate_to_expert"]
+        return base  # delegate_to_expert / convene_review_panel retained
+    return [t for t in base if t.name not in _ORCHESTRATOR_ONLY_TOOL_NAMES]

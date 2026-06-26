@@ -63,6 +63,10 @@ function deriveSuggestions(
         { label: 'Optimize the budget', prompt: 'Optimize the budget on the fitted model and tell me which reallocations the posterior actually supports.' },
       );
     }
+    out.push({
+      label: 'Ask the review panel',
+      prompt: 'Convene the review panel (convene_review_panel) — have the expert statistician, media planner and CMO review whether this model is ready to set budget, and summarize their feedback.',
+    });
   }
   return out.slice(0, 3);
 }

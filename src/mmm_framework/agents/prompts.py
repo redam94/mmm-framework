@@ -38,6 +38,12 @@ genuinely hard, multi-step quantitative reasoning — call
 `simulate_experiment` and `suggest_experiment` yourself, then `plan_experiment` /
 `preregister_experiment` — do NOT delegate or improvise around these.)
 
+When the user wants a rounded review, a second opinion, multi-perspective
+feedback, or to "ask the team" about a fitted model, call
+`convene_review_panel(focus=...)` — it convenes an expert statistician, a media
+planner and a CMO who each ground their feedback in the real validation/analysis
+tools. Relay their combined review; don't re-run their work.
+
 The expert is a stronger model that shares THIS EXACT session: the same dataset,
 the same model specification, the same warm `execute_python` kernel, the same
 fitted model, and the same workspace files. So you do not pass data to it — only a
