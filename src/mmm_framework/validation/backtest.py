@@ -185,11 +185,6 @@ class PosteriorForecaster:
     def __init__(self, model: Any):
         if model._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
-        if model.n_cells > 1:
-            raise NotImplementedError(
-                "PosteriorForecaster supports national (single-cell) data only; "
-                f"got {model.n_cells} geo x product cells."
-            )
         self._trend_type = str(
             getattr(model.trend_config.type, "value", model.trend_config.type)
         ).lower()
@@ -218,6 +213,10 @@ class PosteriorForecaster:
                 "trace, so out-of-time extrapolation is unavailable."
             )
         self._beta_controls = get("beta_controls")
+        # Per-obs geo offset (constant within a geo). For geo panels the obs layout
+        # is period-major / cell-minor (obs = period*n_cells + cell), so the first
+        # n_cells obs carry one offset per cell — see _geo_offsets / _forecast_geo.
+        self._geo_component = get("geo_component")
         self._season = {
             name: get(f"season_{name}") for name in model.seasonality_features
         }
@@ -414,6 +413,16 @@ class PosteriorForecaster:
         model = self.model
         positions = np.asarray(positions, dtype=int)
 
+        if model.n_cells > 1:
+            return self._forecast_geo(
+                X_media_full_raw,
+                X_controls_full_raw,
+                positions,
+                include_noise=include_noise,
+                random_seed=random_seed,
+                train_offset=train_offset,
+            )
+
         mu = np.zeros((len(positions), self._n_samples))
         if self._intercept is not None:
             mu += self._intercept[None, :]
@@ -439,6 +448,79 @@ class PosteriorForecaster:
 
         y = mu * model.y_std + model.y_mean
         return y.T  # (n_samples, n_pos)
+
+    def _geo_offsets(self) -> np.ndarray:
+        """Per-cell geo offset, ``(n_samples, n_cells)``.
+
+        ``geo_component`` is constant within a cell, and obs are period-major /
+        cell-minor (obs = period*n_cells + cell), so the first ``n_cells`` obs are
+        period 0's cells — one offset per cell.
+        """
+        n_cells = self.model.n_cells
+        if self._geo_component is None or self._geo_component.shape[-1] < n_cells:
+            return np.zeros((self._n_samples, n_cells))
+        return self._geo_component[:, :n_cells]
+
+    def _forecast_geo(
+        self,
+        X_media_full_raw: np.ndarray,
+        X_controls_full_raw: np.ndarray | None,
+        obs_positions: np.ndarray,
+        *,
+        include_noise: bool,
+        random_seed: int | None,
+        train_offset: int,
+    ) -> np.ndarray:
+        """Geo-panel forward pass. Reuses the single-cell components PER CELL.
+
+        The geo mean is the national mean plus a per-cell offset, with each cell's
+        OWN media series (so adstock carryover stays within a cell — no cross-geo
+        bleed). Obs are period-major / cell-minor; we build the full (period, cell)
+        grid and select the requested obs.
+        """
+        model = self.model
+        n_cells = model.n_cells
+        n_obs = X_media_full_raw.shape[0]
+        n_full = n_obs // n_cells
+        all_periods = np.arange(n_full)
+
+        Xm = np.asarray(X_media_full_raw, dtype=float).reshape(n_full, n_cells, -1)
+        Xc = (
+            np.asarray(X_controls_full_raw, dtype=float).reshape(n_full, n_cells, -1)
+            if X_controls_full_raw is not None
+            else None
+        )
+
+        # Shared (across cells) components, evaluated on the period axis.
+        shared = np.zeros((n_full, self._n_samples))
+        if self._intercept is not None:
+            shared += self._intercept[None, :]
+        shared += self._trend_at(all_periods, train_offset)
+        shared += self._seasonality_at(all_periods)
+
+        geo_off = self._geo_offsets()  # (n_samples, n_cells)
+
+        mu_grid = np.empty((n_full, n_cells, self._n_samples))
+        for j in range(n_cells):
+            mu_j = shared + geo_off[None, :, j]
+            mu_j = mu_j + self._media_at(Xm[:, j, :], all_periods)  # per-cell adstock
+            if model.n_controls > 0:
+                if Xc is None:
+                    raise ValueError(
+                        "Model was fitted with controls; pass X_controls_full_raw."
+                    )
+                x_ctrl = (Xc[:, j, :] - model.control_mean) / model.control_std
+                if self._beta_controls is not None:
+                    mu_j = mu_j + x_ctrl @ self._beta_controls.T
+            mu_grid[:, j, :] = mu_j
+
+        mu_obs = mu_grid.reshape(n_full * n_cells, self._n_samples)[obs_positions]
+
+        if include_noise and self._sigma is not None:
+            rng = np.random.default_rng(random_seed)
+            mu_obs = mu_obs + rng.normal(0.0, 1.0, size=mu_obs.shape) * self._sigma[None, :]
+
+        return (mu_obs * model.y_std + model.y_mean).T  # (n_samples, n_pos)
 
 
 # ---------------------------------------------------------------------------
@@ -584,10 +666,16 @@ class BacktestResult:
 
 
 def _slice_panel_prefix(panel: Any, n_train: int) -> Any:
-    """First ``n_train`` periods of a national (single-cell) panel."""
+    """First ``n_train`` periods of the panel (national OR geo/product).
+
+    Obs are period-major / cell-minor, so the first ``n_train`` periods are the
+    first ``n_train * n_cells`` obs.
+    """
     from ..data_loader import PanelCoordinates, PanelDataset
 
-    idx = np.arange(n_train)
+    n_periods = panel.coords.n_periods
+    n_cells = max(len(panel.y) // n_periods, 1)
+    idx = np.arange(n_train * n_cells)
     y = panel.y.iloc[idx]
     X_media = panel.X_media.iloc[idx]
     X_controls = panel.X_controls.iloc[idx] if panel.X_controls is not None else None
@@ -666,11 +754,9 @@ def run_backtest(
     BacktestResult
     """
     config = config or BacktestConfig()
-    if model.n_cells > 1:
-        raise NotImplementedError(
-            "run_backtest supports national (single-cell) data only; "
-            f"got {model.n_cells} geo x product cells."
-        )
+    # Obs are period-major / cell-minor: periods [a, b) over all cells map to the
+    # contiguous obs block [a*cells, b*cells). cells == 1 reduces to national.
+    cells = max(model.n_cells, 1)
 
     n_periods = model.n_periods
     origins = rolling_origins(
@@ -704,10 +790,13 @@ def run_backtest(
     mase_scales: dict[int, float] = {}
 
     for k, origin in enumerate(origins):
-        positions = np.arange(origin, min(origin + config.horizon, n_periods))
+        end = min(origin + config.horizon, n_periods)
+        n_fc_periods = end - origin
+        # Obs for periods [origin, end) over all cells (contiguous, period-major).
+        positions = np.arange(origin * cells, end * cells)
         logger.info(
             f"Backtest origin {k + 1}/{len(origins)}: "
-            f"train=[0, {origin}), forecast={len(positions)} periods"
+            f"train=[0, {origin}), forecast={n_fc_periods} periods x {cells} cell(s)"
         )
 
         clone = _clone_for_prefix(model, origin)
@@ -742,9 +831,18 @@ def run_backtest(
         y_pred = samples.mean(axis=0)
 
         y_true = y_full[positions]
-        pred_naive = np.full(len(positions), y_full[origin - 1])
-        pred_snaive = _seasonal_naive_pred(y_full, origin, positions, season)
-        mase_scales[origin] = _seasonal_naive_scale(y_full[:origin], season)
+        # Last-value baseline per cell (the last training period's value for each
+        # cell), tiled across the forecast periods.
+        last_block = y_full[(origin - 1) * cells : origin * cells]
+        pred_naive = np.tile(last_block, n_fc_periods)
+        # Seasonal-naive + MASE scale in OBS space with an obs stride of season*cells
+        # (period-major layout => same cell, `season` periods back).
+        pred_snaive = _seasonal_naive_pred(
+            y_full, origin * cells, positions, season * cells
+        )
+        mase_scales[origin] = _seasonal_naive_scale(
+            y_full[: origin * cells], season * cells
+        )
 
         bounds = {}
         for level in config.coverage_levels:
@@ -756,11 +854,13 @@ def run_backtest(
             )
 
         for i, p in enumerate(positions):
+            pp, cell = divmod(int(p), cells)  # obs -> (period, cell)
             row: dict[str, Any] = {
                 "origin": origin,
                 "position": int(p),
-                "date": periods[p],
-                "horizon": i + 1,
+                "cell": cell,
+                "date": periods[pp],
+                "horizon": pp - origin + 1,
                 "y_true": float(y_true[i]),
                 "y_pred": float(y_pred[i]),
                 "pred_naive": float(pred_naive[i]),

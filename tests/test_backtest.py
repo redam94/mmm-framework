@@ -348,14 +348,8 @@ class TestEndToEndBacktest:
         cov = result.coverage()
         assert list(cov.index) == [0.8, 0.95]
 
-    def test_panel_data_rejected(self):
-        from mmm_framework.validation.backtest import run_backtest
-
-        class FakePanelModel:
-            n_cells = 4
-
-        with pytest.raises(NotImplementedError):
-            run_backtest(FakePanelModel())
+    # NOTE: geo/product panels are no longer rejected — run_backtest supports them
+    # (period-major obs, per-cell forward pass). See tests/test_backtest_geo.py.
 
 
 @pytest.mark.slow
