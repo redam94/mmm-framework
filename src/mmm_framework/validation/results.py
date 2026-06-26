@@ -112,6 +112,18 @@ class PPCCheckResult:
     passed: bool
     description: str
 
+    def __post_init__(self):
+        # PPCValidator builds these from numpy reducers (np.mean/np.std/np.var/
+        # stats.skew), which return np.float64. A bare np.float64 in to_dict()'s
+        # output reaches the agent's dashboard_data and crashes the Oracle's
+        # msgpack checkpoint (np.float64 is a `float` subclass, so the generic
+        # sanitizer's float branch misses it). Coerce to native python at source.
+        self.observed_statistic = float(self.observed_statistic)
+        self.replicated_mean = float(self.replicated_mean)
+        self.replicated_std = float(self.replicated_std)
+        self.p_value = float(self.p_value)
+        self.passed = bool(self.passed)
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
