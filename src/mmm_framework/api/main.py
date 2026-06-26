@@ -2472,6 +2472,23 @@ async def project_history_endpoint(project_id: str):
     return JSONResponse(content=safe_json_dumps_load(build_history_series(project_id)))
 
 
+@app.get("/projects/{project_id}/estimands", dependencies=[_proj_read])
+async def project_estimands_endpoint(project_id: str):
+    """Declarative estimands for every fitted model in the project, grouped into
+    (estimand × KPI) comparability clusters for the Performance page. Models on
+    the same estimand+KPI sit side-by-side; different-KPI models stay separate
+    (not directly comparable). Assembled from estimand rows persisted on each
+    model_run artifact at fit time — no model loads. Older runs need the backfill
+    (``python -m mmm_framework.api.backfill --what estimands``)."""
+    from mmm_framework.api.estimands import build_project_estimands
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(
+        content=safe_json_dumps_load(build_project_estimands(project_id))
+    )
+
+
 @app.get("/projects/{project_id}/calibration-coverage", dependencies=[_proj_read])
 async def calibration_coverage_endpoint(project_id: str, as_of: str | None = None):
     """Channels × evidence tier (calibrated / stale / model_only) with

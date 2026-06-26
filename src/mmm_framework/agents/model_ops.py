@@ -371,25 +371,9 @@ def compute_estimands(
     logic — ``get_roi_metrics`` is left as-is.
     """
     try:
-        out = mmm.evaluate_estimands(estimands=estimands, random_seed=random_seed)
-        rows = []
-        for key, r in out.items():
-            name, _, channel = key.partition(":")
-            extra = r.extra or {}
-            rows.append(
-                {
-                    "estimand": name,
-                    "channel": channel or "—",
-                    "kind": r.kind,
-                    "status": r.status,
-                    "mean": None if r.mean is None else float(r.mean),
-                    "hdi_low": None if r.hdi_low is None else float(r.hdi_low),
-                    "hdi_high": None if r.hdi_high is None else float(r.hdi_high),
-                    "units": r.units,
-                    "prob_positive": extra.get("prob_positive"),
-                    "prob_profitable": extra.get("prob_profitable"),
-                }
-            )
+        from .estimand_rows import evaluate_estimand_rows
+
+        rows = evaluate_estimand_rows(mmm, estimands=estimands, random_seed=random_seed)
         if not rows:
             return _err(
                 "No estimands to compute (model declares none and the "
