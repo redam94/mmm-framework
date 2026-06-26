@@ -2001,8 +2001,424 @@ def garden_tune_suggestions(mmm: Any, results: Any = None) -> dict:
     return res
 
 
+# ── Validation / verification ops (Phase 1) ──────────────────────────────────
+# Wrap the framework's already-built validation machinery (validation/*) as
+# first-class model-ops so the chat agent can run posterior-predictive checks,
+# residual diagnostics, channel collinearity/VIF, causal refutation, out-of-time
+# cross-validation, and a one-call battery — each returning a markdown verdict, a
+# structured table, and themed plots (routed through _modelop_command's plot
+# publishing). Each sub-check is best-effort: a failure becomes an error string,
+# never an exception that aborts the turn.
+
+
+def _fig_json(fig: Any) -> dict:
+    """Plotly ``go.Figure`` -> JSON-safe dict (crosses the kernel boundary)."""
+    import json as _json
+
+    return _json.loads(fig.to_json())
+
+
+def posterior_predictive_checks(
+    mmm: Any, results: Any = None, *, random_seed: int = 42
+) -> dict:
+    """Posterior predictive checks: do datasets replicated from the posterior look
+    like the observed KPI? Bayesian p-values near 0.5 = good; near 0/1 = misfit."""
+    try:
+        from mmm_framework.validation.charts import diagnostics as vch
+        from mmm_framework.validation.posterior_predictive import PPCValidator
+
+        ppc = PPCValidator(mmm).run(random_seed=random_seed)
+        verdict = (
+            "✅ adequate"
+            if ppc.overall_pass
+            else "⚠️ flagged: " + ", ".join(ppc.problematic_checks)
+        )
+        content = (
+            "### Posterior predictive checks\n\n"
+            f"**Overall:** {verdict}\n\n"
+            "Each check compares a feature of the observed KPI (mean, variance, "
+            "autocorrelation, extremes) to the same feature in datasets replicated "
+            "from the posterior. A Bayesian p-value near 0.5 means the model "
+            "reproduces that feature; near 0 or 1 flags a misfit."
+        )
+        plots = []
+        for title, mk in [
+            (
+                "PPC density overlay",
+                lambda: vch.create_ppc_density_plot(ppc.y_obs, ppc.y_rep),
+            ),
+            ("PPC test statistics", lambda: vch.create_ppc_statistics_plot(ppc.checks)),
+        ]:
+            try:
+                plots.append({"title": title, "figure": _fig_json(mk())})
+            except Exception:  # noqa: BLE001
+                pass
+        return {
+            "content": content,
+            "dashboard": {"validation_ppc": ppc.to_dict()},
+            "tables": [
+                df_to_table_json(
+                    ppc.summary(),
+                    title="Posterior predictive checks",
+                    source="posterior_predictive_checks",
+                    group="validation",
+                )
+            ],
+            "plots": plots,
+            "error": None,
+        }
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Posterior predictive checks failed: {e}")
+
+
+def residual_diagnostics(mmm: Any, results: Any = None) -> dict:
+    """Residual diagnostics: autocorrelation (Durbin-Watson / Ljung-Box),
+    heteroscedasticity (Breusch-Pagan) and normality (Shapiro / Jarque-Bera) of
+    the model residuals, plus ACF/PACF and Q-Q plots."""
+    try:
+        from mmm_framework.validation.charts import diagnostics as vch
+        from mmm_framework.validation.residual_diagnostics import ResidualDiagnostics
+
+        rd = ResidualDiagnostics(mmm).run_all()
+        verdict = (
+            "✅ residuals look adequate"
+            if rd.overall_adequate
+            else "⚠️ " + "; ".join(rd.recommendations or ["one or more tests failed"])
+        )
+        content = (
+            "### Residual diagnostics\n\n"
+            f"**Overall:** {verdict}\n\n"
+            "Structure left in the residuals (autocorrelation, changing variance, "
+            "non-normality) means the model is missing something — adstock shape, a "
+            "control, or the wrong likelihood."
+        )
+        plots = []
+        for title, mk in [
+            ("Residual panel", lambda: vch.create_residual_panel(rd)),
+            (
+                "Residuals vs fitted",
+                lambda: vch.create_residual_vs_fitted(rd.residuals, rd.fitted_values),
+            ),
+            (
+                "Residual autocorrelation",
+                lambda: vch.create_acf_chart(
+                    rd.acf_values, rd.pacf_values, n_obs=len(rd.residuals)
+                ),
+            ),
+            ("Q-Q plot", lambda: vch.create_qq_plot(rd.residuals)),
+        ]:
+            try:
+                plots.append({"title": title, "figure": _fig_json(mk())})
+            except Exception:  # noqa: BLE001
+                pass
+        return {
+            "content": content,
+            "dashboard": {"validation_residuals": rd.to_dict()},
+            "tables": [
+                df_to_table_json(
+                    rd.summary(),
+                    title="Residual diagnostics",
+                    source="residual_diagnostics",
+                    group="validation",
+                )
+            ],
+            "plots": plots,
+            "error": None,
+        }
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Residual diagnostics failed: {e}")
+
+
+def channel_diagnostics(mmm: Any, results: Any = None) -> dict:
+    """Per-channel identifiability: VIF / collinearity clusters, per-channel
+    R-hat/ESS. High VIF (>5–10) means a channel's effect can't be cleanly
+    separated from another's — its ROI is unstable."""
+    try:
+        from mmm_framework.validation.channel_diagnostics import ChannelDiagnostics
+        from mmm_framework.validation.charts import diagnostics as vch
+
+        cd = ChannelDiagnostics(mmm).run_all()
+        flags = []
+        if cd.multicollinearity_warning:
+            flags.append("multicollinearity")
+        if cd.convergence_warning:
+            flags.append("per-channel convergence")
+        if getattr(cd, "weak_identification_warning", False):
+            flags.append("weak identification")
+        verdict = (
+            "✅ no channel-level red flags" if not flags else "⚠️ " + ", ".join(flags)
+        )
+        content = (
+            "### Channel diagnostics\n\n"
+            f"**Overall:** {verdict}\n\n"
+            "Per-channel VIF (collinearity), R-hat/ESS, and collinear-cluster "
+            "detection."
+        )
+        for issue in cd.identifiability_issues or []:
+            content += f"\n- {issue}"
+        plots = []
+        try:
+            plots.append(
+                {
+                    "title": "Variance inflation factors",
+                    "figure": _fig_json(vch.create_vif_chart(cd)),
+                }
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        return {
+            "content": content,
+            "dashboard": {"validation_channels": cd.to_dict()},
+            "tables": [
+                df_to_table_json(
+                    cd.summary(),
+                    title="Channel diagnostics",
+                    source="channel_diagnostics",
+                    group="validation",
+                )
+            ],
+            "plots": plots,
+            "error": None,
+        }
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Channel diagnostics failed: {e}")
+
+
+def refutation_suite(mmm: Any, results: Any = None, *, q: float = 1.0) -> dict:
+    """Sensitivity to unobserved confounding: the Robustness Value per channel —
+    the share of residual variance an omitted confounder would need to explain
+    (in both spend and KPI) to nullify the effect. Low RV = fragile."""
+    try:
+        from mmm_framework.validation.sensitivity_unobserved import (
+            UnobservedConfoundingAnalysis,
+        )
+
+        sens = UnobservedConfoundingAnalysis(mmm).run(q=q)
+        fragile = sens.fragile_channels
+        verdict = (
+            "✅ no channel is fragile to plausible unobserved confounding"
+            if not fragile
+            else "⚠️ fragile to plausible confounding: " + ", ".join(fragile)
+        )
+        thr = sens.channels[0].fragile_threshold if sens.channels else 0.10
+        content = (
+            "### Unobserved-confounding robustness\n\n"
+            f"**Overall:** {verdict}\n\n"
+            f"The Robustness Value is how much residual variance an unobserved "
+            f"confounder would need to explain — in both the channel's spend and "
+            f"the KPI — to drive its effect to zero. Below {thr:.0%} is fragile.\n\n"
+            f"*{sens.caveat}*"
+        )
+        return {
+            "content": content,
+            "dashboard": {"validation_refutation": sens.to_dict()},
+            "tables": [
+                df_to_table_json(
+                    sens.summary(),
+                    title="Unobserved-confounding robustness",
+                    source="refutation_suite",
+                    group="validation",
+                )
+            ],
+            "error": None,
+        }
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Refutation suite failed: {e}")
+
+
+def cross_validation(
+    mmm: Any,
+    results: Any = None,
+    *,
+    horizon: int = 13,
+    max_origins: int = 2,
+    draws: int = 300,
+    tune: int = 300,
+) -> dict:
+    """Out-of-time cross-validation (rolling-origin backtest). REFITS the model on
+    expanding windows and grades genuine out-of-sample forecasts vs naive
+    baselines — slow (one refit per origin)."""
+    try:
+        from mmm_framework.validation.backtest import BacktestConfig, run_backtest
+
+        cfg = BacktestConfig(
+            horizon=horizon, max_origins=max_origins, draws=draws, tune=tune
+        )
+        res = run_backtest(mmm, cfg, progressbar=False)
+        summ = res.summary()
+        content = (
+            "### Out-of-time cross-validation\n\n"
+            f"Rolling-origin backtest ({res.n_origins} origin(s), horizon "
+            f"{horizon}): the model refits on expanding windows and forecasts the "
+            "held-out horizon. Beating the seasonal-naive baseline on MAPE is "
+            "genuine predictive skill; interval coverage near nominal means honest "
+            "uncertainty."
+        )
+        return {
+            "content": content,
+            "dashboard": {"validation_cv": {"n_origins": int(res.n_origins)}},
+            "tables": [
+                df_to_table_json(
+                    summ,
+                    title="Backtest accuracy (model vs baselines)",
+                    source="cross_validation",
+                    group="validation",
+                )
+            ],
+            "error": None,
+        }
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Cross-validation failed: {e}")
+
+
+def validate_model(mmm: Any, results: Any = None, *, random_seed: int = 42) -> dict:
+    """One-call validation battery: convergence + posterior-predictive + residual +
+    channel-identifiability + confounding-robustness, with a consolidated verdict
+    table. Each sub-check degrades gracefully (Error row) rather than aborting."""
+    rows: list[dict] = []
+    dash: dict = {}
+    plots: list[dict] = []
+
+    def _row(check, verdict, detail):
+        rows.append({"check": check, "verdict": verdict, "detail": detail})
+
+    try:
+        from mmm_framework.diagnostics import compute_fit_diagnostics
+
+        conv = (compute_fit_diagnostics(mmm, results) or {}).get("convergence") or {}
+        _row(
+            "Convergence",
+            "Pass" if conv.get("ok") else "Warn",
+            f"R-hat max {conv.get('rhat_max')}, min bulk-ESS "
+            f"{conv.get('ess_bulk_min')}, {conv.get('divergences')} divergences",
+        )
+        dash["validation_convergence"] = conv
+    except Exception as e:  # noqa: BLE001
+        _row("Convergence", "Error", str(e))
+
+    try:
+        from mmm_framework.validation.charts import diagnostics as vch
+        from mmm_framework.validation.posterior_predictive import PPCValidator
+
+        ppc = PPCValidator(mmm).run(random_seed=random_seed)
+        _row(
+            "Posterior predictive",
+            "Pass" if ppc.overall_pass else "Warn",
+            (
+                "reproduces the data"
+                if ppc.overall_pass
+                else "flagged: " + ", ".join(ppc.problematic_checks)
+            ),
+        )
+        dash["validation_ppc"] = ppc.to_dict()
+        try:
+            plots.append(
+                {
+                    "title": "PPC density overlay",
+                    "figure": _fig_json(
+                        vch.create_ppc_density_plot(ppc.y_obs, ppc.y_rep)
+                    ),
+                }
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    except Exception as e:  # noqa: BLE001
+        _row("Posterior predictive", "Error", str(e))
+
+    try:
+        from mmm_framework.validation.residual_diagnostics import ResidualDiagnostics
+
+        rd = ResidualDiagnostics(mmm).run_all()
+        _row(
+            "Residuals",
+            "Pass" if rd.overall_adequate else "Warn",
+            (
+                "adequate"
+                if rd.overall_adequate
+                else "; ".join(rd.recommendations or ["tests failed"])
+            ),
+        )
+        dash["validation_residuals"] = rd.to_dict()
+    except Exception as e:  # noqa: BLE001
+        _row("Residuals", "Error", str(e))
+
+    try:
+        from mmm_framework.validation.channel_diagnostics import ChannelDiagnostics
+
+        cd = ChannelDiagnostics(mmm).run_all()
+        cflags = []
+        if cd.multicollinearity_warning:
+            cflags.append("collinearity")
+        if cd.convergence_warning:
+            cflags.append("per-channel convergence")
+        _row(
+            "Channel identifiability",
+            "Pass" if not cflags else "Warn",
+            "clean" if not cflags else ", ".join(cflags),
+        )
+        dash["validation_channels"] = cd.to_dict()
+    except Exception as e:  # noqa: BLE001
+        _row("Channel identifiability", "Error", str(e))
+
+    try:
+        from mmm_framework.validation.sensitivity_unobserved import (
+            UnobservedConfoundingAnalysis,
+        )
+
+        sens = UnobservedConfoundingAnalysis(mmm).run()
+        fragile = sens.fragile_channels
+        _row(
+            "Confounding robustness",
+            "Pass" if not fragile else "Warn",
+            "robust" if not fragile else "fragile: " + ", ".join(fragile),
+        )
+        dash["validation_refutation"] = sens.to_dict()
+    except Exception as e:  # noqa: BLE001
+        _row("Confounding robustness", "Error", str(e))
+
+    n_warn = sum(1 for r in rows if r["verdict"] != "Pass")
+    headline = (
+        "✅ Model passes all validation checks"
+        if n_warn == 0
+        else f"⚠️ {n_warn} of {len(rows)} checks need attention"
+    )
+    content = (
+        "### Model validation battery\n\n"
+        f"**{headline}**\n\n"
+        "Ran convergence, posterior-predictive, residual, channel-identifiability "
+        "and confounding-robustness checks. The table shows each verdict; run the "
+        "individual tools (e.g. residual diagnostics, refutation suite) for the "
+        "detail tables and plots."
+    )
+    return {
+        "content": content,
+        "dashboard": dash,
+        "tables": [
+            records_to_table_json(
+                rows,
+                title="Validation battery",
+                source="validate_model",
+                group="validation",
+                columns=[
+                    {"key": "check", "label": "Check", "type": "string"},
+                    {"key": "verdict", "label": "Verdict", "type": "string"},
+                    {"key": "detail", "label": "Detail", "type": "string"},
+                ],
+            )
+        ],
+        "plots": plots,
+        "error": None,
+    }
+
+
 OPS = {
     "roi_metrics": roi_metrics,
+    "posterior_predictive_checks": posterior_predictive_checks,
+    "residual_diagnostics": residual_diagnostics,
+    "channel_diagnostics": channel_diagnostics,
+    "refutation_suite": refutation_suite,
+    "cross_validation": cross_validation,
+    "validate_model": validate_model,
     "compute_estimands": compute_estimands,
     "garden_compat": garden_compat,
     "garden_tune_suggestions": garden_tune_suggestions,
