@@ -1574,7 +1574,6 @@ mmm-framework/
 ### Core
 
 - `pymc>=5.26` — Probabilistic programming
-- `pymc-marketing` — MMM components (saturation, adstock)
 - `numpyro>=0.19` — JAX-based NUTS sampler
 - `nutpie>=0.16` — Fast NUTS implementation
 - `pandas>=2.3` — Data manipulation

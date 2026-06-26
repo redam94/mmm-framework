@@ -816,7 +816,7 @@ seasonality = (
 
 # Trend configuration (use TrendConfig enum)
 trend = TrendConfig(
-    trend_type=TrendType.LINEAR,  # Options: LINEAR, PIECEWISE, SPLINE, GP
+    type=TrendType.LINEAR,  # Options: LINEAR, PIECEWISE, SPLINE, GP
     # For PIECEWISE: specify changepoint dates
     # For SPLINE: specify n_knots
 )
