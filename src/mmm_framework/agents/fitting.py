@@ -701,7 +701,8 @@ def build_and_fit(spec: dict, dataset_path: str):
     # fail a fit). Kernel-side: model-only compute; the host enriches with
     # registry calibration status and persists to the run_metrics table.
     # Knob: inference.metrics_draws (0 disables).
-    metrics_draws = int(inf.get("metrics_draws", 200))
+    _metrics_draws = inf.get("metrics_draws", 200)
+    metrics_draws = 200 if _metrics_draws is None else int(_metrics_draws)
     if metrics_draws > 0:
         try:
             from mmm_framework.planning.history import compute_run_metrics

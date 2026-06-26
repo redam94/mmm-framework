@@ -99,12 +99,15 @@ def group_estimands(runs: list[dict[str, Any]]) -> dict[str, Any]:
     ``kpis``, and ``groups`` (each a comparability cluster). Pure; no I/O.
     """
     # Latest run per structural model identity (for the FE default selection).
+    # Ties on created_at break deterministically on run_id so the flagged "latest"
+    # run is stable regardless of input order.
     latest_for_key: dict[str, tuple[float, str]] = {}
     for r in runs:
         mk = r.get("model_key") or r.get("run_id")
+        rid = r.get("run_id") or ""
         ca = float(r.get("created_at") or 0)
-        if mk not in latest_for_key or ca > latest_for_key[mk][0]:
-            latest_for_key[mk] = (ca, r.get("run_id"))
+        if mk not in latest_for_key or (ca, rid) > latest_for_key[mk]:
+            latest_for_key[mk] = (ca, rid)
 
     run_summaries: list[dict[str, Any]] = []
     # group key -> accumulator
@@ -124,7 +127,7 @@ def group_estimands(runs: list[dict[str, Any]]) -> dict[str, Any]:
                 "kpi": kpi,
                 "created_at": r.get("created_at"),
                 "n_estimands": len(est_rows),
-                "is_latest_for_model": latest_for_key.get(model_key, (0, None))[1]
+                "is_latest_for_model": latest_for_key.get(model_key, (0.0, ""))[1]
                 == run_id,
             }
         )
@@ -261,4 +264,8 @@ def build_project_estimands(project_id: str | None) -> dict[str, Any]:
                     "estimands": est,
                 }
             )
+    # Deterministic input order (newest first, run_id tiebreak) so the grouped
+    # output — incl. the channel union, which follows first-seen order — is stable
+    # across calls regardless of how the store enumerates sessions/artifacts.
+    runs.sort(key=lambda r: (-(float(r.get("created_at") or 0)), r.get("run_id") or ""))
     return group_estimands(runs)

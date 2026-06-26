@@ -10,7 +10,6 @@ import type {
   EstimandGroup,
   EstimandModel,
   EstimandRunSummary,
-  ProjectEstimands,
 } from '../../api/services/estimandsService';
 
 // ── Estimands — the declarative causal lens, grouped for comparison ────────────
@@ -82,8 +81,15 @@ function ValueCell({ cell, group }: { cell: EstimandCell | undefined; group: Est
   if (cell.prob_positive != null) tips.push(`P(>0) ${(cell.prob_positive * 100).toFixed(0)}%`);
   if (cell.prob_profitable != null)
     tips.push(`P(profitable) ${(cell.prob_profitable * 100).toFixed(0)}%`);
+  const label = [`${fmtVal(group, cell.mean)} ${cell.units}`.trim(), ci, ...tips]
+    .filter(Boolean)
+    .join(', ');
   return (
-    <div className="flex flex-col items-end gap-0.5" title={tips.join(' · ') || undefined}>
+    <div
+      className="flex flex-col items-end gap-0.5"
+      title={tips.join(' · ') || undefined}
+      aria-label={label}
+    >
       <div className="flex items-center gap-1.5">
         <EvidenceDot evidence={cell.evidence} />
         <span className="num font-medium text-ink-900">{fmtVal(group, cell.mean)}</span>
@@ -148,6 +154,7 @@ function GroupCard({ group, models }: { group: EstimandGroup; models: EstimandMo
           <span className="text-xs text-ink-400">evidence {refHint}</span>
           <span
             className="rounded-full px-2 py-0.5 text-xs font-medium"
+            aria-label={comparable ? `Comparable across ${shown.length} models` : 'Single model'}
             style={
               comparable
                 ? { backgroundColor: COLORS.sage100, color: COLORS.sage800 }
@@ -198,20 +205,24 @@ function kpiLabel(kpi: string): string {
 export function EstimandsPanel({ projectId }: { projectId: string }) {
   const { data, isLoading, isError } = useProjectEstimands(projectId);
 
-  // Default selection: the latest run per distinct model. Once the user toggles,
-  // `selected` holds their explicit choice.
-  const [selected, setSelected] = useState<Set<string> | null>(null);
+  // Default selection: the latest run per distinct model. An explicit selection
+  // is tagged with the project it was made in, so switching projects falls back
+  // to the new project's default (run_ids are project-scoped — a stale set would
+  // silently mis-select or empty the view). No effect needed; a routine refetch
+  // within the same project keeps the user's toggles.
+  const [sel, setSel] = useState<{ projectId: string; ids: Set<string> } | null>(null);
   const defaultSelected = useMemo(
     () => new Set((data?.runs ?? []).filter((r) => r.is_latest_for_model).map((r) => r.run_id)),
     [data],
   );
-  const active = selected ?? defaultSelected;
+  const active = sel && sel.projectId === projectId ? sel.ids : defaultSelected;
+  const setActive = (ids: Set<string>) => setSel({ projectId, ids });
 
   const toggle = (runId: string) => {
     const next = new Set(active);
     if (next.has(runId)) next.delete(runId);
     else next.add(runId);
-    setSelected(next);
+    setActive(next);
   };
 
   const groupsByKpi = useMemo(() => {
@@ -227,7 +238,7 @@ export function EstimandsPanel({ projectId }: { projectId: string }) {
   if (isLoading) return <p className="text-sm text-ink-400">Loading estimands…</p>;
   if (isError) return <p className="text-sm text-rust-700">Failed to load estimands.</p>;
 
-  const payload = data as ProjectEstimands | undefined;
+  const payload = data;
   if (!payload || payload.runs.length === 0) {
     return (
       <EmptyState
@@ -267,14 +278,14 @@ export function EstimandsPanel({ projectId }: { projectId: string }) {
           ))}
           <button
             type="button"
-            onClick={() => setSelected(new Set(payload.runs.map((r) => r.run_id)))}
+            onClick={() => setActive(new Set(payload.runs.map((r) => r.run_id)))}
             className="ml-1 text-xs text-sage-700 underline-offset-2 hover:underline"
           >
             Select all
           </button>
           <button
             type="button"
-            onClick={() => setSelected(new Set(defaultSelected))}
+            onClick={() => setActive(new Set(defaultSelected))}
             className="text-xs text-ink-400 underline-offset-2 hover:underline"
           >
             Latest only

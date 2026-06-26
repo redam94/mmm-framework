@@ -266,6 +266,68 @@ def test_build_project_estimands_reads_artifacts(store):
     assert {r["run_id"] for r in out["runs"]} == {"a", "b"}
 
 
+def test_build_project_estimands_is_deterministic_newest_first(store):
+    """Output order (runs + channel union) is stable regardless of how the store
+    enumerates artifacts: newest run first, run_id tiebreak."""
+    pid = store.create_project("P")["project_id"]
+    _seed_run(
+        store,
+        pid,
+        "older",
+        "revenue",
+        ["TV", "Search"],
+        [
+            _row("contribution_roi", "TV", "roi", "ROI", 2.0, 1.5, 2.6),
+            _row("contribution_roi", "Search", "roi", "ROI", 3.0, 2.0, 4.0),
+        ],
+    )
+    _seed_run(
+        store,
+        pid,
+        "newer",
+        "revenue",
+        ["TV", "Social"],
+        [
+            _row("contribution_roi", "TV", "roi", "ROI", 1.8, 1.2, 2.4),
+            _row("contribution_roi", "Social", "roi", "ROI", 0.6, 0.3, 0.9),
+        ],
+    )
+    out = E.build_project_estimands(pid)
+    # newest run first in the summary list
+    assert out["runs"][0]["run_id"] == "newer"
+    # channel union follows newest-model-first first-seen order, deterministically
+    assert out["groups"][0]["channels"] == ["TV", "Social", "Search"]
+
+
+def test_latest_tie_break_is_deterministic():
+    """Equal created_at: the lexicographically larger run_id wins, both orders."""
+    rows = [_row("contribution_roi", "TV", "roi", "ROI", 2.0, 1.5, 2.6)]
+    runs = [
+        {
+            "run_id": "aaa",
+            "label": "aaa",
+            "model_kind": "mmm",
+            "model_key": "m",
+            "kpi": "revenue",
+            "created_at": 100.0,
+            "estimands": rows,
+        },
+        {
+            "run_id": "zzz",
+            "label": "zzz",
+            "model_kind": "mmm",
+            "model_key": "m",
+            "kpi": "revenue",
+            "created_at": 100.0,
+            "estimands": rows,
+        },
+    ]
+    for order in (runs, list(reversed(runs))):
+        out = E.group_estimands(order)
+        latest = {r["run_id"]: r["is_latest_for_model"] for r in out["runs"]}
+        assert latest == {"zzz": True, "aaa": False}
+
+
 def test_build_project_estimands_skips_runs_without_estimands(store):
     pid = store.create_project("P")["project_id"]
     tid = store.create_session("s", project_id=pid)["thread_id"]

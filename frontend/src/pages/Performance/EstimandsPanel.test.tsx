@@ -140,4 +140,32 @@ describe('EstimandsPanel', () => {
     expect(screen.getByText('9.99')).toBeInTheDocument();
     expect(screen.getByText('Comparable · 3 models')).toBeInTheDocument();
   });
+
+  it('resets an explicit selection when the project changes', () => {
+    // Project B has a single revenue model whose run_id collides with one in A.
+    const projectB: ProjectEstimands = {
+      runs: [runSummary('r1', 'revenue', 'mB', true)],
+      kpis: ['revenue'],
+      groups: [
+        {
+          ...roiGroup,
+          models: [model('r1', 2000, [cell('TV', 4.2, 'strong')])],
+          n_models: 1,
+          n_models_with_data: 1,
+        },
+      ],
+    };
+    useProjectEstimands.mockReturnValue({ data: payload, isLoading: false, isError: false });
+    const { rerender } = render(<EstimandsPanel projectId="A" />);
+    // collapse to a single explicit selection in project A
+    fireEvent.click(screen.getByText('Latest only'));
+    expect(screen.getByText('2.10')).toBeInTheDocument();
+
+    // switch to project B: the panel must fall back to B's default selection,
+    // not carry A's explicit run_id set over.
+    useProjectEstimands.mockReturnValue({ data: projectB, isLoading: false, isError: false });
+    rerender(<EstimandsPanel projectId="B" />);
+    expect(screen.getByText('4.20')).toBeInTheDocument();
+    expect(screen.queryByText('2.10')).not.toBeInTheDocument();
+  });
 });
