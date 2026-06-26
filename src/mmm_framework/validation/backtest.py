@@ -286,9 +286,18 @@ class PosteriorForecaster:
         return out
 
     def _media_at(
-        self, X_media_full_raw: np.ndarray, positions: np.ndarray
+        self,
+        X_media_full_raw: np.ndarray,
+        positions: np.ndarray,
+        cell: int | None = None,
     ) -> np.ndarray:
-        """Sum of saturated channel contributions, (n_pos, n_samples)."""
+        """Sum of saturated channel contributions, (n_pos, n_samples).
+
+        ``cell`` selects the per-geo coefficient when the model was fit with
+        per-geo effectiveness (V3): ``beta_{ch}`` is then (n_samples, n_geos) and
+        we index column ``cell``. A scalar (n_samples,) beta is geo-shared and
+        used for every cell.
+        """
         model = self.model
         out = np.zeros((len(positions), self._n_samples))
         for c, ch in enumerate(model.channel_names):
@@ -301,6 +310,13 @@ class PosteriorForecaster:
             beta = self._get(f"beta_{ch}")
             if beta is None:
                 continue
+            if beta.ndim == 2:  # per-geo (n_samples, n_geos)
+                if cell is not None:
+                    # cells are period-major geo×product; map cell -> geo column.
+                    n_products = getattr(model, "n_products", 1) or 1
+                    beta = beta[:, cell // n_products]
+                else:
+                    beta = beta.mean(axis=1)
             out += x_sat * beta[None, :]
         return out
 
@@ -503,7 +519,8 @@ class PosteriorForecaster:
         mu_grid = np.empty((n_full, n_cells, self._n_samples))
         for j in range(n_cells):
             mu_j = shared + geo_off[None, :, j]
-            mu_j = mu_j + self._media_at(Xm[:, j, :], all_periods)  # per-cell adstock
+            # per-cell adstock; cell=j selects this geo's coefficient under V3
+            mu_j = mu_j + self._media_at(Xm[:, j, :], all_periods, cell=j)
             if model.n_controls > 0:
                 if Xc is None:
                     raise ValueError(

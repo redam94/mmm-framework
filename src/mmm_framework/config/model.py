@@ -20,6 +20,16 @@ class HierarchicalConfig(BaseModel):
     pool_across_geo: bool = True
     pool_across_product: bool = True
 
+    # Per-geo CHANNEL COEFFICIENTS (effectiveness), not just intercept offsets.
+    # Off by default (the model keeps one shared beta per channel + per-geo
+    # intercepts). When on (with geo data), each channel's beta is partial-pooled
+    # across geos so geo-heterogeneous effectiveness is estimable — the pooled
+    # model otherwise lands near a spend-weighted average and scrambles regional
+    # ROI. See model/base._build_channel_betas_geo (V3).
+    vary_media_by_geo: bool = False
+    # Prior SD of per-geo log-effectiveness deviations (between-geo spread).
+    media_geo_sigma: float = 0.3
+
     # Parameterization
     use_non_centered: bool = True  # Better for sparse groups
     non_centered_threshold: int = 20  # Min obs for centered
