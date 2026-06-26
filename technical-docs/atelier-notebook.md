@@ -113,7 +113,7 @@ in the hosted profile that kernel is the scrubbed-env container sandbox.
 - Backend: `src/mmm_framework/api/main.py` (the `# Atelier notebook` block + the
   `/model-garden/copilot` endpoint); `agents/garden_authoring.py`
   (`build_copilot_system_prompt`, `NOTEBOOK_DIAGNOSIS_KNOWLEDGE`);
-  `agents/tools.py::_garden_write_source_to_session`.
+  `agents/tools.py::_garden_copy_source_to_session`.
 - Frontend: `pages/ModelGarden/index.tsx` (3rd tab),
   `components/modelGarden/AtelierNotebook.tsx`, `.../NotebookCell.tsx`,
   `.../NotebookCopilotPanel.tsx`, `.../copilotMarkdown.tsx`,
