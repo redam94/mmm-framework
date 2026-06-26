@@ -8,11 +8,13 @@ import { AgreementLog } from './AgreementLog';
 import { RunsTimeline } from './RunsTimeline';
 import { ModelHealthPanel } from './ModelHealthPanel';
 import { ResponseCurvesPanel } from './ResponseCurvesPanel';
+import { EstimandsPanel } from './EstimandsPanel';
 
-type TabId = 'trajectories' | 'saturation' | 'agreement' | 'health' | 'runs';
+type TabId = 'trajectories' | 'estimands' | 'saturation' | 'agreement' | 'health' | 'runs';
 
 const TABS = [
   { id: 'trajectories', label: 'Trajectories' },
+  { id: 'estimands', label: 'Estimands' },
   { id: 'saturation', label: 'Saturation & ROAS' },
   { id: 'agreement', label: 'Agreement' },
   { id: 'health', label: 'Model health' },
@@ -20,6 +22,7 @@ const TABS = [
 ];
 
 function tabFromPath(pathname: string): TabId {
+  if (pathname.endsWith('/estimands')) return 'estimands';
   if (pathname.endsWith('/saturation')) return 'saturation';
   if (pathname.endsWith('/agreement')) return 'agreement';
   if (pathname.endsWith('/health')) return 'health';
@@ -66,6 +69,10 @@ export function PerformancePage() {
         <ModelHealthPanel />
       ) : active === 'saturation' ? (
         <ResponseCurvesPanel projectId={currentProjectId} />
+      ) : active === 'estimands' ? (
+        // Estimands read their own endpoint (own loading/empty states) and are
+        // not gated behind run_metrics history.
+        <EstimandsPanel projectId={currentProjectId} />
       ) : isLoading ? (
         <p className="text-sm text-ink-400">Loading history…</p>
       ) : noHistory || !history ? (

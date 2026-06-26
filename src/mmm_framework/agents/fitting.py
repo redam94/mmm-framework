@@ -287,9 +287,7 @@ def run_data_quality_gate(dataset_path: str, spec: dict) -> None:
         panel = load_eda_panel(dataset_path, spec)
         report = validate_dataset(panel, spec=spec)
     except Exception as e:  # noqa: BLE001 - a gate failure must not block fitting
-        warnings.warn(
-            f"Data-quality gate skipped (could not validate dataset): {e}"
-        )
+        warnings.warn(f"Data-quality gate skipped (could not validate dataset): {e}")
         return
 
     for issue in report.by_severity("warning"):
@@ -703,7 +701,8 @@ def build_and_fit(spec: dict, dataset_path: str):
     # fail a fit). Kernel-side: model-only compute; the host enriches with
     # registry calibration status and persists to the run_metrics table.
     # Knob: inference.metrics_draws (0 disables).
-    metrics_draws = int(inf.get("metrics_draws", 200))
+    _metrics_draws = inf.get("metrics_draws", 200)
+    metrics_draws = 200 if _metrics_draws is None else int(_metrics_draws)
     if metrics_draws > 0:
         try:
             from mmm_framework.planning.history import compute_run_metrics
@@ -723,6 +722,22 @@ def build_and_fit(spec: dict, dataset_path: str):
         model_run["diagnostics"] = compute_fit_diagnostics(mmm, results)
     except Exception as diag_err:  # noqa: BLE001
         model_run["diagnostics_error"] = str(diag_err)
+
+    # 8d. Estimand snapshot (best-effort, same contract as 8b): realize the
+    # model's declared/default estimands once at fit time so the Performance
+    # page can group them across models without reloading the fit. model_kind
+    # lets the UI/grouping distinguish non-MMM families (CFA/LCA). Gated on the
+    # same metrics_draws knob (0 disables heavy snapshots).
+    model_run["model_kind"] = getattr(mmm, "__garden_model_kind__", "mmm")
+    if metrics_draws > 0:
+        try:
+            from mmm_framework.agents.estimand_rows import evaluate_estimand_rows
+
+            model_run["estimands"] = evaluate_estimand_rows(
+                mmm, random_seed=random_seed
+            )
+        except Exception as est_err:  # noqa: BLE001
+            model_run["estimands_error"] = str(est_err)
 
     if model_saved:
         try:
