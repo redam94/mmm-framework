@@ -62,7 +62,7 @@ So:
   the normal text buffer, harmlessly).
 - **NaN/Inf sanitize at the boundary.** HDI can return `np.nan`; `json.dumps` emits bare `NaN`
   (invalid strict JSON / rejected by JS `JSON.parse`). Reuse the existing
-  `api/main.py:safe_json_dumps` logic (NaN/Inf → `None`, numpy scalars → python) in the op-result
+  `src/mmm_framework/api/main.py:safe_json_dumps` logic (NaN/Inf → `None`, numpy scalars → python) in the op-result
   encoder, both impls. (np-scalar leakage is mostly already avoided by the tools' `float()` casts,
   but don't rely on it — sanitize.)
 - **Projection after extraction.** The *raw* computes return DataFrames / ndarrays /

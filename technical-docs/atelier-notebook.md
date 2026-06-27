@@ -43,7 +43,7 @@ auto-binds as `df`; the live model source is staged into
 sandboxed container kernel can import it). This mirrors `_garden_test_sync`.
 
 ### Output capture
-The cell worker (`_notebook_cell_sync` in `api/main.py`) runs
+The cell worker (`_notebook_cell_sync` in `src/mmm_framework/api/main.py`) runs
 `KernelManager.execute(code, ctx)` and maps the `ExecuteResult` to JSON-safe
 refs using the **same content-addressing `execute_python` uses**:
 `workspace.store_plot` for `fig.show()` figures and `tables.publish_tables` for
@@ -90,11 +90,11 @@ cell" instruction grounding the model source + cell + traceback + siblings.
   `DiagnoseRequest` + apply-to-cell), `NotebookCell.tsx` (the Diagnose button),
   `copilotService.ts` (`streamCopilot(…, notebook?)` + shared `readCopilotStream`).
 - Backend: `GardenCopilotRequest.notebook` + `NotebookCopilotContext` in
-  `api/main.py`; `build_copilot_system_prompt(notebook=…)` +
+  `src/mmm_framework/api/main.py`; `build_copilot_system_prompt(notebook=…)` +
   `NOTEBOOK_DIAGNOSIS_KNOWLEDGE` in `agents/garden_authoring.py`. The chat is
   ephemeral (not persisted with the notebook doc).
 
-## Endpoints (api/main.py — registered before the parametric `/model-garden/{name}` routes)
+## Endpoints (src/mmm_framework/api/main.py — registered before the parametric `/model-garden/{name}` routes)
 
 | Method | Path | Purpose |
 |---|---|---|
