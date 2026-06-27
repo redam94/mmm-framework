@@ -268,6 +268,27 @@ export function AgentPage() {
     }
   }, [threadId, apiKey, modelName, setDashboardData, causal]);
 
+  // The Data Studio committed a cleaned dataset (no chat round-trip). Merge the
+  // fresh dataset/eda/spec into dashboardData (mirrors handleResolveOutlierAction)
+  // and run the same post-action refresh trio so the new file shows everywhere.
+  const handleDatasetCommitted = useCallback(async (payload: {
+    dataset?: DashboardData['dataset']; eda?: DashboardData['eda']; model_spec?: ModelSpec;
+  }) => {
+    setDashboardData((prev: DashboardData) => ({
+      ...prev,
+      dataset: payload.dataset ?? prev.dataset,
+      eda: payload.eda ?? prev.eda,
+      model_spec: payload.model_spec ?? prev.model_spec,
+      data_studio: null,
+    }));
+    try {
+      const arts = await fetch(`${API_BASE}/artifacts/${threadId}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
+      if (Array.isArray(arts)) setArtifacts(arts);
+    } catch { /* ignore */ }
+    causal.refresh();
+    setWorkspaceRefreshKey(k => k + 1);
+  }, [threadId, apiKey, modelName, setDashboardData, causal]);
+
   const handleRerunArtifact = (a: Artifact) => {
     if (a.kind !== 'code_snippet') return;
     const code = String(a.payload?.code ?? '');
@@ -370,6 +391,7 @@ export function AgentPage() {
         onLoadRun={handleLoadRun}
         onClearPython={() => setPythonOutputs([])}
         onResolveOutlierAction={handleResolveOutlierAction}
+        onDatasetCommitted={handleDatasetCommitted}
       />
       </div>
     </div>

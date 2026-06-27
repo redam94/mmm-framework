@@ -32,6 +32,8 @@ import { useExperimentRegistry } from '../../../../api/hooks/useMeasurement';
 import { useGardenModel } from '../../../../api/hooks/useModelGarden';
 import { EdaTab } from './EdaTab';
 import { ValidationTab } from './ValidationTab';
+import { DataStudioModal } from '../dataStudio/DataStudioModal';
+import type { CommitPayload } from '../dataStudio/useDataStudio';
 import type { ModelingMode } from '../../../../api/services/sessionService';
 import type { Artifact, DashboardData, ModelSpec, OutlierAction, PythonOutput } from '../../types';
 
@@ -56,7 +58,7 @@ export function WorkspaceTabs({
   chatLoading,
   onApplySpec, onUnlockField, onQuickAction,
   onRerunArtifact, onDeleteArtifact, onLoadRun, onClearPython,
-  onResolveOutlierAction,
+  onResolveOutlierAction, onDatasetCommitted,
 }: {
   rightExpanded: boolean;
   onToggleExpand: () => void;
@@ -80,8 +82,10 @@ export function WorkspaceTabs({
   onLoadRun: (runName: string) => void;
   onClearPython: () => void;
   onResolveOutlierAction: (action: OutlierAction) => Promise<string | null>;
+  onDatasetCommitted: (payload: CommitPayload) => void;
 }) {
   const [brandingOpen, setBrandingOpen] = useState(false);
+  const [studioOpen, setStudioOpen] = useState(false);
   // Modeling mode (hydrated from the session by ModeSwitcher). MMM keeps the full
   // ROI/experiment surface; non-MMM modes hide the Experiments tab.
   const [modelingMode, setModelingMode] = useState<ModelingMode>('mmm');
@@ -245,6 +249,25 @@ export function WorkspaceTabs({
 
           {activeTab === 'data' && (
             <>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <button
+                  onClick={() => setStudioOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sage-700 hover:bg-sage-800 text-white text-sm font-semibold shadow-sm transition-colors"
+                >
+                  <Database size={16} /> Upload &amp; clean data
+                </button>
+                <p className="text-xs text-ink-300">Stage a CSV/Excel file, run interactive EDA, then convert it into the working dataset.</p>
+              </div>
+              {studioOpen && (
+                <DataStudioModal
+                  threadId={threadId}
+                  apiKey={apiKey}
+                  modelName={modelName}
+                  chatLoading={chatLoading}
+                  onClose={() => setStudioOpen(false)}
+                  onCommitted={(payload) => { onDatasetCommitted(payload); setStudioOpen(false); onTabChange('data'); }}
+                />
+              )}
               <DataFilesWidget files={causal.files} onDelete={causal.deleteFile} />
               <WorkspaceFilesWidget
                 threadId={threadId}

@@ -180,7 +180,23 @@ def load_eda_panel(dataset_path: str, spec: dict | None = None) -> EDAPanel:
     return _load_wide(df, spec, str(path))
 
 
-def _load_long(df: pd.DataFrame, spec: dict | None, source_path: str) -> EDAPanel:
+def load_eda_panel_from_df(
+    df: pd.DataFrame, spec: dict | None = None, source_path: str | None = None
+) -> EDAPanel:
+    """Build an :class:`EDAPanel` from an in-memory DataFrame (the Data Studio's
+    staged/transformed frame) — the path-free sibling of :func:`load_eda_panel`.
+
+    Same MFF-long vs wide dispatch; no disk IO so the studio can re-run EDA on
+    every pipeline edit without writing a temp file.
+    """
+    if "VariableName" in df.columns and "VariableValue" in df.columns:
+        return _load_long(df, spec, source_path)
+    return _load_wide(df, spec, source_path)
+
+
+def _load_long(
+    df: pd.DataFrame, spec: dict | None, source_path: str | None
+) -> EDAPanel:
     date_col = "Period"
     if date_col not in df.columns:
         # Tolerate alternative date column names in otherwise-MFF files.
@@ -248,7 +264,9 @@ def _load_long(df: pd.DataFrame, spec: dict | None, source_path: str) -> EDAPane
     )
 
 
-def _load_wide(df: pd.DataFrame, spec: dict | None, source_path: str) -> EDAPanel:
+def _load_wide(
+    df: pd.DataFrame, spec: dict | None, source_path: str | None
+) -> EDAPanel:
     date_cols = [
         c
         for c in df.columns
@@ -304,6 +322,7 @@ def _load_wide(df: pd.DataFrame, spec: dict | None, source_path: str) -> EDAPane
 __all__ = [
     "EDAPanel",
     "load_eda_panel",
+    "load_eda_panel_from_df",
     "seasonal_period_for_freq",
     "MFF_DIMENSION_COLS",
 ]
