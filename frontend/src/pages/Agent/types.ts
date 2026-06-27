@@ -149,12 +149,87 @@ export interface EdaIssue { severity: string; check: string; variable?: string; 
 export interface OutlierAction { action_id: string; strategy: string; variable?: string; rationale?: string; status: string }
 export interface EdaFindings { issues?: EdaIssue[]; outlier_actions?: OutlierAction[]; normalization_damaged?: string[]; updated_at?: number }
 
+// ─── Data Studio (staged upload → interactive EDA → clean → convert) ─────────
+
+export type StudioRole = 'kpi' | 'media' | 'control' | 'date' | 'group' | 'ignore';
+
+/** One step in the replayable cleaning pipeline. `op` discriminates the union. */
+export type TransformStep =
+  | { op: 'rename'; from: string; to: string }
+  | { op: 'drop_columns'; columns: string[] }
+  | { op: 'cast'; column: string; dtype: 'number' | 'integer' | 'string' | 'category' | 'boolean' | 'datetime' }
+  | { op: 'parse_date'; column?: string; format?: string }
+  | { op: 'fill_missing'; columns?: string[]; strategy: 'mean' | 'median' | 'zero' | 'ffill' | 'bfill' | 'interpolate' | 'constant'; value?: number | string }
+  | { op: 'drop_duplicates'; subset?: string[]; keep?: 'first' | 'last' }
+  | { op: 'filter_rows'; column: string; operator: string; value?: unknown; value2?: unknown }
+  | { op: 'date_range'; column?: string; start?: string; end?: string }
+  | { op: 'winsorize'; column: string; periods?: string[]; cap_value: number }
+  | { op: 'impute'; column: string; periods?: string[]; value: number }
+  | { op: 'event_dummy'; name: string; periods: string[] };
+
+export interface TransformDiff { rows_before: number; rows_after: number; cols_before: number; cols_after: number }
+
+/** An inline figure blob (PlotCard renders it directly — no /plots fetch). */
+export interface StudioChart { key: string; title: string; data: unknown; layout: unknown }
+
+export interface StudioTableSpec { title: string; columns: string[]; rows: unknown[][] }
+
+export interface StudioOutlierSuggestion {
+  action_id: string;
+  strategy: string;
+  variable: string;
+  rationale: string;
+  step: TransformStep | null;
+  spec_change?: Record<string, unknown> | null;
+}
+
+export interface StudioEdaResult {
+  analyses: Record<string, { figures: StudioChart[]; tables: StudioTableSpec[]; stats: Record<string, unknown> }>;
+  issues: EdaIssue[];
+  outlier_suggestions: StudioOutlierSuggestion[];
+  normalization_damaged: string[];
+  warnings: string[];
+  meta?: Record<string, unknown>;
+}
+
+/** The current staged dataset + pipeline (hydrated from GET /data-studio). */
+export interface DataStudioState {
+  staging_id: string;
+  filename: string;
+  columns: string[];
+  all_columns: string[];
+  dtypes: Record<string, string>;
+  roles: Record<string, StudioRole>;
+  date_col: string | null;
+  is_long: boolean;
+  n_rows: number;
+  n_cols: number;
+  preview_rows: Record<string, unknown>[];
+  steps: TransformStep[];
+  diff?: TransformDiff;
+  warnings: string[];
+  committed: boolean;
+}
+
+/** Lightweight pointer the backend rides on dashboard_data so the Data tab can
+ *  badge an in-progress staging without holding the full preview. */
+export interface DataStudioPointer {
+  active?: boolean;
+  committed?: boolean;
+  staging_id?: string;
+  filename?: string;
+  n_rows?: number;
+  n_cols?: number;
+}
+
 // ─── Dashboard data (streamed via dashboard_update; shape is server-driven) ──
 
 export interface DashboardData {
   tables?: TableRef[];
   eda?: EdaFindings;
-  // The rest of the payload is server-driven and untyped (was `any` in AgentPage.tsx).
+  data_studio?: DataStudioPointer | null;
+  // dataset / model_spec / decomposition / roi_metrics / … remain server-driven
+  // and untyped via this index signature (callers cast where they need shape).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
