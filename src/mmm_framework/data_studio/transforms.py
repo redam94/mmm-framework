@@ -160,8 +160,16 @@ def _op_parse_date(df: pd.DataFrame, step: dict, roles: dict) -> pd.DataFrame:
     if not col or col not in df.columns:
         raise RuntimeError("no date column to parse")
     fmt = step.get("format") or None
+    dayfirst = bool(step.get("dayfirst", False))
     df = df.copy()
-    df[col] = pd.to_datetime(df[col], format=fmt, errors="coerce")
+    if fmt:
+        df[col] = pd.to_datetime(df[col], format=fmt, errors="coerce")
+    else:
+        # No explicit format: infer per-element (handles mixed/non-ISO), honouring
+        # day-first for DD/MM/YYYY inputs.
+        df[col] = pd.to_datetime(
+            df[col], errors="coerce", dayfirst=dayfirst, format="mixed"
+        )
     roles[col] = "date"
     return df
 

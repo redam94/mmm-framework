@@ -144,11 +144,49 @@ def current_result(tid: str, manifest: dict | None = None) -> PipelineResult:
 # ── roles ─────────────────────────────────────────────────────────────────────
 
 
+def coerce_date_col(df: pd.DataFrame, date_col: str | None) -> pd.DataFrame:
+    """Parse ``date_col`` to datetime ROBUSTLY (never raising).
+
+    Real uploads carry ``01/11/2021`` / ``11-01-2021`` / mixed formats; the EDA
+    loader's strict ``pd.to_datetime`` raises on those, which would crash the
+    panel build (and silently null role inference). Try a few coercing parses
+    (ISO, day-first, mixed) and keep the one that parses the most values; leave
+    the column untouched if none parse (it isn't really a date).
+    """
+    if not date_col or date_col not in df.columns:
+        return df
+    s = df[date_col]
+    if pd.api.types.is_datetime64_any_dtype(s):
+        return df
+    candidates = []
+    for kw in (
+        {},
+        {"dayfirst": True},
+        {"format": "mixed"},
+        {"format": "mixed", "dayfirst": True},
+    ):
+        try:
+            candidates.append(pd.to_datetime(s, errors="coerce", **kw))
+        except Exception:
+            continue
+    if not candidates:
+        return df
+    best = max(candidates, key=lambda x: int(x.notna().sum()))
+    if int(best.notna().sum()) == 0:
+        return df  # not a date column after all — leave it as-is
+    out = df.copy()
+    out[date_col] = best
+    return out
+
+
 def infer_roles(df: pd.DataFrame) -> dict[str, str]:
     """Heuristic default role map (column -> role) for a freshly staged upload."""
     roles: dict[str, str] = {}
+    date_col = resolve_date_col(df)
     try:
-        panel = load_eda_panel_from_df(df)
+        # Coerce the date column first so a non-ISO format doesn't blow up the
+        # panel build — otherwise role inference silently yields nothing.
+        panel = load_eda_panel_from_df(coerce_date_col(df, date_col))
         if panel.kpi:
             roles[panel.kpi] = "kpi"
         for m in panel.media:
@@ -157,7 +195,6 @@ def infer_roles(df: pd.DataFrame) -> dict[str, str]:
             roles[c] = "control"
     except Exception:
         pass
-    date_col = resolve_date_col(df)
     if date_col:
         roles[date_col] = "date"
     if not is_long_frame(df):
@@ -357,7 +394,27 @@ def run_eda_on_frame(
     )
 
     spec = _spec_from_roles(roles)
-    panel = load_eda_panel_from_df(df, spec)
+    # Robustly parse the date column first; a non-ISO format would otherwise make
+    # the panel build raise and 500 the whole tab.
+    df = coerce_date_col(df, resolve_date_col(df, roles))
+    try:
+        panel = load_eda_panel_from_df(df, spec)
+    except Exception as exc:
+        date_col = resolve_date_col(df, roles)
+        hint = (
+            f" The date column `{date_col}` may not be parseable — add a "
+            "**Parse date** step (with day-first if your dates are DD/MM/YYYY)."
+            if date_col
+            else " Assign a **date** role to the period column."
+        )
+        return {
+            "analyses": {},
+            "issues": [],
+            "outlier_suggestions": [],
+            "normalization_damaged": [],
+            "warnings": [f"Could not build the dataset for analysis: {exc}.{hint}"],
+            "meta": {},
+        }
     cfg = EDAConfig()
     requested = [a for a in (analyses or list(STUDIO_ANALYSES)) if a in STUDIO_ANALYSES]
     focus = [v for v in (variables or []) if v in panel.variables] or None
@@ -676,6 +733,9 @@ def build_commit_artifact(
 
     df = result.df.copy()
     roles = result.roles
+    # Normalise the date column to real datetime (handles DD/MM/YYYY etc.) so the
+    # committed CSV is unambiguous and load_mff parses it.
+    df = coerce_date_col(df, result.date_col)
     kpi = next((c for c, r in roles.items() if r == "kpi"), None)
     media = [c for c, r in roles.items() if r == "media"]
     controls = [c for c, r in roles.items() if r == "control"]

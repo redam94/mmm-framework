@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TransformPanel } from './TransformPanel';
-import type { DataStudioState } from '../../../types';
+import type { DataStudioState, TransformStep } from '../../../types';
 
 function makeState(over: Partial<DataStudioState> = {}): DataStudioState {
   return {
@@ -23,9 +23,9 @@ describe('TransformPanel', () => {
   });
 
   it('removes and reorders existing steps', () => {
-    const steps = [
-      { op: 'drop_columns', columns: ['notes'] } as const,
-      { op: 'fill_missing', strategy: 'zero' } as const,
+    const steps: TransformStep[] = [
+      { op: 'drop_columns', columns: ['notes'] },
+      { op: 'fill_missing', strategy: 'zero' },
     ];
     const onSteps = vi.fn();
     render(<TransformPanel state={makeState({ steps: [...steps] })} busy={false} onSteps={onSteps} onRoles={vi.fn()} />);

@@ -43,15 +43,16 @@ export function StepBuilder({
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [dropCols, setDropCols] = useState<string[]>([]);
+  const [dayfirst, setDayfirst] = useState(false);
 
-  const reset = () => { setTo(''); setValue(''); setStart(''); setEnd(''); setDropCols([]); };
+  const reset = () => { setTo(''); setValue(''); setStart(''); setEnd(''); setDropCols([]); setDayfirst(false); };
 
   const build = (): TransformStep | null => {
     switch (op) {
       case 'drop_columns': return dropCols.length ? { op, columns: dropCols } : null;
       case 'rename': return column && to ? { op, from: column, to } : null;
       case 'cast': return column ? { op, column, dtype: dtype as 'number' } : null;
-      case 'parse_date': return { op, column: column || undefined };
+      case 'parse_date': return { op, column: column || undefined, ...(dayfirst ? { dayfirst: true } : {}) } as TransformStep;
       case 'fill_missing': return { op, strategy: strategy as 'mean' };
       case 'drop_duplicates': return { op };
       case 'filter_rows': return column ? { op, column, operator, value: operator === 'notnull' ? undefined : value } : null;
@@ -90,7 +91,7 @@ export function StepBuilder({
 
         {op === 'rename' && (<>{colSelect}<div><FLabel>New name</FLabel><input className={iCls} value={to} onChange={e => setTo(e.target.value)} /></div></>)}
         {op === 'cast' && (<>{colSelect}<div><FLabel>Type</FLabel><select className={sCls} value={dtype} onChange={e => setDtype(e.target.value)}>{DTYPES.map(d => <option key={d}>{d}</option>)}</select></div></>)}
-        {op === 'parse_date' && colSelect}
+        {op === 'parse_date' && (<>{colSelect}<label className="flex items-center gap-1.5 text-xs text-ink-600 self-end pb-1.5"><input type="checkbox" checked={dayfirst} onChange={e => setDayfirst(e.target.checked)} /> Day-first (DD/MM/YYYY)</label></>)}
         {op === 'fill_missing' && (<div><FLabel>Strategy</FLabel><select className={sCls} value={strategy} onChange={e => setStrategy(e.target.value)}>{FILL.map(s => <option key={s}>{s}</option>)}</select></div>)}
         {op === 'filter_rows' && (<>{colSelect}<div><FLabel>Op</FLabel><select className={sCls} value={operator} onChange={e => setOperator(e.target.value)}>{OPERATORS.map(o => <option key={o}>{o}</option>)}</select></div>{operator !== 'notnull' && <div><FLabel>Value</FLabel><input className={iCls} value={value} onChange={e => setValue(e.target.value)} /></div>}</>)}
         {op === 'date_range' && (<><div><FLabel>Start</FLabel><input type="date" className={iCls} value={start} onChange={e => setStart(e.target.value)} /></div><div><FLabel>End</FLabel><input type="date" className={iCls} value={end} onChange={e => setEnd(e.target.value)} /></div></>)}

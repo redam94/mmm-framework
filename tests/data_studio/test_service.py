@@ -68,6 +68,61 @@ def test_infer_roles(ws):
     assert roles["week"] == "date"
 
 
+def _wide_ddmmyyyy(n=27) -> pd.DataFrame:
+    # DD/MM/YYYY dates (days > 12 force day-first) — the strict loader crashes on these
+    dates = [f"{(d % 28) + 1:02d}/11/2021" for d in range(n)]
+    return pd.DataFrame(
+        {
+            "order_date": dates,
+            "revenue": 1000 + np.arange(n) * 5.0,
+            "tv_spend": np.abs(np.random.RandomState(0).normal(50, 10, n)),
+            "search_spend": np.abs(np.random.RandomState(1).normal(30, 8, n)),
+        }
+    )
+
+
+def test_infer_roles_survives_non_iso_dates(ws):
+    """A DD/MM/YYYY date column must NOT silently null role inference."""
+    from mmm_framework.data_studio import service as S
+
+    roles = S.infer_roles(_wide_ddmmyyyy())
+    assert roles.get("revenue") == "kpi"
+    assert roles.get("tv_spend") == "media"
+    assert roles.get("order_date") == "date"
+
+
+def test_run_eda_does_not_crash_on_non_iso_dates(ws):
+    """EDA on a non-ISO-date frame returns analyses, not a 500/exception."""
+    import json
+
+    from mmm_framework.data_studio import service as S
+
+    df = _wide_ddmmyyyy()
+    out = S.run_eda_on_frame(df, S.infer_roles(df), analyses=["overview", "outliers"])
+    assert "overview" in out["analyses"]
+    assert out["analyses"]["overview"]["figures"]
+    json.dumps(out)
+
+
+def test_commit_normalizes_ddmmyyyy_dates(ws):
+    """Committing a DD/MM/YYYY frame writes parseable MFF-long dates."""
+    from mmm_framework.data_studio import service as S
+
+    tid = "t_commit_ddmm"
+    _stage(tid, _wide_ddmmyyyy(), name="orders.csv")
+    state = {
+        "model_spec": {},
+        "locked_fields": [],
+        "pending_spec_changes": [],
+        "dashboard_data": {},
+    }
+    err, _summary, update = S.commit_core(state, tid, reason="t")
+    assert err is None, err
+    df_long = pd.read_csv(update["dataset_path"])
+    parsed = pd.to_datetime(df_long["Period"], errors="coerce")
+    assert parsed.notna().all()  # every committed date parses
+
+
 # ── EDA on frame: inline + json-safe ──────────────────────────────────────────
 
 
