@@ -412,6 +412,16 @@ class ChannelROISection(Section):
             ci_level=self.section_config.credible_interval,
         )
 
+        # Break-even reference for the forest plot: 1.0 when every channel is
+        # monetary (the usual case), 0 when every channel is an efficiency
+        # metric; a mixed portfolio keeps 1.0 (the per-channel table is
+        # authoritative — the plot mixes units).
+        roi_meta = self.data.channel_roi or {}
+        monetary_flags = [
+            roi_meta.get(ch, {}).get("is_monetary", True) for ch in channels
+        ]
+        reference_line = 0.0 if monetary_flags and not any(monetary_flags) else 1.0
+
         # Forest plot
         forest_plot = charts.create_roi_forest_plot(
             channels=channels,
@@ -420,6 +430,7 @@ class ChannelROISection(Section):
             roi_upper=roi_upper,
             config=self.config,
             chart_config=chart_config,
+            reference_line=reference_line,
         )
 
         # ROI table
@@ -450,16 +461,29 @@ class ChannelROISection(Section):
         # Sort by mean ROI
         sort_idx = np.argsort(roi_mean)[::-1]
 
+        # Per-channel measurement metadata (impression-level ROI). Spend channels
+        # default to ROI vs a 1.0 break-even, so the table is unchanged;
+        # impression channels show "Efficiency / 1K impr" judged against 0.
+        roi_meta = self.data.channel_roi or {}
+        all_monetary = all(
+            roi_meta.get(ch, {}).get("is_monetary", True) for ch in channels
+        )
+        value_header = "ROI (Mean)" if all_monetary else "Value (Mean)"
+
         rows = []
         for i in sort_idx:
             ch = channels[i]
             mean, lower, upper = roi_mean[i], roi_lower[i], roi_upper[i]
+            meta = roi_meta.get(ch, {})
+            ref = float(meta.get("reference", 1.0))
+            metric_label = meta.get("value_units", "ROI")
 
-            # Determine confidence class
-            if lower > 1.0:
+            # Determine confidence class against the metric's break-even
+            # reference (1.0 for ROI, 0 for efficiency).
+            if lower > ref:
                 conf_class = "positive"
                 status = "Strong evidence"
-            elif upper < 1.0:
+            elif upper < ref:
                 conf_class = "negative"
                 status = "Underperforming"
             else:
@@ -469,6 +493,7 @@ class ChannelROISection(Section):
             rows.append(f"""
                 <tr>
                     <td>{html.escape(ch)}</td>
+                    <td>{html.escape(str(metric_label))}</td>
                     <td class="mono">{mean:.2f}</td>
                     <td class="mono">[{lower:.2f}, {upper:.2f}]</td>
                     <td class="{conf_class}">{status}</td>
@@ -480,7 +505,8 @@ class ChannelROISection(Section):
                 <thead>
                     <tr>
                         <th>Channel</th>
-                        <th>ROI (Mean)</th>
+                        <th>Metric</th>
+                        <th>{value_header}</th>
                         <th>{ci_level}% CI</th>
                         <th>Confidence</th>
                     </tr>
@@ -1763,7 +1789,13 @@ class EstimandsSection(Section):
             else:
                 ci_str = "—"
 
-            ref = 1.0 if self._is_ratio_kind(kind, units) else 0.0
+            # Break-even reference: trust the estimand's measurement metadata
+            # when present (efficiency metrics carry reference 0 even though their
+            # kind is still "roi"); else fall back to the kind/units heuristic.
+            if v.get("reference") is not None:
+                ref = float(v["reference"])
+            else:
+                ref = 1.0 if self._is_ratio_kind(kind, units) else 0.0
             if lower is not None and upper is not None and float(lower) > ref:
                 conf_class, status = "positive", "Strong"
             elif lower is not None and upper is not None and float(upper) < ref:

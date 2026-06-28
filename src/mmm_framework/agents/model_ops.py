@@ -48,31 +48,50 @@ def roi_metrics(mmm: Any, results: Any = None, *, hdi_prob: float = 0.94) -> dic
         from mmm_framework.reporting.helpers import compute_roi_with_uncertainty
 
         roi_df = compute_roi_with_uncertainty(mmm, hdi_prob=hdi_prob)
+
+        def _nan(x: Any) -> bool:
+            return x is None or x != x
+
+        # "Prob favorable" = P(profitable) for dollar-cost channels (ROI > 1),
+        # else P(positive) for efficiency channels (any positive is good).
+        prob_fav = []
+        for _, row in roi_df.iterrows():
+            pp = row.get("prob_profitable")
+            prob_fav.append(row.get("prob_positive") if _nan(pp) else pp)
+        roi_df = roi_df.assign(prob_favorable=prob_fav)
+
+        any_efficiency = any(not bool(m) for m in roi_df.get("metric_is_monetary", []))
+        title = "ROI / Efficiency Analysis" if any_efficiency else "ROI Analysis"
         content = (
-            "### ROI Analysis\n\n"
-            "| Channel | Mean ROI | 94% HDI | Prob Profitable |\n|---|---|---|---|\n"
+            f"### {title}\n\n"
+            "| Channel | Metric | Mean | 94% HDI | Prob favorable |\n"
+            "|---|---|---|---|---|\n"
         )
         for _, row in roi_df.iterrows():
             ci = f"[{row['roi_hdi_low']:.2f}, {row['roi_hdi_high']:.2f}]"
+            metric = row.get("value_units", "ROI")
+            pf = row.get("prob_favorable")
+            pf_str = "—" if _nan(pf) else f"{pf:.1%}"
             content += (
-                f"| {row['channel']} | {row['roi_mean']:.2f} | {ci} | "
-                f"{row['prob_profitable']:.1%} |\n"
+                f"| {row['channel']} | {metric} | {row['roi_mean']:.2f} | {ci} | "
+                f"{pf_str} |\n"
             )
         res = _ok(content, {"roi_metrics": roi_df.to_dict(orient="records")})
         res["tables"] = [
             df_to_table_json(
                 roi_df,
-                title="ROI by Channel",
+                title="ROI / Efficiency by Channel",
                 source="get_roi_metrics",
                 group="results",
                 columns=[
                     {"key": "channel", "label": "Channel", "type": "string"},
-                    {"key": "roi_mean", "label": "Mean ROI", "type": "number"},
+                    {"key": "value_units", "label": "Metric", "type": "string"},
+                    {"key": "roi_mean", "label": "Mean", "type": "number"},
                     {"key": "roi_hdi_low", "label": "HDI Low", "type": "number"},
                     {"key": "roi_hdi_high", "label": "HDI High", "type": "number"},
                     {
-                        "key": "prob_profitable",
-                        "label": "Prob Profitable",
+                        "key": "prob_favorable",
+                        "label": "Prob favorable",
                         "type": "percent",
                     },
                 ],

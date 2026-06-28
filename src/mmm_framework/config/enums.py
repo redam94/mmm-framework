@@ -25,6 +25,42 @@ class VariableRole(str, Enum):
     AUXILIARY = "auxiliary"  # For allocation weights, etc.
 
 
+class MeasurementUnit(str, Enum):
+    """How a media channel's modeled variable is measured.
+
+    This drives how the channel's efficiency is reported, **not** how its
+    response curve is fit (the curve is always fit on the modeled variable):
+
+    - ``SPEND`` (the default, backward-compatible): the modeled variable *is*
+      dollars spent, so ROI / marginal ROAS divide the channel's incremental
+      KPI by the summed spend exactly as before.
+    - ``IMPRESSIONS`` / ``CLICKS``: the modeled variable is a *volume*, not
+      dollars. ROI cannot be formed by summing the variable. If a cost is known
+      (a separate ``spend_column``, or a ``cpm`` / ``cpc`` constant) the volume
+      is converted to a spend series and normal ROI / mROAS are reported;
+      otherwise the framework reports **efficiency** instead — incremental KPI
+      per 1,000 impressions (or per click) and the marginal efficiency of an
+      extra 1,000 impressions (or click), whose break-even reference is 0, not
+      1.0.
+    - ``OTHER``: a volume with no natural per-1,000 unit; treated like
+      ``IMPRESSIONS`` for efficiency but labeled per unit.
+
+    See :class:`mmm_framework.config.variables.MediaChannelConfig` for the
+    companion ``spend_column`` / ``cpm`` / ``cpc`` fields and
+    :mod:`mmm_framework.reporting.helpers.measurement` for the resolver that
+    turns this into a divisor + metric labels.
+    """
+
+    SPEND = "spend"
+    IMPRESSIONS = "impressions"
+    CLICKS = "clicks"
+    OTHER = "other"
+
+    @property
+    def is_spend(self) -> bool:
+        return self is MeasurementUnit.SPEND
+
+
 class CausalControlRole(str, Enum):
     """Causal role of a *control* variable, used to prevent "bad control" bias.
 

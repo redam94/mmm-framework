@@ -232,6 +232,20 @@ def _mff_config_from_spec(spec: dict):
         if "coefficient" in ch_priors:
             ch_builder.with_coefficient_prior(_build_prior(ch_priors["coefficient"]))
 
+        # Measurement descriptor for impression-level ROI. Optional; absent ⇒
+        # the modeled variable is dollars (normal ROI). ``measurement_unit`` of
+        # impressions/clicks plus an optional spend_column / cpm / cpc switches
+        # the channel to derived-spend ROI or per-volume efficiency.
+        unit = media.get("measurement_unit")
+        if unit:
+            ch_builder.measured_in(unit)
+        if media.get("spend_column"):
+            ch_builder.with_spend_column(media["spend_column"])
+        if media.get("cpm") is not None:
+            ch_builder.with_cpm(float(media["cpm"]))
+        if media.get("cpc") is not None:
+            ch_builder.with_cpc(float(media["cpc"]))
+
         mff_builder.add_media_builder(ch_builder)
 
     for control in spec.get("control_variables", []):

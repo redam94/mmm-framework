@@ -61,17 +61,27 @@ def compute_roi_with_uncertainty(
     >>> roi_df = compute_roi_with_uncertainty(mmm)
     >>> print(roi_df[['channel', 'roi_mean', 'roi_hdi_low', 'roi_hdi_high', 'prob_profitable']])
     """
+    from .measurement import (
+        resolve_channel_divisor,
+        spend_metric_meta,
+    )
+
     _check_model_fitted(model)
 
     posterior = _get_posterior(model)
     channels = _get_channel_names(model)
     y_mean, y_std = _get_scaling_params(model)
 
-    # Get spend data
-    if spend_data is None:
-        spend_data = _extract_spend_from_model(model)
-    elif isinstance(spend_data, pd.Series):
-        spend_data = spend_data.to_dict()
+    # An explicit external spend series is treated as monetary dollars (the
+    # legacy override path). When absent, the measurement-aware resolver picks
+    # the divisor AND the labels per channel (ROI for spend / cpm / cpc /
+    # spend_column channels; efficiency per 1,000 impressions for cost-less
+    # impression channels).
+    external_spend: dict[str, float] | None = None
+    if spend_data is not None:
+        external_spend = (
+            spend_data.to_dict() if isinstance(spend_data, pd.Series) else spend_data
+        )
 
     results = []
 
@@ -90,14 +100,26 @@ def compute_roi_with_uncertainty(
             idx = np.random.choice(len(contrib_samples), n_samples, replace=False)
             contrib_samples = contrib_samples[idx]
 
-        # Get spend
-        spend = spend_data.get(channel, 0.0)
-        if spend <= 0:
-            logger.warning(f"No spend data for {channel}, skipping ROI computation")
+        # Resolve the divisor + metric metadata for this channel.
+        if external_spend is not None:
+            divisor = float(external_spend.get(channel, 0.0))
+            meta = spend_metric_meta()
+        else:
+            resolved = resolve_channel_divisor(model, channel)
+            divisor = resolved.total
+            meta = resolved.meta
+            if not resolved.found:
+                logger.warning(f"No media data for {channel}, skipping ROI computation")
+                continue
+
+        if divisor <= 0:
+            logger.warning(
+                f"Non-positive divisor for {channel}, skipping ROI computation"
+            )
             continue
 
-        # Compute ROI samples
-        roi_samples = contrib_samples / spend
+        # Compute ROI / efficiency samples (incremental KPI per divisor unit).
+        roi_samples = contrib_samples / divisor
 
         # Compute statistics
         contrib_mean = float(np.mean(contrib_samples))
@@ -107,12 +129,18 @@ def compute_roi_with_uncertainty(
         roi_lower, roi_upper = _compute_hdi(roi_samples, hdi_prob)
 
         prob_positive = float(np.mean(roi_samples > 0))
-        prob_profitable = float(np.mean(roi_samples > 1))
+        # P(profitable) only makes sense against a 1.0 break-even (a dollar
+        # cost). For efficiency metrics there is no cost to beat — report None.
+        prob_profitable = (
+            float(np.mean(roi_samples > meta.reference))
+            if meta.supports_profitability
+            else None
+        )
 
         results.append(
             ROIResult(
                 channel=channel,
-                spend=spend,
+                spend=divisor,
                 contribution_mean=contrib_mean,
                 contribution_lower=contrib_lower,
                 contribution_upper=contrib_upper,
@@ -121,6 +149,14 @@ def compute_roi_with_uncertainty(
                 roi_upper=roi_upper,
                 prob_positive=prob_positive,
                 prob_profitable=prob_profitable,
+                metric_is_monetary=meta.is_monetary,
+                metric_label=meta.roi_label,
+                marginal_label=meta.marginal_label,
+                value_units=meta.value_units,
+                divisor_units=meta.divisor_units,
+                reference=meta.reference,
+                measurement_unit=meta.unit.value,
+                cost_basis=meta.cost_basis,
             )
         )
 
@@ -128,53 +164,18 @@ def compute_roi_with_uncertainty(
 
 
 def _extract_spend_from_model(model: Any) -> dict[str, float]:
-    """Extract total spend per channel from model's panel data."""
-    spend = {}
-    channels = _get_channel_names(model)
+    """Per-channel ROI divisor (total) from the model.
 
-    def _get_column_sum(data, col_idx: int, col_name: str) -> float | None:
-        """Safely get sum of a column from DataFrame or array."""
-        if data is None:
-            return None
-        try:
-            if hasattr(data, "columns") and col_name in data.columns:
-                # DataFrame with matching column name
-                return float(data[col_name].sum())
-            elif hasattr(data, "iloc"):
-                # DataFrame - use iloc
-                if col_idx < data.shape[1]:
-                    return float(data.iloc[:, col_idx].sum())
-            elif hasattr(data, "values"):
-                # Has .values attribute (DataFrame-like)
-                arr = data.values
-                if col_idx < arr.shape[1]:
-                    return float(arr[:, col_idx].sum())
-            else:
-                # Numpy array
-                if col_idx < data.shape[1]:
-                    return float(data[:, col_idx].sum())
-        except Exception:
-            pass
-        return None
+    Thin wrapper over the measurement-aware resolver
+    (:func:`mmm_framework.reporting.helpers.measurement.resolve_spend_dict`).
+    For ordinary spend channels this is the summed media variable exactly as
+    before; for impression/click channels it is the resolved divisor (a derived
+    spend from cpm/cpc/spend_column, or the per-1,000-impression volume for the
+    efficiency case).
+    """
+    from .measurement import resolve_spend_dict
 
-    # Try panel data
-    X_media = None
-    if hasattr(model, "panel") and model.panel is not None:
-        X_media = getattr(model.panel, "X_media", None)
-
-    if X_media is None:
-        X_media = getattr(model, "X_media_raw", None)
-
-    if X_media is None:
-        X_media = getattr(model, "X_media", None)
-
-    if X_media is not None:
-        for i, ch in enumerate(channels):
-            val = _get_column_sum(X_media, i, ch)
-            if val is not None:
-                spend[ch] = val
-
-    return spend
+    return resolve_spend_dict(model)
 
 
 def _get_contribution_samples(

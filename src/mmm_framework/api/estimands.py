@@ -141,7 +141,15 @@ def group_estimands(runs: list[dict[str, Any]]) -> dict[str, Any]:
             if grp is None:
                 kind = row.get("kind") or ""
                 units = row.get("units") or ""
-                ratio = is_ratio_kind(kind, units)
+                # Prefer the row's explicit measurement reference (impression-
+                # level ROI: efficiency metrics carry reference 0 even though
+                # their kind is still "roi"); else fall back to the heuristic.
+                if row.get("reference") is not None:
+                    reference = float(row["reference"])
+                    ratio = reference == 1.0
+                else:
+                    ratio = is_ratio_kind(kind, units)
+                    reference = 1.0 if ratio else 0.0
                 grp = {
                     "key": gkey,
                     "estimand": name,
@@ -150,7 +158,7 @@ def group_estimands(runs: list[dict[str, Any]]) -> dict[str, Any]:
                     "kind": kind,
                     "units": units,
                     "is_ratio": ratio,
-                    "reference": 1.0 if ratio else 0.0,
+                    "reference": reference,
                     "channels": [],
                     "_models": {},  # run_id -> model entry (collapsed below)
                 }
@@ -177,7 +185,11 @@ def group_estimands(runs: list[dict[str, Any]]) -> dict[str, Any]:
                 }
                 grp["_models"][run_id] = model
 
-            ref = 1.0 if grp["is_ratio"] else 0.0
+            ref = (
+                float(row["reference"])
+                if row.get("reference") is not None
+                else (1.0 if grp["is_ratio"] else 0.0)
+            )
             mean = row.get("mean")
             lower = row.get("hdi_low")
             upper = row.get("hdi_high")

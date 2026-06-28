@@ -1511,13 +1511,12 @@ class BayesianMMMExtractor(
     def _compute_channel_roi(self) -> dict[str, dict[str, float]] | None:
         """Compute channel ROI with uncertainty."""
         try:
+            from mmm_framework.reporting.helpers.measurement import (
+                resolve_channel_divisor,
+            )
+
             channels = self._get_channel_names()
             if not channels:
-                return None
-
-            current_spend = self._get_current_spend()
-            if not current_spend:
-                logger.debug("No spend data for ROI computation")
                 return None
 
             trace = getattr(self.mmm, "_trace", None)
@@ -1531,8 +1530,13 @@ class BayesianMMMExtractor(
             roi_results = {}
 
             for ch in channels:
-                spend = current_spend.get(ch, 0)
-                if spend <= 0:
+                # Measurement-aware divisor: dollar spend for spend / cpm / cpc /
+                # spend_column channels (-> ROI), or per-1,000-impression volume
+                # for cost-less impression channels (-> efficiency).
+                resolved = resolve_channel_divisor(self.mmm, ch)
+                spend = resolved.total
+                meta = resolved.meta
+                if not resolved.found or spend <= 0:
                     continue
 
                 # Try to get contribution samples
@@ -1593,6 +1597,14 @@ class BayesianMMMExtractor(
                         "upper": float(
                             np.percentile(roi_samples, (1 + self.ci_prob) / 2 * 100)
                         ),
+                        # Measurement metadata so the section/chart render ROI vs
+                        # efficiency (and the right break-even reference).
+                        "reference": meta.reference,
+                        "metric_label": meta.roi_label,
+                        "value_units": meta.value_units,
+                        "is_monetary": meta.is_monetary,
+                        "measurement_unit": meta.unit.value,
+                        "cost_basis": meta.cost_basis,
                     }
 
             return roi_results if roi_results else None
@@ -1872,16 +1884,32 @@ class BayesianMMMExtractor(
         return None
 
     def _compute_blended_roi(self) -> dict[str, float] | None:
-        """Compute blended marketing ROI with uncertainty."""
-        try:
-            # Get total attribution and spend
-            attribution = self._compute_marketing_attribution()
-            spend = self._get_current_spend()
+        """Compute blended marketing ROI with uncertainty.
 
-            if attribution is None or spend is None:
+        A single blended ROI is only meaningful when every channel is measured
+        in dollars (spend, or impressions/clicks costed via cpm/cpc/spend_column
+        -> derived dollar spend). If any channel reports per-volume *efficiency*
+        (no cost), the units are non-comparable, so the blended rollup is
+        suppressed and only per-channel numbers are shown (the chosen policy for
+        mixed portfolios)."""
+        try:
+            from mmm_framework.reporting.helpers.measurement import (
+                resolve_channel_divisor,
+            )
+
+            attribution = self._compute_marketing_attribution()
+            if attribution is None:
                 return None
 
-            total_spend = sum(spend.values())
+            total_spend = 0.0
+            for ch in self._get_channel_names() or []:
+                resolved = resolve_channel_divisor(self.mmm, ch)
+                if not resolved.found:
+                    continue
+                if not resolved.meta.is_monetary:
+                    # Mixed/efficiency portfolio -- a blended $ ROI is meaningless.
+                    return None
+                total_spend += resolved.total
             if total_spend == 0:
                 return None
 

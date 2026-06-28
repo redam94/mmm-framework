@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from .enums import CausalControlRole, DimensionType, PriorType, VariableRole
+from .enums import (
+    CausalControlRole,
+    DimensionType,
+    MeasurementUnit,
+    PriorType,
+    VariableRole,
+)
 from .priors import PriorConfig
 from .transforms import AdstockConfig, SaturationConfig
 
@@ -74,7 +80,70 @@ class MediaChannelConfig(VariableConfig):
     # Split dimensions beyond base dimensions (e.g., Outlet for social platforms)
     split_dimensions: list[DimensionType] = Field(default_factory=list)
 
+    # --- Measurement / cost descriptor (impression-level ROI) -----------------
+    # How the modeled variable is measured. The default ``SPEND`` preserves
+    # historical behavior exactly (ROI = incremental KPI / summed variable). When
+    # set to ``IMPRESSIONS`` / ``CLICKS`` / ``OTHER`` the variable is a *volume*,
+    # so ROI is resolved differently (see :class:`MeasurementUnit` and
+    # :mod:`mmm_framework.reporting.helpers.measurement`). The response curve is
+    # ALWAYS fit on the modeled variable regardless of this field.
+    measurement_unit: MeasurementUnit = MeasurementUnit.SPEND
+
+    # Option (a): the name of a SEPARATE MFF variable holding actual dollars for
+    # this channel, aligned to the same index as the modeled volume. When set,
+    # ROI / mROAS divide by this spend series rather than the modeled variable.
+    spend_column: str | None = None
+
+    # Option (b): a cost constant used to DERIVE a spend series from the modeled
+    # volume — ``spend = (impressions / 1000) * cpm`` or ``spend = clicks * cpc``
+    # — so an impression/click channel reports normal ROI / mROAS comparable to
+    # spend channels. At most one of ``spend_column`` / ``cpm`` / ``cpc`` may be
+    # set. ``cpm`` is cost per 1,000 modeled units; ``cpc`` is cost per click.
+    cpm: float | None = None
+    cpc: float | None = None
+
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _validate_measurement(self) -> MediaChannelConfig:
+        """Keep the measurement descriptor internally consistent.
+
+        Only one cost source may be declared, and a cost only makes sense for a
+        non-spend (volume) channel. The default (``SPEND``, no overrides) passes
+        trivially, so existing configs are unaffected.
+        """
+        cost_sources = [
+            n
+            for n, v in (
+                ("spend_column", self.spend_column),
+                ("cpm", self.cpm),
+                ("cpc", self.cpc),
+            )
+            if v is not None
+        ]
+        if len(cost_sources) > 1:
+            raise ValueError(
+                f"Media channel '{self.name}': at most one cost source may be set, "
+                f"got {cost_sources}. Use a separate spend_column OR a cpm/cpc "
+                "constant, not several."
+            )
+        if cost_sources and self.measurement_unit is MeasurementUnit.SPEND:
+            raise ValueError(
+                f"Media channel '{self.name}': {cost_sources[0]} implies the modeled "
+                "variable is a volume, but measurement_unit is 'spend'. Set "
+                "measurement_unit to 'impressions'/'clicks'/'other'."
+            )
+        if self.cpc is not None and self.measurement_unit is not MeasurementUnit.CLICKS:
+            raise ValueError(
+                f"Media channel '{self.name}': cpc (cost per click) requires "
+                "measurement_unit='clicks'. Use cpm for impression-based cost."
+            )
+        for fld, val in (("cpm", self.cpm), ("cpc", self.cpc)):
+            if val is not None and val <= 0:
+                raise ValueError(
+                    f"Media channel '{self.name}': {fld} must be positive, got {val}."
+                )
+        return self
 
     @property
     def is_child_channel(self) -> bool:

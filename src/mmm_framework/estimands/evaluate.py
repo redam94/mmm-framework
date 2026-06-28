@@ -82,6 +82,10 @@ class EstimandEvaluator:
         self.capabilities = model_capabilities(model)
         self._pred_cache: dict[tuple[str, int | None], Any] = {}
         self._batch_seed: int | None = None  # synthesized once for paired contrasts
+        # The measurement metadata (ROI vs efficiency, labels, break-even
+        # reference) captured while resolving the spend-like denominator of the
+        # estimand currently being evaluated. Reset per estimand.
+        self._last_divisor_meta: Any = None
 
     # -- public ---------------------------------------------------------------
 
@@ -157,6 +161,7 @@ class EstimandEvaluator:
 
         mask = self._window_mask(est)
         marginal_factor = self._marginal_factor(est)
+        self._last_divisor_meta = None
 
         try:
             num_point, num_samples = self._eval_node(
@@ -213,7 +218,40 @@ class EstimandEvaluator:
             extra=extra,
         )
         self._apply_summaries(est, result, result_samples)
+        self._attach_metric_meta(est, result)
         return result
+
+    def _attach_metric_meta(self, est: Estimand, result: EstimandResult) -> None:
+        """Surface impression-level measurement metadata on a ratio estimand.
+
+        When the estimand divides by a spend-like denominator
+        (:class:`ObservedInput` / :class:`MarginalSpend`), carry the resolved
+        labels / units / break-even reference (captured while evaluating that
+        denominator) onto the result so the report and UI render ROI vs
+        efficiency correctly. For ordinary spend channels the metadata is the
+        plain ``ROI`` defaults, leaving existing output unchanged. ``prob_
+        profitable`` (a P(value > 1) reading) is dropped for efficiency metrics,
+        whose break-even reference is 0, not 1."""
+        meta = self._last_divisor_meta
+        if meta is None or not isinstance(
+            est.denominator, (ObservedInput, MarginalSpend)
+        ):
+            return
+        is_marginal = isinstance(est.denominator, MarginalSpend)
+        result.extra["metric_label"] = (
+            meta.marginal_label if is_marginal else meta.roi_label
+        )
+        result.extra["metric_units"] = meta.value_units
+        result.extra["metric_reference"] = meta.reference
+        result.extra["metric_is_monetary"] = meta.is_monetary
+        result.extra["measurement_unit"] = meta.unit.value
+        result.extra["cost_basis"] = meta.cost_basis
+        result.extra["divisor_units"] = meta.divisor_units
+        if not meta.is_monetary:
+            # Efficiency metric: the static "ROI"/"mROAS" unit is wrong, and a
+            # profitability (>1) reading is meaningless without a cost.
+            result.units = meta.value_units
+            result.extra.pop("prob_profitable", None)
 
     # -- ratio combination ----------------------------------------------------
 
@@ -395,12 +433,16 @@ class EstimandEvaluator:
     # -- quantity helpers -----------------------------------------------------
 
     def _observed_spend(self, q: ObservedInput, mask: np.ndarray) -> float:
-        if q.source == "panel":
-            from mmm_framework.reporting.helpers.roi import _extract_spend_from_model
+        from mmm_framework.reporting.helpers.measurement import resolve_channel_divisor
 
-            return float(_extract_spend_from_model(self.model).get(q.target, 0.0))
-        idx = self.model.channel_names.index(q.target)
-        return float(self.model.X_media_raw[mask, idx].sum())
+        # ``panel`` is the full-series dashboard spend (mask ignored, matching
+        # the legacy extractor); ``raw`` is windowed. For ordinary spend
+        # channels both reproduce the old ``X_media_raw`` sums exactly.
+        resolved = resolve_channel_divisor(
+            self.model, q.target, mask=None if q.source == "panel" else mask
+        )
+        self._last_divisor_meta = resolved.meta
+        return resolved.total
 
     def _marginal_spend(
         self, q: MarginalSpend, mask: np.ndarray, factor: float | None
@@ -410,9 +452,11 @@ class EstimandEvaluator:
                 "marginal_spend requires a ScaleInput numerator intervention",
                 skip=False,
             )
-        idx = self.model.channel_names.index(q.target)
-        current = float(self.model.X_media_raw[mask, idx].sum())
-        return current * (factor - 1.0)
+        from mmm_framework.reporting.helpers.measurement import resolve_channel_divisor
+
+        resolved = resolve_channel_divisor(self.model, q.target, mask=mask)
+        self._last_divisor_meta = resolved.meta
+        return resolved.total * (factor - 1.0)
 
     def _contribution_quantity(self, q: Contribution, mask: np.ndarray) -> _NodeValue:
         if q.source == "in_graph_deterministic":

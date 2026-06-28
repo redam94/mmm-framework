@@ -116,7 +116,9 @@ def create_roi_forest_plot(
             "y": -0.3,
             "xref": "x",
             "yref": "y",
-            "text": "Break-even",
+            # "Break-even" only means something against a dollar cost (ROI=1);
+            # for an efficiency metric the reference is 0 (any positive is good).
+            "text": "Break-even" if reference_line == 1.0 else "Zero",
             "showarrow": False,
             "font": {"size": 10, "color": colors.text_muted},
         }
