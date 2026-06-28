@@ -2016,12 +2016,284 @@ async def extract_branding_endpoint(project_id: str, body: BrandingExtractReques
     return JSONResponse(content=proposal)
 
 
-# ── Budget Plans (stub — agent API has no budget plan management) ──────────────
+# ── Budget Plans (Planner persistence) ────────────────────────────────────────
+
+
+class BudgetPlanUpsertRequest(BaseModel):
+    plan_id: str | None = None
+    project_id: str | None = None
+    name: str
+    description: str | None = None
+    model_id: str | None = None
+    kind: str = "optimization"  # optimization | scenario
+    spend_changes: dict[str, float] | None = None
+    baseline_outcome: float | None = None
+    scenario_outcome: float | None = None
+    outcome_change: float | None = None
+    outcome_change_pct: float | None = None
+    channel_details: dict[str, Any] | None = None
+    # The rich studio result (allocation + geo + flighting); persisted so a
+    # saved plan reopens with every panel intact.
+    plan_payload: dict[str, Any] | None = None
+
+
+def _budget_plan_org_check(plan: dict | None, principal: AuthContext) -> dict:
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Budget plan not found.")
+    if not principal.is_dev and plan.get("org_id") != principal.org_id:
+        raise HTTPException(status_code=404, detail="Budget plan not found.")
+    return plan
 
 
 @app.get("/budget-plans")
-async def list_budget_plans_endpoint():
-    return JSONResponse(content={"plans": [], "total": 0})
+async def list_budget_plans_endpoint(
+    project_id: str | None = None,
+    model_id: str | None = None,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
+    """List saved budget plans for the caller's org, optionally filtered."""
+    if not principal.is_dev and project_id is not None:
+        ensure_project_access(principal, project_id, Role.VIEWER)
+    plans = sessions_store.list_budget_plans(
+        org_id=principal.org_id, project_id=project_id, model_id=model_id
+    )
+    return JSONResponse(
+        content=safe_json_dumps_load({"plans": plans, "total": len(plans)})
+    )
+
+
+@app.post("/budget-plans", status_code=201)
+async def upsert_budget_plan_endpoint(
+    body: BudgetPlanUpsertRequest, principal: PrincipalDep = _DEV_PRINCIPAL
+):
+    """Create or update a saved budget plan (no model load — the FE persists an
+    already-computed studio result)."""
+    if not principal.is_dev and body.project_id:
+        ensure_project_access(principal, body.project_id, Role.ANALYST)
+    if body.plan_id:
+        existing = sessions_store.get_budget_plan(body.plan_id)
+        _budget_plan_org_check(existing, principal)
+    plan = sessions_store.upsert_budget_plan(
+        plan_id=body.plan_id,
+        project_id=body.project_id,
+        org_id=principal.org_id,
+        name=body.name,
+        description=body.description,
+        model_id=body.model_id,
+        kind=body.kind,
+        spend_changes=body.spend_changes,
+        baseline_outcome=body.baseline_outcome,
+        scenario_outcome=body.scenario_outcome,
+        outcome_change=body.outcome_change,
+        outcome_change_pct=body.outcome_change_pct,
+        channel_details=body.channel_details,
+        plan_payload=body.plan_payload,
+    )
+    return JSONResponse(status_code=201, content=safe_json_dumps_load(plan))
+
+
+@app.get("/budget-plans/{plan_id}")
+async def get_budget_plan_endpoint(
+    plan_id: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
+    plan = _budget_plan_org_check(sessions_store.get_budget_plan(plan_id), principal)
+    return JSONResponse(content=safe_json_dumps_load(plan))
+
+
+@app.delete("/budget-plans/{plan_id}")
+async def delete_budget_plan_endpoint(
+    plan_id: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
+    _budget_plan_org_check(sessions_store.get_budget_plan(plan_id), principal)
+    ok = sessions_store.delete_budget_plan(plan_id)
+    return JSONResponse(content={"deleted": bool(ok)})
+
+
+@app.get("/budget-plans/{plan_id}/export.csv")
+async def export_budget_plan_csv(
+    plan_id: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
+    """Download a saved plan as a CSV flight plan (allocation + geo + flighting)
+    — the executable deliverable a planner hands a partner (B5)."""
+    import re as _re
+
+    plan = _budget_plan_org_check(sessions_store.get_budget_plan(plan_id), principal)
+    csv_text = _budget_plan_to_csv(plan)
+    fname = _re.sub(r"[^A-Za-z0-9_.-]+", "_", plan.get("name") or "budget_plan")
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{fname}.csv"'},
+    )
+
+
+def _budget_plan_to_csv(plan: dict) -> str:
+    """Flatten a saved plan into a multi-section CSV string."""
+    import csv as _csv
+    import io as _io
+
+    buf = _io.StringIO()
+    w = _csv.writer(buf)
+    w.writerow(["Budget plan", plan.get("name", "")])
+    if plan.get("description"):
+        w.writerow(["Description", plan["description"]])
+    payload = plan.get("plan_payload") or {}
+
+    alloc = payload.get("allocation")
+    if alloc:
+        w.writerow([])
+        w.writerow(["Allocation"])
+        cols = list(alloc[0].keys())
+        w.writerow(cols)
+        for row in alloc:
+            w.writerow([row.get(c, "") for c in cols])
+
+    geo = payload.get("geo_allocation")
+    if geo:
+        w.writerow([])
+        w.writerow(["Per-geo allocation"])
+        cols = list(geo[0].keys())
+        w.writerow(cols)
+        for row in geo:
+            w.writerow([row.get(c, "") for c in cols])
+
+    fl = payload.get("flighting")
+    if fl and fl.get("schedule"):
+        w.writerow([])
+        w.writerow([f"Flighting calendar ({fl.get('pattern', '')})"])
+        sched = fl["schedule"]
+        cols = ["period"] + list(fl.get("channels", [])) + ["total"]
+        w.writerow(cols)
+        for row in sched:
+            w.writerow([row.get(c, "") for c in cols])
+
+    # Scenario plans store outcomes, not an allocation table.
+    if plan.get("kind") == "scenario" and not alloc:
+        w.writerow([])
+        w.writerow(["Scenario"])
+        w.writerow(["baseline_outcome", plan.get("baseline_outcome", "")])
+        w.writerow(["scenario_outcome", plan.get("scenario_outcome", "")])
+        w.writerow(["outcome_change", plan.get("outcome_change", "")])
+        w.writerow(["outcome_change_pct", plan.get("outcome_change_pct", "")])
+        for ch, d in (plan.get("channel_details") or {}).items():
+            w.writerow([ch, d])
+
+    return buf.getvalue()
+
+
+# ── Planner compute (async; loads the project's latest model) ──────────────────
+
+
+class PlannerOptimizeRequest(BaseModel):
+    total_budget: float | None = None
+    budget_change_pct: float | None = None
+    min_multiplier: float = 0.0
+    max_multiplier: float = 2.0
+    channel_bounds: dict[str, list[float]] | None = None
+    by_geo: bool = False
+    flighting: dict[str, Any] | None = None
+    max_draws: int = 120
+
+
+class PlannerScenarioRequest(BaseModel):
+    spend_changes: dict[str, float]
+    time_period: list[int] | None = None
+    max_draws: int = 120
+
+
+@app.post(
+    "/projects/{project_id}/planner/optimize",
+    dependencies=[_proj_write, _rl_heavy],
+)
+async def start_planner_optimization(project_id: str, body: PlannerOptimizeRequest):
+    """Start a NON-BLOCKING budget plan: optimal allocation (national or per-geo)
+    + an optional forward flighting calendar. Poll the returned job_id."""
+    from mmm_framework.api.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    run = latest_model_run_payload(project_id)
+    op_kwargs: dict = {
+        "total_budget": body.total_budget,
+        "budget_change_pct": body.budget_change_pct,
+        "min_multiplier": float(body.min_multiplier),
+        "max_multiplier": float(body.max_multiplier),
+        "bounds": body.channel_bounds,
+        "by_geo": bool(body.by_geo),
+        "flighting": body.flighting,
+        "max_draws": int(body.max_draws),
+    }
+    return _start_planner_job(project_id, "plan_budget", op_kwargs, "budget_plan", run)
+
+
+@app.get(
+    "/projects/{project_id}/planner/optimize/{job_id}",
+    dependencies=[_proj_read],
+)
+async def get_planner_optimization(project_id: str, job_id: str):
+    """Poll a planner optimization job: {status, result|null, error|null}."""
+    return _poll_planner_job(project_id, job_id)
+
+
+@app.post(
+    "/projects/{project_id}/planner/scenario",
+    dependencies=[_proj_write, _rl_heavy],
+)
+async def start_planner_scenario(project_id: str, body: PlannerScenarioRequest):
+    """Start a NON-BLOCKING what-if scenario (uncertainty included). Poll the
+    returned job_id."""
+    from mmm_framework.api.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    run = latest_model_run_payload(project_id)
+    op_kwargs: dict = {
+        "spend_changes": body.spend_changes,
+        "time_period": body.time_period,
+        "max_draws": int(body.max_draws),
+    }
+    return _start_planner_job(
+        project_id, "plan_scenario", op_kwargs, "budget_scenario", run
+    )
+
+
+@app.get(
+    "/projects/{project_id}/planner/scenario/{job_id}",
+    dependencies=[_proj_read],
+)
+async def get_planner_scenario(project_id: str, job_id: str):
+    """Poll a planner scenario job: {status, result|null, error|null}."""
+    return _poll_planner_job(project_id, job_id)
+
+
+def _start_planner_job(
+    project_id: str, op_name: str, op_kwargs: dict, result_key: str, run: dict | None
+):
+    synthetic_tid = f"__planjobs__{project_id}"
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        f"planner_{result_key}",
+        {
+            "status": "pending",
+            "project_id": project_id,
+            "result": None,
+            "error": None,
+        },
+    )
+    job_id = job["id"]
+    _spawn_job_task(
+        _run_model_op_job(job_id, synthetic_tid, run, op_name, op_kwargs, result_key)
+    )
+    return JSONResponse(
+        status_code=202, content={"job_id": job_id, "status": "pending"}
+    )
+
+
+def _poll_planner_job(project_id: str, job_id: str):
+    art = sessions_store.get_artifact(job_id)
+    if art is None or (art.get("payload") or {}).get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Planner job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
 
 
 # ── Experiments (lift-test registry) ──────────────────────────────────────────
@@ -4913,12 +5185,16 @@ async def _studio_set_pointer(thread_id: str, pointer: dict | None) -> None:
     config = {"configurable": {"thread_id": thread_id}}
     agent_graph = _admin_graph()
     snap = await agent_graph.aget_state(config)
-    dashboard = (snap.values.get("dashboard_data") or {}) if snap and snap.values else {}
+    dashboard = (
+        (snap.values.get("dashboard_data") or {}) if snap and snap.values else {}
+    )
     dashboard = dict(dashboard)
     dashboard["data_studio"] = pointer
     # as_node="agent": these are UI-driven updates that may hit a thread which
     # has never run the graph, where a bare update is "ambiguous" (LangGraph).
-    await agent_graph.aupdate_state(config, {"dashboard_data": dashboard}, as_node="agent")
+    await agent_graph.aupdate_state(
+        config, {"dashboard_data": dashboard}, as_node="agent"
+    )
 
 
 @app.post("/data-studio/{thread_id}/upload", dependencies=[_sess_write, _rl_heavy])
@@ -4938,13 +5214,21 @@ async def data_studio_upload(thread_id: str, file: UploadFile = File(...)):
         with open(dest, "wb") as buf:
             shutil.copyfileobj(file.file, buf)
         size_bytes = os.path.getsize(dest)
-        kind = "dataset" if name.lower().endswith(
-            (".csv", ".tsv", ".txt", ".xlsx", ".xls", ".parquet")
-        ) else "upload"
+        kind = (
+            "dataset"
+            if name.lower().endswith(
+                (".csv", ".tsv", ".txt", ".xlsx", ".xls", ".parquet")
+            )
+            else "upload"
+        )
         try:
             sessions_store.register_file(
-                thread_id=thread_id, path=dest, name=name, kind="dataset",
-                size_bytes=size_bytes, preview=None,
+                thread_id=thread_id,
+                path=dest,
+                name=name,
+                kind="dataset",
+                size_bytes=size_bytes,
+                preview=None,
                 meta={"content_type": file.content_type, "source": "data_studio"},
             )
         except Exception:
@@ -4960,12 +5244,14 @@ async def data_studio_upload(thread_id: str, file: UploadFile = File(...)):
         await _studio_set_pointer(
             thread_id, _studio.light_summary(thread_id, manifest, result)
         )
-        return JSONResponse(content={
-            "staging_id": manifest["staging_id"],
-            "raw": manifest["raw"],
-            "inferred_roles": manifest["roles"],
-            **preview,
-        })
+        return JSONResponse(
+            content={
+                "staging_id": manifest["staging_id"],
+                "raw": manifest["raw"],
+                "inferred_roles": manifest["roles"],
+                **preview,
+            }
+        )
     except Exception as e:
         logger.exception("Data studio upload failed")
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -4987,19 +5273,26 @@ async def data_studio_state(thread_id: str):
             _studio.preview_payload, thread_id, manifest, result
         )
     except Exception as e:
-        return JSONResponse(content={
-            "staging": {"staging_id": manifest.get("staging_id"),
-                        "raw": manifest.get("raw"), "error": str(e)},
-        })
-    return JSONResponse(content={
-        "staging": {
-            "staging_id": manifest.get("staging_id"),
-            "raw": manifest.get("raw"),
-            "steps": manifest.get("steps") or [],
-            "committed": bool(manifest.get("committed")),
-            **preview,
+        return JSONResponse(
+            content={
+                "staging": {
+                    "staging_id": manifest.get("staging_id"),
+                    "raw": manifest.get("raw"),
+                    "error": str(e),
+                },
+            }
+        )
+    return JSONResponse(
+        content={
+            "staging": {
+                "staging_id": manifest.get("staging_id"),
+                "raw": manifest.get("raw"),
+                "steps": manifest.get("steps") or [],
+                "committed": bool(manifest.get("committed")),
+                **preview,
+            }
         }
-    })
+    )
 
 
 @app.put("/data-studio/{thread_id}/pipeline", dependencies=[_sess_write])
@@ -5044,8 +5337,12 @@ async def data_studio_eda(thread_id: str, body: StudioEdaRequest):
     try:
         result = await run_in_threadpool(_studio.current_result, thread_id, manifest)
         payload = await run_in_threadpool(
-            _studio.run_eda_on_frame, result.df, result.roles,
-            body.analyses, body.variables, body.sensitivity,
+            _studio.run_eda_on_frame,
+            result.df,
+            result.roles,
+            body.analyses,
+            body.variables,
+            body.sensitivity,
         )
     except Exception as e:
         logger.exception("Data studio EDA failed")
@@ -5075,14 +5372,16 @@ async def data_studio_commit(thread_id: str, body: StudioCommitRequest):
         if update:
             await agent_graph.aupdate_state(config, update, as_node="agent")
         dashboard = update.get("dashboard_data") or {}
-        return JSONResponse(content={
-            "summary": summary,
-            "dataset_path": update.get("dataset_path"),
-            "dataset": dashboard.get("dataset"),
-            "model_spec": update.get("model_spec"),
-            "eda": dashboard.get("eda"),
-            "pending_spec_changes": update.get("pending_spec_changes"),
-        })
+        return JSONResponse(
+            content={
+                "summary": summary,
+                "dataset_path": update.get("dataset_path"),
+                "dataset": dashboard.get("dataset"),
+                "model_spec": update.get("model_spec"),
+                "eda": dashboard.get("eda"),
+                "pending_spec_changes": update.get("pending_spec_changes"),
+            }
+        )
     except Exception as e:
         logger.exception("Data studio commit failed")
         return JSONResponse(status_code=500, content={"error": str(e)})

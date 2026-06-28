@@ -16,6 +16,7 @@ import {
   KnowledgePage,
   AgentPage,
   ModelGardenPage,
+  PlannerPage,
 } from './pages';
 import './index.css';
 
@@ -98,6 +99,7 @@ function App() {
                     <Route path="/experiments/:experimentId" element={<ExperimentsPage />} />
                     <Route path="/performance" element={<PerformancePage />} />
                     <Route path="/performance/:tab" element={<PerformancePage />} />
+                    <Route path="/planner" element={<PlannerPage />} />
                     <Route path="/portfolio" element={<PortfolioPage />} />
                     <Route path="/atelier" element={<ModelGardenPage />} />
                     <Route path="/knowledge" element={<KnowledgePage />} />

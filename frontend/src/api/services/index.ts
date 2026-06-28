@@ -12,3 +12,14 @@ export type { TeamRole, TeamUser, TeamUserListResponse, UserCreateRequest, UserU
 export type { SessionInfo, SessionDetail, SessionListResponse, SessionCreateRequest, SessionUpdateRequest } from './sessionService';
 export { modelGardenService } from './modelGardenService';
 export type { GardenModel, CompatReport, CompatTier, GardenTestJob, GardenRegisterRequest } from './modelGardenService';
+export { plannerService } from './plannerService';
+export type {
+  AllocationRow,
+  GeoAllocationRow,
+  FlightingSchedule,
+  BudgetPlanResult,
+  PlannerScenarioResult,
+  PlannerOptimizeRequest,
+  PlannerScenarioRequest,
+  PlannerJob,
+} from './plannerService';

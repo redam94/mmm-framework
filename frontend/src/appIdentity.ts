@@ -14,6 +14,8 @@
  *   of taking the omens, i.e. running the test before committing the budget.
  * - **Chronicle** (/performance) — the cycle-over-cycle record of how
  *   measurement sharpened and decisions improved.
+ * - **Almanac** (/planner) — the forward calendar of when to act: budget
+ *   allocation, flighting, and what-if scenarios for the coming periods.
  * - **Oracle** (/workspace) — where you ask questions and get answers: the
  *   chat-aided modeling workspace.
  * - **Codex** (/knowledge) — the bound reference: reports and grounding docs.
@@ -41,6 +43,7 @@ export const PAGES: PageIdentity[] = [
   { path: '/program', name: 'Orrery', hint: 'The measurement cycle, in motion' },
   { path: '/experiments', name: 'Auspices', hint: 'Design · run · calibrate tests' },
   { path: '/performance', name: 'Chronicle', hint: 'Cycle-over-cycle record' },
+  { path: '/planner', name: 'Almanac', hint: 'Allocate budget & plan flights' },
   { path: '/portfolio', name: 'Constellation', hint: 'Benchmark brands across the book' },
   { path: '/workspace', name: 'Oracle', hint: 'Chat-aided modeling' },
   { path: '/atelier', name: 'Atelier', hint: 'Craft, version & share bespoke models', minRole: 'analyst' },

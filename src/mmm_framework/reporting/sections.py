@@ -218,15 +218,13 @@ class ExecutiveSummarySection(Section):
                 f'<div class="ci">{metric["ci"]}</div>' if metric.get("ci") else ""
             )
 
-            cards.append(
-                f"""
+            cards.append(f"""
                 <div class="metric-card {highlight_class}">
                     <div class="value">{metric["value"]}</div>
                     <div class="label">{metric["label"]}</div>
                     {ci_html}
                 </div>
-            """
-            )
+            """)
 
         return f"""
             <div class="metrics-grid">
@@ -468,16 +466,14 @@ class ChannelROISection(Section):
                 conf_class = "uncertain"
                 status = "Uncertain"
 
-            rows.append(
-                f"""
+            rows.append(f"""
                 <tr>
                     <td>{html.escape(ch)}</td>
                     <td class="mono">{mean:.2f}</td>
                     <td class="mono">[{lower:.2f}, {upper:.2f}]</td>
                     <td class="{conf_class}">{status}</td>
                 </tr>
-            """
-            )
+            """)
 
         return f"""
             <table class="data-table">
@@ -498,13 +494,11 @@ class ChannelROISection(Section):
         pills = []
         for ch in channels:
             color = self.config.channel_colors.get(ch)
-            pills.append(
-                f"""
+            pills.append(f"""
                 <div class="channel-pill">
                     <span class="dot" style="background: {color}"></span>{html.escape(ch)}
                 </div>
-            """
-            )
+            """)
 
         return f"""
             <div class="channel-legend">{''.join(pills)}</div>
@@ -560,37 +554,31 @@ class DecompositionSection(Section):
         content_parts = []
 
         # Introduction
-        content_parts.append(
-            """
+        content_parts.append("""
             <p>
                 Revenue decomposition breaks down the predicted outcome into component contributions:
                 baseline, trend, seasonality, media channels, and control variables. Each component's
                 contribution sums to the total predicted revenue.
             </p>
-        """
-        )
+        """)
 
         # Aggregation note for multi-dimensional models
         if has_geo:
-            content_parts.append(
-                """
+            content_parts.append("""
             <div class="callout insight">
                 <p><strong>Multi-geography model:</strong> The default view shows contributions
                 aggregated across all geographies. Use the dropdown selectors to examine
                 contribution patterns for individual regions.</p>
             </div>
-            """
-            )
+            """)
         elif has_product:
-            content_parts.append(
-                """
+            content_parts.append("""
             <div class="callout insight">
                 <p><strong>Multi-outcome model:</strong> The default view shows the primary
                 outcome. Use the dropdown selectors to examine contribution patterns for each
                 outcome.</p>
             </div>
-            """
-            )
+            """)
 
         # =====================================================================
         # TABBED VIEWS: stacked area (time series) + waterfall (totals)
@@ -613,8 +601,7 @@ class DecompositionSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=400),
             )
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <div class="tab-container">
                     <div class="tab-buttons">
                         <button class="tab-btn active" onclick="showTab('decomp-tab-area')">Over Time</button>
@@ -629,8 +616,7 @@ class DecompositionSection(Section):
                         {waterfall_chart}
                     </div>
                 </div>
-            """
-            )
+            """)
         else:
             content_parts.append("<h3>Component Contributions Over Time</h3>")
             content_parts.append(stacked_chart)
@@ -663,15 +649,13 @@ class DecompositionSection(Section):
                 if hasattr(self.config, "format_currency")
                 else f"{value:,.0f}"
             )
-            rows.append(
-                f"""
+            rows.append(f"""
                 <tr data-geo="agg">
                     <td>{html.escape(comp)}</td>
                     <td class="mono">{formatted_value}</td>
                     <td class="mono">{pct:.1%}</td>
                 </tr>
-            """
-            )
+            """)
 
         # Build geo-level rows (hidden by default)
         geo_rows = ""
@@ -702,7 +686,9 @@ class DecompositionSection(Section):
         if has_geo:
             options = '<option value="agg" selected>Aggregated (Total)</option>'
             for geo in self.data.geo_names:
-                options += f'<option value="{html.escape(geo)}">{html.escape(geo)}</option>'
+                options += (
+                    f'<option value="{html.escape(geo)}">{html.escape(geo)}</option>'
+                )
 
             dropdown_html = f"""
             <div style="margin-bottom: 1rem;">
@@ -769,14 +755,12 @@ class SaturationSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=280),
             )
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <h3>Saturation Curves</h3>
                 <p>The saturation curves show diminishing returns as spend increases. 
                 The orange diamond marks current spend levels.</p>
                 {sat_chart}
-            """
-            )
+            """)
 
         # Adstock curves
         if self.data.adstock_curves:
@@ -786,13 +770,11 @@ class SaturationSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=350),
             )
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <h3>Adstock Decay</h3>
                 <p>Carryover effects show how advertising impact persists over time.</p>
                 {adstock_chart}
-            """
-            )
+            """)
 
         if not content_parts:
             return ""
@@ -816,14 +798,12 @@ class SensitivitySection(Section):
         content_parts = []
 
         # Overview text
-        content_parts.append(
-            """
+        content_parts.append("""
             <p>
                 Sensitivity analysis explores how results change under alternative model specifications.
                 Robust findings should be stable across reasonable specification choices.
             </p>
-        """
-        )
+        """)
 
         # Sensitivity chart
         if "scenarios" in self.data.sensitivity_results:
@@ -848,15 +828,13 @@ class SensitivitySection(Section):
                 cells = "".join(f'<td class="mono">{cell}</td>' for cell in row[1:])
                 rows.append(f"<tr><td>{row[0]}</td>{cells}</tr>")
 
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <h3>Specification Comparison</h3>
                 <table class="data-table">
                     <thead><tr>{''.join(f'<th>{h}</th>' for h in table_data[0])}</tr></thead>
                     <tbody>{''.join(rows[1:])}</tbody>
                 </table>
-            """
-            )
+            """)
 
         return self._render_section_wrapper("\n".join(content_parts))
 
@@ -876,8 +854,7 @@ class MethodologySection(Section):
         # Always disclose the load-bearing default-prior assumption: channel
         # effects use a non-negative prior, so a channel cannot be shown to have a
         # negative/zero effect from observational data alone.
-        content_parts.append(
-            """
+        content_parts.append("""
                 <div class="methodology-note">
                     <h4>Default prior assumption — read before reallocating</h4>
                     <p>
@@ -894,14 +871,12 @@ class MethodologySection(Section):
                         to calibrate it.
                     </p>
                 </div>
-            """
-        )
+            """)
 
         # Model specification
         if self.data.model_specification:
             spec = self.data.model_specification
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <div class="methodology-note">
                     <h4>Model Specification</h4>
                     <p>This analysis uses a Bayesian Marketing Mix Model with the following components:</p>
@@ -918,14 +893,12 @@ class MethodologySection(Section):
                         {spec.get("tune", 1000)} warmup).
                     </p>
                 </div>
-            """
-            )
+            """)
 
         # Honest uncertainty principles
         if self.config.methodology_note:
             ci_level = int(self.section_config.credible_interval * 100)
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <div class="methodology-note">
                     <h4>Honest Uncertainty Principles</h4>
                     <p>This report follows principles of honest uncertainty quantification:</p>
@@ -937,8 +910,7 @@ class MethodologySection(Section):
                         <li>Experimental validation proposed for high-stakes, uncertain estimates</li>
                     </ul>
                 </div>
-            """
-            )
+            """)
 
         return self._render_section_wrapper("\n".join(content_parts))
 
@@ -964,8 +936,7 @@ class CausalAssumptionsSection(Section):
         parts: list[str] = []
 
         # Always-on caveat banner.
-        parts.append(
-            """
+        parts.append("""
             <div class="methodology-note" style="border-left: 4px solid #d4a86a;">
                 <h4>⚠️ Identification rests on assumptions, not just fit</h4>
                 <p>
@@ -983,33 +954,28 @@ class CausalAssumptionsSection(Section):
                     are high.
                 </p>
             </div>
-            """
-        )
+            """)
 
         ca = self.data.causal_assumptions or {}
 
         strategy = ca.get("identification_strategy")
         if strategy:
-            parts.append(
-                f"""
+            parts.append(f"""
                 <div class="methodology-note">
                     <h4>Identification Strategy</h4>
                     <p>{strategy}</p>
                 </div>
-                """
-            )
+                """)
 
         confounders = ca.get("assumed_confounders")
         if confounders:
             items = "".join(f"<li>{html.escape(c)}</li>" for c in confounders)
-            parts.append(
-                f"""
+            parts.append(f"""
                 <div class="methodology-note">
                     <h4>Assumed Confounders (adjusted for)</h4>
                     <ul style="margin: 0.5rem 0 0 1.5rem;">{items}</ul>
                 </div>
-                """
-            )
+                """)
 
         robustness = ca.get("robustness")
         if robustness and robustness.get("channels"):
@@ -1027,16 +993,14 @@ class CausalAssumptionsSection(Section):
             pr2_s = f"{pr2:.3f}" if isinstance(pr2, (int, float)) else "-"
             cls = "negative" if fragile else "positive"
             status = "Fragile" if fragile else "Robust"
-            rows.append(
-                f"""
+            rows.append(f"""
                 <tr>
                     <td>{html.escape(ch.get("channel", "?"))}</td>
                     <td class="mono">{rv_s}</td>
                     <td class="mono">{pr2_s}</td>
                     <td class="{cls}">{status}</td>
                 </tr>
-                """
-            )
+                """)
         caveat = robustness.get("caveat", "")
         return f"""
             <h3>Robustness to Unobserved Confounding</h3>
@@ -1088,7 +1052,9 @@ class DiagnosticsSection(Section):
             divergence_status = (
                 "—"
                 if divergences is None
-                else ("✅ Pass" if divergences == 0 else f"⚠️ {divergences} divergences")
+                else (
+                    "✅ Pass" if divergences == 0 else f"⚠️ {divergences} divergences"
+                )
             )
             if rhat_max is None:
                 rhat_val, rhat_status = "N/A", "— (approximate fit)"
@@ -1101,8 +1067,7 @@ class DiagnosticsSection(Section):
                 ess_val = f"{ess_min:.0f}"
                 ess_status = "✅ Pass" if ess_min > 400 else f"⚠️ {ess_min:.0f}"
 
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <h3>Convergence Diagnostics</h3>
                 <table class="data-table" style="max-width: 500px;">
                     <thead><tr><th>Diagnostic</th><th>Value</th><th>Status</th></tr></thead>
@@ -1112,8 +1077,7 @@ class DiagnosticsSection(Section):
                         <tr><td>ESS bulk (min)</td><td class="mono">{ess_val}</td><td>{ess_status}</td></tr>
                     </tbody>
                 </table>
-            """
-            )
+            """)
 
         # Trace plots
         if self.data.trace_data and self.data.trace_parameters:
@@ -1123,13 +1087,11 @@ class DiagnosticsSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=180),
             )
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <h3>Trace Plots</h3>
                 <p>Visual inspection of MCMC chains for key parameters.</p>
                 {trace_chart}
-            """
-            )
+            """)
 
         # Prior/posterior comparison
         if self.data.prior_samples and self.data.posterior_samples:
@@ -1142,13 +1104,11 @@ class DiagnosticsSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=int(250 * min(len_params / 6, 1))),
             )
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <h3>Prior vs Posterior</h3>
                 <p>Comparison shows how data updated prior beliefs.</p>
                 {prior_post_chart}
-            """
-            )
+            """)
 
         if not content_parts:
             return ""
@@ -1174,12 +1134,10 @@ class GeographicSection(Section):
         ci_level = int(self.section_config.credible_interval * 100)
 
         # Geographic performance summary table
-        content_parts.append(
-            f"""
+        content_parts.append(f"""
             <h3>Performance by Geography</h3>
             <p>Regional breakdown with {ci_level}% credible intervals.</p>
-        """
-        )
+        """)
 
         # Build performance table
         table_rows = []
@@ -1194,8 +1152,7 @@ class GeographicSection(Section):
             roi_ci = f"[{roi.get('lower', 0):.2f}, {roi.get('upper', 0):.2f}]"
             contrib_str = self._format_percentage(contribution.get("mean", 0))
 
-            table_rows.append(
-                f"""
+            table_rows.append(f"""
                 <tr>
                     <td><strong>{html.escape(geo)}</strong></td>
                     <td class="mono">{rev_str}</td>
@@ -1203,11 +1160,9 @@ class GeographicSection(Section):
                     <td class="mono muted">{roi_ci}</td>
                     <td class="mono">{contrib_str}</td>
                 </tr>
-            """
-            )
+            """)
 
-        content_parts.append(
-            f"""
+        content_parts.append(f"""
             <table class="data-table">
                 <thead>
                     <tr>
@@ -1222,8 +1177,7 @@ class GeographicSection(Section):
                     {''.join(table_rows)}
                 </tbody>
             </table>
-        """
-        )
+        """)
 
         # Geographic ROI heatmap/chart
         if self.data.geo_roi:
@@ -1236,13 +1190,11 @@ class GeographicSection(Section):
                     height=max(300, len(self.data.geo_names) * 40)
                 ),
             )
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <h3>Channel ROI by Geography</h3>
                 <p>Heatmap showing channel performance across regions. Darker colors indicate higher ROI.</p>
                 {geo_chart}
-            """
-            )
+            """)
 
         # Geographic contribution breakdown
         if self.data.geo_contribution:
@@ -1252,12 +1204,10 @@ class GeographicSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=400),
             )
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <h3>Contribution Decomposition by Geography</h3>
                 {geo_decomp}
-            """
-            )
+            """)
 
         return self._render_section_wrapper("\n".join(content_parts))
 
@@ -1280,14 +1230,12 @@ class MediatorSection(Section):
         ci_level = int(self.section_config.credible_interval * 100)
 
         # Introduction
-        content_parts.append(
-            f"""
+        content_parts.append(f"""
             <h3>Indirect Effects Through Mediators</h3>
             <p>Marketing affects sales both directly and indirectly through intermediate outcomes 
             (e.g., awareness, consideration). This analysis decomposes total effects into direct 
             and mediated pathways with {ci_level}% credible intervals.</p>
-        """
-        )
+        """)
 
         # Pathway diagram (visual representation)
         pathway_chart = charts.create_mediator_pathway_chart(
@@ -1300,11 +1248,9 @@ class MediatorSection(Section):
         content_parts.append(pathway_chart)
 
         # Effects table by channel
-        content_parts.append(
-            """
+        content_parts.append("""
             <h3>Effect Decomposition by Channel</h3>
-        """
-        )
+        """)
 
         table_rows = []
         for channel in self.data.channel_names or []:
@@ -1340,8 +1286,7 @@ class MediatorSection(Section):
 
             pct_mediated = (indirect_mean / total_mean * 100) if total_mean != 0 else 0
 
-            table_rows.append(
-                f"""
+            table_rows.append(f"""
                 <tr>
                     <td><strong>{html.escape(channel)}</strong></td>
                     <td class="mono">{total_str}</td>
@@ -1350,11 +1295,9 @@ class MediatorSection(Section):
                     <td class="mono">{indirect_str}</td>
                     <td class="mono">{pct_mediated:.1f}%</td>
                 </tr>
-            """
-            )
+            """)
 
-        content_parts.append(
-            f"""
+        content_parts.append(f"""
             <table class="data-table">
                 <thead>
                     <tr>
@@ -1370,8 +1313,7 @@ class MediatorSection(Section):
                     {''.join(table_rows)}
                 </tbody>
             </table>
-        """
-        )
+        """)
 
         # Mediator time series
         if self.data.mediator_time_series and self.data.dates is not None:
@@ -1382,19 +1324,16 @@ class MediatorSection(Section):
                 config=self.config,
                 chart_config=ChartConfig(height=350),
             )
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <h3>Mediator Values Over Time</h3>
                 <p>Tracking awareness, consideration, and other intermediate outcomes.</p>
                 {mediator_ts_chart}
-            """
-            )
+            """)
 
         # Interpretation callout
         if self.data.total_indirect_effect:
             indirect = self.data.total_indirect_effect
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <div class="callout">
                     <strong>Key Insight:</strong> Approximately 
                     <strong>{self._format_percentage(indirect.get('mean', 0))}</strong> 
@@ -1403,8 +1342,7 @@ class MediatorSection(Section):
                     effect operates through measured mediators. Direct response accounts for 
                     the remainder.
                 </div>
-            """
-            )
+            """)
 
         return self._render_section_wrapper("\n".join(content_parts))
 
@@ -1427,15 +1365,13 @@ class CannibalizationSection(Section):
         ci_level = int(self.section_config.credible_interval * 100)
 
         # Introduction
-        content_parts.append(
-            f"""
+        content_parts.append(f"""
             <h3>Cross-Product Effects</h3>
             <p>Marketing for one product may cannibalize sales of another (substitution) or 
             boost them (halo effects). This matrix shows cross-product effects with {ci_level}% 
             credible intervals. Negative values indicate cannibalization; positive values 
             indicate synergy.</p>
-        """
-        )
+        """)
 
         # Cannibalization heatmap
         cannib_chart = charts.create_cannibalization_heatmap(
@@ -1450,12 +1386,10 @@ class CannibalizationSection(Section):
 
         # Net effects table
         if self.data.net_product_effects:
-            content_parts.append(
-                """
+            content_parts.append("""
                 <h3>Net Product Effects</h3>
                 <p>Direct marketing effect minus cannibalization from other products' marketing.</p>
-            """
-            )
+            """)
 
             table_rows = []
             for product in self.data.product_names:
@@ -1469,8 +1403,7 @@ class CannibalizationSection(Section):
                     "danger" if cannib < -0.05 else ("success" if cannib > 0.05 else "")
                 )
 
-                table_rows.append(
-                    f"""
+                table_rows.append(f"""
                     <tr>
                         <td><strong>{html.escape(product)}</strong></td>
                         <td class="mono">{self._format_currency(direct)}</td>
@@ -1478,11 +1411,9 @@ class CannibalizationSection(Section):
                         <td class="mono"><strong>{self._format_currency(net)}</strong></td>
                         <td class="mono">{(cannib/direct*100) if direct else 0:.1f}%</td>
                     </tr>
-                """
-                )
+                """)
 
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -1497,16 +1428,13 @@ class CannibalizationSection(Section):
                         {''.join(table_rows)}
                     </tbody>
                 </table>
-            """
-            )
+            """)
 
         # Detailed cross-effects table
-        content_parts.append(
-            """
+        content_parts.append("""
             <h3>Detailed Cross-Product Matrix</h3>
             <p>Effect of row product's marketing on column product's sales.</p>
-        """
-        )
+        """)
 
         # Build matrix table
         header_cells = "<th>Source \\ Target</th>" + "".join(
@@ -1543,8 +1471,7 @@ class CannibalizationSection(Section):
                     )
             matrix_rows.append(f'<tr>{"".join(row_cells)}</tr>')
 
-        content_parts.append(
-            f"""
+        content_parts.append(f"""
             <table class="data-table matrix-table">
                 <thead><tr>{header_cells}</tr></thead>
                 <tbody>{''.join(matrix_rows)}</tbody>
@@ -1555,8 +1482,7 @@ class CannibalizationSection(Section):
                 <span class="muted">Gray</span> = not significant (CI includes zero).
                 Hover for credible intervals.
             </p>
-        """
-        )
+        """)
 
         # Key insights
         significant_cannib = []
@@ -1599,13 +1525,11 @@ class CannibalizationSection(Section):
                     f"<strong>Strongest synergies:</strong> {', '.join(synergy_items)}"
                 )
 
-            content_parts.append(
-                f"""
+            content_parts.append(f"""
                 <div class="callout">
                     {'<br>'.join(insights)}
                 </div>
-            """
-            )
+            """)
 
         content_parts.append(self._render_outcome_correlations())
 
@@ -1622,7 +1546,9 @@ class CannibalizationSection(Section):
         if corr.ndim != 2 or corr.shape[0] != len(names):
             return ""
 
-        header_cells = "<th></th>" + "".join(f"<th>{html.escape(n)}</th>" for n in names)
+        header_cells = "<th></th>" + "".join(
+            f"<th>{html.escape(n)}</th>" for n in names
+        )
         rows = []
         for i, source in enumerate(names):
             cells = [f"<td><strong>{html.escape(source)}</strong></td>"]
@@ -1690,15 +1616,13 @@ class FactorAnalysisSection(Section):
             mean = v.get("mean", float("nan"))
             lo, hi = v.get("lower", mean), v.get("upper", mean)
             ci_html = f'<div class="ci">[{lo:.3f}, {hi:.3f}]</div>' if hi != lo else ""
-            cards.append(
-                f"""
+            cards.append(f"""
                 <div class="metric-card">
                     <div class="value">{mean:.3f}</div>
                     <div class="label">{name.upper()}</div>
                     {ci_html}
                 </div>
-                """
-            )
+                """)
         return f'<div class="metrics-grid">{"".join(cards)}</div>'
 
     def _render_table(self, rows: list[dict]) -> str:
@@ -1847,8 +1771,7 @@ class EstimandsSection(Section):
             else:
                 conf_class, status = "uncertain", "Uncertain"
 
-            rows.append(
-                f"""
+            rows.append(f"""
                 <tr>
                     <td>{html.escape(self._kind_label(name))}</td>
                     <td>{html.escape(target)}</td>
@@ -1856,8 +1779,7 @@ class EstimandsSection(Section):
                     <td class="mono">{ci_str}</td>
                     <td class="{conf_class}">{status}</td>
                 </tr>
-            """
-            )
+            """)
 
         return f"""
             <table class="data-table">
@@ -2047,8 +1969,135 @@ class PosteriorPredictiveSection(Section):
         """
 
 
+class AllocationSection(Section):
+    """Budget-allocation plan: recommended per-channel (and per-geo) spend plus an
+    optional forward flighting calendar.
+
+    Data-driven and default-off: renders only when the bundle carries
+    ``allocation_results`` (a plan computed by the ``plan_budget`` op), so a normal
+    model report that has no plan attached silently omits the section."""
+
+    section_id: str = "allocation"
+    default_title: str = "Budget Allocation Plan"
+
+    def render(self) -> str:
+        if not self.is_enabled:
+            return ""
+        alloc = getattr(self.data, "allocation_results", None)
+        if not alloc or not alloc.get("allocation"):
+            return ""
+
+        parts = [self._render_headline(alloc), self._render_alloc_table(alloc)]
+        if alloc.get("geo_allocation"):
+            parts.append(self._render_geo_table(alloc))
+        if alloc.get("flighting", {}).get("schedule"):
+            parts.append(self._render_flighting_table(alloc["flighting"]))
+        note = (
+            '<div class="methodology-note"><p>The recommended allocation maximizes '
+            "expected KPI contribution within the spend range the model has evidence "
+            "for; the uplift interval — not the point estimate — is the basis for a "
+            "decision. The flighting calendar distributes each channel's budget across "
+            "future periods.</p></div>"
+        )
+        return self._render_section_wrapper("".join(parts) + note)
+
+    def _render_headline(self, alloc: dict) -> str:
+        total = alloc.get("total_budget", 0.0)
+        uplift = alloc.get("expected_uplift", 0.0)
+        hdi = alloc.get("uplift_hdi", [0.0, 0.0])
+        prob = alloc.get("prob_positive_uplift", 0.0)
+        return f"""
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="value">{self._format_currency(total)}</div>
+                    <div class="label">Budget allocated</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">{self._format_currency(uplift)}</div>
+                    <div class="label">Expected KPI uplift</div>
+                    <div class="ci">90% [{self._format_currency(hdi[0])}, {self._format_currency(hdi[1])}]</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">{prob:.0%}</div>
+                    <div class="label">P(uplift &gt; 0)</div>
+                </div>
+            </div>
+        """
+
+    def _render_alloc_table(self, alloc: dict) -> str:
+        rows = []
+        for r in alloc["allocation"]:
+            ch = html.escape(str(r.get("channel", "")))
+            cur = float(r.get("current_spend", 0.0))
+            opt = float(r.get("optimal_spend", 0.0))
+            chg = float(r.get("change_pct", 0.0))
+            cls = "positive" if chg > 1 else ("negative" if chg < -1 else "uncertain")
+            rows.append(
+                f"<tr><td>{ch}</td>"
+                f'<td class="mono">{self._format_currency(cur)}</td>'
+                f'<td class="mono">{self._format_currency(opt)}</td>'
+                f'<td class="{cls}">{chg:+.0f}%</td></tr>'
+            )
+        return f"""
+            <h3>Recommended allocation</h3>
+            <table class="data-table">
+                <thead><tr><th>Channel</th><th>Current spend</th>
+                    <th>Recommended spend</th><th>Change</th></tr></thead>
+                <tbody>{"".join(rows)}</tbody>
+            </table>
+        """
+
+    def _render_geo_table(self, alloc: dict) -> str:
+        rows = []
+        for r in alloc["geo_allocation"]:
+            geo = html.escape(str(r.get("geo", "")))
+            ch = html.escape(str(r.get("channel", "")))
+            opt = float(r.get("optimal_spend", 0.0))
+            chg = float(r.get("change_pct", 0.0))
+            rows.append(
+                f"<tr><td>{geo}</td><td>{ch}</td>"
+                f'<td class="mono">{self._format_currency(opt)}</td>'
+                f'<td class="mono">{chg:+.0f}%</td></tr>'
+            )
+        return f"""
+            <h3>Allocation by geography</h3>
+            <table class="data-table">
+                <thead><tr><th>Geography</th><th>Channel</th>
+                    <th>Recommended spend</th><th>Change</th></tr></thead>
+                <tbody>{"".join(rows)}</tbody>
+            </table>
+        """
+
+    def _render_flighting_table(self, fl: dict) -> str:
+        channels = list(fl.get("channels", []))
+        head = (
+            "<tr><th>Period</th>"
+            + "".join(f"<th>{html.escape(str(c))}</th>" for c in channels)
+            + "<th>Total</th></tr>"
+        )
+        rows = []
+        for r in fl["schedule"]:
+            cells = "".join(
+                f'<td class="mono">{self._format_currency(float(r.get(c, 0.0)))}</td>'
+                for c in channels
+            )
+            rows.append(
+                f"<tr><td>{html.escape(str(r.get('period', '')))}</td>{cells}"
+                f'<td class="mono">{self._format_currency(float(r.get("total", 0.0)))}</td></tr>'
+            )
+        pat = html.escape(str(fl.get("pattern", "")))
+        return f"""
+            <h3>Flighting calendar ({pat})</h3>
+            <table class="data-table">
+                <thead>{head}</thead>
+                <tbody>{"".join(rows)}</tbody>
+            </table>
+        """
+
+
 SECTION_REGISTRY: dict[str, type[Section]] = {
     "executive_summary": ExecutiveSummarySection,
+    "allocation": AllocationSection,
     "factor_analysis": FactorAnalysisSection,
     "model_fit": ModelFitSection,
     "posterior_predictive": PosteriorPredictiveSection,

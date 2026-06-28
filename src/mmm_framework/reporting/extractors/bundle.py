@@ -209,6 +209,13 @@ class MMMDataBundle:
     # ``cfa_fit_indices`` (rendered by the FactorAnalysisSection) instead.
     estimands: dict[str, dict[str, Any]] | None = None
 
+    # Budget-allocation plan (Planner). Optional and data-gated: the AllocationSection
+    # renders only when this is attached (a plan computed by ``plan_budget``). Shape
+    # mirrors the ``budget_plan`` op payload — keys: "total_budget", "expected_uplift",
+    # "uplift_hdi", "prob_positive_uplift", "allocation" (list of per-channel rows),
+    # optional "geo_allocation"/"geos", optional "flighting" calendar.
+    allocation_results: dict[str, Any] | None = None
+
     # Posterior-predictive goodness-of-fit summary (original KPI scale), computed
     # once by the extractor so the section/charts stay data-only. Keys:
     #   "observed"    : (n_obs,) observed KPI values

@@ -434,33 +434,40 @@ export function WorkspaceTabs({
                 </DashWidget>
               )}
 
-              {dashboardData.report_path && (
+              {dashboardData.report_path && (() => {
+                // Per-session report routing (U4): the agent writes report HTML
+                // per session, and the endpoint takes an optional ?thread_id=, so
+                // the report is scoped to THIS session rather than the global
+                // dev artifact.
+                const rq = threadId ? `?thread_id=${encodeURIComponent(threadId)}` : '';
+                return (
                 <DashWidget title="Full MMM Report" dotColor="bg-violet-500" color="violet"
                   expandTitle="MMM Report"
                   expandContent={
                     <div className="h-[80vh]">
-                      <iframe src={`${API_BASE}/report`} className="w-full h-full rounded-xl border border-line-200" title="MMM Report" sandbox="allow-scripts allow-same-origin" />
+                      <iframe src={`${API_BASE}/report${rq}`} className="w-full h-full rounded-xl border border-line-200" title="MMM Report" sandbox="allow-scripts allow-same-origin" />
                     </div>
                   }
                 >
                   <div className="flex flex-col gap-3">
                     <p className="text-sm text-ink-400">Full analysis report with diagnostics, ROI, and channel decomposition.</p>
                     <div className="flex gap-3">
-                      <a href={`${API_BASE}/report/download`} download="mmm_report.html"
+                      <a href={`${API_BASE}/report/download${rq}`} download="mmm_report.html"
                         className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm rounded-xl transition-colors font-medium">
                         <Download size={15} /> Download
                       </a>
-                      <a href={`${API_BASE}/report`} target="_blank" rel="noreferrer"
+                      <a href={`${API_BASE}/report${rq}`} target="_blank" rel="noreferrer"
                         className="flex items-center gap-2 px-4 py-2 bg-cream-100 hover:bg-gray-200 text-ink-700 text-sm rounded-xl transition-colors font-medium border border-line-200">
                         <ExternalLink size={15} /> Open Tab
                       </a>
                     </div>
                     <div className="rounded-xl overflow-hidden border border-line-200" style={{ height: '340px' }}>
-                      <iframe src={`${API_BASE}/report`} className="w-full h-full" title="Preview" sandbox="allow-scripts allow-same-origin" />
+                      <iframe src={`${API_BASE}/report${rq}`} className="w-full h-full" title="Preview" sandbox="allow-scripts allow-same-origin" />
                     </div>
                   </div>
                 </DashWidget>
-              )}
+                );
+              })()}
 
               <SlideDeckWidget
                 projectId={projectId}

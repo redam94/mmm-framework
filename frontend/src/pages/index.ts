@@ -9,3 +9,4 @@ export { TeamPage } from './Team';
 export { KnowledgePage } from './Knowledge';
 export { AgentPage } from './Agent';
 export { ModelGardenPage } from './ModelGarden';
+export { PlannerPage } from './Planner';

@@ -22,6 +22,8 @@ def test_ops_registry_complete():
         "adstock_weights",
         "saturation_curves",
         "budget_scenario",
+        "plan_budget",
+        "plan_scenario",
         "marginal_analysis",
         "prior_predictive_check",
         "leave_one_out",

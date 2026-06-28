@@ -6,11 +6,16 @@ session kernels via ``model_ops``.
 """
 
 from .budget import (
+    GEO_ARM_SEP,
     BudgetOptimizationResult,
     ResponseCurves,
+    combine_geo_curves,
     compute_response_curves,
+    compute_response_curves_per_geo,
     optimize_budget,
+    optimize_budget_by_geo,
 )
+from .flighting import FLIGHTING_PATTERNS, build_flighting_schedule
 from .eig import (
     DEFAULT_HALF_LIVES_WEEKS,
     DESIGN_PRECISION,
@@ -60,6 +65,12 @@ __all__ = [
     "ResponseCurves",
     "compute_response_curves",
     "optimize_budget",
+    "GEO_ARM_SEP",
+    "compute_response_curves_per_geo",
+    "combine_geo_curves",
+    "optimize_budget_by_geo",
+    "FLIGHTING_PATTERNS",
+    "build_flighting_schedule",
     "recommend_experiments",
     "ChannelPriority",
     "compute_experiment_priorities",

@@ -51,8 +51,7 @@ def _conn() -> Iterator[sqlite3.Connection]:
 
 def init_db() -> None:
     with _conn() as c:
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 thread_id  TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
@@ -61,8 +60,7 @@ def init_db() -> None:
                 project_id TEXT,
                 modeling_mode TEXT
             )
-            """
-        )
+            """)
         # Migrate existing installs that predate the project_id column
         try:
             c.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT")
@@ -73,8 +71,7 @@ def init_db() -> None:
             c.execute("ALTER TABLE sessions ADD COLUMN modeling_mode TEXT")
         except Exception:
             pass
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS artifacts (
                 id           TEXT PRIMARY KEY,
                 thread_id    TEXT NOT NULL,
@@ -82,8 +79,7 @@ def init_db() -> None:
                 payload_json TEXT NOT NULL,
                 created_at   REAL NOT NULL
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_artifacts_thread ON artifacts(thread_id, created_at)"
         )
@@ -91,8 +87,7 @@ def init_db() -> None:
         # Modeling assumptions: a key/value log per session with full versioned
         # history. Each row is an immutable snapshot; the "current" value for a
         # key is the row with the highest version. Updates write a new row.
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS assumptions (
                 id           TEXT PRIMARY KEY,
                 thread_id    TEXT NOT NULL,
@@ -105,8 +100,7 @@ def init_db() -> None:
                 is_tombstone INTEGER NOT NULL DEFAULT 0,
                 created_at   REAL NOT NULL
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_assumptions_thread_key ON assumptions(thread_id, key, version)"
         )
@@ -114,8 +108,7 @@ def init_db() -> None:
         # Workflow status: which of the 9 canonical steps are done/in-progress.
         # We mostly infer status from state, but store manual overrides + notes
         # here. One row per (thread_id, step).
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS workflow_status (
                 thread_id   TEXT NOT NULL,
                 step        INTEGER NOT NULL,
@@ -124,14 +117,12 @@ def init_db() -> None:
                 updated_at  REAL NOT NULL,
                 PRIMARY KEY (thread_id, step)
             )
-            """
-        )
+            """)
 
         # Data files associated with a session: uploads, generated datasets,
         # exports, plots, etc. Distinct from artifacts (which are code/report
         # snippets); this table is the "Files" tab in the UI.
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS data_files (
                 id           TEXT PRIMARY KEY,
                 thread_id    TEXT NOT NULL,
@@ -143,16 +134,14 @@ def init_db() -> None:
                 meta_json    TEXT,
                 created_at   REAL NOT NULL
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_data_files_thread ON data_files(thread_id, created_at)"
         )
 
         # Locked analysis plans: a snapshot of research_question + DAG + assumptions
         # at the moment the analyst decides to "lock" the pre-registration.
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS analysis_plans (
                 id           TEXT PRIMARY KEY,
                 thread_id    TEXT NOT NULL,
@@ -160,8 +149,7 @@ def init_db() -> None:
                 locked_at    REAL NOT NULL,
                 payload_json TEXT NOT NULL
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_plans_thread ON analysis_plans(thread_id, locked_at)"
         )
@@ -171,8 +159,7 @@ def init_db() -> None:
         # agent reads when deciding whether a model refresh should fold new
         # results in. status='completed' = measured but NOT yet calibrated into
         # a fit; 'calibrated' closes the loop.
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS experiments (
                 id          TEXT PRIMARY KEY,
                 project_id  TEXT,
@@ -189,8 +176,7 @@ def init_db() -> None:
                 created_at  REAL NOT NULL,
                 updated_at  REAL NOT NULL
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_experiments_project"
             " ON experiments(project_id, updated_at)"
@@ -225,8 +211,7 @@ def init_db() -> None:
         # posteriors, budget shares, EIG/EVOI, misallocation proxy) so the
         # Performance page plots trajectories without unpickling models.
         # metrics_json carries its own schema_version; rows are never mutated.
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS run_metrics (
                 run_id         TEXT PRIMARY KEY,
                 artifact_id    TEXT,
@@ -236,8 +221,7 @@ def init_db() -> None:
                 schema_version INTEGER NOT NULL,
                 metrics_json   TEXT NOT NULL
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_run_metrics_project"
             " ON run_metrics(project_id, created_at)"
@@ -250,8 +234,7 @@ def init_db() -> None:
         # construction. manifest_json carries {contract_version, class_name,
         # dataset_schema, recommended_fit, tags}; source lives on disk at
         # source_path (workspace garden_dir); status_history_json is append-only.
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS garden_models (
                 id                      TEXT PRIMARY KEY,
                 org_id                  TEXT NOT NULL,
@@ -270,8 +253,7 @@ def init_db() -> None:
                 updated_at              REAL NOT NULL,
                 UNIQUE(org_id, name, version)
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_garden_models_org"
             " ON garden_models(org_id, status, updated_at)"
@@ -285,8 +267,7 @@ def init_db() -> None:
         # a non-secret reference (bucket/prefix/object, or project/dataset/query/
         # table) — NEVER credentials. Auth stays ambient (ADC / the server's
         # MMM_GCP_CREDENTIALS_PATH), so there is no secret to encrypt at rest.
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS data_connections (
                 id          TEXT PRIMARY KEY,
                 project_id  TEXT,
@@ -297,8 +278,7 @@ def init_db() -> None:
                 updated_at  REAL NOT NULL,
                 last_synced REAL
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_data_connections_project"
             " ON data_connections(project_id, updated_at)"
@@ -328,8 +308,7 @@ def init_db() -> None:
         # to a project via sessions.project_id. meta_json carries the
         # onboarding profile (client info, goals, KPI/channel context) that
         # also gets rendered into a KB "project brief".
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS projects (
                 project_id  TEXT PRIMARY KEY,
                 name        TEXT NOT NULL,
@@ -338,8 +317,7 @@ def init_db() -> None:
                 created_at  REAL NOT NULL,
                 updated_at  REAL NOT NULL
             )
-            """
-        )
+            """)
         try:
             c.execute("ALTER TABLE projects ADD COLUMN meta_json TEXT")
         except Exception:
@@ -348,8 +326,7 @@ def init_db() -> None:
         # Team roster + project membership. A registry for attribution and
         # assignment (who owns what, who signs off) — not an authentication
         # system; the hosted profile handles access control.
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id    TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
@@ -358,24 +335,20 @@ def init_db() -> None:
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             )
-            """
-        )
-        c.execute(
-            """
+            """)
+        c.execute("""
             CREATE TABLE IF NOT EXISTS project_members (
                 project_id TEXT NOT NULL,
                 user_id    TEXT NOT NULL,
                 role       TEXT NOT NULL DEFAULT 'analyst',
                 PRIMARY KEY (project_id, user_id)
             )
-            """
-        )
+            """)
 
         # Knowledge-base documents: the source files a user adds for context,
         # scoped to a project. Bytes live on disk (path); chunks+embeddings in
         # kb_chunks.
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS kb_documents (
                 id         TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
@@ -389,8 +362,7 @@ def init_db() -> None:
                 meta_json  TEXT,
                 created_at REAL NOT NULL
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_kb_docs_project ON kb_documents(project_id, created_at)"
         )
@@ -398,8 +370,7 @@ def init_db() -> None:
         # Knowledge-base chunks: one row per text chunk with its embedding stored
         # as a float32 little-endian BLOB. Brute-force cosine search avoids a
         # vector-store dependency.
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS kb_chunks (
                 id          TEXT PRIMARY KEY,
                 document_id TEXT NOT NULL,
@@ -410,8 +381,7 @@ def init_db() -> None:
                 dim         INTEGER NOT NULL,
                 created_at  REAL NOT NULL
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_kb_chunks_project ON kb_chunks(project_id)"
         )
@@ -422,8 +392,7 @@ def init_db() -> None:
         # User/project preferences: small JSON values keyed by (scope, key).
         # scope is 'global' (deployment-wide defaults: favorite palette, number
         # formats) or a project_id (per-client branding, report preferences).
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS preferences (
                 scope      TEXT NOT NULL,
                 key        TEXT NOT NULL,
@@ -431,8 +400,37 @@ def init_db() -> None:
                 updated_at REAL NOT NULL,
                 PRIMARY KEY (scope, key)
             )
-            """
-        )
+            """)
+        # Saved budget plans (Planner). A plan persists a computed allocation /
+        # scenario so it survives the chat turn; ``plan_payload`` holds the rich
+        # studio result (geo allocation + flighting calendar) as JSON.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS budget_plans (
+                id                 TEXT PRIMARY KEY,
+                project_id         TEXT,
+                org_id             TEXT NOT NULL,
+                name               TEXT NOT NULL,
+                description        TEXT,
+                model_id           TEXT,
+                kind               TEXT NOT NULL DEFAULT 'optimization',
+                spend_changes      TEXT,
+                baseline_outcome   REAL,
+                scenario_outcome   REAL,
+                outcome_change     REAL,
+                outcome_change_pct REAL,
+                channel_details    TEXT,
+                plan_payload       TEXT,
+                created_at         REAL NOT NULL,
+                updated_at         REAL NOT NULL
+            )
+            """)
+        for _ddl in (
+            "CREATE INDEX IF NOT EXISTS idx_budget_plans_org"
+            " ON budget_plans(org_id, updated_at)",
+            "CREATE INDEX IF NOT EXISTS idx_budget_plans_project"
+            " ON budget_plans(project_id, updated_at)",
+        ):
+            c.execute(_ddl)
 
 
 def list_sessions(project_id: str | None = None) -> list[dict[str, Any]]:
@@ -1376,6 +1374,123 @@ def list_experiments(
 def delete_experiment(experiment_id: str) -> bool:
     with _conn() as c:
         cur = c.execute("DELETE FROM experiments WHERE id = ?", (experiment_id,))
+        return cur.rowcount > 0
+
+
+# ── Budget plans (Planner) ────────────────────────────────────────────────────
+
+_BUDGET_PLAN_JSON_COLS = ("spend_changes", "channel_details", "plan_payload")
+
+
+def _budget_plan_row_to_dict(r: sqlite3.Row) -> dict[str, Any]:
+    d = dict(r)
+    for col in _BUDGET_PLAN_JSON_COLS:
+        raw = d.get(col)
+        d[col] = json.loads(raw) if raw else None
+    # FE expects ``plan_id`` and an ISO ``created_at`` (BudgetPlanInfo).
+    d["plan_id"] = d["id"]
+    return d
+
+
+def upsert_budget_plan(
+    *,
+    plan_id: str | None = None,
+    project_id: str | None = None,
+    org_id: str,
+    name: str,
+    description: str | None = None,
+    model_id: str | None = None,
+    kind: str = "optimization",
+    spend_changes: dict[str, Any] | None = None,
+    baseline_outcome: float | None = None,
+    scenario_outcome: float | None = None,
+    outcome_change: float | None = None,
+    outcome_change_pct: float | None = None,
+    channel_details: dict[str, Any] | None = None,
+    plan_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Create or update a budget plan; returns the stored plan dict."""
+    now = _now()
+    with _conn() as c:
+        existing = None
+        if plan_id:
+            existing = c.execute(
+                "SELECT created_at FROM budget_plans WHERE id = ?", (plan_id,)
+            ).fetchone()
+        pid = plan_id or f"plan_{uuid.uuid4().hex[:12]}"
+        created_at = existing["created_at"] if existing else now
+        c.execute(
+            """
+            INSERT INTO budget_plans (
+                id, project_id, org_id, name, description, model_id, kind,
+                spend_changes, baseline_outcome, scenario_outcome, outcome_change,
+                outcome_change_pct, channel_details, plan_payload,
+                created_at, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(id) DO UPDATE SET
+                project_id=excluded.project_id, org_id=excluded.org_id,
+                name=excluded.name, description=excluded.description,
+                model_id=excluded.model_id, kind=excluded.kind,
+                spend_changes=excluded.spend_changes,
+                baseline_outcome=excluded.baseline_outcome,
+                scenario_outcome=excluded.scenario_outcome,
+                outcome_change=excluded.outcome_change,
+                outcome_change_pct=excluded.outcome_change_pct,
+                channel_details=excluded.channel_details,
+                plan_payload=excluded.plan_payload,
+                updated_at=excluded.updated_at
+            """,
+            (
+                pid,
+                project_id,
+                org_id,
+                name,
+                description,
+                model_id,
+                kind,
+                json.dumps(spend_changes, default=str) if spend_changes else None,
+                baseline_outcome,
+                scenario_outcome,
+                outcome_change,
+                outcome_change_pct,
+                json.dumps(channel_details, default=str) if channel_details else None,
+                json.dumps(plan_payload, default=str) if plan_payload else None,
+                created_at,
+                now,
+            ),
+        )
+    return get_budget_plan(pid)  # type: ignore[return-value]
+
+
+def get_budget_plan(plan_id: str) -> dict[str, Any] | None:
+    with _conn() as c:
+        r = c.execute("SELECT * FROM budget_plans WHERE id = ?", (plan_id,)).fetchone()
+    return _budget_plan_row_to_dict(r) if r else None
+
+
+def list_budget_plans(
+    org_id: str,
+    project_id: str | None = None,
+    model_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Plans for an org (required), newest-updated first; optionally filtered."""
+    q = "SELECT * FROM budget_plans WHERE org_id = ?"
+    params: list[Any] = [org_id]
+    if project_id is not None:
+        q += " AND project_id = ?"
+        params.append(project_id)
+    if model_id is not None:
+        q += " AND model_id = ?"
+        params.append(model_id)
+    q += " ORDER BY updated_at DESC"
+    with _conn() as c:
+        rows = c.execute(q, params).fetchall()
+    return [_budget_plan_row_to_dict(r) for r in rows]
+
+
+def delete_budget_plan(plan_id: str) -> bool:
+    with _conn() as c:
+        cur = c.execute("DELETE FROM budget_plans WHERE id = ?", (plan_id,))
         return cur.rowcount > 0
 
 

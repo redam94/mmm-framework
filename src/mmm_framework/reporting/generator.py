@@ -19,6 +19,7 @@ from .data_extractors import (
 )
 from .sections import (
     Section,
+    AllocationSection,
     ExecutiveSummarySection,
     FactorAnalysisSection,
     ModelFitSection,
@@ -177,6 +178,7 @@ class MMMReportGenerator:
                 _mmm(self.config.posterior_predictive),
             ),
             ("channel_roi", ChannelROISection, _mmm(self.config.channel_roi)),
+            ("allocation", AllocationSection, _mmm(self.config.allocation)),
             ("estimands", EstimandsSection, _mmm(self.config.estimands)),
             ("geographic", GeographicSection, _mmm(self.config.geographic)),
             ("decomposition", DecompositionSection, _mmm(self.config.decomposition)),

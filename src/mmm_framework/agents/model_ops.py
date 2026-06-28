@@ -708,6 +708,280 @@ def optimize_budget(
     return out
 
 
+def _normalize_channel_bounds(
+    mmm: Any, bounds: dict | None
+) -> tuple[dict | None, str | None]:
+    """Validate per-channel ``{channel: [low, high]}`` multiplier bounds against
+    the model's channels. Returns (normalized, error_message)."""
+    if not bounds:
+        return None, None
+    names = list(getattr(mmm, "channel_names", []) or [])
+    unknown = [c for c in bounds if c not in names]
+    if unknown:
+        return (
+            None,
+            f"Unknown channel(s) in bounds: {unknown}. Valid channels: {names}.",
+        )
+    norm: dict[str, tuple[float, float]] = {}
+    for c, lohi in bounds.items():
+        try:
+            lo, hi = float(lohi[0]), float(lohi[1])
+        except Exception:  # noqa: BLE001
+            return None, f"bounds[{c!r}] must be [low, high] multipliers, got {lohi!r}."
+        if lo < 0 or hi < lo:
+            return (
+                None,
+                f"bounds[{c!r}] must satisfy 0 <= low <= high, got [{lo}, {hi}].",
+            )
+        norm[c] = (lo, hi)
+    return norm, None
+
+
+def plan_budget(
+    mmm: Any,
+    results: Any = None,
+    *,
+    total_budget: float | None = None,
+    budget_change_pct: float | None = None,
+    min_multiplier: float = 0.0,
+    max_multiplier: float = 2.0,
+    bounds: dict | None = None,
+    by_geo: bool = False,
+    flighting: dict | None = None,
+    max_draws: int = 200,
+) -> dict:
+    """Decision-grade budget plan for the Planner studio: optimal allocation
+    (national or per-geo) plus an optional forward flighting calendar.
+
+    Wraps :func:`planning.optimize_budget` (or ``optimize_budget_by_geo`` when
+    ``by_geo`` and the model is a geo panel) and, if ``flighting`` is given,
+    spreads the recommended per-channel budgets across future periods. Returns a
+    single ``budget_plan`` dashboard payload the FE renders without a chat
+    round-trip."""
+    import pandas as pd
+
+    norm_bounds, err = _normalize_channel_bounds(mmm, bounds)
+    if err:
+        return _err(err)
+
+    use_geo = (
+        bool(by_geo)
+        and bool(getattr(mmm, "has_geo", False))
+        and int(getattr(mmm, "n_geos", 1)) > 1
+    )
+
+    try:
+        from mmm_framework import planning as _pl
+
+        if use_geo:
+            res = _pl.optimize_budget_by_geo(
+                mmm,
+                total_budget=total_budget,
+                budget_change_pct=budget_change_pct,
+                min_multiplier=min_multiplier,
+                max_multiplier=max_multiplier,
+                bounds=norm_bounds,
+                max_draws=max_draws,
+                random_seed=42,
+            )
+        else:
+            res = _pl.optimize_budget(
+                mmm,
+                total_budget=total_budget,
+                budget_change_pct=budget_change_pct,
+                min_multiplier=min_multiplier,
+                max_multiplier=max_multiplier,
+                bounds=norm_bounds,
+                max_draws=max_draws,
+                random_seed=42,
+            )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Budget planning failed: {e}")
+
+    t = res.table
+    current_total = float(t["current_spend"].sum())
+
+    # National roll-up (the headline + the budgets the flighting calendar spreads).
+    if use_geo:
+        roll = t.groupby("channel", as_index=False).agg(
+            current_spend=("current_spend", "sum"),
+            optimal_spend=("optimal_spend", "sum"),
+        )
+        opt_tot = max(float(roll["optimal_spend"].sum()), 1e-9)
+        cur_tot = max(float(roll["current_spend"].sum()), 1e-9)
+        roll["current_share_pct"] = 100 * roll["current_spend"] / cur_tot
+        roll["optimal_share_pct"] = 100 * roll["optimal_spend"] / opt_tot
+        roll["change_pct"] = (
+            100
+            * (roll["optimal_spend"] - roll["current_spend"])
+            / roll["current_spend"].replace(0, pd.NA)
+        ).fillna(0.0)
+        national = roll
+    else:
+        national = t
+
+    channel_budgets = {
+        str(r["channel"]): float(r["optimal_spend"]) for _, r in national.iterrows()
+    }
+
+    plan: dict[str, Any] = {
+        "by_geo": use_geo,
+        "total_budget": float(res.total_budget),
+        "current_total": current_total,
+        "expected_uplift": float(res.expected_uplift),
+        "uplift_hdi": [float(res.uplift_hdi[0]), float(res.uplift_hdi[1])],
+        "prob_positive_uplift": float(res.prob_positive_uplift),
+        "n_draws": int(res.n_draws),
+        "allocation": national.round(2).to_dict(orient="records"),
+        "notes": list(res.notes),
+    }
+    if use_geo:
+        plan["geo_allocation"] = t.round(2).to_dict(orient="records")
+        plan["geos"] = list(getattr(mmm, "geo_names", []))
+
+    if flighting:
+        try:
+            fl = _pl.build_flighting_schedule(
+                channel_budgets,
+                int(flighting.get("n_periods", 13)),
+                pattern=str(flighting.get("pattern", "even")),
+                front_load=float(flighting.get("front_load", 0.65)),
+                pulse_on=int(flighting.get("pulse_on", 1)),
+                pulse_off=int(flighting.get("pulse_off", 1)),
+                seasonal=flighting.get("seasonal"),
+                period_labels=flighting.get("period_labels"),
+            )
+            plan["flighting"] = fl
+        except Exception as e:  # noqa: BLE001
+            plan["notes"].append(f"Flighting skipped: {e}")
+
+    lines = ["### Budget Plan", ""]
+    lines.append(
+        f"- Budget allocated: {res.total_budget:,.0f} (current {current_total:,.0f})"
+    )
+    lines.append(
+        f"- Expected uplift vs current: {res.expected_uplift:,.0f} "
+        f"(90% [{res.uplift_hdi[0]:,.0f}, {res.uplift_hdi[1]:,.0f}]; "
+        f"P(>0)={res.prob_positive_uplift:.0%})"
+    )
+    if use_geo:
+        lines.append(
+            f"- Allocated per geography across {len(plan.get('geos', []))} geos"
+        )
+    if plan.get("flighting"):
+        fl = plan["flighting"]
+        lines.append(f"- {fl['n_periods']}-period {fl['pattern']} flighting calendar")
+    for n in plan["notes"]:
+        lines.append(f"- ⚠️ {n}")
+
+    out = _ok("\n".join(lines), {"budget_plan": plan})
+    tables = [
+        df_to_table_json(
+            national.round(2),
+            title="Recommended Allocation",
+            source="plan_budget",
+            group="results",
+        )
+    ]
+    if use_geo:
+        tables.append(
+            df_to_table_json(
+                t.round(2),
+                title="Per-Geo Allocation",
+                source="plan_budget",
+                group="results",
+            )
+        )
+    if plan.get("flighting"):
+        tables.append(
+            records_to_table_json(
+                plan["flighting"]["schedule"],
+                title=f"Flighting Calendar ({plan['flighting']['pattern']})",
+                source="plan_budget",
+                group="results",
+            )
+        )
+    out["tables"] = tables
+    return out
+
+
+def plan_scenario(
+    mmm: Any,
+    results: Any = None,
+    *,
+    spend_changes: dict | None = None,
+    time_period: list | tuple | None = None,
+    max_draws: int = 200,
+) -> dict:
+    """Structured what-if scenario for the Planner (uncertainty included).
+
+    ``spend_changes`` maps channel -> fractional change (e.g. ``{"TV": 0.2}`` is
+    +20%). Returns a clean ``budget_scenario`` dashboard payload (baseline vs
+    scenario outcome, credible interval, P(beats baseline), per-channel deltas)."""
+    changes = spend_changes or {}
+    if not changes:
+        return _err("Provide spend_changes: {channel: fractional_change}.")
+    names = list(getattr(mmm, "channel_names", []) or [])
+    unknown = [c for c in changes if c not in names]
+    if unknown:
+        return _err(f"Unknown channel(s) in spend_changes: {unknown}. Valid: {names}.")
+
+    try:
+        tp = tuple(time_period) if time_period else None
+        result = mmm.what_if_scenario(
+            changes, time_period=tp, max_draws=max_draws, random_seed=42
+        )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Scenario failed: {e}")
+
+    sc: dict[str, Any] = {
+        "spend_changes_applied": {k: float(v) for k, v in changes.items()},
+        "time_period": list(tp) if tp else None,
+        "baseline_outcome": float(result.get("baseline_outcome", 0.0)),
+        "scenario_outcome": float(result.get("scenario_outcome", 0.0)),
+        "outcome_change": float(result.get("outcome_change", 0.0)),
+        "outcome_change_pct": float(result.get("outcome_change_pct", 0.0)),
+        "channel_details": result.get("spend_changes", {}),
+    }
+    if "outcome_change_hdi" in result:
+        hdi = result["outcome_change_hdi"]
+        sc["outcome_change_hdi"] = [float(hdi[0]), float(hdi[1])]
+        sc["prob_positive"] = float(result.get("prob_positive", 0.0))
+        sc["n_draws"] = int(result.get("n_draws", 0))
+        sc["hdi_prob"] = float(result.get("hdi_prob", 0.94))
+
+    lines = [
+        "### Budget Scenario",
+        "",
+        f"- Outcome change: {sc['outcome_change']:,.0f} ({sc['outcome_change_pct']:+.1f}%)",
+    ]
+    if "outcome_change_hdi" in sc:
+        lines.append(
+            f"- {int(sc['hdi_prob'] * 100)}% interval "
+            f"[{sc['outcome_change_hdi'][0]:,.0f}, {sc['outcome_change_hdi'][1]:,.0f}]; "
+            f"P(beats baseline) = {sc['prob_positive']:.0%} ({sc['n_draws']} draws)"
+        )
+
+    out = _ok("\n".join(lines), {"budget_scenario": sc})
+    rows = []
+    for ch, d in (sc["channel_details"] or {}).items():
+        row = {"channel": ch}
+        if isinstance(d, dict):
+            for k, v in d.items():
+                row[k] = float(v) if isinstance(v, (int, float)) else v
+        rows.append(row)
+    if rows:
+        out["tables"] = [
+            records_to_table_json(
+                rows,
+                title="Scenario Spend Changes",
+                source="plan_scenario",
+                group="results",
+            )
+        ]
+    return out
+
+
 def experiment_design(
     mmm: Any,
     results: Any = None,
@@ -2520,6 +2794,8 @@ OPS = {
     "adstock_weights": adstock_weights,
     "saturation_curves": saturation_curves,
     "budget_scenario": budget_scenario,
+    "plan_budget": plan_budget,
+    "plan_scenario": plan_scenario,
     "marginal_analysis": marginal_analysis,
     "prior_predictive_check": prior_predictive_check,
     "leave_one_out": leave_one_out,
