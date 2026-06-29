@@ -40,6 +40,7 @@ from .results import (
     PriorPosteriorComparison,
     ROIResult,
     SaturationCurveResult,
+    SpendResponseZones,
 )
 
 # Utility functions
@@ -74,8 +75,10 @@ from .prior_posterior import (
 # Saturation curves
 from .saturation import (
     _apply_saturation,
+    _apply_saturation_derivative,
     _get_beta_samples,
     _get_saturation_params,
+    compute_response_zones,
     compute_saturation_curves_with_uncertainty,
 )
 
@@ -118,6 +121,7 @@ __all__ = [
     "ROIResult",
     "PriorPosteriorComparison",
     "SaturationCurveResult",
+    "SpendResponseZones",
     "AdstockResult",
     "DecompositionResult",
     "MediatedEffectResult",
@@ -143,9 +147,11 @@ __all__ = [
     "_select_key_parameters",
     # Saturation
     "compute_saturation_curves_with_uncertainty",
+    "compute_response_zones",
     "_get_saturation_params",
     "_get_beta_samples",
     "_apply_saturation",
+    "_apply_saturation_derivative",
     # Adstock
     "compute_adstock_weights",
     "_get_adstock_alpha",

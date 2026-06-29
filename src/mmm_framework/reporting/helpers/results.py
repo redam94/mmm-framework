@@ -105,6 +105,93 @@ class SaturationCurveResult:
 
 
 @dataclass
+class SpendResponseZones:
+    """Per-channel spend-response curves (response, average ROI, and **marginal
+    ROI**) over a spend grid, with the **breakthrough / optimal / saturation**
+    spend zones defined on *marginal ROI break-even bands* — NOT on percent of
+    maximum response.
+
+    The zones partition the spend axis by where the marginal return on the next
+    dollar sits relative to a break-even target (``break_even``, default 1.0 — one
+    KPI unit returned per dollar; pass ``1/margin`` for a margin-adjusted target):
+
+    * **breakthrough** (under-invested): mROI ≳ ``break_even·(1+band)`` — strong
+      marginal returns, spend more.
+    * **optimal**: mROI within ``±band`` of ``break_even`` — at/near the
+      profit-maximizing spend (``optimal_spend`` is where mROI == break_even).
+    * **saturation** (over-invested): mROI ≲ ``break_even·(1−band)`` —
+      diminishing, reallocate.
+
+    Average ROI is carried alongside for context. All curves carry posterior
+    uncertainty (HDI). Zone boundaries are computed from the posterior-mean mROI
+    curve so the slide shows stable numbers.
+    """
+
+    channel: str
+    # per-period spend grid ($) and the three curves (posterior mean + HDI)
+    spend_grid: np.ndarray
+    response_mean: np.ndarray
+    response_lower: np.ndarray
+    response_upper: np.ndarray
+    roi_mean: np.ndarray
+    roi_lower: np.ndarray
+    roi_upper: np.ndarray
+    mroi_mean: np.ndarray
+    mroi_lower: np.ndarray
+    mroi_upper: np.ndarray
+    # current spend position + ROI/mROI there (sampled exactly, not grid-snapped)
+    current_spend: float
+    current_response: float
+    current_roi: float
+    current_roi_hdi: tuple[float, float]
+    current_mroi: float
+    current_mroi_hdi: tuple[float, float]
+    # zone definition
+    break_even: float
+    band: float
+    # zone spend ranges ($ per period); an empty zone collapses to (x, x)
+    breakthrough_range: tuple[float, float]
+    optimal_range: tuple[float, float]
+    saturation_range: tuple[float, float]
+    optimal_spend: float | None
+    optimal_roi: float | None
+    current_zone: str  # 'breakthrough' | 'optimal' | 'saturation'
+    recommendation: str  # 'increase' | 'hold' | 'reduce'
+    headroom_to_optimal: float | None  # optimal_spend − current_spend (>0 ⇒ spend more)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "channel": self.channel,
+            "spend": self.spend_grid.tolist(),
+            "response_mean": self.response_mean.tolist(),
+            "response_hdi_low": self.response_lower.tolist(),
+            "response_hdi_high": self.response_upper.tolist(),
+            "roi_mean": self.roi_mean.tolist(),
+            "roi_hdi_low": self.roi_lower.tolist(),
+            "roi_hdi_high": self.roi_upper.tolist(),
+            "mroi_mean": self.mroi_mean.tolist(),
+            "mroi_hdi_low": self.mroi_lower.tolist(),
+            "mroi_hdi_high": self.mroi_upper.tolist(),
+            "current_spend": self.current_spend,
+            "current_response": self.current_response,
+            "current_roi": self.current_roi,
+            "current_roi_hdi": list(self.current_roi_hdi),
+            "current_mroi": self.current_mroi,
+            "current_mroi_hdi": list(self.current_mroi_hdi),
+            "break_even": self.break_even,
+            "band": self.band,
+            "breakthrough_range": list(self.breakthrough_range),
+            "optimal_range": list(self.optimal_range),
+            "saturation_range": list(self.saturation_range),
+            "optimal_spend": self.optimal_spend,
+            "optimal_roi": self.optimal_roi,
+            "current_zone": self.current_zone,
+            "recommendation": self.recommendation,
+            "headroom_to_optimal": self.headroom_to_optimal,
+        }
+
+
+@dataclass
 class AdstockResult:
     """Container for adstock decay curve."""
 
