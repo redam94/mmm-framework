@@ -87,10 +87,12 @@ dev = [
     "pytest>=9.0.2",
     "pytest-asyncio>=1.0.0",
     "pytest-cov>=7.0.0",
+    "python-pptx>=1.0.0",
     "ruff>=0.13.0",
 ]
 app = [
     "plotly>=6.5.0",
+    "python-pptx>=1.0.0",  # PowerPoint slide-deck generation (reporting.deck.builder)
     "streamlit>=1.52.1",
     # Powers the Atelier editor's Format + live lint endpoints (ruff check/format).
     "ruff>=0.13.0",

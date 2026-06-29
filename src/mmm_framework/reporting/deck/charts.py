@@ -196,8 +196,11 @@ def roi_forest_png(
     palette: dict[str, str] | None = None,
     width: float = 8.0,
     height: float = 4.8,
+    title: str = "Return on investment by channel",
+    xlabel: str = "ROI (KPI per unit spend)",
 ) -> bytes:
-    """Horizontal ROI point + HDI per channel, sorted, with a break-even line."""
+    """Horizontal point + HDI per channel, sorted, with a break-even line. Used
+    for both average ROI and (via ``title``/``xlabel``) marginal ROI."""
     p = _palette(palette)
     items = sorted(channel_roi.items(), key=lambda kv: kv[1].get("mean", 0.0))
     names = [k for k, _ in items]
@@ -228,8 +231,8 @@ def roi_forest_png(
     )
     ax.set_yticks(y)
     ax.set_yticklabels(names)
-    ax.set_xlabel("ROI (KPI per unit spend)")
-    ax.set_title("Return on investment by channel", fontsize=12, fontweight="bold")
+    ax.set_xlabel(xlabel)
+    ax.set_title(title, fontsize=12, fontweight="bold")
     ax.legend(loc="lower right", fontsize=8)
     _style_ax(ax, p)
     return _finish(fig)

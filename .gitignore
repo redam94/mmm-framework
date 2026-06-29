@@ -90,4 +90,4 @@ examples/mmm_report_*.html
 tests/synth/results/*.log
 
 # Local-only planning doc (kept on disk, never committed)
-/technical-docs/production-readiness-action-plan.md
+/technical-docs/production-readiness-action-plan.mdassets/*.pptx
