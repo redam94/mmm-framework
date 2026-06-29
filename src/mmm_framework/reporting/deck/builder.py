@@ -385,12 +385,15 @@ def build_pptx(
                 else f"80% range {currency}{lo:.2f} – {currency}{hi:.2f}"
             )
             T.fill_card(s, "BLENDED RETURN PER $1", f"{currency}{m:.2f}", rng)
-        if "headline" in insights:
+        if "headline" in insights or "standfirst" in insights:
             h = T.find_by_label(s, "THE HEADLINE")
             if h is not None:
-                below = T.shapes_below(s, h, left_tol_in=2.0, max_n=1)
-                if below:
+                # below the eyebrow: [0] = the big title, [1] = the standfirst para
+                below = T.shapes_below(s, h, left_tol_in=2.0, max_n=2)
+                if below and insights.get("headline"):
                     T.set_text(below[0], insights["headline"])
+                if len(below) > 1 and insights.get("standfirst"):
+                    T.set_text(below[1], insights["standfirst"])
 
     # ---- S5: channel scorecard ----
     sc = next((s for s in slides if T.find_by_label(s, "CHANNEL SCORECARD")), None)

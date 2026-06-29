@@ -28,10 +28,10 @@ _INSIGHT_SYS = (
     "of 1–2 sentences (~35 words). No preamble, no bullet markers, no markdown."
 )
 _SYNTH_SYS = (
-    "You are a senior marketing-effectiveness analyst writing the HEADLINE of a "
-    "client MMM readout. Synthesize across the whole deck. Be specific and "
+    "You are a senior marketing-effectiveness analyst writing the opening of a "
+    "client MMM readout. Synthesize across the whole deck; be specific and "
     "decision-oriented; ground every claim in the facts — never invent numbers. "
-    "No preamble, no markdown."
+    "No preamble, no markdown, no quotes."
 )
 
 # slide kinds that get a per-slide insight (the channel deep-dives)
@@ -167,22 +167,50 @@ def generate_deck_insights(
                 return insights
             continue
 
-    # synthesis -> the report headline
+    # synthesis -> a SHORT headline (for the big title) + a standfirst paragraph
     try:
         sp = (
             f"The deck's slide facts:\n{facts_blob}\n\n"
-            "Write the report HEADLINE standfirst: 2–3 sentences stating the single "
-            "most important finding and the highest-value reallocation move across "
-            "all channels (which to scale up, which to pull back, and why)."
+            "Return EXACTLY two labelled parts:\n"
+            "HEADLINE: a punchy title of AT MOST 12 words — the single most "
+            "important finding (no numbers needed).\n"
+            "STANDFIRST: 1–2 sentences (≤45 words) naming the top reallocation "
+            "move and the key supporting numbers."
         )
         r = llm.invoke([SystemMessage(content=_SYNTH_SYS), HumanMessage(content=sp)])
-        txt = _clean(r)
-        if txt:
-            insights["headline"] = txt
+        headline, standfirst = _split_headline(_clean(r))
+        if headline:
+            insights["headline"] = _cap_headline(headline)
+        if standfirst:
+            insights["standfirst"] = standfirst
     except Exception:
         pass
 
     return insights
+
+
+def _split_headline(text: str) -> tuple[str, str]:
+    """Pull HEADLINE / STANDFIRST out of the synthesis reply (markers, not lines —
+    ``_clean`` has already collapsed newlines). Falls back to (text, "")."""
+    low = text.lower()
+    head_part, standfirst = text, ""
+    if "standfirst:" in low:
+        i = low.index("standfirst:")
+        head_part, standfirst = text[:i], text[i + len("standfirst:") :].strip()
+    if "headline:" in head_part.lower():
+        j = head_part.lower().index("headline:")
+        head_part = head_part[j + len("headline:") :]
+    return head_part.strip().strip('"').strip(), standfirst.strip().strip('"').strip()
+
+
+def _cap_headline(headline: str, max_words: int = 16) -> str:
+    """Defensive cap so the title never overflows even if the model ignores the
+    word limit: keep the first sentence, then at most ``max_words`` words."""
+    first = headline.split(". ")[0].strip().rstrip(".")
+    words = first.split()
+    if len(words) > max_words:
+        first = " ".join(words[:max_words]).rstrip(",;:")
+    return first
 
 
 __all__ = ["generate_deck_insights", "slide_key", "light_metrics"]

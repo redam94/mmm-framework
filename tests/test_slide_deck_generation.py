@@ -103,6 +103,21 @@ def test_generate_insights_degrades_on_llm_failure():
     assert ins == {}  # no crash, no narrative
 
 
+def test_headline_is_short_and_standfirst_split_out():
+    # the synthesis must yield a punchy title (not a paragraph) + a separate standfirst
+    from mmm_framework.agents.deck_insights import _cap_headline, _split_headline
+
+    hl, sf = _split_headline(
+        "HEADLINE: Reallocate from saturated TV into Video "
+        "STANDFIRST: Print and Radio have saturated; shift budget to Video. Blended ROI 0.82."
+    )
+    assert hl == "Reallocate from saturated TV into Video"
+    assert sf.startswith("Print and Radio")
+    # a model that ignores the word limit is capped so the title can't overflow
+    long = " ".join(f"w{i}" for i in range(40))
+    assert len(_cap_headline(long).split()) <= 16
+
+
 def test_generate_insights_skips_summary_slides_for_per_slide_pass():
     # only saturation (channel) slides get a per-slide insight; summaries are
     # handled by the synthesis call (the "headline" key)

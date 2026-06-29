@@ -270,21 +270,30 @@ notes = [{"key": slide_key(s), "kind": s.kind, "title": s.title,
 class _FakeResp:
     def __init__(self, c): self.content = c
 class _FakeLLM:
+    # deterministic stand-in: the synthesis call asks for HEADLINE/STANDFIRST;
+    # per-slide calls get a one-line narrative.
     def __init__(self): self.calls = 0
     def invoke(self, messages):
         self.calls += 1
-        first = messages[-1].content.splitlines()[0]   # echo the slide to show grounding
-        return _FakeResp(f"[demo insight #{self.calls}] {first} — act on the marginal return.")
+        prompt = messages[-1].content
+        if "HEADLINE:" in prompt:   # the whole-deck synthesis
+            return _FakeResp("HEADLINE: Shift budget from saturated channels into the "
+                             "under-invested ones. STANDFIRST: Several channels have "
+                             "saturated while others are still in their linear regime — "
+                             "reallocating lifts the blended return at no extra cost.")
+        return _FakeResp("Marginal returns here sit well below the average — act accordingly.")
 
 llm = _FakeLLM()
 insights = generate_deck_insights(notes, llm)
 print(f"LLM calls: {llm.calls}  (one per channel deep-dive + one synthesis)")
 print("insight keys:", sorted(insights))
-print("\nheadline (synthesized):\n  ", insights.get("headline", "—"))
+print("\nheadline (short, for the title):  ", insights.get("headline", "—"))
+print("standfirst (paragraph below it): ", insights.get("standfirst", "—"))
 
-# one insight per channel deep-dive, plus the synthesized headline
+# one insight per channel deep-dive, plus a short synthesized headline + standfirst
 n_channels = sum(1 for s in deck.slides if s.kind == "saturation")
-assert "headline" in insights
+assert "headline" in insights and len(insights["headline"].split()) <= 16
+assert "standfirst" in insights
 assert sum(1 for k in insights if k.startswith("channel:")) == n_channels
 """),
     md(r"""
@@ -367,14 +376,16 @@ print(f"per-channel deep-dives  : {len(deep)}  (one per model channel; model has
 print(f"headline 80% ranges     : {'80% range' in ' '.join(texts(head))}")
 print(f"scorecard names all ch  : {channels.issubset(set(t for s in prs.slides for t in texts(s)))}")
 print(f"'THE NEXT DOLLAR' slide  : {any(has(s, 'THE NEXT DOLLAR') for s in prs.slides)}")
-print(f"AI insight text present : {'demo insight' in all_text}")
+ai_text = insights["standfirst"]  # the synthesized standfirst we passed in
+print(f"AI standfirst landed    : {ai_text[:30] in all_text}")
+print(f"headline (title) words  : {len(' '.join(texts(head)[1:2]).split()) if len(texts(head)) > 1 else 0}")
 
 assert len(deep) == len(channels)                    # one deep-dive per channel
 for kpi in ("MARKETING-ATTRIBUTED REVENUE", "SHARE OF TOTAL REVENUE", "BLENDED RETURN PER $1"):
     assert any(t.strip().lower() == kpi.lower() for t in texts(head)), kpi
 assert "80% range" in " ".join(texts(head))          # KPI cards filled with ranges
 assert any(has(s, "THE NEXT DOLLAR") for s in prs.slides)  # marginal-ROI slide present
-assert "demo insight" in all_text                    # insights landed
+assert ai_text[:30] in all_text                      # AI standfirst landed in the deck
 """),
     # ====================================================================
     # 6. From the agent / UI
