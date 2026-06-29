@@ -23,6 +23,7 @@ import { KnowledgeTab } from '../widgets/KnowledgeTab';
 import { ModelSpecWidget } from '../widgets/ModelSpecWidget';
 import { PriorConfigWidget } from '../widgets/PriorConfigWidget';
 import { SeasonalityTrendWidget } from '../widgets/SeasonalityTrendWidget';
+import { SlideDeckWidget } from '../widgets/SlideDeckWidget';
 import { WorkspaceFilesWidget } from '../widgets/WorkspaceFilesWidget';
 import { ExperimentsTab } from '../widgets/ExperimentsTab';
 import { ModeSwitcher } from '../widgets/ModeSwitcher';
@@ -437,6 +438,12 @@ export function WorkspaceTabs({
                   </div>
                 </DashWidget>
               )}
+
+              <SlideDeckWidget
+                projectId={projectId}
+                threadId={threadId}
+                chatDeckPath={dashboardData.slide_deck_path}
+              />
             </>
           )}
 

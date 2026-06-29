@@ -434,6 +434,25 @@ export interface SimulationJob {
   error: string | null;
 }
 
+// ── PowerPoint slide-deck generation ──────────────────────────────────────────
+
+export interface DeckRequest {
+  client?: string | null;
+  kpi_name?: string;
+  currency?: string;
+  break_even?: number;
+  margin?: number | null;
+  hdi_prob?: number;
+}
+
+export interface DeckJob {
+  status: 'pending' | 'running' | 'done' | 'error';
+  stage?: string;
+  project_id: string;
+  result: { n_slides: number; n_insights: number; filename?: string; download?: string } | null;
+  error: string | null;
+}
+
 // ── Experiment-setup optimizer (Pareto front) ─────────────────────────────────
 
 /** One evaluated design on the three Pareto objectives + its runnable setup. */
@@ -662,6 +681,26 @@ export const measurementService = {
   async pollOptimization(projectId: string, jobId: string): Promise<OptimizationJob> {
     const { data } = await apiClient.get<OptimizationJob>(
       `/projects/${projectId}/experiment-design/optimize/${jobId}`,
+    );
+    return data;
+  },
+
+  /** Kick off the non-blocking PowerPoint slide-deck build (HTTP 202). */
+  async startDeckGeneration(
+    projectId: string,
+    body: DeckRequest,
+  ): Promise<{ job_id: string; status: string }> {
+    const { data } = await apiClient.post<{ job_id: string; status: string }>(
+      `/projects/${projectId}/generate-deck`,
+      body,
+    );
+    return data;
+  },
+
+  /** Poll a slide-deck job; resolves to {status, stage, result|null, error|null}. */
+  async pollDeckJob(projectId: string, jobId: string): Promise<DeckJob> {
+    const { data } = await apiClient.get<DeckJob>(
+      `/projects/${projectId}/generate-deck/${jobId}`,
     );
     return data;
   },

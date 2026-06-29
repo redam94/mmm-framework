@@ -985,6 +985,73 @@ def get_roi_metrics(
 
 
 @tool
+def generate_slide_deck(
+    state: Annotated[dict, InjectedState],
+    client_name: Optional[str] = None,
+    kpi_name: str = "Revenue",
+    currency: str = "$",
+    margin: Optional[float] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Generate a polished PowerPoint (.pptx) client readout from the fitted model.
+
+    Fills the branded slide template with the model's numbers and charts —
+    including each channel's breakthrough / optimal / saturation spend zones
+    (defined on ROI and **marginal ROI**, not percent of response) — then writes a
+    per-slide AI insight for each channel and a headline synthesized across the
+    whole deck. Call this when the user asks for a slide deck, PowerPoint, client
+    presentation, or readout deck. Requires a fitted model.
+
+    Args:
+        client_name: Client name for the cover and headline.
+        kpi_name: KPI label (e.g. "Revenue", "Sales").
+        currency: Currency symbol for money formatting.
+        margin: Gross margin (0–1); sets a profit-maximizing break-even (1/margin).
+    """
+    _activate_thread(config)
+    tid = get_current_thread()
+    kern = _KERNELS.get_or_spawn(tid)
+    opts = {
+        "client": client_name,
+        "kpi_name": kpi_name,
+        "currency": currency,
+        "margin": margin,
+    }
+    # 1) deterministic outline (model numbers + facts), 2) AI insights, 3) render
+    r1 = kern.run_model_op("slide_deck_notes", opts)
+    if r1.get("error"):
+        return _modelop_command(r1, state, tool_call_id)
+    notes = (r1.get("dashboard") or {}).get("slide_deck_notes") or []
+    insights: dict = {}
+    try:
+        from mmm_framework.agents.deck_insights import generate_deck_insights
+        from mmm_framework.agents.llm import build_llm
+
+        insights = generate_deck_insights(notes, build_llm())
+    except Exception as e:  # noqa: BLE001 — narrative is best-effort
+        logger.warning("Deck insight generation failed: %s", e)
+    r2 = kern.run_model_op("render_slide_deck", {**opts, "insights": insights})
+    if r2.get("error"):
+        return _modelop_command(r2, state, tool_call_id)
+    deck = (r2.get("dashboard") or {}).get("slide_deck") or {}
+    content = (
+        f"Generated a {len(notes)}-slide PowerPoint deck"
+        + (f" with {len(insights)} AI-written insights" if insights else "")
+        + ". Download it from the Results tab (Slide deck)."
+    )
+    res = {
+        "content": content,
+        "dashboard": {
+            "slide_deck_path": deck.get("path"),
+            "slide_deck_filename": deck.get("filename", "agent_slide_deck.pptx"),
+        },
+        "error": None,
+    }
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
 def get_estimands(
     state: Annotated[dict, InjectedState],
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
@@ -5959,6 +6026,7 @@ TOOLS = [
     reset_namespace,
     # Reporting
     generate_project_report,
+    generate_slide_deck,
     generate_client_report,
     generate_model_defense_report,
     generate_client_slides,

@@ -2858,6 +2858,180 @@ async def get_experiment_simulation(project_id: str, job_id: str):
     return JSONResponse(content=safe_json_dumps_load(art["payload"]))
 
 
+# ── Slide-deck generation (PowerPoint) ───────────────────────────────────────
+# Non-blocking, model-anchored deck build with an agentic insight layer:
+#   1. (to_thread) load the model + build the deterministic deck outline,
+#   2. (in-process LLM) write per-slide insights + a whole-deck synthesis,
+#   3. (to_thread) render the template into a .pptx with those insights.
+# The .pptx is written to the job's workspace; poll the job, then download it.
+
+
+class GenerateDeckRequest(BaseModel):
+    client: str | None = None
+    kpi_name: str = "Revenue"
+    currency: str = "$"
+    break_even: float = 1.0
+    margin: float | None = (
+        None  # gross margin -> profit-maximizing break-even (1/margin)
+    )
+    hdi_prob: float = 0.8  # the template shows 80% ranges
+
+
+async def _run_deck_job(
+    job_id: str,
+    synthetic_tid: str,
+    run: dict | None,
+    deck_opts: dict,
+    llm_kwargs: dict,
+) -> None:
+    """Build the deck outline, write AI insights + synthesis, render the .pptx."""
+    try:
+        # ``_project_id`` rides along only for the download URL; strip it from the
+        # kwargs the model ops receive.
+        project_id = deck_opts.pop("_project_id", None)
+        _sim_job_patch(job_id, status="running", stage="building outline")
+        if not run or not run.get("run_name"):
+            _sim_job_patch(
+                job_id,
+                status="error",
+                error="No saved model run for this project — fit a model first.",
+            )
+            return
+        rn, spec, dpath = run.get("run_name"), run.get("spec"), run.get("dataset_path")
+
+        res1 = await asyncio.to_thread(
+            _load_and_run_op,
+            synthetic_tid,
+            rn,
+            spec,
+            dpath,
+            "slide_deck_notes",
+            deck_opts,
+        )
+        if res1.get("error"):
+            _sim_job_patch(job_id, status="error", error=res1["error"])
+            return
+        notes = (res1.get("dashboard") or {}).get("slide_deck_notes") or []
+
+        # AI insights — best-effort; an LLM failure degrades to a no-narrative deck.
+        _sim_job_patch(job_id, status="running", stage="writing insights")
+        insights: dict = {}
+        try:
+            from mmm_framework.agents.deck_insights import generate_deck_insights
+
+            llm = get_llm(**llm_kwargs)
+            insights = await asyncio.to_thread(generate_deck_insights, notes, llm)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "Deck insight generation failed (%s); rendering without it.", e
+            )
+
+        _sim_job_patch(job_id, status="running", stage="rendering deck")
+        res2 = await asyncio.to_thread(
+            _load_and_run_op,
+            synthetic_tid,
+            rn,
+            spec,
+            dpath,
+            "render_slide_deck",
+            {**deck_opts, "insights": insights},
+        )
+        if res2.get("error"):
+            _sim_job_patch(job_id, status="error", error=res2["error"])
+            return
+        deck = (res2.get("dashboard") or {}).get("slide_deck") or {}
+        _sim_job_patch(
+            job_id,
+            status="done",
+            stage="done",
+            result={
+                "n_slides": len(notes),
+                "n_insights": len(insights),
+                "filename": deck.get("filename"),
+                "download": f"/projects/{project_id}/generate-deck/{job_id}/download",
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Deck job failed: %s", job_id)
+        _sim_job_patch(job_id, status="error", error=str(e))
+
+
+@app.post("/projects/{project_id}/generate-deck", dependencies=[_proj_write, _rl_heavy])
+async def start_deck_generation(
+    project_id: str,
+    body: GenerateDeckRequest,
+    x_api_key: str | None = Header(None),
+    x_model_name: str | None = Header(None),
+    x_base_url: str | None = Header(None),
+    x_provider: str | None = Header(None),
+):
+    """Start a NON-BLOCKING PowerPoint slide-deck build from the project's latest
+    saved model. Poll the returned job_id; download the .pptx when done."""
+    from mmm_framework.api.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    run = latest_model_run_payload(project_id)
+    margin, _price = _resolve_project_margin(project_id, body.margin, None)
+    deck_opts = {
+        "client": body.client,
+        "kpi_name": body.kpi_name,
+        "currency": body.currency,
+        "break_even": float(body.break_even),
+        "margin": margin,
+        "hdi_prob": float(body.hdi_prob),
+        "_project_id": project_id,
+    }
+    synthetic_tid = f"__deckjobs__{project_id}"
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        "slide_deck",
+        {
+            "status": "pending",
+            "stage": "queued",
+            "project_id": project_id,
+            "result": None,
+            "error": None,
+        },
+    )
+    llm_kwargs = {
+        "model_name": x_model_name,
+        "api_key": x_api_key,
+        "base_url": x_base_url,
+        "provider": x_provider,
+    }
+    _spawn_job_task(_run_deck_job(job["id"], synthetic_tid, run, deck_opts, llm_kwargs))
+    return JSONResponse(
+        status_code=202, content={"job_id": job["id"], "status": "pending"}
+    )
+
+
+@app.get("/projects/{project_id}/generate-deck/{job_id}", dependencies=[_proj_read])
+async def get_deck_job(project_id: str, job_id: str):
+    """Poll a slide-deck job: {status, stage, result|null, error|null}."""
+    art = sessions_store.get_artifact(job_id)
+    if art is None or (art.get("payload") or {}).get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Deck job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
+@app.get(
+    "/projects/{project_id}/generate-deck/{job_id}/download", dependencies=[_proj_read]
+)
+async def download_deck(project_id: str, job_id: str):
+    """Download the generated .pptx for a completed deck job."""
+    art = sessions_store.get_artifact(job_id)
+    if art is None or (art.get("payload") or {}).get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Deck job not found.")
+    return _serve_report(
+        "agent_slide_deck.pptx",
+        thread_id=f"__deckjobs__{project_id}",
+        missing="No slide deck generated yet.",
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        download_name="mmm_slide_deck.pptx",
+    )
+
+
 # ── Model validation runner (Phase 2) ────────────────────────────────────────
 # One-click, no-LLM validation: load the project's latest saved model in the
 # background, run a validation op directly (the same ops the chat agent's
@@ -5228,6 +5402,20 @@ async def download_report(thread_id: str | None = None):
         missing="No report generated yet.",
         media_type="application/octet-stream",
         download_name="mmm_report.html",
+    )
+
+
+@app.get("/slide-deck/download", dependencies=[_rep_read])
+async def download_slide_deck(thread_id: str | None = None):
+    """Download the PowerPoint deck generated by the chat agent's
+    ``generate_slide_deck`` tool for a session (the project-scoped UI button uses
+    ``/projects/{id}/generate-deck/{job_id}/download``)."""
+    return _serve_report(
+        "agent_slide_deck.pptx",
+        thread_id=thread_id,
+        missing="No slide deck generated yet.",
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        download_name="mmm_slide_deck.pptx",
     )
 
 
