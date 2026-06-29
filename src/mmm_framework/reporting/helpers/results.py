@@ -107,22 +107,24 @@ class SaturationCurveResult:
 @dataclass
 class SpendResponseZones:
     """Per-channel spend-response curves (response, average ROI, and **marginal
-    ROI**) over a spend grid, with the **breakthrough / optimal / saturation**
-    spend zones defined by where each spend level sits on the **response curve** —
-    via the elasticity ``e(s) = mROI(s)/ROI(s)`` — NOT on a break-even threshold
-    and NOT on percent of maximum response.
+    ROI**) over a spend grid, with **shape-aware** **breakthrough / optimal /
+    saturation** spend zones — NOT defined on a break-even threshold and NOT on
+    percent of maximum response. The zones run (low → high spend):
 
-    Elasticity is ~1 in the curve's linear regime and → 0 as it flattens; it
-    generally decreases with spend, so the zones run (low → high spend):
-
-    * **breakthrough** (under-invested): ``e ≥ breakthrough_elasticity`` — the
-      most linear / least saturated region; the next dollar still pulls its
-      weight, so spend more.
-    * **optimal**: ``saturation_elasticity ≤ e < breakthrough_elasticity`` — the
-      efficient operating knee (``optimal_spend`` is its centre).
+    * **breakthrough** (under-invested, increasing returns): the **convex** region
+      ``[0, inflection]`` where the marginal dollar earns *more* than the last —
+      a genuine threshold to break through. Exists only for **S-shaped** curves
+      (Hill slope > 1, logistic); for a **concave** curve (exponential,
+      Michaelis–Menten, tanh, Hill slope ≤ 1) there is no breakthrough level and
+      this zone is **empty** (``breakthrough_range == (0, 0)``).
+    * **optimal**: the efficient regime up to where the elasticity
+      ``e(s) = mROI(s)/ROI(s)`` drops below ``saturation_elasticity``;
+      ``optimal_spend`` is the efficient operating point within it.
     * **saturation** (over-invested): ``e < saturation_elasticity`` — marginal
-      ROI is much lower than average ROI; diminishing, reallocate.
+      ROI far below average ROI; diminishing, reallocate.
 
+    ``recommendation`` follows current spend's position relative to the zones and
+    ``optimal_spend`` (below it → increase, at it → hold, in saturation → reduce).
     Average ROI is carried alongside, ``break_even`` is the ROI/mROI reference
     level (the chart's dashed line), and all curves carry posterior uncertainty
     (HDI). Zone boundaries are computed from the posterior-mean curves so the

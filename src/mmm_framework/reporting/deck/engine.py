@@ -373,7 +373,14 @@ def build_deck(
         except Exception:
             png = None
 
-        def _rng(r):
+        def _rng(r, *, open_ended: bool = False):
+            # empty zone (e.g. no breakthrough on a concave curve) → no range to show
+            if r is None or r[1] - r[0] <= 0:
+                return "—"
+            if (
+                open_ended
+            ):  # saturation has no finite upper bound; the grid edge isn't one
+                return f"{_fmt_money(r[0], currency)} +"
             return f"{_fmt_money(r[0], currency)} – {_fmt_money(r[1], currency)}"
 
         table = {
@@ -386,7 +393,7 @@ def build_deck(
                 ["Efficient operating point", _fmt_money(z.optimal_spend, currency)],
                 ["Breakthrough range", _rng(z.breakthrough_range)],
                 ["Optimal range", _rng(z.optimal_range)],
-                ["Saturation range", _rng(z.saturation_range)],
+                ["Saturation range", _rng(z.saturation_range, open_ended=True)],
             ],
         }
         head = (

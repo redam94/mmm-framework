@@ -164,6 +164,18 @@ class TestDeckEngine:
             assert "optimal_range" in z and "break_even" in z
             # the slide's subtitle states the deterministic recommendation
             assert "Recommendation:" in s.subtitle
+            # the deck uses the DEFAULT (adaptive) spend range, which must extend
+            # far enough that the optimal knee and saturation onset are actually
+            # on the chart — otherwise the whole axis collapses to "breakthrough"
+            # with no optimal marker (the bug this guards against). So every
+            # deep-dive must carry a present optimal point and non-degenerate
+            # optimal + saturation zones.
+            opt_lo, opt_hi = z["optimal_range"]
+            sat_lo, sat_hi = z["saturation_range"]
+            assert z["optimal_spend"] is not None, (z["channel"], z)
+            assert z["headroom_to_optimal"] is not None
+            assert opt_hi > opt_lo, ("empty optimal zone", z["channel"], z)
+            assert sat_hi > sat_lo, ("empty saturation zone", z["channel"], z)
 
     def test_margin_sets_break_even(self, fitted_model):
         deck = build_deck(

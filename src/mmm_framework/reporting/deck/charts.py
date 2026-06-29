@@ -75,6 +75,43 @@ def _style_ax(ax, palette):
         ax.spines[spine].set_visible(False)
 
 
+def _roi_axis_top(zones: Any) -> float:
+    """Upper limit for the ROI / marginal-ROI (right) axis of the zone chart.
+
+    Avg ROI and marginal ROI DIVERGE as spend→0 for concave curves (the first
+    dollar is the most efficient; for Hill slope < 1 they go to ``+inf``), so
+    anchoring to the whole-curve max would pin the axis to that degenerate
+    near-zero spike and squash everything else. Scale to the decision-relevant
+    region instead: drop the near-zero toe for a CONCAVE curve (marginal-ROI peak
+    at the toe), but keep an INTERIOR peak for an S-shaped curve (its breakthrough
+    region). Break-even and the current/optimal levels are always kept in frame.
+    """
+    x = np.asarray(zones.spend_grid, dtype=float)
+    mroi_full = np.asarray(zones.mroi_mean, dtype=float)
+    roi_full = np.asarray(zones.roi_mean, dtype=float)
+    finite = np.isfinite(mroi_full)
+    if finite.any():
+        i_peak = int(np.nanargmax(np.where(finite, mroi_full, -np.inf)))
+        # concave ⇒ marginal-ROI peaks at the toe ⇒ scale from current spend on;
+        # S-shaped ⇒ interior peak is meaningful, keep the whole curve in frame.
+        sel = (x >= zones.current_spend) & finite if i_peak <= 1 else finite
+        if not sel.any():
+            sel = finite
+    else:
+        sel = np.zeros_like(x, dtype=bool)
+
+    def _region_max(arr):
+        mask = sel & np.isfinite(arr)
+        return float(np.nanmax(arr[mask])) if mask.any() else float("-inf")
+
+    cands = [_region_max(mroi_full), _region_max(roi_full), zones.break_even * 1.5]
+    for v in (zones.current_mroi, zones.current_roi):
+        if np.isfinite(v):
+            cands.append(float(v) * 1.2)
+    top = max((c for c in cands if np.isfinite(c)), default=float(zones.break_even))
+    return max(top, 1e-6)
+
+
 def saturation_zones_png(
     zones: Any,
     *,
@@ -102,22 +139,25 @@ def saturation_zones_png(
         ("optimal", zones.optimal_range, "Optimal"),
         ("saturation", zones.saturation_range, "Saturation"),
     ]
+    axis_w = float(x[-1] - x[0]) or 1.0
     for key, (lo, hi), label in zone_specs:
-        if hi - lo <= 0:
+        if hi - lo <= 0:  # empty zone (e.g. no breakthrough on a concave curve)
             continue
         ax1.axvspan(lo, hi, color=p[key], alpha=0.10, lw=0)
-        ax1.text(
-            (lo + hi) / 2.0,
-            0.97,
-            label,
-            transform=ax1.get_xaxis_transform(),
-            ha="center",
-            va="top",
-            fontsize=9,
-            color=p[key],
-            fontweight="bold",
-            alpha=0.9,
-        )
+        # only label zones wide enough to hold the text (avoid cramped overlaps)
+        if (hi - lo) / axis_w >= 0.08:
+            ax1.text(
+                (lo + hi) / 2.0,
+                0.97,
+                label,
+                transform=ax1.get_xaxis_transform(),
+                ha="center",
+                va="top",
+                fontsize=9,
+                color=p[key],
+                fontweight="bold",
+                alpha=0.9,
+            )
 
     # --- response curve (left axis) ---
     ax1.fill_between(
@@ -141,10 +181,10 @@ def saturation_zones_png(
     ax2.axhline(zones.break_even, color=p["muted"], lw=1.2, ls=":", label="Break-even")
     ax2.set_ylabel("ROI / marginal ROI", color=p["mroi"])
     ax2.tick_params(axis="y", labelcolor=p["mroi"])
-    # Keep the break-even region visible (ROI/mROI both peak at low spend).
-    top = float(np.nanmax(zones.mroi_mean[0:1]))
-    top = max(top, zones.break_even * 1.5, float(zones.current_mroi) * 1.2)
-    ax2.set_ylim(0, top * 1.05)
+    # scale the right axis to the decision-relevant region (see _roi_axis_top):
+    # avg/marginal ROI diverge as spend→0 for concave curves and would otherwise
+    # blow out the scale.
+    ax2.set_ylim(0, _roi_axis_top(zones) * 1.05)
     for spine in ("top",):
         ax2.spines[spine].set_visible(False)
 
@@ -363,6 +403,7 @@ def reallocation_png(
 
 __all__ = [
     "PALETTE",
+    "_roi_axis_top",
     "saturation_zones_png",
     "roi_forest_png",
     "decomposition_png",
