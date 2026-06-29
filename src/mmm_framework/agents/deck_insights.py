@@ -140,8 +140,14 @@ def generate_deck_insights(
             txt = _clean(r)
             if txt:
                 insights[n["key"]] = txt
-                calls += 1
+            calls += 1
         except Exception:
+            # If the very first call fails the LLM is almost certainly
+            # unreachable (mis-config / endpoint down); short-circuit rather than
+            # retrying every slide, so the deck still renders promptly with no
+            # narrative instead of waiting out N×retry backoffs.
+            if calls == 0:
+                return insights
             continue
 
     # synthesis -> the report headline
