@@ -23,7 +23,14 @@ def test_scenario_builds_and_is_consistent(name):
     sc = dgp.build(name)
     n = len(sc.y)
     assert n == len(sc.spend) == len(sc.controls)
-    assert list(sc.spend.columns) == dgp.CHANNELS or sc.name == "aurora_kitchen_sink"
+    # Most worlds use the canonical 4 channels; aurora_kitchen_sink and the
+    # breakout worlds (which split a channel into impression sub-streams) carry
+    # their own column sets.
+    assert (
+        list(sc.spend.columns) == dgp.CHANNELS
+        or sc.name == "aurora_kitchen_sink"
+        or "breakout_groups" in sc.notes
+    )
     assert not sc.y.isna().any()
     assert not sc.spend.isna().any().any()
     assert (sc.spend.to_numpy() >= 0).all()
