@@ -378,6 +378,18 @@ class MMMSerializer:
     @classmethod
     def _collect_metadata(cls, model: BayesianMMM) -> dict[str, Any]:
         """Collect model metadata for saving."""
+        # The panel's own channel columns, which may differ from ``channel_names``
+        # when a model re-expresses the media axis (e.g. the breakout-weighting
+        # model groups sub-stream columns into virtual channels). Used for the
+        # panel-compatibility gate so the check is against what the panel actually
+        # carries, not the model's derived axis. Degrades to ``channel_names``
+        # when the panel isn't available (they coincide for a plain MMM).
+        _panel = getattr(model, "panel", None)
+        panel_channels = (
+            list(_panel.coords.channels)
+            if _panel is not None
+            else list(model.channel_names)
+        )
         metadata = {
             "version": model._VERSION,
             "format_version": cls._FORMAT_VERSION,
@@ -386,6 +398,7 @@ class MMMSerializer:
             "n_controls": model.n_controls,
             "n_time_periods": model.n_periods,
             "channel_names": model.channel_names,
+            "panel_channels": panel_channels,
             "control_names": model.control_names,
             "has_geo": model.has_geo,
             "has_product": model.has_product,
@@ -605,10 +618,16 @@ class MMMSerializer:
         if metadata.get("model_kind", "mmm") != "mmm":
             return
 
-        if panel.coords.channels != metadata["channel_names"]:
+        # Compare against the panel's own channels (``panel_channels``) when the
+        # save recorded them — a model may re-express its media axis (e.g. the
+        # breakout-weighting model's virtual channels), so ``channel_names`` need
+        # not equal the panel columns. Old saves (no ``panel_channels``) fall back
+        # to ``channel_names``, which equals the panel columns for a plain MMM.
+        expected = metadata.get("panel_channels", metadata["channel_names"])
+        if panel.coords.channels != expected:
             raise ValueError(
                 f"Panel channels {panel.coords.channels} don't match "
-                f"saved model channels {metadata['channel_names']}"
+                f"saved model channels {expected}"
             )
 
         if panel.coords.controls != metadata["control_names"]:
