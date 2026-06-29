@@ -296,7 +296,6 @@ def build_pptx(
     keys to AI narrative text; omitted here.
     """
     from pptx import Presentation
-    from pptx.util import Inches
 
     from ..helpers import compute_response_zones, compute_roi_with_uncertainty
 
