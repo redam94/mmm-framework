@@ -29,6 +29,7 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from mmm_framework.agents.graph import create_agent_graph
+from mmm_framework.agents.serde import MsgpackSafeSerializer
 from mmm_framework.agents.spec_locks import apply_spec_patch, is_spec_patch
 from mmm_framework.api import sessions as sessions_store
 from mmm_framework.auth import store as auth_store
@@ -213,7 +214,10 @@ async def lifespan(app: FastAPI):
     await _aiosqlite_conn.execute("PRAGMA journal_mode=WAL")
     await _aiosqlite_conn.execute("PRAGMA synchronous=NORMAL")
     await _aiosqlite_conn.commit()
-    memory = AsyncSqliteSaver(_aiosqlite_conn)
+    # MsgpackSafeSerializer backstops the checkpoint: a stray numpy scalar / pandas
+    # object that a tool folds into AgentState would otherwise crash the thread
+    # ("Type is not msgpack serializable: numpy.float64"). See agents/serde.py.
+    memory = AsyncSqliteSaver(_aiosqlite_conn, serde=MsgpackSafeSerializer())
     await memory.setup()
     sessions_store.init_db()
     # Org/tenant auth: schema + optional bootstrap owner + one-time backfill of
@@ -4877,6 +4881,226 @@ async def apply_outliers_endpoint(thread_id: str, body: OutlierApplyRequest):
         )
     except Exception as e:
         logger.exception("Outlier apply failed")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+# ── Data Studio: staged upload → interactive EDA → clean → convert-to-dataset ──
+# A raw upload is staged under thread_dir/data_studio/ (NOT yet the working
+# dataset). The studio runs the mmm_framework.eda engine on the staged frame and
+# builds a replayable transform pipeline; commit melts the cleaned frame to
+# MFF-long, sets dataset_path + spec roles via a STATE-ONLY aupdate_state (same
+# orphan-ToolMessage invariant as /outliers/apply). Heavy data lives on disk;
+# only a light pointer rides dashboard_data["data_studio"].
+
+
+class StudioPipelineRequest(BaseModel):
+    steps: list[dict] = []
+    roles: dict[str, str] | None = None
+
+
+class StudioEdaRequest(BaseModel):
+    analyses: list[str] | None = None
+    variables: list[str] | None = None
+    sensitivity: str = "default"
+
+
+class StudioCommitRequest(BaseModel):
+    reason: str | None = None
+
+
+async def _studio_set_pointer(thread_id: str, pointer: dict | None) -> None:
+    """Merge the light data_studio summary into agent state (survives reloads)."""
+    config = {"configurable": {"thread_id": thread_id}}
+    agent_graph = _admin_graph()
+    snap = await agent_graph.aget_state(config)
+    dashboard = (snap.values.get("dashboard_data") or {}) if snap and snap.values else {}
+    dashboard = dict(dashboard)
+    dashboard["data_studio"] = pointer
+    # as_node="agent": these are UI-driven updates that may hit a thread which
+    # has never run the graph, where a bare update is "ambiguous" (LangGraph).
+    await agent_graph.aupdate_state(config, {"dashboard_data": dashboard}, as_node="agent")
+
+
+@app.post("/data-studio/{thread_id}/upload", dependencies=[_sess_write, _rl_heavy])
+async def data_studio_upload(thread_id: str, file: UploadFile = File(...)):
+    """Stage a raw upload (.csv/.xlsx/.parquet) for the Data Studio. Lands under
+    thread_dir/data_studio/raw/, (re)initialises the staging manifest with
+    heuristic default roles, and returns the columns + a preview. Does NOT set
+    the session's working dataset — that happens on commit."""
+    from fastapi.concurrency import run_in_threadpool
+
+    from mmm_framework.agents import workspace as _ws
+    from mmm_framework.data_studio import service as _studio
+
+    try:
+        name = _safe_upload_name(file.filename, "data.csv")
+        dest = str(_ws.safe_join(_studio.raw_dir(thread_id), name))
+        with open(dest, "wb") as buf:
+            shutil.copyfileobj(file.file, buf)
+        size_bytes = os.path.getsize(dest)
+        kind = "dataset" if name.lower().endswith(
+            (".csv", ".tsv", ".txt", ".xlsx", ".xls", ".parquet")
+        ) else "upload"
+        try:
+            sessions_store.register_file(
+                thread_id=thread_id, path=dest, name=name, kind="dataset",
+                size_bytes=size_bytes, preview=None,
+                meta={"content_type": file.content_type, "source": "data_studio"},
+            )
+        except Exception:
+            pass
+
+        manifest = await run_in_threadpool(
+            _studio.init_manifest, thread_id, dest, name, kind, size_bytes
+        )
+        result = await run_in_threadpool(_studio.current_result, thread_id, manifest)
+        preview = await run_in_threadpool(
+            _studio.preview_payload, thread_id, manifest, result
+        )
+        await _studio_set_pointer(
+            thread_id, _studio.light_summary(thread_id, manifest, result)
+        )
+        return JSONResponse(content={
+            "staging_id": manifest["staging_id"],
+            "raw": manifest["raw"],
+            "inferred_roles": manifest["roles"],
+            **preview,
+        })
+    except Exception as e:
+        logger.exception("Data studio upload failed")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/data-studio/{thread_id}", dependencies=[_sess_read])
+async def data_studio_state(thread_id: str):
+    """The current staging manifest + a fresh preview (for hydration on reopen)."""
+    from fastapi.concurrency import run_in_threadpool
+
+    from mmm_framework.data_studio import service as _studio
+
+    manifest = await run_in_threadpool(_studio.read_manifest, thread_id)
+    if not manifest:
+        return JSONResponse(content={"staging": None})
+    try:
+        result = await run_in_threadpool(_studio.current_result, thread_id, manifest)
+        preview = await run_in_threadpool(
+            _studio.preview_payload, thread_id, manifest, result
+        )
+    except Exception as e:
+        return JSONResponse(content={
+            "staging": {"staging_id": manifest.get("staging_id"),
+                        "raw": manifest.get("raw"), "error": str(e)},
+        })
+    return JSONResponse(content={
+        "staging": {
+            "staging_id": manifest.get("staging_id"),
+            "raw": manifest.get("raw"),
+            "steps": manifest.get("steps") or [],
+            "committed": bool(manifest.get("committed")),
+            **preview,
+        }
+    })
+
+
+@app.put("/data-studio/{thread_id}/pipeline", dependencies=[_sess_write])
+async def data_studio_pipeline(thread_id: str, body: StudioPipelineRequest):
+    """Replace the whole transform pipeline (+ roles) and re-preview the frame."""
+    from fastapi.concurrency import run_in_threadpool
+
+    from mmm_framework.data_studio import service as _studio
+    from mmm_framework.data_studio.transforms import TransformError
+
+    try:
+        preview = await run_in_threadpool(
+            _studio.set_pipeline, thread_id, list(body.steps or []), body.roles
+        )
+    except TransformError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    except FileNotFoundError as exc:
+        return JSONResponse(status_code=404, content={"error": str(exc)})
+    except Exception as e:
+        logger.exception("Data studio pipeline failed")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+    manifest = await run_in_threadpool(_studio.read_manifest, thread_id)
+    result = await run_in_threadpool(_studio.current_result, thread_id, manifest)
+    await _studio_set_pointer(
+        thread_id, _studio.light_summary(thread_id, manifest, result)
+    )
+    return JSONResponse(content=preview)
+
+
+@app.post("/data-studio/{thread_id}/eda", dependencies=[_sess_read, _rl_heavy])
+async def data_studio_eda(thread_id: str, body: StudioEdaRequest):
+    """Run the requested EDA analyses on the current staged + transformed frame.
+    Figures are returned INLINE (never pushed to the session Plots tab)."""
+    from fastapi.concurrency import run_in_threadpool
+
+    from mmm_framework.data_studio import service as _studio
+
+    manifest = await run_in_threadpool(_studio.read_manifest, thread_id)
+    if not manifest:
+        return JSONResponse(status_code=404, content={"error": "No staged dataset."})
+    try:
+        result = await run_in_threadpool(_studio.current_result, thread_id, manifest)
+        payload = await run_in_threadpool(
+            _studio.run_eda_on_frame, result.df, result.roles,
+            body.analyses, body.variables, body.sensitivity,
+        )
+    except Exception as e:
+        logger.exception("Data studio EDA failed")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    return JSONResponse(content=payload)
+
+
+@app.post("/data-studio/{thread_id}/commit", dependencies=[_sess_write])
+async def data_studio_commit(thread_id: str, body: StudioCommitRequest):
+    """Promote the cleaned staged frame to the session's working dataset. Writes
+    MFF-long CSV, sets dataset_path + spec roles via a STATE-ONLY aupdate_state
+    (no ToolMessage — same pattern as /outliers/apply)."""
+    from fastapi.concurrency import run_in_threadpool
+
+    from mmm_framework.data_studio import service as _studio
+
+    try:
+        config = {"configurable": {"thread_id": thread_id}}
+        agent_graph = _admin_graph()
+        snap = await agent_graph.aget_state(config)
+        values = (snap.values or {}) if snap else {}
+        error, summary, update = await run_in_threadpool(
+            _studio.commit_core, values, thread_id, body.reason
+        )
+        if error:
+            return JSONResponse(status_code=400, content={"error": error})
+        if update:
+            await agent_graph.aupdate_state(config, update, as_node="agent")
+        dashboard = update.get("dashboard_data") or {}
+        return JSONResponse(content={
+            "summary": summary,
+            "dataset_path": update.get("dataset_path"),
+            "dataset": dashboard.get("dataset"),
+            "model_spec": update.get("model_spec"),
+            "eda": dashboard.get("eda"),
+            "pending_spec_changes": update.get("pending_spec_changes"),
+        })
+    except Exception as e:
+        logger.exception("Data studio commit failed")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/data-studio/{thread_id}/discard", dependencies=[_sess_write])
+async def data_studio_discard(thread_id: str):
+    """Discard the staging area. Does NOT touch a prior committed dataset_path."""
+    from fastapi.concurrency import run_in_threadpool
+
+    from mmm_framework.data_studio import service as _studio
+
+    try:
+        await run_in_threadpool(_studio.discard_staging, thread_id)
+        await _studio_set_pointer(thread_id, None)
+        return JSONResponse(content={"discarded": True})
+    except Exception as e:
+        logger.exception("Data studio discard failed")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 

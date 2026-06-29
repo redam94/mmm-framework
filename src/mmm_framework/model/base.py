@@ -1079,6 +1079,21 @@ class BayesianMMM:
             normalized[:, c] = X_media_raw[:, c] / max_val
         return normalized
 
+    def _channel_media_input(
+        self, c: int, channel_name: str, X_media_raw_data: "pt.TensorVariable"
+    ) -> "pt.TensorVariable":
+        """The (normalized) media series fed into channel ``c``'s adstock.
+
+        Base returns the channel's own normalized column, so the built media
+        likelihood is byte-identical to before. A subclass may override this hook
+        to *re-mix* the input before adstock/saturation — e.g. the breakout-
+        weighting model (``examples/garden_models/breakout_weighted_mmm.py``)
+        replaces a channel's column with a partial-pooled weighted aggregate of
+        its impression sub-streams. Called inside the ``pm.Model`` context on the
+        parametric-adstock path only.
+        """
+        return X_media_raw_data[:, c]
+
     def _get_adstock_config(self, channel_name: str) -> AdstockConfig:
         """Resolve the AdstockConfig for a channel, defaulting to geometric."""
         media_cfg = self.mff_config.get_media_config(channel_name)
@@ -1456,7 +1471,9 @@ class BayesianMMM:
                     adstock_apply, adstock_kernel_weights = self._channel_adstock_apply(
                         channel_name
                     )
-                    x_input = X_media_raw_data[:, c]
+                    x_input = self._channel_media_input(
+                        c, channel_name, X_media_raw_data
+                    )
                     x_adstocked = adstock_apply(x_input)
                 else:
                     # Legacy: blend two fixed-alpha geometric adstocks.

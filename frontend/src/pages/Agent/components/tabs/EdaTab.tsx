@@ -28,7 +28,7 @@ function severityBucket(s: string): 'error' | 'warning' | 'info' {
   return s === 'error' || s === 'warning' ? s : 'info';
 }
 
-function IssueRow({ issue }: { issue: EdaIssue }) {
+export function IssueRow({ issue }: { issue: EdaIssue }) {
   return (
     <div className="flex items-start gap-2.5 px-3 py-2.5 bg-white rounded-lg border border-line-200">
       <span className="shrink-0 mt-0.5">
@@ -49,7 +49,7 @@ function IssueRow({ issue }: { issue: EdaIssue }) {
   );
 }
 
-function OutlierActionRow({
+export function OutlierActionRow({
   action, disabled, onConfirm,
 }: {
   action: OutlierAction;

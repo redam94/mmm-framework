@@ -10,7 +10,12 @@ before ``BayesianMMM`` sees it.
 from .collinearity import collinearity_analysis
 from .config import DataValidationConfig, EDAConfig, OutlierConfig
 from .decomposition import decompose_series, decomposition_summary, stationarity_tests
-from .loading import EDAPanel, load_eda_panel, seasonal_period_for_freq
+from .loading import (
+    EDAPanel,
+    load_eda_panel,
+    load_eda_panel_from_df,
+    seasonal_period_for_freq,
+)
 from .outliers import OutlierDetector, detect_outliers
 from .profiling import missingness_matrix, profile_panel, spend_share
 from .remediation import apply_treatments, recommend_treatments
@@ -31,6 +36,7 @@ __all__ = [
     "EDAConfig",
     "EDAPanel",
     "load_eda_panel",
+    "load_eda_panel_from_df",
     "seasonal_period_for_freq",
     "OutlierFlag",
     "RemediationAction",

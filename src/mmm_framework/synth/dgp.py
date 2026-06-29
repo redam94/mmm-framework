@@ -1448,6 +1448,216 @@ def make_economic_health(seed: int = 14, *, n_weeks: int | None = None) -> Scena
     )
 
 
+# ===========================================================================
+# breakout-weighting worlds (one channel split into impression sub-streams)
+# ===========================================================================
+#
+# These three sibling worlds power the falsification harness for the
+# breakout-weighting model (``examples/garden_models/breakout_weighted_mmm.py``).
+# A single channel (TV) is split into three impression sub-streams that combine
+# inside ONE shared saturation curve via a weighted aggregate
+# ``Σ_k w_k·I_{k,t}`` — the exact functional form an in-house PSO optimizer
+# searches over. The TRUE per-breakout weights are planted with a share-weighted
+# mean of 1 (the ``Σ_k w_k·S_k = Σ_k S_k`` sum-preserving constraint), so the
+# weights are pure exposure-quality multipliers, not a level change.
+#
+#   * heterogeneous — weights genuinely differ AND the sub-streams flight
+#     independently → the mix is identifiable; a regularized model recovers it.
+#   * homogeneous   — weights are all 1 (truth is equal-weighting) → the honest
+#     model must COLLAPSE to equal weights (τ→0), where an unregularized
+#     optimizer invents spurious weights that still lower in-sample MSE.
+#   * collinear     — weights differ (as in heterogeneous) but the sub-streams
+#     share ONE flighting calendar → the mix is UNIDENTIFIABLE; the honest model
+#     must report WIDE weight posteriors, where the optimizer reports a confident
+#     (noise-driven) point.
+
+_BREAKOUT_PARENT = "TV"
+_BREAKOUT_SUBS = ["TV_Premium", "TV_Standard", "TV_Remnant"]
+_BREAKOUT_PLAIN = ["Search", "Social", "Display"]
+# Per-impression effectiveness RATIOS (un-normalized); the makers renormalize to
+# a share-weighted mean of 1 against the realized impression totals.
+_BREAKOUT_RAW_EFF_HET = {"TV_Premium": 1.8, "TV_Standard": 1.0, "TV_Remnant": 0.4}
+_BREAKOUT_RAW_EFF_HOMO = {s: 1.0 for s in _BREAKOUT_SUBS}
+# Distinct flighting cycles (weeks) -> independent sub-stream variation when not
+# collinear, so the weighted aggregate's *shape* depends on the weights.
+_BREAKOUT_SUB_FLIGHT = {"TV_Premium": 6.0, "TV_Standard": 10.0, "TV_Remnant": 15.0}
+# Sub-stream base impression levels (sum ~ TV's base spend of 100).
+_BREAKOUT_SUB_BASE = {"TV_Premium": 45.0, "TV_Standard": 35.0, "TV_Remnant": 20.0}
+
+
+def _breakout_substreams(
+    rng: np.random.Generator, n: int, *, collinear: bool
+) -> dict[str, np.ndarray]:
+    """Three TV impression sub-streams.
+
+    ``collinear=False``: each sub-stream has its OWN flighting cycle + idio noise
+    (independent variation → the mix is identifiable). ``collinear=True``: one
+    shared burst drives all three with almost no independent movement (the
+    identifiability ceiling no optimizer can beat).
+    """
+    t = np.arange(n)
+    streams: dict[str, np.ndarray] = {}
+    if collinear:
+        phase = rng.random() * 2 * np.pi
+        burst = np.clip(np.sin(2 * np.pi * t / 9.0 + phase), 0, None)
+        shared = 0.08 + 1.6 * burst
+        for s in _BREAKOUT_SUBS:
+            idio = rng.lognormal(0.0, 0.04, n)  # ~no independent movement
+            streams[s] = np.clip(_BREAKOUT_SUB_BASE[s] * shared * idio, 0.5, None)
+    else:
+        for s in _BREAKOUT_SUBS:
+            phase = rng.random() * 2 * np.pi
+            burst = np.clip(
+                np.sin(2 * np.pi * t / _BREAKOUT_SUB_FLIGHT[s] + phase), 0, None
+            )
+            idio = rng.lognormal(0.0, 0.25, n)
+            streams[s] = np.clip(
+                _BREAKOUT_SUB_BASE[s] * (0.08 + 1.6 * burst) * idio, 0.5, None
+            )
+    return streams
+
+
+def _make_breakout(
+    name: str,
+    violates: str,
+    description: str,
+    *,
+    seed: int,
+    raw_eff: dict[str, float],
+    collinear: bool,
+    role: str,
+    n_weeks: int | None = None,
+) -> Scenario:
+    """Assemble a breakout world: TV split into 3 impression sub-streams that feed
+    ONE saturation curve via a weighted aggregate with planted, share-mean-1
+    weights; Search/Social/Display stay plain channels.
+
+    The channel response is the model's *exact* functional form,
+    ``AMP_TV·sat(adstock((Σ_k w*_k·I_k)/M_TV))`` with ``M_TV = max_t Σ_k I_k``
+    (the UNWEIGHTED aggregate max), so a correctly-specified breakout model
+    recovers ``w*`` up to identifiability.
+    """
+    rng, weeks, n, base_spend, baseline, controls, _ = _base_world(seed, n_weeks)
+    subs = _breakout_substreams(rng, n, collinear=collinear)
+    cols = _BREAKOUT_SUBS + _BREAKOUT_PLAIN
+    data = {**subs, **{c: base_spend[c].to_numpy(float) for c in _BREAKOUT_PLAIN}}
+    spend = pd.DataFrame({c: data[c] for c in cols}, columns=cols)
+
+    # Renormalize the raw effectiveness ratios to a share-weighted mean of 1
+    # against the realized impression totals: Σ_k w*_k·S_k = Σ_k S_k exactly.
+    S = np.array([float(subs[s].sum()) for s in _BREAKOUT_SUBS])
+    w_raw = np.array([float(raw_eff[s]) for s in _BREAKOUT_SUBS])
+    w_norm = w_raw * (S.sum() / float(w_raw @ S))
+    true_weights = {s: float(w_norm[i]) for i, s in enumerate(_BREAKOUT_SUBS)}
+
+    # Fixed unweighted aggregate max — matches the model's training-time M_C.
+    agg = sum(subs[s] for s in _BREAKOUT_SUBS)
+    m_tv = float(agg.max())
+    plain_max = {c: float(spend[c].max()) for c in _BREAKOUT_PLAIN}
+
+    def fn(sp: np.ndarray) -> np.ndarray:
+        mu = baseline.copy()
+        a = sp[:, 0] * w_norm[0] + sp[:, 1] * w_norm[1] + sp[:, 2] * w_norm[2]
+        mu = mu + _AMP["TV"] * _logistic_sat(
+            _geom_adstock(a / m_tv, _ALPHA["TV"]), _LAM["TV"]
+        )
+        for j, c in enumerate(_BREAKOUT_PLAIN):
+            xn = sp[:, 3 + j] / plain_max[c]
+            mu = mu + _AMP[c] * _logistic_sat(_geom_adstock(xn, _ALPHA[c]), _LAM[c])
+        return mu
+
+    mu = fn(spend.to_numpy(float))
+    noise = rng.normal(0, 18.0, n)
+    sub_mat = np.array([subs[s] for s in _BREAKOUT_SUBS])
+    corr = float(np.corrcoef(sub_mat)[np.triu_indices(3, 1)].mean())
+    notes = {
+        "breakout_groups": {_BREAKOUT_PARENT: list(_BREAKOUT_SUBS)},
+        "true_weights": true_weights,
+        "true_raw_effectiveness": dict(raw_eff),
+        # Between-breakout log-SD — the τ the partial-pooled model should recover
+        # (≈0 when weights are all 1, > 0 when they genuinely differ).
+        "true_logtau": float(np.std(np.log(w_norm))),
+        "breakout_totals": {s: float(S[i]) for i, s in enumerate(_BREAKOUT_SUBS)},
+        "mean_pairwise_corr": corr,
+        "unidentifiable": bool(collinear),
+        "role": role,
+    }
+    return _finish(
+        name, violates, description, weeks, spend, mu, noise, controls, fn, notes=notes
+    )
+
+
+def make_breakout_heterogeneous(
+    seed: int = 30, *, n_weeks: int | None = None
+) -> Scenario:
+    """TV split into Premium/Standard/Remnant sub-streams with genuinely DIFFERENT
+    per-impression effectiveness and INDEPENDENT flighting (identifiable mix).
+
+    The planted weights (share-weighted mean 1) trace a real Premium > Standard >
+    Remnant ordering a regularized model can recover.
+    """
+    return _make_breakout(
+        "breakout_heterogeneous",
+        "",
+        "One channel (TV) split into 3 impression sub-streams with different "
+        "per-impression effectiveness and independent flighting; a single "
+        "saturation curve over the weighted aggregate. True breakout weights have "
+        "share-weighted mean 1 and a recoverable Premium>Standard>Remnant order.",
+        seed=seed,
+        raw_eff=_BREAKOUT_RAW_EFF_HET,
+        collinear=False,
+        role="breakout recovery (heterogeneous, identifiable)",
+        n_weeks=n_weeks,
+    )
+
+
+def make_breakout_homogeneous(
+    seed: int = 31, *, n_weeks: int | None = None
+) -> Scenario:
+    """Same sub-stream split and distinct flighting, but IDENTICAL per-impression
+    effectiveness (true weights all 1).
+
+    The honest test: a partial-pooled model must COLLAPSE to equal-weighting
+    (τ→0, every weight's interval covering 1), where an unregularized optimizer
+    invents spurious unequal weights that still lower in-sample MSE.
+    """
+    return _make_breakout(
+        "breakout_homogeneous",
+        "",
+        "TV split into 3 impression sub-streams with distinct flighting but "
+        "IDENTICAL per-impression effectiveness (true weights all 1). The honest "
+        "model collapses to equal-weighting; an unregularized optimizer overfits "
+        "the noise into spurious weights.",
+        seed=seed,
+        raw_eff=_BREAKOUT_RAW_EFF_HOMO,
+        collinear=False,
+        role="breakout null (homogeneous -> equal weights)",
+        n_weeks=n_weeks,
+    )
+
+
+def make_breakout_collinear(seed: int = 32, *, n_weeks: int | None = None) -> Scenario:
+    """Sub-streams differ in true effectiveness (as in heterogeneous) but are
+    bought on ONE shared flighting calendar (near-collinear).
+
+    The mix is UNIDENTIFIABLE — only the share-weighted level is pinned, not the
+    weight allocation. The honest model must report WIDE weight posteriors
+    (τ ≈ its prior), where an optimizer reports a confident, noise-driven point.
+    """
+    return _make_breakout(
+        "breakout_collinear",
+        "identifiability (independent breakout variation)",
+        "TV sub-streams differ in true effectiveness but share one flighting "
+        "calendar (near-collinear); the mix is unidentifiable. The honest model "
+        "reports wide weight posteriors rather than a confident point.",
+        seed=seed,
+        raw_eff=_BREAKOUT_RAW_EFF_HET,
+        collinear=True,
+        role="breakout unidentifiable (collinear)",
+        n_weeks=n_weeks,
+    )
+
+
 SCENARIOS: dict[str, Callable[..., Scenario]] = {
     "realistic": make_realistic,
     "clean": make_clean,
@@ -1469,6 +1679,9 @@ SCENARIOS: dict[str, Callable[..., Scenario]] = {
     "seasonality_misspec": make_seasonality_misspec,
     "dense_controls": make_dense_controls,
     "economic_health": make_economic_health,
+    "breakout_heterogeneous": make_breakout_heterogeneous,
+    "breakout_homogeneous": make_breakout_homogeneous,
+    "breakout_collinear": make_breakout_collinear,
     "aurora_kitchen_sink": make_aurora_kitchen_sink,
 }
 
@@ -1490,6 +1703,9 @@ PRIORITY = [
     "seasonality_misspec",
     "dense_controls",
     "economic_health",
+    "breakout_heterogeneous",
+    "breakout_homogeneous",
+    "breakout_collinear",
     "confounding_controlled",
     "aurora_kitchen_sink",
 ]

@@ -116,6 +116,11 @@ def create_agent_graph(
     def should_continue(state: AgentState) -> Literal["tools", END]:
         """Determine if we should call tools or wait for user input."""
         messages = state["messages"]
+        # A UI-driven state write (e.g. Data Studio commit, spec edit) can apply
+        # as_node="agent" to a thread that has never chatted — no messages yet.
+        # Treat that as "nothing to route" rather than indexing off an empty list.
+        if not messages:
+            return END
         last_message = messages[-1]
 
         if getattr(last_message, "tool_calls", None):
