@@ -65,7 +65,7 @@ uv run python examples/ex_vertex_agent.py      # Vertex/ADC smoke test
 ```
 mmm-framework/
 ├── src/mmm_framework/          # Core modeling library
-│   ├── config.py               # Configuration enums and Pydantic dataclasses
+│   ├── config/                 # Configuration enums and Pydantic dataclasses
 │   ├── data_loader.py          # MFF parsing, validation, loading
 │   ├── jobs.py                 # Async job management (ARQ)
 │   ├── analysis.py             # Counterfactual & marginal analysis
@@ -199,7 +199,7 @@ mmm-framework/
 |--------|---------|
 | `model/base.py` | BayesianMMM class - saturation, adstock, hierarchical modeling |
 | `model/results.py` | MMMResults, PredictionResults classes |
-| `config.py` | Pydantic configs: PriorConfig, AdstockConfig, MediaChannelConfig |
+| `config/` | Pydantic configs: PriorConfig, AdstockConfig, MediaChannelConfig |
 | `builders/` | Fluent builders: ModelConfigBuilder, MediaChannelConfigBuilder |
 | `data_loader.py` | MFFLoader for Master Flat File format data |
 | `analysis.py` | Counterfactual analysis, MarginalAnalysisResult |
@@ -273,7 +273,7 @@ Test organization:
 ### Add feature to BayesianMMM
 1. Edit `src/mmm_framework/model/base.py`
 2. Update results in `src/mmm_framework/model/results.py`
-3. Update config in `src/mmm_framework/config.py`
+3. Update config in `src/mmm_framework/config/`
 4. Add builder method in `src/mmm_framework/builders/model.py`
 5. Write tests in `tests/test_model.py`
 
