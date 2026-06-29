@@ -91,10 +91,18 @@ def fitted_model():
     return mmm
 
 
+def _elasticity_at(z, s):
+    roi = float(np.interp(s, z.spend_grid, z.roi_mean))
+    mroi = float(np.interp(s, z.spend_grid, z.mroi_mean))
+    return mroi / roi if roi > 1e-9 else 0.0
+
+
 @pytest.mark.slow
 class TestResponseZones:
+    # use a wide spend range so the concave curve actually saturates and all three
+    # zones appear (within only ~2× current spend these channels are still linear).
     def test_structure_and_zone_ordering(self, fitted_model):
-        zones = compute_response_zones(fitted_model, break_even=1.0, band=0.15)
+        zones = compute_response_zones(fitted_model, spend_multiplier=12, hdi_prob=0.8)
         assert len(zones) >= 1
         assert set(zones) <= set(fitted_model.channel_names)
         for ch, z in zones.items():
@@ -113,46 +121,48 @@ class TestResponseZones:
             assert abs(z.roi_mean[i] - z.response_mean[i] / z.spend_grid[i]) < 1e-6 * (
                 abs(z.roi_mean[i]) + 1.0
             )
-            # current-zone classification follows current marginal ROI
-            t_hi, t_lo = 1.15, 0.85
-            if z.current_mroi >= t_hi:
+            # current-zone follows the current elasticity e = mROI/ROI (thresholds 0.8 / 0.5)
+            e = z.current_mroi / z.current_roi if z.current_roi > 1e-9 else 0.0
+            if e >= 0.8:
                 assert (
                     z.current_zone == "breakthrough" and z.recommendation == "increase"
                 )
-            elif z.current_mroi >= t_lo:
+            elif e >= 0.5:
                 assert z.current_zone == "optimal" and z.recommendation == "hold"
             else:
                 assert z.current_zone == "saturation" and z.recommendation == "reduce"
 
-    def test_optimal_spend_sits_at_break_even(self, fitted_model):
-        # The synthetic KPI is an index (not dollars), so a *revenue* break-even of
-        # 1.0 may sit outside the channel's mROI range. Pick a target inside that
-        # range so the curve is guaranteed to cross it, then assert the optimal
-        # spend is exactly where mROI == that target (the property under test).
-        base = compute_response_zones(fitted_model, band=0.15)
-        ch = next(iter(base))
-        z0 = base[ch]
-        target = float(
-            0.5 * (z0.mroi_mean[0] + z0.mroi_mean[-1])
-        )  # midpoint of mROI range
-        z = compute_response_zones(fitted_model, [ch], break_even=target, band=0.15)[ch]
-        assert z.optimal_spend is not None
-        mroi_at = float(np.interp(z.optimal_spend, z.spend_grid, z.mroi_mean))
-        assert abs(mroi_at - target) < 0.05 * abs(target) + 1e-6, (mroi_at, target)
-        # headroom is the signed distance to the optimum
-        assert abs(z.headroom_to_optimal - (z.optimal_spend - z.current_spend)) < 1e-6
+    def test_optimal_point_sits_in_the_efficient_elasticity_band(self, fitted_model):
+        # the optimal operating point's elasticity (mROI/ROI) is in the optimal band
+        zones = compute_response_zones(fitted_model, spend_multiplier=12, hdi_prob=0.8)
+        checked = 0
+        for z in zones.values():
+            if z.optimal_spend is None:
+                continue
+            checked += 1
+            e = _elasticity_at(z, z.optimal_spend)
+            assert 0.45 <= e <= 0.85, (
+                z.channel,
+                e,
+            )  # within the optimal band (small tol)
+            assert (
+                abs(z.headroom_to_optimal - (z.optimal_spend - z.current_spend)) < 1e-6
+            )
+        assert checked >= 1, "at least one channel should saturate in range"
 
-    def test_higher_break_even_shrinks_optimal_spend(self, fitted_model):
-        base = compute_response_zones(fitted_model, band=0.15)
-        ch = next(iter(base))
-        z0 = base[ch]
-        hi_m, lo_m = float(z0.mroi_mean[0]), float(
-            z0.mroi_mean[-1]
-        )  # max @ low spend, min @ high
-        lo_t = 0.4 * hi_m + 0.6 * lo_m  # lower target  -> higher optimal spend
-        hi_t = 0.6 * hi_m + 0.4 * lo_m  # higher target -> lower optimal spend
-        lo = compute_response_zones(fitted_model, [ch], break_even=lo_t)[ch]
-        hi = compute_response_zones(fitted_model, [ch], break_even=hi_t)[ch]
-        assert lo.optimal_spend is not None and hi.optimal_spend is not None
-        # a higher break-even target demands higher mROI ⇒ lower optimal spend
-        assert hi.optimal_spend <= lo.optimal_spend + 1e-6
+    def test_zones_ordered_by_elasticity(self, fitted_model):
+        # saturation (high spend) is where the next dollar earns far less than the
+        # average; breakthrough (low spend) is the near-linear regime.
+        zones = compute_response_zones(fitted_model, spend_multiplier=12, hdi_prob=0.8)
+        checked = 0
+        for z in zones.values():
+            bt, sat = z.breakthrough_range, z.saturation_range
+            if bt[1] <= bt[0] or sat[1] <= sat[0]:
+                continue
+            checked += 1
+            bt_mid = 0.5 * (bt[0] + bt[1])
+            sat_mid = 0.5 * (sat[0] + sat[1])
+            assert _elasticity_at(z, bt_mid) > _elasticity_at(z, sat_mid)
+            # saturation: marginal ROI is well below average ROI
+            assert _elasticity_at(z, sat_mid) < 0.55
+        assert checked >= 1

@@ -349,18 +349,33 @@ def compute_response_zones(
     n_samples: int = 500,
     hdi_prob: float = 0.94,
     break_even: float = 1.0,
+    breakthrough_elasticity: float = 0.8,
+    saturation_elasticity: float = 0.5,
     band: float = 0.15,
 ) -> dict[str, SpendResponseZones]:
     """Per-channel ROI(spend) and **marginal ROI(spend)** curves with
-    breakthrough / optimal / saturation spend zones, defined on marginal-ROI
-    break-even bands rather than percent-of-response.
+    breakthrough / optimal / saturation spend zones, defined by where each spend
+    level sits on the **response curve** — via the response *elasticity*
+    ``e(s) = mROI(s) / ROI(s)`` — NOT by an absolute break-even threshold and NOT
+    by percent of maximum response.
+
+    The elasticity is the local slope-to-average ratio: ``e ≈ 1`` in the linear
+    regime (each extra dollar earns about the channel's average), and ``e → 0`` as
+    the curve flattens (the marginal dollar earns far less than the average). The
+    zones, ordered by increasing spend, are:
+
+    * **breakthrough** — ``e ≥ breakthrough_elasticity`` (most linear / least
+      saturated, the lowest-spend region — the marginal dollar still pulls its
+      weight, so spend *more*);
+    * **optimal** — ``saturation_elasticity ≤ e < breakthrough_elasticity`` (the
+      efficient operating knee, where the curve leaves its linear regime);
+    * **saturation** — ``e < saturation_elasticity`` (marginal ROI is much lower
+      than average ROI — diminishing returns, reallocate).
 
     For each channel the (per-period) response is ``β·sat(spend/scale)·y_std``;
     average ROI is ``response/spend`` and marginal ROI is the analytic derivative
-    ``β·sat'(spend/scale)·(1/scale)·y_std``. The zones partition the spend axis by
-    where marginal ROI sits relative to ``break_even`` (see
-    :class:`SpendResponseZones`). Everything is computed directly from the fitted
-    posterior — no AI calls.
+    ``β·sat'(spend/scale)·(1/scale)·y_std``. Everything is computed directly from
+    the fitted posterior — no AI calls.
 
     Parameters
     ----------
@@ -371,12 +386,17 @@ def compute_response_zones(
     n_points, spend_multiplier, n_samples, hdi_prob
         Spend grid resolution, max spend as a multiple of current per-period
         spend, posterior subsample size, and HDI mass.
+    breakthrough_elasticity, saturation_elasticity : float
+        Elasticity (mROI/ROI) zone boundaries: above ``breakthrough_elasticity``
+        (default 0.8) is breakthrough; below ``saturation_elasticity`` (default
+        0.5) is saturation; in between is optimal.
     break_even : float
-        Marginal-ROI break-even target (default 1.0 — one KPI unit per dollar;
-        pass ``1/margin`` for a margin-adjusted target).
+        ROI/mROI reference level (default 1.0 — one KPI unit per dollar; pass
+        ``1/margin`` for a margin-adjusted target). It is the dashed reference line
+        on the chart and is reported on each curve, but it no longer *defines* the
+        zones (which are elasticity-based).
     band : float
-        Fractional half-width of the "optimal" band around ``break_even``
-        (default 0.15 ⇒ optimal where mROI ∈ [0.85, 1.15]·break_even).
+        Deprecated; retained for signature stability (zones are elasticity-based).
 
     Returns
     -------
@@ -463,28 +483,33 @@ def compute_response_zones(
         current_mroi = float(cur_mroi.mean())
         current_mroi_hdi = _compute_hdi(cur_mroi, hdi_prob)
 
-        # Zones from the posterior-mean mROI curve.
-        t_hi = break_even * (1.0 + band)
-        t_lo = break_even * (1.0 - band)
+        # Zones from the response-curve elasticity e(s) = mROI(s)/ROI(s): ~1 in
+        # the linear regime, → 0 as the curve flattens. Elasticity generally
+        # decreases with spend, so breakthrough (most linear) is the low-spend
+        # region, optimal the efficient knee, saturation where mROI ≪ ROI.
         gmax = float(spend_grid[-1])
-        s_bt_opt = _largest_spend_at_or_above(spend_grid, mroi_mean, t_hi)
-        s_opt_sat = _largest_spend_at_or_above(spend_grid, mroi_mean, t_lo)
-        s_opt_sat = max(s_opt_sat, s_bt_opt)  # keep ordering under noise
-        opt_spend_val = _largest_spend_at_or_above(spend_grid, mroi_mean, break_even)
-        # Only a meaningful optimum if mROI actually crosses break-even in range.
-        optimal_spend = (
-            float(opt_spend_val)
-            if (mroi_mean[0] >= break_even >= mroi_mean[-1])
-            else None
+        with np.errstate(divide="ignore", invalid="ignore"):
+            elasticity = np.where(roi_mean > 1e-12, mroi_mean / roi_mean, 0.0)
+        s_bt_opt = _largest_spend_at_or_above(
+            spend_grid, elasticity, breakthrough_elasticity
         )
-        optimal_roi = None
-        if optimal_spend is not None:
+        s_opt_sat = _largest_spend_at_or_above(
+            spend_grid, elasticity, saturation_elasticity
+        )
+        s_opt_sat = max(s_opt_sat, s_bt_opt)  # keep ordering under noise
+
+        # the optimal operating point: the centre of the optimal (efficient) band.
+        if s_opt_sat > s_bt_opt:
+            optimal_spend = float(0.5 * (s_bt_opt + s_opt_sat))
             oi = int(np.argmin(np.abs(spend_grid - optimal_spend)))
             optimal_roi = float(roi_mean[oi])
+        else:
+            optimal_spend, optimal_roi = None, None
 
-        if current_mroi >= t_hi:
+        cur_elasticity = (current_mroi / current_roi) if current_roi > 1e-12 else 0.0
+        if cur_elasticity >= breakthrough_elasticity:
             current_zone, recommendation = "breakthrough", "increase"
-        elif current_mroi >= t_lo:
+        elif cur_elasticity >= saturation_elasticity:
             current_zone, recommendation = "optimal", "hold"
         else:
             current_zone, recommendation = "saturation", "reduce"

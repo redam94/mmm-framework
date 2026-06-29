@@ -166,10 +166,14 @@ class TestDeckEngine:
             assert "Recommendation:" in s.subtitle
 
     def test_margin_sets_break_even(self, fitted_model):
-        deck = build_deck(fitted_model, margin=0.5)  # break-even mROI = 1/0.5 = 2.0
+        deck = build_deck(
+            fitted_model, margin=0.5
+        )  # break-even ROI reference = 1/0.5 = 2.0
+        # margin sets the ROI/mROI reference level used on the chart + carried in meta
+        # (the zones themselves are elasticity-based, not break-even-based)
         assert abs(deck.meta["break_even"] - 2.0) < 1e-9
-        opt = next(s for s in deck.slides if s.kind == "optimization")
-        assert "2" in "".join(opt.bullets)  # break-even surfaced in the copy
+        method = next(s for s in deck.slides if s.kind == "methodology")
+        assert "50%" in "".join(method.bullets)  # the gross margin surfaces in the copy
 
     def test_to_dict_is_serializable(self, fitted_model):
         import json

@@ -81,8 +81,25 @@ def light_metrics(slide: Any) -> dict[str, Any]:
 
 
 def _clean(text: Any) -> str:
-    s = text if isinstance(text, str) else getattr(text, "content", str(text))
-    return " ".join(str(s).split()).strip().strip('"')
+    """Extract plain text from an LLM reply, then collapse whitespace.
+
+    A LangChain message's ``.content`` may be a plain string OR a list of
+    content blocks (``[{"type": "text", "text": "..."}, ...]`` — Anthropic and
+    some OpenAI-compatible servers). Stringifying that list dumps the dict repr
+    (and any ``extras``/metadata) into the slide, so we pull only the text.
+    """
+    s = text.content if hasattr(text, "content") else text
+    if isinstance(s, list):
+        parts = []
+        for blk in s:
+            if isinstance(blk, dict):
+                parts.append(str(blk.get("text") or blk.get("content") or ""))
+            elif isinstance(blk, str):
+                parts.append(blk)
+        s = " ".join(p for p in parts if p)
+    elif not isinstance(s, str):
+        s = str(s)
+    return " ".join(s.split()).strip().strip('"')
 
 
 def _brief(metrics: dict | None) -> str:

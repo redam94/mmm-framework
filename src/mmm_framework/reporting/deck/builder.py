@@ -258,13 +258,15 @@ def _fill_channel_slide(
                 T.set_text(sh, narrative)
                 break
 
-    # the saturation/zone chart on the left panel
+    # the saturation/zone chart on the left panel — rendered to fit the box's
+    # exact aspect ratio (no squish).
     if z is not None:
         try:
-            png = charts.saturation_zones_png(z, currency=currency)
-            T.replace_image(
+            T.replace_image_fit(
                 slide,
-                png,
+                lambda w, h: charts.saturation_zones_png(
+                    z, currency=currency, width=w, height=h
+                ),
                 match=T.pictures_in_region(slide, Inches(1.05), Inches(4.43), 0, 0),
             )
         except Exception:
@@ -407,7 +409,12 @@ def build_pptx(
     s6 = next((s for s in slides if T.find_by_label(s, "RETURN & UNCERTAINTY")), None)
     if s6 is not None and roi_dict:
         try:
-            T.replace_image(s6, charts.roi_forest_png(roi_dict, break_even=eff_be))
+            T.replace_image_fit(
+                s6,
+                lambda w, h: charts.roi_forest_png(
+                    roi_dict, break_even=eff_be, width=w, height=h
+                ),
+            )
         except Exception:
             pass
     s7 = next((s for s in slides if T.find_by_label(s, "THE NEXT DOLLAR")), None)
@@ -421,11 +428,13 @@ def build_pptx(
             for ch, z in zones.items()
         }
         try:
-            T.replace_image(
+            T.replace_image_fit(
                 s7,
-                charts.roi_forest_png(
+                lambda w, h: charts.roi_forest_png(
                     mroi_dict,
                     break_even=eff_be,
+                    width=w,
+                    height=h,
                     title="Marginal return on the next dollar",
                     xlabel="Marginal ROI (next-dollar return)",
                 ),
@@ -444,8 +453,11 @@ def build_pptx(
             None,
         )
         if s4 is not None:
+            comp = bundle.component_totals
             try:
-                T.replace_image(s4, charts.decomposition_png(bundle.component_totals))
+                T.replace_image_fit(
+                    s4, lambda w, h: charts.decomposition_png(comp, width=w, height=h)
+                )
             except Exception:
                 pass
 
@@ -473,6 +485,12 @@ def build_pptx(
     for idx, _ in sorted(deep, key=lambda t: -t[0]):
         if idx not in used_idx:
             T.delete_slide(prs, idx)
+
+    # Clear the template's cached shrink-to-fit scale on every text box so
+    # PowerPoint recomputes the fit for the actual (possibly substituted) font —
+    # fixes the one-character text wrapping on filled AND untouched slides.
+    for s in prs.slides:
+        T.clear_autofit_scale(s)
 
     buf = io.BytesIO()
     prs.save(buf)

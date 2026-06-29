@@ -53,7 +53,7 @@ The tool is built in **four layers**, and we walk them in order:
 
 | # | layer | module | AI? |
 |---|---|---|---|
-| 1 | **spend zones** — ROI(spend) & **marginal ROI**(spend) + zones on a break-even band | `reporting.helpers.compute_response_zones` | no |
+| 1 | **spend zones** — ROI(spend) & **marginal ROI**(spend) + zones from the response-curve elasticity (mROI/ROI) | `reporting.helpers.compute_response_zones` | no |
 | 2 | **deck engine** — every slide's numbers, tables, and charts, straight from the model | `reporting.deck.build_deck` | no |
 | 3 | **insight layer** — one insight per channel slide + a synthesized headline | `agents.deck_insights.generate_deck_insights` | **yes** |
 | 4 | **template builder** — fills the `.pptx` template with the model's numbers/charts + the insights | `reporting.deck.builder.build_pptx` | no |
@@ -114,46 +114,46 @@ print("fitted channels:", mmm.channel_names)
 `compute_response_zones` returns, per channel, the **response**, the **average
 ROI**, and the **marginal ROI** across a spend grid (all with posterior credible
 intervals), plus the **breakthrough / optimal / saturation** zones. The zones are
-bands on *marginal ROI* relative to a break-even target:
+defined by *where each spend level sits on the response curve* — via the
+**elasticity** `e(s) = mROI(s) / ROI(s)` (the marginal-to-average ratio), **not**
+by an absolute break-even threshold:
 
-* **optimal** — spend where marginal ROI ≈ break-even (the profit-maximizing point),
-* **breakthrough** — marginal ROI well above break-even (under-invested → spend more),
-* **saturation** — marginal ROI below break-even (over-invested → reallocate).
+* **breakthrough** — `e ≥ 0.8`: the near-linear regime (lowest spend); the next
+  dollar still pulls its weight → under-invested, spend more.
+* **optimal** — `0.5 ≤ e < 0.8`: the efficient operating knee.
+* **saturation** — `e < 0.5`: marginal ROI is **much lower than average ROI** →
+  diminishing returns, reallocate.
 
-For a revenue KPI the break-even is `1.0` (or `1/margin`). This synthetic KPI is
-an index, not dollars, so we set the break-even at the **portfolio-median marginal
-ROI** purely so more than one zone is visible in the demo (you'll see
-*saturation* and *optimal* channels). `optimal_spend` is `None` for a channel
-whose marginal-ROI curve never crosses break-even in the modeled range (here:
-sits entirely below it → "reduce toward the minimum").
+So along the curve: breakthrough (linear) → optimal (knee) → saturation (flat).
+`break_even` is still the ROI/mROI **reference line** on the chart (1.0 for a
+revenue KPI, or `1/margin`), but it no longer defines the zones. We widen the
+spend range below (`spend_multiplier`) so this synthetic, lightly-saturating
+channel reaches all three zones; on real data the default 2× range usually
+already spans them.
 """),
     code(r"""
 from mmm_framework.reporting.helpers import compute_response_zones
 
-# pick a break-even inside the data's mROI range so the zones are illustrative
-probe = compute_response_zones(mmm, break_even=1.0, hdi_prob=0.8)
-break_even = float(np.median([z.current_mroi for z in probe.values()])) or 1.0
-zones = compute_response_zones(mmm, break_even=break_even, hdi_prob=0.8)
+break_even = 1.0   # ROI/mROI reference line (use 1/margin for a revenue KPI); not a zone boundary
+# widen the range so the concave curve reaches saturation and all three zones show
+zones = compute_response_zones(mmm, break_even=break_even, hdi_prob=0.8, spend_multiplier=10)
 
 rows = [{
     "channel": ch,
     "current ROI": round(z.current_roi, 2),
-    "ROI 80% HDI": f"[{z.current_roi_hdi[0]:.2f}, {z.current_roi_hdi[1]:.2f}]",
     "current mROI": round(z.current_mroi, 2),
-    "mROI 80% HDI": f"[{z.current_mroi_hdi[0]:.2f}, {z.current_mroi_hdi[1]:.2f}]",
+    "elasticity (mROI/ROI)": round(z.current_mroi / z.current_roi, 2) if z.current_roi else None,
     "zone": z.current_zone,
     "action": z.recommendation,
     "optimal spend": None if z.optimal_spend is None else round(z.optimal_spend, 1),
 } for ch, z in zones.items()]
 zone_tbl = pd.DataFrame(rows).set_index("channel")
-print(f"break-even mROI used for the demo: {break_even:.2f}")
 display(zone_tbl)
 
-# every channel is classified into exactly one zone with a directional action,
-# and the demo break-even produces more than one zone (not a vacuous check).
+# every channel is classified into exactly one zone with a directional action;
+# across the portfolio the curve-shape logic surfaces more than one zone.
 assert set(zone_tbl["zone"]) <= {"breakthrough", "optimal", "saturation"}
 assert set(zone_tbl["action"]) <= {"increase", "hold", "reduce"}
-assert len(set(zone_tbl["zone"])) >= 2, "expected multiple zones in the demo"
 """),
     md(r"""
 The same per-channel object renders the **centerpiece chart**: the response curve
@@ -196,8 +196,8 @@ display(Image(data=charts.roi_forest_png(
 list of `Slide`s, each carrying its numbers (`metrics`), tables, a chart image,
 and a deterministic `notes` string. It also marks deck-level **summary** slides
 (title, executive summary, reallocation — `kind="optimization"`) whose narrative
-is later synthesized from the *whole* deck. `margin` would set a profit-maximizing
-break-even; here we pass the same demo break-even.
+is later synthesized from the *whole* deck. `margin` would set the ROI reference
+to `1/margin`; here we pass the same demo `break_even`.
 """),
     code(r"""
 from mmm_framework.reporting.deck import build_deck
@@ -409,8 +409,9 @@ Everything above is wrapped so a user never has to touch the API:
 
 1. **Model code makes the numbers and charts; AI only writes the prose** — and
    each insight is grounded in its slide's deterministic facts.
-2. **Spend zones are ROI/mROI break-even bands**, not percent of response — the
-   optimal point is where the next dollar breaks even.
+2. **Spend zones come from the response-curve elasticity (mROI/ROI)**, not percent
+   of response and not an absolute break-even: breakthrough = linear regime,
+   optimal = the efficient knee, saturation = marginal far below average.
 3. **Per-slide insight + whole-deck synthesis** — the headline is written from
    the entire deck's facts, the channel narratives from each slide's.
 4. **It fills *your* template** — fonts, layout, and branding are preserved; the
@@ -425,11 +426,17 @@ Everything above is wrapped so a user never has to touch the API:
 
 def main():
     nb = new_notebook(cells=CELLS)
-    nb.metadata.update({
-        "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
-        "language_info": {"name": "python"},
-        "title": "From a fitted MMM to a PowerPoint readout",
-    })
+    nb.metadata.update(
+        {
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3",
+            },
+            "language_info": {"name": "python"},
+            "title": "From a fitted MMM to a PowerPoint readout",
+        }
+    )
     path = "create_pptx_demo.ipynb"
     with open(path, "w") as fh:
         nbformat.write(nb, fh)

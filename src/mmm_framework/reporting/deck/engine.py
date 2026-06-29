@@ -226,7 +226,7 @@ def build_deck(
         exec_bullets.append(
             f"{zone_counts['breakthrough']} channel(s) under-invested, "
             f"{zone_counts['optimal']} near optimal, {zone_counts['saturation']} saturated "
-            f"(at a {eff_be:g} marginal-ROI break-even)."
+            f"(by where each sits on its response curve — marginal vs. average ROI)."
         )
     if r2 is not None and np.isfinite(r2):
         exec_bullets.append(f"Model explains {r2:.0%} of KPI variance (R²).")
@@ -383,17 +383,14 @@ def build_deck(
                 ["Current zone", _ZONE_LABEL.get(z.current_zone, z.current_zone)],
                 ["Current ROI", _fmt_x(z.current_roi)],
                 ["Current marginal ROI", _fmt_x(z.current_mroi)],
-                [
-                    "Optimal spend (mROI = break-even)",
-                    _fmt_money(z.optimal_spend, currency),
-                ],
+                ["Efficient operating point", _fmt_money(z.optimal_spend, currency)],
                 ["Breakthrough range", _rng(z.breakthrough_range)],
                 ["Optimal range", _rng(z.optimal_range)],
                 ["Saturation range", _rng(z.saturation_range)],
             ],
         }
         head = (
-            f"scale up — strong marginal returns"
+            "scale up — still in the efficient regime"
             if z.recommendation == "increase"
             else (
                 "hold near current spend"
@@ -401,15 +398,17 @@ def build_deck(
                 else "reduce / reallocate"
             )
         )
+        elast = z.current_mroi / z.current_roi if z.current_roi else float("nan")
         bullets = [
             f"Current spend sits in the {_ZONE_LABEL.get(z.current_zone, z.current_zone)} zone.",
-            f"Marginal ROI at current spend: {_fmt_x(z.current_mroi)} "
-            f"(break-even {eff_be:g}).",
+            f"Current ROI {_fmt_x(z.current_roi)}, marginal ROI {_fmt_x(z.current_mroi)} "
+            f"(the next dollar earns {elast:.0%} of the average — "
+            f"{'still efficient' if elast >= 0.5 else 'well into diminishing returns'}).",
         ]
         if z.optimal_spend is not None and z.headroom_to_optimal is not None:
             direction = "more" if z.headroom_to_optimal > 0 else "less"
             bullets.append(
-                f"Profit-maximizing spend ≈ {_fmt_money(z.optimal_spend, currency)} "
+                f"Efficient operating point ≈ {_fmt_money(z.optimal_spend, currency)} "
                 f"({_fmt_money(abs(z.headroom_to_optimal), currency)} {direction} per period)."
             )
         slides.append(
@@ -421,16 +420,19 @@ def build_deck(
                 table=table,
                 chart_png=png,
                 chart_caption=(
-                    "Response curve with breakthrough/optimal/saturation zones "
-                    "(marginal-ROI break-even bands) and the ROI / marginal-ROI overlay."
+                    "Response curve with breakthrough / optimal / saturation zones "
+                    "(where the next dollar's return relative to the average places "
+                    "spend on the curve) and the ROI / marginal-ROI overlay."
                 ),
                 metrics={"zones": z.to_dict()},
                 notes=(
-                    f"Saturation/headroom for {ch}. It is in the '{z.current_zone}' zone "
-                    f"with current marginal ROI {z.current_mroi:.2f} vs a {eff_be:g} "
-                    f"break-even; the deterministic recommendation is to "
-                    f"{_REC_VERB.get(z.recommendation, z.recommendation)}. Turn this into a "
-                    "specific, quantified spend recommendation for this channel."
+                    f"Spend-efficiency for {ch}. On its response curve it sits in the "
+                    f"'{z.current_zone}' zone (current ROI {z.current_roi:.2f}, marginal "
+                    f"ROI {z.current_mroi:.2f} — the next dollar earns ~{elast:.0%} of the "
+                    f"average): breakthrough = under-invested/linear regime, optimal = the "
+                    f"efficient knee, saturation = marginal far below average. Deterministic "
+                    f"action: {_REC_VERB.get(z.recommendation, z.recommendation)}. Turn this "
+                    "into a specific, quantified spend recommendation for this channel."
                 ),
             )
         )
@@ -473,7 +475,8 @@ def build_deck(
                 bullets=[
                     f"{n_up} channel(s) under-invested (scale up), "
                     f"{n_down} saturated (pull back).",
-                    f"Optimum = spend where marginal ROI reaches the {eff_be:g} break-even.",
+                    "Optimum = each channel's efficient operating point on its "
+                    "response curve (before the marginal dollar falls far below the average).",
                 ],
                 table={
                     "columns": [
@@ -508,9 +511,10 @@ def build_deck(
         f"KPI: {kpi_name}; {len(chan)} media channels.",
         "Bayesian MMM with adstock (carryover) and saturation (diminishing returns); "
         "all figures carry posterior credible intervals.",
-        f"Spend zones defined on marginal ROI vs a {eff_be:g} break-even"
-        + (f" (gross margin {margin:.0%})" if margin else "")
-        + " — not percent of response.",
+        "Spend zones defined by where each channel sits on its response curve — "
+        "the marginal-to-average ROI ratio (linear regime → optimal; marginal far "
+        "below average → saturated) — not percent of response"
+        + (f"; profit lens uses a gross margin of {margin:.0%}." if margin else "."),
     ]
     slides.append(
         Slide(

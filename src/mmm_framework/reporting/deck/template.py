@@ -152,6 +152,69 @@ def replace_image(
     return True
 
 
+def replace_image_fit(
+    slide, render_fn, *, match: Callable[[Any], bool] | None = None
+) -> bool:
+    """Replace the picture(s) in a region with a chart rendered to **fit the box
+    exactly** — no aspect distortion.
+
+    Unlike :func:`replace_image` (which forces an existing PNG into the box's
+    width×height and squishes it when the aspects differ), this measures the
+    matched box and calls ``render_fn(width_in, height_in)`` to render the chart
+    at that exact aspect ratio, then drops it in. Returns ``False`` if no picture
+    matched.
+    """
+    from pptx.util import Emu
+
+    pics = [
+        sh
+        for sh in slide.shapes
+        if sh.shape_type is not None
+        and "PICTURE" in str(sh.shape_type)
+        and (match is None or match(sh))
+    ]
+    if not pics:
+        return False
+    first = pics[0]
+    left, top, width, height = first.left, first.top, first.width, first.height
+    png = render_fn(Emu(width).inches, Emu(height).inches)
+    for sh in pics:
+        sh._element.getparent().remove(sh._element)
+    slide.shapes.add_picture(io.BytesIO(png), left, top, width=width, height=height)
+    return True
+
+
+def clear_autofit_scale(slide) -> int:
+    """Strip the cached shrink-to-fit scale from every text box on the slide.
+
+    The template's text boxes use "shrink text on overflow" with a ``fontScale``
+    cached for the *authoring* font. When PowerPoint substitutes a missing font
+    (e.g. Calibri), that stale scale is too large and text overflows / wraps a
+    character onto the next line. Removing ``fontScale``/``lnSpcReduction`` (while
+    keeping autofit on) makes PowerPoint recompute the fit for the actual font on
+    open. Returns the number of boxes adjusted.
+    """
+    from pptx.oxml.ns import qn
+
+    n = 0
+    for sh in slide.shapes:
+        if not sh.has_text_frame:
+            continue
+        body = sh.text_frame._txBody.find(qn("a:bodyPr"))
+        if body is None:
+            continue
+        na = body.find(qn("a:normAutofit"))
+        if na is None:
+            continue
+        changed = False
+        for attr in ("fontScale", "lnSpcReduction"):
+            if attr in na.attrib:
+                del na.attrib[attr]
+                changed = True
+        n += int(changed)
+    return n
+
+
 def pictures_in_region(slide, left, top, width, height, *, tol_in: float = 0.3):
     """Predicate factory: matches pictures whose top-left is within ``tol_in`` of
     a target region's top-left (to target one chart when a slide has several)."""
@@ -189,6 +252,8 @@ __all__ = [
     "shapes_below",
     "fill_card",
     "replace_image",
+    "replace_image_fit",
+    "clear_autofit_scale",
     "pictures_in_region",
     "delete_shape",
     "delete_slide",

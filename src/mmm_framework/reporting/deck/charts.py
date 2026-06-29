@@ -209,7 +209,7 @@ def roi_forest_png(
     highs = np.array([v.get("upper", v.get("mean", 0.0)) for _, v in items])
     y = np.arange(len(names))
 
-    fig = Figure(figsize=(width, max(height, 0.5 * len(names) + 1.5)))
+    fig = Figure(figsize=(width, height))
     ax = fig.subplots()
     ax.errorbar(
         means,
@@ -254,7 +254,7 @@ def decomposition_png(
     total = float(np.sum(np.abs(vals))) or 1.0
     y = np.arange(len(names))
 
-    fig = Figure(figsize=(width, max(height, 0.5 * len(names) + 1.5)))
+    fig = Figure(figsize=(width, height))
     ax = fig.subplots()
     colors = [_BAR_COLORS[i % len(_BAR_COLORS)] for i in range(len(names))]
     ax.barh(y, vals, color=colors, alpha=0.9)

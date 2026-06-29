@@ -108,23 +108,25 @@ class SaturationCurveResult:
 class SpendResponseZones:
     """Per-channel spend-response curves (response, average ROI, and **marginal
     ROI**) over a spend grid, with the **breakthrough / optimal / saturation**
-    spend zones defined on *marginal ROI break-even bands* — NOT on percent of
-    maximum response.
+    spend zones defined by where each spend level sits on the **response curve** —
+    via the elasticity ``e(s) = mROI(s)/ROI(s)`` — NOT on a break-even threshold
+    and NOT on percent of maximum response.
 
-    The zones partition the spend axis by where the marginal return on the next
-    dollar sits relative to a break-even target (``break_even``, default 1.0 — one
-    KPI unit returned per dollar; pass ``1/margin`` for a margin-adjusted target):
+    Elasticity is ~1 in the curve's linear regime and → 0 as it flattens; it
+    generally decreases with spend, so the zones run (low → high spend):
 
-    * **breakthrough** (under-invested): mROI ≳ ``break_even·(1+band)`` — strong
-      marginal returns, spend more.
-    * **optimal**: mROI within ``±band`` of ``break_even`` — at/near the
-      profit-maximizing spend (``optimal_spend`` is where mROI == break_even).
-    * **saturation** (over-invested): mROI ≲ ``break_even·(1−band)`` —
-      diminishing, reallocate.
+    * **breakthrough** (under-invested): ``e ≥ breakthrough_elasticity`` — the
+      most linear / least saturated region; the next dollar still pulls its
+      weight, so spend more.
+    * **optimal**: ``saturation_elasticity ≤ e < breakthrough_elasticity`` — the
+      efficient operating knee (``optimal_spend`` is its centre).
+    * **saturation** (over-invested): ``e < saturation_elasticity`` — marginal
+      ROI is much lower than average ROI; diminishing, reallocate.
 
-    Average ROI is carried alongside for context. All curves carry posterior
-    uncertainty (HDI). Zone boundaries are computed from the posterior-mean mROI
-    curve so the slide shows stable numbers.
+    Average ROI is carried alongside, ``break_even`` is the ROI/mROI reference
+    level (the chart's dashed line), and all curves carry posterior uncertainty
+    (HDI). Zone boundaries are computed from the posterior-mean curves so the
+    slide shows stable numbers.
     """
 
     channel: str
