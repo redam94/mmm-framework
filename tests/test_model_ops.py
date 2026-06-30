@@ -38,6 +38,7 @@ def test_ops_registry_complete():
         "identify_structural_parameters",
         # Validation / verification ops (Phase 1)
         "posterior_predictive_checks",
+        "simulation_based_calibration",
         "residual_diagnostics",
         "channel_diagnostics",
         "refutation_suite",

@@ -844,6 +844,56 @@ def prior_predictive_check(
     return _modelop_command(res, state or {}, tool_call_id)
 
 
+@tool
+def run_calibration_check(
+    n_sims: int = 32,
+    posterior_draws: int = 100,
+    sampler: str = "numpyro",
+    config: InjectedConfig = None,
+    state: Annotated[dict, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Run Simulation-Based Calibration (SBC, Talts 2018) — is the inference
+    engine itself well-calibrated? Call this when the user asks whether the
+    posteriors / credible intervals are calibrated/trustworthy, about SBC, or
+    "are my uncertainty intervals real?".
+
+    Draws `n_sims` parameter sets from the prior, simulates a dataset from each,
+    refits the posterior, and ranks each true value within its posterior draws —
+    uniform ranks ⇒ calibrated. Returns a per-parameter rank-histogram and
+    ECDF-difference plot, a verdict table, and a grounded interpretation that
+    names each failure shape (∪ = overconfident/too-narrow, ∩ = overdispersed,
+    skew = bias) and recommends fixes or caveats.
+
+    A prior-predictive-class check: it builds from the ACTIVE spec, so it can run
+    BEFORE fitting and reflects the current priors. EXPENSIVE — one model refit
+    per simulation. Keep `n_sims` modest here (it runs in the chat turn);
+    `n_sims<50` only detects gross miscalibration. For a thorough run use the
+    Validation tab's calibration job (background). Requires a configured model +
+    a loaded dataset.
+    """
+    from mmm_framework.agents.tools import _KERNELS, _modelop_command, _normalized_spec
+    from mmm_framework.agents.runtime import set_current_thread, get_current_thread
+
+    set_current_thread(_thread_id_from(config))
+    spec = _normalized_spec((state or {}).get("model_spec"))
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "simulation_based_calibration",
+        {
+            "n_sims": int(n_sims),
+            "L": int(posterior_draws),
+            "sampler": str(sampler),
+            "spec": spec if spec.get("kpi") else None,
+            "dataset_path": (state or {}).get("dataset_path"),
+        },
+    )
+    _assumption = res.pop("assumption", None) if isinstance(res, dict) else None
+    tid = _thread_id_from(config)
+    if _assumption and tid and not res.get("error"):
+        sessions_store.record_assumption(thread_id=tid, **_assumption)
+    return _modelop_command(res, state or {}, tool_call_id)
+
+
 # ── 7. Leave-one-out decomposition (Step 8, sensitivity) ─────────────────────
 
 
@@ -1223,6 +1273,7 @@ CAUSAL_TOOLS = [
     list_assumptions,
     mark_workflow_step,
     prior_predictive_check,
+    run_calibration_check,
     leave_one_out_decomposition,
     define_analysis_plan,
     check_spec_divergence,
