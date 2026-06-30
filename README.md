@@ -312,8 +312,8 @@ The `mmm_extensions` subpackage provides advanced modeling capabilities for scen
 mmm_framework/mmm_extensions/
 ├── config.py       # Dataclasses for all configuration objects
 ├── builders.py     # Fluent builders and factory functions
-├── components.py   # PyMC/PyTensor building blocks (lazy-loaded)
-└── models.py       # NestedMMM, MultivariateMMM, CombinedMMM classes
+├── components/     # PyMC/PyTensor building blocks (lazy-loaded)
+└── models/         # NestedMMM, MultivariateMMM, CombinedMMM classes
 ```
 
 ### Nested/Mediated Models
@@ -622,10 +622,7 @@ from mmm_framework.mmm_extensions import (
 )
 
 # Method 1: Factory function (simplest)
-config = sparse_controls(
-    expected_nonzero=3,
-    "distribution", "price", "competitor_media",  # Confounders to exclude
-)
+config = sparse_controls(3, "distribution", "price", "competitor_media")
 
 # Method 2: Builder with full control
 config = (VariableSelectionConfigBuilder()
@@ -1539,32 +1536,35 @@ The framework explicitly addresses common identification problems:
 mmm-framework/
 ├── src/mmm_framework/          # Core modeling library
 │   ├── __init__.py             # Package exports
-│   ├── config.py               # Configuration enums and dataclasses
-│   ├── builders.py             # Fluent configuration builders
+│   ├── config/                 # Configuration enums and Pydantic dataclasses
+│   ├── builders/               # Fluent configuration builders
 │   ├── data_loader.py          # MFF parsing and validation
-│   ├── model.py                # BayesianMMM implementation
+│   ├── model/                  # BayesianMMM implementation (base.py, results.py, …)
 │   ├── jobs.py                 # Async job management
+│   ├── agents/                 # LangGraph agent, tools, kernels
+│   ├── reporting/              # HTML report generation
+│   ├── validation/             # Backtesting, diagnostics, sensitivity
+│   ├── calibration/            # Experiment calibration
+│   ├── estimands/              # Named, serializable estimand system
+│   ├── planning/               # Experiment design, EIG/EVOI, optimizer
+│   ├── garden/                 # Custom model registry (Atelier)
+│   ├── transforms/             # Adstock, saturation, seasonality, trend
+│   ├── synth/                  # Synthetic DGP worlds with causal ground truth
 │   └── mmm_extensions/         # Extended model capabilities
-│       ├── __init__.py         # Lazy imports for heavy dependencies
 │       ├── config.py           # Mediator, Outcome, CrossEffect configs
 │       ├── builders.py         # Fluent builders + factory functions
-│       ├── components.py       # PyMC/PyTensor building blocks
-│       └── models.py           # NestedMMM, MultivariateMMM, CombinedMMM
-├── api/                        # FastAPI backend
+│       ├── components/         # PyMC/PyTensor building blocks
+│       └── models/             # NestedMMM, MultivariateMMM, CombinedMMM
+├── api/                        # Legacy REST API (deprecated; Streamlit target)
 │   ├── main.py                 # Application factory
 │   ├── routes/                 # API route handlers
 │   ├── schemas.py              # Pydantic models
 │   ├── redis_service.py        # Redis connection management
 │   └── worker.py               # ARQ worker settings
-├── app/                        # Streamlit frontend
-│   ├── Home.py                 # Main entry point
-│   ├── pages/                  # Multipage app pages
-│   ├── api_client.py           # HTTP client for backend
-│   └── components/             # Reusable UI components
+├── frontend/                   # React/TypeScript UI (modern, supported)
+├── app/                        # Streamlit frontend (legacy, deprecated)
 ├── examples/                   # Usage examples
-│   └── ex_extensions.py        # Extended model examples
 ├── tests/                      # Test suite
-│   └── mmm_extensions/         # Extension module tests
 ├── pyproject.toml              # Project configuration
 └── README.md
 ```
@@ -1574,7 +1574,6 @@ mmm-framework/
 ### Core
 
 - `pymc>=5.26` — Probabilistic programming
-- `pymc-marketing` — MMM components (saturation, adstock)
 - `numpyro>=0.19` — JAX-based NUTS sampler
 - `nutpie>=0.16` — Fast NUTS implementation
 - `pandas>=2.3` — Data manipulation

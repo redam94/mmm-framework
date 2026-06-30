@@ -25,7 +25,7 @@ cp config/model_config.example.yaml config/model_config.yaml
 # 2. Edit config/model_config.yaml — set provider / model / project / location
 
 # 3. Run the agent server (it reads the config at startup)
-cd src/mmm_framework && uvicorn mmm_framework.api.main:app --reload
+uv run uvicorn mmm_framework.api.main:app --host 0.0.0.0 --port 8000 --reload
 # or the standalone CLI example:
 uv run python examples/ex_agent_workflow.py
 # or the Vertex/ADC smoke test:

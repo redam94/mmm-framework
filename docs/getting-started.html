@@ -846,13 +846,13 @@ if results.channel_contributions is not None:
 import arviz as az
 
 # Posterior distributions
-az.plot_posterior(results.idata, var_names=["beta_TV", "beta_Digital"])
+az.plot_posterior(results.trace, var_names=["beta_TV", "beta_Digital"])
 
 # Trace plots for convergence
-az.plot_trace(results.idata, var_names=["beta_TV", "beta_Digital"])
+az.plot_trace(results.trace, var_names=["beta_TV", "beta_Digital"])
 
 # Forest plot comparing channels
-az.plot_forest(results.idata, var_names=["beta_TV", "beta_Digital"])</code></pre>
+az.plot_forest(results.trace, var_names=["beta_TV", "beta_Digital"])</code></pre>
             </div>
 
             <h3 id="generating-reports">Generating Reports</h3>
@@ -950,8 +950,10 @@ mff_config = (
     .with_kpi_name("Sales")
     # National media disaggregated to geo by population share
     .add_national_media("TV", adstock_lmax=8)
-    # Geo-level media stays at its native granularity  
-    .add_geo_media("Local_Radio", adstock_lmax=6)
+    # Geo-level media stays at its native granularity
+    .add_media_builder(
+        MediaChannelConfigBuilder("Local_Radio").by_geo().with_geometric_adstock(6)
+    )
     .build()
 )</code></pre>
             </div>
@@ -1056,7 +1058,7 @@ hierarchical = (
                 <span class="folder">mmm-framework/</span><br>
                 <span class="indent"><span class="folder">src/mmm_framework/</span> — Core Python package</span><br>
                 <span class="indent"><span class="indent"><span class="file">__init__.py</span> — Module exports and version</span></span><br>
-                <span class="indent"><span class="indent"><span class="file">config.py</span> — Pydantic config classes and enums</span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">config/</span> — Pydantic config classes and enums</span></span><br>
                 <span class="indent"><span class="indent"><span class="file">data_loader.py</span> — MFF parsing and validation</span></span><br>
                 <span class="indent"><span class="indent"><span class="file">analysis.py</span> — Analysis utilities</span></span><br>
                 <span class="indent"><span class="indent"><span class="file">serialization.py</span> — Save/load functionality</span></span><br>
