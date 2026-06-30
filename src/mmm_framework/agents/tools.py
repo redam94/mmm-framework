@@ -6000,6 +6000,8 @@ TOOLS = [
     run_channel_diagnostics,
     run_refutation_suite,
     run_cross_validation,
+    # Simulation-based calibration (inference-engine calibration)
+    *[t for t in CAUSAL_TOOLS if t.name == "run_calibration_check"],
     run_budget_scenario,
     run_marginal_analysis,
     # Decision layer: learnings -> budget + next experiment

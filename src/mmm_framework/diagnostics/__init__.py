@@ -20,10 +20,12 @@ from .learning import (
     plot_parameter_learning,
     plot_prior_posterior_overlay,
 )
+from .sbc import SBCResult, run_mmm_sbc, run_sbc
 from .snapshot import compute_fit_diagnostics
 
 __all__ = [
     "ConvergenceWarning",
+    "SBCResult",
     "annotate_convergence",
     "compute_convergence",
     "compute_fit_diagnostics",
@@ -32,5 +34,7 @@ __all__ = [
     "parameter_learning",
     "plot_parameter_learning",
     "plot_prior_posterior_overlay",
+    "run_mmm_sbc",
+    "run_sbc",
     "warn_if_not_converged",
 ]

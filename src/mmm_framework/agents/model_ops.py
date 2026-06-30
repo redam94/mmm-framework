@@ -2071,6 +2071,153 @@ def posterior_predictive_checks(
         return _err(f"Posterior predictive checks failed: {e}")
 
 
+def simulation_based_calibration(
+    mmm: Any,
+    results: Any = None,
+    *,
+    spec: dict | None = None,
+    dataset_path: str | None = None,
+    n_sims: int = 64,
+    L: int = 100,
+    n_bins: int = 20,
+    sampler: str = "numpyro",
+    params: list[str] | None = None,
+    seed: int = 0,
+    alpha: float = 0.05,
+    max_render: int = 6,
+) -> dict:
+    """Simulation-Based Calibration (Talts 2018): is the inference engine
+    calibrated? Draws ``n_sims`` (θ*, y_sim) pairs from the model's prior, refits
+    the posterior on each simulated dataset, and ranks each true value within its
+    posterior draws — uniform ranks ⇒ calibrated. A prior-predictive-class check
+    that validates the engine itself, independent of the real fit.
+
+    EXPENSIVE: one model refit per simulation — runs behind a background job.
+    Builds an unfitted model from the ACTIVE ``spec`` + ``dataset_path`` (so it
+    reflects the priors the next fit would use); falls back to the fitted model.
+    Returns deterministic markdown + per-parameter rank-histogram & ECDF-diff
+    plots + a verdict table + an `assumption` payload. The LLM interpretation is
+    added host-side (never in the kernel)."""
+    from mmm_framework.diagnostics.sbc import run_mmm_sbc
+    from mmm_framework.validation.charts import diagnostics as vch
+    from mmm_framework.agents.sbc_insights import interpret_sbc
+
+    if spec and dataset_path:
+        try:
+            from mmm_framework.agents.fitting import build_model
+
+            model = build_model(spec, dataset_path)
+        except Exception as e:  # noqa: BLE001
+            return _err(f"Could not build the model for SBC: {e}")
+    elif mmm is not None:
+        model = mmm
+    else:
+        return _err(
+            "SBC needs the active spec + dataset (it builds and refits fresh "
+            "models). Configure a model and load a dataset first."
+        )
+
+    try:
+        sbc = run_mmm_sbc(
+            model,
+            n_sims=int(n_sims),
+            L=int(L),
+            n_bins=int(n_bins),
+            sampler=str(sampler),
+            params=params,
+            seed=int(seed),
+            alpha=float(alpha),
+        )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"SBC run failed: {e}")
+
+    dash = sbc.to_dashboard()
+    # Deterministic interpretation in content; host-side job re-runs with an LLM.
+    content = interpret_sbc(dash, llm=None)
+
+    # Render the worst offenders first (respect the plot budget).
+    ordered = sorted(sbc.params, key=lambda p: p.miscalibration, reverse=True)
+    plots = []
+    for p in ordered[: int(max_render)]:
+        try:
+            plots.append(
+                {
+                    "title": f"SBC rank — {p.name}",
+                    "figure": _fig_json(
+                        vch.create_sbc_rank_histogram(
+                            p.int_ranks,
+                            p.L,
+                            n_bins=p.n_bins,
+                            n_sims=p.n_sims,
+                            param_name=p.name,
+                            shape=p.shape,
+                        )
+                    ),
+                }
+            )
+            plots.append(
+                {
+                    "title": f"SBC ECDF-diff — {p.name}",
+                    "figure": _fig_json(
+                        vch.create_sbc_ecdf_difference(
+                            p.int_ranks,
+                            p.L,
+                            n_sims=p.n_sims,
+                            param_name=p.name,
+                            shape=p.shape,
+                        )
+                    ),
+                }
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+    import pandas as _pd
+
+    rows = [
+        {
+            "parameter": p.name,
+            "shape": p.shape,
+            "chi2_p": round(p.chi2_pvalue, 3),
+            "mean_rank": round(p.mean_norm_rank, 3),
+            "miscalibration": round(p.miscalibration, 3),
+            "calibrated": p.calibrated,
+        }
+        for p in ordered
+    ]
+
+    out = _ok(content, {"sbc": dash})
+    out["tables"] = [
+        df_to_table_json(
+            _pd.DataFrame(rows),
+            title="SBC per-parameter calibration",
+            source="simulation_based_calibration",
+            group="validation",
+        )
+    ]
+    out["plots"] = plots
+    out["assumption"] = {
+        "key": "sbc_check",
+        "value": dash,
+        "rationale": (
+            "Simulation-based calibration of the inference engine (Talts 2018). "
+            + (
+                "Ranks consistent with uniform — intervals have nominal coverage."
+                if sbc.all_calibrated
+                else "Miscalibration detected — see the per-parameter verdict."
+            )
+        ),
+        "category": "prior",
+        "change_note": f"n_sims={int(n_sims)}, L={int(L)}, sampler={sampler}",
+    }
+    return out
+
+
+# Dispatchers skip the fitted-model gate: SBC builds + refits its own models from
+# the active spec (a prior-predictive-class check that runs pre-fit).
+simulation_based_calibration.allow_unfitted = True
+
+
 def residual_diagnostics(mmm: Any, results: Any = None) -> dict:
     """Residual diagnostics: autocorrelation (Durbin-Watson / Ljung-Box),
     heteroscedasticity (Breusch-Pagan) and normality (Shapiro / Jarque-Bera) of
@@ -2507,6 +2654,7 @@ def render_slide_deck(
 OPS = {
     "roi_metrics": roi_metrics,
     "posterior_predictive_checks": posterior_predictive_checks,
+    "simulation_based_calibration": simulation_based_calibration,
     "residual_diagnostics": residual_diagnostics,
     "channel_diagnostics": channel_diagnostics,
     "refutation_suite": refutation_suite,

@@ -16,6 +16,8 @@ from .diagnostics import (
     create_residual_panel,
     create_residual_time_series_plot,
     create_residual_vs_fitted,
+    create_sbc_ecdf_difference,
+    create_sbc_rank_histogram,
     create_vif_chart,
 )
 
@@ -31,6 +33,8 @@ __all__ = [
     "create_residual_time_series_plot",
     "create_pit_histogram",
     "create_pit_ecdf",
+    "create_sbc_rank_histogram",
+    "create_sbc_ecdf_difference",
     "create_cv_fold_metrics_chart",
     "create_cv_coverage_chart",
     "create_cv_actual_vs_predicted_chart",

@@ -3050,6 +3050,9 @@ _VALIDATION_CHECKS: dict[str, tuple[str, dict]] = {
     "channels": ("channel_diagnostics", {}),
     "refutation": ("refutation_suite", {}),
     "cross_validation": ("cross_validation", {}),
+    # Simulation-Based Calibration (Talts 2018) — expensive (one refit per sim);
+    # the background-job path so the chat turn never blocks on it.
+    "sbc": ("simulation_based_calibration", {"n_sims": 100, "L": 100}),
 }
 
 
