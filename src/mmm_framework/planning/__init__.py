@@ -6,12 +6,14 @@ session kernels via ``model_ops``.
 """
 
 from .budget import (
+    DEFAULT_REALLOC_DEVIATION,
     GEO_ARM_SEP,
     BudgetOptimizationResult,
     ResponseCurves,
     combine_geo_curves,
     compute_response_curves,
     compute_response_curves_per_geo,
+    default_reallocation,
     optimize_budget,
     optimize_budget_by_geo,
 )
@@ -65,6 +67,8 @@ __all__ = [
     "ResponseCurves",
     "compute_response_curves",
     "optimize_budget",
+    "default_reallocation",
+    "DEFAULT_REALLOC_DEVIATION",
     "GEO_ARM_SEP",
     "compute_response_curves_per_geo",
     "combine_geo_curves",

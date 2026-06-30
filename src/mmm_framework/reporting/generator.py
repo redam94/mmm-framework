@@ -90,6 +90,7 @@ class MMMReportGenerator:
         results: Any | None = None,
         sensitivity: dict | None = None,
         llm: Any | None = None,
+        allocation: dict | None = None,
     ):
         self.config = config or ReportConfig()
         self._llm = llm
@@ -106,6 +107,20 @@ class MMMReportGenerator:
         # Add sensitivity results if provided
         if sensitivity is not None:
             self.data.sensitivity_results = sensitivity
+
+        # Budget-allocation plan (a default reallocation, or a saved Planner plan).
+        # When attached, expose it on the bundle and turn the allocation section ON
+        # — it is default-off and data-gated, so it never appears without a plan.
+        # This drives BOTH the classic AllocationSection and the Augur-native
+        # AugurAllocationSection (same bundle field, both gate on config.allocation).
+        if isinstance(allocation, dict) and allocation.get("allocation"):
+            self.data.allocation_results = allocation
+            if not self.config.allocation.enabled:
+                import dataclasses
+
+                self.config = dataclasses.replace(
+                    self.config, allocation=SectionConfig(enabled=True)
+                )
 
         # Augur shell: fill the CMO/planner narrative (templated fallback +
         # optional LLM enrichment) when the caller hasn't supplied one. Build a
@@ -1169,6 +1184,7 @@ class ReportBuilder:
         self._panel: Any | None = None
         self._results: Any | None = None
         self._sensitivity: dict | None = None
+        self._allocation: dict | None = None
         self._llm: Any | None = None
         self._config_kwargs: dict = {}
         self._section_configs: dict[str, SectionConfig] = {}
@@ -1221,6 +1237,17 @@ class ReportBuilder:
     def with_sensitivity(self, results: dict) -> ReportBuilder:
         """Add sensitivity analysis results."""
         self._sensitivity = results
+        return self
+
+    def with_allocation(self, plan: dict | None) -> ReportBuilder:
+        """Attach a budget-allocation plan (a default reallocation from
+        :func:`planning.default_reallocation`, or a saved Planner plan).
+
+        The plan is exposed on the report bundle as ``allocation_results`` and
+        turns the allocation section ON (classic *and* Augur). A falsy/empty plan
+        is ignored, so the section stays off. The plan dict shape is the one the
+        ``plan_budget`` op / ``AllocationSection`` consume."""
+        self._allocation = plan
         return self
 
     def with_title(self, title: str) -> ReportBuilder:
@@ -1341,4 +1368,5 @@ class ReportBuilder:
             results=self._results,
             sensitivity=self._sensitivity,
             llm=self._llm,
+            allocation=self._allocation,
         )

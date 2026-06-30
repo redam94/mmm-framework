@@ -240,3 +240,138 @@ def test_plan_budget_end_to_end_with_fitted_model(tmp_path):
     total_sched = sum(r["total"] for r in plan["flighting"]["schedule"])
     total_alloc = sum(a["optimal_spend"] for a in plan["allocation"])
     assert total_sched == pytest.approx(total_alloc, rel=0.02)
+
+
+@pytest.mark.slow
+def test_default_reallocation_and_augur_report_end_to_end(tmp_path):
+    """Real fit → default_reallocation (±20%, within support) → the plan lands in
+    the Augur "Media Performance Readout" as a rendered allocation section."""
+    import os
+    import sys
+
+    sys.path.insert(
+        0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../examples"))
+    )
+    from ex_model_workflow import generate_synthetic_mff
+
+    from mmm_framework.agents.fitting import build_model
+    from mmm_framework.planning import default_reallocation
+    from mmm_framework.reporting.generator import ReportBuilder
+
+    df = generate_synthetic_mff(n_weeks=60)
+    path = str(tmp_path / "mff.csv")
+    df.to_csv(path, index=False)
+    spec = {
+        "kpi": "Sales",
+        "kpi_level": "national",
+        "time_granularity": "weekly",
+        "media_channels": [{"name": "TV"}, {"name": "Digital"}],
+        "control_variables": [],
+        "inference": {"chains": 2, "draws": 100, "tune": 100},
+    }
+    mmm = build_model(spec, path)
+    mmm.fit(random_seed=1)
+
+    plan = default_reallocation(mmm, max_draws=50)
+    # ±20% within support, no channel switched off, total preserved — on REAL curves.
+    assert plan["deviation_cap"] == pytest.approx(0.20)
+    cur = sum(r["current_spend"] for r in plan["allocation"])
+    opt = sum(r["optimal_spend"] for r in plan["allocation"])
+    assert opt == pytest.approx(cur, rel=0.02)
+    for r in plan["allocation"]:
+        assert 0.8 * r["current_spend"] - 1e-6 <= r["optimal_spend"]
+        assert r["optimal_spend"] <= 1.2 * r["current_spend"] + 1e-6
+        assert r["optimal_spend"] > 0
+
+    html = (
+        ReportBuilder()
+        .with_model(mmm)
+        .with_title("Media Performance Readout")
+        .with_client("Acme")
+        .augur_readout()
+        .with_allocation(plan)
+        .build()
+        .render()
+    )
+    assert 'id="allocation"' in html
+    assert "The optimized plan" in html
+    assert "±20%" in html
+
+
+class FakeNationalMMM:
+    """Additive national model: contribution(obs, ch) = coef[ch] * sqrt(spend).
+
+    TV has the higher marginal return, so a budget-neutral reallocation should
+    push spend toward TV and trim Search — but only up to the deviation cap.
+    """
+
+    def __init__(self, coef=(3.0, 1.0), base=100.0, n_obs=4):
+        self.channel_names = ["TV", "Search"]
+        self.X_media_raw = np.full((n_obs, 2), float(base))
+        self._coef = np.asarray(coef, dtype=float)
+
+    def sample_channel_contributions(
+        self, X_media=None, max_draws=None, random_seed=None
+    ):
+        X = self.X_media_raw if X_media is None else X_media
+        n_obs, C = X.shape
+        out = np.zeros((6, n_obs, C))
+        for c in range(C):
+            out[:, :, c] = self._coef[c] * np.sqrt(np.clip(X[:, c], 0.0, None))
+        return out
+
+
+class TestDefaultReallocation:
+    """planning.default_reallocation: the ±20%, within-support report plan."""
+
+    def test_bounds_no_channel_off_total_preserved(self):
+        from mmm_framework.planning import default_reallocation
+
+        plan = default_reallocation(FakeNationalMMM(), max_draws=20)
+        assert plan["deviation_cap"] == pytest.approx(0.20)
+
+        cur = sum(r["current_spend"] for r in plan["allocation"])
+        opt = sum(r["optimal_spend"] for r in plan["allocation"])
+        assert opt == pytest.approx(cur, rel=0.02)  # pure reallocation
+
+        for r in plan["allocation"]:
+            lo, hi = 0.8 * r["current_spend"], 1.2 * r["current_spend"]
+            # every channel stays within ±20% (the sampled support) ...
+            assert lo - 1e-6 <= r["optimal_spend"] <= hi + 1e-6
+            # ... and none is switched off
+            assert r["optimal_spend"] > 0
+            assert -20.5 <= r["change_pct"] <= 20.5
+
+    def test_moves_budget_toward_higher_marginal(self):
+        from mmm_framework.planning import default_reallocation
+
+        rows = {
+            r["channel"]: r
+            for r in default_reallocation(
+                FakeNationalMMM(coef=(3.0, 1.0)), max_draws=20
+            )["allocation"]
+        }
+        assert rows["TV"]["change_pct"] > 0  # winner scaled up
+        assert rows["Search"]["change_pct"] < 0  # loser trimmed
+        # the winner is pushed to (but not past) the +20% cap
+        assert rows["TV"]["optimal_spend"] == pytest.approx(
+            1.2 * rows["TV"]["current_spend"], rel=0.05
+        )
+
+    def test_custom_deviation_tightens_band(self):
+        from mmm_framework.planning import default_reallocation
+
+        plan = default_reallocation(FakeNationalMMM(), deviation=0.10, max_draws=20)
+        assert plan["deviation_cap"] == pytest.approx(0.10)
+        for r in plan["allocation"]:
+            assert (
+                0.9 * r["current_spend"] - 1e-6
+                <= r["optimal_spend"]
+                <= 1.1 * r["current_spend"] + 1e-6
+            )
+
+    def test_rejects_out_of_range_deviation(self):
+        from mmm_framework.planning import default_reallocation
+
+        with pytest.raises(ValueError):
+            default_reallocation(FakeNationalMMM(), deviation=1.5)

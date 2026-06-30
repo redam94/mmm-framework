@@ -20,6 +20,13 @@ import pandas as pd
 
 DEFAULT_MULTIPLIERS = (0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5)
 
+#: Default per-channel deviation cap for a *default reallocation* (the plan shown
+#: in a client report when the user has not run the Planner studio). Each
+#: channel may move at most ±20% from its current spend so no channel is turned
+#: off completely and every recommendation stays inside the spend range the model
+#: has direct evidence for. See :func:`default_reallocation`.
+DEFAULT_REALLOC_DEVIATION = 0.20
+
 
 @dataclass
 class ResponseCurves:
@@ -268,6 +275,91 @@ def optimize_budget(
         per_draw_alloc=per_draw_alloc,
         optimal_alloc=optimal,
     )
+
+
+def _result_to_report_dict(
+    res: BudgetOptimizationResult, *, deviation: float | None = None
+) -> dict[str, Any]:
+    """Flatten a :class:`BudgetOptimizationResult` into the report-ready dict the
+    ``AllocationSection`` / ``AugurAllocationSection`` / ``plan_budget`` op all
+    consume (``allocation`` rows + headline uplift fields)."""
+    t = res.table
+    allocation = [
+        {
+            "channel": str(r["channel"]),
+            "current_spend": float(r["current_spend"]),
+            "optimal_spend": float(r["optimal_spend"]),
+            "change_pct": float(r["change_pct"]),
+        }
+        for _, r in t.iterrows()
+    ]
+    plan: dict[str, Any] = {
+        "total_budget": float(res.total_budget),
+        "current_total": float(t["current_spend"].sum()),
+        "expected_uplift": float(res.expected_uplift),
+        "uplift_hdi": [float(res.uplift_hdi[0]), float(res.uplift_hdi[1])],
+        "prob_positive_uplift": float(res.prob_positive_uplift),
+        "n_draws": int(res.n_draws),
+        "allocation": allocation,
+        "notes": list(res.notes),
+    }
+    if deviation is not None:
+        plan["deviation_cap"] = float(deviation)
+    return plan
+
+
+def default_reallocation(
+    mmm: Any,
+    *,
+    deviation: float = DEFAULT_REALLOC_DEVIATION,
+    max_draws: int = 150,
+    random_seed: int | None = 42,
+) -> dict[str, Any]:
+    """A conservative, report-ready *default reallocation* of the current budget.
+
+    This is the plan surfaced in a generated client report when the user has not
+    run the Planner studio. It reallocates the **current total spend** (no budget
+    change) across channels, but constrains every channel to within
+    ``±deviation`` of its current spend — default **±20%** — so that:
+
+    * **no channel is turned off** (the floor is ``1 - deviation`` of current
+      spend, never zero), and
+    * **no recommendation extrapolates** beyond the spend range the model has
+      evidence for — the response curves are sampled on a multiplier grid that
+      stays inside ``[1 - deviation, 1 + deviation]`` (plus the ``1.0`` anchor),
+      so the greedy allocator only ever interpolates within observed support.
+
+    Args:
+        mmm: a fitted model exposing ``X_media_raw`` / ``channel_names`` /
+            ``sample_channel_contributions`` (the :func:`compute_response_curves`
+            contract).
+        deviation: max fractional move per channel (0.20 ⇒ ±20%).
+        max_draws: posterior draws for the curves and decision-uncertainty.
+        random_seed: seed for reproducible curve sampling.
+
+    Returns:
+        The report-ready ``allocation_results`` dict (see
+        :func:`_result_to_report_dict`), tagged with ``deviation_cap``.
+    """
+    deviation = float(deviation)
+    if not (0.0 < deviation < 1.0):
+        raise ValueError(f"deviation must be in (0, 1); got {deviation}.")
+    lo, hi = 1.0 - deviation, 1.0 + deviation
+    # A multiplier grid focused on the ±deviation band: endpoints included so the
+    # bounds land on sampled points (no extrapolation), plus an interior point on
+    # each side so the marginal-return interpolation has curvature to work with.
+    grid = tuple(sorted({lo, (lo + 1.0) / 2.0, 1.0, (1.0 + hi) / 2.0, hi}))
+    curves = compute_response_curves(
+        mmm, multipliers=grid, max_draws=max_draws, random_seed=random_seed
+    )
+    res = optimize_budget(
+        curves=curves,
+        min_multiplier=lo,
+        max_multiplier=hi,
+        max_draws=max_draws,
+        random_seed=random_seed,
+    )
+    return _result_to_report_dict(res, deviation=deviation)
 
 
 # ── Geo / DMA-level allocation (B4) ───────────────────────────────────────────
