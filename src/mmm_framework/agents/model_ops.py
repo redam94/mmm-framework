@@ -2411,6 +2411,99 @@ def validate_model(mmm: Any, results: Any = None, *, random_seed: int = 42) -> d
     }
 
 
+def slide_deck_notes(
+    mmm: Any,
+    results: Any = None,
+    *,
+    client: str | None = None,
+    kpi_name: str = "Revenue",
+    currency: str = "$",
+    break_even: float = 1.0,
+    margin: float | None = None,
+    hdi_prob: float = 0.8,
+) -> dict:
+    """Deterministic deck OUTLINE: build the deck and return each slide's light
+    facts (key / kind / title / notes / scalar metrics / is_summary) for the AI
+    insight + synthesis pass. No charts, no AI."""
+    try:
+        from mmm_framework.agents.deck_insights import light_metrics, slide_key
+        from mmm_framework.reporting.deck import build_deck
+
+        deck = build_deck(
+            mmm,
+            results,
+            client=client,
+            kpi_name=kpi_name,
+            currency=currency,
+            break_even=break_even,
+            margin=margin,
+            hdi_prob=hdi_prob,
+        )
+        notes = [
+            {
+                "key": slide_key(s),
+                "kind": s.kind,
+                "title": s.title,
+                "notes": s.notes,
+                "is_summary": s.is_summary,
+                "metrics": light_metrics(s),
+            }
+            for s in deck.slides
+        ]
+        return _ok(f"Outlined {len(notes)} slides.", {"slide_deck_notes": notes})
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Error building deck outline: {e}")
+
+
+def render_slide_deck(
+    mmm: Any,
+    results: Any = None,
+    *,
+    insights: dict | None = None,
+    client: str | None = None,
+    kpi_name: str = "Revenue",
+    currency: str = "$",
+    break_even: float = 1.0,
+    margin: float | None = None,
+    hdi_prob: float = 0.8,
+    template_path: str | None = None,
+    filename: str = "agent_slide_deck.pptx",
+) -> dict:
+    """Render the .pptx by filling the template from the model + (optional) AI
+    ``insights``, writing it into the session workspace. Deterministic given
+    ``insights``."""
+    try:
+        from mmm_framework.agents import workspace as _ws
+        from mmm_framework.agents.runtime import get_current_thread
+        from mmm_framework.reporting.deck.builder import build_pptx
+
+        out = str(_ws.report_path(filename, get_current_thread()))
+        build_pptx(
+            mmm,
+            template_path=template_path,
+            out_path=out,
+            insights=insights or {},
+            client=client,
+            kpi_name=kpi_name,
+            currency=currency,
+            break_even=break_even,
+            margin=margin,
+            hdi_prob=hdi_prob,
+        )
+        return _ok(
+            "Rendered the slide deck.",
+            {
+                "slide_deck": {
+                    "path": out,
+                    "filename": filename,
+                    "thread": get_current_thread(),
+                }
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Error rendering slide deck: {e}")
+
+
 OPS = {
     "roi_metrics": roi_metrics,
     "posterior_predictive_checks": posterior_predictive_checks,
@@ -2437,4 +2530,6 @@ OPS = {
     "experiment_economics": experiment_economics,
     "experiment_optimizer": experiment_optimizer,
     "identify_structural_parameters": identify_structural_parameters,
+    "slide_deck_notes": slide_deck_notes,
+    "render_slide_deck": render_slide_deck,
 }

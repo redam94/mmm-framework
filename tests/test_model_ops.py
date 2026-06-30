@@ -41,6 +41,9 @@ def test_ops_registry_complete():
         "refutation_suite",
         "cross_validation",
         "validate_model",
+        # Slide-deck ops
+        "slide_deck_notes",
+        "render_slide_deck",
     }
 
 
@@ -81,12 +84,15 @@ def test_ops_return_error_as_data_on_bad_model():
     """An op never raises for a compute failure — it returns the error as data so
     it can cross the future kernel boundary (PR-B). Checked for the model-only
     ops; parameterized ops have their own wiring tests."""
-    # validate_model is a BATTERY: it never returns an _err, it degrades each
-    # sub-check to an "Error" row and always returns a verdict table.
-    _battery_ops = {"validate_model"}
+    # Ops that intentionally DEGRADE instead of erroring on a bad/unfitted model:
+    # validate_model is a BATTERY (degrades each sub-check to an "Error" row and
+    # always returns a verdict table); slide_deck_notes is a best-effort OUTLINE
+    # (build_deck drops the slides it can't compute and still returns the title /
+    # summary / methodology skeleton).
+    _degrade_ops = {"validate_model", "slide_deck_notes"}
     checked = 0
     for name, op in M.OPS.items():
-        if name in _battery_ops or not _is_model_only_op(op):
+        if name in _degrade_ops or not _is_model_only_op(op):
             continue
         r = op(object())  # not a real model -> compute fails inside
         assert r["content"] is None, name

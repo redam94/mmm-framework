@@ -22,6 +22,11 @@ from .utils import (
     _get_scaling_params,
 )
 
+# Tolerance band (fraction of the optimal operating point) within which current
+# spend counts as "at" the optimum → hold; below it → increase. Used by
+# compute_response_zones for the shape-robust current-spend recommendation.
+_REC_TOL = 0.2
+
 
 def compute_saturation_curves_with_uncertainty(
     model: Any,
@@ -316,6 +321,108 @@ def _apply_saturation_derivative(
         return np.ones_like(base)
 
 
+def _mean_saturation_params(sat_params: dict[str, Any]) -> dict[str, Any]:
+    """Collapse per-posterior-sample saturation params to their posterior mean
+    (keeping the ``type`` key), for cheap shape-only computations."""
+    out: dict[str, Any] = {"type": sat_params.get("type")}
+    for k, v in sat_params.items():
+        if k == "type":
+            continue
+        out[k] = float(np.mean(v)) if isinstance(v, np.ndarray) else v
+    return out
+
+
+def _adaptive_max_spend(
+    sat_params: dict[str, Any],
+    scale: float,
+    current_spend: float,
+    *,
+    saturation_elasticity: float,
+    extend_frac: float = 0.6,
+    min_mult: float = 2.5,
+    max_mult: float = 60.0,
+    n_probe: int = 400,
+) -> float:
+    """Per-channel spend ceiling that frames *current → optimal → saturation*.
+
+    The whole point of the deck's deep-dive chart is to show where a channel sits
+    on its response curve and where the efficient knee / saturation onset are. A
+    fixed ``current × multiplier`` window (e.g. 2×) is useless: real fitted curves
+    are still near-linear at 2× current spend, so the optimal and saturation zones
+    fall off the right edge and the whole axis reads as "breakthrough".
+
+    The response-curve **elasticity** ``e(x) = x·sat'(x)/sat(x)`` (normalized input
+    ``x = spend/scale``) depends *only on the saturation shape* — ``β`` and
+    ``y_std`` cancel. It is monotone-decreasing for the concave forms and
+    hump-shaped for the S-shaped ones (logistic, Hill slope > 1), so we take the
+    **rightmost** spend at which ``e`` is still above the target and extend a
+    little past it: the grid reaches ``e = saturation_elasticity·extend_frac``
+    (just past the optimal/saturation boundary, so the saturation zone is
+    actually visible), then:
+
+    * **floor** at ``current × min_mult`` — a channel that saturates very early
+      still shows headroom past current spend, and
+    * **cap** at ``current × max_mult`` — a near-linear channel (elasticity never
+      drops) doesn't blow the axis out to infinity.
+    """
+    cur = float(current_spend)
+    base = cur if cur > 0 else float(scale)
+    cap = base * max_mult
+    floor = base * min_mult
+    target = max(float(saturation_elasticity) * extend_frac, 1e-3)
+
+    mp = _mean_saturation_params(sat_params)
+    x = np.linspace(cap / scale / n_probe, cap / scale, n_probe)
+    f = np.asarray(_apply_saturation(x, mp), dtype=float)
+    df = np.asarray(_apply_saturation_derivative(x, mp), dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        # toe (f≈0) elasticity → 1 for these forms; keep it "above" so the scan
+        # for the rightmost crossing isn't tricked by a numerically-zero toe.
+        e = np.where(f > 1e-12, x * df / f, 1.0)
+    x_cross = _largest_spend_at_or_above(x, e, target)  # normalized
+    ms = x_cross * scale * 1.15
+    if not np.isfinite(ms) or ms <= 0:
+        ms = floor
+    return float(min(max(ms, floor), cap))
+
+
+def _convex_region_end(
+    sat_params: dict[str, Any],
+    scale: float,
+    max_spend: float,
+    *,
+    n_probe: int = 400,
+) -> float:
+    """End of the convex **breakthrough** region — the spend at which marginal
+    return peaks (the response-curve inflection point).
+
+    A "breakthrough" / threshold level only exists for genuinely **S-shaped**
+    response curves (Hill with slope > 1, logistic), where the marginal return
+    *rises* with spend before it falls: below the inflection the channel hasn't
+    "broken through" yet (increasing returns), above it returns diminish. A
+    **concave** curve (exponential, Michaelis–Menten, tanh, Hill slope ≤ 1) has
+    its highest marginal return at the very first dollar and only declines — there
+    is *no* breakthrough threshold. This returns ``0.0`` for such curves, so the
+    breakthrough zone is correctly **empty** and the calculation is robust to the
+    saturation shape.
+
+    Detected from the posterior-mean saturation shape (``β``/``y_std`` cancel out
+    of the curvature), so it's noise-free: the breakthrough end is the spend that
+    maximizes the marginal-response derivative; if that maximum is at the toe
+    (marginal return never rises), the curve is concave and there is no zone.
+    """
+    if max_spend <= 0:
+        return 0.0
+    mp = _mean_saturation_params(sat_params)
+    x = np.linspace(max_spend / scale / n_probe, max_spend / scale, n_probe)
+    dfx = np.asarray(_apply_saturation_derivative(x, mp), dtype=float)
+    i = int(np.argmax(dfx))
+    # concave (or flat/linear): marginal return peaks at the toe ⇒ no breakthrough
+    if i <= 0 or not np.isfinite(dfx[i]) or dfx[i] <= dfx[0] * (1.0 + 1e-6):
+        return 0.0
+    return float(x[i] * scale)
+
+
 def _largest_spend_at_or_above(grid: np.ndarray, y: np.ndarray, thr: float) -> float:
     """Largest spend on ``grid`` where curve ``y`` is ≥ ``thr``, linearly
     interpolating the crossing.
@@ -345,22 +452,44 @@ def compute_response_zones(
     channels: list[str] | None = None,
     *,
     n_points: int = 60,
-    spend_multiplier: float = 2.0,
+    spend_multiplier: float | None = None,
     n_samples: int = 500,
     hdi_prob: float = 0.94,
     break_even: float = 1.0,
+    breakthrough_elasticity: float = 0.8,
+    saturation_elasticity: float = 0.5,
     band: float = 0.15,
 ) -> dict[str, SpendResponseZones]:
     """Per-channel ROI(spend) and **marginal ROI(spend)** curves with
-    breakthrough / optimal / saturation spend zones, defined on marginal-ROI
-    break-even bands rather than percent-of-response.
+    **shape-aware** breakthrough / optimal / saturation spend zones — NOT defined
+    by an absolute break-even threshold and NOT by percent of maximum response.
+
+    The zones are robust to the saturation curve's *shape*, ordered by increasing
+    spend:
+
+    * **breakthrough** — the **convex** region ``[0, inflection]`` where marginal
+      return *rises* with spend (increasing returns): a genuine threshold to
+      "break through". This exists only for **S-shaped** curves (Hill slope > 1,
+      logistic); a **concave** curve (exponential, Michaelis–Menten, tanh, Hill
+      slope ≤ 1) has *no* breakthrough level — its first dollar is its most
+      efficient — so this zone is correctly **empty** (see
+      :func:`_convex_region_end`).
+    * **optimal** — the efficient regime up to where the elasticity
+      ``e(s) = mROI(s)/ROI(s)`` falls below ``saturation_elasticity`` (the
+      ``optimal_spend`` operating point is the centre of the high-efficiency
+      elasticity band).
+    * **saturation** — ``e < saturation_elasticity`` (the marginal dollar earns
+      far less than the average — diminishing returns, reallocate).
+
+    The current-spend **recommendation** is by position relative to the zones and
+    the operating point (below the operating point → *increase*; at it → *hold*;
+    in saturation → *reduce*), so an efficient-but-under-invested concave channel
+    still reads "scale up" without inventing a breakthrough zone.
 
     For each channel the (per-period) response is ``β·sat(spend/scale)·y_std``;
     average ROI is ``response/spend`` and marginal ROI is the analytic derivative
-    ``β·sat'(spend/scale)·(1/scale)·y_std``. The zones partition the spend axis by
-    where marginal ROI sits relative to ``break_even`` (see
-    :class:`SpendResponseZones`). Everything is computed directly from the fitted
-    posterior — no AI calls.
+    ``β·sat'(spend/scale)·(1/scale)·y_std``. Everything is computed directly from
+    the fitted posterior — no AI calls.
 
     Parameters
     ----------
@@ -368,15 +497,29 @@ def compute_response_zones(
         Fitted model.
     channels : list[str], optional
         Channels to compute (default: all).
-    n_points, spend_multiplier, n_samples, hdi_prob
-        Spend grid resolution, max spend as a multiple of current per-period
-        spend, posterior subsample size, and HDI mass.
+    n_points, n_samples, hdi_prob
+        Spend grid resolution, posterior subsample size, and HDI mass.
+    spend_multiplier : float, optional
+        Max spend as a multiple of current per-period spend. The default
+        (``None``) instead picks the ceiling **adaptively per channel** so the
+        grid always spans through the optimal knee into saturation (see
+        :func:`_adaptive_max_spend`) — a fixed small multiple (e.g. 2×) leaves
+        real curves near-linear, collapsing every zone into "breakthrough". Pass
+        an explicit float to force a fixed ``current × multiplier`` window.
+    breakthrough_elasticity, saturation_elasticity : float
+        Elasticity (mROI/ROI) bounds of the high-efficiency band that defines the
+        ``optimal_spend`` operating point and the optimal/saturation boundary:
+        ``e ≥ breakthrough_elasticity`` (default 0.8) is the top of the band,
+        ``e < saturation_elasticity`` (default 0.5) is saturation. The
+        **breakthrough zone** itself is shape-based (the convex region), not this
+        elasticity threshold — so concave curves get no breakthrough zone.
     break_even : float
-        Marginal-ROI break-even target (default 1.0 — one KPI unit per dollar;
-        pass ``1/margin`` for a margin-adjusted target).
+        ROI/mROI reference level (default 1.0 — one KPI unit per dollar; pass
+        ``1/margin`` for a margin-adjusted target). It is the dashed reference line
+        on the chart and is reported on each curve, but it does not *define* the
+        zones.
     band : float
-        Fractional half-width of the "optimal" band around ``break_even``
-        (default 0.15 ⇒ optimal where mROI ∈ [0.85, 1.15]·break_even).
+        Deprecated; retained for signature stability.
 
     Returns
     -------
@@ -397,10 +540,8 @@ def compute_response_zones(
         if total_spend <= 0:
             continue
         current_spend = total_spend / n_obs
-        max_spend = current_spend * spend_multiplier
-        if max_spend <= 0:
+        if current_spend <= 0:
             continue
-        spend_grid = np.linspace(0.0, max_spend, n_points)
 
         sat_params = _get_saturation_params(model, posterior, channel)
         beta_samples = _get_beta_samples(posterior, channel)
@@ -420,6 +561,21 @@ def compute_response_zones(
             scale = float(model._media_max[channel]) + 1e-8
         else:
             scale = 1.0
+
+        # Spend ceiling: adaptive (default) so the grid spans current → optimal →
+        # saturation, or a fixed current × multiplier if one was requested.
+        if spend_multiplier is None:
+            max_spend = _adaptive_max_spend(
+                sat_params,
+                scale,
+                current_spend,
+                saturation_elasticity=saturation_elasticity,
+            )
+        else:
+            max_spend = current_spend * float(spend_multiplier)
+        if max_spend <= 0:
+            continue
+        spend_grid = np.linspace(0.0, max_spend, n_points)
         scaled = spend_grid / scale
 
         n_s = len(beta_samples)
@@ -463,31 +619,57 @@ def compute_response_zones(
         current_mroi = float(cur_mroi.mean())
         current_mroi_hdi = _compute_hdi(cur_mroi, hdi_prob)
 
-        # Zones from the posterior-mean mROI curve.
-        t_hi = break_even * (1.0 + band)
-        t_lo = break_even * (1.0 - band)
         gmax = float(spend_grid[-1])
-        s_bt_opt = _largest_spend_at_or_above(spend_grid, mroi_mean, t_hi)
-        s_opt_sat = _largest_spend_at_or_above(spend_grid, mroi_mean, t_lo)
-        s_opt_sat = max(s_opt_sat, s_bt_opt)  # keep ordering under noise
-        opt_spend_val = _largest_spend_at_or_above(spend_grid, mroi_mean, break_even)
-        # Only a meaningful optimum if mROI actually crosses break-even in range.
-        optimal_spend = (
-            float(opt_spend_val)
-            if (mroi_mean[0] >= break_even >= mroi_mean[-1])
-            else None
+        with np.errstate(divide="ignore", invalid="ignore"):
+            elasticity = np.where(roi_mean > 1e-12, mroi_mean / roi_mean, 0.0)
+
+        # Elasticity crossings (right edges): high-efficiency end (e≥
+        # breakthrough_elasticity) and the saturation onset (e<saturation_elasticity).
+        s_e_hi = _largest_spend_at_or_above(
+            spend_grid, elasticity, breakthrough_elasticity
         )
-        optimal_roi = None
-        if optimal_spend is not None:
+        s_e_lo = _largest_spend_at_or_above(
+            spend_grid, elasticity, saturation_elasticity
+        )
+        s_e_lo = max(s_e_lo, s_e_hi)  # keep ordering under noise
+
+        # SHAPE-AWARE zones (robust to concave vs S-shaped curves):
+        #   breakthrough = the CONVEX region [0, inflection] where marginal return
+        #     rises — a genuine threshold to "break through". EMPTY for concave
+        #     curves (exponential / Michaelis-Menten / tanh / Hill slope≤1), which
+        #     have no breakthrough level (their first dollar is the most efficient).
+        #   saturation  = [sat_start, gmax] where the marginal dollar earns far
+        #     below the average (elasticity < saturation_elasticity).
+        #   optimal     = the efficient regime between them.
+        bt_end = _convex_region_end(sat_params, scale, gmax)
+        sat_start = max(s_e_lo, bt_end)
+        breakthrough_range = (0.0, bt_end)
+        optimal_range = (bt_end, sat_start)
+        saturation_range = (sat_start, gmax)
+
+        # Efficient OPERATING POINT: centre of the high-efficiency elasticity band,
+        # kept inside the optimal zone (shape-independent; defined for every curve).
+        if s_e_lo > s_e_hi:
+            optimal_spend = float(min(max(0.5 * (s_e_hi + s_e_lo), bt_end), sat_start))
             oi = int(np.argmin(np.abs(spend_grid - optimal_spend)))
             optimal_roi = float(roi_mean[oi])
-
-        if current_mroi >= t_hi:
-            current_zone, recommendation = "breakthrough", "increase"
-        elif current_mroi >= t_lo:
-            current_zone, recommendation = "optimal", "hold"
         else:
+            optimal_spend, optimal_roi = None, None
+
+        # Current position + recommendation, by where current spend sits relative
+        # to the zones and the efficient operating point (NOT a fixed elasticity
+        # threshold) — so a concave curve's efficient-but-under-invested channel
+        # still reads "scale up" without inventing a breakthrough zone.
+        if current_spend >= sat_start:
             current_zone, recommendation = "saturation", "reduce"
+        else:
+            current_zone = "breakthrough" if current_spend < bt_end else "optimal"
+            if optimal_spend is not None and current_spend < optimal_spend * (
+                1.0 - _REC_TOL
+            ):
+                recommendation = "increase"
+            else:
+                recommendation = "hold"
 
         headroom = (
             float(optimal_spend - current_spend) if optimal_spend is not None else None
@@ -513,9 +695,9 @@ def compute_response_zones(
             current_mroi_hdi=current_mroi_hdi,
             break_even=break_even,
             band=band,
-            breakthrough_range=(0.0, s_bt_opt),
-            optimal_range=(s_bt_opt, s_opt_sat),
-            saturation_range=(s_opt_sat, gmax),
+            breakthrough_range=breakthrough_range,
+            optimal_range=optimal_range,
+            saturation_range=saturation_range,
             optimal_spend=optimal_spend,
             optimal_roi=optimal_roi,
             current_zone=current_zone,
@@ -533,4 +715,6 @@ __all__ = [
     "_get_beta_samples",
     "_apply_saturation",
     "_apply_saturation_derivative",
+    "_adaptive_max_spend",
+    "_convex_region_end",
 ]

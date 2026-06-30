@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { measurementService } from '../services/measurementService';
 import type {
+  DeckRequest,
   DesignRequest,
   ExperimentTransition,
   OptimizeRequest,
@@ -22,6 +23,8 @@ export const measurementKeys = {
     [...measurementKeys.all, 'simulation', projectId, jobId] as const,
   optimization: (projectId: string | null, jobId: string | null) =>
     [...measurementKeys.all, 'optimization', projectId, jobId] as const,
+  deck: (projectId: string | null, jobId: string | null) =>
+    [...measurementKeys.all, 'deck', projectId, jobId] as const,
 };
 
 export function useExperimentRegistry(projectId: string | null, status?: string) {
@@ -164,4 +167,33 @@ export function useCalibrationCoverage(projectId: string | null) {
     enabled: !!projectId,
     staleTime: 30000,
   });
+}
+
+/**
+ * PowerPoint slide-deck generation. `start` POSTs the deck options and stores the
+ * returned job_id; `job` polls until the build (model → AI insights → render)
+ * reaches done/error. `reset` clears the in-flight job.
+ */
+export function useSlideDeck(projectId: string | null) {
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const start = useMutation({
+    mutationFn: (body: DeckRequest) => measurementService.startDeckGeneration(projectId!, body),
+    onSuccess: (data) => setJobId(data.job_id),
+  });
+
+  const job = useQuery({
+    queryKey: measurementKeys.deck(projectId, jobId),
+    queryFn: () => measurementService.pollDeckJob(projectId!, jobId!),
+    enabled: !!projectId && !!jobId,
+    refetchInterval: (q) =>
+      ['done', 'error'].includes(q.state.data?.status ?? '') ? false : 2500,
+  });
+
+  const reset = () => {
+    setJobId(null);
+    start.reset();
+  };
+
+  return { start, job, reset, jobId };
 }
