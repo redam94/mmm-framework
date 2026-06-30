@@ -2746,7 +2746,7 @@ def generate_client_report(
     client_name: str = None,
     report_title: Optional[str] = None,
     analysis_period: Optional[str] = None,
-    template: str = "client",
+    template: str = "augur",
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
     config: InjectedConfig = None,
 ) -> Command:
@@ -2754,17 +2754,25 @@ def generate_client_report(
     Generate a clean, client-ready HTML report from the fitted model.
 
     Uses the project's confirmed client branding automatically (colors, client
-    name) — check it first with `get_preferences`. template: "client"
-    (default), "minimal" (summary + ROI), "presentation" (summary + ROI +
-    decomposition), or "full" (every section). See `list_templates`.
+    name) — check it first with `get_preferences`.
+
+    template (default "augur"): the editorial "Media Performance Readout" — a
+    narrative, evidence-coded CMO/planner deliverable with a masthead, KPI strip
+    and recommendations, a Scale/Test/Hold/Reduce channel scorecard, ROI &
+    uncertainty, marginal-vs-average return, saturation, reallocation, per-
+    channel deep dives, carryover, a posterior-predictive fit-over-time + checks
+    block, recommended tests and next steps, with AI-written insights woven
+    through. Other templates produce the classic technical report: "full" (every
+    section — the technical readout), "client", "presentation", "minimal". See
+    `list_templates`.
 
     Call this after `fit_mmm_model` when the user wants to share results externally.
 
     Args:
         client_name: Client/company name (defaults to the branded client name).
-        report_title: Optional report title (defaults to "Marketing Mix Model Results").
+        report_title: Optional report title (defaults to the readout title).
         analysis_period: Optional period string, e.g. "Q1–Q2 2024".
-        template: Report template name.
+        template: Report template name ("augur" default).
     """
     _activate_thread(config)
     mmm = _MODEL_CACHE.get("fitted_model")
@@ -2792,7 +2800,13 @@ def generate_client_report(
     if not client_name:
         client_name = (branding or {}).get("client_name") or "Client"
 
-    title = report_title or "Marketing Mix Model Results"
+    tpl = (template or "augur").strip().lower()
+    _AUGUR_ALIASES = {"augur", "media-readout", "media_readout", "readout"}
+    is_augur = tpl in _AUGUR_ALIASES
+    default_title = (
+        "Media Performance Readout" if is_augur else "Marketing Mix Model Results"
+    )
+    title = report_title or default_title
     report_path = str(_ws.report_path("agent_client_report.html"))
 
     try:
@@ -2804,10 +2818,21 @@ def generate_client_report(
             .with_title(title)
             .with_client(client_name)
         )
-        tpl = (template or "client").strip().lower()
-        if tpl == "minimal":
+        if is_augur:
+            tpl = "augur"
+            builder = builder.augur_readout()
+            # CMO/planner narrative is enriched by the LLM when available; the
+            # report falls back to grounded templated insights otherwise.
+            try:
+                from mmm_framework.agents.llm import build_llm
+
+                builder = builder.with_llm(build_llm())
+            except Exception:
+                pass
+        elif tpl == "minimal":
             builder = builder.minimal_report()
-        elif tpl == "full":
+        elif tpl in ("full", "technical"):
+            tpl = "full"
             builder = builder.enable_all_sections()
         elif tpl == "presentation":
             builder = builder.client_report()
@@ -2820,7 +2845,11 @@ def generate_client_report(
             builder = builder.with_analysis_period(analysis_period)
         branded = False
         if _brand_active(branding):
-            builder = builder.with_color_scheme(branding_to_color_scheme(branding))
+            # The Augur readout keeps its editorial cream/ink/evidence palette;
+            # branding only recolors the per-channel chart hues. The classic
+            # templates take the full branded color scheme.
+            if not is_augur:
+                builder = builder.with_color_scheme(branding_to_color_scheme(branding))
             channels = [
                 m.get("name")
                 for m in _normalized_spec(state.get("model_spec")).get(
@@ -3436,10 +3465,17 @@ def list_templates(
     if "report" in kinds:
         sections.append(
             "**Report templates** (use with `generate_client_report(template=...)`):\n"
-            "- `client` — clean client-ready report (default; no MCMC internals)\n"
-            "- `minimal` — executive summary + channel ROI only\n"
+            "- `augur` — **default**: the editorial *Media Performance Readout* — "
+            "narrative, evidence-coded (Scale/Test/Hold/Reduce), with a KPI strip, "
+            "channel scorecard, ROI & uncertainty, marginal return, saturation, "
+            "reallocation, per-channel deep dives, carryover, a posterior-predictive "
+            "fit-over-time + checks block, recommended tests, and AI-written CMO/"
+            "planner insights\n"
+            "- `full` — every section incl. diagnostics & methodology (the technical "
+            "readout the Augur report links to)\n"
+            "- `client` — clean classic client report (no MCMC internals)\n"
             "- `presentation` — summary, ROI, decomposition (deck-friendly)\n"
-            "- `full` — every section incl. diagnostics & methodology"
+            "- `minimal` — executive summary + channel ROI only"
         )
 
     if "palette" in kinds:

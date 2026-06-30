@@ -140,6 +140,40 @@ def test_report_includes_estimand_and_ppc_sections(fitted_model_and_panel):
     assert "ppcResiduals" in html
 
 
+@pytest.mark.slow
+def test_augur_readout_renders_from_real_model(fitted_model_and_panel):
+    """The Augur ``shell="augur"`` deliverable renders end-to-end from a real
+    fitted model — the extractor populates every field its sections rely on, and
+    both posterior-predictive blocks (fit-over-time + checks) are present with
+    grounded, templated CMO insights."""
+    from mmm_framework.reporting.generator import ReportBuilder
+
+    model, panel = fitted_model_and_panel
+    report = (
+        ReportBuilder()
+        .with_model(model, panel=panel)
+        .with_title("Media Performance Readout")
+        .with_client("Acme Corp")
+        .augur_readout()
+        .build()
+    )
+    html = report.render()
+
+    # editorial shell
+    assert "masthead-logo" in html
+    assert 'class="nav-num"' in html and "Fraunces" in html
+    # headline KPI strip is populated from the real extractor
+    assert 'class="kpi-grid"' in html
+    assert report.config.cmo_insights.get("headline")
+    # evidence-coded scorecard + ROI forest
+    assert "tier-chip" in html and "augurForest" in html
+    # NEW additions: posterior-predictive fit-over-time + checks
+    assert 'id="ppc-fit"' in html and "augurPPCFit" in html
+    assert 'id="ppc-checks"' in html and "augurPPCObsPred" in html
+    # recommended tests + measurement-loop next steps
+    assert 'id="tests"' in html and 'class="loop"' in html
+
+
 # =============================================================================
 # Fast extractor unit tests (no model fit) — finiteness + estimand mapping
 # =============================================================================

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 import html
 
-from .config import ReportConfig, SectionConfig, ColorScheme
+from .config import ReportConfig, SectionConfig, ColorScheme, ColorPalette
 from .design_tokens import TOKENS
 from .data_extractors import (
     MMMDataBundle,
@@ -36,6 +36,8 @@ from .sections import (
     CannibalizationSection,
     SECTION_REGISTRY,
 )
+from .augur_sections import AUGUR_SECTIONS
+from .augur_theme import augur_css, MASTHEAD_LOGO_SVG, AUGUR_FONTS_LINK
 
 
 class MMMReportGenerator:
@@ -86,8 +88,10 @@ class MMMReportGenerator:
         panel: Any | None = None,
         results: Any | None = None,
         sensitivity: dict | None = None,
+        llm: Any | None = None,
     ):
         self.config = config or ReportConfig()
+        self._llm = llm
 
         # Extract data from model or use provided data
         if data is not None:
@@ -102,12 +106,37 @@ class MMMReportGenerator:
         if sensitivity is not None:
             self.data.sensitivity_results = sensitivity
 
+        # Augur shell: fill the CMO/planner narrative (templated fallback +
+        # optional LLM enrichment) when the caller hasn't supplied one. Build a
+        # fresh ReportConfig via dataclasses.replace rather than mutating the
+        # frozen config in place — so a config reused across reports never leaks
+        # one report's insights into another. Never blocks.
+        if self.config.shell == "augur" and not self.config.cmo_insights:
+            try:
+                import dataclasses
+
+                from .insights import build_report_insights
+
+                self.config = dataclasses.replace(
+                    self.config,
+                    cmo_insights=build_report_insights(self.data, llm=self._llm),
+                )
+            except Exception:
+                pass
+
         # Initialize sections
         self._sections: list[Section] = []
         self._initialize_sections()
 
     def _initialize_sections(self):
         """Initialize report sections based on configuration."""
+        # The Augur "Media Performance Readout" uses a dedicated, ordered section
+        # set (narrative + evidence-coded) instead of the classic cards. Each
+        # Augur section gates on a ReportConfig SectionConfig and no-ops on
+        # missing bundle data, so a partial model still renders.
+        if self.config.shell == "augur":
+            self._initialize_augur_sections()
+            return
         # MMM-specific sections (channels/ROI/decomposition/saturation/geo/
         # mediators/cannibalization) gate OFF for a non-MMM family (e.g. a CFA);
         # the factor-analysis section gates ON only for non-MMM. Detected from the
@@ -175,6 +204,19 @@ class MMMReportGenerator:
                 section_config=section_config,
             )
             self._sections.append(section)
+
+    def _initialize_augur_sections(self):
+        """Build the ordered Augur "Media Performance Readout" section set."""
+        default = SectionConfig()
+        for _section_id, section_class, cfg_attr in AUGUR_SECTIONS:
+            section_config = getattr(self.config, cfg_attr, None) or default
+            self._sections.append(
+                section_class(
+                    data=self.data,
+                    config=self.config,
+                    section_config=section_config,
+                )
+            )
 
     def add_section(
         self,
@@ -265,6 +307,8 @@ class MMMReportGenerator:
 
     def _assemble_html(self, sections_html: str) -> str:
         """Assemble complete HTML document."""
+        if self.config.shell == "augur":
+            return self._assemble_html_augur(sections_html)
         generated_date = self.config.generated_date or datetime.now().strftime("%B %Y")
 
         # Build header: gradient hero — serif title, client/subtitle line,
@@ -388,6 +432,121 @@ class MMMReportGenerator:
 </body>
 </html>"""
 
+    def _assemble_html_augur(self, sections_html: str) -> str:
+        """Assemble the Augur "Media Performance Readout" document.
+
+        Editorial masthead + numbered sticky contents nav + cream/ink shell.
+        Preserves the three injection vectors of the default shell
+        (``{css}`` / ``{plotly_script}`` / ``{sections_html}``).
+        """
+        generated_date = self.config.generated_date or datetime.now().strftime("%B %Y")
+        enabled = [s for s in self._sections if s.is_enabled]
+
+        # Masthead
+        eyebrow = "Marketing mix modeling · Client &amp; planning readout"
+        meta_bits = []
+        if self.config.client:
+            meta_bits.append(f"Prepared for {html.escape(self.config.client)}")
+        if self.config.subtitle:
+            meta_bits.append(html.escape(self.config.subtitle))
+        if self.config.analysis_period:
+            meta_bits.append(html.escape(self.config.analysis_period))
+        meta_bits.append(generated_date)
+        meta_line = '<span class="sep">·</span>'.join(meta_bits)
+        conf = (
+            '<div class="conf">Confidential</div>' if self.config.confidential else ""
+        )
+        header = f"""
+        <header class="report-header">
+            <div class="masthead-logo">{MASTHEAD_LOGO_SVG}</div>
+            <div class="masthead-text">
+                <div class="masthead-eyebrow">{eyebrow}</div>
+                <h1>{html.escape(self.config.title)}</h1>
+                <div class="meta">{meta_line}</div>
+                {conf}
+            </div>
+        </header>
+        """
+
+        # Numbered sticky contents nav
+        nav_items = "".join(
+            f'<a class="nav-item" href="#{s.section_id}">'
+            f'<span class="nav-num">{i:02d}</span>{html.escape(s.title)}</a>'
+            for i, s in enumerate(enabled, start=1)
+        )
+        nav_html = (
+            '<nav class="report-nav" id="reportNav" aria-label="Report contents">'
+            '<div class="nav-head">Contents</div>'
+            f"{nav_items}</nav>"
+        )
+
+        # Footer / colophon
+        conf_line = ""
+        if self.config.confidential:
+            client_label = (
+                f" — {html.escape(self.config.client)}" if self.config.client else ""
+            )
+            conf_line = (
+                f'<p class="confidential-notice">CONFIDENTIAL{client_label} — '
+                "not for distribution</p>"
+            )
+        footer = f"""
+        <footer class="report-footer">
+            {conf_line}
+            <p>ROI, credible intervals, saturation curves and carryover rates are
+               output from a Bayesian marketing mix model; figures carry
+               {int(self.config.default_credible_interval * 100)}% credible
+               intervals unless noted. Weekly flighting patterns are illustrative —
+               modelled to be consistent with the channel-level estimates — and are
+               marked as such where they appear. Point estimates alone are not
+               decisions. Generated {generated_date} with the MMM Framework.</p>
+        </footer>
+        """
+
+        content_wrap = (
+            f'<div class="report-body">{nav_html}'
+            f'<div class="report-container">{header}{sections_html}{footer}</div></div>'
+        )
+
+        css = self._generate_css()
+        plotly_script = self._get_plotly_script()
+        scrollspy = """
+<script>
+(function() {
+  var items = Array.prototype.slice.call(document.querySelectorAll('.report-nav .nav-item'));
+  if (!items.length) return;
+  var sections = items.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); }).filter(Boolean);
+  function setActive(id){ items.forEach(function(a){ a.classList.toggle('active', a.getAttribute('href').slice(1)===id); }); }
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if (e.isIntersecting) setActive(e.target.id); });
+    }, { rootMargin:'-18% 0px -72% 0px', threshold:0 });
+    sections.forEach(function(s){ io.observe(s); });
+  }
+  if (sections[0]) setActive(sections[0].id);
+})();
+</script>"""
+
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{html.escape(self.config.title)}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    {AUGUR_FONTS_LINK}
+    {plotly_script}
+    <style>
+{css}
+    </style>
+</head>
+<body>
+    {content_wrap}
+    {scrollspy}
+</body>
+</html>"""
+
     def _get_plotly_script(self) -> str:
         """Get Plotly.js script tag."""
         if self.config.include_plotly_js:
@@ -396,6 +555,9 @@ class MMMReportGenerator:
 
     def _generate_css(self) -> str:
         """Generate CSS styles from configuration."""
+        if self.config.shell == "augur":
+            return augur_css(self.config.color_scheme)
+
         c = self.config.color_scheme
 
         return f"""
@@ -1005,8 +1167,40 @@ class ReportBuilder:
         self._panel: Any | None = None
         self._results: Any | None = None
         self._sensitivity: dict | None = None
+        self._llm: Any | None = None
         self._config_kwargs: dict = {}
         self._section_configs: dict[str, SectionConfig] = {}
+
+    def with_llm(self, llm: Any) -> ReportBuilder:
+        """Attach a LangChain chat model used to enrich CMO/planner narrative
+        in the Augur readout (best-effort; templated fallback otherwise)."""
+        self._llm = llm
+        return self
+
+    def with_insights(self, insights: dict[str, str]) -> ReportBuilder:
+        """Pre-supply CMO/planner narrative slots (skips insight generation)."""
+        self._config_kwargs["cmo_insights"] = dict(insights or {})
+        return self
+
+    def augur_readout(self) -> ReportBuilder:
+        """Configure the editorial "Media Performance Readout" (Augur) shell.
+
+        Sets the Augur palette + cream/ink shell, a numbered sticky contents
+        nav, a confidentiality notice and channel-name formatting. The Augur
+        section set (headline → reallocation → deep dives → posterior-predictive
+        fit & checks → tests → next steps) is selected by ``shell == "augur"``.
+        """
+        self._config_kwargs.update(
+            {
+                "shell": "augur",
+                "color_scheme": ColorScheme.from_palette(ColorPalette.AUGUR),
+                "large_number_format": "short",
+                "show_nav": True,
+                "confidential": True,
+                "format_channel_names": True,
+            }
+        )
+        return self
 
     def with_model(
         self, model: Any, panel: Any | None = None, results: Any | None = None
@@ -1144,4 +1338,5 @@ class ReportBuilder:
             panel=self._panel,
             results=self._results,
             sensitivity=self._sensitivity,
+            llm=self._llm,
         )

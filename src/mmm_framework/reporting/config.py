@@ -20,6 +20,7 @@ class ColorPalette(Enum):
     CORPORATE = "corporate"  # Blue/gray professional
     WARM = "warm"  # Warm earth tones
     MONOCHROME = "monochrome"  # Grayscale
+    AUGUR = "augur"  # Editorial cream/ink with sage/gold/steel/rust evidence tiers
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,10 @@ class ColorScheme:
     background_alt: str = TOKENS.background_alt
     surface: str = TOKENS.surface
     border: str = TOKENS.border
+    # Font used for in-chart text (Plotly layout font). Default keeps the
+    # historical "Source Sans 3" so existing reports are byte-identical; the
+    # Augur palette overrides it to "IBM Plex Sans" so charts match the shell.
+    font_sans: str = "Source Sans 3, sans-serif"
 
     @classmethod
     def from_palette(cls, palette: ColorPalette) -> ColorScheme:
@@ -89,6 +94,25 @@ class ColorScheme:
                 background_alt="#f0f0f0",
                 surface="#ffffff",
                 border="#dddddd",
+            ),
+            # Augur "Media Performance Readout" palette: cream page, ink text,
+            # sage (scale) primary, steel (hold) accent, gold (test) warning,
+            # rust (reduce) danger. Charts inherit these via to_plotly_layout.
+            ColorPalette.AUGUR: cls(
+                primary="#5a7a3a",  # sage-700 (scale / profitable)
+                primary_dark="#4a6d2a",  # sage-800
+                accent="#4a6d8a",  # steel-600 (hold / marginal)
+                accent_dark="#3a5a75",  # steel-700
+                warning="#b8860b",  # gold-600 (test / unproven)
+                danger="#a04535",  # rust-600 (reduce / below break-even)
+                success="#5a7a3a",  # sage
+                text="#3a4838",  # ink-700 (body)
+                text_muted="#7a8a78",  # ink-400
+                background="#faf8f3",  # cream-50
+                background_alt="#f3f0e6",  # cream-100
+                surface="#ffffff",
+                border="#e8e4d5",  # line-200
+                font_sans="IBM Plex Sans, system-ui, sans-serif",
             ),
         }
         return palettes.get(palette, cls())
@@ -177,6 +201,18 @@ class ReportConfig:
     font_family_sans: str = TOKENS.font_sans
     font_family_mono: str = TOKENS.font_mono
 
+    # Report shell / template aesthetic. "default" = the classic card layout;
+    # "augur" = the editorial "Media Performance Readout" (narrative, evidence-
+    # coded, with masthead + numbered contents nav). Selected by the section set
+    # and CSS in MMMReportGenerator.
+    shell: Literal["default", "augur"] = "default"
+
+    # Optional pre-computed CMO / media-planner narrative insights (keyed by slot,
+    # e.g. "headline", "standfirst", "channel:<name>", "tests", "next_steps").
+    # When empty and shell == "augur", the generator fills a deterministic
+    # templated fallback. See reporting/insights.py.
+    cmo_insights: dict[str, str] = field(default_factory=dict)
+
     # Global settings
     default_credible_interval: float = 0.8
     currency_symbol: str = "$"
@@ -205,6 +241,21 @@ class ReportConfig:
     cannibalization: SectionConfig = field(default_factory=SectionConfig)
     # Non-MMM family sections
     factor_analysis: SectionConfig = field(default_factory=SectionConfig)
+    # Augur ("Media Performance Readout") sections. Each Augur section no-ops on
+    # missing bundle data, so these default ON; they are only consulted when
+    # shell == "augur".
+    headline: SectionConfig = field(default_factory=SectionConfig)
+    marginal_returns: SectionConfig = field(default_factory=SectionConfig)
+    reallocation: SectionConfig = field(default_factory=SectionConfig)
+    flighting: SectionConfig = field(default_factory=SectionConfig)
+    deep_dives: SectionConfig = field(default_factory=SectionConfig)
+    carryover: SectionConfig = field(default_factory=SectionConfig)
+    # Posterior-predictive timeseries fit (observed vs predicted KPI over time
+    # with a credible band) — the dedicated PPC "does the model track reality?".
+    ppc_timeseries: SectionConfig = field(default_factory=SectionConfig)
+    recommended_tests: SectionConfig = field(default_factory=SectionConfig)
+    evidence_guide: SectionConfig = field(default_factory=SectionConfig)
+    next_steps: SectionConfig = field(default_factory=SectionConfig)
 
     # Output settings
     include_plotly_js: bool = True  # Embed Plotly.js (larger file, fully portable)
@@ -260,6 +311,43 @@ class ReportConfig:
                 enabled=True,
                 custom_notes="Contact data science team for technical details.",
             ),
+        )
+
+    @classmethod
+    def augur_readout(
+        cls,
+        title: str = "Media Performance Readout",
+        client: str | None = None,
+        *,
+        cmo_insights: dict[str, str] | None = None,
+    ) -> ReportConfig:
+        """Create the editorial "Media Performance Readout" (Augur) report.
+
+        A narrative, evidence-coded client deliverable: masthead + numbered
+        contents nav, a headline with a KPI strip and recommendations, a channel
+        scorecard with Scale/Test/Hold/Reduce tiers, ROI-with-uncertainty,
+        marginal-vs-average return, saturation, reallocation, per-channel deep
+        dives, carryover, a posterior-predictive fit-over-time + checks section,
+        and recommended tests / next steps. CMO/planner narrative is filled by
+        ``reporting.insights.build_report_insights`` (templated fallback +
+        optional LLM enrichment).
+        """
+        return cls(
+            title=title,
+            client=client,
+            shell="augur",
+            color_scheme=ColorScheme.from_palette(ColorPalette.AUGUR),
+            large_number_format="short",
+            show_nav=True,
+            confidential=True,
+            format_channel_names=True,
+            cmo_insights=dict(cmo_insights or {}),
+            # Goodness-of-fit checks are folded into the Augur "does the model
+            # hold up?" block; the classic standalone sections stay off.
+            sensitivity=SectionConfig(enabled=False),
+            diagnostics=SectionConfig(enabled=False),
+            methodology=SectionConfig(enabled=False),
+            causal_assumptions=SectionConfig(enabled=False),
         )
 
     def format_currency(self, value: float) -> str:
@@ -322,7 +410,9 @@ class ChartConfig:
             "paper_bgcolor": "transparent",
             "plot_bgcolor": "transparent",
             "font": {
-                "family": "Source Sans 3, sans-serif",
+                "family": getattr(
+                    color_scheme, "font_sans", "Source Sans 3, sans-serif"
+                ),
                 "color": color_scheme.text,
                 "size": 12,
             },
