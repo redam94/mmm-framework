@@ -997,6 +997,181 @@ def create_pit_ecdf(
     return fig
 
 
+def create_sbc_rank_histogram(
+    int_ranks: np.ndarray,
+    L: int,
+    *,
+    n_bins: int = 20,
+    n_sims: int | None = None,
+    prob: float = 0.95,
+    param_name: str = "",
+    shape: str | None = None,
+    title: str | None = None,
+) -> go.Figure:
+    """Simulation-Based Calibration rank histogram with a simultaneous band.
+
+    Bars are the counts of the SBC ranks ``r = #{posterior draws ≤ θ*}`` binned
+    over ``[0, L]``. Under a calibrated inference engine the ranks are
+    Uniform{0..L}, so the bars should sit on the dashed uniform line and inside
+    the grey simultaneous band ``prob`` of the time. ∪-shape ⇒ posterior too
+    narrow (overconfident); ∩-shape ⇒ too wide; skew ⇒ bias (Talts 2018).
+
+    Parameters
+    ----------
+    int_ranks : np.ndarray
+        Integer ranks in ``{0..L}``, one per simulation.
+    L : int
+        Number of (thinned) posterior draws per fit (rank range is ``0..L``).
+    n_bins, n_sims, prob, param_name, shape, title
+        Bins, simulation count (defaults to ``len(int_ranks)``), simultaneous
+        band coverage, and labelling.
+    """
+    from ...diagnostics.sbc import rank_hist_band, uniformity_chisq
+
+    r = np.asarray(int_ranks, dtype=float)
+    n = int(n_sims or r.size)
+    nb = min(n_bins, L + 1)
+    edges = np.linspace(-0.5, L + 0.5, nb + 1)
+    counts, _ = np.histogram(r, bins=edges)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    width = edges[1] - edges[0]
+
+    lower, upper = rank_hist_band(n, L, nb, prob=prob)
+    expected = n / nb
+
+    # Colour bars red when they fall outside the simultaneous band.
+    bar_colors = [
+        "#c97067" if (c < lo or c > hi) else "#6a8fa8"
+        for c, lo, hi in zip(counts, lower, upper)
+    ]
+
+    fig = go.Figure()
+    # simultaneous band (grey)
+    fig.add_trace(
+        go.Scatter(
+            x=centers.tolist() + centers[::-1].tolist(),
+            y=upper.tolist() + lower[::-1].tolist(),
+            fill="toself",
+            fillcolor="rgba(128,128,128,0.18)",
+            line=dict(color="rgba(255,255,255,0)"),
+            name=f"{int(prob * 100)}% simultaneous band",
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            x=centers.tolist(),
+            y=counts.tolist(),
+            width=width * 0.95,
+            marker_color=bar_colors,
+            name="Rank count",
+            hovertemplate="rank≈%{x:.0f}<br>count=%{y}<extra></extra>",
+        )
+    )
+    fig.add_hline(
+        y=expected,
+        line_dash="dash",
+        line_color="#555555",
+        annotation_text="uniform",
+        annotation_position="top right",
+    )
+
+    chi2, p, _ = uniformity_chisq(r.astype(int), L, nb)
+    sub = f"χ² p={p:.3f}"
+    if shape:
+        sub += f" · {shape}"
+    name = f" — {param_name}" if param_name else ""
+    fig.update_layout(
+        title=dict(
+            text=f"{title or f'SBC rank histogram{name}'}<br><sub>{sub}</sub>",
+            x=0.5,
+            xanchor="center",
+        ),
+        xaxis_title=f"Rank of θ* within {L} posterior draws",
+        yaxis_title="Count",
+        height=380,
+        autosize=True,
+        showlegend=False,
+        bargap=0.04,
+    )
+    return fig
+
+
+def create_sbc_ecdf_difference(
+    int_ranks: np.ndarray,
+    L: int,
+    *,
+    n_sims: int | None = None,
+    prob: float = 0.95,
+    n_points: int = 100,
+    param_name: str = "",
+    shape: str | None = None,
+    title: str | None = None,
+) -> go.Figure:
+    """SBC ECDF-difference plot with a Säilynoja simultaneous band.
+
+    Plots ``ECDF(u) − u`` for the normalized ranks ``u = (r+0.5)/(L+1)`` against
+    a flat-zero reference, with the grey simultaneous band the curve should stay
+    inside under calibration. More sensitive than the histogram to systematic
+    departures; a curve drifting above/below 0 indicates bias, a symmetric
+    bow indicates over/under-dispersion.
+    """
+    from ...diagnostics.sbc import ecdf_diff_band, normalized_ranks, uniformity_chisq
+
+    r = np.asarray(int_ranks, dtype=int)
+    n = int(n_sims or r.size)
+    u = np.sort(normalized_ranks(r, L))
+
+    z, lo, hi = ecdf_diff_band(n, prob=prob, n_points=n_points)
+    ecdf = np.searchsorted(u, z, side="right") / u.size
+    diff = ecdf - z
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=z.tolist() + z[::-1].tolist(),
+            y=hi.tolist() + lo[::-1].tolist(),
+            fill="toself",
+            fillcolor="rgba(128,128,128,0.18)",
+            line=dict(color="rgba(255,255,255,0)"),
+            name=f"{int(prob * 100)}% simultaneous band",
+            hoverinfo="skip",
+        )
+    )
+    fig.add_hline(y=0.0, line_dash="dash", line_color="#555555")
+    in_band = bool(np.all((diff >= lo - 1e-9) & (diff <= hi + 1e-9)))
+    fig.add_trace(
+        go.Scatter(
+            x=z.tolist(),
+            y=diff.tolist(),
+            mode="lines",
+            line=dict(color="#6a8fa8" if in_band else "#c97067", width=2),
+            name="ECDF − uniform",
+            hovertemplate="z=%{x:.2f}<br>ECDF−z=%{y:.3f}<extra></extra>",
+        )
+    )
+
+    chi2, p, _ = uniformity_chisq(r, L, min(20, L + 1))
+    sub = f"χ² p={p:.3f}"
+    if shape:
+        sub += f" · {shape}"
+    name = f" — {param_name}" if param_name else ""
+    fig.update_layout(
+        title=dict(
+            text=f"{title or f'SBC ECDF difference{name}'}<br><sub>{sub}</sub>",
+            x=0.5,
+            xanchor="center",
+        ),
+        xaxis_title="Normalized rank u",
+        yaxis_title="ECDF(u) − u",
+        height=380,
+        autosize=True,
+        showlegend=False,
+    )
+    fig.update_xaxes(range=[0, 1])
+    return fig
+
+
 def create_cv_fold_metrics_chart(
     fold_results: list,
     mean_rmse: float,
@@ -1336,6 +1511,8 @@ __all__ = [
     "create_residual_time_series_plot",
     "create_pit_histogram",
     "create_pit_ecdf",
+    "create_sbc_rank_histogram",
+    "create_sbc_ecdf_difference",
     "create_cv_fold_metrics_chart",
     "create_cv_coverage_chart",
     "create_cv_actual_vs_predicted_chart",
