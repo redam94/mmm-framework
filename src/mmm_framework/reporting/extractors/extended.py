@@ -736,19 +736,35 @@ class ExtendedMMMExtractor(DataExtractor, EstimandPPCMixin):
         posterior-mean saturated spend; spend is the raw channel total.
         """
         try:
+            from mmm_framework.reporting.helpers.measurement import (
+                resolve_channel_divisor,
+            )
+
             channels = self._get_channel_names()
-            X = np.asarray(self.model.X_media, dtype=float)
             roi: dict[str, dict[str, float]] = {}
             for c, ch in enumerate(channels):
-                spend = float(X[:, c].sum())
-                if spend <= 0:
+                # Measurement-aware divisor (ROI for spend/cpm/cpc/spend_column;
+                # efficiency per volume otherwise). Identical to the raw channel
+                # total for ordinary spend channels.
+                resolved = resolve_channel_divisor(self.model, ch)
+                spend = resolved.total
+                meta = resolved.meta
+                if not resolved.found or spend <= 0:
                     continue
                 coef = self._total_effect_samples(ch)
                 x_sat = self._media_x_sat(c, ch)
                 if coef is None or x_sat is None:
                     continue
                 contribution = coef * float(x_sat.sum())
-                roi[ch] = self._stats(contribution / spend)
+                roi[ch] = {
+                    **self._stats(contribution / spend),
+                    "reference": meta.reference,
+                    "metric_label": meta.roi_label,
+                    "value_units": meta.value_units,
+                    "is_monetary": meta.is_monetary,
+                    "measurement_unit": meta.unit.value,
+                    "cost_basis": meta.cost_basis,
+                }
             return roi or None
         except Exception as e:
             logger.warning(f"Extended channel ROI failed: {e}")

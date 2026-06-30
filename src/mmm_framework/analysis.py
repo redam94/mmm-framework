@@ -301,11 +301,14 @@ class MMMAnalyzer:
         # Get time mask
         time_mask = self.get_time_mask(time_period)
 
-        # Calculate spend and ROI
+        from mmm_framework.reporting.helpers.measurement import resolve_channel_divisor
+
+        # Calculate divisor and ROI / efficiency
         results = []
         for channel in self.channel_names:
-            ch_idx = self.channel_names.index(channel)
-            spend = self._model.X_media_raw[time_mask, ch_idx].sum()
+            resolved = resolve_channel_divisor(self._model, channel, mask=time_mask)
+            spend = resolved.total
+            meta = resolved.meta
             contribution = contributions.total_contributions[channel]
 
             roi = contribution / spend if spend > 0 else 0
@@ -316,6 +319,12 @@ class MMMAnalyzer:
                 "Total Contribution": contribution,
                 "Contribution %": contributions.contribution_pct[channel],
                 "ROI": roi,
+                "Metric": meta.roi_label,
+                "Value Units": meta.value_units,
+                "Divisor Units": meta.divisor_units,
+                "Reference": meta.reference,
+                "Is Monetary": meta.is_monetary,
+                "Measurement Unit": meta.unit.value,
             }
 
             # Add HDI if available

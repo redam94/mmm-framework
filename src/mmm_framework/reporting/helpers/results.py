@@ -24,11 +24,21 @@ class ROIResult:
     roi_mean: float
     roi_lower: float
     roi_upper: float
-    prob_positive: float  # P(ROI > 0)
-    prob_profitable: float  # P(ROI > 1)
+    prob_positive: float  # P(value > 0)
+    prob_profitable: float | None  # P(ROI > 1); None for efficiency metrics
     marginal_roi_mean: float | None = None
     marginal_roi_lower: float | None = None
     marginal_roi_upper: float | None = None
+    # Measurement metadata (impression-level ROI). Defaults describe a normal
+    # spend-based ROI so existing callers and serialized output are unchanged.
+    metric_is_monetary: bool = True
+    metric_label: str = "ROI"
+    marginal_label: str = "Marginal ROAS"
+    value_units: str = "ROI"
+    divisor_units: str = "$"
+    reference: float = 1.0
+    measurement_unit: str = "spend"
+    cost_basis: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -45,6 +55,14 @@ class ROIResult:
             "marginal_roi_mean": self.marginal_roi_mean,
             "marginal_roi_hdi_low": self.marginal_roi_lower,
             "marginal_roi_hdi_high": self.marginal_roi_upper,
+            "metric_is_monetary": self.metric_is_monetary,
+            "metric_label": self.metric_label,
+            "marginal_label": self.marginal_label,
+            "value_units": self.value_units,
+            "divisor_units": self.divisor_units,
+            "reference": self.reference,
+            "measurement_unit": self.measurement_unit,
+            "cost_basis": self.cost_basis,
         }
 
 

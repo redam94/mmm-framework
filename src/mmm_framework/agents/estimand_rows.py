@@ -39,19 +39,26 @@ def evaluate_estimand_rows(
     for key, r in out.items():
         name, _, channel = key.partition(":")
         extra = r.extra or {}
-        rows.append(
-            {
-                "estimand": name,
-                "channel": channel or "—",
-                "kind": r.kind,
-                "status": r.status,
-                "mean": None if r.mean is None else float(r.mean),
-                "hdi_low": None if r.hdi_low is None else float(r.hdi_low),
-                "hdi_high": None if r.hdi_high is None else float(r.hdi_high),
-                "units": r.units,
-                "hdi_prob": getattr(r, "hdi_prob", None),
-                "prob_positive": extra.get("prob_positive"),
-                "prob_profitable": extra.get("prob_profitable"),
-            }
-        )
+        row = {
+            "estimand": name,
+            "channel": channel or "—",
+            "kind": r.kind,
+            "status": r.status,
+            "mean": None if r.mean is None else float(r.mean),
+            "hdi_low": None if r.hdi_low is None else float(r.hdi_low),
+            "hdi_high": None if r.hdi_high is None else float(r.hdi_high),
+            "units": r.units,
+            "hdi_prob": getattr(r, "hdi_prob", None),
+            "prob_positive": extra.get("prob_positive"),
+            "prob_profitable": extra.get("prob_profitable"),
+        }
+        # Impression-level measurement metadata (ROI vs efficiency + break-even
+        # reference) so the Performance dashboard judges the estimand against the
+        # right reference (0 for efficiency, not 1). Absent ⇒ ordinary ROI.
+        if "metric_reference" in extra:
+            row["reference"] = extra.get("metric_reference")
+        for k in ("metric_is_monetary", "measurement_unit", "cost_basis"):
+            if extra.get(k) is not None:
+                row[k] = extra.get(k)
+        rows.append(row)
     return rows

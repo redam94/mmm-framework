@@ -444,6 +444,13 @@ class BayesianMMM:
         self.y_raw = self.panel.y.values.astype(np.float64)
         self.X_media_raw = self.panel.X_media.values.astype(np.float64)
 
+        # External per-channel dollar spend for impression/click channels that
+        # declare a ``spend_column`` (impression-level ROI). ``None`` when the
+        # modeled variable IS the spend. Does NOT enter the PyMC graph — it only
+        # feeds the ROI/efficiency divisor resolver (the response curve is fit on
+        # the modeled variable regardless).
+        self.spend_raw = getattr(self.panel, "spend_raw", None)
+
         if self.panel.X_controls is not None and self.panel.X_controls.shape[1] > 0:
             self.X_controls_raw = self.panel.X_controls.values.astype(np.float64)
         else:
@@ -2590,6 +2597,8 @@ class BayesianMMM:
         if compute_uncertainty and pair_seed is None:
             pair_seed = int(np.random.default_rng().integers(0, 2**31 - 1))
 
+        from mmm_framework.reporting.helpers.measurement import resolve_channel_divisor
+
         baseline_pred = self.predict(random_seed=pair_seed)
         baseline_total = baseline_pred.y_pred_mean[time_mask].sum()
         if compute_uncertainty:
@@ -2611,7 +2620,14 @@ class BayesianMMM:
 
             marginal_contrib = increased_total - baseline_total
 
-            current_spend = self.X_media_raw[time_mask, ch_idx].sum()
+            # The modeled variable above is perturbed in its native unit (which
+            # may be impressions/clicks); the denominator is the *spend-* or
+            # *volume-equivalent* increment, resolved from the measurement
+            # descriptor. For spend channels this is identical to the old
+            # ``X_media_raw[mask].sum() * (multiplier - 1)``.
+            resolved = resolve_channel_divisor(self, channel, mask=time_mask)
+            current_spend = resolved.total
+            meta = resolved.meta
             spend_increase = current_spend * (multiplier - 1)
 
             marginal_roas = (
@@ -2624,6 +2640,12 @@ class BayesianMMM:
                 f"Spend Increase ({spend_increase_pct}%)": spend_increase,
                 "Marginal Contribution": marginal_contrib,
                 "Marginal ROAS": marginal_roas,
+                "Metric": meta.marginal_label,
+                "Value Units": meta.value_units,
+                "Divisor Units": meta.divisor_units,
+                "Reference": meta.reference,
+                "Is Monetary": meta.is_monetary,
+                "Measurement Unit": meta.unit.value,
             }
 
             if compute_uncertainty:

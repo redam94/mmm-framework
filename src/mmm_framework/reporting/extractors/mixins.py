@@ -491,6 +491,20 @@ class EstimandPPCMixin:
                     val = _finite(extra.get(k)) if isinstance(extra, dict) else None
                     if val is not None:
                         entry[k] = val
+                # Impression-level measurement metadata (ROI vs efficiency, and
+                # the break-even reference) so the section renders + judges the
+                # estimand correctly. Absent for ordinary spend estimands.
+                if isinstance(extra, dict):
+                    if "metric_reference" in extra:
+                        entry["reference"] = _finite(extra.get("metric_reference"))
+                    for k in (
+                        "metric_label",
+                        "metric_is_monetary",
+                        "measurement_unit",
+                        "cost_basis",
+                    ):
+                        if extra.get(k) is not None:
+                            entry[k] = extra.get(k)
                 out[str(key)] = entry
 
             if out:

@@ -13,6 +13,7 @@ from ..config import (
     ControlVariableConfig,
     DimensionType,
     KPIConfig,
+    MeasurementUnit,
     MediaChannelConfig,
     PriorConfig,
     SaturationConfig,
@@ -52,6 +53,10 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
         self._coefficient_prior: PriorConfig | None = None
         self._parent_channel: str | None = None
         self._split_dimensions: list[DimensionType] = []
+        self._measurement_unit: MeasurementUnit = MeasurementUnit.SPEND
+        self._spend_column: str | None = None
+        self._cpm: float | None = None
+        self._cpc: float | None = None
 
     def with_adstock(self, config: AdstockConfig) -> Self:
         """Set adstock configuration."""
@@ -118,6 +123,43 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
         self._split_dimensions = list(dims)
         return self
 
+    def measured_in(self, unit: MeasurementUnit | str) -> Self:
+        """Declare how the modeled variable is measured.
+
+        ``"spend"`` (default) keeps normal ROI. ``"impressions"`` / ``"clicks"``
+        / ``"other"`` mark the variable as a *volume*, so ROI is resolved from a
+        ``spend_column`` / ``cpm`` / ``cpc`` if provided, else reported as
+        efficiency per 1,000 impressions (or per click / unit). The response
+        curve is always fit on the modeled variable regardless.
+        """
+        self._measurement_unit = MeasurementUnit(unit)
+        return self
+
+    def with_spend_column(self, column: str) -> Self:
+        """Use a SEPARATE MFF variable as the dollar spend for ROI (option a).
+
+        Implies a non-spend ``measurement_unit``; defaults it to impressions if
+        still ``spend``."""
+        self._spend_column = column
+        if self._measurement_unit is MeasurementUnit.SPEND:
+            self._measurement_unit = MeasurementUnit.IMPRESSIONS
+        return self
+
+    def with_cpm(self, cpm: float) -> Self:
+        """Derive ROI by costing the modeled impressions at ``cpm`` per 1,000
+        (option b). Implies impressions if ``measurement_unit`` is still spend."""
+        self._cpm = cpm
+        if self._measurement_unit is MeasurementUnit.SPEND:
+            self._measurement_unit = MeasurementUnit.IMPRESSIONS
+        return self
+
+    def with_cpc(self, cpc: float) -> Self:
+        """Derive ROI by costing the modeled clicks at ``cpc`` per click
+        (option b). Sets ``measurement_unit`` to clicks."""
+        self._cpc = cpc
+        self._measurement_unit = MeasurementUnit.CLICKS
+        return self
+
     def build(self) -> MediaChannelConfig:
         """Build the MediaChannelConfig object."""
         # Set defaults if not specified
@@ -142,6 +184,10 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
             coefficient_prior=coefficient_prior,
             parent_channel=self._parent_channel,
             split_dimensions=self._split_dimensions,
+            measurement_unit=self._measurement_unit,
+            spend_column=self._spend_column,
+            cpm=self._cpm,
+            cpc=self._cpc,
         )
 
 

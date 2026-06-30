@@ -20,6 +20,7 @@ from .config import (
     MediaChannelConfig,
     MFFConfig,
     VariableConfig,
+    VariableRole,
     MFFColumnConfig,
 )
 
@@ -134,13 +135,27 @@ def validate_mff_structure(df: pd.DataFrame, config: MFFConfig) -> list[str]:
     if missing_cols:
         raise MFFValidationError(f"Missing required columns: {missing_cols}")
 
-    # Check for expected variables
+    # Check for expected variables. A declared ``spend_column`` is referenced by
+    # a media channel (for impression-level ROI) but is not itself a modeled
+    # variable, so it is "expected" and must not warn as an ignored extra.
     actual_vars = set(df[cols.variable_name].unique())
-    expected_vars = set(config.variable_names)
+    spend_cols = {
+        m.spend_column
+        for m in config.media_channels
+        if getattr(m, "spend_column", None) is not None
+    }
+    expected_vars = set(config.variable_names) | spend_cols
 
-    missing_vars = expected_vars - actual_vars
+    missing_vars = set(config.variable_names) - actual_vars
     if missing_vars:
         raise MFFValidationError(f"Missing expected variables: {missing_vars}")
+
+    missing_spend = spend_cols - actual_vars
+    if missing_spend:
+        warnings_list.append(
+            f"Declared spend_column variable(s) absent from data (ROI will fall "
+            f"back to per-volume efficiency): {missing_spend}"
+        )
 
     extra_vars = actual_vars - expected_vars
     if extra_vars:
@@ -312,6 +327,13 @@ class PanelDataset:
     # the source, as opposed to filled — populated by RaggedMFFLoader. ``None`` on
     # the standard (fully-filled) loader path.
     explicit_nan_mask: dict[str, pd.Series] | None = None
+
+    # Per-channel external dollar-spend series (impression-level ROI, option a):
+    # ``{channel_name: aligned per-obs spend array}`` for channels that declare a
+    # ``MediaChannelConfig.spend_column``. ``None`` (the default) when no channel
+    # uses a separate spend column — the modeled variable is the spend, so ROI is
+    # divided by it directly. Aligned to the same index as ``X_media``.
+    spend_raw: dict[str, NDArray] | None = None
 
     @property
     def n_obs(self) -> int:
@@ -869,6 +891,10 @@ class MFFLoader:
         X_media = pd.DataFrame(media_series)
         X_media.index = target_index
 
+        # 3b. Build external spend series for impression/click channels that
+        # declare a separate ``spend_column`` (impression-level ROI, option a).
+        spend_raw = self._build_spend_raw(target_index)
+
         # 4. Build control matrix
         X_controls = None
         if self.config.controls:
@@ -908,9 +934,52 @@ class MFFLoader:
             index=target_index,
             config=self.config,
             media_stats=media_stats,
+            spend_raw=spend_raw,
         )
 
         return panel
+
+    def _build_spend_raw(
+        self, target_index: pd.MultiIndex | pd.DatetimeIndex
+    ) -> dict[str, NDArray] | None:
+        """Aligned per-obs dollar-spend series for channels declaring a
+        ``spend_column`` (impression-level ROI, option a).
+
+        Returns ``None`` when no channel uses a separate spend column. A missing
+        spend variable is surfaced as a warning (not a hard failure) — the ROI
+        resolver then degrades that channel to per-volume efficiency.
+        """
+        spend_channels = [
+            m
+            for m in self.config.media_channels
+            if getattr(m, "spend_column", None) is not None
+        ]
+        if not spend_channels:
+            return None
+
+        spend_raw: dict[str, NDArray] = {}
+        for media_config in spend_channels:
+            spend_cfg = VariableConfig(
+                name=media_config.spend_column,
+                role=VariableRole.MEDIA,
+                dimensions=list(media_config.dimensions),
+            )
+            try:
+                var_data = self._extract_variable(spend_cfg)
+            except MFFValidationError:
+                warnings.warn(
+                    f"Channel '{media_config.name}' declares spend_column="
+                    f"{media_config.spend_column!r} but that variable is absent from "
+                    "the data; ROI will fall back to per-volume efficiency.",
+                    stacklevel=2,
+                )
+                continue
+            aligned = self._align_to_target_dimensions(
+                var_data, spend_cfg, target_index
+            ).fillna(0.0)
+            spend_raw[media_config.name] = np.asarray(aligned.values, dtype=np.float64)
+
+        return spend_raw or None
 
 
 # =============================================================================
