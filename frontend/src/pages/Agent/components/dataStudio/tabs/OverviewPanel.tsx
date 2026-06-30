@@ -1,6 +1,6 @@
 import { DashWidget } from '../../common/DashWidget';
 import { StudioEdaChart, StudioTable } from '../StudioEdaChart';
-import { AnalysisLoading } from './AnalysisPanel';
+import { AnalysisLoading, EdaWarnings } from './AnalysisPanel';
 import { useStudioAnalysis } from '../useStudioAnalysis';
 import type { DataStudioState, StudioEdaResult } from '../../../types';
 
@@ -20,6 +20,7 @@ export function OverviewPanel({ state, runEda, rev }: { state: DataStudioState; 
   const ov = res?.analyses?.overview;
   return (
     <div className="space-y-4">
+      <EdaWarnings warnings={res?.warnings} />
       <DashWidget title="Dataset summary" dotColor="bg-indigo-500" color="indigo">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Stat label="Rows" value={state.n_rows.toLocaleString()} />

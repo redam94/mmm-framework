@@ -3,7 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { DashWidget } from '../../common/DashWidget';
 import { IssueRow, OutlierActionRow } from '../../tabs/EdaTab';
 import { StudioEdaChart, StudioTable } from '../StudioEdaChart';
-import { AnalysisLoading } from './AnalysisPanel';
+import { AnalysisLoading, EdaWarnings } from './AnalysisPanel';
 import { useStudioAnalysis } from '../useStudioAnalysis';
 import type { OutlierAction, StudioEdaResult, StudioOutlierSuggestion, TransformStep } from '../../../types';
 
@@ -53,6 +53,7 @@ export function OutliersPanel({
 
       {loading ? <AnalysisLoading /> : (
         <>
+          <EdaWarnings warnings={res?.warnings} />
           {(suggestions.length > 0 || damaged.length > 0) && (
             <DashWidget title={`Suggested fixes (${suggestions.length})`} dotColor="bg-amber-500" color="amber">
               <div className="space-y-2">

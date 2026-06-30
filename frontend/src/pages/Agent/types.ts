@@ -158,7 +158,7 @@ export type TransformStep =
   | { op: 'rename'; from: string; to: string }
   | { op: 'drop_columns'; columns: string[] }
   | { op: 'cast'; column: string; dtype: 'number' | 'integer' | 'string' | 'category' | 'boolean' | 'datetime' }
-  | { op: 'parse_date'; column?: string; format?: string }
+  | { op: 'parse_date'; column?: string; format?: string; dayfirst?: boolean }
   | { op: 'fill_missing'; columns?: string[]; strategy: 'mean' | 'median' | 'zero' | 'ffill' | 'bfill' | 'interpolate' | 'constant'; value?: number | string }
   | { op: 'drop_duplicates'; subset?: string[]; keep?: 'first' | 'last' }
   | { op: 'filter_rows'; column: string; operator: string; value?: unknown; value2?: unknown }
