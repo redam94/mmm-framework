@@ -622,10 +622,7 @@ from mmm_framework.mmm_extensions import (
 )
 
 # Method 1: Factory function (simplest)
-config = sparse_controls(
-    expected_nonzero=3,
-    "distribution", "price", "competitor_media",  # Confounders to exclude
-)
+config = sparse_controls(3, "distribution", "price", "competitor_media")
 
 # Method 2: Builder with full control
 config = (VariableSelectionConfigBuilder()
