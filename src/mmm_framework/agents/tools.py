@@ -2863,6 +2863,17 @@ def generate_client_report(
                 )
             branded = True
 
+        # Surface a conservative *default reallocation* in the report: reallocate
+        # the current budget with each channel held within ±20% of today's spend
+        # and inside the model's evidence range (so no channel is switched off and
+        # nothing extrapolates). Best-effort — never block the report on it.
+        try:
+            from mmm_framework.planning import default_reallocation
+
+            builder = builder.with_allocation(default_reallocation(mmm))
+        except Exception:
+            pass
+
         report = builder.build()
         report.to_html(report_path)
         summary = (

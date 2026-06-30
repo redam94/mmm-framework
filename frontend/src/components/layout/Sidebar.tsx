@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import {
   Bird,
   BookOpen,
+  CalendarRange,
   ChevronDown,
   Landmark,
   LogOut,
@@ -49,6 +50,7 @@ const NAV_ICONS: Record<string, NavItem['icon']> = {
   '/program': Orbit,
   '/experiments': Bird,
   '/performance': ScrollText,
+  '/planner': CalendarRange,
   '/portfolio': Telescope,
   '/workspace': MessageSquareText,
   '/atelier': Sprout,

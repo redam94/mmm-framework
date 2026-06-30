@@ -629,6 +629,167 @@ class AugurReallocationSection(AugurSection):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 07b — The optimized plan, in dollars (Planner allocation)
+# ─────────────────────────────────────────────────────────────────────────────
+class AugurAllocationSection(AugurSection):
+    """The optimized budget plan rendered in the Augur voice — current vs.
+    recommended spend per channel, with the portfolio uplift and its credible
+    interval.
+
+    This is the *quantitative* companion to the tier-based reallocation guidance
+    above: where that section says which way to lean, this one puts dollars on it.
+    Data-driven and default-off — it renders only when the bundle carries a
+    concrete ``allocation_results`` plan (from :func:`planning.default_reallocation`
+    in a report, or a saved Planner plan), so a model with no plan attached
+    silently omits it.
+    """
+
+    section_id = "allocation"
+    default_title = "The optimized plan, in dollars"
+    eyebrow = "Recommended allocation"
+
+    def render(self) -> str:
+        if not self.is_enabled:
+            return ""
+        alloc = getattr(self.data, "allocation_results", None)
+        if not isinstance(alloc, dict) or not alloc.get("allocation"):
+            return ""
+        parts = [
+            self._intro(alloc),
+            self._kpis(alloc),
+            self._table(alloc),
+        ]
+        if alloc.get("geo_allocation"):
+            parts.append(self._geo_table(alloc))
+        parts.append(self._note(alloc))
+        return self._wrap("".join(p for p in parts if p))
+
+    # ── pieces ────────────────────────────────────────────────────────────────
+    def _intro(self, alloc: dict) -> str:
+        dev = alloc.get("deviation_cap")
+        band = (
+            f" — moving each channel by at most ±{dev * 100:.0f}% of today's spend"
+            if isinstance(dev, (int, float)) and np.isfinite(dev)
+            else ""
+        )
+        return (
+            "<p>Holding total investment constant, this is where the model would "
+            f"move the money{band}. The split below maximizes expected return at "
+            "the same budget; treat the uplift range, not the single number, as the "
+            "size of the prize.</p>"
+        )
+
+    def _kpis(self, alloc: dict) -> str:
+        total = alloc.get("total_budget", 0.0)
+        uplift = alloc.get("expected_uplift", 0.0)
+        hdi = alloc.get("uplift_hdi") or [0.0, 0.0]
+        prob = alloc.get("prob_positive_uplift", 0.0)
+        cards = [
+            self._kpi(
+                "Budget allocated",
+                self._money(total),
+                "Same as the current total — a pure reallocation",
+            ),
+            self._kpi(
+                "Expected KPI uplift",
+                self._money(uplift),
+                f"90% range&nbsp; {self._money(hdi[0])} – {self._money(hdi[1])}",
+            ),
+            self._kpi(
+                "Chance it beats today",
+                self._pct(prob),
+                "Posterior probability the plan out-performs the current split",
+            ),
+        ]
+        return f'<div class="kpi-grid">{"".join(cards)}</div>'
+
+    @staticmethod
+    def _kpi(label: str, value: str, ci: str) -> str:
+        return (
+            f'<div class="kpi"><div class="label">{html.escape(label)}</div>'
+            f'<div class="value">{value}</div>'
+            f'<div class="ci">{ci}</div></div>'
+        )
+
+    @staticmethod
+    def _change_chip(chg: float) -> str:
+        """A tier-coloured change chip: sage for increases, rust for cuts, steel
+        for ≈no change. Reuses the scorecard's tier-chip CSS."""
+        if not np.isfinite(chg):
+            return '<span class="tier-chip t-hold">—</span>'
+        if chg > 1:
+            return f'<span class="tier-chip t-scale">+{chg:.0f}%</span>'
+        if chg < -1:
+            return f'<span class="tier-chip t-reduce">{chg:.0f}%</span>'
+        return '<span class="tier-chip t-hold">no change</span>'
+
+    def _table(self, alloc: dict) -> str:
+        body = []
+        for r in alloc["allocation"]:
+            name = r.get("channel", "")
+            swatch = self.config.channel_colors.get(name)
+            cur = float(r.get("current_spend", 0.0) or 0.0)
+            opt = float(r.get("optimal_spend", 0.0) or 0.0)
+            chg = float(r.get("change_pct", 0.0) or 0.0)
+            body.append(
+                f'<tr><td class="chname"><span class="swatch" '
+                f'style="background:{swatch}"></span>{self._ch(name)}</td>'
+                f'<td class="mono">{self._money(cur)}</td>'
+                f'<td class="mono">{self._money(opt)}</td>'
+                f"<td>{self._change_chip(chg)}</td></tr>"
+            )
+        return f"""
+            <table class="data-table">
+              <thead><tr><th>Channel</th><th>Current spend</th>
+                <th>Recommended</th><th>Change</th></tr></thead>
+              <tbody>{''.join(body)}</tbody>
+            </table>
+        """
+
+    def _geo_table(self, alloc: dict) -> str:
+        rows = alloc.get("geo_allocation") or []
+        if not rows:
+            return ""
+        body = []
+        for r in rows:
+            geo = self._ch(r.get("geo", ""))
+            name = self._ch(r.get("channel", ""))
+            cur = float(r.get("current_spend", 0.0) or 0.0)
+            opt = float(r.get("optimal_spend", 0.0) or 0.0)
+            chg = float(r.get("change_pct", 0.0) or 0.0)
+            body.append(
+                f"<tr><td>{geo}</td><td>{name}</td>"
+                f'<td class="mono">{self._money(cur)}</td>'
+                f'<td class="mono">{self._money(opt)}</td>'
+                f"<td>{self._change_chip(chg)}</td></tr>"
+            )
+        return f"""
+            <h3 style="margin-top:1.4rem">By geography</h3>
+            <table class="data-table">
+              <thead><tr><th>Geography</th><th>Channel</th><th>Current</th>
+                <th>Recommended</th><th>Change</th></tr></thead>
+              <tbody>{''.join(body)}</tbody>
+            </table>
+        """
+
+    def _note(self, alloc: dict) -> str:
+        dev = alloc.get("deviation_cap")
+        guard = (
+            f"Each channel is held within ±{dev * 100:.0f}% of its current spend, so "
+            "no channel is switched off and every move stays inside the range the "
+            "model has direct evidence for. "
+            if isinstance(dev, (int, float)) and np.isfinite(dev)
+            else ""
+        )
+        return (
+            f'<p class="note" style="margin-top:.85rem">{guard}A reallocation at '
+            "constant budget shifts weight toward the channels whose next dollar "
+            "still pays back; the uplift interval is the basis for the decision, "
+            "not the point estimate.</p>"
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 08 — The flighting plan (illustrative)
 # ─────────────────────────────────────────────────────────────────────────────
 class AugurFlightingSection(AugurSection):
@@ -1205,6 +1366,7 @@ AUGUR_SECTIONS: list[tuple[str, type[AugurSection], str]] = [
     ("marginal", AugurMarginalSection, "marginal_returns"),
     ("saturation", AugurSaturationSection, "saturation"),
     ("budget", AugurReallocationSection, "reallocation"),
+    ("allocation", AugurAllocationSection, "allocation"),
     ("flighting", AugurFlightingSection, "flighting"),
     ("deepdives", AugurDeepDivesSection, "deep_dives"),
     ("carryover", AugurCarryoverSection, "carryover"),
@@ -1225,6 +1387,7 @@ __all__ = [
     "AugurMarginalSection",
     "AugurSaturationSection",
     "AugurReallocationSection",
+    "AugurAllocationSection",
     "AugurFlightingSection",
     "AugurDeepDivesSection",
     "AugurCarryoverSection",

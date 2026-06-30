@@ -257,6 +257,12 @@ class ReportConfig:
     evidence_guide: SectionConfig = field(default_factory=SectionConfig)
     next_steps: SectionConfig = field(default_factory=SectionConfig)
 
+    # Budget-allocation plan (Planner). Default-OFF: AllocationSection is
+    # data-gated and renders only when a plan is attached to the bundle.
+    allocation: SectionConfig = field(
+        default_factory=lambda: SectionConfig(enabled=False)
+    )
+
     # Output settings
     include_plotly_js: bool = True  # Embed Plotly.js (larger file, fully portable)
     plotly_cdn_version: str = "2.27.0"  # Used if not embedding

@@ -334,3 +334,145 @@ class TestDefaultShellUnchanged:
         cfg = ReportConfig(title="Classic")
         MMMReportGenerator(data=_full_bundle(), config=cfg)
         assert cfg.cmo_insights == {}
+
+
+# ── Augur-native allocation section ───────────────────────────────────────────
+_ALLOC_PLAN = {
+    "total_budget": 39600.0,
+    "current_total": 39600.0,
+    "expected_uplift": 2100.0,
+    "uplift_hdi": [400.0, 4200.0],
+    "prob_positive_uplift": 0.88,
+    "deviation_cap": 0.20,
+    "allocation": [
+        {
+            "channel": "Video",
+            "current_spend": 4300.0,
+            "optimal_spend": 5160.0,
+            "change_pct": 20.0,
+        },
+        {
+            "channel": "TV",
+            "current_spend": 11300.0,
+            "optimal_spend": 9040.0,
+            "change_pct": -20.0,
+        },
+    ],
+}
+
+
+def _render_alloc(plan, bundle=None) -> str:
+    bundle = bundle if bundle is not None else _full_bundle()
+    return (
+        ReportBuilder()
+        .with_data(bundle)
+        .with_title("Media Performance Readout")
+        .with_client("Acme Corp")
+        .augur_readout()
+        .with_allocation(plan)
+        .build()
+        .render()
+    )
+
+
+class TestAugurAllocation:
+    def test_section_renders_when_plan_attached(self):
+        html = _render_alloc(_ALLOC_PLAN)
+        assert 'id="allocation"' in html
+        assert "The optimized plan" in html  # section title
+        assert 'class="kpi-grid"' in html
+        # tier-coloured change chips: sage up, rust down
+        assert "tier-chip t-scale" in html and "+20%" in html
+        assert "tier-chip t-reduce" in html and "-20%" in html
+
+    def test_deviation_guardrail_note(self):
+        m = re.search(
+            r'<section class="section" id="allocation">.*?</section>',
+            _render_alloc(_ALLOC_PLAN),
+            re.S,
+        )
+        assert m, "allocation section present"
+        sec = m.group(0)
+        assert "±20%" in sec
+        assert "no channel is switched off" in sec
+
+    def test_absent_without_plan(self):
+        # the default readout (no plan attached) omits the section entirely
+        assert 'id="allocation"' not in _render()
+
+    def test_nav_section_count_matches_with_plan(self):
+        html = _render_alloc(_ALLOC_PLAN)
+        n_sections = len(re.findall(r'<section class="section"', html))
+        n_nav = len(re.findall(r'class="nav-item"', html))
+        assert n_sections == n_nav
+
+    def test_empty_plan_is_ignored(self):
+        # with_allocation(None) / an empty plan must NOT enable the section
+        assert 'id="allocation"' not in _render_alloc(None)
+        assert 'id="allocation"' not in _render_alloc({"allocation": []})
+
+    def test_geo_table_when_present(self):
+        plan = dict(_ALLOC_PLAN)
+        plan["geo_allocation"] = [
+            {
+                "geo": "North",
+                "channel": "Video",
+                "current_spend": 2000.0,
+                "optimal_spend": 2400.0,
+                "change_pct": 20.0,
+            },
+        ]
+        html = _render_alloc(plan)
+        assert "By geography" in html and "North" in html
+
+    def test_channel_name_escaped_in_allocation(self):
+        plan = {
+            "total_budget": 100.0,
+            "current_total": 100.0,
+            "expected_uplift": 1.0,
+            "uplift_hdi": [0.0, 2.0],
+            "prob_positive_uplift": 0.5,
+            "deviation_cap": 0.20,
+            "allocation": [
+                {
+                    "channel": "<img src=x>",
+                    "current_spend": 50.0,
+                    "optimal_spend": 60.0,
+                    "change_pct": 20.0,
+                },
+            ],
+        }
+        bundle = _full_bundle(channels=["<img src=x>", "Search", "TV"])
+        m = re.search(
+            r'<section class="section" id="allocation">.*?</section>',
+            _render_alloc(plan, bundle),
+            re.S,
+        )
+        assert m, "allocation section present"
+        sec = m.group(0)
+        assert "<img" not in sec
+        assert "&lt;img" in sec
+
+
+class TestAllocationWiring:
+    def test_with_allocation_attaches_and_enables(self):
+        bundle = _full_bundle()
+        gen = ReportBuilder().with_data(bundle).with_allocation(_ALLOC_PLAN).build()
+        assert gen.data.allocation_results is _ALLOC_PLAN
+        assert gen.config.allocation.enabled is True
+
+    def test_no_allocation_leaves_section_off(self):
+        gen = ReportBuilder().with_data(_full_bundle()).build()
+        assert gen.config.allocation.enabled is False
+        assert gen.data.allocation_results is None
+
+    def test_classic_path_renders_allocation_when_attached(self):
+        # the SAME wiring drives the classic AllocationSection (non-augur shell)
+        gen = (
+            ReportBuilder()
+            .with_data(_full_bundle())
+            .with_allocation(_ALLOC_PLAN)
+            .build()
+        )
+        html = gen.render()
+        assert "Budget Allocation Plan" in html  # classic section title

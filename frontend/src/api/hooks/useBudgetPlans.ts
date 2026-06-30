@@ -1,49 +1,65 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../client';
+import { apiClient, API_BASE_URL } from '../client';
+import type { BudgetPlanResult, PlannerScenarioResult } from '../services/plannerService';
 
+/** A saved budget plan. ``plan_payload`` holds the rich studio result (an
+ * allocation BudgetPlanResult, or a scenario ScenarioResult) so a saved plan
+ * reopens with every panel intact. */
 export interface BudgetPlanInfo {
   plan_id: string;
   name: string;
-  description?: string;
-  model_id: string;
-  spend_changes: Record<string, number>;
-  baseline_outcome: number;
-  scenario_outcome: number;
-  outcome_change: number;
-  outcome_change_pct: number;
-  channel_details: Record<string, Record<string, number>>;
-  created_at: string;
-  project_id?: string;
+  description?: string | null;
+  model_id?: string | null;
+  project_id?: string | null;
+  kind: 'optimization' | 'scenario' | string;
+  spend_changes?: Record<string, number> | null;
+  baseline_outcome?: number | null;
+  scenario_outcome?: number | null;
+  outcome_change?: number | null;
+  outcome_change_pct?: number | null;
+  channel_details?: Record<string, unknown> | null;
+  plan_payload?: BudgetPlanResult | PlannerScenarioResult | Record<string, unknown> | null;
+  created_at: number | string;
+  updated_at: number | string;
 }
 
-export interface BudgetPlanCreateRequest {
+/** Upsert body — the FE persists an already-computed studio result (no model
+ * load on the backend). Pass ``plan_id`` to update an existing plan in place. */
+export interface BudgetPlanUpsertRequest {
+  plan_id?: string;
   name: string;
-  description?: string;
-  model_id: string;
-  spend_changes: Record<string, number>;
-  time_period?: [number, number];
-  project_id?: string;
+  description?: string | null;
+  project_id?: string | null;
+  model_id?: string | null;
+  kind?: 'optimization' | 'scenario';
+  spend_changes?: Record<string, number> | null;
+  baseline_outcome?: number | null;
+  scenario_outcome?: number | null;
+  outcome_change?: number | null;
+  outcome_change_pct?: number | null;
+  channel_details?: Record<string, unknown> | null;
+  plan_payload?: Record<string, unknown> | null;
 }
 
 export const budgetPlanKeys = {
   all: ['budget-plans'] as const,
   lists: () => [...budgetPlanKeys.all, 'list'] as const,
-  list: (params?: { model_id?: string; project_id?: string }) =>
+  list: (params?: { model_id?: string; project_id?: string | null }) =>
     [...budgetPlanKeys.lists(), params] as const,
   detail: (id: string) => [...budgetPlanKeys.all, 'detail', id] as const,
 };
 
-export function useBudgetPlans(params?: { model_id?: string; project_id?: string }) {
+export function useBudgetPlans(params?: { model_id?: string; project_id?: string | null }) {
   return useQuery({
     queryKey: budgetPlanKeys.list(params),
     queryFn: async () => {
       const { data } = await apiClient.get<{ plans: BudgetPlanInfo[]; total: number }>(
         '/budget-plans',
-        { params }
+        { params: params ?? undefined },
       );
       return data;
     },
-    staleTime: 30000,
+    staleTime: 15000,
   });
 }
 
@@ -55,14 +71,15 @@ export function useBudgetPlan(planId: string | undefined) {
       return data;
     },
     enabled: !!planId,
-    staleTime: 30000,
+    staleTime: 15000,
   });
 }
 
-export function useCreateBudgetPlan() {
+/** Create OR update a budget plan (POST /budget-plans; pass plan_id to update). */
+export function useSaveBudgetPlan() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (req: BudgetPlanCreateRequest) => {
+    mutationFn: async (req: BudgetPlanUpsertRequest) => {
       const { data } = await apiClient.post<BudgetPlanInfo>('/budget-plans', req);
       return data;
     },
@@ -79,4 +96,9 @@ export function useDeleteBudgetPlan() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: budgetPlanKeys.lists() }),
   });
+}
+
+/** Absolute URL to a plan's CSV flight-plan export (used by a download link). */
+export function budgetPlanCsvUrl(planId: string): string {
+  return `${API_BASE_URL}/budget-plans/${planId}/export.csv`;
 }

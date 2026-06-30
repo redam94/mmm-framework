@@ -20,6 +20,13 @@ import pandas as pd
 
 DEFAULT_MULTIPLIERS = (0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5)
 
+#: Default per-channel deviation cap for a *default reallocation* (the plan shown
+#: in a client report when the user has not run the Planner studio). Each
+#: channel may move at most ±20% from its current spend so no channel is turned
+#: off completely and every recommendation stays inside the spend range the model
+#: has direct evidence for. See :func:`default_reallocation`.
+DEFAULT_REALLOC_DEVIATION = 0.20
+
 
 @dataclass
 class ResponseCurves:
@@ -268,3 +275,236 @@ def optimize_budget(
         per_draw_alloc=per_draw_alloc,
         optimal_alloc=optimal,
     )
+
+
+def _result_to_report_dict(
+    res: BudgetOptimizationResult, *, deviation: float | None = None
+) -> dict[str, Any]:
+    """Flatten a :class:`BudgetOptimizationResult` into the report-ready dict the
+    ``AllocationSection`` / ``AugurAllocationSection`` / ``plan_budget`` op all
+    consume (``allocation`` rows + headline uplift fields)."""
+    t = res.table
+    allocation = [
+        {
+            "channel": str(r["channel"]),
+            "current_spend": float(r["current_spend"]),
+            "optimal_spend": float(r["optimal_spend"]),
+            "change_pct": float(r["change_pct"]),
+        }
+        for _, r in t.iterrows()
+    ]
+    plan: dict[str, Any] = {
+        "total_budget": float(res.total_budget),
+        "current_total": float(t["current_spend"].sum()),
+        "expected_uplift": float(res.expected_uplift),
+        "uplift_hdi": [float(res.uplift_hdi[0]), float(res.uplift_hdi[1])],
+        "prob_positive_uplift": float(res.prob_positive_uplift),
+        "n_draws": int(res.n_draws),
+        "allocation": allocation,
+        "notes": list(res.notes),
+    }
+    if deviation is not None:
+        plan["deviation_cap"] = float(deviation)
+    return plan
+
+
+def default_reallocation(
+    mmm: Any,
+    *,
+    deviation: float = DEFAULT_REALLOC_DEVIATION,
+    max_draws: int = 150,
+    random_seed: int | None = 42,
+) -> dict[str, Any]:
+    """A conservative, report-ready *default reallocation* of the current budget.
+
+    This is the plan surfaced in a generated client report when the user has not
+    run the Planner studio. It reallocates the **current total spend** (no budget
+    change) across channels, but constrains every channel to within
+    ``±deviation`` of its current spend — default **±20%** — so that:
+
+    * **no channel is turned off** (the floor is ``1 - deviation`` of current
+      spend, never zero), and
+    * **no recommendation extrapolates** beyond the spend range the model has
+      evidence for — the response curves are sampled on a multiplier grid that
+      stays inside ``[1 - deviation, 1 + deviation]`` (plus the ``1.0`` anchor),
+      so the greedy allocator only ever interpolates within observed support.
+
+    Args:
+        mmm: a fitted model exposing ``X_media_raw`` / ``channel_names`` /
+            ``sample_channel_contributions`` (the :func:`compute_response_curves`
+            contract).
+        deviation: max fractional move per channel (0.20 ⇒ ±20%).
+        max_draws: posterior draws for the curves and decision-uncertainty.
+        random_seed: seed for reproducible curve sampling.
+
+    Returns:
+        The report-ready ``allocation_results`` dict (see
+        :func:`_result_to_report_dict`), tagged with ``deviation_cap``.
+    """
+    deviation = float(deviation)
+    if not (0.0 < deviation < 1.0):
+        raise ValueError(f"deviation must be in (0, 1); got {deviation}.")
+    lo, hi = 1.0 - deviation, 1.0 + deviation
+    # A multiplier grid focused on the ±deviation band: endpoints included so the
+    # bounds land on sampled points (no extrapolation), plus an interior point on
+    # each side so the marginal-return interpolation has curvature to work with.
+    grid = tuple(sorted({lo, (lo + 1.0) / 2.0, 1.0, (1.0 + hi) / 2.0, hi}))
+    curves = compute_response_curves(
+        mmm, multipliers=grid, max_draws=max_draws, random_seed=random_seed
+    )
+    res = optimize_budget(
+        curves=curves,
+        min_multiplier=lo,
+        max_multiplier=hi,
+        max_draws=max_draws,
+        random_seed=random_seed,
+    )
+    return _result_to_report_dict(res, deviation=deviation)
+
+
+# ── Geo / DMA-level allocation (B4) ───────────────────────────────────────────
+# A geo panel exposes a separate response curve per (geography, channel) — each
+# observation's contribution depends only on that cell's own (per-cell adstocked)
+# media, so scaling every geo's spend by a multiplier and reading one geo's
+# summed contribution gives THAT geo's response, independent of the others. We
+# build one curve per arm and let the same exact greedy allocator move a single
+# national budget across all geo×channel arms at once (a frozen geo or a capped
+# channel is just a bound on its arms).
+
+#: Separator between the geo-index prefix and the channel name in a combined arm
+#: label. The prefix is the integer geo index (never a geo name) so splitting is
+#: unambiguous even if a geography's name contains the separator.
+GEO_ARM_SEP = " │ "
+
+
+def compute_response_curves_per_geo(
+    mmm: Any,
+    multipliers: tuple[float, ...] | None = None,
+    max_draws: int = 200,
+    random_seed: int | None = None,
+) -> dict[str, ResponseCurves]:
+    """Per-geography spend-response curves from a fitted geo panel.
+
+    One posterior-predictive evaluation per multiplier (all geos scaled together,
+    as in :func:`compute_response_curves`); contributions are then grouped by
+    ``mmm.geo_idx`` so each geography gets its own :class:`ResponseCurves` over
+    that geography's current spend. Requires ``mmm.has_geo``.
+    """
+    if not getattr(mmm, "has_geo", False) or int(getattr(mmm, "n_geos", 1)) <= 1:
+        raise ValueError(
+            "Model has no geo dimension — use compute_response_curves for national."
+        )
+    mults = np.asarray(multipliers if multipliers is not None else DEFAULT_MULTIPLIERS)
+    if 1.0 not in mults:
+        mults = np.sort(np.append(mults, 1.0))
+
+    X = mmm.X_media_raw
+    geo_idx = np.asarray(mmm.geo_idx)
+    geo_names = list(mmm.geo_names)
+    n_geos = len(geo_names)
+
+    per_mult_by_geo: dict[int, list[np.ndarray]] = {g: [] for g in range(n_geos)}
+    for i, m in enumerate(mults):
+        contrib = mmm.sample_channel_contributions(
+            X_media=X * float(m),
+            max_draws=max_draws,
+            random_seed=None if random_seed is None else random_seed + i,
+        )  # (D, n_obs, C)
+        for g in range(n_geos):
+            mask = geo_idx == g
+            per_mult_by_geo[g].append(contrib[:, mask, :].sum(axis=1))  # (D, C)
+
+    out: dict[str, ResponseCurves] = {}
+    for g, name in enumerate(geo_names):
+        mask = geo_idx == g
+        base_spend = X[mask].sum(axis=0)  # (C,)
+        # (G, D, C) -> (D, C, G)
+        contributions = np.stack(per_mult_by_geo[g], axis=0).transpose(1, 2, 0)
+        out[name] = ResponseCurves(
+            channel_names=list(mmm.channel_names),
+            multipliers=mults,
+            base_spend=base_spend,
+            contributions=contributions,
+        )
+    return out
+
+
+def combine_geo_curves(geo_curves: dict[str, ResponseCurves]) -> ResponseCurves:
+    """Flatten ``{geo: ResponseCurves}`` into a single :class:`ResponseCurves`
+    whose "channels" are ``"{geo_index} │ {channel}"`` arms, so the national
+    greedy optimizer can allocate one budget jointly across every geo×channel
+    arm. All inputs must share the same multipliers and channel ordering."""
+    geos = list(geo_curves)
+    if not geos:
+        raise ValueError("No geo curves to combine.")
+    mults = geo_curves[geos[0]].multipliers
+    arm_names: list[str] = []
+    base: list[float] = []
+    contribs: list[np.ndarray] = []
+    for g_idx, g in enumerate(geos):
+        rc = geo_curves[g]
+        for c, ch in enumerate(rc.channel_names):
+            arm_names.append(f"{g_idx}{GEO_ARM_SEP}{ch}")
+            base.append(float(rc.base_spend[c]))
+            contribs.append(rc.contributions[:, c, :])  # (D, G_mult)
+    contributions = np.stack(contribs, axis=1)  # (D, A, G_mult)
+    return ResponseCurves(
+        channel_names=arm_names,
+        multipliers=mults,
+        base_spend=np.asarray(base),
+        contributions=contributions,
+    )
+
+
+def optimize_budget_by_geo(
+    mmm: Any,
+    *,
+    total_budget: float | None = None,
+    budget_change_pct: float | None = None,
+    min_multiplier: float = 0.0,
+    max_multiplier: float = 2.0,
+    bounds: dict[str, tuple[float, float]] | None = None,
+    n_steps: int = 400,
+    max_draws: int = 200,
+    random_seed: int | None = None,
+) -> BudgetOptimizationResult:
+    """Allocate one national budget jointly across every (geo, channel) arm.
+
+    Builds per-geo curves, flattens them to arms, and reuses :func:`optimize_budget`
+    so the greedy marginal allocator, per-draw stability, and uplift diagnostics
+    are identical to the national path. The returned ``table`` gains a ``geo``
+    column and the ``channel`` column holds the bare channel name. Per-channel
+    ``bounds`` apply to that channel in **every** geography.
+    """
+    geo_curves = compute_response_curves_per_geo(
+        mmm, max_draws=max_draws, random_seed=random_seed
+    )
+    combined = combine_geo_curves(geo_curves)
+
+    arm_bounds: dict[str, tuple[float, float]] | None = None
+    if bounds:
+        arm_bounds = {}
+        for arm in combined.channel_names:
+            ch = arm.split(GEO_ARM_SEP, 1)[1]
+            if ch in bounds:
+                arm_bounds[arm] = bounds[ch]
+
+    res = optimize_budget(
+        curves=combined,
+        total_budget=total_budget,
+        budget_change_pct=budget_change_pct,
+        min_multiplier=min_multiplier,
+        max_multiplier=max_multiplier,
+        bounds=arm_bounds,
+        n_steps=n_steps,
+        max_draws=max_draws,
+        random_seed=random_seed,
+    )
+
+    geo_names = list(mmm.geo_names)
+    t = res.table.copy()
+    split = t["channel"].str.split(GEO_ARM_SEP, n=1, expand=True)
+    t.insert(0, "geo", [geo_names[int(g)] for g in split[0]])
+    t["channel"] = split[1].to_numpy()
+    res.table = t
+    return res

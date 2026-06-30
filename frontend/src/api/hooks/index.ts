@@ -1,12 +1,16 @@
-// Budget plan hooks
+// Budget plan hooks (Planner persistence)
 export {
   budgetPlanKeys,
   useBudgetPlans,
   useBudgetPlan,
-  useCreateBudgetPlan,
+  useSaveBudgetPlan,
   useDeleteBudgetPlan,
+  budgetPlanCsvUrl,
 } from './useBudgetPlans';
-export type { BudgetPlanInfo, BudgetPlanCreateRequest } from './useBudgetPlans';
+export type { BudgetPlanInfo, BudgetPlanUpsertRequest } from './useBudgetPlans';
+
+// Planner compute hooks (non-blocking optimize / what-if jobs)
+export { plannerKeys, usePlannerOptimization, usePlannerScenario } from './usePlanner';
 
 // Data hooks
 export {
