@@ -34,6 +34,8 @@
                 { href: 'variable-selection.html', label: 'Variable Selection' },
                 { href: 'scientific-modeling.html', label: 'Scientific Modeling' },
                 { href: 'measurement-calibration.html', label: 'Calibration Loop' },
+                { href: 'continuous-learning.html', label: 'Continuous Learning' },
+                { href: 'continuous-learning-math.html', label: 'Continuous Learning · Math' },
                 { href: 'identification-assumptions.html', label: 'Identification Assumptions' },
                 { href: 'technical-guide.html', label: 'Technical Guide' }
             ]

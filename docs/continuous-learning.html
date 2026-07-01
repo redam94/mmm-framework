@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuous Learning — Sequential Experimentation for Media Planning | MMM Framework</title>
+
+    <meta name="description" content="Continuous sequential learning: a model-free geo response-surface bandit that plans media budgets under uncertainty by running designed experiments one wave at a time.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/continuous-learning.html">
+    <meta property="og:title" content="Continuous Learning — Sequential Experimentation for Media Planning">
+    <meta property="og:description" content="A model-free geo response-surface bandit that plans media budgets under uncertainty by running designed experiments one wave at a time.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/continuous-learning.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <!-- Page-specific styles (figures + loop diagram); tokens only, palette locked -->
+    <style>
+        .screenshot-figure { margin: 1.75rem 0; }
+        .screenshot-figure img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border: 1px solid var(--color-border);
+            border-radius: 10px;
+            box-shadow: var(--shadow-md);
+        }
+        .screenshot-figure figcaption {
+            margin-top: 0.6rem;
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            line-height: 1.5;
+        }
+        .screenshot-figure figcaption .shot-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--augur-sage-600);
+            margin-right: 0.6em;
+        }
+        .loop-diagram {
+            background: var(--color-bg-alt);
+            border: 1px solid var(--color-border);
+            border-radius: 10px;
+            padding: 1.4rem 1.6rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.5;
+            color: var(--color-text);
+            overflow-x: auto;
+        }
+        .stage-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        .stage-grid .card h4 { margin: 0 0 0.4rem; }
+        .stage-grid .card .stage-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--augur-sage-600);
+        }
+        @media (max-width: 1024px) { .stage-grid { grid-template-columns: 1fr; } }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Continuous Learning — Sequential Experimentation for Media Planning">
+    <meta name="twitter:description" content="A model-free geo response-surface bandit that plans media budgets under uncertainty by running designed experiments one wave at a time.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/continuous-learning.html",
+          "name": "Continuous Learning — Sequential Experimentation for Media Planning | MMM Framework",
+          "description": "Continuous sequential learning: a model-free geo response-surface bandit that plans media budgets under uncertainty by running designed experiments one wave at a time.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/continuous-learning.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/continuous-learning.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/continuous-learning.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Continuous Learning",
+              "item": "https://redam94.github.io/mmm-framework/continuous-learning.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Continuous learning</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#cycle">The learning cycle</a></li>
+                <li><a href="#animation">Watch it learn</a></li>
+            </ul>
+
+            <h3>How it works</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#surface">The response surface</a></li>
+                <li><a href="#design">Designed experiments</a></li>
+                <li><a href="#planning">Planning under uncertainty</a></li>
+                <li><a href="#stopping">Knowing when to stop</a></li>
+            </ul>
+
+            <h3>In practice</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#hard">A harder problem</a></li>
+                <li><a href="#application">Media planning under uncertainty</a></li>
+                <li><a href="#assumptions">What it assumes</a></li>
+                <li><a href="#try">Try it</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Continuous learning — measuring your way to a plan</h1>
+            <p class="lead">A self-contained loop that learns how spend drives outcome <strong>directly from designed
+            experiments</strong> — one wave at a time, carrying its uncertainty forward — and turns that learning into a
+            budget you can defend. No pre-fit marketing-mix model required.</p>
+
+            <p>Most planning starts from a model fit to <em>observational history</em> and hopes past spend was exogenous
+            enough to be causal. Continuous learning takes the opposite route. It treats media planning as a
+            <strong>sequential experiment</strong>: run a small, designed batch of geo tests, fit a response surface to
+            what they measured, decide where the next dollar and the next test should go, and repeat — stopping when
+            another round of testing no longer pays for itself.</p>
+
+            <p>Because every wave is <em>experimentally assigned</em>, the answer is causal by construction, not by
+            assumption. And because the loop is Bayesian, the plan it produces arrives with its uncertainty attached: a
+            credible band on the recommended split, a funding line that says which channels clear break-even and with
+            what probability, and an explicit rule for when to stop testing and act.</p>
+
+            <div class="definition">
+                <h4>What this is</h4>
+                <p>A model-free <strong>geo response-surface bandit</strong>
+                (<code>mmm_framework.continuous_learning</code>): a lightweight Bayesian surface — Hill saturation plus
+                sign-informed channel synergies — fit from designed geo-week experiments, wrapped in a decision loop that
+                allocates budget, prices the next experiment, and knows when to quit. It complements, rather than
+                replaces, the model-anchored planner that sits on top of a fitted <code>BayesianMMM</code>.</p>
+            </div>
+
+            <h2 id="cycle">The learning cycle</h2>
+            <p>Each pass is a <strong>wave</strong>: a designed batch of geo cells run for a fixed window. The posterior is
+            carried across waves by refitting on <em>all</em> the data collected so far, so every wave borrows strength
+            from the last.</p>
+
+            <pre class="loop-diagram">   ┌────────────────────────────────────────────────────────────────┐
+   ▼                                                                │
+ FIT the surface ─▶ SCORE &amp; PICK the next test ─▶ RUN a designed ─▶ │
+ (posterior over    (Thompson split, funding      wave (geo         │
+  the response)      line, value-of-information)   holdouts)  ──▶ UPDATE
+   ▲                                                                │
+   └──────────────────────  STOP?  (expected regret vs. wave cost) ─┘</pre>
+
+            <div class="stage-grid">
+                <div class="card">
+                    <span class="stage-tag">1 · Fit</span>
+                    <h4>Learn the surface</h4>
+                    <p>Fit a Bayesian response surface to the accumulated experiments. The output is a full
+                    <em>posterior</em> — a distribution over how each channel converts spend to outcome, not a single
+                    curve.</p>
+                </div>
+                <div class="card">
+                    <span class="stage-tag">2 · Score &amp; pick</span>
+                    <h4>Value the next test</h4>
+                    <p>Score candidate next experiments by how much they would improve the <em>budget decision</em>
+                    (value of information), and probe where the model is least sure — not just where the mean looks
+                    best.</p>
+                </div>
+                <div class="card">
+                    <span class="stage-tag">3 · Run</span>
+                    <h4>Run a designed wave</h4>
+                    <p>Assign geos to a central-composite design around the current recommendation and hold them for a
+                    fixed window. Designed cross-sectional variation is what makes the readout causal.</p>
+                </div>
+                <div class="card">
+                    <span class="stage-tag">4 · Update &amp; decide</span>
+                    <h4>Refit, then stop or continue</h4>
+                    <p>Fold the readout in, refit, and re-price. When the expected value of another wave falls below its
+                    cost (the ENBS rule), the loop halts and hands you the plan.</p>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>💡 Model-free, but not evidence-free</h4>
+                <p>&ldquo;No model&rdquo; means no pre-fit observational MMM is required — the loop learns its own surface
+                from experiments. If you <em>do</em> have a fitted <code>BayesianMMM</code>, the model-anchored planner
+                (<a href="measurement-calibration.html">the calibration loop</a>) prioritizes experiments from that
+                model instead. The two share conventions and are meant to be used with whatever evidence you have.</p>
+            </div>
+
+            <h2 id="animation">Watch it learn</h2>
+            <p>The animation below is the whole loop in motion on a four-channel world of generic social surfaces
+            (<em>Chatter, Pulse, Orbit, Vibe</em>). It shows a two-dimensional slice of the allocation space —
+            <em>Pulse&nbsp;&times;&nbsp;Orbit</em>, with the other two channels held at their best — and how the model's
+            beliefs update as each designed wave lands.</p>
+
+            <figure class="screenshot-figure">
+                <img src="assets/animations/continuous-learning-cycle.gif" loading="lazy"
+                     width="1180" height="760"
+                     alt="Three surfaces updating over eighteen experiment waves: mean profit sharpens to a peak, the uncertainty surface collapses, and the acquisition point converges onto the exploit optimum, with the probed cells and the experiment readouts tracked below.">
+                <figcaption>
+                    <span class="shot-tag">Simulated · known truth</span>
+                    Eighteen designed waves. <strong>Top:</strong> the posterior-mean profit sharpens toward a peak; the
+                    <strong>uncertainty surface</strong> (value&nbsp;&times;&nbsp;SD of the response) shrinks where cells
+                    were probed; the <strong>acquisition</strong> surface (mean + an exploration bonus) points at the next
+                    test. Markers: the true optimum (gold&nbsp;&#9733;), the greedy &ldquo;exploit&rdquo; optimum
+                    (white&nbsp;&#9734;), and the &ldquo;explore&rdquo; acquisition optimum (black&nbsp;&#9670;).
+                    <strong>Middle-left overlay:</strong> the parameters searched — the probed cells (orange) and the
+                    recommendation trajectory (grey). <strong>Bottom:</strong> the experiment readouts — each wave's
+                    measured incremental KPI with its observation uncertainty (&plusmn;&nbsp;SE). Simulated on a world
+                    with known ground truth (fixed seed) so the recovery can be graded; the surfaces are the model's
+                    <em>beliefs</em>, not the truth.
+                </figcaption>
+            </figure>
+
+            <p>Read it as a story about uncertainty. Early on, the response surface is barely pinned down, so the black
+            acquisition diamond sits far from the greedy peak — it is worth <em>exploring</em>. As waves accumulate, the
+            uncertainty surface fades, the readouts trace out the dose-response, and the greedy optimum
+            (white&nbsp;&#9734;) settles onto the truth (gold&nbsp;&#9733;) while the acquisition point converges with
+            it: there is less and less left to learn. That convergence is exactly the stopping signal the loop watches
+            for.</p>
+
+            <h2 id="surface">How it works · the response surface</h2>
+            <p>This section is the intuition; for the full derivation — the expected-information-gain objective, the
+            Gaussian/Laplace acquisition, D- and D<sub>s</sub>-optimality, the knowledge gradient, and the ENBS stopping
+            rule, each mapped to the code — see the <a href="continuous-learning-math.html">mathematical foundations</a>
+            companion.</p>
+            <p>Everything rests on one differentiable function used in three places — the likelihood that fits it, the
+            simulator that generates from it, and the allocator that optimizes it — so the optimizer can never disagree
+            with the fitted model. Per geo-week, the incremental outcome of a scaled spend vector is the sum of each
+            channel's saturating response plus a sign-informed interaction block:</p>
+
+            <div class="math-block">
+                \[ R(s) = \sum_c \beta_c\, f_c(s_c) \;+\; \sum_{c \,&lt;\, c'} \gamma_{cc'}\, f_c(s_c)\, f_{c'}(s_{c'}) \]
+                <span class="equation-label">(1)</span>
+            </div>
+
+            <p>Here \( \beta_c \) is the channel ceiling and \( \gamma_{cc'} \) the synergy between a pair of channels —
+            <strong>positive</strong> for complementarity, <strong>negative</strong> for cannibalization (heavily
+            overlapping audiences). The object that matters is the per-channel <strong>activation</strong>
+            \( f_c(\cdot) \): the method needs only a <strong>smooth, monotonically increasing, saturating</strong>
+            curve with \( f_c(0) = 0 \) and values in \( [0, 1) \) — not one specific functional form. The single hard
+            requirement is that it be <em>differentiable</em>, because the allocator optimizes budget by following the
+            marginal response \( \partial R / \partial s_c \); the activation just needs a well-defined gradient
+            everywhere.</p>
+
+            <p>The loop's default choice is a <strong>Hill</strong> curve, which gives each channel its own onset,
+            steepness, and half-saturation:</p>
+
+            <div class="math-block">
+                \[ f_c(s_c) = \frac{s_c^{\alpha_c}}{\kappa_c^{\alpha_c} + s_c^{\alpha_c}} \]
+                <span class="equation-label">(2)</span>
+            </div>
+
+            <p>with \( \kappa_c \) the half-saturation (where the curve reaches half its ceiling) and \( \alpha_c \) the
+            shape. This is convention-identical to the framework's <code>SaturationType.HILL</code>, so a
+            continuous-learning posterior is directly comparable to a full MMM fit on the same channel. But the choice is
+            genuinely pluggable: the loop ships a <strong>logistic</strong> activation
+            \( f(s) = 1 - e^{-\lambda s} \) (a concave, no-inflection curve) that you select with one flag
+            (<code>activation="logistic"</code>) — the fit, the design, the planning, and the stopping rule are all
+            indifferent to which family you pick, and a Michaelis–Menten or tanh curve would drop in the same way.</p>
+
+            <div class="info">
+                <h4>Priors inform; the experiment decides</h4>
+                <p>The priors are weakly informative — non-negative ceilings, half-saturations of order one in scaled
+                units, and <em>sign-informed</em> synergy priors that encode which channel pairs are expected to
+                compete or complement. But the surface is identified by the designed experiment, not the prior: the
+                signs of the synergies recover robustly, while their magnitudes stay prior-sensitive and should be
+                treated as sign-reliable, magnitude-assumed until a wave probes them directly.</p>
+            </div>
+
+            <h2 id="design">Designed experiments · the waves</h2>
+            <p>A model is causal only because spend is <strong>experimentally assigned</strong>. Each wave uses a
+            <strong>central-composite design</strong> around the current operating point: a centre cell, axial cells that
+            move one channel at a time (the gradient), off-axis cells that move two channels together (the only way to
+            see a synergy), and shut-off cells that set a channel to zero (which break the confound between a channel's
+            main effect and its interactions).</p>
+
+            <p>Identification is non-negotiable, and the data contract builds it in:</p>
+            <ul>
+                <li>a <strong>pre-period</strong> where every geo runs the status-quo allocation — this pins each geo's
+                baseline and breaks the within-geo collinearity between baseline and incremental response; then</li>
+                <li>a <strong>test-period</strong> of designed cross-sectional variation (the central-composite cells,
+                assigned across geos) — this is the variation that identifies the surface.</li>
+            </ul>
+
+            <div class="warning">
+                <h4>⚠️ No designed variation, no causal answer</h4>
+                <p>Fit the same surface to observational spend with no pre/test split and no designed variation and the
+                loop degenerates to an ordinary MMM with the usual confounding — the priors carry everything and the
+                output is not causal. The pre-period and the designed cells are what make the readout an experiment
+                rather than a correlation.</p>
+            </div>
+
+            <h2 id="planning">Planning under uncertainty</h2>
+            <p>The decision each wave is: <em>given today's beliefs, how should the budget be split, and is that split
+            worth acting on yet?</em> Three readouts answer it, and all three are distributions, not point numbers.</p>
+
+            <h3 id="planning-thompson">A posterior over the optimal split</h3>
+            <p>Rather than optimize the average curve, the planner solves the allocation problem under <em>each</em>
+            posterior draw — Thompson sampling. The result is a <strong>distribution over the optimal split</strong>: its
+            mean is the recommendation, and its spread is the exploration signal that tells you which channels you are
+            still unsure how to fund. The response surface is non-concave (negative synergies create ridges), so the
+            allocator multi-starts and keeps the best.</p>
+
+            <h3 id="planning-funding">The funding line</h3>
+            <p>A channel is <strong>funded</strong> where the posterior says its marginal return clears break-even — where
+            \( P(\text{value} \cdot \partial R / \partial s_c \,&gt;\, 1) \,&gt;\, 0.5 \). The funding line is the decision readout each
+            wave: it names the channels worth another dollar, each with the <em>probability</em> that they are, so a
+            channel funded &ldquo;70% likely above the line&rdquo; is treated very differently from one at 95%.</p>
+
+            <h3 id="planning-acquisition">Explore versus exploit</h3>
+            <p>Where should the next test go? Not necessarily at the greedy peak. The <strong>acquisition</strong> surface
+            adds an exploration bonus to the mean — an upper-confidence-bound style score — so the next experiment is
+            pulled toward regions the model is least sure about. In the animation, the black diamond (acquisition) sits
+            off the white star (greedy peak) precisely because the uncertainty there is high; as the surface tightens,
+            the two converge.</p>
+
+            <div class="highlight-box">
+                <h4>The value of an experiment, in decision terms</h4>
+                <p>Under the hood, candidate tests are scored by how much they would improve the budget decision (a
+                value-of-information / knowledge-gradient calculation), which the framework can approximate cheaply with
+                a Laplace update rather than a full refit per candidate. The point is that a test is worth running when
+                what it teaches changes what you would do — not merely when it reduces a standard error.</p>
+            </div>
+
+            <h2 id="stopping">Knowing when to stop</h2>
+            <p>Continuous learning is only useful if it also knows when to <em>stop</em> learning. Each wave the loop
+            computes the <strong>expected regret</strong> — the profit still on the table from posterior uncertainty,
+            the gap between acting on today's consensus split and acting with perfect knowledge. Multiply that by the
+            margin and the population it affects, subtract the cost of running a wave, and you have the expected net
+            benefit of sampling:</p>
+
+            <div class="math-block">
+                \[ \text{ENBS} \;=\; \mathbb{E}[\text{regret}] \cdot \text{margin} \cdot \text{population} \;-\; \text{wave cost} \]
+                <span class="equation-label">(3)</span>
+            </div>
+
+            <p>While a channel's or a pair's share of the expected regret exceeds the cost of a wave that would resolve
+            it, keep testing. Once no wave's expected reallocation value clears its cost — ENBS ≤ 0 — halt and allocate.
+            The rule is what keeps the loop from testing forever or chasing noise; visually, it fires just as the
+            acquisition point stops moving.</p>
+
+            <h2 id="hard">A harder problem</h2>
+            <p>The clean world above converges quickly. Real media rarely does. The animation below runs the same loop on
+            a deliberately harder world: the two slice channels <em>strongly cannibalize</em> each other — a large
+            negative synergy, as if their audiences heavily overlap — so the response surface has a <strong>ridge</strong>.
+            You cannot fund both; the optimum is a narrow trade-off, the channels' main effects are close together (hard
+            to rank), and saturation is slow.</p>
+
+            <figure class="screenshot-figure">
+                <img src="assets/animations/continuous-learning-hard.gif" loading="lazy"
+                     width="1180" height="760"
+                     alt="The same learning loop on a hard world with strong cannibalization: the profit surface is a ridge rather than a peak, the exploit optimum wanders along the ridge, and convergence is slow and non-monotone.">
+                <figcaption>
+                    <span class="shot-tag">Simulated · hard problem</span>
+                    A ridge you cannot fund your way across. With strong Pulse&nbsp;&times;&nbsp;Orbit cannibalization the
+                    profit surface is a curved ridge, not a single hill — so the exploit optimum <em>wanders along the
+                    ridge</em>, the acquisition point keeps probing, the readouts stay noisy, and convergence is slow and
+                    non-monotone. The value-of-information rule keeps saying <em>keep testing</em>. Simulated on a world
+                    with known ground truth (fixed seed).
+                </figcaption>
+            </figure>
+
+            <p>This is the honest picture of measurement under uncertainty. Learning is not a smooth march to a known
+            answer; it is a sequence of noisy readouts that gradually rule out the wrong ridges. The loop's job is to
+            keep each test cheap and pointed at what still matters, and to be candid — through the uncertainty surface
+            and the funding line — about how much is still unknown.</p>
+
+            <h2 id="application">Application to media planning under uncertainty</h2>
+            <p>Why run planning this way? Because the numbers a plan rests on are rarely known, and pretending otherwise
+            is where budgets go to waste.</p>
+
+            <div class="two-col">
+                <div class="card">
+                    <h4>It defuses demand-chasing</h4>
+                    <p>Channels that ride demand — that spend more precisely when sales are already rising — look
+                    fantastic in an observational model that can't separate cause from confound. Designed experiments
+                    break that back-door path directly, so the loop credits <em>incremental</em> effect, not
+                    coincidence.</p>
+                </div>
+                <div class="card">
+                    <h4>It turns a big bet into small ones</h4>
+                    <p>Instead of committing a full budget on a single fitted curve, you commit a little, in a designed
+                    test, and let each readout de-risk the next allocation. The trust region moves toward the optimum as
+                    the evidence accrues.</p>
+                </div>
+                <div class="card">
+                    <h4>It reports what it doesn't know</h4>
+                    <p>The recommendation is a posterior mean with a credible band; the funding line gives each channel
+                    a probability of clearing break-even. A planner can act on the confident channels and keep testing
+                    the uncertain ones — rather than treating every point estimate as fact.</p>
+                </div>
+                <div class="card">
+                    <h4>It decides when to stop</h4>
+                    <p>The ENBS rule converts &ldquo;should we test more?&rdquo; from a gut call into arithmetic: keep
+                    testing while the profit still at risk from uncertainty outweighs the cost of a wave; otherwise
+                    allocate. No infinite testing, no chasing noise.</p>
+                </div>
+            </div>
+
+            <p>In practice this is a fit for the marketing organizations that already run geo experiments — dark markets,
+            matched-market lift tests, holdouts — and want a principled way to <em>sequence</em> them toward a budget
+            rather than running one-off tests and eyeballing the results. It pairs naturally with the model-anchored
+            calibration loop: use the model-free bandit when you have little usable history, and fold experiment
+            readouts back into a fitted MMM when you do.</p>
+
+            <div class="note">
+                <h4>💡 A plan is a decision under uncertainty, not a forecast</h4>
+                <p>The deliverable is not &ldquo;channel X returns 3.2×.&rdquo; It is &ldquo;shift budget toward X and Y;
+                X clears break-even with high probability, Y is close but uncertain, and one more geo wave on Y would pay
+                for itself.&rdquo; The uncertainty is the product, not a caveat on it.</p>
+            </div>
+
+            <h2 id="assumptions">What it assumes</h2>
+            <p>Every measurement method rests on assumptions; honesty means stating them.</p>
+            <ul>
+                <li><strong>Designed, randomized assignment.</strong> Geos must be assigned to cells (round-robin, or
+                stratified on pre-period level/variance). Without designed variation the causal claim collapses.</li>
+                <li><strong>A pinned baseline.</strong> The pre-period must share a common allocation so each geo's
+                intercept is identified separately from its incremental response.</li>
+                <li><strong>No cross-geo spillover.</strong> Treated geos are assumed not to contaminate control geos.
+                Overlapping media markets violate this and must be handled in the assignment.</li>
+                <li><strong>Structural stationarity.</strong> The response curve is assumed stable over the windows being
+                compared; a channel whose effectiveness shifts mid-flight breaks the surface.</li>
+                <li><strong>Non-randomizable channels stay honest.</strong> A walled-garden channel that can't be
+                geo-co-randomized is demoted to a main-effect-only estimate, and its synergies are flagged as
+                prior-driven, not measured.</li>
+            </ul>
+
+            <div class="warning">
+                <h4>⚠️ Sign-reliable, magnitude-assumed</h4>
+                <p>The signs of synergies and the ordering of the strong channels recover robustly; the magnitudes of
+                weakly-probed interactions track their priors. Never present a prior-dominated synergy magnitude as a
+                measured result — the loop's own prior-sensitivity audit exists to catch exactly this.</p>
+            </div>
+
+            <h2 id="try">Try it</h2>
+            <p>The whole loop is a small Python API. A single designed wave, a fit, and the three decision readouts:</p>
+
+            <pre><code class="language-python">import numpy as np
+import mmm_framework.continuous_learning as cl
+
+# A synthetic world with known ground truth (swap for your own geo panel).
+world = cl.make_world(seed=0)
+center = np.full(4, 0.7)                       # current operating allocation (scaled)
+
+# Run one designed central-composite wave, then fit the response surface.
+data = cl.simulate_panel(world, center, n_geo=80, t_pre=6, t_test=10, noise=0.5)
+post = cl.fit(data, channels=world.channels, pair_signs=cl.PAIR_SIGNS_EXAMPLE)
+
+# Plan under uncertainty: recommendation, funding line, value still on the table.
+rec = cl.recommend_allocation(post, B=3.2, value=5.0, mode="fixed")
+mroas_mean, prob_above_line, _ = cl.marginal_roas(post, rec, value=5.0)
+expected_regret, *_ = cl.expected_regret(post, B=3.2, value=5.0, mode="fixed")</code></pre>
+
+            <p>Or drive the full sequential loop end-to-end — refit-on-all-data across waves, with the ENBS stopping
+            rule — and read back the per-wave decision trace:</p>
+
+            <pre><code class="language-python">import mmm_framework.continuous_learning as cl
+
+world = cl.make_world(seed=0)
+trace = cl.run_closed_loop(
+    world, center=[0.7, 0.7, 0.7, 0.7], B=3.2, value=5.0,
+    margin=1.0, population=2.0, wave_cost=0.45, max_waves=4,
+)
+for wave in trace["history"]:
+    print(wave["wave"], wave["e_regret"], wave["enbs"], wave["stop"])</code></pre>
+
+            <div class="info">
+                <h4>Where to go next</h4>
+                <p>For the rigorous, code-faithful derivation of everything on this page — the EIG objective, the
+                Gaussian/Laplace acquisition, the knowledge gradient, and the stopping rule — see the
+                <a href="continuous-learning-math.html">mathematical foundations</a>. The model-anchored counterpart —
+                prioritizing and calibrating experiments <em>from</em> a fitted
+                model — is the <a href="measurement-calibration.html">calibration loop</a>. The
+                <a href="platform-overview.html">Augur platform</a> runs the whole measurement cycle end to end, and the
+                <a href="https://github.com/redam94/mmm-framework" target="_blank" rel="noopener">source and notebooks</a>
+                include a fully worked, executed walkthrough of everything on this page.</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

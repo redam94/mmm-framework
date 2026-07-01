@@ -1,0 +1,643 @@
+"""Tests for the model-free continuous-learning loop.
+
+Fast unit tests cover the surface math, the central-composite design, the
+allocator, and the stopping arithmetic (no MCMC). The slow tests are the three
+feasibility gates from the guide (``assets/continous_learning.md`` §8): recovery
+(fit a known world and get the effects back), the prior-sensitivity audit (the
+``gamma_scale`` knob), and closure/stopping (the loop carries the posterior, the
+recommendation tracks truth, and the ENBS rule fires before testing forever).
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+import mmm_framework.continuous_learning as cl
+from mmm_framework.continuous_learning import (
+    acquisition,
+    design,
+    model,
+    planner,
+    preprocess,
+    surface,
+)
+
+# ── fast: surface ─────────────────────────────────────────────────────────────
+
+
+def test_activation_half_saturation_and_monotone():
+    kappa = np.array([0.5, 1.0, 2.0])
+    alpha = np.array([1.0, 2.0, 3.0])
+    # at s == kappa the Hill fraction is exactly 0.5
+    f = np.asarray(surface.activation(kappa, kappa, alpha))
+    np.testing.assert_allclose(f, 0.5, atol=1e-6)
+    # strictly increasing in spend
+    lo = np.asarray(surface.activation(kappa * 0.5, kappa, alpha))
+    hi = np.asarray(surface.activation(kappa * 1.5, kappa, alpha))
+    assert np.all(lo < f) and np.all(f < hi)
+    # zero spend -> ~0 activation (shutoff cell), finite (no nan)
+    z = np.asarray(surface.activation(np.zeros(3), kappa, alpha))
+    assert np.all(np.isfinite(z)) and np.all(z < 1e-3)
+
+
+def test_incremental_no_interaction_is_sum_of_main_effects():
+    k = 3
+    spend = np.array([0.4, 0.8, 1.2])
+    beta = np.array([1.0, 2.0, 0.5])
+    kappa = np.array([0.6, 0.9, 1.1])
+    alpha = np.array([1.5, 2.0, 1.2])
+    gamma0 = np.zeros((k, k))
+    f = np.asarray(surface.activation(spend, kappa, alpha))
+    expected = float(np.sum(beta * f))
+    got = float(surface.incremental(spend, beta, kappa, alpha, gamma0))
+    assert got == pytest.approx(expected, rel=1e-6)
+
+
+def test_grad_incremental_matches_finite_difference():
+    spend = np.array([0.5, 0.7, 0.3, 0.9])
+    beta = np.array([2.0, 1.5, 1.0, 0.8])
+    kappa = np.array([0.8, 0.6, 1.0, 0.7])
+    alpha = np.array([2.0, 1.5, 2.5, 1.3])
+    gamma = np.zeros((4, 4))
+    gamma[0, 1] = -0.4
+    gamma[1, 2] = 0.3
+    import jax.numpy as jnp
+
+    g = np.asarray(
+        surface.grad_incremental(jnp.asarray(spend), beta, kappa, alpha, gamma)
+    )
+    # JAX runs float32 by default (as in production), so use a step large
+    # enough to avoid catastrophic cancellation and a float32-appropriate
+    # tolerance — still tight enough to catch a wrong/missing term (those move
+    # the gradient by O(0.1+)).
+    eps = 1e-3
+    fd = np.empty(4)
+    for c in range(4):
+        sp, sm = spend.copy(), spend.copy()
+        sp[c] += eps
+        sm[c] -= eps
+        fd[c] = (
+            float(surface.incremental(sp, beta, kappa, alpha, gamma))
+            - float(surface.incremental(sm, beta, kappa, alpha, gamma))
+        ) / (2 * eps)
+    np.testing.assert_allclose(g, fd, atol=5e-3)
+
+
+# ── fast: design ──────────────────────────────────────────────────────────────
+
+
+def test_central_composite_structure():
+    center = np.array([1.0, 1.0, 1.0, 1.0])
+    probe = [(0, 1), (1, 2)]
+    d = design.central_composite(center, 0.6, probe)
+    k = 4
+    assert d.shape == (1 + 2 * k + 2 * len(probe) + k, k)
+    np.testing.assert_allclose(d[0], center)  # center cell
+    assert np.all(d >= 0)  # non-negative
+    # the last K rows are shutoffs: each has exactly one zeroed channel
+    shutoffs = d[-k:]
+    for c in range(k):
+        assert shutoffs[c, c] == pytest.approx(0.0)
+
+
+def test_central_composite_rejects_bad_delta():
+    with pytest.raises(ValueError):
+        design.central_composite(np.ones(3), 0.0, [])
+    with pytest.raises(ValueError):
+        design.central_composite(np.ones(3), 1.5, [])
+
+
+def test_assign_geos_balanced_with_holdouts():
+    center = np.array([0.8, 0.8, 0.8])
+    d = design.central_composite(center, 0.5, [(0, 1)])
+    rng = np.random.default_rng(0)
+    geo_alloc, cell_idx = design.assign_geos(d, 30, rng, n_holdout=4, center=center)
+    assert geo_alloc.shape == (30, 3)
+    assert np.all(cell_idx[:4] == -1)  # first 4 are holdouts
+    assert np.allclose(geo_alloc[:4], center)  # ... held at status quo
+    assert cell_idx[4:].min() >= 0 and cell_idx[4:].max() < d.shape[0]
+
+
+# ── fast: planner ─────────────────────────────────────────────────────────────
+
+
+def _concave_params(k):
+    # alpha == 1 -> Hill is strictly concave (s / (k + s)), so the budget
+    # allocation problem has a unique optimum we can reason about.
+    return {
+        "beta": np.ones(k),
+        "kappa": np.ones(k),
+        "alpha": np.ones(k),
+        "gamma": np.zeros((k, k)),
+    }
+
+
+def test_allocator_symmetric_split_fixed_budget():
+    params = _concave_params(4)
+    alloc, _ = cl.allocate_under_sample(
+        params, B=4.0, value=5.0, mode="fixed", n_starts=4
+    )
+    assert alloc.sum() == pytest.approx(4.0, abs=1e-2)
+    np.testing.assert_allclose(alloc, 1.0, atol=0.05)  # identical channels -> equal
+
+
+def test_allocator_free_mode_drops_dead_channel():
+    params = _concave_params(2)
+    params["beta"] = np.array([3.0, 1e-6])  # second channel is worthless
+    alloc, _ = cl.allocate_under_sample(
+        params, B=5.0, value=2.0, mode="free", cap=5.0, n_starts=4
+    )
+    assert alloc[1] < 1e-2  # free budget: don't fund the dead channel
+    assert alloc[0] > 0.1
+
+
+def test_allocator_rejects_infeasible_fixed_budget_cap():
+    # fixed mode with cap < B/k makes the budget simplex unreachable
+    # (k*cap < B) -> fail loudly rather than return an off-simplex fallback.
+    params = _concave_params(4)
+    with pytest.raises(ValueError, match="infeasible"):
+        cl.allocate_under_sample(params, B=10.0, value=1.0, mode="fixed", cap=1.0)
+    # free mode has no such constraint -> fine
+    alloc, _ = cl.allocate_under_sample(params, B=10.0, value=1.0, mode="free", cap=1.0)
+    assert np.all(alloc <= 1.0 + 1e-6)
+
+
+def test_enbs_and_stop_arithmetic():
+    # E[regret]=0.2, margin=1, population=10 -> value 2.0; cost 1.5 -> ENBS 0.5
+    val = planner.enbs(0.2, margin=1.0, population=10.0, wave_cost=1.5)
+    assert val == pytest.approx(0.5)
+    stop, v = planner.should_stop(0.05, margin=1.0, population=10.0, wave_cost=1.5)
+    assert stop is True and v < 0
+
+
+# ── fast: model helpers ───────────────────────────────────────────────────────
+
+
+def test_demote_channel_zeros_its_pairs():
+    channels = ["Chatter", "Pulse", "Orbit", "Vibe"]
+    signs = model.demote_channel(channels, "Vibe")
+    # every pair touching Vibe (idx 3) -> "zero"
+    assert (
+        signs[(0, 3)] == "zero" and signs[(1, 3)] == "zero" and signs[(2, 3)] == "zero"
+    )
+    probe = model.probe_pairs_excluding(channels, "Vibe")
+    assert all(3 not in p for p in probe)
+
+
+def test_true_world_response_matches_surface():
+    world = cl.make_world(seed=3)
+    spend = np.array([[0.5, 0.6, 0.7, 0.4], [1.0, 0.2, 0.8, 0.9]])
+    got = world.response_mean(spend)
+    g = world.gamma_matrix()
+    want = np.array(
+        [
+            float(surface.incremental(row, world.beta, world.kappa, world.alpha, g))
+            for row in spend
+        ]
+    )
+    np.testing.assert_allclose(got, want, atol=1e-6)
+
+
+# ── fast: adstock pre-pass + CUPED (preprocess) ───────────────────────────────
+
+
+def test_adstock_panel_convolves_within_geo():
+    # n_geo=2, t_pre=1, t_test=3 -> T=4 weeks; impulse in geo 0 at week 0.
+    n_geo, t_pre, t_test = 2, 1, 3
+    spend = np.zeros((8, 1))  # rows: pre(w0:g0,g1) then test(w0,w1,w2 × g0,g1)
+    spend[0, 0] = 1.0  # geo 0, overall week 0
+    out = preprocess.adstock_panel(spend, n_geo, t_pre, t_test, alpha=0.5, l_max=6)
+    from mmm_framework.config.enums import AdstockType
+    from mmm_framework.transforms.adstock import adstock_weights
+
+    w = adstock_weights(AdstockType.GEOMETRIC, 6, alpha=0.5, normalize=True)
+    # geo-0 rows in overall-week order: 0 (pre w0), 2, 4, 6 (test w0..w2)
+    geo0 = out[[0, 2, 4, 6], 0]
+    np.testing.assert_allclose(geo0, w[:4], atol=1e-6)
+    assert np.allclose(out[[1, 3, 5, 7], 0], 0.0)  # geo 1 untouched (no spend)
+
+
+def test_cuped_reduces_geo_variance():
+    world = cl.make_world(seed=0)
+    center = np.array([0.8, 0.8, 0.8, 0.8])
+    data = cl.simulate_panel(
+        world, center, n_geo=60, t_pre=5, t_test=8, delta=0.6, noise=0.5, seed=1
+    )
+    adj, info = cl.cuped_adjust(data, t_pre=5)
+    assert 0.0 < info["var_reduction"] < 1.0
+    assert info["var_reduction"] == pytest.approx(1 - info["rho"] ** 2, abs=1e-9)
+    # the adjusted test-period geo means have lower variance than the raw ones
+    n_pre = 5 * 60
+    raw = np.array(
+        [data["y"][n_pre:][data["geo_idx"][n_pre:] == g].mean() for g in range(60)]
+    )
+    new = np.array(
+        [adj["y"][n_pre:][adj["geo_idx"][n_pre:] == g].mean() for g in range(60)]
+    )
+    assert np.var(new) < np.var(raw)
+
+
+# ── fast: acquisition (pure-EIG + Laplace KG) on a fabricated posterior ────────
+
+
+def _fake_posterior(world, n_geo=40, n=300, seed=0):
+    """A Gaussian-ish posterior around a known world — no MCMC needed."""
+    rng = np.random.default_rng(seed)
+    k = world.n_channels
+    s = {
+        "beta": np.abs(world.beta + 0.15 * rng.standard_normal((n, k))),
+        "kappa": np.abs(world.kappa + 0.08 * rng.standard_normal((n, k))),
+        "alpha": np.clip(world.alpha + 0.15 * rng.standard_normal((n, k)), 0.5, 5),
+        "A": rng.normal(4, 0.3, n),
+        "sigma_a": np.abs(rng.normal(1, 0.1, n)),
+        "sigma": np.abs(rng.normal(0.5, 0.05, n)),
+        "a_geo": rng.normal(4, 1, (n, n_geo)),
+    }
+    for idx, (i, j) in enumerate(world.pairs):
+        s[model.pair_name(world.channels, (i, j))] = world.gamma_pairs[
+            idx
+        ] + 0.15 * rng.standard_normal(n)
+    return cl.Posterior(
+        samples=s, channels=world.channels, pairs=world.pairs, pair_signs={}
+    )
+
+
+def test_theta_pack_unpack_roundtrip():
+    beta = np.array([1.0, 2.0])
+    kappa = np.array([0.5, 0.7])
+    alpha = np.array([1.5, 2.5])
+    gp = np.array([0.3])
+    th = acquisition.pack_theta(beta, kappa, alpha, gp)
+    b, kp, a, g = acquisition.unpack_theta(th, 2)
+    np.testing.assert_allclose(b, beta)
+    np.testing.assert_allclose(g, gp)
+    assert acquisition.gamma_indices(2, [(0, 1)]) == [6]
+
+
+def test_design_information_is_psd():
+    world = cl.make_world(seed=0)
+    post = _fake_posterior(world)
+    mu, sigma0 = acquisition.theta_moments(post)
+    dsg = cl.central_composite(np.array([0.7, 0.7, 0.7, 0.7]), 0.6, world.pairs)
+    lam = acquisition.design_information(
+        dsg, mu, sigma=0.4, k=world.n_channels, pairs=world.pairs, n_geo=40, t_test=8
+    )
+    assert np.allclose(lam, lam.T, atol=1e-8)
+    assert np.linalg.eigvalsh(lam).min() > -1e-8  # PSD
+
+
+def test_pure_eig_probing_lifts_synergy_identification():
+    world = cl.make_world(seed=0)
+    post = _fake_posterior(world)
+    center = np.array([0.7, 0.7, 0.7, 0.7])
+    full = cl.central_composite(center, 0.6, world.pairs)  # probes synergies
+    noprobe = cl.central_composite(center, 0.6, [])  # axial + shutoff only
+    ds_full = cl.design_eig(post, full, sigma=0.4, target="gamma", n_geo=40, t_test=8)
+    ds_no = cl.design_eig(post, noprobe, sigma=0.4, target="gamma", n_geo=40, t_test=8)
+    assert ds_full > ds_no >= 0.0  # off-axis cells identify gamma
+    # D-optimal (all params) >= D_s-optimal (gamma sub-block) for the same design
+    d_all = cl.design_eig(post, full, sigma=0.4, target="all", n_geo=40, t_test=8)
+    assert d_all >= ds_full
+
+
+def test_laplace_kg_finite_and_fast():
+    world = cl.make_world(seed=0)
+    post = _fake_posterior(world)
+    dsg = cl.central_composite(np.array([0.7, 0.7, 0.7, 0.7]), 0.6, world.pairs)
+    kg = cl.laplace_knowledge_gradient(
+        post,
+        dsg,
+        B=3.2,
+        value=5.0,
+        sigma=0.4,
+        n_geo=40,
+        t_test=8,
+        n_outcomes=32,
+        seed=0,
+    )
+    assert np.isfinite(kg)
+
+
+# ── fast: pluggable activations (not Hill-specific) ───────────────────────────
+
+
+def test_activation_registry_and_logistic_properties():
+    assert set(cl.ACTIVATIONS) >= {"hill", "logistic"}
+    lam = np.array([1.0, 2.0])
+    # logistic: f(0)=0, strictly increasing, saturating toward 1
+    z = np.asarray(cl.logistic(np.zeros(2), lam))
+    lo = np.asarray(cl.logistic(np.full(2, 0.5), lam))
+    hi = np.asarray(cl.logistic(np.full(2, 5.0), lam))
+    assert np.allclose(z, 0.0, atol=1e-6)
+    assert np.all(z < lo) and np.all(lo < hi) and np.all(hi < 1.0)
+    assert np.all(hi > 0.9)  # nearly saturated by 5 half-lives
+
+
+def test_surface_value_hill_matches_incremental():
+    # the general surface with the Hill activation reproduces `incremental`
+    spend = np.array([0.4, 0.9, 1.3])
+    beta = np.array([1.0, 2.0, 0.5])
+    kappa = np.array([0.6, 0.9, 1.1])
+    alpha = np.array([1.5, 2.0, 1.2])
+    gamma = np.zeros((3, 3))
+    gamma[0, 1] = -0.4
+    general = float(cl.surface_value(spend, beta, gamma, cl.activation, (kappa, alpha)))
+    direct = float(surface.incremental(spend, beta, kappa, alpha, gamma))
+    assert general == pytest.approx(direct, rel=1e-6)
+
+
+def test_true_world_logistic_response_matches_surface():
+    world = cl.make_world_logistic(seed=1)
+    assert world.activation == "logistic" and "lam" in world.shape
+    spend = np.array([[0.5, 0.6, 0.7, 0.4], [1.0, 0.2, 0.8, 0.9]])
+    got = world.response_mean(spend)
+    want = np.asarray(
+        cl.surface_over_rows(
+            spend, world.beta, world.gamma_matrix(), world.act_fn(), world.shape_tuple()
+        )
+    )
+    np.testing.assert_allclose(got, want, atol=1e-6)
+
+
+def test_hill_mixture_activation_properties():
+    """The mixture activation is registered, well-behaved, and strictly more
+    expressive than a single Hill (it can bend where one Hill cannot)."""
+    assert "hill_mixture" in cl.ACTIVATIONS
+    names, fn = cl.ACTIVATIONS["hill_mixture"]
+    assert names == ("kappa1", "alpha1", "kappa2", "alpha2", "w")
+    s = np.linspace(0, 2.0, 50)
+    k1, a1, k2, a2, w = 0.35, 4.0, 1.5, 2.0, 0.5
+    f = np.asarray(fn(s, k1, a1, k2, a2, w))
+    assert f[0] == pytest.approx(0.0, abs=1e-6)  # f(0)=0
+    assert np.all(np.diff(f) >= -1e-9)  # monotone non-decreasing
+    assert f[-1] < 1.0  # saturating below 1
+    # equals the explicit weighted sum of two Hills
+    want = w * np.asarray(cl.activation(s, k1, a1)) + (1 - w) * np.asarray(
+        cl.activation(s, k2, a2)
+    )
+    np.testing.assert_allclose(f, want, atol=1e-6)
+    # a two-phase mixture reaches a DIFFERENT shape than either single Hill —
+    # its mid-range value is not reproducible by averaging the components' kappas
+    single = np.asarray(cl.activation(s, 0.5 * (k1 + k2), 0.5 * (a1 + a2)))
+    assert np.max(np.abs(f - single)) > 0.03
+
+
+def test_true_world_hill_mixture_response_matches_surface():
+    world = cl.make_world_hill_mixture(seed=1)
+    assert world.activation == "hill_mixture"
+    assert {"kappa1", "alpha1", "kappa2", "alpha2", "w"} <= set(world.shape)
+    spend = np.array([[0.5, 0.6, 0.7, 0.4], [1.0, 0.2, 0.8, 0.9]])
+    got = world.response_mean(spend)
+    want = np.asarray(
+        cl.surface_over_rows(
+            spend, world.beta, world.gamma_matrix(), world.act_fn(), world.shape_tuple()
+        )
+    )
+    np.testing.assert_allclose(got, want, atol=1e-6)
+
+
+def test_acquisition_is_hill_only():
+    # the fast Laplace-KG / pure-EIG packs the Hill params; a logistic posterior
+    # must be rejected with a clear error (the planner readouts still work).
+    world = cl.make_world_logistic(seed=0)
+    rng = np.random.default_rng(0)
+    n, k = 100, world.n_channels
+    s = {
+        "beta": np.abs(world.beta + 0.1 * rng.standard_normal((n, k))),
+        "lam": np.abs(world.shape["lam"] + 0.1 * rng.standard_normal((n, k))),
+        "a_geo": rng.normal(4, 1, (n, 30)),
+    }
+    for idx, (i, j) in enumerate(world.pairs):
+        s[model.pair_name(world.channels, (i, j))] = world.gamma_pairs[
+            idx
+        ] + 0.1 * rng.standard_normal(n)
+    post = cl.Posterior(
+        samples=s, channels=world.channels, pairs=world.pairs, activation="logistic"
+    )
+    with pytest.raises(NotImplementedError, match="Hill"):
+        acquisition.theta_moments(post)
+
+
+# ── slow: the three feasibility gates ─────────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def recovered():
+    """Fit a known world once; reused by the recovery assertions."""
+    world = cl.make_world(seed=0)
+    center = np.array([0.8, 0.8, 0.8, 0.8])
+    data = cl.simulate_panel(
+        world, center, n_geo=80, t_pre=6, t_test=10, delta=0.6, noise=0.5, seed=1
+    )
+    post = cl.fit(
+        data,
+        channels=world.channels,
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        num_warmup=400,
+        num_samples=400,
+        num_chains=2,
+        seed=0,
+    )
+    return world, post
+
+
+@pytest.mark.slow
+def test_recovery_main_effects_and_synergy_signs(recovered):
+    world, post = recovered
+    beta_hat = post.samples["beta"].mean(0)
+    # the strongest channel (Chatter) is recovered as strongest
+    assert int(np.argmax(beta_hat)) == int(np.argmax(world.beta))
+    # main-effect ordering tracks truth (rank correlation)
+    from scipy.stats import spearmanr
+
+    rho = spearmanr(beta_hat, world.beta).correlation
+    assert rho >= 0.8
+    # sign-informed synergies: cannibalization negative, complementarities positive
+    gs = post.gamma_summary()
+    assert gs["gamma_Chatter_Pulse"]["mean"] < 0.0  # neg pair
+    assert gs["gamma_Pulse_Orbit"]["mean"] > 0.0  # pos pair
+    assert gs["gamma_Orbit_Vibe"]["mean"] > 0.0  # pos pair
+    # and a healthy fit
+    assert post.diagnostics["max_rhat"] is None or post.diagnostics["max_rhat"] < 1.2
+
+
+@pytest.mark.slow
+def test_recovered_posterior_plans_a_sensible_funding_line(recovered):
+    world, post = recovered
+    rec = cl.recommend_allocation(post, B=3.2, value=5.0, q=200, mode="fixed")
+    assert rec.sum() == pytest.approx(3.2, abs=0.05)
+    _, prob_above, _ = cl.marginal_roas(post, rec, value=5.0, q=200)
+    # the strongest channel is funded with high probability
+    assert prob_above[int(np.argmax(world.beta))] > 0.5
+
+
+@pytest.mark.slow
+def test_prior_sensitivity_audit_gamma_scale():
+    # A prior-dominated (weak, true ~0) synergy tracks its prior: widen the
+    # gamma_scale and the posterior spread of that pair grows (guide §8.2).
+    world = cl.make_world(seed=2)
+    center = np.array([0.8, 0.8, 0.8, 0.8])
+    data = cl.simulate_panel(
+        world, center, n_geo=70, t_pre=5, t_test=8, delta=0.6, noise=0.5, seed=4
+    )
+    weak_pair = "gamma_Chatter_Vibe"  # true gamma == 0
+    sds = {}
+    for gs in (0.3, 1.5):
+        post = cl.fit(
+            data,
+            channels=world.channels,
+            pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+            gamma_scale=gs,
+            num_warmup=300,
+            num_samples=300,
+            num_chains=2,
+            seed=0,
+        )
+        sds[gs] = float(np.std(post.samples[weak_pair]))
+    assert sds[1.5] > sds[0.3]
+
+
+@pytest.mark.slow
+def test_closure_and_stopping():
+    world = cl.make_world(seed=0)
+    center = np.array([0.7, 0.7, 0.7, 0.7])
+    out = cl.run_closed_loop(
+        world,
+        center=center,
+        B=3.2,
+        value=5.0,
+        n_geo=64,
+        t_pre=5,
+        t_test=8,
+        delta=0.6,
+        noise=0.5,
+        mode="fixed",
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        margin=1.0,
+        population=2.0,
+        wave_cost=0.3,
+        max_waves=4,
+        planner_q=120,
+        fit_kwargs=dict(num_warmup=300, num_samples=300, num_chains=2, seed=0),
+        seed=2,
+    )
+    hist = out["history"]
+    assert len(hist) >= 2
+    # closure: expected regret shrinks as the posterior is carried across waves
+    assert hist[-1]["e_regret"] < hist[0]["e_regret"]
+    # stopping: ENBS decreases and the rule fires before max_waves
+    assert hist[-1]["enbs"] < hist[0]["enbs"]
+    assert any(r["stop"] for r in hist)
+    # recovery: the final recommendation is close to the truth-optimal profit
+    assert hist[-1]["profit_gap_rel"] < 0.1
+
+
+@pytest.mark.slow
+def test_knowledge_gradient_runs_and_is_finite():
+    world = cl.make_world(seed=1)
+    center = np.array([0.8, 0.8, 0.8, 0.8])
+    data = cl.simulate_panel(
+        world, center, n_geo=48, t_pre=4, t_test=6, delta=0.6, noise=0.5, seed=3
+    )
+    post = cl.fit(
+        data,
+        channels=world.channels,
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        num_warmup=150,
+        num_samples=150,
+        num_chains=1,
+        seed=0,
+    )
+    refit = cl.refit_fn_from_data(
+        data,
+        channels=world.channels,
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        num_warmup=100,
+        num_samples=100,
+        num_chains=1,
+        seed=5,
+    )
+    candidate = cl.central_composite(center, 0.6, world.pairs)
+    kg = cl.knowledge_gradient(
+        post,
+        candidate,
+        refit,
+        B=3.2,
+        value=5.0,
+        n_fantasy=2,
+        t_test=6,
+        n_geo=48,
+        q=40,
+        seed=4,
+    )
+    assert np.isfinite(kg)
+
+
+@pytest.mark.slow
+def test_logistic_activation_recovers_and_plans():
+    """The whole loop is activation-agnostic: fit a logistic (exponential-
+    saturation) world and recover the effects + plan, exactly as for Hill."""
+    world = cl.make_world_logistic(seed=0)
+    center = np.array([0.8, 0.8, 0.8, 0.8])
+    data = cl.simulate_panel(
+        world, center, n_geo=72, t_pre=6, t_test=10, delta=0.6, noise=0.5, seed=1
+    )
+    post = cl.fit(
+        data,
+        channels=world.channels,
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        activation="logistic",
+        num_warmup=400,
+        num_samples=400,
+        num_chains=2,
+        seed=0,
+    )
+    assert post.activation == "logistic"
+    assert "lam" in post.samples and "kappa" not in post.samples  # its own params
+    beta_hat = post.samples["beta"].mean(0)
+    # strongest channel + top-2 recovered (as in the Hill recovery test)
+    assert int(np.argmax(beta_hat)) == int(np.argmax(world.beta))
+    assert set(np.argsort(-beta_hat)[:2]) == set(np.argsort(-world.beta)[:2])
+    # the activation-agnostic planner produces a valid funded split
+    rec = cl.recommend_allocation(post, B=3.2, value=5.0, q=200, mode="fixed")
+    assert rec.sum() == pytest.approx(3.2, abs=0.05)
+    _, prob_above, _ = cl.marginal_roas(post, rec, value=5.0, q=200)
+    assert prob_above[int(np.argmax(world.beta))] > 0.5
+
+
+@pytest.mark.slow
+def test_misspecified_single_hill_still_makes_a_near_optimal_decision():
+    """Headline of the misspecification study: when the TRUE response is a
+    weighted sum of Hills but we fit a single Hill, the *decision* barely
+    suffers — the recommended allocation still captures the vast majority of the
+    true optimum's profit, because near an interior optimum the profit surface is
+    flat and a wrong-but-monotone-saturating curve gets the local marginal
+    ordering right. (Calibration is what degrades, not portfolio profit.)"""
+    world = cl.make_world_hill_mixture(seed=0)
+    B, value = 3.2, 5.0
+    _, true_profit = cl.world_optimal_allocation(world, B, value, mode="fixed")
+    data = cl.simulate_panel(
+        world,
+        np.full(4, 0.7),
+        n_geo=72,
+        t_pre=6,
+        t_test=10,
+        delta=0.6,
+        noise=0.4,
+        seed=1,
+    )
+    post = cl.fit(
+        data,
+        channels=world.channels,
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        activation="hill",
+        num_warmup=400,
+        num_samples=400,
+        num_chains=2,
+        seed=0,
+    )
+    rec = cl.recommend_allocation(post, B, value, q=200, mode="fixed")
+    achieved = value * float(world.response_mean(np.asarray(rec)[None, :])[0]) - B
+    # the misspecified plan captures >=95% of the achievable profit
+    assert achieved >= 0.95 * true_profit

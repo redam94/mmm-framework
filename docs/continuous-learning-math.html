@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuous Learning · Mathematical Foundations — Bayesian Optimal Experimental Design | MMM Framework</title>
+
+    <meta name="description" content="A rigorous, code-faithful derivation of the continuous-learning loop: expected information gain (Lindley), the Gaussian/Laplace EIG surrogate, D- and Ds-optimality, the knowledge gradient (EVSI), Thompson allocation, expected regret, and the ENBS stopping rule.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/continuous-learning-math.html">
+    <meta property="og:title" content="Continuous Learning · Mathematical Foundations">
+    <meta property="og:description" content="A rigorous, code-faithful treatment of the sequential-learning loop, grounded in Bayesian Optimal Experimental Design (Lindley 1956; Rainforth et al. 2023; Foster et al. 2019/2020).">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/continuous-learning-math.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <!-- Page-specific styles (theory/code mapping); tokens only, palette locked -->
+    <style>
+        .map-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.9rem; }
+        .map-table th, .map-table td {
+            border: 1px solid var(--color-border);
+            padding: 0.6rem 0.8rem;
+            text-align: left;
+            vertical-align: top;
+        }
+        .map-table th { background: var(--color-bg-alt); font-weight: 600; }
+        .map-table code { font-size: 0.82rem; white-space: nowrap; }
+        .theorem {
+            border-left: 3px solid var(--augur-steel-500, #3b6fb6);
+            background: var(--color-bg-alt);
+            border-radius: 0 8px 8px 0;
+            padding: 1rem 1.2rem;
+            margin: 1.5rem 0;
+        }
+        .theorem h4 { margin: 0 0 0.5rem; }
+        .theorem .cite {
+            font-size: 0.8rem;
+            color: var(--color-text-muted);
+            font-style: italic;
+        }
+        .refs { font-size: 0.9rem; line-height: 1.7; }
+        .refs li { margin-bottom: 0.6rem; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Continuous Learning · Mathematical Foundations">
+    <meta name="twitter:description" content="A rigorous, code-faithful treatment of the sequential-learning loop, grounded in Bayesian Optimal Experimental Design (Lindley 1956; Rainforth et al. 2023; Foster et al. 2019/2020).">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/continuous-learning-math.html",
+          "name": "Continuous Learning · Mathematical Foundations — Bayesian Optimal Experimental Design | MMM Framework",
+          "description": "A rigorous, code-faithful derivation of the continuous-learning loop: expected information gain (Lindley), the Gaussian/Laplace EIG surrogate, D- and Ds-optimality, the knowledge gradient (EVSI), Thompson allocation, expected regret, and the ENBS stopping rule.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/continuous-learning-math.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/continuous-learning-math.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/continuous-learning-math.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Continuous Learning · Mathematical Foundations",
+              "item": "https://redam94.github.io/mmm-framework/continuous-learning-math.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Foundations</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#problem">The two decisions</a></li>
+                <li><a href="#eig">Expected information gain</a></li>
+                <li><a href="#intractable">Why the EIG is hard</a></li>
+                <li><a href="#variational">Variational &amp; contrastive bounds</a></li>
+            </ul>
+
+            <h3>The model</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#surface">Surface &amp; likelihood</a></li>
+                <li><a href="#priors">Priors &amp; posterior</a></li>
+                <li><a href="#design">Design &amp; identification</a></li>
+            </ul>
+
+            <h3>Acquisition</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#value">Information vs. decision value</a></li>
+                <li><a href="#laplace">The Gaussian/Laplace surrogate</a></li>
+                <li><a href="#doptimal">D- and D<sub>s</sub>-optimal EIG</a></li>
+                <li><a href="#kg">The knowledge gradient</a></li>
+            </ul>
+
+            <h3>Decide &amp; stop</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#thompson">Thompson allocation</a></li>
+                <li><a href="#funding">The funding line (KKT)</a></li>
+                <li><a href="#stopping">Regret &amp; ENBS</a></li>
+                <li><a href="#decay">Information decay</a></li>
+            </ul>
+
+            <h3>Sequential &amp; refs</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#sequential">Greedy-adaptive BED</a></li>
+                <li><a href="#misspec">Misspecification</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="problem">Continuous learning · mathematical foundations</h1>
+            <p class="lead">A precise, code-faithful derivation of the continuous-learning loop, grounded in
+            <strong>Bayesian Optimal Experimental Design</strong> (BOED). This page is the technical companion to the
+            <a href="continuous-learning.html">narrative overview</a>: it states the model, the acquisition functions, and
+            the stopping rule as equations, and maps each one to the function in
+            <code>mmm_framework.continuous_learning</code> that implements it.</p>
+
+            <p>The loop solves two coupled decision problems at once. Let the media plan be an allocation
+            \( a = s \in \mathbb{R}_{\ge 0}^{K} \) over \( K \) channels, and let \( \theta \) collect the unknown
+            parameters of the response surface. Given a prior \( p(\theta) \) and experiment history
+            \( h_{t-1} = \{(\xi_k, y_k)\}_{k&lt;t} \):</p>
+
+            <div class="two-col">
+                <div class="card">
+                    <h4>The allocation decision</h4>
+                    <p>Choose \( a \) to maximise expected profit under current beliefs,
+                    \( a^\star = \arg\max_a \mathbb{E}_{p(\theta \mid h_{t-1})}[\,v(a,\theta)\,] \), where
+                    \( v(a,\theta) \) is the terminal payoff (profit) of running plan \( a \) in a world with parameters
+                    \( \theta \).</p>
+                </div>
+                <div class="card">
+                    <h4>The experiment decision</h4>
+                    <p>Choose the next design \( \xi_t \) — which geos run which spend cells — to be <em>worth its cost</em>:
+                    most informative about \( \theta \) (an <em>information</em> objective), or most likely to change what
+                    we would do (a <em>decision</em> objective). These can rank designs differently.</p>
+                </div>
+            </div>
+
+            <p>The first problem is Bayesian decision theory; the second is BOED. The framework's contribution is a
+            <strong>Gaussian/Laplace realisation of both</strong> that needs no per-candidate refit, so the loop can price
+            many candidate experiments in milliseconds. We build the theory first, then show the exact linear algebra the
+            code runs.</p>
+
+            <div class="definition">
+                <h4>Notation</h4>
+                <p>\( \theta \) — latent target (here the surface parameters \( \beta,\kappa,\alpha,\gamma \)); it need
+                <em>not</em> be all model parameters. \( \xi \) — a design (the cell matrix of a wave). \( y \) — outcome.
+                \( p(y\mid\theta,\xi) \) — likelihood; \( p(y\mid\xi)=\mathbb{E}_{p(\theta)}[p(y\mid\theta,\xi)] \) — the
+                marginal (predictive). \( \mathrm{H}[\cdot] \) — differential entropy.
+                \( \mathrm{KL}(\cdot\,\|\,\cdot) \) — Kullback–Leibler divergence.
+                \( I(\theta;y\mid\xi) \) — mutual information under design \( \xi \).</p>
+            </div>
+
+            <h2 id="eig">Expected information gain</h2>
+            <p>The canonical BOED objective is <strong>expected information gain</strong> (EIG): the expected reduction in
+            uncertainty about \( \theta \) from running \( \xi \), averaged over outcomes we have not yet seen. Writing the
+            joint \( p(\theta,y\mid\xi)=p(\theta)\,p(y\mid\theta,\xi) \),</p>
+
+            <div class="math-block">
+                \[ \mathrm{EIG}(\xi) \;=\; \mathbb{E}_{p(y\mid\xi)}\!\big[\,\mathrm{H}[p(\theta)] - \mathrm{H}[p(\theta\mid y,\xi)]\,\big]
+                \;=\; \mathbb{E}_{p(\theta,y\mid\xi)}\!\left[\log \frac{p(\theta\mid y,\xi)}{p(\theta)}\right]. \]
+                <span class="equation-label">(1)</span>
+            </div>
+
+            <p>This single quantity has four equivalent readings, each useful in a different regime:</p>
+
+            <div class="math-block">
+                \[ \mathrm{EIG}(\xi)
+                = \underbrace{I(\theta;y\mid\xi)}_{\text{mutual information}}
+                = \underbrace{\mathbb{E}_{p(y\mid\xi)}\!\big[\mathrm{KL}\!\left(p(\theta\mid y,\xi)\,\|\,p(\theta)\right)\big]}_{\text{expected posterior}\to\text{prior KL}}
+                = \underbrace{\mathbb{E}_{p(\theta,y\mid\xi)}\!\left[\log \frac{p(y\mid\theta,\xi)}{p(y\mid\xi)}\right]}_{\text{likelihood form}}. \]
+                <span class="equation-label">(2)</span>
+            </div>
+
+            <p>The Bayesian-optimal design is \( \xi^\star=\arg\max_{\xi\in\Xi}\mathrm{EIG}(\xi) \). The posterior form is
+            cheap when \( \dim(\theta)\ll\dim(y) \); the likelihood form when \( \dim(y)\ll\dim(\theta) \).</p>
+
+            <div class="theorem">
+                <h4>Lindley's information measure (origin)</h4>
+                <p>Lindley (1956) defined the average information an experiment provides as
+                \( \mathcal{I}(\mathcal{E},p(\theta)) = \mathrm{H}[p(\theta)] - \mathbb{E}_x\,\mathrm{H}[p(\theta\mid x)] \)
+                — exactly Eq. (1) — and proved it is <strong>non-negative</strong> (zero iff \( p(x\mid\theta) \) does not
+                depend on \( \theta \)), <strong>additive</strong> across independent stages (the chain rule that makes
+                sequential design coherent), and <strong>invariant</strong> under one-to-one reparameterisation of the
+                <em>average</em>. It is the expected utility of an experiment under the log-score (information) utility
+                \( U(\xi,\theta,y)=\log p(\theta\mid y,\xi) \); general BOED replaces this with any posterior-functional
+                utility, recovering the EIG as the information special case.</p>
+                <p class="cite">Lindley 1956, Defs. 1–2, Thms. 1–2; Rainforth et al. 2023, §2.1.</p>
+            </div>
+
+            <h2 id="intractable">Why the EIG is hard — and the honest cost of estimating it</h2>
+            <p>The EIG is <strong>doubly intractable</strong>: the outer expectation is over the marginal
+            \( p(y\mid\xi) \), which is itself the intractable integral
+            \( \int p(y\mid\theta,\xi)\,p(\theta)\,d\theta \) inside the log. A naïve single-loop Monte-Carlo estimate of
+            the likelihood form fails because each \( \log p(y_n\mid\xi) \) is a fresh nested integral. The
+            <strong>Nested Monte Carlo</strong> (NMC) estimator approximates each inner marginal with \( M \) prior draws:</p>
+
+            <div class="math-block">
+                \[ \widehat{\mathrm{EIG}}_{\mathrm{NMC}}(\xi) = \frac{1}{N}\sum_{n=1}^{N}
+                \log \frac{p(y_n\mid\theta_{n,0},\xi)}{\frac{1}{M}\sum_{m=1}^{M} p(y_n\mid\theta_{n,m},\xi)},
+                \qquad \theta_{n,0},\theta_{n,m}\sim p(\theta),\;\; y_n\sim p(y\mid\theta_{n,0},\xi). \]
+                <span class="equation-label">(3)</span>
+            </div>
+
+            <p>Jensen's inequality makes the log biased for any finite \( M \): the bias is \( \mathcal{O}(1/M) \) and the
+            mean-squared error is \( \mathcal{O}(a/N + b/M^2) \). Balancing the two terms at a fixed compute budget
+            \( C=NM \) forces \( M\propto\sqrt{N} \) and yields a root-MSE of only
+            \( \mathcal{O}(C^{-1/3}) \) — strictly worse than the \( \mathcal{O}(C^{-1/2}) \) of ordinary Monte Carlo.
+            This \( C^{-1/3} \) wall is the reason modern BOED reaches for variational, contrastive, or — as here —
+            Gaussian/Laplace estimators.</p>
+            <p class="cite" style="font-size:0.8rem;color:var(--color-text-muted);font-style:italic;">Rainforth et al. 2023, §3.1; Rainforth et al. 2018.</p>
+
+            <h2 id="variational">Variational and contrastive bounds (the modern toolkit)</h2>
+            <p>Because the EIG <em>is</em> a mutual information, any MI bound is an EIG estimator. Two are worth stating,
+            because they frame the design-space in which our Gaussian estimator is a fast special case. The
+            <strong>Barber–Agakov</strong> posterior lower bound learns a variational posterior
+            \( q_p(\theta\mid y,\xi) \):</p>
+
+            <div class="math-block">
+                \[ \mathrm{EIG}(\xi) \;\ge\; \mathbb{E}_{p(\theta,y\mid\xi)}\!\left[\log \frac{q_p(\theta\mid y,\xi)}{p(\theta)}\right],
+                \qquad \text{gap} = \mathbb{E}_{p(y\mid\xi)}\!\big[\mathrm{KL}\!\left(p(\theta\mid y,\xi)\,\|\,q_p\right)\big] \ge 0, \]
+                <span class="equation-label">(4)</span>
+            </div>
+
+            <p>tight iff \( q_p \) is the true posterior. <strong>Prior Contrastive Estimation</strong> (PCE) needs no
+            learned network — it contrasts the true parameter against \( L \) prior draws (note the original draw
+            \( \theta_0 \) appears in the denominator, which is what turns an upper bound into a valid lower bound):</p>
+
+            <div class="math-block">
+                \[ \mathrm{EIG}(\xi) \;\ge\; \mathbb{E}\!\left[\log \frac{p(y\mid\theta_0,\xi)}{\frac{1}{L+1}\sum_{\ell=0}^{L} p(y\mid\theta_\ell,\xi)}\right],
+                \qquad \theta_0\sim p(\theta),\; y\sim p(y\mid\theta_0,\xi),\; \theta_{1:L}\sim p(\theta), \]
+                <span class="equation-label">(5)</span>
+            </div>
+
+            <p>which is monotone increasing and tight as \( L\to\infty \) (its learned-proposal generalisation, Adaptive
+            Contrastive Estimation, is the InfoNCE bound with the likelihood as the known-optimal critic). These bounds are
+            what make design optimisation differentiable enough for stochastic gradient ascent on \( \xi \).</p>
+
+            <div class="info">
+                <h4>Where this framework sits</h4>
+                <p>The continuous-learning loop has a <em>low-dimensional</em> \( \theta \) (a handful of channel
+                parameters) and needs to price <em>many</em> candidate waves per round, fast. So instead of learning a
+                variational network per design, it uses the <strong>Gaussian special case</strong> of the EIG — exact for
+                linear-Gaussian models and a Laplace approximation otherwise — which reduces Eqs. (1)–(2) to a
+                <em>closed-form</em> \( \tfrac12\log\det \) with no Monte-Carlo inner loop at all (§<a href="#doptimal">D-optimal EIG</a>).
+                The contrastive machinery above is the route you would take if \( \theta \) were high-dimensional or the
+                likelihood implicit.</p>
+            </div>
+
+            <h2 id="surface">The generative model — surface and likelihood</h2>
+            <p>Everything rests on one differentiable response function, used by the likelihood that fits it, the simulator
+            that generates from it, and the allocator that optimises it. For a scaled spend vector \( s\in\mathbb{R}_{\ge 0}^K \):</p>
+
+            <div class="math-block">
+                \[ R(s) \;=\; \sum_{c} \beta_c\, f_c(s_c) \;+\; \sum_{c \,&lt;\, c'} \gamma_{cc'}\, f_c(s_c)\, f_{c'}(s_{c'}),
+                \qquad f_c(s_c) = \frac{s_c^{\alpha_c}}{\kappa_c^{\alpha_c} + s_c^{\alpha_c}}. \]
+                <span class="equation-label">(6)</span>
+            </div>
+
+            <p>Here \( \beta_c \ge 0 \) is the channel ceiling, \( \kappa_c \) the half-saturation, \( \alpha_c \) the Hill
+            shape, and \( \gamma_{cc'} \) the pairwise synergy — <strong>positive</strong> for complementarity,
+            <strong>negative</strong> for cannibalisation. The activation \( f_c \) need only be smooth, monotone,
+            saturating, with \( f_c(0)=0 \) and a finite gradient (a <code>logistic</code>
+            \( f(s)=1-e^{-\lambda s} \) is a drop-in); Hill is the default and is convention-identical to the framework's
+            <code>SaturationType.HILL</code>. The observation model is a geo-week panel with a pinned baseline:</p>
+
+            <div class="math-block">
+                \[ y_{g,t} \;=\; a_g \;+\; R(s_{g,t}) \;+\; \varepsilon_{g,t},
+                \qquad \varepsilon_{g,t}\sim\mathcal{N}(0,\sigma^2), \quad a_g\sim\mathcal{N}(A,\sigma_a^2). \]
+                <span class="equation-label">(7)</span>
+            </div>
+
+            <p>The geo intercept \( a_g \) absorbs each market's baseline demand; a pre-period in which every geo runs the
+            status-quo allocation identifies \( a_g \) separately from the incremental response \( R \). The surface
+            parameters are collected into \( \theta = (\beta,\kappa,\alpha,\gamma) \in\mathbb{R}^P \) with
+            \( P = 3K + \binom{K}{2}^{\!*} \) (only modelled pairs).</p>
+
+            <h2 id="priors">Priors and the carried posterior</h2>
+            <p>The priors are weakly informative and <em>sign-informed</em> on the interactions, which is where domain
+            knowledge legitimately enters:</p>
+
+            <div class="math-block">
+                \[ \beta_c \sim \mathrm{HalfNormal},\quad \kappa_c \sim \mathrm{LogNormal},\quad
+                \alpha_c \sim \mathrm{TruncNormal}_{[0.5,\,5]},\quad
+                \gamma_{cc'} \sim \begin{cases} \pm\,\mathrm{HalfNormal} & \text{sign known (compete / complement)}\\ \mathcal{N}(0,\tau^2) & \text{sign unknown.} \end{cases} \]
+                <span class="equation-label">(8)</span>
+            </div>
+
+            <p>Inference is full NUTS (NumPyro). Crucially, the loop is <strong>sequential-Bayes coherent</strong>: after
+            wave \( t \) the posterior over all data so far becomes the prior for the next design,</p>
+
+            <div class="math-block">
+                \[ p(\theta \mid h_t) \;\propto\; p(\theta)\prod_{k=1}^{t} p(y_k \mid \theta, \xi_k), \]
+                <span class="equation-label">(9)</span>
+            </div>
+
+            <p>realised in practice by <strong>refitting on all accumulated data each wave</strong> (the same geos, so the
+            \( a_g \) are stable). This is exactly Lindley's additivity (§<a href="#eig">EIG</a>) made operational: every
+            wave borrows strength from the last, and belief updates about the nuisance intercepts are retained rather than
+            discarded (discarding them would break the additivity of information across stages).</p>
+
+            <h2 id="design">The design and identification</h2>
+            <p>A design \( \xi \) is a <strong>central-composite</strong> cell matrix around the current operating point:
+            a centre cell, axial cells that move one channel (the gradient), off-axis cells that move a pair together (the
+            only way a synergy \( \gamma_{cc'} \) is seen), and <strong>shut-off</strong> cells that set a channel to zero.
+            Shut-offs break the collinearity between a channel's main effect \( \beta_c f_c \) and its interaction terms:
+            with \( f_c(0)=0 \), a shut-off zeroes every term containing channel \( c \), isolating the rest.</p>
+
+            <p>The identifying variation is <em>between cells</em>, not between geos (the per-geo baselines are randomised
+            and profiled out). This is why the Fisher information in §<a href="#laplace">the surrogate</a> residualises the
+            cell gradients against their weighted mean — it removes the geo-intercept nuisance direction, mirroring a
+            Frisch–Waugh–Lovell partialling-out of \( a_g \).</p>
+
+            <div class="warning">
+                <h4>⚠️ Identification is a precondition, not an output</h4>
+                <p>Without the pre/test split and designed cross-sectional variation, Eq. (7) is just an observational
+                regression and \( \theta \) is confounded by whatever drove spend. The BOED machinery below prices
+                <em>additional</em> information on top of an already-identified model; it cannot manufacture identification
+                that the design does not provide.</p>
+            </div>
+
+            <h2 id="value">Information versus decision value</h2>
+            <p>Here is the pivotal distinction. The EIG measures information about \( \theta \). But the loop does not want
+            to know \( \theta \) for its own sake — it wants a good <em>allocation</em>. When an experiment feeds a terminal
+            decision \( a\in\mathcal{A} \) with payoff \( v(a,\theta) \), the decision-relevant objective is the
+            <strong>expected value of sample information</strong> (EVSI):</p>
+
+            <div class="math-block">
+                \[ \mathrm{EVSI}(\xi) \;=\; \underbrace{\mathbb{E}_{p(y\mid\xi)}\!\Big[\max_{a}\;\mathbb{E}_{p(\theta\mid y,\xi)}[\,v(a,\theta)\,]\Big]}_{\text{expected best value after the data}}
+                \;-\; \underbrace{\max_{a}\;\mathbb{E}_{p(\theta)}[\,v(a,\theta)\,]}_{\text{best value before}} \;\ge\; 0. \]
+                <span class="equation-label">(10)</span>
+            </div>
+
+            <p>The one-wave version — the expected improvement in the best <em>posterior-mean</em> value from one more
+            measurement — is the <strong>knowledge gradient</strong> (KG):</p>
+
+            <div class="math-block">
+                \[ \mathrm{KG}(\xi) \;=\; \mathbb{E}_{p(y\mid\xi)}\!\Big[\max_{a}\,\mu^{\text{post}}_a(y,\xi)\Big] - \max_{a}\,\mu^{\text{prior}}_a,
+                \qquad \mu_a = \mathbb{E}[\,v(a,\theta)\,]. \]
+                <span class="equation-label">(11)</span>
+            </div>
+
+            <p>The \( \max_a \) operator is what separates KG/EVSI from the EIG's log-ratio: <strong>a design that is most
+            informative about \( \theta \) globally need not most improve the attainable decision.</strong> Rainforth et al.
+            make the same point when they note that scoring designs by the information in the <em>parameters</em> (the BALD
+            objective) is sub-optimal when the real goal is a downstream prediction or decision. The loop therefore ships
+            <em>both</em> acquisitions and treats them as complementary: use the KG when the goal is the budget; use the EIG
+            to shore up decision-pivotal interactions that the greedy, exploit-heavy waves under-probe.</p>
+
+            <div class="highlight-box">
+                <h4>The terminal payoff, concretely</h4>
+                <p>For a fixed budget \( B \), the plan value is \( v(a,\theta) = \mathrm{value}\cdot R_\theta(a) - B \)
+                subject to \( \sum_c a_c = B \); in free-budget mode it is
+                \( v(a,\theta) = \mathrm{value}\cdot R_\theta(a) - \sum_c a_c \). Here <code>value</code> is the margin
+                \( \$ \) per unit KPI, so the funding line sits at a marginal ROAS of \( 1 \). Every acquisition and
+                stopping rule below is defined against this same \( v \).</p>
+            </div>
+
+            <h2 id="laplace">The Gaussian/Laplace surrogate</h2>
+            <p>Both objectives become closed-form under a local Gaussian model of the posterior — the engine in
+            <code>acquisition.py</code>. Three steps:</p>
+
+            <p><strong>1 · Moment-match.</strong> Approximate the carried posterior over \( \theta \) by a Gaussian matched
+            to its first two moments (<code>theta_moments</code>):</p>
+
+            <div class="math-block">
+                \[ p(\theta \mid h_{t-1}) \;\approx\; \mathcal{N}(\mu, \Sigma),
+                \qquad \mu = \mathbb{E}[\theta\mid h_{t-1}],\;\; \Sigma = \mathrm{Cov}[\theta\mid h_{t-1}]. \]
+                <span class="equation-label">(12)</span>
+            </div>
+
+            <p><strong>2 · Linearise the surface (the Laplace step).</strong> For a candidate design with cells
+            \( \{s_c\}_{c=1}^{n} \), take the parameter gradient of the response at each cell,
+            \( g_c = \partial R(s_c)/\partial\theta\,\big|_{\mu}\in\mathbb{R}^P \) (<code>param_grad</code>, by
+            <code>jax.grad</code>). Under Eq. (7) the <strong>Fisher information</strong> a design carries about
+            \( \theta \) is</p>
+
+            <div class="math-block">
+                \[ \Lambda(\xi) \;=\; \sigma^{-2}\sum_{c} w_c\,(g_c - \bar g)(g_c - \bar g)^{\!\top},
+                \qquad \bar g = \frac{\sum_c w_c\,g_c}{\sum_c w_c}, \]
+                <span class="equation-label">(13)</span>
+            </div>
+
+            <p>where \( w_c \) is the cell's replication weight (geos \( \times \) test weeks) and the centring by
+            \( \bar g \) profiles out the geo intercept (<code>design_information</code>, <code>residualize=True</code>).</p>
+
+            <p><strong>3 · Update the covariance.</strong> The Gaussian-linear posterior after running \( \xi \) has
+            precision \( \Sigma^{-1}+\Lambda \):</p>
+
+            <div class="math-block">
+                \[ \Sigma_{\text{post}}(\xi) \;=\; \big(\Sigma^{-1} + \Lambda(\xi)\big)^{-1}. \]
+                <span class="equation-label">(14)</span>
+            </div>
+
+            <p>Everything the acquisitions need falls out of this one \( P\times P \) object — no MCMC, no refit per
+            candidate.</p>
+
+            <h2 id="doptimal">D- and D<sub>s</sub>-optimal EIG</h2>
+            <p>For a Gaussian, the EIG of Eqs. (1)–(2) is a difference of log-determinants and — remarkably —
+            <em>independent of the not-yet-observed \( y \)</em>. For a parameter block \( S \) (a subset of the coordinates
+            of \( \theta \)):</p>
+
+            <div class="math-block">
+                \[ \mathrm{EIG}_S(\xi) \;=\; \tfrac12\Big(\log\det \Sigma_{[S]} - \log\det \big(\Sigma_{\text{post}}(\xi)\big)_{[S]}\Big), \]
+                <span class="equation-label">(15)</span>
+            </div>
+
+            <p>where \( [S] \) selects the \( S{\times}S \) sub-block (<code>gaussian_eig</code>). Two choices of \( S \)
+            give the two classical criteria:</p>
+
+            <ul>
+                <li><strong>D-optimality</strong> — \( S = \) all of \( \theta \): the design that shrinks the total
+                posterior volume the most, \( \arg\max_\xi \log\det\big(\Sigma^{-1}+\Lambda(\xi)\big) \)
+                (<code>design_eig(..., target="all")</code>).</li>
+                <li><strong>D<sub>s</sub>-optimality</strong> — \( S = \) the synergy block \( \gamma \): the design most
+                informative about the <em>interactions</em> specifically, whose marginal precision is the Schur complement
+                \( \Lambda_{\gamma\mid\text{rest}} = \Lambda_{\gamma\gamma} - \Lambda_{\gamma r}\Lambda_{rr}^{-1}\Lambda_{r\gamma} \)
+                (<code>design_eig(..., target="gamma")</code>).</li>
+            </ul>
+
+            <div class="theorem">
+                <h4>This is Lindley's determinant criterion</h4>
+                <p>For the linear-Gaussian model \( y = X_\xi\theta+\varepsilon \), \( \varepsilon\sim\mathcal{N}(0,\sigma^2 I) \),
+                prior \( \theta\sim\mathcal{N}(0,\Sigma_0) \), Eq. (15) with \( S=\text{all} \) is exactly
+                \( \mathrm{EIG}(\xi)=\tfrac12\log\det\!\big(I + \sigma^{-2}\Sigma_0 X_\xi^\top X_\xi\big) \), which is
+                Lindley's (1956) \( \tfrac12\log(|A+C|/|C|) \) for the multivariate-normal experiment. Under near-ignorant
+                priors this reduces to maximising \( \det(\sigma^{-2}X_\xi^\top X_\xi) \) — the classical
+                <strong>D-optimality</strong> of the design literature. Our \( g_c \) play the role of the rows of
+                \( X_\xi \); the Laplace linearisation is what buys the linear-Gaussian form for a nonlinear surface.</p>
+                <p class="cite">Lindley 1956, §6; Rainforth et al. 2023, §2.3.</p>
+            </div>
+
+            <h2 id="kg">The knowledge gradient (decision-value EVSI)</h2>
+            <p>The same covariance update yields the KG of Eq. (11) with no refit. The key object is the
+            <strong>pre-posterior spread of the updated mean</strong>: before seeing \( y \), the posterior mean
+            \( \mu_{\text{post}}(y) \) is itself a random variable whose covariance is</p>
+
+            <div class="math-block">
+                \[ V(\xi) \;=\; \mathrm{Cov}\big[\mu_{\text{post}}\big] \;=\; \Sigma - \Sigma_{\text{post}}(\xi). \]
+                <span class="equation-label">(16)</span>
+            </div>
+
+            <p>(Intuitively: the more a design will move your beliefs, the larger \( V \).) Sampling
+            <strong>fantasy means</strong> \( \theta_m\sim\mathcal{N}(\mu, V) \), re-optimising the allocation for each, and
+            averaging the uplift over the current best gives a Monte-Carlo KG:</p>
+
+            <div class="math-block">
+                \[ \widehat{\mathrm{KG}}(\xi) \;=\; \frac{1}{M}\sum_{m=1}^{M} v\big(a^\star(\theta_m),\,\theta_m\big) \;-\; v\big(a^\star(\mu),\,\mu\big),
+                \qquad a^\star(\theta)=\arg\max_a v(a,\theta). \]
+                <span class="equation-label">(17)</span>
+            </div>
+
+            <p>This is <code>laplace_knowledge_gradient</code>. Because \( a^\star(\cdot) \) requires only a fast SLSQP
+            allocation, not inference, the whole score is milliseconds — and it orders designs the same way the
+            reference NUTS-refit knowledge gradient (<code>planner.knowledge_gradient</code>) does, at a fraction of the
+            cost. It is the Gaussian realisation of the EVSI in Eq. (10): a wave is worth running when what it teaches
+            <em>changes what you would do</em>, not merely when it reduces a standard error.</p>
+
+            <pre><code class="language-python">import numpy as np
+import mmm_framework.continuous_learning as cl
+
+world = cl.make_world(seed=0)
+data = cl.simulate_panel(world, np.full(4, 0.7), n_geo=80, t_pre=6, t_test=10, noise=0.5)
+post = cl.fit(data, channels=world.channels, pair_signs=cl.PAIR_SIGNS_EXAMPLE)
+
+# One Gaussian surrogate, three ways to price the SAME candidate wave — no refit.
+cells = cl.central_composite(np.full(4, 0.7), 0.6, world.pairs)
+mu, sigma = cl.theta_moments(post)                                   # Eq. (12)
+eig_all   = cl.design_eig(post, cells, sigma=0.5, target="all")      # D-optimal   (Eq. 15, S = all)
+eig_gamma = cl.design_eig(post, cells, sigma=0.5, target="gamma")    # D_s-optimal (Eq. 15, S = gamma)
+kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0.5)  # KG / EVSI (Eq. 17)</code></pre>
+
+            <div class="note">
+                <h4>💡 Why the two acquisitions can disagree</h4>
+                <p>Off-axis cells maximise the D<sub>s</sub>-optimal EIG (they identify synergies), but a main-effect cell
+                often moves the <em>allocation</em> more — so the knowledge gradient ranks it higher. That is the
+                information-≠-decision-value gap of §<a href="#value">above</a>, made concrete: pick the acquisition that
+                matches your goal (a better plan → KG; a decision-pivotal interaction you cannot yet see → D<sub>s</sub>-EIG).</p>
+            </div>
+
+            <h2 id="thompson">Thompson allocation — a posterior over the optimal split</h2>
+            <p>Given the carried posterior, the recommendation is <em>not</em> the optimiser of the mean curve. Instead the
+            loop solves the allocation problem under each of \( q \) posterior draws — <strong>Thompson sampling</strong>:</p>
+
+            <div class="math-block">
+                \[ a^\star_d \;=\; \arg\max_{a}\; \mathrm{value}\cdot R_{\theta_d}(a)\quad\text{s.t.}\;\textstyle\sum_c a_c = B,\; 0\le a_c\le \text{cap},
+                \qquad \theta_d \sim p(\theta\mid h_t). \]
+                <span class="equation-label">(18)</span>
+            </div>
+
+            <p>The set \( \{a^\star_d\} \) is a <strong>posterior over the optimal split</strong>: its mean
+            \( \bar a = \tfrac1q\sum_d a^\star_d \) is the recommendation, and its spread is the exploration signal — the
+            channels whose funding you are still unsure of. Because Eq. (6) is non-concave when any \( \gamma_{cc'}&lt;0 \)
+            (cannibalisation creates a ridge), each solve is multi-start SLSQP on the analytic gradient
+            \( \partial R/\partial a \) (<code>thompson_wave</code>, <code>allocate_under_sample</code>).</p>
+
+            <h2 id="funding">The funding line and why marginal returns equalise</h2>
+            <p>A channel is <strong>funded</strong> where the posterior says its next dollar clears break-even. The
+            marginal ROAS is \( \mathrm{value}\cdot\partial R/\partial s_c \), and the decision rule is a posterior
+            probability, not a point estimate (<code>marginal_roas</code>):</p>
+
+            <div class="math-block">
+                \[ \text{channel } c \text{ is funded} \iff P\!\left(\mathrm{value}\cdot \frac{\partial R}{\partial s_c} \,&gt;\, 1 \;\Big|\; h_t\right) \,&gt;\, 0.5. \]
+                <span class="equation-label">(19)</span>
+            </div>
+
+            <p>At the fixed-budget optimum the Karush–Kuhn–Tucker stationarity condition for Eq. (18) is
+            \( \mathrm{value}\cdot\partial R/\partial a_c = \lambda \) for every interior (funded) channel, where
+            \( \lambda \) is the budget shadow price, and \( \le\lambda \) for channels held at the zero bound. In words:
+            <strong>an optimised budget equalises the marginal ROAS across all funded channels</strong> — so a "flat"
+            funding line at the end of the loop is not a coincidence, it is the signature of a plan with no dollar left to
+            move. A channel pinned at zero (e.g. a weak one) has marginal return below the shared line; a small
+            complementarity term \( \gamma_{cc'}f_{c'} \) can lift a weak channel just over it, which is why measuring
+            interactions changes the funded set.</p>
+
+            <h2 id="stopping">Expected regret and the ENBS stopping rule</h2>
+            <p>The loop stops when learning no longer pays. Each wave it computes the <strong>expected regret</strong> — the
+            posterior expected profit lost by acting on the consensus split \( \bar a \) instead of the split that is
+            optimal for the true (unknown) \( \theta \):</p>
+
+            <div class="math-block">
+                \[ \mathbb{E}[\text{regret}] \;=\; \mathbb{E}_{\theta\sim p(\theta\mid h_t)}\!\big[\,v(a^\star(\theta),\theta) - v(\bar a,\theta)\,\big] \;\ge\; 0. \]
+                <span class="equation-label">(20)</span>
+            </div>
+
+            <p>This is a Bayes-risk / expected-value-of-perfect-information quantity: it is exactly the profit still on the
+            table from parameter uncertainty (<code>expected_regret</code>; the per-draw regret is non-negative because
+            \( a^\star(\theta) \) is that draw's own optimum). Multiplying by the margin and the affected population and
+            subtracting the cost of a wave gives the <strong>expected net benefit of sampling</strong>:</p>
+
+            <div class="math-block">
+                \[ \mathrm{ENBS} \;=\; \mathbb{E}[\text{regret}] \cdot \text{margin} \cdot \text{population} \;-\; \text{wave cost},
+                \qquad \text{stop} \iff \mathrm{ENBS} \le 0. \]
+                <span class="equation-label">(21)</span>
+            </div>
+
+            <p>While the profit at risk from uncertainty exceeds the cost of a wave that would resolve it, keep testing;
+            once it does not, allocate (<code>should_stop</code>). This is a decision-theoretic stopping rule in the
+            lineage of Lindley's information-threshold sequential design — which, for a two-hypothesis problem, reduces
+            exactly to Wald's sequential probability-ratio test — but stated in <em>decision</em> units (profit) rather
+            than information units, because the terminal act is an allocation, not an inference.</p>
+
+            <h2 id="decay">Information decay and re-testing</h2>
+            <p>A measured surface is a snapshot; audiences drift and creative fatigues. The loop treats each finding as
+            having a half-life: the effective uncertainty grows until a fresh wave is worth its cost. With posterior
+            precision summarised by \( \sigma_{\text{post}} \) and a decay half-life \( h \),</p>
+
+            <div class="math-block">
+                \[ \sigma_{\text{eff}}^2(t) \;=\; \sigma_{\text{post}}^2\, e^{\lambda t},\qquad \lambda = \frac{\ln 2}{h}, \]
+                <span class="equation-label">(22)</span>
+            </div>
+
+            <p>and a re-test is due when \( \sigma_{\text{eff}}(t) \) has grown enough that a new wave's precision
+            \( \sigma_{\text{exp}} \) would materially tighten it (<code>due_for_retest</code>, reusing the same
+            information-decay clock as the model-anchored planner, so a continuous-learning programme and an MMM-anchored
+            one agree on when evidence has gone stale).</p>
+
+            <h2 id="sequential">The sequential loop as greedy-adaptive BED</h2>
+            <p>Assembled, the loop is a <strong>greedy (myopic) adaptive BED</strong> policy — the classical
+            design→run→infer cycle of traditional Bayesian adaptive design:</p>
+
+            <div class="loop-diagram" style="background:var(--color-bg-alt);border:1px solid var(--color-border);border-radius:10px;padding:1.2rem 1.4rem;font-family:'JetBrains Mono',monospace;font-size:0.8rem;line-height:1.6;overflow-x:auto;">for each wave t:
+    p(θ | h_t)          ← refit on ALL data                         # Eq. (9)  sequential Bayes
+    ξ_t   = argmax_ξ  A(ξ ; p(θ | h_t))                             # Eqs. (15)/(17)  acquisition
+    y_t   ← run the designed wave ξ_t (central-composite, holdouts) # Eq. (7)  causal by design
+    ā, fund, E[regret]  ← Thompson / funding line / regret          # Eqs. (18)-(20)  the decision
+    if ENBS ≤ 0:  stop and allocate ā                               # Eq. (21)  decision-theoretic stop</div>
+
+            <p>The incremental EIG at step \( t \) is an ordinary EIG whose prior is the carried posterior,
+            \( \mathrm{EIG}(\xi_t\mid h_{t-1}) = \mathbb{E}\big[\log \tfrac{p(y_t\mid\theta,\xi_t,h_{t-1})}{p(y_t\mid\xi_t,h_{t-1})}\big] \),
+            and Lindley additivity means these sum to the total information of the programme. A greedy policy maximises only
+            the <em>next</em> step's value; a fully non-myopic policy (amortised "Deep Adaptive Design", which trains a
+            policy network \( \pi_\phi(h) \) to maximise total EIG over a whole trajectory with a sequential contrastive
+            bound) can do better when a design's value is mostly downstream. The framework is deliberately greedy — but its
+            <strong>trust-region locality</strong> (each wave re-probes near the current recommendation) is a practical
+            substitute: it never commits to a far extrapolation, so it recovers from a mis-step by re-testing rather than
+            by planning the whole horizon ahead.</p>
+
+            <h2 id="misspec">Misspecification — the one place to be careful</h2>
+            <p>BOED is uniquely exposed to model misspecification because the model both <em>fits</em> the data and
+            <em>chooses</em> the next data. When no \( \theta^\star \) makes Eq. (6) match reality — e.g. the true
+            saturation is a two-phase mixture of Hills and you fit a single Hill — two things happen, and it is important to
+            state both honestly:</p>
+
+            <div class="two-col">
+                <div class="card">
+                    <h4>The decision is robust</h4>
+                    <p>Near an interior optimum the profit surface is flat, so any smooth, monotone, saturating curve fit
+                    to the probed cells reproduces the <em>local marginal ordering</em> — which is all the allocator in
+                    Eq. (18) uses. Empirically the recommended split captures \( \gtrsim 99\% \) of the achievable profit
+                    even under a badly-wrong response family.</p>
+                </div>
+                <div class="card">
+                    <h4>The calibration is not</h4>
+                    <p>The credible intervals of Eqs. (19)–(20) can become narrow <em>and</em> wrong — a misspecified model
+                    does not know it is wrong, so it understates its own uncertainty exactly where it did not probe. Trust
+                    the ranking and the funded set; treat a single channel's point marginal-ROAS as modelled, not
+                    measured. A poorly-mixing chain (high \( \hat R \)) or systematic cross-sectional residuals is the
+                    tell.</p>
+                </div>
+            </div>
+
+            <p>Rainforth et al. give the sharp cautionary example: for a <em>linear</em> model the EIG of the coefficients
+            is always maximised at the extremes of the input range regardless of the prior, so a misspecified linear model
+            never explores the interior. The mitigations here are the trust-region locality above, the shut-off cells that
+            expose gross misfit, and fitting the most flexible activation you can identify. The worked misspecification
+            study — mixture truth fit three ways — is in the executed notebook.</p>
+
+            <div class="info">
+                <h4>Where to go next</h4>
+                <p>The narrative walkthrough with animations is the <a href="continuous-learning.html">continuous-learning
+                overview</a>; the model-anchored counterpart (prioritising experiments <em>from</em> a fitted MMM) is the
+                <a href="measurement-calibration.html">calibration loop</a>. The
+                <a href="https://github.com/redam94/mmm-framework" target="_blank" rel="noopener">source and executed
+                notebooks</a> include a fully worked derivation-to-decision walkthrough and the misspecification study
+                referenced above.</p>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul class="refs">
+                <li>Lindley, D. V. (1956). <em>On a Measure of the Information Provided by an Experiment.</em> The Annals of
+                Mathematical Statistics, 27(4), 986–1005. <span style="color:var(--color-text-muted);">— the EIG /
+                information measure, its properties, and the sequential information-threshold stopping rule (§6).</span></li>
+                <li>Rainforth, T., Foster, A., Ivanova, D. R., &amp; Bickford Smith, F. (2023). <em>Modern Bayesian
+                Experimental Design.</em> Statistical Science. <span style="color:var(--color-text-muted);">— the review:
+                EIG estimators, nested Monte-Carlo rates, adaptive/amortised policies, and the misspecification and
+                information-vs-decision cautions.</span></li>
+                <li>Foster, A., Jankowiak, M., Bingham, E., Horsfall, P., Teh, Y. W., Rainforth, T., &amp; Goodman, N.
+                (2019). <em>Variational Bayesian Optimal Experimental Design.</em> NeurIPS.
+                <span style="color:var(--color-text-muted);">— the Barber–Agakov posterior bound, marginal and variational
+                NMC bounds.</span></li>
+                <li>Foster, A., Jankowiak, M., O'Meara, M., Teh, Y. W., &amp; Rainforth, T. (2020). <em>A Unified Stochastic
+                Gradient Approach to Designing Bayesian-Optimal Experiments.</em> AISTATS.
+                <span style="color:var(--color-text-muted);">— Prior and Adaptive Contrastive Estimation (PCE / ACE) and
+                the InfoNCE connection.</span></li>
+                <li>Frazier, P. I., Powell, W. B., &amp; Dayanik, S. (2008/2009). <em>The Knowledge-Gradient Policy for
+                Correlated Normal Beliefs.</em> INFORMS Journal on Computing. <span style="color:var(--color-text-muted);">—
+                the one-step EVSI acquisition realised in Eqs. (16)–(17).</span></li>
+                <li>Raiffa, H., &amp; Schlaifer, R. (1961). <em>Applied Statistical Decision Theory.</em> Harvard.
+                <span style="color:var(--color-text-muted);">— expected value of sample information (EVSI) and Bayesian
+                decision-theoretic experimentation.</span></li>
+                <li>Chaloner, K., &amp; Verdinelli, I. (1995). <em>Bayesian Experimental Design: A Review.</em> Statistical
+                Science, 10(3), 273–304. <span style="color:var(--color-text-muted);">— the general expected-utility
+                formulation of which the EIG is the information special case.</span></li>
+            </ul>
+
+            <p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:2rem;">The equations on this page map
+            one-to-one to <code>mmm_framework.continuous_learning</code> (<code>surface.py</code>, <code>model.py</code>,
+            <code>planner.py</code>, <code>acquisition.py</code>, <code>loop.py</code>); the mathematical specification is
+            in <code>technical-docs/continuous-learning.md</code>.</p>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
