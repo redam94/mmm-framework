@@ -1166,6 +1166,41 @@ print("percent — local re-testing makes the mild misspecification decision-irr
 assert mis[-1][1] < 1.5 and abs(mis[-1][1] - cor[-1][1]) < 1.5   # tracks the correct loop
 """),
     md(r"""
+### Watching the wrong family learn
+
+The static panels above become one moving picture. We run **two** trust-region
+loops on the same two-Hill world — one fitting the **correct** mixture, one fitting
+a **single Hill** — and watch them wave by wave.
+
+* **Top row — the curve you fit.** The correct family's band (green) hugs and
+  *covers* the black truth; the wrong family's band (blue) shrinks but stays
+  biased, with a **red** segment wherever the truth escapes it.
+* **Bottom row — the payoff.** The two **profit-gap** lines descend together and
+  overlap — the *decision* converges. But the wrong family's **credible-interval
+  width** stays narrower than the correct one and its marginal-ROAS coverage stays
+  low (the corner badges): **narrow *and* wrong**.
+
+The loop reaches the right budget on a wrong model — and stays honestly wrong about
+the curve. (Built on demand; pass `MIS_WRONG=logistic` to feature the severe case.)
+"""),
+    code(r"""
+import os
+import subprocess
+import sys
+sys.path.insert(0, ".")
+from IPython.display import Image as _IPImageM
+import build_misspecification_animation as _animM
+
+_mis_gif = os.path.join(_animM.OUTDIR, "continuous_learning_misspecification.gif")
+if not os.path.exists(_mis_gif):     # build on demand (single Hill = the default wrong family)
+    subprocess.run(
+        [sys.executable, "build_misspecification_animation.py"],
+        cwd=os.path.dirname(_animM.__file__), check=True,
+    )
+assert os.path.exists(_mis_gif)
+_IPImageM(filename=_mis_gif)
+"""),
+    md(r"""
 **Takeaways for the wrong-model case.**
 
 * **Use the most flexible activation you can identify.** The mixture recovered the

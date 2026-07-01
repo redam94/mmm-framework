@@ -211,7 +211,12 @@ activation you can identify (it is honest-but-uncertain rather than
 tight-but-wrong), and treat R̂ / cross-section residuals as a misspecification
 alarm. Verified in `tests/test_continuous_learning.py`
 (`test_misspecified_single_hill_still_makes_a_near_optimal_decision`) and
-demonstrated in notebook §14.
+demonstrated in notebook §14 — including an animation
+(`nbs/build_misspecification_animation.py`) that runs the correct-mixture and
+wrong-single-Hill loops side by side: the profit-gap trackers overlap and descend
+(the *decision* converges) while the wrong family's credible-interval width shrinks
+*below* the correct one and its coverage collapses (calibration stays confidently
+wrong).
 
 ## Failure modes & gotchas (guide §11)
 
