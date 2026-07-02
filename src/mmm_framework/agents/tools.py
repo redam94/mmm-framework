@@ -3719,6 +3719,16 @@ _LIBRARY_MENU = """\
 - `from mmm_framework.calibration.likelihood import ExperimentMeasurement, ExperimentEstimand`
 - Pass `experiments=[...]` to BayesianMMM, OR `mmm.add_experiment_calibration([...])` **before** `.fit()`.
 
+## Continuous learning  (model-free geo response-surface bandit — NO fitted MMM required)
+- Dedicated tools cover the whole loop: `start_learning_program` →
+  `import_past_experiments` (registry readouts as evidence) / `design_learning_wave` →
+  `record_learning_wave` → `get_learning_program_status` → `check_learning_stopping` (ENBS).
+- Library: `from mmm_framework.continuous_learning import LearningState, fit, plan_from_posterior,
+  central_composite, experiments_to_summaries, expand_arms, to_scaled, to_dollars`.
+- Traps: spend is SCALED (`dollars / spend_ref`, fixed at program start — never re-estimate);
+  NEVER normalize/center/log `y`; the geo set must stay STABLE across waves; trust the funded
+  set, not channel magnitudes, until a channel has ≥3 distinct spend levels.
+
 ## Diagnostics & reporting
 - `from mmm_framework.diagnostics import parameter_learning` (prior→posterior contraction)
 - `from mmm_framework.reporting import MMMReportGenerator, ReportBuilder` (HTML reports)
@@ -3884,6 +3894,7 @@ def log_experiment(
     value: float = None,
     se: float = None,
     notes: str = None,
+    subchannel: str = None,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -3902,6 +3913,9 @@ def log_experiment(
     Lifecycle: draft → planned → running → completed → calibrated.
     Results: status='completed' with `value`, `se`, `estimand`
     ('roas' | 'contribution' | 'mroas'). Dates are ISO strings.
+    `subchannel` is an optional creative/keyword/campaign identifier —
+    calibration to an MMM stays channel-level; sub-channel readouts feed
+    continuous-learning programs with arms.
     """
     from mmm_framework.api import sessions as sessions_store
 
@@ -3918,6 +3932,7 @@ def log_experiment(
             project_id=project_id,
             thread_id=tid,
             channel=channel,
+            subchannel=subchannel,
             design_type=design_type,
             status=status,
             start_date=start_date,
@@ -4037,6 +4052,7 @@ def plan_experiment(
     start_date: str = None,
     end_date: str = None,
     preregister: bool = False,
+    subchannel: str = None,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -4048,7 +4064,9 @@ def plan_experiment(
     pre-registration step) — or call preregister_experiment after review.
 
     Lifecycle: draft → planned → running → completed → calibrated. Dates are
-    ISO strings for the intended test window.
+    ISO strings for the intended test window. `subchannel` optionally targets a
+    creative/keyword/campaign within the channel — MMM calibration stays
+    channel-level; sub-channel readouts feed learning programs with arms.
     """
     from mmm_framework.api import sessions as sessions_store
 
@@ -4091,6 +4109,7 @@ def plan_experiment(
             project_id=project_id,
             thread_id=tid,
             channel=channel,
+            subchannel=subchannel,
             design_type=(design or {}).get("design_key")
             or (design or {}).get("design_type"),
             status="draft",
@@ -4164,6 +4183,7 @@ def record_experiment_readout(
     spend_per_period: float = None,
     n_treated_units: int = 1,
     adstock_state: str = "steady_state",
+    subchannel: str = None,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -4172,6 +4192,14 @@ def record_experiment_readout(
     'mroas'), plus the actual test window (ISO dates) and the measurement
     method (e.g. 'geo holdout DiD', 'synthetic control'). A planned experiment
     is moved through 'running' automatically.
+
+    `spend_per_period` is a SIGNED per-period spend delta vs business-as-usual:
+    a holdout/go-dark test must record it NEGATIVE (spend was cut), a scale-up
+    positive. The sign matters twice — off-panel MMM calibration and the
+    model-free `import_past_experiments` bridge both read it. `subchannel`
+    optionally tags the readout with a creative/keyword/campaign identifier
+    (MMM calibration stays channel-level; sub-channel readouts feed learning
+    programs with arms).
 
     Off-panel calibration (experiment ran OUTSIDE the model's fitted date
     range): also pass `spend_per_period` — the channel's spend per period per
@@ -4206,6 +4234,8 @@ def record_experiment_readout(
             readout["method"] = method
         if notes is not None:
             readout["notes"] = notes
+        if subchannel is not None:
+            readout["subchannel"] = subchannel
         # Off-panel calibration inputs (used when the test window is outside the
         # dataset): the response curve is evaluated at this spend level.
         if spend_per_period is not None:
@@ -4243,6 +4273,12 @@ def record_experiment_readout(
                 end_date=end_date,
                 readout=readout,
                 note=method,
+            )
+        if subchannel is not None:
+            # Mirror the readout's subchannel onto the registry column so
+            # list_experiments(subchannel=...) filtering sees it.
+            exp = sessions_store.upsert_experiment(
+                experiment_id=experiment_id, subchannel=subchannel
             )
     except ValueError as exc:
         return _simple_msg(f"Could not record readout: {exc}", tool_call_id)
@@ -5059,6 +5095,7 @@ def identify_structural_parameters(
 
 
 from mmm_framework.agents.eda_tools import EDA_TOOLS
+from mmm_framework.agents.learning_tools import LEARNING_TOOLS
 
 # ── Two-tier delegation: orchestrator (fast) → expert (strong) ──────────────
 
@@ -6030,6 +6067,8 @@ TOOLS = [
     log_experiment,
     list_experiment_log,
     get_run_history,
+    # Continuous learning programs — model-free geo bandit (no MMM required)
+    *LEARNING_TOOLS,
     # Step 8 — Sensitivity (post-fit)
     *[t for t in CAUSAL_TOOLS if t.name == "leave_one_out_decomposition"],
     # Pre-registration: lock the plan + check divergence (were previously unregistered)

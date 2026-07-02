@@ -54,9 +54,20 @@ BINDING_MAP: dict[str, tuple[str, str]] = {
     "panel": ("mmm_framework.data_loader", "PanelDataset"),
 }
 
-# ``result`` is only trusted in a backtest context (run_backtest in snippet).
+# Bindings that only apply when a guard substring appears in the snippet.
+# ``result`` is only trusted in a backtest context (run_backtest in snippet);
+# ``post``/``state`` only in a continuous-learning context (their names are too
+# generic to bind globally without colliding with other pages).
 CONDITIONAL_BINDINGS: dict[str, tuple[str, tuple[str, str]]] = {
     "result": ("run_backtest", ("mmm_framework.validation.backtest", "BacktestResult")),
+    "post": (
+        "continuous_learning",
+        ("mmm_framework.continuous_learning.model", "Posterior"),
+    ),
+    "state": (
+        "continuous_learning",
+        ("mmm_framework.continuous_learning.loop", "LearningState"),
+    ),
 }
 
 # If a mapped name is (re)assigned inside a snippet, we only keep the binding
@@ -72,6 +83,8 @@ TRUSTED_PRODUCERS: dict[str, set[str]] = {
     "contributions": {"ContributionResults", "get_contributions"},
     "panel": {"PanelDataset", "load"},
     "result": {"BacktestResult", "run_backtest"},
+    "post": {"Posterior", "fit"},  # post = cl.fit(...) is the canonical producer
+    "state": {"LearningState"},
 }
 
 # Lines that are clearly shell, not Python.
@@ -475,6 +488,37 @@ def test_checker_ignores_rebound_names() -> None:
 
 def test_checker_skips_unknown_variables_silently() -> None:
     res = check_snippet(_synthetic("config.totally_made_up()\nfoo.bar()"))
+    assert res.violations == []
+
+
+def test_checker_flags_fictional_method_on_cl_posterior() -> None:
+    # `post` binds to continuous_learning.model.Posterior only when the
+    # snippet mentions continuous_learning; cl.fit is a trusted producer.
+    src = (
+        "import mmm_framework.continuous_learning as cl\n"
+        "post = cl.fit(data, channels=chs)\n"
+        "post.summon_dragons()\n"
+    )
+    res = check_snippet(_synthetic(src))
+    assert any("summon_dragons" in v for v in res.violations)
+
+
+def test_checker_accepts_real_cl_posterior_and_state_apis() -> None:
+    src = (
+        "import mmm_framework.continuous_learning as cl\n"
+        "post = cl.fit(data, channels=chs)\n"
+        "post.gamma_summary()\n"
+        "state = cl.LearningState(channels=chs, center=c, pairs=p, pair_signs=s)\n"
+        "state.ingest(wave)\n"
+        "state.recommend()\n"
+    )
+    res = check_snippet(_synthetic(src))
+    assert res.violations == []
+
+
+def test_cl_bindings_inert_without_guard() -> None:
+    # Outside a continuous-learning snippet, `post`/`state` stay unbound.
+    res = check_snippet(_synthetic("post.summon_dragons()\nstate.not_real()"))
     assert res.violations == []
 
 

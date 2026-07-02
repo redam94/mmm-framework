@@ -175,6 +175,14 @@ function DrawerBody({ exp }: { exp: ExperimentRecord }) {
         <Card padding="sm">
           <dl className="divide-y divide-line-200">
             {design.hypothesis != null && <DefRow term="Hypothesis">{String(design.hypothesis)}</DefRow>}
+            {exp.subchannel && (
+              <DefRow term="Sub-channel">
+                <span className="rounded-full bg-steel-100 px-2 py-0.5 text-xs font-medium text-steel-700">
+                  {exp.subchannel}
+                </span>
+                <span className="ml-1.5 text-xs text-ink-400">creative/keyword arm</span>
+              </DefRow>
+            )}
             <DefRow term="Design type">{design.design_type ?? exp.design_type ?? '—'}</DefRow>
             {design.min_duration_periods != null && (
               <DefRow term="Min duration">

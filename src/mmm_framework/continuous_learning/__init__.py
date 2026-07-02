@@ -38,6 +38,14 @@ See ``technical-docs/continuous-learning.md`` and ``assets/continous_learning.md
 
 from __future__ import annotations
 
+from .arms import (
+    ARM_SEP,
+    ArmSpec,
+    cross_parent_pairs,
+    default_arm_pair_signs,
+    expand_arms,
+    within_parent_pairs,
+)
 from .design import assign_geos, central_composite
 from .dgp import (
     TrueWorld,
@@ -47,6 +55,7 @@ from .dgp import (
     simulate_panel,
     simulate_wave,
 )
+from .evidence import experiments_to_summaries
 from .loop import (
     LearningState,
     WaveRecord,
@@ -65,11 +74,13 @@ from .model import (
     refit_fn_from_data,
 )
 from .planner import (
+    PlanResult,
     allocate_under_sample,
     enbs,
     expected_regret,
     knowledge_gradient,
     marginal_roas,
+    plan_from_posterior,
     posterior_optimal_allocation,
     recommend_allocation,
     response_grid,
@@ -83,6 +94,13 @@ from .acquisition import (
     gaussian_eig,
     laplace_knowledge_gradient,
     theta_moments,
+)
+from .scaling import to_dollars, to_scaled
+from .serialize import (
+    posterior_from_payload,
+    posterior_to_payload,
+    state_from_npz,
+    state_to_npz,
 )
 from .surface import (
     ACTIVATIONS,
@@ -130,6 +148,8 @@ __all__ = [
     "recommend_allocation",
     "marginal_roas",
     "expected_regret",
+    "plan_from_posterior",
+    "PlanResult",
     "posterior_optimal_allocation",
     "knowledge_gradient",
     "response_grid",
@@ -146,6 +166,23 @@ __all__ = [
     "design_information",
     "gaussian_eig",
     "theta_moments",
+    # scaling (dollars <-> scaled units)
+    "to_scaled",
+    "to_dollars",
+    # evidence (experiment registry -> summary observations)
+    "experiments_to_summaries",
+    # serialize (Posterior payloads + LearningState .npz persistence)
+    "posterior_to_payload",
+    "posterior_from_payload",
+    "state_to_npz",
+    "state_from_npz",
+    # arms (sub-channel measurement)
+    "ARM_SEP",
+    "ArmSpec",
+    "expand_arms",
+    "within_parent_pairs",
+    "cross_parent_pairs",
+    "default_arm_pair_signs",
     # loop
     "LearningState",
     "WaveRecord",

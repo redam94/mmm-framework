@@ -55,6 +55,29 @@
         }
         .refs { font-size: 0.9rem; line-height: 1.7; }
         .refs li { margin-bottom: 0.6rem; }
+        .screenshot-figure { margin: 1.75rem 0; }
+        .screenshot-figure img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border: 1px solid var(--color-border);
+            border-radius: 10px;
+            box-shadow: var(--shadow-md);
+        }
+        .screenshot-figure figcaption {
+            margin-top: 0.6rem;
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            line-height: 1.5;
+        }
+        .screenshot-figure figcaption .shot-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--augur-sage-600);
+            margin-right: 0.6em;
+        }
     </style>
     <!-- seo:augmented (structured data + social cards) -->
     <meta name="twitter:card" content="summary_large_image">
@@ -99,7 +122,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-06-24",
+          "dateModified": "2026-07-02",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/continuous-learning-math.html#breadcrumb"
           },
@@ -147,6 +170,7 @@
             <h3>The model</h3>
             <ul class="sidebar-nav">
                 <li><a href="#surface">Surface &amp; likelihood</a></li>
+                <li><a href="#summary-obs">Summary observations</a></li>
                 <li><a href="#priors">Priors &amp; posterior</a></li>
                 <li><a href="#design">Design &amp; identification</a></li>
             </ul>
@@ -163,6 +187,7 @@
             <ul class="sidebar-nav">
                 <li><a href="#thompson">Thompson allocation</a></li>
                 <li><a href="#funding">The funding line (KKT)</a></li>
+                <li><a href="#arms">Arms &amp; grouped budgets</a></li>
                 <li><a href="#stopping">Regret &amp; ENBS</a></li>
                 <li><a href="#decay">Information decay</a></li>
             </ul>
@@ -327,10 +352,31 @@
 
             <p>Here \( \beta_c \ge 0 \) is the channel ceiling, \( \kappa_c \) the half-saturation, \( \alpha_c \) the Hill
             shape, and \( \gamma_{cc'} \) the pairwise synergy — <strong>positive</strong> for complementarity,
-            <strong>negative</strong> for cannibalisation. The activation \( f_c \) need only be smooth, monotone,
-            saturating, with \( f_c(0)=0 \) and a finite gradient (a <code>logistic</code>
-            \( f(s)=1-e^{-\lambda s} \) is a drop-in); Hill is the default and is convention-identical to the framework's
-            <code>SaturationType.HILL</code>. The observation model is a geo-week panel with a pinned baseline:</p>
+            <strong>negative</strong> for cannibalisation. The activation \( f_c \) is <strong>pluggable</strong>
+            (the <code>ACTIVATIONS</code> registry): any smooth, monotone, saturating curve with \( f_c(0)=0 \) and a
+            finite gradient. Three families ship as <em>fittable</em> activations — <code>hill</code> (the default,
+            convention-identical to the framework's <code>SaturationType.HILL</code>), <code>logistic</code>
+            (\( f(s)=1-e^{-\lambda s} \), concave, no inflection), and <code>hill_mixture</code>
+            (\( w\,\mathrm{Hill}(\kappa_1,\alpha_1) + (1{-}w)\,\mathrm{Hill}(\kappa_2,\alpha_2) \), a two-phase shape a
+            single Hill can only average over) — selected via <code>fit(data, activation=...)</code>. The matching truth
+            constructors <code>make_world_logistic</code> and <code>make_world_hill_mixture</code> build simulated worlds
+            in each family, which is what powers the misspecification study in
+            §<a href="#misspec">Misspecification</a>. The observation model is a geo-week panel with a pinned
+            baseline:</p>
+
+            <figure class="screenshot-figure">
+                <img src="assets/animations/continuous-learning-logistic.gif" loading="lazy"
+                     width="1180" height="760"
+                     alt="The learning-loop animation running with the logistic activation: the profit and uncertainty surfaces sharpen across waves exactly as in the Hill run, demonstrating that the loop is activation-agnostic.">
+                <figcaption>
+                    <span class="shot-tag">Simulated · logistic activation</span>
+                    The same closed loop fit with <code>activation="logistic"</code> instead of Hill: the surfaces
+                    sharpen and the recommendation converges exactly as in the Hill run. The planner differentiates
+                    whatever activation the posterior carries (<code>surface_value</code> /
+                    <code>surface_over_rows</code>), so the decision machinery is family-agnostic — the fast Laplace
+                    acquisition path is the one Hill-only exception (see §<a href="#laplace">the surrogate</a>).
+                </figcaption>
+            </figure>
 
             <div class="math-block">
                 \[ y_{g,t} \;=\; a_g \;+\; R(s_{g,t}) \;+\; \varepsilon_{g,t},
@@ -342,6 +388,58 @@
             status-quo allocation identifies \( a_g \) separately from the incremental response \( R \). The surface
             parameters are collected into \( \theta = (\beta,\kappa,\alpha,\gamma) \in\mathbb{R}^P \) with
             \( P = 3K + \binom{K}{2}^{\!*} \) (only modelled pairs).</p>
+
+            <h2 id="summary-obs">Summary observations — past experiments as likelihood terms</h2>
+            <p>The panel likelihood of Eq. (7) is not the only admissible evidence. A finished lift test — read out as a
+            point estimate and a standard error — is a <strong>summary observation</strong>: a measured contrast between
+            the surface at a test spend vector \( s^{\text{test}} \) and at its counterfactual baseline
+            \( s^{\text{base}} \), aggregated over \( n \) geo-periods. Each summary \( m \) enters the same posterior
+            as one additional Gaussian factor:</p>
+
+            <div class="math-block">
+                \[ \mathrm{lift}_m \;\sim\; \mathcal{N}\!\Big( n_m \big( R(s^{\text{test}}_m) - R(s^{\text{base}}_m) \big),\; \mathrm{SE}_m^2 \Big), \]
+                <span class="equation-label">(7a)</span>
+            </div>
+
+            <p>where \( n_m \) (the <code>scale</code>) is the number of treated geo-periods the total lift aggregates
+            over. Two consequences are worth stating precisely:</p>
+
+            <ul>
+                <li><strong>The geo intercept cancels — no pre-period is required.</strong> A lift readout is already a
+                difference of outcomes, so the additive \( a_g \) of Eq. (7) drops out of Eq. (7a) identically. Historical
+                tests can therefore inform the surface even when no panel, no pre-period, and no MMM exist. The price is
+                the same <em>structural-stationarity</em> assumption the MMM's off-panel calibration makes: the response
+                curve is taken as stable between when the test ran and now.</li>
+                <li><strong>In Fisher terms, a summary is one design row.</strong> Linearising as in
+                §<a href="#laplace">the surrogate</a>, summary \( m \) contributes a single rank-one increment to the
+                information:</li>
+            </ul>
+
+            <div class="math-block">
+                \[ \Delta\Lambda_m \;=\; \frac{1}{\mathrm{SE}_m^2}\; u_m u_m^{\!\top},
+                \qquad u_m = n_m\big( g(s^{\text{test}}_m) - g(s^{\text{base}}_m) \big), \]
+                <span class="equation-label">(7b)</span>
+            </div>
+
+            <p>a gradient row weighted by \( 1/\mathrm{SE}_m^2 \) — exactly the weight a whole test earned from its own
+            internal replication. A handful of summaries at one spend level per channel identifies the local funded/not-funded
+            contrast but leaves \( (\kappa_c, \alpha_c) \) prior-dominated: <strong>only observations at
+            \( \ge 3 \) distinct spend levels identify curvature</strong>. The fit records the evidence mix in
+            <code>diagnostics["evidence"]</code>, and the learning-program snapshot flags
+            <code>shape_identified: false</code> per channel rather than extrapolating a prior-shaped curve as if it
+            were measured. Works with any activation; combine freely with panel rows (the joint likelihood is the
+            product of Eq. (7) and Eq. (7a) factors), or fit on summaries alone.</p>
+
+            <p>The bridge from the experiment lifecycle registry is <code>evidence.experiments_to_summaries</code>:
+            completed/calibrated readouts are mapped channel-by-channel, and <strong>the lift is signed</strong> — the
+            registry records a working channel's effect positive, but the summary is a test-minus-base contrast, so a
+            holdout imports with a <em>negative</em> lift. Contribution readouts pass through as lifts with the sign
+            flipped for holdouts; ROAS readouts are converted as \( \mathrm{lift} = \text{value} \times \Delta s_{\text{total}} \)
+            with the <em>signed</em> total spend delta (negative for a holdout, the sign restored from the design; the
+            SE uses its absolute value); mROAS readouts are <em>skipped</em> — a slope is not a lift. A design-derived
+            spend delta is the treated-cell <em>total</em> and is divided by the number of treated units before use.
+            <code>fit</code> accepts the summaries via <code>data["summaries"]</code>. The agent tool is <code>import_past_experiments</code>; the plain-language
+            version of this section is on the <a href="continuous-learning.html#past-tests">narrative page</a>.</p>
 
             <h2 id="priors">Priors and the carried posterior</h2>
             <p>The priors are weakly informative and <em>sign-informed</em> on the interactions, which is where domain
@@ -366,6 +464,18 @@
             \( a_g \) are stable). This is exactly Lindley's additivity (§<a href="#eig">EIG</a>) made operational: every
             wave borrows strength from the last, and belief updates about the nuisance intercepts are retained rather than
             discarded (discarding them would break the additivity of information across stages).</p>
+
+            <div class="warning">
+                <h4>⚠️ Operating rule: a stable geo set</h4>
+                <p>Eq. (9) is only coherent if the accumulated waves share their nuisance parameters — i.e. the
+                <strong>same geo set, same <code>geo_idx</code> mapping, wave after wave</strong>. Re-drawing the geo
+                baselines each wave (e.g. calling a fresh <code>simulate_panel</code> per wave instead of
+                <code>simulate_wave</code> over fixed \( a_g \), or re-sampling markets in production) conflates two
+                independent intercept draws under one index: the misspecification study measured the loop
+                <em>diverging</em> under exactly this error, while the fixed-geo runs converged. The
+                <code>LearningState</code> ingest path guards the geo identity across waves; if the market list must
+                change, start a new programme (or carry the summaries, whose intercepts have already cancelled — Eq. 7a).</p>
+            </div>
 
             <h2 id="design">The design and identification</h2>
             <p>A design \( \xi \) is a <strong>central-composite</strong> cell matrix around the current operating point:
@@ -427,6 +537,18 @@
             <h2 id="laplace">The Gaussian/Laplace surrogate</h2>
             <p>Both objectives become closed-form under a local Gaussian model of the posterior — the engine in
             <code>acquisition.py</code>. Three steps:</p>
+
+            <div class="warning">
+                <h4>⚠️ The Laplace acquisition path is Hill-only</h4>
+                <p><code>theta_moments</code> packs \( \theta = (\beta, \kappa, \alpha, \gamma) \) — the <em>Hill</em>
+                parameter vector. For any other activation (<code>logistic</code>, <code>hill_mixture</code>) it raises
+                <code>NotImplementedError</code>, and everything downstream of it —
+                <code>design_eig</code> and <code>laplace_knowledge_gradient</code> — is therefore Hill-only too. The
+                <em>decision</em> readouts are unaffected: <code>thompson_wave</code>, <code>marginal_roas</code>,
+                <code>expected_regret</code>, and the NUTS-refit <code>planner.knowledge_gradient</code> are
+                activation-agnostic. If you fit a non-Hill family, price candidate waves with the refit KG (slow) or fall
+                back to the trust-region default design rather than the Laplace scores.</p>
+            </div>
 
             <p><strong>1 · Moment-match.</strong> Approximate the carried posterior over \( \theta \) by a Gaussian matched
             to its first two moments (<code>theta_moments</code>):</p>
@@ -533,7 +655,8 @@ post = cl.fit(data, channels=world.channels, pair_signs=cl.PAIR_SIGNS_EXAMPLE)
 
 # One Gaussian surrogate, three ways to price the SAME candidate wave — no refit.
 cells = cl.central_composite(np.full(4, 0.7), 0.6, world.pairs)
-mu, sigma = cl.theta_moments(post)                                   # Eq. (12)
+mu0, Sigma0 = cl.theta_moments(post)         # Eq. (12): posterior moments N(mu0, Sigma0)
+# NB: `sigma` below is the OBSERVATION noise of Eq. (7) — not Sigma0.
 eig_all   = cl.design_eig(post, cells, sigma=0.5, target="all")      # D-optimal   (Eq. 15, S = all)
 eig_gamma = cl.design_eig(post, cells, sigma=0.5, target="gamma")    # D_s-optimal (Eq. 15, S = gamma)
 kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0.5)  # KG / EVSI (Eq. 17)</code></pre>
@@ -581,6 +704,43 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             complementarity term \( \gamma_{cc'}f_{c'} \) can lift a weak channel just over it, which is why measuring
             interactions changes the funded set.</p>
 
+            <h2 id="arms">Sub-channel arms and grouped budgets</h2>
+            <p>Nothing in Eq. (6) requires the coordinates of \( s \) to be channels. A creative family or a keyword
+            group is an <strong>arm</strong> — an extra surface dimension named
+            <code>"Search&nbsp;│&nbsp;Brand"</code> — with its own \( (\beta,\kappa,\alpha) \) and its own pairwise
+            \( \gamma \) terms (<code>arms.expand_arms</code> flattens the parent&rarr;arms map into the channel list;
+            the separator is the same one the geo-arm budget optimiser uses). Two modelling choices make arms honest
+            rather than merely possible:</p>
+
+            <ul>
+                <li><strong>Within-parent pairs default to cannibalisation.</strong> Sibling arms share an audience, so
+                their \( \gamma \) priors take the negative-HalfNormal branch of Eq. (8)
+                (<code>within_parent_pairs</code> / <code>default_arm_pair_signs</code>); cross-parent pairs default to
+                the weak sign-unknown prior unless declared. This is the same sign-informed machinery as
+                <code>demote_channel</code> — assumptions are stated, then tested only where probed.</li>
+                <li><strong>The parent's budget is a hard constraint, not a prior.</strong> The allocator gains grouped
+                equality constraints alongside the total-budget constraint of Eq. (18):</li>
+            </ul>
+
+            <div class="math-block">
+                \[ \sum_{i \,\in\, g} s_i \;=\; B_g \quad \text{for each arm group } g,
+                \qquad \sum_c s_c = B,\;\; \textstyle\sum_g B_g \le B, \]
+                <span class="equation-label">(19a)</span>
+            </div>
+
+            <p>so the SLSQP solve re-mixes <em>within</em> a parent at fixed parent spend
+            (<code>group_budgets</code> on <code>allocate_under_sample</code> / <code>thompson_wave</code> /
+            <code>expected_regret</code>). Every Thompson draw, funding-line read, and regret pass respects the same
+            constraints, so the posterior over the optimal split stays a posterior over <em>feasible</em> splits.</p>
+
+            <p><strong>Design cost.</strong> Arms are not free: the central-composite design grows by roughly
+            <strong>3 cells per extra arm</strong> (2 axial + 1 shut-off) plus 2 cells per probed pair, and each cell
+            needs at least one geo. With all-pairs probing the pair count is quadratic in the number of arms — so
+            restrict probes to within-parent pairs (<code>arms.within_parent_pairs</code> builds exactly that list, and
+            <code>cross_parent_pairs</code> declares any cross-parent probes explicitly; <code>probe_pairs_excluding</code>
+            only <em>excludes</em> one channel's pairs — it is the walled-garden demotion tool, not a within-parent
+            filter) and split only the parents whose mix decision is worth the cells.</p>
+
             <h2 id="stopping">Expected regret and the ENBS stopping rule</h2>
             <p>The loop stops when learning no longer pays. Each wave it computes the <strong>expected regret</strong> — the
             posterior expected profit lost by acting on the consensus split \( \bar a \) instead of the split that is
@@ -593,8 +753,10 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
 
             <p>This is a Bayes-risk / expected-value-of-perfect-information quantity: it is exactly the profit still on the
             table from parameter uncertainty (<code>expected_regret</code>; the per-draw regret is non-negative because
-            \( a^\star(\theta) \) is that draw's own optimum). Multiplying by the margin and the affected population and
-            subtracting the cost of a wave gives the <strong>expected net benefit of sampling</strong>:</p>
+            \( a^\star(\theta) \) is that draw's own optimum). Multiplying by the margin and the affected population — the
+            <em>geo-periods</em> the sharper plan will govern, i.e. geos &times; horizon periods, since the regret is a
+            per-geo-period quantity and every geo runs the learned allocation — and subtracting the cost of a wave gives
+            the <strong>expected net benefit of sampling</strong>:</p>
 
             <div class="math-block">
                 \[ \mathrm{ENBS} \;=\; \mathbb{E}[\text{regret}] \cdot \text{margin} \cdot \text{population} \;-\; \text{wave cost},
@@ -671,17 +833,32 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             <p>Rainforth et al. give the sharp cautionary example: for a <em>linear</em> model the EIG of the coefficients
             is always maximised at the extremes of the input range regardless of the prior, so a misspecified linear model
             never explores the interior. The mitigations here are the trust-region locality above, the shut-off cells that
-            expose gross misfit, and fitting the most flexible activation you can identify. The worked misspecification
-            study — mixture truth fit three ways — is in the executed notebook.</p>
+            expose gross misfit, and fitting the most flexible activation you can identify.</p>
+
+            <p>The worked study (single-cycle numbers, recorded in the misspecification section of
+            <code>technical-docs/continuous-learning.md</code> and demonstrated in
+            <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/continuous_learning.ipynb"
+               target="_blank" rel="noopener"><code>nbs/continuous_learning.ipynb</code></a> §14): fitting
+            <code>hill_mixture</code> truth with a single Hill gives a 0.9% profit gap with 3/4 marginal-ROAS coverage;
+            with a logistic, 1.4% and 2/4 — on the <em>narrowest</em> intervals; the correct mixture, 0.9% and 4/4 on the
+            widest. The single-Hill fit also frequently fails to mix (\( \hat R \approx 1.5 \)) — the practical
+            misspecification alarm. Run sequentially with a fixed geo set, the wrong family's per-wave profit gap
+            converges 0.9% &rarr; 0.5% &rarr; 0.2% &rarr; 0.3% against the correct family's
+            0.9% &rarr; 0.5% &rarr; 0.1% &rarr; 0.1%. The analyst-level version, with the study's figures and animation,
+            is on the <a href="continuous-learning.html#misspec">narrative page</a>.</p>
 
             <div class="info">
                 <h4>Where to go next</h4>
                 <p>The narrative walkthrough with animations is the <a href="continuous-learning.html">continuous-learning
                 overview</a>; the model-anchored counterpart (prioritising experiments <em>from</em> a fitted MMM) is the
-                <a href="measurement-calibration.html">calibration loop</a>. The
-                <a href="https://github.com/redam94/mmm-framework" target="_blank" rel="noopener">source and executed
-                notebooks</a> include a fully worked derivation-to-decision walkthrough and the misspecification study
-                referenced above.</p>
+                <a href="measurement-calibration.html">calibration loop</a>. The executed notebooks are
+                <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/continuous_learning.ipynb"
+                   target="_blank" rel="noopener"><code>nbs/continuous_learning.ipynb</code></a> (the
+                derivation-to-decision walkthrough, including the acquisition comparison and the misspecification study)
+                and
+                <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/continuous_learning_story.ipynb"
+                   target="_blank" rel="noopener"><code>nbs/continuous_learning_story.ipynb</code></a> (the measurement
+                story told over one brand's cycle).</p>
             </div>
 
             <h2 id="references">References</h2>
@@ -713,8 +890,14 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             </ul>
 
             <p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:2rem;">The equations on this page map
-            one-to-one to <code>mmm_framework.continuous_learning</code> (<code>surface.py</code>, <code>model.py</code>,
-            <code>planner.py</code>, <code>acquisition.py</code>, <code>loop.py</code>); the mathematical specification is
+            one-to-one to <code>mmm_framework.continuous_learning</code>: <code>surface.py</code> (Eq. 6, the pluggable
+            activations), <code>model.py</code> (Eqs. 7–9), <code>design.py</code> (the central-composite cells),
+            <code>dgp.py</code> (the known-truth worlds, incl. <code>make_world_logistic</code> /
+            <code>make_world_hill_mixture</code>), <code>preprocess.py</code> (the adstock pre-pass and CUPED),
+            <code>evidence.py</code> (Eq. 7a, registry readouts &rarr; summaries), <code>planner.py</code>
+            (Eqs. 18–21), <code>acquisition.py</code> (Eqs. 12–17), <code>arms.py</code> (Eq. 19a),
+            <code>loop.py</code> (Eqs. 9, 22), with <code>serialize.py</code> persisting the carried state and
+            <code>service.py</code> orchestrating the app-facing learning programs; the mathematical specification is
             in <code>technical-docs/continuous-learning.md</code>.</p>
         </main>
     </div>

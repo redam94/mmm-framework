@@ -2304,6 +2304,7 @@ class ExperimentUpsertRequest(BaseModel):
     project_id: str | None = None
     thread_id: str | None = None
     channel: str | None = None
+    subchannel: str | None = None  # creative/keyword/campaign identifier
     design_type: str | None = None
     status: str | None = None
     start_date: str | None = None
@@ -2337,12 +2338,13 @@ async def list_experiments_endpoint(
     project_id: str | None = None,
     status: str | None = None,
     channel: str | None = None,
+    subchannel: str | None = None,
     principal: PrincipalDep = _DEV_PRINCIPAL,
 ):
     if not principal.is_dev and project_id is not None:
         ensure_project_access(principal, project_id, Role.VIEWER)
     exps = sessions_store.list_experiments(
-        project_id=project_id, status=status, channel=channel
+        project_id=project_id, status=status, channel=channel, subchannel=subchannel
     )
     if not principal.is_dev:
         allowed = auth_store.list_org_project_ids(principal.org_id)
@@ -2375,6 +2377,7 @@ async def upsert_experiment_endpoint(
             project_id=body.project_id,
             thread_id=body.thread_id,
             channel=body.channel,
+            subchannel=body.subchannel,
             design_type=body.design_type,
             status=body.status,
             start_date=body.start_date,
@@ -3430,6 +3433,515 @@ async def get_model_validation(project_id: str, job_id: str):
     art = sessions_store.get_artifact(job_id)
     if art is None or (art.get("payload") or {}).get("project_id") != project_id:
         raise HTTPException(status_code=404, detail="Validation job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
+# ── Continuous-learning programs (model-free geo bandit; Sextant page) ────────
+# A program is a first-class sessions-store entity (learning_programs /
+# learning_waves) whose heavy state lives on disk (state.npz under the project
+# workspace). Fits are NON-BLOCKING jobs on the synthetic thread
+# ``__learnjobs__{project_id}`` (artifact kind ``learning_fit``) — model-free,
+# so the worker never loads an MMM (bespoke worker, NOT _run_model_op_job).
+# Contract: technical-docs/continuous-learning-wiring.md §3.1/§3.5.
+
+
+class LearningProgramCreateRequest(BaseModel):
+    """Body: ``{name, config}`` — ``config`` is the §3.1 program config dict
+    (dollars, PER GEO per period): channels (+ optional arms), center, budget,
+    value_per_unit, spend_ref?, mode, activation, gamma_scale/beta_scale,
+    pair_signs?, kpi, cadence_weeks, and the ENBS economics (margin /
+    horizon_periods / wave_cost). The Sextant wizard sends channels INSIDE
+    config, ``mode: "fixed"``, and a fully-populated ``center``. The wizard's
+    horizon rides ``horizon_periods`` (a legacy ``population`` key is read as
+    horizon periods too); the backend scales it by the program's geo count at
+    fit time — the ENBS population is GEO-PERIODS."""
+
+    name: str | None = None
+    config: dict
+
+
+class LearningDesignWaveRequest(BaseModel):
+    delta: float = 0.6
+    probe_pairs: list[list[int]] | None = None  # None -> all program pairs
+    n_geo: int | None = None
+    n_holdout: int = 0
+    seed: int = 0
+
+
+class LearningWaveIngestRequest(BaseModel):
+    rows: list[dict] | None = None  # [{geo, <channel $ spends...>, y}]
+    experiment_ids: list[str] | None = None  # registry rows to import as evidence
+    csv_text: str | None = None  # geo,<channel $ columns>,y — EXCLUSIVE with rows
+    economics: dict | None = None  # {margin?, population?, wave_cost?}
+    fit_kwargs: dict | None = None  # e.g. {"num_warmup": 40} (tests / quick fits)
+
+
+class LearningFitRequest(BaseModel):
+    margin: float | None = None
+    population: float | None = None
+    wave_cost: float | None = None
+    fit_kwargs: dict | None = None
+
+
+def _learning_program_or_404(project_id: str, program_id: str) -> dict:
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    prog = sessions_store.get_learning_program(program_id)
+    if prog is None or prog.get("project_id") != project_id:
+        raise HTTPException(
+            status_code=404, detail=f"Learning program not found: {program_id}"
+        )
+    return prog
+
+
+#: Pending/running learning_fit jobs older than this stop blocking new
+#: submissions (a crash mid-fit would otherwise 409 the program forever).
+_LEARNING_JOB_STALE_S = 6 * 3600.0
+
+
+def _learning_running_job_id(project_id: str, program_id: str) -> str | None:
+    """The id of a pending/running learning_fit job for this program, if any.
+
+    Bounded artifact scan under the project's synthetic job thread — robust
+    across server restarts (no in-memory registry to lose), with a staleness
+    cutoff so an orphaned non-terminal artifact cannot lock the program out.
+    """
+    import time as _time
+
+    now = _time.time()
+    for art in sessions_store.list_artifacts(f"__learnjobs__{project_id}"):
+        if art.get("kind") != "learning_fit":
+            continue
+        payload = art.get("payload") or {}
+        if payload.get("program_id") != program_id:
+            continue
+        if payload.get("status") not in ("pending", "running"):
+            continue
+        created = float(art.get("created_at") or 0.0)
+        if now - created < _LEARNING_JOB_STALE_S:
+            return art["id"]
+    return None
+
+
+def _learning_job_sync(
+    synthetic_tid: str,
+    project_id: str,
+    program_id: str,
+    rows: list[dict] | None,
+    experiment_ids: list[str] | None,
+    csv_text: str | None,
+    economics: dict | None,
+    fit_kwargs: dict | None,
+) -> dict:
+    """SYNC worker (one asyncio.to_thread call): set the thread, load the
+    program state, ingest the new evidence, fit_and_plan, save state, write the
+    sessions rows. All inside ONE worker context (the F11 ContextVar rule)."""
+    from mmm_framework.agents.runtime import set_current_thread
+    from mmm_framework.continuous_learning import service as cl_service
+
+    set_current_thread(synthetic_tid)
+    prog = sessions_store.get_learning_program(program_id)
+    if prog is None or prog.get("project_id") != project_id:
+        return {"error": f"Learning program not found: {program_id}"}
+    config = prog.get("config") or {}
+    if rows and csv_text:
+        return {
+            "error": "provide exactly one of rows/csv_text — with both, the row "
+            "dicts would be silently discarded."
+        }
+
+    # Serialize the whole load → ingest → fit → save span per program: a
+    # concurrent writer that loaded before this one ingested would otherwise
+    # save a state.npz missing these rows (last-writer-wins evidence loss).
+    with cl_service.program_lock(program_id):
+        try:
+            state = cl_service.load_program_state(project_id, program_id)
+        except cl_service.ProgramStateError as exc:
+            return {"error": str(exc)}
+
+        source: str | None = None
+        observations: dict | None = None
+        import_report: dict | None = None
+        imported_ids: list[str] | None = None
+        if csv_text:
+            rows = cl_service.rows_from_csv(csv_text)
+        if rows:
+            ing = cl_service.ingest_wave_rows(state, rows)
+            source = "wave"
+            observations = {"n_rows": ing["n_rows"], "n_geo": ing["n_geo"]}
+        if experiment_ids:
+            # Project scoping: never fold another project's experiments into
+            # this program's surface (mirrors GET /experiments/{id}'s check).
+            exps: list[dict] = []
+            pre_skipped: list[dict] = []
+            for x in experiment_ids:
+                e = sessions_store.get_experiment(x)
+                if e is None:
+                    pre_skipped.append({"id": x, "reason": "not found in this project"})
+                elif e.get("project_id") and e.get("project_id") != project_id:
+                    pre_skipped.append(
+                        {
+                            "id": x,
+                            "reason": "experiment belongs to a different project",
+                        }
+                    )
+                else:
+                    exps.append(e)
+            period_days = 7.0 * float(config.get("cadence_weeks") or 1)
+            import_report = cl_service.import_experiment_summaries(
+                state, exps, period_days=period_days
+            )
+            import_report["skipped"] = pre_skipped + import_report["skipped"]
+            # Provenance: only the ids that actually became evidence ride the
+            # wave row; skipped ids live in observations_json.
+            imported_ids = list(import_report.get("imported_ids") or [])
+            source = source or "experiment_import"
+            observations = {
+                **(observations or {}),
+                "imported": import_report["imported"],
+                "skipped": import_report["skipped"],
+            }
+            if not import_report["imported"] and not rows:
+                reasons = "; ".join(
+                    f"{s.get('id')}: {s.get('reason')}"
+                    for s in import_report["skipped"][:5]
+                )
+                return {
+                    "error": "None of the selected experiments could be converted "
+                    f"to evidence ({reasons or 'no convertible readouts'})."
+                }
+
+        econ = dict(economics or {})
+        margin = (
+            float(econ["margin"])
+            if econ.get("margin") is not None
+            else float(config.get("margin") or 1.0)
+        )
+        # ENBS population = geo-periods (horizon × geo count, resolved at fit
+        # time; an explicit economics override is taken as final geo-periods).
+        population, pop_warning = cl_service.resolve_population(
+            state, config, econ.get("population")
+        )
+        wave_cost = (
+            float(econ["wave_cost"])
+            if econ.get("wave_cost") is not None
+            else float(config.get("wave_cost") or 0.0)
+        )
+        plan_kwargs: dict = {}
+        group_budgets = cl_service.group_budgets_for(state, config)
+        if group_budgets:
+            plan_kwargs["group_budgets"] = group_budgets
+
+        # n_waves counts INGESTED evidence batches, not fits: pure refits keep
+        # the existing count so Refit clicks never inflate the wave count.
+        waves = sessions_store.list_learning_waves(program_id)
+        n_ingested = sum(1 for w in waves if w.get("status") == "ingested")
+        n_waves = n_ingested + (1 if source is not None else 0)
+
+        snapshot = cl_service.fit_and_plan(
+            state,
+            fit_kwargs=fit_kwargs,
+            plan_kwargs=plan_kwargs,
+            margin=margin,
+            population=population,
+            wave_cost=wave_cost,
+            n_waves=n_waves,
+            extra_warnings=[pop_warning] if pop_warning else None,
+        )
+        if import_report is not None:
+            # The UI reads these ALONGSIDE the snapshot keys (Phase C contract).
+            snapshot["imported"] = import_report["imported"]
+            snapshot["skipped"] = import_report["skipped"]
+        path = cl_service.save_program_state(project_id, program_id, state)
+        if source is not None:  # new evidence -> a wave row; a pure refit only
+            sessions_store.record_ingested_wave(  # updates the program summary.
+                program_id,
+                project_id=project_id,
+                source=source,
+                observations=observations,
+                snapshot=snapshot,
+                experiment_ids=imported_ids,
+            )
+        sessions_store.update_learning_program(
+            program_id, state_path=path, summary=snapshot
+        )
+    return {"snapshot": snapshot}
+
+
+async def _run_learning_job(
+    job_id: str,
+    project_id: str,
+    program_id: str,
+    *,
+    rows: list[dict] | None = None,
+    experiment_ids: list[str] | None = None,
+    csv_text: str | None = None,
+    economics: dict | None = None,
+    fit_kwargs: dict | None = None,
+) -> None:
+    """Background learning-fit job: pending → running → done (result=SNAPSHOT)
+    / error. Model-free — never loads an MMM. Never lets the job vanish."""
+    try:
+        _sim_job_patch(job_id, status="running")
+        synthetic_tid = f"__learnjobs__{project_id}"
+        res = await asyncio.to_thread(
+            _learning_job_sync,
+            synthetic_tid,
+            project_id,
+            program_id,
+            rows,
+            experiment_ids,
+            csv_text,
+            economics,
+            fit_kwargs,
+        )
+        if res.get("error"):
+            _sim_job_patch(job_id, status="error", error=res["error"])
+            return
+        _sim_job_patch(
+            job_id, status="done", result=safe_json_dumps_load(res["snapshot"])
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Learning-fit job failed: %s", job_id)
+        _sim_job_patch(job_id, status="error", error=str(e))
+
+
+def _spawn_learning_job(
+    project_id: str, program_id: str, **worker_kwargs
+) -> JSONResponse:
+    synthetic_tid = f"__learnjobs__{project_id}"
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        "learning_fit",
+        {
+            "status": "pending",
+            "project_id": project_id,
+            "program_id": program_id,
+            "result": None,
+            "error": None,
+        },
+    )
+    _spawn_job_task(
+        _run_learning_job(job["id"], project_id, program_id, **worker_kwargs)
+    )
+    return JSONResponse(
+        status_code=202, content={"job_id": job["id"], "status": "pending"}
+    )
+
+
+@app.get("/projects/{project_id}/learning-programs", dependencies=[_proj_read])
+async def list_learning_programs_endpoint(project_id: str, status: str | None = None):
+    """The project's continuous-learning programs (each row carries its latest
+    fit SNAPSHOT under ``summary``)."""
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    programs = sessions_store.list_learning_programs(project_id, status=status)
+    return JSONResponse(content=safe_json_dumps_load({"programs": programs}))
+
+
+@app.post("/projects/{project_id}/learning-programs", dependencies=[_proj_write])
+async def create_learning_program_endpoint(
+    project_id: str, body: LearningProgramCreateRequest
+):
+    """Create a learning program: validate the config (dollars), build + save
+    the initial LearningState, insert the sessions row."""
+    from mmm_framework.continuous_learning import service as cl_service
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    config = dict(body.config or {})
+    try:
+        state = cl_service.new_program_state(config)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    prog = sessions_store.create_learning_program(
+        project_id=project_id,
+        name=body.name
+        or f"Learning program ({', '.join(str(c) for c in config.get('channels') or [])})",
+        channels=state.channels,
+        config=config,
+    )
+    path = cl_service.save_program_state(project_id, prog["id"], state)
+    prog = sessions_store.update_learning_program(prog["id"], state_path=path)
+    return JSONResponse(
+        status_code=201, content=safe_json_dumps_load({"program": prog})
+    )
+
+
+@app.get(
+    "/projects/{project_id}/learning-programs/{program_id}",
+    dependencies=[_proj_read],
+)
+async def get_learning_program_endpoint(project_id: str, program_id: str):
+    """One program + its wave timeline (design/observation/snapshot rows)."""
+    prog = _learning_program_or_404(project_id, program_id)
+    waves = sessions_store.list_learning_waves(program_id)
+    return JSONResponse(content=safe_json_dumps_load({"program": prog, "waves": waves}))
+
+
+@app.delete(
+    "/projects/{project_id}/learning-programs/{program_id}",
+    dependencies=[_proj_write],
+)
+async def delete_learning_program_endpoint(project_id: str, program_id: str):
+    """Delete a program (cascades its waves) AND reap its on-disk directory
+    (state.npz holds the client's accumulated panel + posterior draws)."""
+    from mmm_framework.continuous_learning import service as cl_service
+
+    _learning_program_or_404(project_id, program_id)
+    # Delete-vs-running-fit race: the running-job 409 covers the common case;
+    # the non-blocking lock acquisition covers a fit currently inside its
+    # load→save critical section (a fit that slips past both would recreate
+    # the dir on save, then fail loudly on the now-missing program row).
+    running = _learning_running_job_id(project_id, program_id)
+    if running:
+        raise HTTPException(
+            status_code=409,
+            detail=f"a learning fit is pending/running for this program "
+            f"(job {running}) — wait for it to finish before deleting.",
+        )
+    lock = cl_service.program_lock(program_id)
+    if not lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail="a fit is holding this program's state — retry shortly.",
+        )
+    try:
+        sessions_store.delete_learning_program(program_id)
+        cl_service.delete_program_dir(project_id, program_id)
+    finally:
+        lock.release()
+    return JSONResponse(content={"status": "ok"})
+
+
+@app.post(
+    "/projects/{project_id}/learning-programs/{program_id}/design-wave",
+    dependencies=[_proj_write],
+)
+async def design_learning_wave_endpoint(
+    project_id: str, program_id: str, body: LearningDesignWaveRequest
+):
+    """Design the next central-composite wave around the program's current
+    center (sync — pure design math, no fit). Stores a 'designed' wave row."""
+    from mmm_framework.continuous_learning import service as cl_service
+
+    _learning_program_or_404(project_id, program_id)
+    try:
+        state = cl_service.load_program_state(project_id, program_id)
+    except cl_service.ProgramStateError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    try:
+        design = cl_service.design_wave(
+            state,
+            delta=body.delta,
+            probe_pairs=(
+                None
+                if body.probe_pairs is None
+                else [(int(i), int(j)) for i, j in body.probe_pairs]
+            ),
+            n_geo=body.n_geo,
+            n_holdout=body.n_holdout,
+            seed=body.seed,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    wave = sessions_store.add_learning_wave(
+        program_id,
+        project_id=project_id,
+        status="designed",
+        source="wave",
+        design=design,
+    )
+    return JSONResponse(content=safe_json_dumps_load({**design, "wave_id": wave["id"]}))
+
+
+@app.post(
+    "/projects/{project_id}/learning-programs/{program_id}/waves",
+    dependencies=[_proj_write, _rl_heavy],
+)
+async def ingest_learning_wave_endpoint(
+    project_id: str, program_id: str, body: LearningWaveIngestRequest
+):
+    """Ingest wave evidence (rows / CSV text / registry experiment ids) and
+    refit in the background. 202 + job_id; poll ``.../jobs/{job_id}`` — the
+    done payload's ``result`` is the fit SNAPSHOT. 409 while a fit job for the
+    same program is still pending/running (concurrent fits race on state.npz)."""
+    _learning_program_or_404(project_id, program_id)
+    if not (body.rows or body.experiment_ids or body.csv_text):
+        raise HTTPException(
+            status_code=400,
+            detail="Provide at least one evidence source: rows, csv_text, or "
+            "experiment_ids (use POST .../fit for a pure refit).",
+        )
+    if body.rows and body.csv_text:
+        raise HTTPException(
+            status_code=400,
+            detail="provide exactly one of rows/csv_text — with both, the row "
+            "dicts would be silently discarded.",
+        )
+    running = _learning_running_job_id(project_id, program_id)
+    if running:
+        raise HTTPException(
+            status_code=409,
+            detail=f"a learning fit is already pending/running for this program "
+            f"(job {running}) — wait for it before submitting new evidence.",
+        )
+    return _spawn_learning_job(
+        project_id,
+        program_id,
+        rows=body.rows,
+        experiment_ids=body.experiment_ids,
+        csv_text=body.csv_text,
+        economics=body.economics,
+        fit_kwargs=body.fit_kwargs,
+    )
+
+
+@app.post(
+    "/projects/{project_id}/learning-programs/{program_id}/fit",
+    dependencies=[_proj_write, _rl_heavy],
+)
+async def refit_learning_program_endpoint(
+    project_id: str, program_id: str, body: LearningFitRequest
+):
+    """Pure refit on the evidence already accumulated (e.g. with overridden
+    ENBS economics). 202 + job_id. 409 while another fit job for this program
+    is still pending/running."""
+    _learning_program_or_404(project_id, program_id)
+    running = _learning_running_job_id(project_id, program_id)
+    if running:
+        raise HTTPException(
+            status_code=409,
+            detail=f"a learning fit is already pending/running for this program "
+            f"(job {running}) — wait for it before requesting a refit.",
+        )
+    economics = {
+        k: v
+        for k, v in {
+            "margin": body.margin,
+            "population": body.population,
+            "wave_cost": body.wave_cost,
+        }.items()
+        if v is not None
+    }
+    return _spawn_learning_job(
+        project_id,
+        program_id,
+        economics=economics or None,
+        fit_kwargs=body.fit_kwargs,
+    )
+
+
+@app.get(
+    "/projects/{project_id}/learning-programs/{program_id}/jobs/{job_id}",
+    dependencies=[_proj_read],
+)
+async def get_learning_job_endpoint(project_id: str, program_id: str, job_id: str):
+    """Poll a learning-fit job: {status: pending|running|done|error,
+    result: SNAPSHOT|null, error|null, project_id, program_id}."""
+    art = sessions_store.get_artifact(job_id)
+    if art is None or (art.get("payload") or {}).get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Learning job not found.")
     return JSONResponse(content=safe_json_dumps_load(art["payload"]))
 
 

@@ -47,7 +47,14 @@ function ExperimentCard({
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="font-medium text-ink-900">{exp.channel}</span>
+        <span className="min-w-0 font-medium text-ink-900">
+          {exp.channel}
+          {exp.subchannel && (
+            <span className="ml-1.5 rounded-full bg-steel-100 px-1.5 py-0.5 align-middle text-[10px] font-medium text-steel-700">
+              {exp.subchannel}
+            </span>
+          )}
+        </span>
         <StatusChip status={exp.status} />
       </div>
       {exp.design_type && <p className="mt-1 text-xs text-ink-400">{exp.design_type}</p>}

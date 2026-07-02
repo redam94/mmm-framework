@@ -236,16 +236,50 @@ The productionization upgrades from guide §9 are now implemented and
 demonstrated in the notebook (§7–9): the **adstock pre-pass + CUPED**
 (`preprocess.py`), the **fast Laplace knowledge-gradient**
 (`acquisition.laplace_knowledge_gradient`), and the **pure-EIG D/D_s-optimal**
-acquisition (`acquisition.design_eig`). Still deferred:
+acquisition (`acquisition.design_eig`).
 
-* **Agent / API / UI wiring** — agent tools (`start_learning_program`,
-  `design_next_wave`, `record_wave_readout`, `recommend_allocation`,
-  `check_stopping`), REST endpoints + non-blocking jobs (reuse
-  `_run_model_op_job` / `_spawn_job_task`), sessions persistence
-  (`learning_program` / `learning_wave` tables), and a React "Learning Programs"
-  page.
+**Agent / API wiring has now shipped** (Phase B of
+`technical-docs/continuous-learning-wiring.md`):
+
+* **Service layer** — `continuous_learning/service.py`: dollars-at-the-boundary
+  config validation (`new_program_state`, arms-aware), state-file IO
+  (`<workspace>/projects/<pid>/learning/<prog>/state.npz`), `design_wave`,
+  `ingest_wave_rows` / `rows_from_csv`, `import_experiment_summaries` (the
+  model-free past-experiment bridge), and `fit_and_plan` — ONE Thompson pass
+  producing the pinned SNAPSHOT (per-dollar mROAS funding line with
+  FUND/HOLD/CUT verdicts, ENBS in dollars, response curves, prior-domination
+  and shape-identification flags).
+* **Sessions persistence** — `learning_programs` / `learning_waves` tables +
+  CRUD in `api/sessions.py`; a nullable `subchannel` column on the
+  `experiments` registry (threaded through `log_experiment` /
+  `plan_experiment` / `record_experiment_readout` and `POST /experiments`).
+* **REST endpoints** — `GET/POST/DELETE /projects/{pid}/learning-programs…`,
+  sync `…/design-wave`, non-blocking `…/waves` + `…/fit` jobs on the synthetic
+  thread `__learnjobs__{pid}` (bespoke model-free worker `_run_learning_job` —
+  it never loads an MMM), and the `…/jobs/{job_id}` poller.
+* **Agent tools** — `agents/learning_tools.py`: `start_learning_program`,
+  `import_past_experiments`, `design_learning_wave`, `record_learning_wave`,
+  `get_learning_program_status`, `check_learning_stopping` (all spine tools;
+  prompt guidance in `MMM_SYSTEM_PROMPT` + a `_LIBRARY_MENU` section).
+* **React "Sextant" page** (`/learning`) — built in Phase C against the same
+  §3.1 SNAPSHOT schema and §3.5 endpoint paths.
+* **Docs pages** (Phase D) — `docs/continuous-learning.html` /
+  `-math.html` gained the past-experiment ingestion (summary-observation
+  likelihood), creative/keyword arms, and in-the-app (Sextant + agent tools)
+  sections, plus the interactive surface/ENBS calculators.
+
+Still deferred:
+
 * **Laplace KG *inside the loop*** — the Laplace update is available as a
   standalone acquisition; wiring it into `knowledge_gradient` / the closed loop
   (so wave selection never pays for a NUTS refit) is not done.
 * **Richer baseline** — a national time effect `τ_t`, and a per-geo (rather than
   pre-pass) adstock parameter in the graph.
+* **Heterogeneous `spend_ref` budget constraint** — the planner enforces the
+  fixed budget in scaled units; with a non-uniform per-channel `spend_ref`
+  that is a reference-weighted budget, not the exact dollar simplex (the
+  snapshot carries a warning). The default `spend_ref` — one global constant,
+  the mean of the channel centers — is exact.
+* **Total-lift constraints across an arm group** — a channel-level readout on a
+  split parent is skipped by the evidence converter rather than being
+  distributed over its arms.

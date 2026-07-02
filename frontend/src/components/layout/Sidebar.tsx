@@ -6,6 +6,7 @@ import {
   BookOpen,
   CalendarRange,
   ChevronDown,
+  Compass,
   Landmark,
   LogOut,
   MessageSquareText,
@@ -49,6 +50,7 @@ interface NavItem {
 const NAV_ICONS: Record<string, NavItem['icon']> = {
   '/program': Orbit,
   '/experiments': Bird,
+  '/learning': Compass,
   '/performance': ScrollText,
   '/planner': CalendarRange,
   '/portfolio': Telescope,

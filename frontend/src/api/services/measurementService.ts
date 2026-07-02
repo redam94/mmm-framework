@@ -14,6 +14,8 @@ export interface StatusHistoryEntry {
 /** Full registry record (extends the legacy ExperimentInfo scalar columns). */
 export interface ExperimentRecord extends Omit<ExperimentInfo, 'status'> {
   status: LifecycleStatus;
+  /** creative/keyword/campaign arm within the channel (nullable) */
+  subchannel?: string | null;
   recommending_run_id: string | null;
   calibrated_run_id: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic JSON blob; ExperimentDrawer renders fields like design.design_type/min_duration_periods directly as ReactNode, which `unknown` is not assignable to (narrowing here would break that consumer, which this cleanup must not edit)

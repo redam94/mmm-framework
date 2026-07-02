@@ -17,6 +17,7 @@ import {
   AgentPage,
   ModelGardenPage,
   PlannerPage,
+  LearningPage,
 } from './pages';
 import './index.css';
 
@@ -97,6 +98,7 @@ function App() {
                     <Route path="/program" element={<ProgramPage />} />
                     <Route path="/experiments" element={<ExperimentsPage />} />
                     <Route path="/experiments/:experimentId" element={<ExperimentsPage />} />
+                    <Route path="/learning" element={<LearningPage />} />
                     <Route path="/performance" element={<PerformancePage />} />
                     <Route path="/performance/:tab" element={<PerformancePage />} />
                     <Route path="/planner" element={<PlannerPage />} />

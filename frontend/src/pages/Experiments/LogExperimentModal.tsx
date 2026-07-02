@@ -25,6 +25,7 @@ export function LogExperimentModal({ onClose }: { onClose: () => void }) {
   const upsert = useUpsertExperiment();
 
   const [channel, setChannel] = useState('');
+  const [subchannel, setSubchannel] = useState('');
   const [hypothesis, setHypothesis] = useState('');
   const [status, setStatus] = useState<LoggableStatus>('draft');
   const [designType, setDesignType] = useState('');
@@ -48,6 +49,7 @@ export function LogExperimentModal({ onClose }: { onClose: () => void }) {
       await upsert.mutateAsync({
         project_id: projectId,
         channel: channel.trim(),
+        subchannel: subchannel.trim() || null,
         status: status as ExperimentStatus,
         design_type: designType.trim() || null,
         start_date: startDate || null,
@@ -102,6 +104,14 @@ export function LogExperimentModal({ onClose }: { onClose: () => void }) {
               </select>
             </Field>
           </div>
+          <Field label="Sub-channel (creative/keyword — optional)">
+            <input
+              value={subchannel}
+              onChange={(e) => setSubchannel(e.target.value)}
+              placeholder="e.g. Brand, NonBrand, 30s-spot"
+              className={inputCls}
+            />
+          </Field>
           <Field label="Hypothesis">
             <input
               value={hypothesis}
