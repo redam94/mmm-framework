@@ -104,6 +104,14 @@ def theta_moments(
             "(thompson_wave / marginal_roas / expected_regret), which are "
             "activation-agnostic."
         )
+    if getattr(post, "likelihood", "normal") != "normal":
+        raise NotImplementedError(
+            "the fast Laplace-KG / pure-EIG acquisition assumes a homoskedastic "
+            "Gaussian observation model (design_information's Fisher weights "
+            f"are w_c / sigma^2); posterior likelihood is {post.likelihood!r}. "
+            "Use the planner's decision readouts (thompson_wave / marginal_roas "
+            "/ expected_regret), which read only the surface parameters."
+        )
     gp = np.stack(
         [post.samples[pair_name(post.channels, p)] for p in post.pairs], axis=1
     )

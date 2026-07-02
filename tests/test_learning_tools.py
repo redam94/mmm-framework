@@ -232,6 +232,67 @@ class TestDesignAndIngest:
         # probe_pairs=[] drops the off-axis cells
         assert svc.design_wave(state, probe_pairs=[])["n_cells"] == 7
 
+    def test_design_wave_stratified_on_flag(self):
+        from mmm_framework.continuous_learning import service as svc
+
+        state = self._state()
+        # no ingested data yet -> round-robin
+        d = svc.design_wave(state, n_geo=8)
+        assert d["assignment"]["stratified_on"] is None
+        # ingest a wave -> stratified on the accumulated per-geo KPI
+        rows = [
+            {"geo": f"g{i}", "Chatter": 140000.0, "Pulse": 70000.0, "y": 5.0 + i}
+            for i in range(8)
+        ]
+        svc.ingest_wave_rows(state, rows)
+        d2 = svc.design_wave(state)  # n_geo defaults to the pinned geo set
+        assert d2["assignment"]["stratified_on"] == "accumulated_kpi"
+        assert len(d2["assignment"]["cell_idx"]) == 8
+        # explicit opt-out keeps round-robin
+        d3 = svc.design_wave(state, stratify=False)
+        assert d3["assignment"]["stratified_on"] is None
+
+    def test_design_wave_optimize_without_posterior_warns(self):
+        from mmm_framework.continuous_learning import service as svc
+
+        state = self._state()
+        d = svc.design_wave(state, optimize=True, n_geo=10)
+        assert "kg" not in d
+        assert any("knowledge-gradient" in w for w in d["warnings"])
+        assert d["delta"] == 0.6  # the fixed-delta path is preserved
+
+    def test_design_wave_optimize_with_posterior_picks_candidate(self):
+        from mmm_framework.continuous_learning import Posterior
+        from mmm_framework.continuous_learning import service as svc
+        from mmm_framework.continuous_learning.model import pair_name
+
+        state = self._state()
+        rng = np.random.default_rng(0)
+        n = 120
+        s = {
+            "beta": np.abs(rng.normal(1.5, 0.2, (n, 2))),
+            "kappa": np.abs(rng.normal(0.8, 0.1, (n, 2))),
+            "alpha": np.clip(rng.normal(2.0, 0.2, (n, 2)), 0.5, 5),
+            "sigma": np.abs(rng.normal(0.5, 0.05, n)),
+            pair_name(state.channels, (0, 1)): rng.normal(0.0, 0.3, n),
+        }
+        state.posterior = Posterior(
+            samples=s, channels=state.channels, pairs=[(0, 1)], pair_signs={}
+        )
+        d = svc.design_wave(
+            state,
+            optimize=True,
+            candidate_deltas=[0.5, 0.8],
+            n_geo=12,
+            kg_n_outcomes=8,
+        )
+        assert d["kg"]["used"] is True
+        assert d["delta"] in (0.5, 0.8) and d["delta"] == d["kg"]["chosen_delta"]
+        assert len(d["kg"]["scores"]) == 2
+        # cell labels reflect the CHOSEN delta
+        pct = int(round(d["delta"] * 100))
+        assert f"Chatter +{pct}%" in d["cell_labels"]
+
     def test_rows_from_csv_and_week_column(self):
         from mmm_framework.continuous_learning import service as svc
 
@@ -591,6 +652,68 @@ def test_start_design_record_status_stop_flow(session, monkeypatch):
         program_id=prog_id, wave_cost=0.5, config=cfg, tool_call_id="t7"
     )
     assert "keep testing" in _text(cmd)
+
+
+def test_record_wave_period_col_reaches_the_service(session, monkeypatch):
+    """[9]/[13] A national-time-effect program is usable through the agent
+    tool: record_learning_wave(period_col=...) threads to ingest_wave_rows,
+    and omitting it auto-detects a week column instead of dead-ending."""
+    env, pid, tid, cfg = session
+    from mmm_framework.agents import learning_tools as LT
+    from mmm_framework.continuous_learning import service as svc
+
+    config = {
+        "channels": ["Chatter", "Pulse"],
+        "budget": 280000,
+        "value_per_unit": 5.0,
+        "time_effect": "national",
+    }
+    state = svc.new_program_state(config)
+    prog = env.create_learning_program(
+        project_id=pid, name="National", channels=state.channels, config=config
+    )
+    path = svc.save_program_state(pid, prog["id"], state)
+    env.update_learning_program(prog["id"], state_path=path)
+    monkeypatch.setattr(svc, "fit_and_plan", lambda state, **kw: dict(CANNED_SNAPSHOT))
+
+    rows = [
+        {"geo": f"g{i}", "week": wk, "Chatter": 140000.0, "Pulse": 140000.0, "y": 5.0}
+        for wk in ("2026-01-05", "2026-01-12")
+        for i in range(3)
+    ]
+    cmd = LT.record_learning_wave.func(
+        state={},
+        rows=rows,
+        period_col="week",
+        program_id=prog["id"],
+        config=cfg,
+        tool_call_id="t1",
+    )
+    assert "Wave recorded: 6 rows" in _text(cmd)
+    saved = svc.load_program_state(pid, prog["id"])
+    assert "period_idx" in saved.data
+    np.testing.assert_array_equal(np.unique(saved.data["period_idx"]), [0, 1])
+
+    # omitted period_col -> auto-detected 'week' column, surfaced as a warning
+    cmd = LT.record_learning_wave.func(
+        state={},
+        rows=[
+            {
+                "geo": f"g{i}",
+                "week": "2026-01-19",
+                "Chatter": 140000.0,
+                "Pulse": 140000.0,
+                "y": 5.0,
+            }
+            for i in range(3)
+        ],
+        program_id=prog["id"],
+        config=cfg,
+        tool_call_id="t2",
+    )
+    assert "auto-detected" in _text(cmd)
+    saved = svc.load_program_state(pid, prog["id"])
+    np.testing.assert_array_equal(np.unique(saved.data["period_idx"]), [0, 1, 2])
 
 
 def test_record_wave_requires_rows_or_csv(session):

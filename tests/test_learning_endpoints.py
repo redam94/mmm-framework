@@ -298,6 +298,60 @@ async def test_design_wave_sync_cells_and_wave_row(store):
 
 
 @pytest.mark.asyncio
+async def test_design_wave_optimize_and_stratify_passthrough(store):
+    """The optimize/stratify request fields reach the service: a fresh program
+    (no posterior, no ingested data) degrades gracefully — a knowledge-gradient
+    warning instead of a `kg` block, and a round-robin assignment."""
+    from mmm_framework.api import main as M
+
+    pid = store.create_project("P")["project_id"]
+    prog = await _create_program(M, pid)
+
+    resp = await M.design_learning_wave_endpoint(
+        pid,
+        prog["id"],
+        M.LearningDesignWaveRequest(optimize=True, stratify=True, n_geo=12),
+    )
+    design = _body(resp)
+    assert any("knowledge-gradient" in w for w in design["warnings"])
+    assert "kg" not in design
+    assert design["assignment"]["stratified_on"] is None
+    assert len(design["assignment"]["cell_idx"]) == 12
+    # the request model exposes the new knobs with safe defaults
+    body = M.LearningDesignWaveRequest()
+    assert body.optimize is False and body.stratify is True
+    assert body.candidate_deltas is None and body.kg_n_outcomes == 32
+
+
+@pytest.mark.asyncio
+async def test_design_wave_request_bounds_kg_params(store):
+    """[12] The Laplace-KG knobs are bounded at the request model (FastAPI maps
+    ValidationError to 422): an unbounded kg_n_outcomes/candidate_deltas would
+    run hours of SLSQP solves + GB-scale MvNormal draws off one request."""
+    from pydantic import ValidationError
+
+    from mmm_framework.api import main as M
+
+    with pytest.raises(ValidationError):
+        M.LearningDesignWaveRequest(kg_n_outcomes=100000)
+    with pytest.raises(ValidationError):
+        M.LearningDesignWaveRequest(kg_n_outcomes=0)  # np.mean([]) -> NaN scores
+    with pytest.raises(ValidationError):
+        M.LearningDesignWaveRequest(kg_n_outcomes=7)  # below the floor
+    with pytest.raises(ValidationError):
+        M.LearningDesignWaveRequest(candidate_deltas=[0.5] * 9)  # too many
+    with pytest.raises(ValidationError):
+        M.LearningDesignWaveRequest(candidate_deltas=[0.5, 0.0])  # <= 0
+    with pytest.raises(ValidationError):
+        M.LearningDesignWaveRequest(candidate_deltas=[-0.3])
+    with pytest.raises(ValidationError):
+        M.LearningDesignWaveRequest(candidate_deltas=[2.0])  # > 1.5
+    # in-range values pass
+    ok = M.LearningDesignWaveRequest(kg_n_outcomes=64, candidate_deltas=[0.4, 0.8])
+    assert ok.kg_n_outcomes == 64 and ok.candidate_deltas == [0.4, 0.8]
+
+
+@pytest.mark.asyncio
 async def test_ingest_requires_evidence_and_poll_scoping(store):
     from mmm_framework.api import main as M
 
@@ -469,6 +523,56 @@ async def test_wave_ingest_fit_end_to_end(store):
     assert len(ingested) == 1 and ingested[0]["snapshot"]["schema_version"] == 1
     assert ingested[0]["design"]["n_cells"] == 9  # design joined to its results
     assert detail["program"]["summary"]["evidence"]["n_rows"] == 24
+
+
+@pytest.mark.asyncio
+async def test_wave_ingest_fit_end_to_end_national_time_effect(store):
+    """[9]/[13] A time_effect='national' program is usable END-TO-END through
+    the REST surface: create with the config knob → POST rows with period_col
+    → the job ingests (tau periods indexed off the week column) and the tiny
+    fit reaches done with a full SNAPSHOT."""
+    from mmm_framework.api import main as M
+    from mmm_framework.continuous_learning import service as cl_service
+
+    pid = store.create_project("P")["project_id"]
+    prog = await _create_program(
+        M, pid, config=dict(CONFIG, time_effect="national"), name="National"
+    )
+
+    resp = await M.ingest_learning_wave_endpoint(
+        pid,
+        prog["id"],
+        M.LearningWaveIngestRequest(
+            rows=_wave_rows(), fit_kwargs=TINY_FIT, period_col="week"
+        ),
+    )
+    payload = await _poll_to_terminal(store, _body(resp)["job_id"])
+    assert payload["status"] == "done", payload.get("error")
+    snap = payload["result"]
+    assert SNAPSHOT_KEYS <= set(snap)
+    assert snap["evidence"]["n_rows"] == 24
+    # the persisted state accumulated a global period index (2 periods)
+    state = cl_service.load_program_state(pid, prog["id"])
+    assert state.time_effect == "national"
+    assert state.data is not None and "period_idx" in state.data
+    np.testing.assert_array_equal(np.unique(state.data["period_idx"]), [0, 1])
+    # ... and the fitted posterior carries the national tau sites
+    assert state.posterior is not None and "tau" in state.posterior.samples
+
+    # omitting period_col still works: the service auto-detects the 'week'
+    # column (a warning note, not a dead-end error)
+    resp = await M.ingest_learning_wave_endpoint(
+        pid,
+        prog["id"],
+        M.LearningWaveIngestRequest(
+            rows=_wave_rows(n_periods=1, seed=1), fit_kwargs=TINY_FIT
+        ),
+    )
+    payload = await _poll_to_terminal(store, _body(resp)["job_id"])
+    assert payload["status"] == "done", payload.get("error")
+    state = cl_service.load_program_state(pid, prog["id"])
+    # wave 2's single period was offset past wave 1's two periods
+    np.testing.assert_array_equal(np.unique(state.data["period_idx"]), [0, 1, 2])
 
 
 @pytest.mark.slow

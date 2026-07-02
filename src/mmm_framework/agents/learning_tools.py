@@ -631,6 +631,9 @@ def design_learning_wave(
     probe_pairs: str = "auto",
     n_geo: int = None,
     n_holdout: int = 0,
+    optimize: bool = False,
+    candidate_deltas: list[float] = None,
+    stratify: bool = True,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -642,9 +645,16 @@ def design_learning_wave(
     spend-variation fraction (0.6 = ±60%). `probe_pairs`: 'auto' (all program
     pairs), 'none', or a JSON list like '[[0,1]]' to probe only the
     decision-pivotal synergies (each pair costs 2 extra cells). `n_geo` adds a
-    round-robin geo→cell assignment (`n_holdout` geos stay at the status-quo
-    center as a counterfactual). Stores the design on the program's wave
-    timeline; after the wave runs, record results with record_learning_wave.
+    geo→cell assignment — stratified on the accumulated per-geo KPI when the
+    program has ingested data (blocked randomization), else round-robin; set
+    `stratify=false` to force round-robin (`n_holdout` geos stay at the
+    status-quo center as a counterfactual). `optimize=true` scores
+    `candidate_deltas` (default 0.3/0.6/0.9) with the Laplace
+    knowledge-gradient (decision-aware EVSI, no refit) and designs the best
+    one — needs a fitted posterior (Hill activation, Gaussian likelihood);
+    otherwise it falls back to `delta` with a warning. Stores the design on
+    the program's wave timeline; after the wave runs, record results with
+    record_learning_wave.
     """
     from mmm_framework.api import sessions as sessions_store
     from mmm_framework.continuous_learning import service as cl_service
@@ -684,6 +694,11 @@ def design_learning_wave(
             probe_pairs=pairs,
             n_geo=n_geo,
             n_holdout=int(n_holdout or 0),
+            stratify=bool(stratify),
+            optimize=bool(optimize),
+            candidate_deltas=(
+                [float(d) for d in candidate_deltas] if candidate_deltas else None
+            ),
         )
     except ValueError as exc:
         return _msg(f"Could not design the wave: {exc}", tool_call_id)
@@ -702,6 +717,7 @@ def design_learning_wave(
     )
 
     channels = prog.get("channels") or cl_state.channels
+    chosen_delta = float(design["delta"])
     records = [
         {
             "cell": design["cell_labels"][i],
@@ -717,7 +733,10 @@ def design_learning_wave(
         [
             records_to_table_json(
                 records,
-                title=f"Wave design — {design['n_cells']} cells (±{int(delta*100)}%)",
+                title=(
+                    f"Wave design — {design['n_cells']} cells "
+                    f"(±{int(chosen_delta * 100)}%)"
+                ),
                 source="learning_program",
             )
         ],
@@ -729,11 +748,27 @@ def design_learning_wave(
         f"(wave row `{wave['id'][:8]}`): {design['n_cells']} cells "
         f"(1 center + {2 * len(channels)} axial + "
         f"{2 * len(design['probe_pairs'])} off-axis + {len(channels)} shutoff), "
-        f"delta ±{int(float(delta) * 100)}%."
+        f"delta ±{int(chosen_delta * 100)}%."
     )
-    if design.get("assignment"):
+    if (design.get("kg") or {}).get("used"):
+        scores_md = ", ".join(
+            f"±{int(float(s['delta']) * 100)}%"
+            f"{' (no probes)' if not s['probe_pairs'] else ''}"
+            f" → {float(s['score']):.4g}"
+            for s in design["kg"].get("scores") or []
+        )
         md += (
-            f" Assigned round-robin to {len(design['assignment']['cell_idx'])} "
+            f"\n\nDelta ±{int(chosen_delta * 100)}% chosen by the Laplace "
+            f"knowledge-gradient (EVSI per candidate: {scores_md})."
+        )
+    if design.get("assignment"):
+        how = (
+            "stratified on the accumulated per-geo KPI (blocked randomization)"
+            if design["assignment"].get("stratified_on") == "accumulated_kpi"
+            else "round-robin"
+        )
+        md += (
+            f" Assigned {how} to {len(design['assignment']['cell_idx'])} "
             f"geos ({design['assignment']['n_holdout']} holdout)."
         )
     for w in design.get("warnings") or []:
@@ -757,6 +792,7 @@ def record_learning_wave(
     program_id: str = None,
     csv_path: str = None,
     rows: list[dict] = None,
+    period_col: str = None,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -765,10 +801,13 @@ def record_learning_wave(
     {geo, <one $ spend column per channel>, y} dicts — one row per geo-period)
     or `csv_path` (a workspace CSV with columns geo,<channel $ columns>,y; an
     optional week column is fine). Spend is in DOLLARS; y in natural KPI units
-    (never normalized). The geo set must be the SAME as previous waves — a
-    changed geo set makes the loop diverge and is rejected. Publishes the
-    refreshed funding line (FUND/HOLD/CUT), the recommended allocation, and
-    the response curves.
+    (never normalized). For a program with a national time effect
+    (time_effect='national'), pass `period_col` naming the week/date/period
+    column so each row's period can be indexed (omitted: a period/week/date
+    column is auto-detected when present). The geo set must be the SAME as
+    previous waves — a changed geo set makes the loop diverge and is rejected.
+    Publishes the refreshed funding line (FUND/HOLD/CUT), the recommended
+    allocation, and the response curves.
     """
     from mmm_framework.continuous_learning import service as cl_service
 
@@ -797,7 +836,7 @@ def record_learning_wave(
         if not p.exists() or not _ws.is_within(p):
             return _msg(f"CSV not found in the workspace: {csv_path}", tool_call_id)
         try:
-            rows = cl_service.rows_from_csv(p.read_text())
+            rows = cl_service.rows_from_csv(p.read_text(), period_col=period_col)
         except ValueError as exc:
             return _msg(f"Could not parse the CSV: {exc}", tool_call_id)
 
@@ -813,7 +852,7 @@ def record_learning_wave(
                 tool_call_id,
             )
         try:
-            ing = cl_service.ingest_wave_rows(cl_state, rows)
+            ing = cl_service.ingest_wave_rows(cl_state, rows, period_col=period_col)
         except ValueError as exc:
             return _msg(f"Could not ingest the wave: {exc}", tool_call_id)
 
@@ -827,9 +866,10 @@ def record_learning_wave(
     md = (
         f"Wave recorded: {ing['n_rows']} rows over {ing['n_geo']} geos. "
         "Refit on all accumulated evidence.\n\n"
-        + _snapshot_markdown(prog, snapshot)
-        + _HONESTY_NOTE
     )
+    for w in ing.get("warnings") or []:
+        md += f"⚠️ {w}\n\n"
+    md += _snapshot_markdown(prog, snapshot) + _HONESTY_NOTE
     md, dashboard_data = _publish_snapshot(prog, snapshot, state, tid, md)
     return Command(
         update={

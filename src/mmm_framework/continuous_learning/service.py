@@ -93,7 +93,7 @@ from .arms import default_arm_pair_signs, expand_arms
 from .design import assign_geos
 from .evidence import experiments_to_summaries
 from .loop import LearningState, WaveRecord
-from .model import VALID_SIGNS, pair_name
+from .model import VALID_LIKELIHOODS, VALID_SIGNS, VALID_TIME_EFFECTS, pair_name
 from .scaling import to_dollars, to_scaled
 from .serialize import state_from_npz, state_to_npz
 from .surface import ACTIVATIONS
@@ -323,6 +323,17 @@ def new_program_state(config: dict[str, Any]) -> LearningState:
         raise ValueError(
             f"unknown activation {activation!r}; known: {tuple(ACTIVATIONS)}"
         )
+    likelihood = str(config.get("likelihood") or "normal")
+    if likelihood not in VALID_LIKELIHOODS:
+        raise ValueError(
+            f"unknown likelihood {likelihood!r}; known: {VALID_LIKELIHOODS}"
+        )
+    time_effect = str(config.get("time_effect") or "none")
+    if time_effect not in VALID_TIME_EFFECTS:
+        raise ValueError(
+            f"config.time_effect must be one of {VALID_TIME_EFFECTS}, "
+            f"got {time_effect!r}"
+        )
     mode = str(config.get("mode") or "fixed")
     if mode not in ("fixed", "free"):
         raise ValueError(f"config.mode must be 'fixed' or 'free', got {mode!r}")
@@ -380,6 +391,8 @@ def new_program_state(config: dict[str, Any]) -> LearningState:
         value=value,
         pair_signs=pair_signs or None,
         activation=activation,
+        likelihood=likelihood,
+        time_effect=time_effect,
         mode=mode,
         cap=cap_scaled,
         beta_scale=float(config.get("beta_scale") or 1.0),
@@ -445,19 +458,39 @@ def design_wave(
     n_geo: int | None = None,
     n_holdout: int = 0,
     seed: int = 0,
+    stratify: bool = True,
+    optimize: bool = False,
+    candidate_deltas: list[float] | None = None,
+    kg_n_outcomes: int = 32,
+    t_test: int = 10,
 ) -> dict[str, Any]:
     """Central-composite wave design around the program's current center.
 
     Returns ``{cells_scaled, cells_dollars, cell_labels, assignment?, n_cells,
-    delta, probe_pairs, warnings}``. ``assignment`` (round-robin geo → cell) is
-    included when ``n_geo`` is given or the program already knows its geo set.
+    delta, probe_pairs, warnings}``. ``assignment`` (geo → cell) is included
+    when ``n_geo`` is given or the program already knows its geo set; it is
+    **stratified on the accumulated per-geo KPI** (blocked randomization, see
+    :func:`~mmm_framework.continuous_learning.design.assign_geos`) when
+    ``stratify`` is on and the program has ingested data for the same geo set
+    (``assignment["stratified_on"] = "accumulated_kpi"``), else shuffled
+    round-robin (``stratified_on = None``).
+
+    ``optimize=True`` scores ``candidate_deltas`` (default ``0.3/0.6/0.9``)
+    with the Laplace knowledge-gradient
+    (:func:`~mmm_framework.continuous_learning.loop.select_next_design`) and
+    designs the EVSI-best candidate; the returned ``delta``/``probe_pairs``/
+    cells/labels reflect the CHOSEN candidate and a ``"kg"`` key carries the
+    per-candidate scores. Requires a fitted posterior with the Hill activation
+    and a Gaussian likelihood — otherwise the fixed-``delta`` design is kept
+    and a warning explains why.
     """
+    from .loop import select_next_design
+
     pairs = (
         list(state.pairs or [])
         if probe_pairs is None
         else [(int(i), int(j)) for i, j in probe_pairs]
     )
-    cells = state.next_design(float(delta), probe_pairs=pairs)
     ref = (
         state.spend_ref if state.spend_ref is not None else np.ones(len(state.channels))
     )
@@ -467,15 +500,64 @@ def design_wave(
     if resolved_n_geo is None and state.geo_ids:
         resolved_n_geo = len(state.geo_ids)
 
+    chosen_delta = float(delta)
+    kg_info: dict[str, Any] | None = None
+    if optimize:
+        if state.posterior is None:
+            warnings.append(
+                "knowledge-gradient optimization unavailable: the program has "
+                "no fitted posterior yet — record a wave or import experiments "
+                "and fit first (using the fixed delta)"
+            )
+        else:
+            cells_kg, meta = select_next_design(
+                state.posterior,
+                state.center,
+                pairs,
+                state.B,
+                state.value,
+                mode=state.mode,
+                cap=state.cap,
+                candidate_deltas=(
+                    tuple(float(d) for d in candidate_deltas)
+                    if candidate_deltas
+                    else (0.3, 0.6, 0.9)
+                ),
+                n_geo=int(resolved_n_geo) if resolved_n_geo else 80,
+                t_test=int(t_test),
+                n_outcomes=int(kg_n_outcomes),
+                seed=int(seed),
+                fallback_delta=float(delta),
+            )
+            if meta.get("kg_used"):
+                chosen_delta = float(meta["chosen_delta"])
+                pairs = [(int(i), int(j)) for i, j in meta["chosen_probe_pairs"]]
+                kg_info = {
+                    "used": True,
+                    "chosen_delta": chosen_delta,
+                    "chosen_probe_pairs": [[int(i), int(j)] for i, j in pairs],
+                    "scores": meta.get("kg_scores") or [],
+                    "sigma": meta.get("sigma"),
+                }
+            else:
+                warnings.append(
+                    "knowledge-gradient optimization unavailable: "
+                    f"{meta.get('reason')} (using the fixed delta)"
+                )
+
+    cells = state.next_design(chosen_delta, probe_pairs=pairs)
+
     out: dict[str, Any] = {
         "cells_scaled": [[float(x) for x in row] for row in cells],
         "cells_dollars": [[float(x) for x in row] for row in to_dollars(cells, ref)],
-        "cell_labels": _cell_labels(state.channels, float(delta), pairs),
+        "cell_labels": _cell_labels(state.channels, chosen_delta, pairs),
         "n_cells": int(cells.shape[0]),
-        "delta": float(delta),
+        "delta": chosen_delta,
         "probe_pairs": [[int(i), int(j)] for i, j in pairs],
         "warnings": warnings,
     }
+    if kg_info is not None:
+        out["kg"] = kg_info
     if resolved_n_geo is not None:
         resolved_n_geo = int(resolved_n_geo)
         if resolved_n_geo < 1:
@@ -486,6 +568,21 @@ def design_wave(
                 f"{resolved_n_geo} geos — every cell needs at least one geo; "
                 "drop probe pairs or add geos"
             )
+        # Stratification baseline: the accumulated per-geo mean KPI (only when
+        # the panel's geo set matches — never raise on a first-wave design).
+        baseline = None
+        stratified_on = None
+        if (
+            stratify
+            and state.data is not None
+            and int(state.data["n_geo"]) == resolved_n_geo
+        ):
+            g_idx = np.asarray(state.data["geo_idx"], dtype=int)
+            y = np.asarray(state.data["y"], dtype=float)
+            baseline = np.bincount(
+                g_idx, weights=y, minlength=resolved_n_geo
+            ) / np.maximum(np.bincount(g_idx, minlength=resolved_n_geo), 1)
+            stratified_on = "accumulated_kpi"
         rng = np.random.default_rng(int(seed))
         geo_alloc, cell_idx = assign_geos(
             cells,
@@ -493,6 +590,7 @@ def design_wave(
             rng,
             n_holdout=int(n_holdout),
             center=state.center if n_holdout else None,
+            baseline=baseline,
         )
         geo_ids = (
             list(state.geo_ids)
@@ -503,6 +601,7 @@ def design_wave(
             "geo_ids": geo_ids,
             "cell_idx": [int(i) for i in cell_idx],
             "n_holdout": int(n_holdout),
+            "stratified_on": stratified_on,
             "spend_dollars": [
                 [float(x) for x in row] for row in to_dollars(geo_alloc, ref)
             ],
@@ -514,12 +613,20 @@ def design_wave(
 
 
 def rows_from_csv(
-    csv_text: str, *, geo_col: str = "geo", y_col: str = "y"
+    csv_text: str,
+    *,
+    geo_col: str = "geo",
+    y_col: str = "y",
+    period_col: str | None = None,
 ) -> list[dict[str, Any]]:
     """Parse a ``geo,<channel $ columns>,y`` CSV into ingestable row dicts.
 
     An optional week/date/period column is fine (kept as a string; ignored by
-    :func:`ingest_wave_rows` beyond row ordering). Numeric columns are coerced.
+    :func:`ingest_wave_rows` beyond row ordering — unless the program models a
+    national time effect and ``period_col`` names it, in which case pass the
+    same ``period_col`` to :func:`ingest_wave_rows`). Naming it here keeps its
+    labels as strings (a numeric week id would otherwise coerce to float).
+    Numeric columns are coerced.
     """
     reader = csv.DictReader(io.StringIO(csv_text or ""))
     rows: list[dict[str, Any]] = []
@@ -533,7 +640,7 @@ def rows_from_csv(
                 row[key] = None
                 continue
             sval = str(val).strip()
-            if key == geo_col:
+            if key == geo_col or (period_col is not None and key == period_col):
                 row[key] = sval
                 continue
             try:
@@ -553,12 +660,24 @@ def ingest_wave_rows(
     *,
     geo_col: str = "geo",
     y_col: str = "y",
+    period_col: str | None = None,
 ) -> dict[str, Any]:
     """Append observed wave rows (dollars) to the program's accumulated panel.
 
     Each row is ``{geo, <one $ column per channel/arm>, y}`` (case-insensitive
     column match; extra columns like ``week`` are ignored). The first wave pins
     the program's geo identities; later waves must use the same geo set.
+
+    When the program models a national time effect (``state.time_effect !=
+    "none"``), each row's period must be identifiable: pass ``period_col``
+    naming the column; its labels are mapped to wave-local 0-based indices in
+    **sorted label order** (ISO dates sort correctly) and
+    :meth:`LearningState.ingest` applies the cross-wave offset. When
+    ``period_col`` is omitted, a recognizable period column (``period`` /
+    ``week`` / ``date``, case-insensitive — the same names
+    :func:`rows_from_csv` tolerates) is auto-detected with a warning note in
+    the returned ``warnings``; if none exists the ingest fails loudly. With
+    ``time_effect="none"`` any ``period_col`` is ignored.
     """
     if not rows:
         raise ValueError("no rows to ingest")
@@ -571,6 +690,36 @@ def ingest_wave_rows(
     if y_col.lower() not in keys:
         raise ValueError(f"rows are missing the outcome column {y_col!r}")
     col_geo, col_y = keys[geo_col.lower()], keys[y_col.lower()]
+    warnings_out: list[str] = []
+    col_period: str | None = None
+    if state.time_effect != "none":
+        if period_col is None:
+            # Auto-detect a period column so nationally-time-effected programs
+            # can ingest through callers that never learned to pass period_col.
+            reserved = {geo_col.lower(), y_col.lower()} | {
+                ch.lower() for ch in channels
+            }
+            for cand in ("period", "week", "date"):
+                if cand in keys and cand not in reserved:
+                    period_col = cand
+                    warnings_out.append(
+                        f"this program models a national time effect "
+                        f"(time_effect={state.time_effect!r}) and no "
+                        f"period_col was given — auto-detected the period "
+                        f"column {keys[cand]!r} (pass period_col explicitly "
+                        "to override)"
+                    )
+                    break
+        if period_col is None:
+            raise ValueError(
+                f"this program models a national time effect (time_effect="
+                f"{state.time_effect!r}): pass period_col naming the "
+                "week/date/period column so each row's period can be indexed "
+                "(no 'period'/'week'/'date' column was found to auto-detect)"
+            )
+        if period_col.lower() not in keys:
+            raise ValueError(f"rows are missing the period column {period_col!r}")
+        col_period = keys[period_col.lower()]
     col_by_channel: dict[str, str] = {}
     missing = []
     for ch in channels:
@@ -621,8 +770,13 @@ def ingest_wave_rows(
         "n_geo": len(geo_ids),
         "geo_ids": geo_ids,
     }
+    if col_period is not None:
+        labels_p = [str(r.get(col_period)) for r in rows]
+        period_labels = sorted(set(labels_p))
+        p_index = {p: i for i, p in enumerate(period_labels)}
+        wave["period_idx"] = np.array([p_index[p] for p in labels_p], dtype=int)
     state.ingest(wave)
-    return {"n_rows": n, "n_geo": len(geo_ids), "warnings": []}
+    return {"n_rows": n, "n_geo": len(geo_ids), "warnings": warnings_out}
 
 
 # ── past-experiment import ─────────────────────────────────────────────────────

@@ -747,7 +747,25 @@ def _default_noise(post: Posterior) -> float:
     Falls back to ``0.6`` (the legacy DGP value) only when the posterior has no
     ``sigma`` site (e.g. a summaries-only fit, which never samples the panel
     noise scale).
+
+    Raises for a non-Gaussian posterior: the knowledge-gradient fantasies are
+    generated as ``y = mu + Normal(0, noise)``, which is silently wrong for a
+    count likelihood (a NegBinomial posterior has ``phi``, no ``sigma`` — the
+    0.6 fallback would fire and produce plausible-looking nonsense).
     """
+    likelihood = getattr(post, "likelihood", "normal")
+    if likelihood != "normal":
+        raise NotImplementedError(
+            "knowledge_gradient fantasy generation is Gaussian (y = mu + "
+            f"Normal(0, noise)); this posterior was fit with likelihood="
+            f"{likelihood!r}. Use the activation-agnostic decision readouts "
+            "(thompson_wave / recommend_allocation / marginal_roas / "
+            "expected_regret), which read only the surface parameters — note "
+            "that for a count likelihood the marginal readouts are on the "
+            "LATENT surface scale (the observable count mean is softplus(mu), "
+            "derivative sigmoid(mu) ≈ 1 for mu >> 1 but < 1 at low counts; "
+            "see model.fit's likelihood note)."
+        )
     s = post.samples.get("sigma")
     return float(np.mean(s)) if s is not None else 0.6
 

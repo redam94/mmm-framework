@@ -981,6 +981,528 @@ class TestDiagnosticsShapeSites:
         assert mixture["max_rhat"] > 1.5
 
 
+# ── NegBinomial likelihood + national time effect (opt-in extensions) ─────────
+
+
+def _nb_posterior(world, n_geo=40, n=200, seed=0):
+    """A fake NegBinomial-fit posterior: ``phi`` instead of ``sigma``."""
+    rng = np.random.default_rng(seed)
+    post = _fake_posterior(world, n_geo=n_geo, n=n, seed=seed, extra_sigma=False)
+    post.samples["phi"] = np.abs(rng.normal(10.0, 1.0, n))
+    post.likelihood = "negbinomial"
+    return post
+
+
+class TestNegBinomialValidation:
+    def test_negative_counts_rejected_with_cuped_hint(self):
+        data = _tiny_panel()
+        data["y"] = np.round(np.abs(data["y"]) * 10)
+        data["y"][0] = -3.0
+        with pytest.raises(ValueError, match="cuped_adjust"):
+            cl.fit(data, channels=["A", "B"], likelihood="negbinomial")
+
+    def test_non_integer_counts_rejected(self):
+        data = _tiny_panel()  # continuous Gaussian y
+        with pytest.raises(ValueError, match="integer counts"):
+            cl.fit(data, channels=["A", "B"], likelihood="negbinomial")
+
+    def test_valid_counts_pass_and_round_to_int(self):
+        data = _tiny_panel()
+        data["y"] = np.round(np.abs(data["y"]) * 100) + 5e-7  # int within 1e-6
+        _, _, y, _, period_idx, n_period = model._validate_panel(
+            data, 2, likelihood="negbinomial"
+        )
+        np.testing.assert_allclose(y, np.round(y))
+        assert period_idx is None and n_period == 0
+
+    def test_unknown_likelihood_rejected(self):
+        with pytest.raises(ValueError, match="likelihood"):
+            cl.fit(_tiny_panel(), channels=["A", "B"], likelihood="poisson")
+
+
+class TestPeriodIdxValidation:
+    def _panel_with_periods(self, dtype=int):
+        data = _tiny_panel()  # 6 geos x 3 weeks, week-major rows
+        data["period_idx"] = np.repeat(np.arange(3), 6).astype(dtype)
+        return data
+
+    def test_valid_period_idx_derives_n_period(self):
+        data = self._panel_with_periods()
+        *_, period_idx, n_period = model._validate_panel(data, 2)
+        assert n_period == 3
+        np.testing.assert_array_equal(period_idx, data["period_idx"])
+
+    def test_float_period_idx_rejected(self):
+        data = self._panel_with_periods(dtype=float)
+        with pytest.raises(ValueError, match="integer-typed"):
+            model._validate_panel(data, 2)
+
+    def test_negative_period_idx_rejected(self):
+        data = self._panel_with_periods()
+        data["period_idx"][0] = -1
+        with pytest.raises(ValueError, match="non-negative"):
+            model._validate_panel(data, 2)
+
+    def test_wrong_length_period_idx_rejected(self):
+        data = self._panel_with_periods()
+        data["period_idx"] = data["period_idx"][:-1]
+        with pytest.raises(ValueError, match="period_idx must have shape"):
+            model._validate_panel(data, 2)
+
+    def test_national_requires_period_idx(self):
+        with pytest.raises(ValueError, match="period_idx"):
+            cl.fit(_tiny_panel(), channels=["A", "B"], time_effect="national")
+
+    def test_unknown_time_effect_rejected(self):
+        with pytest.raises(ValueError, match="time_effect"):
+            cl.fit(_tiny_panel(), channels=["A", "B"], time_effect="weekly")
+
+    def test_summaries_only_national_fit_succeeds(self):
+        """[10] Summaries carry no periods and tau cancels in the lift
+        difference, so a summaries-only fit with time_effect='national' must
+        run (only a NON-empty panel lacking period_idx errors)."""
+        center = np.full(2, 0.8)
+        data = {
+            "n_geo": 0,
+            "summaries": [
+                _summary(center, 0, 0.3, 5.0),
+                _summary(center, 1, 0.3, 1.0),
+            ],
+        }
+        post = cl.fit(
+            data,
+            channels=["A", "B"],
+            time_effect="national",
+            num_warmup=20,
+            num_samples=20,
+            num_chains=1,
+            seed=0,
+        )
+        assert post.time_effect == "national"
+        # no panel rows -> no tau/noise sites sampled
+        assert "tau" not in post.samples and "sigma" not in post.samples
+        # ... and the LearningState wrapper takes the same path
+        state = cl.LearningState(
+            channels=["A", "B"],
+            center=center,
+            B=2.0,
+            value=5.0,
+            time_effect="national",
+        )
+        state.ingest_summaries([_summary(center, 0, 0.3, 5.0)])
+        post2 = state.fit(num_warmup=10, num_samples=10, num_chains=1, seed=0)
+        assert post2.time_effect == "national"
+
+
+class TestNegBinomialGuards:
+    def test_default_noise_raises_instead_of_falling_back(self):
+        # a NB posterior has no 'sigma' site: the old 0.6 fallback would fire
+        # and fantasize Gaussian outcomes around count data — silent wrongness.
+        world = cl.make_world(seed=0)
+        post = _nb_posterior(world)
+        with pytest.raises(NotImplementedError, match="likelihood"):
+            planner._default_noise(post)
+
+    def test_low_count_mean_fit_warns_about_link_derivative(self):
+        """[3] The planner's marginal readouts differentiate the LATENT
+        surface; at low counts sigmoid(mu) << 1 and they overstate the
+        count-scale marginal response — fit() must warn loudly."""
+        import warnings as _warnings
+
+        data = _tiny_panel()
+        data["y"] = np.round(np.abs(data["y"]))  # tiny counts, mean(y) < 20
+        assert float(np.mean(data["y"])) < 20.0
+        with pytest.warns(UserWarning, match="sigmoid"):
+            cl.fit(
+                data,
+                channels=["A", "B"],
+                likelihood="negbinomial",
+                num_warmup=10,
+                num_samples=10,
+                num_chains=1,
+                seed=0,
+            )
+        # high-count data stays silent (no crying wolf on healthy programs)
+        data_hi = _tiny_panel()
+        data_hi["y"] = np.round(np.abs(data_hi["y"]) * 100.0)
+        assert float(np.mean(data_hi["y"])) >= 20.0
+        with _warnings.catch_warnings(record=True) as rec:
+            _warnings.simplefilter("always")
+            cl.fit(
+                data_hi,
+                channels=["A", "B"],
+                likelihood="negbinomial",
+                num_warmup=10,
+                num_samples=10,
+                num_chains=1,
+                seed=0,
+            )
+        assert not [w for w in rec if "sigmoid" in str(w.message)]
+
+    def test_theta_moments_raises(self):
+        from mmm_framework.continuous_learning import acquisition
+
+        world = cl.make_world(seed=0)
+        post = _nb_posterior(world)
+        with pytest.raises(NotImplementedError, match="likelihood"):
+            acquisition.theta_moments(post)
+
+    def test_surface_readouts_still_work_for_nb(self):
+        # thompson/recommend/mroas/regret read only beta/gamma/shape — a NB
+        # posterior must flow through them untouched.
+        world = cl.make_world(seed=0)
+        post = _nb_posterior(world)
+        rec = cl.recommend_allocation(post, B=3.2, value=5.0, q=8, mode="fixed")
+        assert rec.sum() == pytest.approx(3.2, abs=0.05)
+        mroas_mean, prob_above, _ = cl.marginal_roas(post, rec, value=5.0, q=8)
+        assert np.all(np.isfinite(mroas_mean))
+        assert np.asarray(prob_above).shape == (4,)
+        plan = cl.plan_from_posterior(post, 3.2, 5.0, q=8, seed=0)
+        assert np.isfinite(plan.e_regret) and plan.e_regret >= 0.0
+
+    def test_refit_fn_rejects_time_effect(self):
+        with pytest.raises(NotImplementedError, match="period identity"):
+            cl.refit_fn_from_data(
+                _tiny_panel(), channels=["A", "B"], time_effect="national"
+            )
+
+
+class TestPeriodIngestOffsets:
+    def _wave(self, t=3, n_geo=6, seed=0, with_period=True):
+        data = _tiny_panel(n_geo=n_geo, t=t, seed=seed)
+        if with_period:
+            data["period_idx"] = np.repeat(np.arange(t), n_geo)
+        return data
+
+    def _state(self, time_effect="national"):
+        return cl.LearningState(
+            channels=["A", "B"],
+            center=np.full(2, 0.8),
+            B=2.0,
+            value=5.0,
+            time_effect=time_effect,
+        )
+
+    def test_offsets_accumulate_across_waves(self):
+        state = self._state()
+        state.ingest(self._wave(t=3))
+        state.ingest(self._wave(t=2, seed=1))
+        pidx = state.data["period_idx"]
+        assert pidx.shape == state.data["y"].shape
+        # wave 1 periods 0..2, wave 2 shifted by max+1 -> 3..4, no aliasing
+        np.testing.assert_array_equal(np.unique(pidx), np.arange(5))
+        np.testing.assert_array_equal(pidx[18:], np.repeat([3, 4], 6))
+
+    def test_wave_without_period_raises_on_a_national_program(self):
+        state = self._state()
+        with pytest.raises(ValueError, match="period_idx"):
+            state.ingest(self._wave(with_period=False))
+
+    def test_mixed_presence_raises(self):
+        # earlier waves ingested without periods (time_effect flipped later):
+        # the accumulated panel has nothing to offset against -> loud error.
+        state = self._state(time_effect="none")
+        state.ingest(self._wave(with_period=False))
+        state.time_effect = "national"
+        with pytest.raises(ValueError, match="earlier waves"):
+            state.ingest(self._wave(seed=1))
+
+    def test_none_program_ignores_period_idx(self):
+        state = self._state(time_effect="none")
+        state.ingest(self._wave())  # wave carries period_idx; program opts out
+        assert "period_idx" not in state.data
+
+
+class TestDgpPeriodsAndNoiseFamily:
+    def test_period_idx_layout_matches_the_week_major_row_order(self):
+        world = cl.make_world(seed=0)
+        center = np.full(4, 0.8)
+        data = cl.simulate_panel(
+            world, center, n_geo=5, t_pre=2, t_test=3, delta=0.6, seed=0
+        )
+        np.testing.assert_array_equal(data["period_idx"], np.repeat(np.arange(5), 5))
+        assert data["period_idx"].shape == data["y"].shape
+        wave = cl.simulate_wave(
+            world, data["design"], data["a_geo"], t_test=3, center=center, seed=1
+        )
+        np.testing.assert_array_equal(wave["period_idx"], np.repeat(np.arange(3), 5))
+
+    def test_defaults_byte_identical_and_tau_scale_opt_in(self):
+        world = cl.make_world(seed=0)
+        center = np.full(4, 0.8)
+        base = cl.simulate_panel(
+            world, center, n_geo=5, t_pre=2, t_test=3, delta=0.6, seed=0
+        )
+        again = cl.simulate_panel(
+            world,
+            center,
+            n_geo=5,
+            t_pre=2,
+            t_test=3,
+            delta=0.6,
+            seed=0,
+            tau_scale=0.0,
+            noise_family="normal",
+        )
+        np.testing.assert_array_equal(base["y"], again["y"])  # same rng stream
+        np.testing.assert_array_equal(base["tau_true"], np.zeros(5))
+        shocked = cl.simulate_panel(
+            world, center, n_geo=5, t_pre=2, t_test=3, delta=0.6, seed=0, tau_scale=1.0
+        )
+        assert shocked["tau_true"].shape == (5,)
+        assert not np.allclose(shocked["y"], base["y"])
+
+    def test_negbinomial_noise_family_draws_counts(self):
+        world = cl.make_world(seed=0)
+        world.phi_true = 25.0
+        center = np.full(4, 0.8)
+        data = cl.simulate_panel(
+            world,
+            center,
+            n_geo=6,
+            t_pre=2,
+            t_test=3,
+            delta=0.6,
+            seed=0,
+            noise_family="negbinomial",
+        )
+        assert np.all(data["y"] >= 0)
+        np.testing.assert_allclose(data["y"], np.round(data["y"]))
+        with pytest.raises(ValueError, match="noise_family"):
+            cl.simulate_panel(
+                world,
+                center,
+                n_geo=4,
+                t_pre=1,
+                t_test=1,
+                delta=0.6,
+                seed=0,
+                noise_family="lognormal",
+            )
+
+
+class TestServiceLikelihoodTimeEffect:
+    CFG = {"channels": ["TV", "Search"], "budget": 1000.0, "value_per_unit": 5.0}
+
+    def test_new_program_state_carries_the_knobs(self):
+        from mmm_framework.continuous_learning import service
+
+        state = service.new_program_state(
+            dict(self.CFG, likelihood="negbinomial", time_effect="national")
+        )
+        assert state.likelihood == "negbinomial"
+        assert state.time_effect == "national"
+        default = service.new_program_state(dict(self.CFG))
+        assert default.likelihood == "normal" and default.time_effect == "none"
+
+    def test_new_program_state_validates_the_knobs(self):
+        from mmm_framework.continuous_learning import service
+
+        with pytest.raises(ValueError, match="likelihood"):
+            service.new_program_state(dict(self.CFG, likelihood="poisson"))
+        with pytest.raises(ValueError, match="time_effect"):
+            service.new_program_state(dict(self.CFG, time_effect="weekly"))
+
+    def test_rows_from_csv_period_col_stays_string(self):
+        from mmm_framework.continuous_learning import service
+
+        csv_text = "geo,week,TV,Search,y\ng0,1,100,50,4.0\ng1,1,100,50,4.5\n"
+        rows = service.rows_from_csv(csv_text, period_col="week")
+        assert rows[0]["week"] == "1"  # not coerced to 1.0
+
+    def test_ingest_wave_rows_maps_sorted_period_labels(self):
+        from mmm_framework.continuous_learning import service
+
+        state = cl.LearningState(
+            channels=["TV", "Search"],
+            center=np.full(2, 0.8),
+            B=2.0,
+            value=5.0,
+            time_effect="national",
+            spend_ref=np.array([100.0, 50.0]),
+        )
+        rows = []
+        for wk in ("2026-01-12", "2026-01-05"):  # reverse label order on purpose
+            for g in ("g0", "g1"):
+                rows.append(
+                    {"geo": g, "week": wk, "TV": 100.0, "Search": 50.0, "y": 4.0}
+                )
+        out = service.ingest_wave_rows(state, rows, period_col="week")
+        assert out["n_rows"] == 4
+        np.testing.assert_array_equal(state.data["period_idx"], [1, 1, 0, 0])
+
+    def test_ingest_wave_rows_requires_the_period_column_on_national(self):
+        from mmm_framework.continuous_learning import service
+
+        state = cl.LearningState(
+            channels=["TV"],
+            center=np.full(1, 0.8),
+            B=1.0,
+            value=5.0,
+            time_effect="national",
+        )
+        rows = [{"geo": "g0", "TV": 100.0, "y": 4.0}]
+        with pytest.raises(ValueError, match="pass period_col"):
+            service.ingest_wave_rows(state, rows)
+        with pytest.raises(ValueError, match="period column"):
+            service.ingest_wave_rows(state, rows, period_col="week")
+
+    def test_ingest_wave_rows_autodetects_the_period_column(self):
+        """[9]/[13] A national program whose caller never passes period_col
+        still ingests when the rows carry a recognizable week/date/period
+        column — with a warning note (explicit period_col stays silent)."""
+        from mmm_framework.continuous_learning import service
+
+        def _state():
+            return cl.LearningState(
+                channels=["TV", "Search"],
+                center=np.full(2, 0.8),
+                B=2.0,
+                value=5.0,
+                time_effect="national",
+                spend_ref=np.array([100.0, 50.0]),
+            )
+
+        rows = []
+        for wk in ("2026-01-05", "2026-01-12"):
+            for g in ("g0", "g1"):
+                rows.append(
+                    {"geo": g, "week": wk, "TV": 100.0, "Search": 50.0, "y": 4.0}
+                )
+        state = _state()
+        out = service.ingest_wave_rows(state, rows)  # period_col omitted
+        assert out["n_rows"] == 4
+        assert any("auto-detected" in w for w in out["warnings"])
+        np.testing.assert_array_equal(state.data["period_idx"], [0, 0, 1, 1])
+        # explicit period_col: same mapping, no auto-detect note
+        state2 = _state()
+        out2 = service.ingest_wave_rows(state2, rows, period_col="week")
+        assert out2["warnings"] == []
+        np.testing.assert_array_equal(
+            state2.data["period_idx"], state.data["period_idx"]
+        )
+
+
+class TestSerializeLikelihoodTimeEffect:
+    def test_posterior_payload_round_trips_new_fields(self):
+        world = cl.make_world(seed=0)
+        post = _nb_posterior(world, n=20)
+        post.time_effect = "national"
+        payload = json.loads(json.dumps(cl.posterior_to_payload(post)))
+        back = cl.posterior_from_payload(payload)
+        assert back.likelihood == "negbinomial"
+        assert back.time_effect == "national"
+        np.testing.assert_array_equal(back.samples["phi"], post.samples["phi"])
+
+    def test_old_posterior_payload_defaults(self):
+        world = cl.make_world(seed=0)
+        payload = cl.posterior_to_payload(_fake_posterior(world, n=10))
+        payload.pop("likelihood")
+        payload.pop("time_effect")
+        back = cl.posterior_from_payload(payload)
+        assert back.likelihood == "normal" and back.time_effect == "none"
+
+    def test_state_npz_round_trips_new_fields_and_period_idx(self, tmp_path):
+        state = cl.LearningState(
+            channels=["A", "B"],
+            center=np.full(2, 0.8),
+            B=2.0,
+            value=5.0,
+            likelihood="negbinomial",
+            time_effect="national",
+        )
+        wave = _tiny_panel()
+        wave["y"] = np.round(np.abs(wave["y"]) * 10)
+        wave["period_idx"] = np.repeat(np.arange(3), 6)
+        state.ingest(wave)
+        path = tmp_path / "state.npz"
+        cl.state_to_npz(state, path)
+        back = cl.state_from_npz(path)
+        assert back.likelihood == "negbinomial" and back.time_effect == "national"
+        np.testing.assert_array_equal(back.data["period_idx"], wave["period_idx"])
+
+    def test_old_state_npz_without_new_keys_loads_with_defaults(self, tmp_path):
+        state = cl.LearningState(
+            channels=["A", "B"], center=np.full(2, 0.8), B=2.0, value=5.0
+        )
+        state.ingest(_tiny_panel())
+        p_new = tmp_path / "new.npz"
+        cl.state_to_npz(state, p_new)
+        # simulate a pre-feature file: strip the new meta keys
+        with np.load(p_new, allow_pickle=False) as z:
+            meta = json.loads(str(z["meta"].item()))
+            arrays = {k: z[k] for k in z.files if k != "meta"}
+        meta.pop("likelihood", None)
+        meta.pop("time_effect", None)
+        p_old = tmp_path / "old.npz"
+        np.savez_compressed(p_old, meta=json.dumps(meta), **arrays)
+        back = cl.state_from_npz(p_old)
+        assert back.likelihood == "normal" and back.time_effect == "none"
+        assert "period_idx" not in back.data
+
+    def test_plain_state_still_writes_schema_version_1(self, tmp_path):
+        """[5] Default-config programs must keep stamping version 1 so OLD
+        readers (which cap at 1) can still load them."""
+        state = cl.LearningState(
+            channels=["A", "B"], center=np.full(2, 0.8), B=2.0, value=5.0
+        )
+        state.ingest(_tiny_panel())
+        world = cl.make_world(seed=0)
+        state.posterior = _fake_posterior(world, n=10)
+        p = tmp_path / "plain.npz"
+        cl.state_to_npz(state, p)
+        with np.load(p, allow_pickle=False) as z:
+            meta = json.loads(str(z["meta"].item()))
+        assert meta["schema_version"] == 1
+        cl.state_from_npz(p)  # and it still round-trips
+        # ... same for the JSON posterior payload
+        assert (
+            cl.posterior_to_payload(_fake_posterior(world, n=10))["schema_version"] == 1
+        )
+
+    def test_new_semantics_state_writes_schema_version_2(self, tmp_path):
+        """[5] Non-default likelihood/time_effect (or a persisted period_idx)
+        stamps version 2, so an OLD reader refuses the file loudly instead of
+        silently refitting a count/time-effect program as Gaussian/no-tau."""
+        state = cl.LearningState(
+            channels=["A", "B"],
+            center=np.full(2, 0.8),
+            B=2.0,
+            value=5.0,
+            likelihood="negbinomial",
+            time_effect="national",
+        )
+        wave = _tiny_panel()
+        wave["y"] = np.round(np.abs(wave["y"]) * 10)
+        wave["period_idx"] = np.repeat(np.arange(3), 6)
+        state.ingest(wave)
+        p = tmp_path / "nb_tau.npz"
+        cl.state_to_npz(state, p)
+        with np.load(p, allow_pickle=False) as z:
+            meta = json.loads(str(z["meta"].item()))
+        assert meta["schema_version"] == 2
+        back = cl.state_from_npz(p)  # the NEW reader accepts <= 2
+        assert back.likelihood == "negbinomial"
+        # a lone NB posterior payload is version 2 as well
+        world = cl.make_world(seed=0)
+        assert cl.posterior_to_payload(_nb_posterior(world))["schema_version"] == 2
+
+    def test_reader_rejects_a_newer_schema_version(self, tmp_path):
+        state = cl.LearningState(
+            channels=["A", "B"], center=np.full(2, 0.8), B=2.0, value=5.0
+        )
+        state.ingest(_tiny_panel())
+        p = tmp_path / "v3.npz"
+        cl.state_to_npz(state, p)
+        with np.load(p, allow_pickle=False) as z:
+            meta = json.loads(str(z["meta"].item()))
+            arrays = {k: z[k] for k in z.files if k != "meta"}
+        meta["schema_version"] = 3
+        np.savez_compressed(p, meta=json.dumps(meta), **arrays)
+        with pytest.raises(ValueError, match="newer"):
+            cl.state_from_npz(p)
+
+
 # ── slow: tiny-NUTS integration gates ─────────────────────────────────────────
 
 

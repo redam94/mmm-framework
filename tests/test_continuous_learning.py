@@ -119,6 +119,91 @@ def test_assign_geos_balanced_with_holdouts():
     assert cell_idx[4:].min() >= 0 and cell_idx[4:].max() < d.shape[0]
 
 
+def test_assign_geos_stratified_balances_baseline():
+    """Blocked randomization on a strong baseline gradient: per-cell counts
+    match round-robin's (as a multiset) while the between-cell baseline-mean
+    spread shrinks strictly below the shuffled round-robin's."""
+    center = np.array([0.8, 0.8, 0.8])
+    d = design.central_composite(center, 0.5, [(0, 1)])
+    n_geo = 36
+    baseline = np.linspace(0.0, 10.0, n_geo)  # strong monotone gradient
+
+    _, rr_idx = design.assign_geos(d, n_geo, np.random.default_rng(0))
+    _, st_idx = design.assign_geos(
+        d, n_geo, np.random.default_rng(0), baseline=baseline
+    )
+    assert sorted(np.bincount(rr_idx, minlength=d.shape[0]).tolist()) == sorted(
+        np.bincount(st_idx, minlength=d.shape[0]).tolist()
+    )
+
+    def spread(idx):
+        means = [
+            baseline[idx == c].mean() for c in range(d.shape[0]) if np.any(idx == c)
+        ]
+        return float(np.ptp(means))
+
+    assert spread(st_idx) < spread(rr_idx)
+
+
+def test_assign_geos_stratified_holdouts_span_baseline_range():
+    center = np.array([0.8, 0.8, 0.8])
+    d = design.central_composite(center, 0.5, [(0, 1)])
+    baseline = np.arange(30, dtype=float)
+    rng = np.random.default_rng(1)
+    geo_alloc, cell_idx = design.assign_geos(
+        d, 30, rng, n_holdout=4, center=center, baseline=baseline
+    )
+    hold = np.nonzero(cell_idx == -1)[0]
+    assert hold.size == 4
+    assert np.allclose(geo_alloc[hold], center)
+    # 4 evenly spaced positions in baseline-sorted order -> spans the range
+    assert set(hold.tolist()) == {0, 10, 19, 29}
+    assert np.ptp(baseline[hold]) >= 0.5 * np.ptp(baseline)
+    assert cell_idx[cell_idx >= 0].max() < d.shape[0]
+
+
+@pytest.mark.parametrize(
+    "n_geo,n_holdout",
+    [(10, 6), (10, 7), (9, 4), (12, 8), (12, 5), (30, 4), (10, 10)],
+)
+def test_assign_geos_stratified_holdout_count_is_exact(n_geo, n_holdout):
+    """The stratified path must hold out EXACTLY the requested count (the old
+    strided pick returned only ceil(n_geo/step) geos — e.g. 10/6 -> 5) while
+    still spanning the baseline range."""
+    center = np.array([0.8, 0.8, 0.8])
+    d = design.central_composite(center, 0.5, [(0, 1)])
+    baseline = np.linspace(0.0, 100.0, n_geo)
+    geo_alloc, cell_idx = design.assign_geos(
+        d,
+        n_geo,
+        np.random.default_rng(0),
+        n_holdout=n_holdout,
+        center=center,
+        baseline=baseline,
+    )
+    hold = np.nonzero(cell_idx == -1)[0]
+    assert hold.size == n_holdout  # exact count, never fewer
+    assert np.allclose(geo_alloc[hold], center)
+    # spans the baseline range: extremes are always included
+    assert baseline[hold].min() == pytest.approx(baseline.min())
+    assert baseline[hold].max() == pytest.approx(baseline.max())
+    # non-holdout geos still carry valid design cells
+    if n_holdout < n_geo:
+        rest = cell_idx[cell_idx >= 0]
+        assert rest.min() >= 0 and rest.max() < d.shape[0]
+
+
+def test_assign_geos_stratified_requires_center_and_aligned_baseline():
+    center = np.array([0.8, 0.8, 0.8])
+    d = design.central_composite(center, 0.5, [(0, 1)])
+    with pytest.raises(ValueError, match="baseline"):
+        design.assign_geos(d, 30, np.random.default_rng(0), baseline=np.arange(7.0))
+    with pytest.raises(ValueError, match="center"):
+        design.assign_geos(
+            d, 30, np.random.default_rng(0), n_holdout=2, baseline=np.arange(30.0)
+        )
+
+
 # ── fast: planner ─────────────────────────────────────────────────────────────
 
 
@@ -317,6 +402,176 @@ def test_laplace_kg_finite_and_fast():
         seed=0,
     )
     assert np.isfinite(kg)
+
+
+# ── fast: KG-driven design selection (loop.select_next_design) ────────────────
+
+
+def test_select_next_design_returns_the_best_scored_candidate():
+    world = cl.make_world(seed=0)
+    post = _fake_posterior(world)
+    center = np.array([0.7, 0.7, 0.7, 0.7])
+    cells, meta = cl.select_next_design(
+        post,
+        center,
+        world.pairs,
+        B=3.2,
+        value=5.0,
+        candidate_deltas=(0.3, 0.6, 0.9),
+        n_geo=40,
+        t_test=8,
+        n_outcomes=16,
+        seed=0,
+    )
+    assert meta["kg_used"] is True
+    assert meta["chosen_delta"] in (0.3, 0.6, 0.9)
+    assert len(meta["kg_scores"]) == 3
+    # the returned cells are exactly the chosen candidate's CCD
+    np.testing.assert_allclose(
+        cells, cl.central_composite(center, meta["chosen_delta"], world.pairs)
+    )
+    # ... and it carries the max score (common random numbers -> comparable)
+    best = max(meta["kg_scores"], key=lambda s: s["score"])
+    assert best["delta"] == meta["chosen_delta"]
+    assert meta["sigma"] == pytest.approx(float(np.mean(post.samples["sigma"])))
+    # the scores are finite and actually discriminate between candidates
+    # (constant/NaN scores would make the argmax vacuous)
+    vals = [float(s["score"]) for s in meta["kg_scores"]]
+    assert all(np.isfinite(v) for v in vals)
+    assert len(set(vals)) >= 2
+
+
+def test_select_next_design_prefers_probes_when_synergy_is_decision_pivotal():
+    # Rigged setup (the EIG-test pattern): tiny main-effect uncertainty, huge
+    # synergy uncertainty — the remaining decision value is in learning gamma,
+    # so the probe-pairs candidate beats the no-probe candidate. NB the KG gap
+    # is genuinely small here (shutoff cells also identify gamma, and
+    # main-effect cells move the allocation more — the documented KG≠EIG
+    # finding), so a large ``n_outcomes`` under common random numbers is what
+    # makes the argmax deterministic. The expected winner is deliberately
+    # placed SECOND in the candidate list: ties (and NaN comparisons) resolve
+    # to the FIRST candidate scored, so a scorer that collapses to a constant
+    # would otherwise keep this test green without discriminating anything.
+    world = cl.make_world(seed=0)
+    rng = np.random.default_rng(0)
+    n, k = 300, world.n_channels
+    s = {
+        "beta": np.abs(world.beta + 0.02 * rng.standard_normal((n, k))),
+        "kappa": np.abs(world.kappa + 0.02 * rng.standard_normal((n, k))),
+        "alpha": np.clip(world.alpha + 0.02 * rng.standard_normal((n, k)), 0.5, 5),
+        "sigma": np.abs(rng.normal(0.5, 0.05, n)),
+    }
+    for idx, (i, j) in enumerate(world.pairs):
+        s[model.pair_name(world.channels, (i, j))] = world.gamma_pairs[
+            idx
+        ] + 1.2 * rng.standard_normal(n)
+    post = cl.Posterior(
+        samples=s, channels=world.channels, pairs=world.pairs, pair_signs={}
+    )
+    _, meta = cl.select_next_design(
+        post,
+        np.full(4, 0.7),
+        world.pairs,
+        B=3.2,
+        value=5.0,
+        candidate_deltas=(0.6,),
+        candidate_probe_sets=[[], world.pairs],  # winner NOT first-scored
+        n_geo=40,
+        t_test=8,
+        n_outcomes=256,
+        seed=0,
+    )
+    assert meta["kg_used"] is True
+    assert meta["chosen_probe_pairs"] == [[int(i), int(j)] for i, j in world.pairs]
+    # the scores genuinely discriminate: all finite, >= 2 distinct values, and
+    # the probes candidate STRICTLY beats the no-probes candidate
+    vals = [float(sc["score"]) for sc in meta["kg_scores"]]
+    assert all(np.isfinite(v) for v in vals)
+    assert len(set(vals)) >= 2
+    by_probes = {
+        tuple(map(tuple, sc["probe_pairs"])): float(sc["score"])
+        for sc in meta["kg_scores"]
+    }
+    probes_key = tuple((int(i), int(j)) for i, j in world.pairs)
+    assert by_probes[probes_key] > by_probes[()]
+
+
+def test_select_next_design_falls_back_on_nan_scores(monkeypatch):
+    """A scorer degenerating to NaN must NOT be reported as kg_used=True with
+    the argmax silently landing on the first candidate (nan > nan is False)."""
+    from mmm_framework.continuous_learning import acquisition
+
+    world = cl.make_world(seed=0)
+    post = _fake_posterior(world)
+    monkeypatch.setattr(
+        acquisition, "laplace_knowledge_gradient", lambda *a, **k: float("nan")
+    )
+    center = np.full(4, 0.7)
+    cells, meta = cl.select_next_design(
+        post,
+        center,
+        world.pairs,
+        B=3.2,
+        value=5.0,
+        candidate_deltas=(0.3, 0.6),
+        fallback_delta=0.6,
+    )
+    assert meta["kg_used"] is False
+    assert "non-finite" in meta["reason"]
+    np.testing.assert_allclose(cells, cl.central_composite(center, 0.6, world.pairs))
+
+
+def test_select_next_design_falls_back_on_unsupported_posteriors():
+    center = np.full(4, 0.7)
+    # (a) logistic activation: theta_moments is Hill-only -> clean fallback
+    world = cl.make_world_logistic(seed=0)
+    rng = np.random.default_rng(0)
+    n, k = 100, world.n_channels
+    s = {
+        "beta": np.abs(world.beta + 0.1 * rng.standard_normal((n, k))),
+        "lam": np.abs(world.shape["lam"] + 0.1 * rng.standard_normal((n, k))),
+        "sigma": np.abs(rng.normal(0.5, 0.05, n)),
+    }
+    for idx, (i, j) in enumerate(world.pairs):
+        s[model.pair_name(world.channels, (i, j))] = 0.1 * rng.standard_normal(n)
+    post = cl.Posterior(
+        samples=s, channels=world.channels, pairs=world.pairs, activation="logistic"
+    )
+    cells, meta = cl.select_next_design(
+        post, center, world.pairs, B=3.2, value=5.0, fallback_delta=0.6
+    )
+    assert meta["kg_used"] is False and meta["reason"]
+    np.testing.assert_allclose(cells, cl.central_composite(center, 0.6, world.pairs))
+
+    # (b) a non-Gaussian posterior (NB carries 'phi', no 'sigma') -> fallback
+    hill_world = cl.make_world(seed=0)
+    post_nb = _fake_posterior(hill_world)
+    del post_nb.samples["sigma"]
+    post_nb.likelihood = "negbinomial"
+    cells2, meta2 = cl.select_next_design(
+        post_nb, center, hill_world.pairs, B=3.2, value=5.0, fallback_delta=0.4
+    )
+    assert meta2["kg_used"] is False and "negbinomial" in meta2["reason"]
+    np.testing.assert_allclose(
+        cells2, cl.central_composite(center, 0.4, hill_world.pairs)
+    )
+
+    # (c) a Gaussian summaries-only posterior (no 'sigma' site) -> fallback,
+    # NEVER a hard-coded noise guess: under prior_scaling="auto" its theta
+    # lives on the KPI's natural scale, so a fixed sigma would make every
+    # candidate score identically while reporting kg_used=True.
+    post_summ = _fake_posterior(hill_world)
+    del post_summ.samples["sigma"]
+    assert post_summ.likelihood == "normal"
+    cells3, meta3 = cl.select_next_design(
+        post_summ, center, hill_world.pairs, B=3.2, value=5.0, fallback_delta=0.5
+    )
+    assert meta3["kg_used"] is False
+    assert "observation-noise" in meta3["reason"]
+    assert "summaries-only" in meta3["reason"]
+    np.testing.assert_allclose(
+        cells3, cl.central_composite(center, 0.5, hill_world.pairs)
+    )
 
 
 # ── fast: pluggable activations (not Hill-specific) ───────────────────────────
@@ -534,6 +789,47 @@ def test_closure_and_stopping():
 
 
 @pytest.mark.slow
+def test_closure_with_laplace_kg():
+    """The closure invariants hold when the Laplace KG picks each wave's design
+    (use_laplace_kg=True): E[regret] shrinks, the ENBS rule fires (or the loop
+    exhausts max_waves), and the final plan stays near the truth optimum."""
+    world = cl.make_world(seed=0)
+    center = np.array([0.7, 0.7, 0.7, 0.7])
+    out = cl.run_closed_loop(
+        world,
+        center=center,
+        B=3.2,
+        value=5.0,
+        n_geo=64,
+        t_pre=5,
+        t_test=8,
+        delta=0.6,
+        noise=0.5,
+        mode="fixed",
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        margin=1.0,
+        population=2.0,
+        wave_cost=0.3,
+        max_waves=4,
+        planner_q=120,
+        fit_kwargs=dict(num_warmup=300, num_samples=300, num_chains=2, seed=0),
+        use_laplace_kg=True,
+        candidate_deltas=(0.4, 0.6, 0.8),
+        kg_n_outcomes=32,
+        seed=2,
+    )
+    hist = out["history"]
+    assert len(hist) >= 2
+    assert hist[-1]["e_regret"] < hist[0]["e_regret"]
+    assert any(r["stop"] for r in hist) or len(hist) == 4
+    assert hist[-1]["profit_gap_rel"] < 0.15
+    # the KG actually chose the later designs (Hill/Gaussian -> never falls back)
+    assert all(r["kg_used"] for r in hist[1:])
+    assert all(r["chosen_delta"] in (0.4, 0.6, 0.8) for r in hist[1:])
+    assert hist[0]["kg_used"] is False  # wave 0 is the fixed initial CCD
+
+
+@pytest.mark.slow
 def test_knowledge_gradient_runs_and_is_finite():
     world = cl.make_world(seed=1)
     center = np.array([0.8, 0.8, 0.8, 0.8])
@@ -641,3 +937,95 @@ def test_misspecified_single_hill_still_makes_a_near_optimal_decision():
     achieved = value * float(world.response_mean(np.asarray(rec)[None, :])[0]) - B
     # the misspecified plan captures >=95% of the achievable profit
     assert achieved >= 0.95 * true_profit
+
+
+@pytest.mark.slow
+def test_negbinomial_recovery_counts_world():
+    """NB feasibility gate: designed count data (gamma-Poisson DGP, counts in
+    the hundreds) fit with ``likelihood='negbinomial'`` — the beta ordering is
+    recovered and the chains mix, mirroring the Gaussian recovery gate."""
+    channels = ["Chatter", "Pulse", "Orbit", "Vibe"]
+    world = cl.TrueWorld(
+        beta=np.array([150.0, 100.0, 60.0, 40.0]),
+        kappa=np.array([0.8, 0.6, 1.0, 0.7]),
+        alpha=np.array([2.2, 1.6, 2.6, 1.3]),
+        gamma_pairs=np.zeros(6),
+        channels=channels,
+        a_level=250.0,
+        sigma_a=25.0,
+        phi_true=25.0,
+    )
+    center = np.array([0.8, 0.8, 0.8, 0.8])
+    data = cl.simulate_panel(
+        world,
+        center,
+        n_geo=60,
+        t_pre=4,
+        t_test=6,
+        delta=0.6,
+        noise_family="negbinomial",
+        seed=1,
+    )
+    assert np.all(data["y"] >= 0)
+    np.testing.assert_allclose(data["y"], np.round(data["y"]))
+    post = cl.fit(
+        data,
+        channels=channels,
+        pairs=[],  # main effects only: keep the count gate small
+        likelihood="negbinomial",
+        beta_scale=2.0,
+        # the scale-free LogNormal(log 30, 2) dispersion prior (finding [4])
+        # mixes phi more slowly than the old exponential-tailed Gamma —
+        # a longer adaptation keeps the R-hat gate honest without touching
+        # the prior back.
+        num_warmup=800,
+        num_samples=600,
+        num_chains=2,
+        seed=0,
+    )
+    assert post.likelihood == "negbinomial"
+    assert "phi" in post.samples and "sigma" not in post.samples
+    beta_hat = post.samples["beta"].mean(0)
+    assert int(np.argmax(beta_hat)) == int(np.argmax(world.beta))
+    from scipy.stats import spearmanr
+
+    rho = spearmanr(beta_hat, world.beta).correlation
+    assert rho >= 0.8
+    assert post.diagnostics["max_rhat"] is None or post.diagnostics["max_rhat"] < 1.2
+
+
+@pytest.mark.slow
+def test_national_time_effect_recovery():
+    """tau gate: planted national per-period shocks are recovered
+    (corr(tau_hat, tau_true) > 0.7) while the beta recovery stays intact."""
+    world = cl.make_world(seed=0)
+    center = np.array([0.8, 0.8, 0.8, 0.8])
+    data = cl.simulate_panel(
+        world,
+        center,
+        n_geo=60,
+        t_pre=4,
+        t_test=6,
+        delta=0.6,
+        noise=0.5,
+        tau_scale=1.0,
+        seed=3,
+    )
+    post = cl.fit(
+        data,
+        channels=world.channels,
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        time_effect="national",
+        num_warmup=400,
+        num_samples=400,
+        num_chains=2,
+        seed=0,
+    )
+    assert post.time_effect == "national"
+    tau_hat = post.samples["tau"].mean(0)
+    assert tau_hat.shape == (10,)  # t_pre + t_test national shocks
+    corr = float(np.corrcoef(tau_hat, np.asarray(data["tau_true"]))[0, 1])
+    assert corr > 0.7
+    beta_hat = post.samples["beta"].mean(0)
+    assert int(np.argmax(beta_hat)) == int(np.argmax(world.beta))
+    assert post.diagnostics["max_rhat"] is None or post.diagnostics["max_rhat"] < 1.2

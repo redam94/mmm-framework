@@ -124,6 +124,12 @@ def cuped_adjust(
     covariate). Returns ``(adjusted_data, info)`` where ``info`` carries
     ``theta``, ``rho`` (the correlation CUPED exploits) and ``var_reduction``
     (``1 - rho^2``, the fraction of geo-level outcome variance removed).
+
+    **Incompatible with** ``likelihood="negbinomial"``: the adjustment mutates
+    ``y`` to non-integer (and possibly negative) values, which the count
+    likelihood's validation rejects. For count KPIs fit the raw counts — the
+    geo intercept plus the national time effect (``time_effect="national"``)
+    covers most of what CUPED buys here.
     """
     x_pre = cuped_covariate(data, t_pre)
     y = np.asarray(data["y"], dtype=float)

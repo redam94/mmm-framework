@@ -24,7 +24,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
@@ -3481,6 +3481,30 @@ class LearningDesignWaveRequest(BaseModel):
     n_geo: int | None = None
     n_holdout: int = 0
     seed: int = 0
+    # Laplace-KG design optimization (needs a fitted Hill/Gaussian posterior;
+    # degrades to the fixed delta with a warning otherwise). Bounded: the KG
+    # runs one multi-start SLSQP allocation PER fantasy outcome PER candidate,
+    # so unbounded values would let one request monopolize the worker thread.
+    optimize: bool = False
+    candidate_deltas: list[float] | None = Field(
+        None, max_length=8
+    )  # None -> (0.3, 0.6, 0.9)
+    kg_n_outcomes: int = Field(32, ge=8, le=256)
+    # Stratify the geo→cell assignment on the accumulated per-geo KPI when the
+    # program has ingested data (else round-robin).
+    stratify: bool = True
+
+    @field_validator("candidate_deltas")
+    @classmethod
+    def _deltas_in_range(cls, v: list[float] | None) -> list[float] | None:
+        if v is None:
+            return v
+        for d in v:
+            if not 0.0 < float(d) <= 1.5:
+                raise ValueError(
+                    f"candidate_deltas entries must be in (0, 1.5], got {d}"
+                )
+        return v
 
 
 class LearningWaveIngestRequest(BaseModel):
@@ -3489,6 +3513,10 @@ class LearningWaveIngestRequest(BaseModel):
     csv_text: str | None = None  # geo,<channel $ columns>,y — EXCLUSIVE with rows
     economics: dict | None = None  # {margin?, population?, wave_cost?}
     fit_kwargs: dict | None = None  # e.g. {"num_warmup": 40} (tests / quick fits)
+    # Names the week/date/period column for programs with a national time
+    # effect (time_effect="national"); the service auto-detects a
+    # period/week/date column when omitted and errors loudly if none exists.
+    period_col: str | None = None
 
 
 class LearningFitRequest(BaseModel):
@@ -3547,6 +3575,7 @@ def _learning_job_sync(
     csv_text: str | None,
     economics: dict | None,
     fit_kwargs: dict | None,
+    period_col: str | None = None,
 ) -> dict:
     """SYNC worker (one asyncio.to_thread call): set the thread, load the
     program state, ingest the new evidence, fit_and_plan, save state, write the
@@ -3579,9 +3608,11 @@ def _learning_job_sync(
         import_report: dict | None = None
         imported_ids: list[str] | None = None
         if csv_text:
-            rows = cl_service.rows_from_csv(csv_text)
+            # period_col keeps the period labels as strings (a numeric week id
+            # would otherwise coerce to float) for national-time-effect programs.
+            rows = cl_service.rows_from_csv(csv_text, period_col=period_col)
         if rows:
-            ing = cl_service.ingest_wave_rows(state, rows)
+            ing = cl_service.ingest_wave_rows(state, rows, period_col=period_col)
             source = "wave"
             observations = {"n_rows": ing["n_rows"], "n_geo": ing["n_geo"]}
         if experiment_ids:
@@ -3693,6 +3724,7 @@ async def _run_learning_job(
     csv_text: str | None = None,
     economics: dict | None = None,
     fit_kwargs: dict | None = None,
+    period_col: str | None = None,
 ) -> None:
     """Background learning-fit job: pending → running → done (result=SNAPSHOT)
     / error. Model-free — never loads an MMM. Never lets the job vanish."""
@@ -3709,6 +3741,7 @@ async def _run_learning_job(
             csv_text,
             economics,
             fit_kwargs,
+            period_col,
         )
         if res.get("error"):
             _sim_job_patch(job_id, status="error", error=res["error"])
@@ -3837,7 +3870,9 @@ async def design_learning_wave_endpoint(
     project_id: str, program_id: str, body: LearningDesignWaveRequest
 ):
     """Design the next central-composite wave around the program's current
-    center (sync — pure design math, no fit). Stores a 'designed' wave row."""
+    center (no fit; ``optimize=true`` runs the bounded Laplace-KG scoring in a
+    worker thread so the event loop never blocks). Stores a 'designed' wave
+    row."""
     from mmm_framework.continuous_learning import service as cl_service
 
     _learning_program_or_404(project_id, program_id)
@@ -3846,7 +3881,11 @@ async def design_learning_wave_endpoint(
     except cl_service.ProgramStateError as e:
         raise HTTPException(status_code=409, detail=str(e))
     try:
-        design = cl_service.design_wave(
+        # to_thread: with optimize=true this runs one multi-start SLSQP per
+        # fantasy outcome per candidate — CPU-bound work that must not run on
+        # the event loop (request-model bounds cap its total size).
+        design = await asyncio.to_thread(
+            cl_service.design_wave,
             state,
             delta=body.delta,
             probe_pairs=(
@@ -3857,6 +3896,10 @@ async def design_learning_wave_endpoint(
             n_geo=body.n_geo,
             n_holdout=body.n_holdout,
             seed=body.seed,
+            stratify=body.stratify,
+            optimize=body.optimize,
+            candidate_deltas=body.candidate_deltas,
+            kg_n_outcomes=body.kg_n_outcomes,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -3909,6 +3952,7 @@ async def ingest_learning_wave_endpoint(
         csv_text=body.csv_text,
         economics=body.economics,
         fit_kwargs=body.fit_kwargs,
+        period_col=body.period_col,
     )
 
 

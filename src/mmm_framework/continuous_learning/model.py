@@ -34,6 +34,29 @@ the status-quo allocation), which breaks the within-geo collinearity between
 baseline and incremental response — the CUPED-style identification requirement
 of guide §3.2.
 
+Two **opt-in** extensions (the defaults reproduce the graph above
+byte-identically — no new sample sites, same rng stream):
+
+* ``likelihood="negbinomial"`` — count KPIs. The panel observation becomes
+  ``y ~ NegativeBinomial2(softplus(mu), phi)`` with concentration
+  ``phi ~ LogNormal(log 30, 2)`` replacing the ``sigma`` site; ``y`` must be
+  non-negative integer counts (``_validate_panel`` enforces it — note
+  :func:`preprocess.cuped_adjust` mutates ``y`` to non-integer/possibly-negative
+  values and is therefore incompatible). The **summary** block stays Gaussian
+  for BOTH likelihoods: a historical ``lift ± se`` readout is already a
+  normal-approximation aggregate, so a count observation model has nothing to
+  add there. Link caveat: the planner's marginal readouts differentiate the
+  LATENT surface ``R`` while the observable count mean is ``softplus(mu)``
+  (derivative ``sigmoid(mu)``) — asymptotically exact for ``mu >> 1``, an
+  overstatement of the count-scale marginal near ``mu ≈ 0`` (see :func:`fit`).
+* ``time_effect="national"`` — a zero-centered hierarchical national per-period
+  shock ``tau_t ~ Normal(0, sigma_tau)``, ``sigma_tau ~ HalfNormal(y_scale)``,
+  added to every panel row of period ``t`` (requires ``data["period_idx"]``).
+  Zero-centered partial pooling, NOT fixed effects: a free tau level is exactly
+  collinear with the intercept hyper ``A``. Summaries need no tau — a national
+  per-period constant cancels in the lift *difference* exactly as the geo
+  intercept does, so the evidence/summary path is unchanged.
+
 **Summary observations** (past experiments, no panel required). A historical
 lift test is a *difference* measurement, so the geo intercept cancels and no
 pre-period is needed — the atomic evidence unit is::
@@ -55,6 +78,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any, Callable
@@ -96,6 +120,13 @@ Pair = tuple[int, int]
 PairSign = str  # "neg" | "pos" | "zero" | "weak"
 
 VALID_SIGNS = ("neg", "pos", "zero", "weak")
+
+#: Observation families for the panel likelihood ("normal" is the default and
+#: reproduces the original graph byte-identically).
+VALID_LIKELIHOODS = ("normal", "negbinomial")
+
+#: National per-period time-effect modes ("none" default = no tau sites).
+VALID_TIME_EFFECTS = ("none", "national")
 
 # A worked PAIR_SIGNS example for the reference channel set
 # ["Chatter", "Pulse", "Orbit", "Vibe"]. Real deployments pass their own.
@@ -243,6 +274,10 @@ def model(
     beta_scale: float = 1.0,
     gamma_scale: float = 0.8,
     activation: str = "hill",
+    likelihood: str = "normal",
+    time_effect: str = "none",
+    period_idx=None,
+    n_period: int = 0,
     y_loc: float = 0.0,
     y_scale: float = 1.0,
     summary_test=None,
@@ -259,6 +294,23 @@ def model(
     deterministic ``gamma_<ci>_<cj>`` so every pair has a uniform posterior site.
     ``activation`` selects the per-channel saturation family (``"hill"`` default,
     ``"logistic"`` for exponential saturation).
+
+    ``likelihood`` selects the panel observation family: ``"normal"`` (default —
+    the original graph, byte-identical) or ``"negbinomial"`` for count KPIs
+    (``phi ~ LogNormal(log 30, 2)`` replaces the ``sigma`` site and
+    ``y ~ NegativeBinomial2(softplus(mu), phi)``; the identity-link ``mu``
+    composition ``a_geo[geo_idx] + surface (+ tau)`` is unchanged, with a
+    softplus positivity guard). The summary block below stays **Gaussian for
+    both** likelihoods: a lift ± se is a normal-approximation aggregate, and the
+    geo intercept AND any national per-period constant cancel in the difference.
+
+    ``time_effect="national"`` (with ``period_idx (N,)`` / ``n_period``) adds a
+    zero-centered hierarchical national shock ``tau_t ~ Normal(0, sigma_tau)``
+    to every panel row of period ``t``. Zero-centered partial pooling, NOT
+    fixed effects — a free tau level is exactly collinear with the intercept
+    hyper ``A`` (both are national constants); the hierarchical prior resolves
+    it softly and the pre-period still pins ``a_geo``. The tau sites are only
+    sampled on the opt-in path, so the default graph is untouched.
 
     ``y_loc``/``y_scale`` (defaults ``0``/``1`` = the original O(1) priors,
     byte-identical graph) put the intercept/noise/effect priors on the KPI's
@@ -319,9 +371,39 @@ def model(
         sigma_a = numpyro.sample("sigma_a", dist.HalfNormal(2.0 * y_scale))
         with numpyro.plate("geos", n_geo):
             a_geo = numpyro.sample("a_geo", dist.Normal(a, sigma_a))
-        sigma = numpyro.sample("sigma", dist.HalfNormal(y_scale))
+        if likelihood == "normal":
+            sigma = numpyro.sample("sigma", dist.HalfNormal(y_scale))
+        elif likelihood == "negbinomial":
+            # Dispersion prior: NB2 variance is m + m^2/phi, so near-Poisson
+            # behavior at row mean m needs phi >~ m — and m scales with the
+            # KPI, so a fixed O(10) prior cannot serve every program. A
+            # Gamma(2, 0.1) (mean 20, exponential tail ~e^{-0.1 phi}) puts
+            # ~15 prior nats against phi=300 and imposes a data-immune
+            # variance floor of m^2/O(10^2) on high-mean, weakly-overdispersed
+            # counts (verified: Poisson(1e4) data pinned phi near ~1e3, a 9x
+            # variance inflation). LogNormal(log 30, 2) keeps the same O(10)
+            # center for genuinely overdispersed KPIs but its heavy log-scale
+            # tail (2 sigma spans ~0.5 .. ~1.6e3, and beyond) lets the data
+            # buy near-Poisson dispersion when it earns it.
+            phi = numpyro.sample("phi", dist.LogNormal(np.log(30.0), 2.0))
+        else:
+            raise ValueError(
+                f"unknown likelihood {likelihood!r}; known: {VALID_LIKELIHOODS}"
+            )
         mu = a_geo[geo_idx] + surface_over_rows(spend, beta, gamma, act_fn, shape)
-        numpyro.sample("y", dist.Normal(mu, sigma), obs=y)
+        if time_effect != "none" and period_idx is not None and int(n_period) > 0:
+            # Zero-centered hierarchical national shocks (NOT fixed effects —
+            # a free tau level is exactly collinear with the intercept hyper A).
+            sigma_tau = numpyro.sample("sigma_tau", dist.HalfNormal(y_scale))
+            with numpyro.plate("periods", int(n_period)):
+                tau = numpyro.sample("tau", dist.Normal(0.0, sigma_tau))
+            mu = mu + tau[period_idx]
+        if likelihood == "normal":
+            numpyro.sample("y", dist.Normal(mu, sigma), obs=y)
+        else:
+            import jax
+
+            numpyro.sample("y", dist.NegativeBinomial2(jax.nn.softplus(mu), phi), obs=y)
 
     if summary_lift is not None and int(np.shape(summary_lift)[0]) > 0:
         pred = jnp.asarray(summary_scale, dtype=float) * (
@@ -345,8 +427,10 @@ class Posterior:
     ``samples`` holds plain numpy arrays keyed by site name (``beta``, ``kappa``,
     ``alpha``, ``A``, ``sigma_a``, ``a_geo``, ``sigma``, and one
     ``gamma_<ci>_<cj>`` per pair; the intercept/noise sites are absent for a
-    summaries-only fit). ``spend_ref`` is the per-channel reference constant
-    used to scale spend — convert with
+    summaries-only fit). A ``likelihood="negbinomial"`` fit carries ``phi``
+    (the NB concentration) instead of ``sigma``; a ``time_effect="national"``
+    fit adds ``sigma_tau`` and ``tau`` (``(draws, n_period)``). ``spend_ref``
+    is the per-channel reference constant used to scale spend — convert with
     :func:`~mmm_framework.continuous_learning.scaling.to_dollars` /
     :func:`~mmm_framework.continuous_learning.scaling.to_scaled`.
     """
@@ -356,6 +440,8 @@ class Posterior:
     pairs: list[Pair]
     pair_signs: dict[Pair, PairSign] = field(default_factory=dict)
     activation: str = "hill"
+    likelihood: str = "normal"
+    time_effect: str = "none"
     spend_ref: np.ndarray | None = None
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
@@ -466,14 +552,22 @@ def _validate_summaries(summaries: Any, k: int) -> list[dict[str, Any]]:
 
 
 def _validate_panel(
-    data: dict[str, Any], k: int
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    data: dict[str, Any], k: int, *, likelihood: str = "normal"
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int, np.ndarray | None, int]:
     """Validate the panel part of the data contract (review fix F1).
 
     JAX *clamps* out-of-bounds indices silently, so a wrong ``n_geo`` or a
     1-based ``geo_idx`` would corrupt the fit with no signal — this check makes
-    it loud. Returns ``(spend, geo_idx, y, n_geo)`` with an empty ``(0, K)``
-    panel when the data dict carries no panel keys (summaries-only mode).
+    it loud. Returns ``(spend, geo_idx, y, n_geo, period_idx, n_period)`` with
+    an empty ``(0, K)`` panel when the data dict carries no panel keys
+    (summaries-only mode); ``period_idx`` is ``None`` (and ``n_period`` 0) when
+    the data has no ``"period_idx"`` key. An optional ``period_idx (N,)`` gets
+    the same integer/range treatment as ``geo_idx`` (same silent-clamp hazard),
+    with ``n_period`` derived as ``max + 1``.
+
+    When ``likelihood="negbinomial"``, ``y`` must be non-negative and
+    integer-valued (within 1e-6, then rounded) — count data on its natural
+    scale.
     """
     if "spend" not in data:
         return (
@@ -481,6 +575,8 @@ def _validate_panel(
             np.zeros(0, dtype=int),
             np.zeros(0, dtype=float),
             int(data.get("n_geo", 0)),
+            None,
+            0,
         )
     spend = np.asarray(data["spend"], dtype=float)
     geo_raw = np.asarray(data["geo_idx"])
@@ -513,7 +609,51 @@ def _validate_panel(
                 "the fit without any signal"
             )
     geo_idx = np.ascontiguousarray(geo_raw, dtype=int)
-    return np.ascontiguousarray(spend), geo_idx, np.ascontiguousarray(y), n_geo
+    if likelihood == "negbinomial" and n_rows > 0:
+        if np.any(y < 0) or np.max(np.abs(y - np.round(y))) > 1e-6:
+            raise ValueError(
+                "likelihood='negbinomial' requires y to be non-negative "
+                "integer counts on their natural scale; got negative and/or "
+                "non-integer values. Note preprocess.cuped_adjust mutates y to "
+                "non-integer (possibly negative) values and is INCOMPATIBLE "
+                "with a count likelihood — fit the raw counts instead (a "
+                "national time effect, time_effect='national', covers much of "
+                "CUPED's job for counts)"
+            )
+        y = np.round(y)
+    period_raw = data.get("period_idx")
+    period_idx: np.ndarray | None = None
+    n_period = 0
+    if period_raw is not None:
+        period_arr = np.asarray(period_raw)
+        if period_arr.shape != (n_rows,):
+            raise ValueError(
+                f"period_idx must have shape ({n_rows},) to match the panel "
+                f"rows, got {period_arr.shape}"
+            )
+        if n_rows > 0:
+            if not np.issubdtype(period_arr.dtype, np.integer):
+                raise ValueError(
+                    f"period_idx must be integer-typed, got dtype "
+                    f"{period_arr.dtype}"
+                )
+            lo_p = int(period_arr.min())
+            if lo_p < 0:
+                raise ValueError(
+                    f"period_idx must be non-negative (0-based), got minimum "
+                    f"{lo_p} — JAX clamps out-of-bounds indices silently, "
+                    "which would corrupt the fit without any signal"
+                )
+            n_period = int(period_arr.max()) + 1
+        period_idx = np.ascontiguousarray(period_arr, dtype=int)
+    return (
+        np.ascontiguousarray(spend),
+        geo_idx,
+        np.ascontiguousarray(y),
+        n_geo,
+        period_idx,
+        n_period,
+    )
 
 
 def _decade(x: float) -> float:
@@ -571,6 +711,8 @@ def fit(
     pairs: list[Pair] | None = None,
     pair_signs: dict[Pair, PairSign] | None = None,
     activation: str = "hill",
+    likelihood: str = "normal",
+    time_effect: str = "none",
     beta_scale: float = 1.0,
     gamma_scale: float = 0.8,
     num_warmup: int = 500,
@@ -587,13 +729,37 @@ def fit(
         data: the data contract — ``{"spend": (N, K), "geo_idx": (N,),
             "n_geo": int, "y": (N,)}`` (scaled spend, natural-unit ``y``),
             optionally with ``"summaries": list[dict]`` (see the module header),
-            or summaries-only (``{"summaries": [...], "n_geo": 0}`` / an empty
-            ``(0, K)`` panel). At least one of panel rows / summaries required.
+            an optional ``"period_idx": (N,)`` (0-based int; required when
+            ``time_effect="national"``), or summaries-only
+            (``{"summaries": [...], "n_geo": 0}`` / an empty ``(0, K)``
+            panel). At least one of panel rows / summaries required.
         channels: channel names, length ``K``.
         pairs: interaction pairs to model (default: all upper-triangular pairs).
         pair_signs: sign-informed prior family per pair (default: all ``"weak"``).
             Keys are normalized to ``(min, max)`` orientation; conflicting
             duplicate entries raise.
+        likelihood: panel observation family — ``"normal"`` (default,
+            byte-identical to the original graph) or ``"negbinomial"`` for
+            count KPIs (``y`` must be non-negative integer counts; the summary
+            block stays Gaussian either way). Link caveat for the planner:
+            with ``"negbinomial"`` the marginal readouts (``marginal_roas``,
+            ``expected_regret``, free-mode allocation) differentiate the
+            LATENT surface ``R``, while the observable count mean is
+            ``softplus(mu)`` whose derivative is ``sigmoid(mu)`` — so the
+            count-scale marginal response is ``sigmoid(mu) * dR/ds``. Since
+            ``sigmoid(mu) ≈ 1`` whenever ``mu >> 1`` (typical counts), the
+            readouts are asymptotically exact; near ``mu ≈ 0`` (per-row means
+            of a few counts) they OVERSTATE the count-scale marginal response
+            by up to ``1/sigmoid(mu)``. :func:`fit` warns loudly when the
+            observed count mean is below ~20. Fixed-budget Thompson argmax is
+            unaffected (softplus is monotone).
+        time_effect: ``"none"`` (default) or ``"national"`` — a zero-centered
+            hierarchical per-period national shock ``tau_t`` added to the panel
+            mean (a non-empty panel requires ``data["period_idx"]``; see
+            :func:`model`). A summaries-only fit needs NO period identity:
+            there are no panel rows for ``tau_t`` to index and a national
+            per-period constant cancels in the lift difference, so the
+            summary path is unchanged (no tau sites are sampled).
         gamma_scale: interaction prior scale — the most consequential knob; audit
             it with :func:`prior_sensitivity` (guide §8.2).
         spend_ref: per-channel reference constant used to scale spend, carried on
@@ -624,14 +790,52 @@ def fit(
         raise ValueError(
             f"unknown activation {activation!r}; known: {tuple(ACTIVATIONS)}"
         )
+    if likelihood not in VALID_LIKELIHOODS:
+        raise ValueError(
+            f"unknown likelihood {likelihood!r}; known: {VALID_LIKELIHOODS}"
+        )
+    if time_effect not in VALID_TIME_EFFECTS:
+        raise ValueError(
+            f"time_effect must be one of {VALID_TIME_EFFECTS}, got {time_effect!r}"
+        )
 
-    spend, geo_idx, y, n_geo = _validate_panel(data, k)
-    summaries = _validate_summaries(data.get("summaries"), k)
+    spend, geo_idx, y, n_geo, period_idx, n_period = _validate_panel(
+        data, k, likelihood=likelihood
+    )
     n_rows = int(spend.shape[0])
+    # Only a NON-empty panel needs period identity: a summaries-only fit has
+    # no rows for tau_t to index, and the national per-period constant cancels
+    # in the lift difference (the module's documented summary semantics), so
+    # tau is simply a no-op there.
+    if time_effect == "national" and n_rows > 0 and period_idx is None:
+        raise ValueError(
+            "time_effect='national' requires data['period_idx'] (a 0-based "
+            "(N,) integer period index per panel row) — without it the "
+            "national tau_t shocks have nothing to index"
+        )
+    summaries = _validate_summaries(data.get("summaries"), k)
     if n_rows == 0 and not summaries:
         raise ValueError(
             "fit needs evidence: provide panel rows (spend/geo_idx/y) and/or "
             "data['summaries']"
+        )
+    if likelihood == "negbinomial" and n_rows > 0 and float(np.mean(y)) < 20.0:
+        # Softplus-link caveat: the planner's marginal readouts differentiate
+        # the latent surface R, but the observable count mean is softplus(mu)
+        # with derivative sigmoid(mu) — near-1 for mu >> 1, but well below 1
+        # at low counts, where the readouts overstate the count-scale marginal
+        # response. mean(y) is a cheap proxy for the posterior-mean mu level.
+        warnings.warn(
+            f"likelihood='negbinomial' with a low observed count mean "
+            f"(mean(y) = {float(np.mean(y)):.2f} < 20): the planner's "
+            "marginal readouts (marginal_roas / expected_regret / free-mode "
+            "allocation) differentiate the LATENT surface, while the "
+            "count-scale marginal response is sigmoid(mu) * dR/ds — at this "
+            "count level sigmoid(mu) can be well below 1, so those readouts "
+            "may OVERSTATE the count-scale marginal response (the funding "
+            "line is optimistic). Fixed-budget Thompson allocation is "
+            "unaffected (softplus is monotone).",
+            stacklevel=2,
         )
     y_loc, y_scale = _resolve_prior_scaling(
         prior_scaling, y if n_rows > 0 else None, summaries
@@ -655,6 +859,8 @@ def fit(
         beta_scale=beta_scale,
         gamma_scale=gamma_scale,
         activation=activation,
+        likelihood=likelihood,
+        time_effect=time_effect,
         y_loc=y_loc,
         y_scale=y_scale,
     )
@@ -672,6 +878,8 @@ def fit(
         geo_idx=geo_idx,
         n_geo=n_geo,
         y=y,
+        period_idx=period_idx,
+        n_period=n_period,
         **summary_kwargs,
     )
 
@@ -693,6 +901,8 @@ def fit(
         pairs=list(pairs),
         pair_signs=pair_signs,
         activation=activation,
+        likelihood=likelihood,
+        time_effect=time_effect,
         spend_ref=None if spend_ref is None else np.asarray(spend_ref, dtype=float),
         diagnostics=diagnostics,
     )
@@ -705,7 +915,10 @@ def _diagnostics(mcmc: Any, activation: str = "hill") -> dict[str, Any]:
     names (:data:`surface.ACTIVATIONS`) plus the always-present ``beta``/
     ``sigma`` sites, so R̂ covers whatever family was fit — a hard-coded list
     would leave e.g. ``hill_mixture``'s five shape sites (the very place a
-    misspecified fit shows R̂≈1.5) outside the convergence gate.
+    misspecified fit shows R̂≈1.5) outside the convergence gate. ``phi`` (the
+    NegBinomial concentration) and ``tau`` (the national time effect) are
+    included for the same reason; absent sites are skipped, so Normal /
+    no-time-effect fits are unaffected.
     """
     try:
         import numpyro
@@ -714,7 +927,7 @@ def _diagnostics(mcmc: Any, activation: str = "hill") -> dict[str, Any]:
         grouped = mcmc.get_samples(group_by_chain=True)
         rhats: list[float] = []
         ess: list[float] = []
-        for key in ("beta", "sigma", *shape_sites):
+        for key in ("beta", "sigma", "phi", "tau", *shape_sites):
             if key not in grouped:
                 continue
             arr = grouped[key]
@@ -746,6 +959,7 @@ def refit_fn_from_data(
     num_chains: int = 1,
     seed: int = 7,
     prior_scaling: str = "auto",
+    time_effect: str = "none",
 ) -> Callable[[np.ndarray, np.ndarray, np.ndarray], Posterior]:
     """Build a ``refit_fn(extra_spend, extra_geo_idx, extra_y) -> Posterior``.
 
@@ -756,8 +970,24 @@ def refit_fn_from_data(
 
     Requires a panel base dataset: fantasy observations are geo-week rows, so a
     summaries-only data dict has nothing to append them to.
+
+    ``time_effect`` other than ``"none"`` raises ``NotImplementedError``: the
+    knowledge-gradient fantasy rows carry no period identity, so a national
+    ``tau_t`` cannot be refit on the augmented panel. A ``period_idx`` present
+    in ``base_data`` is DROPPED from the refit base for the same reason (the
+    refit models no time effect, so the index is inert either way).
     """
-    spend0, geo0, y0, n_geo = _validate_panel(base_data, len(channels))
+    if time_effect != "none":
+        raise NotImplementedError(
+            f"refit_fn_from_data does not support time_effect={time_effect!r}: "
+            "the knowledge-gradient fantasy rows have no period identity, so a "
+            "national tau_t cannot be refit on the augmented panel — score "
+            "designs with the Laplace acquisition instead, or build the refit "
+            "closure with time_effect='none'"
+        )
+    spend0, geo0, y0, n_geo, _period0, _n_period0 = _validate_panel(
+        base_data, len(channels)
+    )
     if spend0.shape[0] == 0:
         raise ValueError(
             "refit_fn_from_data requires a panel base dataset "

@@ -31,7 +31,25 @@ import numpy as np
 from .loop import LearningState, WaveRecord
 from .model import Posterior
 
-SCHEMA_VERSION = 1
+#: Highest schema version this READER understands. Writers stamp files
+#: CONDITIONALLY (see :func:`_written_schema_version`): version 2 only when
+#: the payload uses a v2 semantic (``likelihood != "normal"``,
+#: ``time_effect != "none"``, or a persisted panel ``period_idx``), else
+#: version 1 — so old files AND plain default-config programs stay loadable by
+#: old readers, while a new-semantics file makes an old reader (which caps at
+#: 1) refuse loudly instead of silently reinterpreting a count/time-effect
+#: program as a Gaussian/no-tau one.
+SCHEMA_VERSION = 2
+
+
+def _written_schema_version(
+    likelihood: str, time_effect: str, has_period_idx: bool
+) -> int:
+    """The schema version to STAMP on a payload (conditional write)."""
+    if likelihood != "normal" or time_effect != "none" or has_period_idx:
+        return 2
+    return 1
+
 
 _SUMMARY_ARRAY_KEYS = ("spend_test", "spend_base")
 _SUMMARY_SCALAR_KEYS = ("lift", "se", "scale")
@@ -82,7 +100,9 @@ def posterior_to_payload(post: Posterior) -> dict[str, Any]:
     :func:`posterior_from_payload` reconstructs bit-identical samples.
     """
     return {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": _written_schema_version(
+            post.likelihood, post.time_effect, has_period_idx=False
+        ),
         "samples": {
             k: np.asarray(v, dtype=float).tolist() for k, v in post.samples.items()
         },
@@ -90,6 +110,8 @@ def posterior_to_payload(post: Posterior) -> dict[str, Any]:
         "pairs": [[int(i), int(j)] for i, j in post.pairs],
         "pair_signs": _signs_to_json(post.pair_signs) or {},
         "activation": post.activation,
+        "likelihood": post.likelihood,
+        "time_effect": post.time_effect,
         "spend_ref": (
             None
             if post.spend_ref is None
@@ -109,6 +131,8 @@ def posterior_from_payload(d: dict[str, Any]) -> Posterior:
         pairs=[(int(i), int(j)) for i, j in d.get("pairs") or []],
         pair_signs=_signs_from_json(d.get("pair_signs")) or {},
         activation=str(d.get("activation", "hill")),
+        likelihood=str(d.get("likelihood", "normal")),
+        time_effect=str(d.get("time_effect", "none")),
         spend_ref=(
             None
             if d.get("spend_ref") is None
@@ -140,6 +164,10 @@ def state_to_npz(state: LearningState, path: str | Path) -> str:
         arrays["panel_spend"] = np.asarray(state.data["spend"], dtype=float)
         arrays["panel_geo_idx"] = np.asarray(state.data["geo_idx"], dtype=np.int64)
         arrays["panel_y"] = np.asarray(state.data["y"], dtype=float)
+        if state.data.get("period_idx") is not None:
+            arrays["panel_period_idx"] = np.asarray(
+                state.data["period_idx"], dtype=np.int64
+            )
         n_geo = int(state.data["n_geo"])
 
     summaries_extra: list[dict[str, Any]] = []
@@ -174,19 +202,41 @@ def state_to_npz(state: LearningState, path: str | Path) -> str:
             "pairs": [[int(i), int(j)] for i, j in post.pairs],
             "pair_signs": _signs_to_json(post.pair_signs) or {},
             "activation": post.activation,
+            "likelihood": post.likelihood,
+            "time_effect": post.time_effect,
             "diagnostics": _json_safe(post.diagnostics),
             "sample_names": sample_names,
             "has_spend_ref": post.spend_ref is not None,
         }
 
+    has_period_idx = state.data is not None and state.data.get("period_idx") is not None
     meta = {
-        "schema_version": SCHEMA_VERSION,
+        # Conditional stamp: v2 IFF the state uses a v2 semantic (non-default
+        # likelihood/time_effect on the state OR its posterior, or a persisted
+        # period_idx), else v1 — old readers keep loading plain programs and
+        # refuse loudly on files they would silently misread.
+        "schema_version": max(
+            _written_schema_version(
+                state.likelihood, state.time_effect, has_period_idx
+            ),
+            (
+                _written_schema_version(
+                    state.posterior.likelihood,
+                    state.posterior.time_effect,
+                    has_period_idx=False,
+                )
+                if state.posterior is not None
+                else 1
+            ),
+        ),
         "channels": list(state.channels),
         "B": float(state.B),
         "value": float(state.value),
         "pairs": [[int(i), int(j)] for i, j in (state.pairs or [])],
         "pair_signs": _signs_to_json(state.pair_signs),
         "activation": state.activation,
+        "likelihood": state.likelihood,
+        "time_effect": state.time_effect,
         "mode": state.mode,
         "cap": None if state.cap is None else float(state.cap),
         "beta_scale": float(state.beta_scale),
@@ -222,6 +272,8 @@ def state_from_npz(path: str | Path) -> LearningState:
             pairs=[(int(i), int(j)) for i, j in meta.get("pairs") or []],
             pair_signs=_signs_from_json(meta.get("pair_signs")),
             activation=str(meta.get("activation", "hill")),
+            likelihood=str(meta.get("likelihood", "normal")),
+            time_effect=str(meta.get("time_effect", "none")),
             mode=str(meta.get("mode", "fixed")),
             cap=None if meta.get("cap") is None else float(meta["cap"]),
             beta_scale=float(meta.get("beta_scale", 1.0)),
@@ -243,6 +295,8 @@ def state_from_npz(path: str | Path) -> LearningState:
                 "y": np.asarray(z["panel_y"], dtype=float),
                 "n_geo": int(meta["n_geo"]),
             }
+            if "panel_period_idx" in z:  # absent in pre-time-effect files
+                state.data["period_idx"] = np.asarray(z["panel_period_idx"], dtype=int)
 
         n_summaries = int(meta.get("n_summaries", 0))
         if n_summaries:
@@ -267,6 +321,8 @@ def state_from_npz(path: str | Path) -> LearningState:
                 pairs=[(int(i), int(j)) for i, j in post_meta.get("pairs") or []],
                 pair_signs=_signs_from_json(post_meta.get("pair_signs")) or {},
                 activation=str(post_meta.get("activation", "hill")),
+                likelihood=str(post_meta.get("likelihood", "normal")),
+                time_effect=str(post_meta.get("time_effect", "none")),
                 spend_ref=(
                     np.asarray(z["post_spend_ref"], dtype=float)
                     if post_meta.get("has_spend_ref")
