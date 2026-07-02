@@ -90,6 +90,98 @@ async def test_list_filters_by_channel_and_status(api):
 
 
 @pytest.mark.asyncio
+async def test_create_in_calibrated_is_409(api):
+    # calibration happens via the transition endpoint (fit close-out), never
+    # on create — a state conflict, not bad input
+    with pytest.raises(HTTPException) as exc:
+        await api.upsert_experiment_endpoint(
+            api.ExperimentUpsertRequest(
+                channel="TV", project_id="p1", status="calibrated"
+            )
+        )
+    assert exc.value.status_code == 409
+    assert "Illegal status" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_upsert_update_multihop_forward_is_legal(api):
+    # draft -> completed walks the legal chain and backfills the skipped hops
+    created = _body(
+        await api.upsert_experiment_endpoint(
+            api.ExperimentUpsertRequest(channel="TV", project_id="p1", status="draft")
+        )
+    )
+    updated = _body(
+        await api.upsert_experiment_endpoint(
+            api.ExperimentUpsertRequest(
+                id=created["id"], status="completed", value=1.2, se=0.3
+            )
+        )
+    )
+    assert updated["status"] == "completed" and updated["value"] == 1.2
+    assert [h["status"] for h in updated["status_history"]] == [
+        "draft",
+        "planned",
+        "running",
+        "completed",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_upsert_update_across_illegal_edge_is_409(api):
+    # 'calibrated' is fit-close-out-only: unreachable via upsert even from
+    # 'completed', where the transition endpoint's edge is legal.
+    created = _body(
+        await api.upsert_experiment_endpoint(
+            api.ExperimentUpsertRequest(
+                channel="TV", project_id="p1", status="completed", value=2.0, se=0.2
+            )
+        )
+    )
+    with pytest.raises(HTTPException) as exc:
+        await api.upsert_experiment_endpoint(
+            api.ExperimentUpsertRequest(id=created["id"], status="calibrated")
+        )
+    assert exc.value.status_code == 409
+    assert "Illegal transition" in exc.value.detail
+    # the failed update left the row untouched
+    got = _body(await api.get_experiment_endpoint(created["id"]))
+    assert got["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_upsert_edit_of_calibrated_row_is_409(api):
+    # REST clients cannot silently mutate a calibrated experiment's
+    # likelihood-feeding fields — the endpoint never exposes
+    # allow_calibrated_edit, so the store's guard maps to 409.
+    from mmm_framework.api import sessions as S
+
+    created = _body(
+        await api.upsert_experiment_endpoint(
+            api.ExperimentUpsertRequest(
+                channel="TV", project_id="p1", status="completed", value=2.0, se=0.2
+            )
+        )
+    )
+    S.transition_experiment(created["id"], "calibrated")
+    with pytest.raises(HTTPException) as exc:
+        await api.upsert_experiment_endpoint(
+            api.ExperimentUpsertRequest(id=created["id"], value=9.9)
+        )
+    assert exc.value.status_code == 409
+    assert "Illegal update" in exc.value.detail
+    got = _body(await api.get_experiment_endpoint(created["id"]))
+    assert got["value"] == 2.0 and got["status"] == "calibrated"
+    # non-measurement fields stay editable over REST
+    ok = _body(
+        await api.upsert_experiment_endpoint(
+            api.ExperimentUpsertRequest(id=created["id"], notes="context")
+        )
+    )
+    assert ok["notes"] == "context"
+
+
+@pytest.mark.asyncio
 async def test_get_unknown_experiment_404(api):
     with pytest.raises(HTTPException) as exc:
         await api.get_experiment_endpoint("missing")

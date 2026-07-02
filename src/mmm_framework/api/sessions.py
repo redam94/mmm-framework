@@ -1121,6 +1121,28 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
 }
 
 
+def _transition_path(current: str, target: str) -> list[str] | None:
+    """Shortest legal path ``current -> ... -> target`` through
+    :data:`ALLOWED_TRANSITIONS` (BFS).
+
+    Returns the hop statuses after ``current`` (last element == ``target``),
+    or ``None`` when the target is unreachable.
+    """
+    seen = {current}
+    queue: list[tuple[str, list[str]]] = [(current, [])]
+    while queue:
+        node, path = queue.pop(0)
+        for nxt in sorted(ALLOWED_TRANSITIONS.get(node, set())):
+            if nxt in seen:
+                continue
+            hops = path + [nxt]
+            if nxt == target:
+                return hops
+            seen.add(nxt)
+            queue.append((nxt, hops))
+    return None
+
+
 def _json_or_none(raw: str | None) -> Any:
     if not raw:
         return None
@@ -1190,14 +1212,30 @@ def upsert_experiment(
     design: dict[str, Any] | None = None,
     readout: dict[str, Any] | None = None,
     priority: dict[str, Any] | None = None,
+    allow_calibrated_edit: bool = False,
 ) -> dict[str, Any]:
     """Create (no ``experiment_id``) or partially update an experiment record.
 
     On update, only the non-None fields change. Raises ValueError for an
-    unknown id, a missing channel on create, or an invalid status. Status
-    changes through here are unvalidated (legacy path) — lifecycle moves
-    should use :func:`transition_experiment`, which enforces the state machine
-    and keeps the audit trail.
+    unknown id, a missing channel on create, or an invalid status.
+
+    Status is state-machine enforced: creating directly in 'calibrated' is
+    rejected (calibration happens via :func:`transition_experiment` at fit
+    close-out); creating in planned/running/completed stays legal (historical
+    import) but the full draft→…→status history chain is backfilled. An update
+    may change status to anything REACHABLE through
+    :data:`ALLOWED_TRANSITIONS` — multi-hop moves (e.g. planned→completed,
+    the one-call results-recording flow) backfill the intermediate hops into
+    the history — EXCEPT 'calibrated', which is only ever set by
+    :func:`transition_experiment` (fit close-out). Same-status (or
+    ``status=None``) updates stay silent no-ops for the other fields.
+
+    A calibrated experiment's measurement fields (value / se / estimand /
+    start_date / end_date / readout / channel / subchannel) feed the model's
+    calibration likelihood, so CHANGING any of them raises unless
+    ``allow_calibrated_edit=True`` (the ``record_experiment_readout`` tool's
+    sanctioned, audited overwrite path). Unchanged re-sends and
+    notes/design/priority-only updates stay allowed.
     """
     if status is not None and status not in EXPERIMENT_STATUSES:
         raise ValueError(
@@ -1208,8 +1246,25 @@ def upsert_experiment(
         if experiment_id is None:
             if not channel:
                 raise ValueError("channel is required to create an experiment")
+            if status == "calibrated":
+                raise ValueError(
+                    "Illegal status for create: 'calibrated' — experiments "
+                    "become calibrated via transition_experiment (fit "
+                    "close-out), not on create."
+                )
             experiment_id = uuid.uuid4().hex
             initial_status = status or "planned"
+            # Historical import (explicit planned/running/completed): backfill
+            # the full legal chain so the audit trail never shows an
+            # unreachable state as the first entry.
+            _chain = ("draft", "planned", "running", "completed")
+            if status is not None and status in _chain[1:]:
+                history = [
+                    {"status": s, "at": now, "note": "backfilled on create"}
+                    for s in _chain[: _chain.index(status) + 1]
+                ]
+            else:
+                history = [{"status": initial_status, "at": now}]
             c.execute(
                 "INSERT INTO experiments (id, project_id, thread_id, channel,"
                 " subchannel, design_type, status, start_date, end_date, estimand,"
@@ -1236,7 +1291,7 @@ def upsert_experiment(
                     json.dumps(design) if design is not None else None,
                     json.dumps(readout) if readout is not None else None,
                     json.dumps(priority) if priority is not None else None,
-                    json.dumps([{"status": initial_status, "at": now}]),
+                    json.dumps(history),
                     now,
                     now,
                 ),
@@ -1247,6 +1302,58 @@ def upsert_experiment(
             ).fetchone()
             if row is None:
                 raise ValueError(f"Unknown experiment id '{experiment_id}'")
+            current = row["status"]
+            status_changed = status is not None and status != current
+            hops: list[str] = []
+            if status_changed:
+                if status == "calibrated":
+                    raise ValueError(
+                        f"Illegal transition {current}->calibrated. Experiments "
+                        "become calibrated via transition_experiment (fit "
+                        "close-out), never via upsert."
+                    )
+                hops = _transition_path(current, status) or []
+                if not hops:
+                    allowed = ALLOWED_TRANSITIONS.get(current, set())
+                    raise ValueError(
+                        f"Illegal transition {current}->{status}. Allowed from "
+                        f"'{current}': {', '.join(sorted(allowed)) or '(none)'}"
+                    )
+            if current == "calibrated" and not allow_calibrated_edit:
+                keys = row.keys()
+                changing = [
+                    name
+                    for name, new_val, old_val in (
+                        ("value", value, row["value"]),
+                        ("se", se, row["se"]),
+                        ("estimand", estimand, row["estimand"]),
+                        ("start_date", start_date, row["start_date"]),
+                        ("end_date", end_date, row["end_date"]),
+                        (
+                            "readout",
+                            readout,
+                            _json_or_none(
+                                row["readout_json"] if "readout_json" in keys else None
+                            ),
+                        ),
+                        ("channel", channel, row["channel"]),
+                        (
+                            "subchannel",
+                            subchannel,
+                            row["subchannel"] if "subchannel" in keys else None,
+                        ),
+                    )
+                    if new_val is not None and new_val != old_val
+                ]
+                if changing:
+                    raise ValueError(
+                        f"Illegal update: experiment '{experiment_id}' is "
+                        f"calibrated — this would change "
+                        f"{', '.join(changing)}, which feed the model's "
+                        "calibration likelihood. Readout edits require the "
+                        "record_experiment_readout tool "
+                        "(overwrite_calibrated=True)."
+                    )
             updates = {
                 k: v
                 for k, v in {
@@ -1274,6 +1381,18 @@ def upsert_experiment(
                 }.items()
                 if v is not None
             }
+            if status_changed:
+                history = _json_or_none(
+                    row["status_history_json"]
+                    if "status_history_json" in row.keys()
+                    else None
+                ) or [{"status": current, "at": row["created_at"]}]
+                for s in hops[:-1]:
+                    history.append(
+                        {"status": s, "at": now, "note": "backfilled via upsert"}
+                    )
+                history.append({"status": status, "at": now, "note": "via upsert"})
+                updates["status_history_json"] = json.dumps(history)
             updates["updated_at"] = now
             sets = ", ".join(f"{k} = ?" for k in updates)
             c.execute(
@@ -1369,6 +1488,48 @@ def transition_experiment(
             "SELECT * FROM experiments WHERE id = ?", (experiment_id,)
         ).fetchone()
     return _experiment_row_to_dict(row)
+
+
+def append_experiment_event(
+    experiment_id: str, note: str, changed: dict[str, Any] | None = None
+) -> None:
+    """Append a non-transition audit event to an experiment's history.
+
+    Records an entry ``{status: <current status>, at, note[, changed]}`` in
+    ``status_history_json`` without moving the state machine — used to leave a
+    trail when a readout is edited in place (e.g. re-recording a value or
+    attaching off-panel spend on an already-measured experiment). NULL-tolerant
+    like :func:`transition_experiment` (pre-lifecycle rows get their history
+    synthesized from the current status). Bumps ``updated_at``.
+
+    Args:
+        experiment_id: Registry id of the experiment.
+        note: Human-readable description of the event.
+        changed: Optional ``{field: [old, new]}`` diff of what changed.
+
+    Raises:
+        ValueError: For an unknown experiment id.
+    """
+    now = _now()
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM experiments WHERE id = ?", (experiment_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Unknown experiment id '{experiment_id}'")
+        current = row["status"]
+        history = _json_or_none(
+            row["status_history_json"] if "status_history_json" in row.keys() else None
+        ) or [{"status": current, "at": row["created_at"]}]
+        entry: dict[str, Any] = {"status": current, "at": now, "note": note}
+        if changed:
+            entry["changed"] = changed
+        history.append(entry)
+        c.execute(
+            "UPDATE experiments SET status_history_json = ?, updated_at = ?"
+            " WHERE id = ?",
+            (json.dumps(history), now, experiment_id),
+        )
 
 
 def latest_calibrated_evidence(project_id: str | None = None) -> dict[str, dict]:

@@ -2392,7 +2392,22 @@ async def upsert_experiment_endpoint(
             priority=body.priority,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # State-machine conflicts (illegal transition / illegal create status /
+        # editing a calibrated row's measurement fields) are 409 like the
+        # transition endpoint; bad input stays 400. Note: the endpoint never
+        # exposes allow_calibrated_edit — calibrated readout edits go through
+        # the record_experiment_readout tool (overwrite_calibrated=True).
+        msg = str(e)
+        raise HTTPException(
+            status_code=(
+                409
+                if msg.startswith(
+                    ("Illegal transition", "Illegal status", "Illegal update")
+                )
+                else 400
+            ),
+            detail=msg,
+        )
     return JSONResponse(content=exp)
 
 
