@@ -1561,9 +1561,10 @@ class BayesianMMM:
             # EXPERIMENT LIKELIHOODS (incrementality / lift / ROAS calibration)
             # Fold any registered experimental results into the joint posterior
             # as likelihood terms on the model-implied estimand. No-op (and graph
-            # byte-identical) when no experiments are registered.
-            if self.experiments:
-                self._add_experiment_likelihoods(channel_handles)
+            # byte-identical) when no experiments are registered. Called
+            # unconditionally so subclass overrides (e.g. share calibrations)
+            # always get a chance to attach their own likelihood terms.
+            self._add_experiment_likelihoods(channel_handles)
 
             # CONTROL EFFECTS
             # ``beta_controls`` (kept for reporting/validation which read it by
@@ -1877,6 +1878,9 @@ class BayesianMMM:
         own spend level via :meth:`_offpanel_contribution_std`, requiring no
         training rows (valid under structural stationarity).
         """
+        if not self.experiments:
+            return
+
         from ..calibration.likelihood import (
             ExperimentEstimand,
             attach_experiment_likelihood,

@@ -105,7 +105,7 @@ import warnings
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from mmm_framework.config.roles import DatasetRole
 from mmm_framework.estimands.registry import latent_scalar
@@ -129,7 +129,53 @@ class BreakoutWeightedParams(BaseModel):
     #: weighting. Default 0.3 matches the per-geo ``media_geo_sigma`` default.
     breakout_weight_sigma: float = Field(default=0.3, gt=0)
 
+    #: Share calibrations: observed within-channel share compositions folded in
+    #: as likelihood terms on the model-implied ``breakout_share_<C>`` simplex
+    #: (e.g. exported from a continuous-learning program via
+    #: ``continuous_learning.arms.arm_shares``). Each entry is a
+    #: :class:`mmm_framework.calibration.likelihood.ShareMeasurement` dict:
+    #: ``{channel, breakouts, shares, log_ratio_cov | concentration,
+    #: distribution, name, source}``. The entry's ``channel`` must be a
+    #: ``breakout_groups`` parent and its ``breakouts`` must ALL come from that
+    #: group's columns; at build time the order must match the model's breakout
+    #: order EXACTLY (the ALR covariance is order-dependent).
+    share_calibrations: list[dict] = Field(default_factory=list)
+
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _validate_share_calibrations(self) -> "BreakoutWeightedParams":
+        """Round-trip each share-calibration entry through ``ShareMeasurement``
+        so a bad spec fails at build time with a clear message, and check the
+        entry targets a real breakout group with that group's own columns."""
+        if not self.share_calibrations:
+            return self
+        # Import inside the validator to keep the schema import-light (the
+        # manifest form / JSON-schema path never needs the calibration module).
+        from mmm_framework.calibration.likelihood import ShareMeasurement
+
+        normalized: list[dict] = []
+        for i, entry in enumerate(self.share_calibrations):
+            try:
+                meas = ShareMeasurement.from_dict(dict(entry))
+            except (KeyError, ValueError, TypeError) as e:
+                raise ValueError(f"share_calibrations[{i}]: {e}") from e
+            if meas.channel not in self.breakout_groups:
+                raise ValueError(
+                    f"share_calibrations[{i}]: channel {meas.channel!r} is not a "
+                    f"breakout_groups parent {sorted(self.breakout_groups)}."
+                )
+            group_cols = set(self.breakout_groups[meas.channel])
+            unknown = [b for b in meas.breakouts if b not in group_cols]
+            if unknown:
+                raise ValueError(
+                    f"share_calibrations[{i}]: breakouts {unknown} are not "
+                    f"sub-streams of {meas.channel!r} "
+                    f"{self.breakout_groups[meas.channel]}."
+                )
+            normalized.append(meas.to_dict())
+        object.__setattr__(self, "share_calibrations", normalized)
+        return self
 
 
 class BreakoutWeightedMMM(CustomMMM):
@@ -344,6 +390,77 @@ class BreakoutWeightedMMM(CustomMMM):
         I_brk = x_brk[:, idx]  # (n_obs, K) raw impressions
         mix_factor = (I_brk @ w) / (I_brk.sum(axis=1) + 1e-12)  # ≡1 at w=1
         return X_media_raw_data[:, c] * mix_factor
+
+    # -- calibration ----------------------------------------------------------
+
+    def _add_experiment_likelihoods(self, channel_handles: dict[str, dict]) -> None:
+        """Attach the configured share calibrations, then the base scalar
+        experiment likelihoods.
+
+        Each ``model_params.share_calibrations`` entry is compared to the
+        channel's ``breakout_share_<C>`` Deterministic (guaranteed built —
+        ``_channel_media_input`` runs before the base build reaches this hook)
+        via :func:`~mmm_framework.calibration.likelihood.attach_share_likelihood`.
+
+        The measurement's ``breakouts`` must match the MODEL's breakout order
+        for that channel EXACTLY (``self._breakout_names[C]``): the ALR
+        log-ratio covariance is defined w.r.t. the ordered breakouts, so a
+        reordered measurement would need a re-derived covariance — we require
+        the exact order rather than silently reindexing. A parent channel that
+        also carries a scalar :class:`ExperimentMeasurement` is flagged with a
+        double-counting warning (a level readout + a share vector from the SAME
+        program enter the posterior twice with correlated errors).
+        """
+        from mmm_framework.calibration.likelihood import (
+            ShareMeasurement,
+            attach_share_likelihood,
+        )
+
+        entries = list(self.model_params.share_calibrations or [])
+        if entries:
+            model = pm.modelcontext(None)
+            scalar_channels = {exp.channel for exp in (self.experiments or [])}
+            used_names: set[str] = set()
+            for i, entry in enumerate(entries):
+                meas = ShareMeasurement.from_dict(entry)
+                C = meas.channel
+                expected = list(getattr(self, "_breakout_names", {}).get(C, []))
+                if not expected:
+                    raise ValueError(
+                        f"share calibration targets {C!r}, which is not a "
+                        f"breakout channel of this model "
+                        f"{sorted(getattr(self, '_breakout_names', {}))}."
+                    )
+                if list(meas.breakouts) != expected:
+                    raise ValueError(
+                        f"share calibration for {C!r} must list the model's "
+                        f"breakouts in the model's order exactly — expected "
+                        f"{expected}, got {list(meas.breakouts)}. (The ALR "
+                        "covariance is order-dependent; re-derive it rather "
+                        "than reordering.)"
+                    )
+                if C in scalar_channels:
+                    warnings.warn(
+                        f"Channel {C!r} has BOTH a scalar experiment "
+                        "measurement and a share calibration. If both derive "
+                        "from the same program/wave, the evidence enters the "
+                        "posterior twice with correlated errors (level via the "
+                        "scalar readout, mix via the shares) — prefer one "
+                        "parent-level readout + one share vector per program.",
+                        stacklevel=2,
+                    )
+                share_expr = model[f"breakout_share_{C}"]
+                base_name = meas.default_node_name(i)
+                name = base_name
+                bump = 2
+                while name in used_names or f"{name}_model_share" in used_names:
+                    name = f"{base_name}_{bump}"
+                    bump += 1
+                used_names.add(name)
+                used_names.add(f"{name}_model_share")
+                attach_share_likelihood(name, share_expr, meas)
+
+        super()._add_experiment_likelihoods(channel_handles)
 
     # -- estimands + reporting ----------------------------------------------
 

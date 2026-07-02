@@ -41,6 +41,7 @@ from __future__ import annotations
 from .arms import (
     ARM_SEP,
     ArmSpec,
+    arm_shares,
     cross_parent_pairs,
     default_arm_pair_signs,
     expand_arms,
@@ -61,6 +62,7 @@ from .loop import (
     WaveRecord,
     due_for_retest,
     run_closed_loop,
+    select_next_design,
     world_optimal_allocation,
 )
 from .model import (
@@ -179,6 +181,7 @@ __all__ = [
     # arms (sub-channel measurement)
     "ARM_SEP",
     "ArmSpec",
+    "arm_shares",
     "expand_arms",
     "within_parent_pairs",
     "cross_parent_pairs",
@@ -187,6 +190,7 @@ __all__ = [
     "LearningState",
     "WaveRecord",
     "run_closed_loop",
+    "select_next_design",
     "world_optimal_allocation",
     "due_for_retest",
 ]
