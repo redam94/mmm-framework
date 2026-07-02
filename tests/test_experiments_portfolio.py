@@ -37,17 +37,18 @@ class TestExperimentStore:
             channel="TV", project_id="p1", design_type="geo holdout"
         )
         assert e["status"] == "planned"
-        e = store.upsert_experiment(
-            experiment_id=e["id"],
-            status="completed",
+        store.transition_experiment(e["id"], "running")
+        e = store.transition_experiment(
+            e["id"],
+            "completed",
             value=1.4,
             se=0.3,
             estimand="roas",
         )
-        # partial update preserves untouched fields
+        # transition merges the readout fields, preserving untouched ones
         assert e["design_type"] == "geo holdout" and e["value"] == 1.4
         assert store.list_experiments(project_id="p1", status="completed")
-        store.upsert_experiment(experiment_id=e["id"], status="calibrated")
+        store.transition_experiment(e["id"], "calibrated")
         assert store.list_experiments(status="completed") == []
 
     def test_validation(self, store):
@@ -160,9 +161,9 @@ class TestPortfolio:
         cal = [a for a in body["next_actions"] if a["type"] == "calibrate"]
         assert len(cal) == 1 and cal[0]["urgency"] == "high"
         assert "TV" in cal[0]["detail"]
-        # calibrating clears the flag
+        # calibrating clears the flag (completed -> calibrated is legal)
         eid = body["experiments"][0]["id"]
-        store.upsert_experiment(experiment_id=eid, status="calibrated")
+        store.transition_experiment(eid, "calibrated")
         body2 = _body(await app_main.portfolio_endpoint(project_id="p1"))
         assert not [a for a in body2["next_actions"] if a["type"] == "calibrate"]
 

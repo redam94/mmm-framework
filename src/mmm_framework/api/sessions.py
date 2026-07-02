@@ -193,6 +193,10 @@ def init_db() -> None:
             ("priority_json", "TEXT"),
             ("preregistered_at", "REAL"),
             ("status_history_json", "TEXT"),
+            # creative / keyword / campaign identifier (nullable) — sub-channel
+            # readouts feed continuous-learning programs with arms; MMM
+            # calibration stays channel-level.
+            ("subchannel", "TEXT"),
         ):
             try:
                 c.execute(f"ALTER TABLE experiments ADD COLUMN {col} {decl}")
@@ -431,6 +435,51 @@ def init_db() -> None:
             " ON budget_plans(project_id, updated_at)",
         ):
             c.execute(_ddl)
+
+        # Continuous-learning programs (model-free geo response-surface bandit).
+        # A program is a statused, project-scoped, longitudinal entity; heavy
+        # state (posterior draws + the accumulated panel) lives on disk at
+        # state_path (.npz), SQLite holds paths + JSON snapshots only —
+        # exactly the experiments/run_metrics idiom.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS learning_programs (
+                id            TEXT PRIMARY KEY,
+                project_id    TEXT,
+                thread_id     TEXT,
+                name          TEXT,
+                status        TEXT NOT NULL DEFAULT 'active',
+                channels_json TEXT NOT NULL,
+                config_json   TEXT NOT NULL,
+                state_path    TEXT,
+                summary_json  TEXT,
+                created_at    REAL,
+                updated_at    REAL
+            )
+            """)
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_learning_programs_project"
+            " ON learning_programs(project_id, updated_at)"
+        )
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS learning_waves (
+                id                  TEXT PRIMARY KEY,
+                program_id          TEXT NOT NULL,
+                project_id          TEXT,
+                wave_index          INTEGER NOT NULL,
+                status              TEXT NOT NULL DEFAULT 'designed',
+                source              TEXT,
+                design_json         TEXT,
+                observations_json   TEXT,
+                snapshot_json       TEXT,
+                experiment_ids_json TEXT,
+                created_at          REAL,
+                updated_at          REAL
+            )
+            """)
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_learning_waves_program"
+            " ON learning_waves(program_id, wave_index)"
+        )
 
 
 def list_sessions(project_id: str | None = None) -> list[dict[str, Any]]:
@@ -1072,6 +1121,28 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
 }
 
 
+def _transition_path(current: str, target: str) -> list[str] | None:
+    """Shortest legal path ``current -> ... -> target`` through
+    :data:`ALLOWED_TRANSITIONS` (BFS).
+
+    Returns the hop statuses after ``current`` (last element == ``target``),
+    or ``None`` when the target is unreachable.
+    """
+    seen = {current}
+    queue: list[tuple[str, list[str]]] = [(current, [])]
+    while queue:
+        node, path = queue.pop(0)
+        for nxt in sorted(ALLOWED_TRANSITIONS.get(node, set())):
+            if nxt in seen:
+                continue
+            hops = path + [nxt]
+            if nxt == target:
+                return hops
+            seen.add(nxt)
+            queue.append((nxt, hops))
+    return None
+
+
 def _json_or_none(raw: str | None) -> Any:
     if not raw:
         return None
@@ -1088,6 +1159,7 @@ def _experiment_row_to_dict(r) -> dict[str, Any]:
         "project_id": r["project_id"],
         "thread_id": r["thread_id"],
         "channel": r["channel"],
+        "subchannel": r["subchannel"] if "subchannel" in keys else None,
         "design_type": r["design_type"],
         "status": r["status"],
         "start_date": r["start_date"],
@@ -1126,6 +1198,7 @@ def upsert_experiment(
     project_id: str | None = None,
     thread_id: str | None = None,
     channel: str | None = None,
+    subchannel: str | None = None,
     design_type: str | None = None,
     status: str | None = None,
     start_date: str | None = None,
@@ -1139,14 +1212,30 @@ def upsert_experiment(
     design: dict[str, Any] | None = None,
     readout: dict[str, Any] | None = None,
     priority: dict[str, Any] | None = None,
+    allow_calibrated_edit: bool = False,
 ) -> dict[str, Any]:
     """Create (no ``experiment_id``) or partially update an experiment record.
 
     On update, only the non-None fields change. Raises ValueError for an
-    unknown id, a missing channel on create, or an invalid status. Status
-    changes through here are unvalidated (legacy path) — lifecycle moves
-    should use :func:`transition_experiment`, which enforces the state machine
-    and keeps the audit trail.
+    unknown id, a missing channel on create, or an invalid status.
+
+    Status is state-machine enforced: creating directly in 'calibrated' is
+    rejected (calibration happens via :func:`transition_experiment` at fit
+    close-out); creating in planned/running/completed stays legal (historical
+    import) but the full draft→…→status history chain is backfilled. An update
+    may change status to anything REACHABLE through
+    :data:`ALLOWED_TRANSITIONS` — multi-hop moves (e.g. planned→completed,
+    the one-call results-recording flow) backfill the intermediate hops into
+    the history — EXCEPT 'calibrated', which is only ever set by
+    :func:`transition_experiment` (fit close-out). Same-status (or
+    ``status=None``) updates stay silent no-ops for the other fields.
+
+    A calibrated experiment's measurement fields (value / se / estimand /
+    start_date / end_date / readout / channel / subchannel) feed the model's
+    calibration likelihood, so CHANGING any of them raises unless
+    ``allow_calibrated_edit=True`` (the ``record_experiment_readout`` tool's
+    sanctioned, audited overwrite path). Unchanged re-sends and
+    notes/design/priority-only updates stay allowed.
     """
     if status is not None and status not in EXPERIMENT_STATUSES:
         raise ValueError(
@@ -1157,20 +1246,38 @@ def upsert_experiment(
         if experiment_id is None:
             if not channel:
                 raise ValueError("channel is required to create an experiment")
+            if status == "calibrated":
+                raise ValueError(
+                    "Illegal status for create: 'calibrated' — experiments "
+                    "become calibrated via transition_experiment (fit "
+                    "close-out), not on create."
+                )
             experiment_id = uuid.uuid4().hex
             initial_status = status or "planned"
+            # Historical import (explicit planned/running/completed): backfill
+            # the full legal chain so the audit trail never shows an
+            # unreachable state as the first entry.
+            _chain = ("draft", "planned", "running", "completed")
+            if status is not None and status in _chain[1:]:
+                history = [
+                    {"status": s, "at": now, "note": "backfilled on create"}
+                    for s in _chain[: _chain.index(status) + 1]
+                ]
+            else:
+                history = [{"status": initial_status, "at": now}]
             c.execute(
                 "INSERT INTO experiments (id, project_id, thread_id, channel,"
-                " design_type, status, start_date, end_date, estimand, value, se,"
-                " notes, recommending_run_id, calibrated_run_id, design_json,"
-                " readout_json, priority_json, status_history_json,"
+                " subchannel, design_type, status, start_date, end_date, estimand,"
+                " value, se, notes, recommending_run_id, calibrated_run_id,"
+                " design_json, readout_json, priority_json, status_history_json,"
                 " created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     experiment_id,
                     project_id,
                     thread_id,
                     channel,
+                    subchannel,
                     design_type,
                     initial_status,
                     start_date,
@@ -1184,7 +1291,7 @@ def upsert_experiment(
                     json.dumps(design) if design is not None else None,
                     json.dumps(readout) if readout is not None else None,
                     json.dumps(priority) if priority is not None else None,
-                    json.dumps([{"status": initial_status, "at": now}]),
+                    json.dumps(history),
                     now,
                     now,
                 ),
@@ -1195,12 +1302,65 @@ def upsert_experiment(
             ).fetchone()
             if row is None:
                 raise ValueError(f"Unknown experiment id '{experiment_id}'")
+            current = row["status"]
+            status_changed = status is not None and status != current
+            hops: list[str] = []
+            if status_changed:
+                if status == "calibrated":
+                    raise ValueError(
+                        f"Illegal transition {current}->calibrated. Experiments "
+                        "become calibrated via transition_experiment (fit "
+                        "close-out), never via upsert."
+                    )
+                hops = _transition_path(current, status) or []
+                if not hops:
+                    allowed = ALLOWED_TRANSITIONS.get(current, set())
+                    raise ValueError(
+                        f"Illegal transition {current}->{status}. Allowed from "
+                        f"'{current}': {', '.join(sorted(allowed)) or '(none)'}"
+                    )
+            if current == "calibrated" and not allow_calibrated_edit:
+                keys = row.keys()
+                changing = [
+                    name
+                    for name, new_val, old_val in (
+                        ("value", value, row["value"]),
+                        ("se", se, row["se"]),
+                        ("estimand", estimand, row["estimand"]),
+                        ("start_date", start_date, row["start_date"]),
+                        ("end_date", end_date, row["end_date"]),
+                        (
+                            "readout",
+                            readout,
+                            _json_or_none(
+                                row["readout_json"] if "readout_json" in keys else None
+                            ),
+                        ),
+                        ("channel", channel, row["channel"]),
+                        (
+                            "subchannel",
+                            subchannel,
+                            row["subchannel"] if "subchannel" in keys else None,
+                        ),
+                    )
+                    if new_val is not None and new_val != old_val
+                ]
+                if changing:
+                    raise ValueError(
+                        f"Illegal update: experiment '{experiment_id}' is "
+                        f"calibrated — this would change "
+                        f"{', '.join(changing)}, which feed the model's "
+                        "calibration likelihood. Readout edits require the "
+                        "record_experiment_readout tool "
+                        "(overwrite_calibrated=True)."
+                    )
             updates = {
                 k: v
                 for k, v in {
                     "project_id": project_id,
                     "thread_id": thread_id,
                     "channel": channel,
+                    "subchannel": subchannel,
                     "design_type": design_type,
                     "status": status,
                     "start_date": start_date,
@@ -1221,6 +1381,18 @@ def upsert_experiment(
                 }.items()
                 if v is not None
             }
+            if status_changed:
+                history = _json_or_none(
+                    row["status_history_json"]
+                    if "status_history_json" in row.keys()
+                    else None
+                ) or [{"status": current, "at": row["created_at"]}]
+                for s in hops[:-1]:
+                    history.append(
+                        {"status": s, "at": now, "note": "backfilled via upsert"}
+                    )
+                history.append({"status": status, "at": now, "note": "via upsert"})
+                updates["status_history_json"] = json.dumps(history)
             updates["updated_at"] = now
             sets = ", ".join(f"{k} = ?" for k in updates)
             c.execute(
@@ -1318,6 +1490,48 @@ def transition_experiment(
     return _experiment_row_to_dict(row)
 
 
+def append_experiment_event(
+    experiment_id: str, note: str, changed: dict[str, Any] | None = None
+) -> None:
+    """Append a non-transition audit event to an experiment's history.
+
+    Records an entry ``{status: <current status>, at, note[, changed]}`` in
+    ``status_history_json`` without moving the state machine — used to leave a
+    trail when a readout is edited in place (e.g. re-recording a value or
+    attaching off-panel spend on an already-measured experiment). NULL-tolerant
+    like :func:`transition_experiment` (pre-lifecycle rows get their history
+    synthesized from the current status). Bumps ``updated_at``.
+
+    Args:
+        experiment_id: Registry id of the experiment.
+        note: Human-readable description of the event.
+        changed: Optional ``{field: [old, new]}`` diff of what changed.
+
+    Raises:
+        ValueError: For an unknown experiment id.
+    """
+    now = _now()
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM experiments WHERE id = ?", (experiment_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Unknown experiment id '{experiment_id}'")
+        current = row["status"]
+        history = _json_or_none(
+            row["status_history_json"] if "status_history_json" in row.keys() else None
+        ) or [{"status": current, "at": row["created_at"]}]
+        entry: dict[str, Any] = {"status": current, "at": now, "note": note}
+        if changed:
+            entry["changed"] = changed
+        history.append(entry)
+        c.execute(
+            "UPDATE experiments SET status_history_json = ?, updated_at = ?"
+            " WHERE id = ?",
+            (json.dumps(history), now, experiment_id),
+        )
+
+
 def latest_calibrated_evidence(project_id: str | None = None) -> dict[str, dict]:
     """Newest calibrated experiment per channel — the evidence map that feeds
     information decay and the calibration-coverage view.
@@ -1350,6 +1564,7 @@ def list_experiments(
     project_id: str | None = None,
     status: str | None = None,
     channel: str | None = None,
+    subchannel: str | None = None,
 ) -> list[dict[str, Any]]:
     """Experiments, newest-updated first; optionally filtered."""
     q = "SELECT * FROM experiments"
@@ -1363,6 +1578,9 @@ def list_experiments(
     if channel is not None:
         clauses.append("channel = ?")
         params.append(channel)
+    if subchannel is not None:
+        clauses.append("subchannel = ?")
+        params.append(subchannel)
     if clauses:
         q += " WHERE " + " AND ".join(clauses)
     q += " ORDER BY updated_at DESC"
@@ -1375,6 +1593,365 @@ def delete_experiment(experiment_id: str) -> bool:
     with _conn() as c:
         cur = c.execute("DELETE FROM experiments WHERE id = ?", (experiment_id,))
         return cur.rowcount > 0
+
+
+# ── Continuous-learning programs (model-free geo bandit) ─────────────────────
+
+LEARNING_PROGRAM_STATUSES = ("active", "stopped", "archived")
+LEARNING_WAVE_STATUSES = ("designed", "ingested")
+
+
+def _learning_program_row_to_dict(r: sqlite3.Row) -> dict[str, Any]:
+    keys = set(r.keys())
+    return {
+        "id": r["id"],
+        "project_id": r["project_id"],
+        "thread_id": r["thread_id"],
+        "name": r["name"],
+        "status": r["status"],
+        "channels": _json_or_none(r["channels_json"]) or [],
+        "config": _json_or_none(r["config_json"]) or {},
+        "state_path": r["state_path"] if "state_path" in keys else None,
+        "summary": _json_or_none(r["summary_json"] if "summary_json" in keys else None),
+        "created_at": r["created_at"],
+        "updated_at": r["updated_at"],
+    }
+
+
+def create_learning_program(
+    *,
+    project_id: str | None = None,
+    thread_id: str | None = None,
+    name: str | None = None,
+    channels: list[str],
+    config: dict[str, Any],
+    state_path: str | None = None,
+    status: str = "active",
+) -> dict[str, Any]:
+    """Insert a learning-program row. ``channels`` is the FLATTENED arm list
+    (the surface dimensions); ``config`` is the dollars-at-the-boundary program
+    config (wiring contract §3.1)."""
+    if status not in LEARNING_PROGRAM_STATUSES:
+        raise ValueError(
+            f"Invalid status '{status}'. Valid: {', '.join(LEARNING_PROGRAM_STATUSES)}"
+        )
+    if not channels:
+        raise ValueError("channels is required to create a learning program")
+    program_id = uuid.uuid4().hex
+    now = _now()
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO learning_programs (id, project_id, thread_id, name, status,"
+            " channels_json, config_json, state_path, summary_json, created_at,"
+            " updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                program_id,
+                project_id,
+                thread_id,
+                name,
+                status,
+                json.dumps(list(channels)),
+                json.dumps(config, default=str),
+                state_path,
+                None,
+                now,
+                now,
+            ),
+        )
+        row = c.execute(
+            "SELECT * FROM learning_programs WHERE id = ?", (program_id,)
+        ).fetchone()
+    return _learning_program_row_to_dict(row)
+
+
+def get_learning_program(program_id: str) -> dict[str, Any] | None:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM learning_programs WHERE id = ?", (program_id,)
+        ).fetchone()
+    return _learning_program_row_to_dict(row) if row else None
+
+
+def list_learning_programs(
+    project_id: str | None = None, status: str | None = None
+) -> list[dict[str, Any]]:
+    """Learning programs, newest-updated first; optionally filtered."""
+    q = "SELECT * FROM learning_programs"
+    clauses, params = [], []
+    if project_id is not None:
+        clauses.append("project_id = ?")
+        params.append(project_id)
+    if status is not None:
+        clauses.append("status = ?")
+        params.append(status)
+    if clauses:
+        q += " WHERE " + " AND ".join(clauses)
+    q += " ORDER BY updated_at DESC"
+    with _conn() as c:
+        rows = c.execute(q, params).fetchall()
+    return [_learning_program_row_to_dict(r) for r in rows]
+
+
+def update_learning_program(
+    program_id: str,
+    *,
+    name: str | None = None,
+    status: str | None = None,
+    thread_id: str | None = None,
+    channels: list[str] | None = None,
+    config: dict[str, Any] | None = None,
+    state_path: str | None = None,
+    summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Partial update; only the non-None fields change. Raises ValueError for
+    an unknown id or an invalid status."""
+    if status is not None and status not in LEARNING_PROGRAM_STATUSES:
+        raise ValueError(
+            f"Invalid status '{status}'. Valid: {', '.join(LEARNING_PROGRAM_STATUSES)}"
+        )
+    updates = {
+        k: v
+        for k, v in {
+            "name": name,
+            "status": status,
+            "thread_id": thread_id,
+            "channels_json": (
+                json.dumps(list(channels)) if channels is not None else None
+            ),
+            "config_json": (
+                json.dumps(config, default=str) if config is not None else None
+            ),
+            "state_path": state_path,
+            "summary_json": (
+                json.dumps(summary, default=str) if summary is not None else None
+            ),
+        }.items()
+        if v is not None
+    }
+    updates["updated_at"] = _now()
+    with _conn() as c:
+        row = c.execute(
+            "SELECT 1 FROM learning_programs WHERE id = ?", (program_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Unknown learning program id '{program_id}'")
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        c.execute(
+            f"UPDATE learning_programs SET {sets} WHERE id = ?",
+            (*updates.values(), program_id),
+        )
+        row = c.execute(
+            "SELECT * FROM learning_programs WHERE id = ?", (program_id,)
+        ).fetchone()
+    return _learning_program_row_to_dict(row)
+
+
+def delete_learning_program(program_id: str) -> bool:
+    """Delete a program and cascade its waves. Returns True if the program
+    existed. (The on-disk state.npz is left for the caller to reap.)"""
+    with _conn() as c:
+        c.execute("DELETE FROM learning_waves WHERE program_id = ?", (program_id,))
+        cur = c.execute("DELETE FROM learning_programs WHERE id = ?", (program_id,))
+        return cur.rowcount > 0
+
+
+def _learning_wave_row_to_dict(r: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": r["id"],
+        "program_id": r["program_id"],
+        "project_id": r["project_id"],
+        "wave_index": r["wave_index"],
+        "status": r["status"],
+        "source": r["source"],
+        "design": _json_or_none(r["design_json"]),
+        "observations": _json_or_none(r["observations_json"]),
+        "snapshot": _json_or_none(r["snapshot_json"]),
+        "experiment_ids": _json_or_none(r["experiment_ids_json"]),
+        "created_at": r["created_at"],
+        "updated_at": r["updated_at"],
+    }
+
+
+def add_learning_wave(
+    program_id: str,
+    *,
+    project_id: str | None = None,
+    wave_index: int | None = None,
+    status: str = "designed",
+    source: str | None = None,
+    design: dict[str, Any] | None = None,
+    observations: dict[str, Any] | None = None,
+    snapshot: dict[str, Any] | None = None,
+    experiment_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Append a wave row (``wave_index`` auto-increments per program).
+
+    ``source`` is one of ``wave`` / ``experiment_import`` / ``manual``;
+    ``snapshot`` is the pinned fit_and_plan SNAPSHOT (immutable, like
+    run_metrics rows)."""
+    if status not in LEARNING_WAVE_STATUSES:
+        raise ValueError(
+            f"Invalid wave status '{status}'. Valid: {', '.join(LEARNING_WAVE_STATUSES)}"
+        )
+    wave_id = uuid.uuid4().hex
+    now = _now()
+    with _conn() as c:
+        prog = c.execute(
+            "SELECT 1 FROM learning_programs WHERE id = ?", (program_id,)
+        ).fetchone()
+        if prog is None:
+            raise ValueError(f"Unknown learning program id '{program_id}'")
+        if wave_index is None:
+            row = c.execute(
+                "SELECT MAX(wave_index) AS mx FROM learning_waves WHERE program_id = ?",
+                (program_id,),
+            ).fetchone()
+            wave_index = 0 if row is None or row["mx"] is None else int(row["mx"]) + 1
+        c.execute(
+            "INSERT INTO learning_waves (id, program_id, project_id, wave_index,"
+            " status, source, design_json, observations_json, snapshot_json,"
+            " experiment_ids_json, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                wave_id,
+                program_id,
+                project_id,
+                int(wave_index),
+                status,
+                source,
+                json.dumps(design, default=str) if design is not None else None,
+                (
+                    json.dumps(observations, default=str)
+                    if observations is not None
+                    else None
+                ),
+                json.dumps(snapshot, default=str) if snapshot is not None else None,
+                (
+                    json.dumps(list(experiment_ids))
+                    if experiment_ids is not None
+                    else None
+                ),
+                now,
+                now,
+            ),
+        )
+        row = c.execute(
+            "SELECT * FROM learning_waves WHERE id = ?", (wave_id,)
+        ).fetchone()
+    return _learning_wave_row_to_dict(row)
+
+
+def get_learning_wave(wave_id: str) -> dict[str, Any] | None:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM learning_waves WHERE id = ?", (wave_id,)
+        ).fetchone()
+    return _learning_wave_row_to_dict(row) if row else None
+
+
+def list_learning_waves(program_id: str) -> list[dict[str, Any]]:
+    """A program's waves, oldest first (wave_index ascending)."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM learning_waves WHERE program_id = ?"
+            " ORDER BY wave_index ASC, created_at ASC",
+            (program_id,),
+        ).fetchall()
+    return [_learning_wave_row_to_dict(r) for r in rows]
+
+
+def update_learning_wave(
+    wave_id: str,
+    *,
+    status: str | None = None,
+    source: str | None = None,
+    design: dict[str, Any] | None = None,
+    observations: dict[str, Any] | None = None,
+    snapshot: dict[str, Any] | None = None,
+    experiment_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Partial update of a wave row (e.g. designed → ingested with results)."""
+    if status is not None and status not in LEARNING_WAVE_STATUSES:
+        raise ValueError(
+            f"Invalid wave status '{status}'. Valid: {', '.join(LEARNING_WAVE_STATUSES)}"
+        )
+    updates = {
+        k: v
+        for k, v in {
+            "status": status,
+            "source": source,
+            "design_json": (
+                json.dumps(design, default=str) if design is not None else None
+            ),
+            "observations_json": (
+                json.dumps(observations, default=str)
+                if observations is not None
+                else None
+            ),
+            "snapshot_json": (
+                json.dumps(snapshot, default=str) if snapshot is not None else None
+            ),
+            "experiment_ids_json": (
+                json.dumps(list(experiment_ids)) if experiment_ids is not None else None
+            ),
+        }.items()
+        if v is not None
+    }
+    updates["updated_at"] = _now()
+    with _conn() as c:
+        row = c.execute(
+            "SELECT 1 FROM learning_waves WHERE id = ?", (wave_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Unknown learning wave id '{wave_id}'")
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        c.execute(
+            f"UPDATE learning_waves SET {sets} WHERE id = ?",
+            (*updates.values(), wave_id),
+        )
+        row = c.execute(
+            "SELECT * FROM learning_waves WHERE id = ?", (wave_id,)
+        ).fetchone()
+    return _learning_wave_row_to_dict(row)
+
+
+def record_ingested_wave(
+    program_id: str,
+    *,
+    project_id: str | None = None,
+    source: str | None = None,
+    observations: dict[str, Any] | None = None,
+    snapshot: dict[str, Any] | None = None,
+    experiment_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Record ingested evidence on the wave board (designed → ingested).
+
+    A rows-ingest (``source='wave'``) RESOLVES the program's latest wave row
+    when that row is still ``'designed'`` — so the timeline shows ONE row per
+    real wave instead of a permanently-open 'designed' card plus a duplicate
+    'ingested' one. Experiment imports (and ingests with no open design)
+    append a new ``'ingested'`` row. Shared by the REST fit worker and the
+    agent tools' ``record_learning_wave``/``import_past_experiments`` paths.
+    """
+    if source == "wave":
+        waves = list_learning_waves(program_id)
+        if waves and waves[-1].get("status") == "designed":
+            return update_learning_wave(
+                waves[-1]["id"],
+                status="ingested",
+                observations=observations,
+                snapshot=snapshot,
+                experiment_ids=experiment_ids,
+            )
+    return add_learning_wave(
+        program_id,
+        project_id=project_id,
+        status="ingested",
+        source=source,
+        observations=observations,
+        snapshot=snapshot,
+        experiment_ids=experiment_ids,
+    )
 
 
 # ── Budget plans (Planner) ────────────────────────────────────────────────────

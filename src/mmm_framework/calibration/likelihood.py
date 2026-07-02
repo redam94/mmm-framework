@@ -375,6 +375,211 @@ class ExperimentMeasurement:
         return "_".join(parts)
 
 
+@dataclass(frozen=True)
+class ShareMeasurement:
+    """An observed within-channel *share vector* to fold into the likelihood.
+
+    Where :class:`ExperimentMeasurement` carries a scalar estimand (contribution
+    / ROAS / mROAS) for one channel, this carries a **composition**: the observed
+    mean shares of a virtual parent channel's breakout sub-streams (e.g. from a
+    continuous-learning program's per-arm posterior, or a creative-level lift
+    study). The model-implied counterpart is a simplex expression such as the
+    breakout model's ``breakout_share_<C>`` Deterministic; the two are compared
+    via :func:`attach_share_likelihood`.
+
+    Two measurement-error families:
+
+    * ``"logistic_normal"`` (default) -- an MvNormal on the ``K-1`` additive
+      log-ratios (ALR) w.r.t. the **last** breakout as reference:
+      ``z_k = log(share_k / share_K)``. Matches the simplex's ``K-1`` degrees of
+      freedom exactly and preserves the correlation structure of the source
+      draws. Requires ``log_ratio_cov``.
+    * ``"dirichlet"`` -- ``shares ~ Dirichlet(concentration * model_share)``.
+      A single-scalar-precision alternative with the Dirichlet's rigid
+      negative-correlation structure. Requires ``concentration``.
+
+    Parameters
+    ----------
+    channel:
+        The VIRTUAL parent channel the shares decompose (must be one of the
+        model's channels, e.g. a breakout group's parent name).
+    breakouts:
+        The parent's sub-stream column names (MFF media columns), in the
+        explicit order the ``shares`` (and ``log_ratio_cov``) refer to.
+        At least 2, unique. The ALR reference is the **last** entry.
+    shares:
+        Observed mean shares, one per breakout, same order. Must be
+        non-negative and sum to ~1; they are floored at a tiny epsilon and
+        renormalized to an exact simplex on construction.
+    log_ratio_cov:
+        ``(K-1, K-1)`` covariance of the ALR log-ratios (last breakout as
+        reference). Must be symmetric and **strictly** positive definite
+        (checked via Cholesky -- a singular/PSD matrix would make the
+        ``MvNormal`` logp ``-inf`` deep inside the fit; add a small diagonal
+        ridge, e.g. ``1e-9``, to an empirically-estimated covariance).
+        Required for ``"logistic_normal"``; must be ``None`` for
+        ``"dirichlet"``. NOTE: the ALR coordinates depend on the
+        breakout ORDER -- reordering ``breakouts`` requires re-deriving the
+        covariance, so consumers require an exact order match rather than
+        reindexing.
+    concentration:
+        Dirichlet precision (larger = tighter). Required for ``"dirichlet"``;
+        must be ``None`` for ``"logistic_normal"``.
+    distribution:
+        ``"logistic_normal"`` (default) or ``"dirichlet"``.
+    name:
+        Optional explicit name for the likelihood node; auto-generated
+        otherwise.
+    source:
+        Optional provenance (e.g. ``{"program_id": ..., "wave": ...,
+        "mode": ..., "spend_ref": ...}``) -- used by consumers to warn about
+        double counting when the same program also produced a scalar
+        parent-level readout.
+    """
+
+    channel: str
+    breakouts: tuple[str, ...]
+    shares: tuple[float, ...]
+    log_ratio_cov: tuple[tuple[float, ...], ...] | None = None
+    concentration: float | None = None
+    distribution: str = "logistic_normal"
+    name: str | None = None
+    source: dict | None = None
+
+    def __post_init__(self) -> None:
+        if not self.channel or not isinstance(self.channel, str):
+            raise ValueError(
+                f"channel must be a non-empty string, got {self.channel!r}"
+            )
+
+        breakouts = tuple(str(b) for b in self.breakouts)
+        if len(breakouts) < 2:
+            raise ValueError(
+                f"breakouts must list at least 2 sub-streams, got {breakouts!r}"
+            )
+        if len(set(breakouts)) != len(breakouts):
+            raise ValueError(f"breakouts contains duplicates: {breakouts!r}")
+        object.__setattr__(self, "breakouts", breakouts)
+
+        k = len(breakouts)
+        try:
+            shares = tuple(float(s) for s in self.shares)
+        except (TypeError, ValueError):
+            raise ValueError(f"shares must be numeric, got {self.shares!r}") from None
+        if len(shares) != k:
+            raise ValueError(
+                f"shares has {len(shares)} entries but breakouts has {k}; they "
+                "must align one-to-one in the same order."
+            )
+        if any(not math.isfinite(s) or s < 0 for s in shares):
+            raise ValueError(f"shares must be finite and non-negative, got {shares!r}")
+        floored = tuple(max(s, _EPS) for s in shares)
+        total = sum(floored)
+        if not math.isclose(total, 1.0, rel_tol=0.0, abs_tol=0.01):
+            raise ValueError(
+                f"shares must sum to ~1 (got {total:.6g}); pass the observed "
+                "share composition, not raw responses."
+            )
+        object.__setattr__(self, "shares", tuple(s / total for s in floored))
+
+        if self.distribution not in ("logistic_normal", "dirichlet"):
+            raise ValueError(
+                "distribution must be 'logistic_normal' or 'dirichlet', got "
+                f"{self.distribution!r}"
+            )
+
+        if (self.log_ratio_cov is None) == (self.concentration is None):
+            raise ValueError(
+                "exactly one of log_ratio_cov (logistic_normal) or concentration "
+                "(dirichlet) must be set."
+            )
+        if self.distribution == "logistic_normal" and self.log_ratio_cov is None:
+            raise ValueError("distribution='logistic_normal' requires log_ratio_cov.")
+        if self.distribution == "dirichlet" and self.concentration is None:
+            raise ValueError("distribution='dirichlet' requires concentration.")
+
+        if self.concentration is not None:
+            conc = float(self.concentration)
+            if not math.isfinite(conc) or conc <= 0:
+                raise ValueError(
+                    f"concentration must be a positive finite number, got "
+                    f"{self.concentration!r}"
+                )
+            object.__setattr__(self, "concentration", conc)
+
+        if self.log_ratio_cov is not None:
+            import numpy as np
+
+            cov = np.asarray(self.log_ratio_cov, dtype=float)
+            if cov.shape != (k - 1, k - 1):
+                raise ValueError(
+                    f"log_ratio_cov must be ({k - 1}, {k - 1}) -- the ALR "
+                    f"covariance w.r.t. the last breakout -- got shape "
+                    f"{cov.shape}."
+                )
+            if not np.all(np.isfinite(cov)):
+                raise ValueError("log_ratio_cov must be finite.")
+            scale = max(float(np.abs(cov).max()), _EPS)
+            if not np.allclose(cov, cov.T, atol=1e-8 * scale):
+                raise ValueError("log_ratio_cov must be symmetric.")
+            # Strict PD via Cholesky: a merely-PSD (singular) covariance passes
+            # an eigenvalue-with-slack check but hands pm.MvNormal a matrix it
+            # cannot factor -- surfacing only as a cryptic logp=-inf failure at
+            # sampler init, deep inside the (expensive) fit job. Fail here,
+            # at construction, with an actionable message instead.
+            try:
+                np.linalg.cholesky(0.5 * (cov + cov.T))
+            except np.linalg.LinAlgError:
+                raise ValueError(
+                    "log_ratio_cov must be strictly positive definite; add a "
+                    "small diagonal ridge (e.g. 1e-9)."
+                ) from None
+            object.__setattr__(
+                self,
+                "log_ratio_cov",
+                tuple(tuple(float(v) for v in row) for row in cov),
+            )
+
+    # -- serialization ----------------------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "channel": self.channel,
+            "breakouts": list(self.breakouts),
+            "shares": list(self.shares),
+            "log_ratio_cov": (
+                [list(row) for row in self.log_ratio_cov]
+                if self.log_ratio_cov is not None
+                else None
+            ),
+            "concentration": self.concentration,
+            "distribution": self.distribution,
+            "name": self.name,
+            "source": dict(self.source) if self.source is not None else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ShareMeasurement":
+        cov = data.get("log_ratio_cov")
+        return cls(
+            channel=data["channel"],
+            breakouts=tuple(data["breakouts"]),
+            shares=tuple(data["shares"]),
+            log_ratio_cov=(
+                tuple(tuple(row) for row in cov) if cov is not None else None
+            ),
+            concentration=data.get("concentration"),
+            distribution=data.get("distribution", "logistic_normal"),
+            name=data.get("name"),
+            source=data.get("source"),
+        )
+
+    def default_node_name(self, index: int) -> str:
+        if self.name:
+            return self.name
+        return f"share_{self.channel}_{index}"
+
+
 # =============================================================================
 # Pure helpers (no PyMC -- directly unit-testable)
 # =============================================================================
@@ -467,10 +672,71 @@ def attach_experiment_likelihood(
     )
 
 
+def attach_share_likelihood(
+    name: str,
+    share_expr: "pt.TensorVariable",
+    measurement: ShareMeasurement,
+):
+    """Add an observed likelihood comparing a model simplex to measured shares.
+
+    Mirrors :func:`attach_experiment_likelihood` for *compositional* evidence:
+    ``share_expr`` is the model-implied share vector (a length-``K`` simplex
+    tensor, e.g. the breakout model's ``breakout_share_<C>`` Deterministic) and
+    ``measurement`` carries the observed shares in the SAME breakout order.
+    Call inside the ``pm.Model`` context.
+
+    ``"logistic_normal"`` places an MvNormal on the ``K-1`` additive log-ratios
+    (last component as reference) -- matching the simplex's degrees of freedom
+    exactly; ``"dirichlet"`` places a Dirichlet with ``a = concentration *
+    model_share``. Both clip/floor at a tiny epsilon for numerical safety (the
+    model share is strictly interior by construction in the breakout model).
+
+    Parameters
+    ----------
+    name:
+        Name of the observed node (must be unique within the model).
+    share_expr:
+        PyTensor vector: the model-implied shares, length ``K`` matching
+        ``measurement.breakouts`` in order.
+    measurement:
+        The observed share composition and its measurement-error family.
+
+    Returns
+    -------
+    The created observed random variable.
+    """
+    import numpy as np
+    import pymc as pm
+    import pytensor.tensor as pt
+
+    # Expose the model-implied shares as a named Deterministic for diagnostics
+    # ("what the model thinks the shares are" vs what was measured).
+    pm.Deterministic(f"{name}_model_share", pt.as_tensor_variable(share_expr))
+
+    shares = np.asarray(measurement.shares, dtype=float)
+
+    if measurement.distribution == "logistic_normal":
+        s = pt.clip(share_expr, _EPS, np.inf)
+        z_model = pt.log(s[:-1] / s[-1])
+        z_hat = np.log(shares[:-1] / shares[-1])
+        return pm.MvNormal(
+            name,
+            mu=z_model,
+            cov=np.asarray(measurement.log_ratio_cov, dtype=float),
+            observed=z_hat,
+        )
+
+    # Dirichlet: a = concentration * model_share (floored to keep a > 0).
+    a = float(measurement.concentration) * pt.clip(share_expr, _EPS, np.inf)
+    return pm.Dirichlet(name, a=a, observed=shares)
+
+
 __all__ = [
     "ExperimentEstimand",
     "ExperimentMeasurement",
+    "ShareMeasurement",
     "attach_experiment_likelihood",
+    "attach_share_likelihood",
     "build_estimand_expr",
     "lognormal_sigma_from_moments",
 ]

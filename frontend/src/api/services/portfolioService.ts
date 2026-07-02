@@ -32,6 +32,8 @@ export interface ExperimentUpsert {
   id?: string;
   project_id?: string | null;
   channel?: string;
+  /** creative/keyword/campaign arm within the channel */
+  subchannel?: string | null;
   design_type?: string | null;
   status?: ExperimentStatus;
   start_date?: string | null;

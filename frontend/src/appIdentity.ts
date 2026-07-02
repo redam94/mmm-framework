@@ -12,6 +12,8 @@
  *   measurement loop at a glance.
  * - **Auspices** (/experiments) — literally "bird-watching": the formal act
  *   of taking the omens, i.e. running the test before committing the budget.
+ * - **Sextant** (/learning) — the navigation instrument you re-sight every
+ *   wave: continuous learning programs that steer spend between full fits.
  * - **Chronicle** (/performance) — the cycle-over-cycle record of how
  *   measurement sharpened and decisions improved.
  * - **Almanac** (/planner) — the forward calendar of when to act: budget
@@ -42,6 +44,7 @@ export interface PageIdentity {
 export const PAGES: PageIdentity[] = [
   { path: '/program', name: 'Orrery', hint: 'The measurement cycle, in motion' },
   { path: '/experiments', name: 'Auspices', hint: 'Design · run · calibrate tests' },
+  { path: '/learning', name: 'Sextant', hint: 'Continuous learning programs' },
   { path: '/performance', name: 'Chronicle', hint: 'Cycle-over-cycle record' },
   { path: '/planner', name: 'Almanac', hint: 'Allocate budget & plan flights' },
   { path: '/portfolio', name: 'Constellation', hint: 'Benchmark brands across the book' },

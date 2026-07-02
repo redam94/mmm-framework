@@ -168,6 +168,151 @@ def test_config_schema_defaults():
     p = BreakoutWeightedParams()
     assert p.breakout_groups == {}
     assert p.breakout_weight_sigma == 0.3
+    assert p.share_calibrations == []
+
+
+# ---------------------------------------------------------------------------
+# fast: share calibrations (graph shape, validation, double-count guard)
+# ---------------------------------------------------------------------------
+
+_TV_SUBS = ["TV_Premium", "TV_Standard", "TV_Remnant"]
+
+
+def _share_entry(**overrides) -> dict:
+    entry = {
+        "channel": "TV",
+        "breakouts": list(_TV_SUBS),
+        "shares": [0.5, 0.3, 0.2],
+        "log_ratio_cov": [[0.01, 0.0], [0.0, 0.01]],
+        "name": "tv_share",
+    }
+    entry.update(overrides)
+    return entry
+
+
+def _share_model(entries: list[dict], *, groups: dict | None = None):
+    dataset, sc, gr = breakout_dataset("breakout_heterogeneous")
+    return (
+        BreakoutWeightedMMM(
+            dataset,
+            ModelConfig(use_parametric_adstock=True),
+            TrendConfig(type=TrendType.LINEAR),
+            model_params={
+                "breakout_groups": groups if groups is not None else gr,
+                "share_calibrations": entries,
+            },
+        ),
+        sc,
+    )
+
+
+def test_share_calibration_only_attaches_likelihood():
+    """A share calibration attaches WITHOUT any scalar experiments registered —
+    the base gate now calls ``_add_experiment_likelihoods`` unconditionally, so
+    the subclass override always runs."""
+    mmm, _ = _share_model([_share_entry()])
+    assert mmm.experiments == []  # share-only: no scalar experiments
+    m = mmm.model
+    names = set(m.named_vars)
+    assert "tv_share" in names
+    assert "tv_share_model_share" in names
+    obs = {rv.name for rv in m.observed_RVs}
+    assert "tv_share" in obs
+    # the observed ALR vector has K-1 = 2 components
+    assert tuple(m["tv_share"].shape.eval()) == (2,)
+
+
+def test_share_calibration_order_mismatch_raises():
+    """The measurement's breakouts must match the MODEL's breakout order exactly
+    (the ALR covariance is order-dependent); the error names the expected order."""
+    reordered = [_TV_SUBS[1], _TV_SUBS[0], _TV_SUBS[2]]
+    mmm, _ = _share_model([_share_entry(breakouts=reordered)])
+    with pytest.raises(ValueError, match="TV_Premium.*TV_Standard.*TV_Remnant"):
+        _ = mmm.model
+    # a strict subset is also rejected (config-level: subset membership passes,
+    # build-level: exact order match fails)
+    mmm2, _ = _share_model(
+        [
+            _share_entry(
+                breakouts=_TV_SUBS[:2],
+                shares=[0.6, 0.4],
+                log_ratio_cov=[[0.01]],
+            )
+        ]
+    )
+    with pytest.raises(ValueError, match="model's order exactly"):
+        _ = mmm2.model
+
+
+def test_share_calibration_dirichlet_builds():
+    entry = _share_entry(
+        distribution="dirichlet", concentration=200.0, log_ratio_cov=None
+    )
+    mmm, _ = _share_model([entry])
+    m = mmm.model
+    assert "tv_share" in set(m.named_vars)
+    assert "tv_share" in {rv.name for rv in m.observed_RVs}
+
+
+def test_share_calibration_double_count_warns():
+    """A scalar experiment AND a share calibration on the same parent channel is
+    a double-counting hazard — the build warns."""
+    from mmm_framework.calibration import ExperimentMeasurement
+
+    mmm, _ = _share_model([_share_entry()])
+    mmm.add_experiment_calibration(
+        [ExperimentMeasurement(channel="TV", test_period=(5, 15), value=50.0, se=10.0)]
+    )
+    with pytest.warns(UserWarning, match="BOTH a scalar"):
+        _ = mmm.model
+
+
+def test_share_measurement_rejects_singular_cov():
+    """A rank-deficient (PSD-but-not-PD) ALR covariance must fail at
+    CONSTRUCTION with an actionable message -- handing it to pm.MvNormal would
+    otherwise surface only as PyMC's cryptic 'logp = -inf' at sampler init,
+    deep inside the (expensive) fit job."""
+    from mmm_framework.calibration.likelihood import ShareMeasurement
+
+    # outer product of one vector: eigenvalues {0, 2} -- PSD but singular
+    singular = [[1.0, 1.0], [1.0, 1.0]]
+    with pytest.raises(ValueError, match="strictly positive definite"):
+        ShareMeasurement(
+            channel="TV",
+            breakouts=tuple(_TV_SUBS),
+            shares=(0.5, 0.3, 0.2),
+            log_ratio_cov=tuple(tuple(row) for row in singular),
+        )
+    # ... and through the untrusted spec path (the pydantic validator
+    # round-trips every entry through ShareMeasurement).
+    with pytest.raises(Exception, match="strictly positive definite"):
+        _share_model([_share_entry(log_ratio_cov=singular)])
+    # a tiny diagonal ridge (the documented remedy) makes it acceptable
+    ridged = [[1.0 + 1e-6, 1.0], [1.0, 1.0 + 1e-6]]
+    meas = ShareMeasurement(
+        channel="TV",
+        breakouts=tuple(_TV_SUBS),
+        shares=(0.5, 0.3, 0.2),
+        log_ratio_cov=tuple(tuple(row) for row in ridged),
+    )
+    assert meas.log_ratio_cov is not None
+
+
+def test_share_calibration_config_validation():
+    """Bad share-calibration specs fail at construction (the pydantic validator
+    round-trips each entry through ShareMeasurement)."""
+    # unknown parent channel
+    with pytest.raises(Exception, match="not a breakout_groups parent"):
+        _share_model([_share_entry(channel="Search")])
+    # breakout not in the group's columns
+    with pytest.raises(Exception, match="not sub-streams"):
+        _share_model([_share_entry(breakouts=["TV_Premium", "TV_Standard", "Search"])])
+    # shares not a simplex
+    with pytest.raises(Exception, match="sum to ~1"):
+        _share_model([_share_entry(shares=[0.9, 0.8, 0.7])])
+    # both cov and concentration
+    with pytest.raises(Exception, match="exactly one"):
+        _share_model([_share_entry(concentration=100.0)])
 
 
 # ---------------------------------------------------------------------------
@@ -277,3 +422,76 @@ def test_serialization_round_trip():
     after = loaded.breakout_weights_summary().set_index("breakout")["weight_mean"]
     for s in before.index:
         assert abs(float(before[s]) - float(after[s])) < 1e-6, s
+
+
+@pytest.mark.slow
+def test_share_calibration_restores_identification():
+    """The headline demo: on the COLLINEAR world (sub-streams share one flighting
+    calendar, so the observational mix is unidentifiable) a share calibration
+    built from the TRUE shares pins the weight posterior — the share-calibrated
+    fit is materially closer to truth AND materially tighter than the
+    uncalibrated fit."""
+    import arviz as az
+
+    fit_kwargs = dict(
+        progressbar=False,
+        draws=300,
+        tune=600,
+        chains=2,
+        target_accept=0.9,
+        random_seed=11,
+    )
+
+    def _fit(entries: list[dict]):
+        dataset, sc, gr = breakout_dataset("breakout_collinear")
+        mmm = BreakoutWeightedMMM(
+            dataset,
+            ModelConfig(use_parametric_adstock=True),
+            TrendConfig(type=TrendType.LINEAR),
+            model_params={"breakout_groups": gr, "share_calibrations": entries},
+        )
+        mmm.fit(**fit_kwargs)
+        return mmm, sc
+
+    # True effectiveness shares in the model's own parameterization:
+    # share_k = w*_k S_k / Σ_j w*_j S_j (weights + totals from the answer key).
+    mmm_base, sc = _fit([])
+    subs = mmm_base._breakout_names["TV"]
+    w_true = np.array([sc.notes["true_weights"][s] for s in subs])
+    S = np.array([sc.notes["breakout_totals"][s] for s in subs])
+    true_shares = (w_true * S) / float(w_true @ S)
+
+    entry = {
+        "channel": "TV",
+        "breakouts": list(subs),
+        "shares": [float(s) for s in true_shares],
+        # A well-powered program: ~5% sd on each ALR log-ratio.
+        "log_ratio_cov": [[0.0025, 0.0], [0.0, 0.0025]],
+        "name": "tv_share_calibration",
+    }
+    mmm_cal, _ = _fit([entry])
+    assert "tv_share_calibration" in set(mmm_cal.model.named_vars)
+
+    def _share_stats(mmm):
+        da = mmm._trace.posterior["breakout_share_TV"]
+        mean = da.mean(dim=("chain", "draw")).values
+        hdi = az.hdi(mmm._trace, var_names=["breakout_share_TV"], hdi_prob=0.9)[
+            "breakout_share_TV"
+        ].values
+        width = hdi[:, 1] - hdi[:, 0]
+        return mean, width
+
+    mean_base, width_base = _share_stats(mmm_base)
+    mean_cal, width_cal = _share_stats(mmm_cal)
+
+    err_base = float(np.abs(mean_base - true_shares).mean())
+    err_cal = float(np.abs(mean_cal - true_shares).mean())
+    assert err_cal < err_base, (
+        f"share calibration should pull the posterior-mean shares toward truth: "
+        f"calibrated err={err_cal:.4f} vs uncalibrated err={err_base:.4f} "
+        f"(truth {true_shares})"
+    )
+    assert float(width_cal.mean()) < float(width_base.mean()), (
+        f"share calibration should TIGHTEN the share posterior: calibrated mean "
+        f"HDI width={width_cal.mean():.4f} vs uncalibrated={width_base.mean():.4f}"
+    )

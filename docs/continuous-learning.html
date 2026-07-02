@@ -26,6 +26,9 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly (pinned) for the live explorers -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
 
@@ -87,6 +90,72 @@
         }
         .takeaway strong { color: var(--augur-sage-600); }
         @media (max-width: 1024px) { .stage-grid { grid-template-columns: 1fr; } }
+
+        /* Live-explorer controls (house pattern from the math series; page-local) */
+        .chart-container.tall { height: 480px; }
+        .chart-container.short { height: 300px; }
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.25rem 0 0;
+        }
+        .controls-row label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+        }
+        .controls-row input[type="range"] {
+            width: 140px;
+            accent-color: var(--color-primary-dark);
+        }
+        .ctrl-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--color-primary-dark);
+        }
+        .ctrl-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.6rem;
+            border: 1px dashed var(--color-border);
+            border-radius: var(--radius-md);
+        }
+        .verdict-banner {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            border: 1px solid var(--color-border);
+            border-radius: 10px;
+            padding: 1rem 1.4rem;
+            margin: 1.25rem 0 0.5rem;
+        }
+        .verdict-banner .verdict {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+        }
+        .verdict-banner .verdict-detail {
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+        }
+        .verdict-banner.run { background: rgba(143, 168, 106, 0.14); border-color: rgba(143, 168, 106, 0.7); }
+        .verdict-banner.run .verdict { color: var(--augur-sage-600); }
+        .verdict-banner.stop { background: rgba(201, 112, 103, 0.12); border-color: rgba(201, 112, 103, 0.6); }
+        .verdict-banner.stop .verdict { color: #c97067; }
     </style>
     <!-- seo:augmented (structured data + social cards) -->
     <meta name="twitter:card" content="summary_large_image">
@@ -131,7 +200,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-01",
+          "dateModified": "2026-07-02",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/continuous-learning.html#breadcrumb"
           },
@@ -189,9 +258,24 @@
             <h3>In practice</h3>
             <ul class="sidebar-nav">
                 <li><a href="#hard">A harder problem</a></li>
+                <li><a href="#misspec">When the curve is wrong</a></li>
                 <li><a href="#why">Why plan this way</a></li>
                 <li><a href="#assumptions">What it assumes</a></li>
+                <li><a href="#carryover">Carry-over and noise</a></li>
+            </ul>
+
+            <h3>Bring your own evidence</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#past-tests">Start from past tests</a></li>
+                <li><a href="#arms">Creative &amp; keyword arms</a></li>
+                <li><a href="#in-the-app">In the app</a></li>
+            </ul>
+
+            <h3>Hands-on</h3>
+            <ul class="sidebar-nav">
                 <li><a href="#deeper">Under the hood</a></li>
+                <li><a href="#playground">Play with the surface</a></li>
+                <li><a href="#wave-calculator">Another wave?</a></li>
                 <li><a href="#try">Try it</a></li>
             </ul>
         </aside>
@@ -281,6 +365,26 @@
                     next test (right) at what it's still unsure about. Early on it explores widely; as the picture
                     tightens it settles — and that settling is exactly the signal the loop watches to know it can stop.
                     Simulated on a world with a known right answer, so the learning can be graded.
+                </figcaption>
+            </figure>
+
+            <p>If the animation moves too fast, here is a single frame of what the loop is looking at every time it
+            chooses the next test:</p>
+
+            <figure class="screenshot-figure">
+                <img src="assets/animations/continuous-learning-acquisition.png" loading="lazy"
+                     width="1180" height="998"
+                     alt="Four static panels over a Pulse-by-Orbit budget slice: the posterior-mean profit surface with the exploit optimum starred, the uncertainty surface, the acquisition surface whose optimum (a diamond) sits away from the profit peak toward higher uncertainty, and a one-dimensional slice showing the mean-profit curve inside its uncertainty band with the two optima marked.">
+                <figcaption>
+                    <span class="shot-tag">Simulated · what the loop sees</span>
+                    One frame, four views of the same Pulse&nbsp;&times;&nbsp;Orbit budget slice.
+                    <strong>Top left — expected profit:</strong> where the best split looks to be right now (the star).
+                    <strong>Top right — uncertainty:</strong> where the model is still guessing.
+                    <strong>Bottom left — where to test next:</strong> the blend of the two; its peak (the diamond) sits
+                    <em>away</em> from the profit peak, pulled toward the doubt. <strong>Bottom right</strong> shows why,
+                    on a single slice: the profit curve's band is wide enough that the true best point could hide beyond
+                    the current favourite. The best place to <em>spend</em> is not the best place to <em>test</em> — a
+                    test is worth most where resolving doubt could still change the plan.
                 </figcaption>
             </figure>
 
@@ -517,6 +621,79 @@
             answer; it's a sequence of noisy readouts that gradually rule out the wrong bets. The loop's job is to keep
             each test cheap and pointed at what still matters, and to be candid about how much is still unknown.</p>
 
+            <h2 id="misspec">When the curve is wrong</h2>
+            <p>The loop fits a saturation curve to every channel. So here is the question a sharp analyst should ask
+            before trusting any of the charts above: <strong>what if the real world doesn't follow our curve?</strong>
+            Some channels genuinely ramp twice — an early burst from cheap retargeting inventory, then a second, slower
+            climb as prospecting kicks in. A single smooth curve can only average over a two-phase response like that.
+            We tested exactly this failure: simulate a brand whose true response ramps twice, then fit it with
+            deliberately <em>wrong</em> curve families and grade the damage against the known answer.</p>
+
+            <figure class="screenshot-figure">
+                <img src="assets/continuous-learning/cl-misspec.png" loading="lazy"
+                     width="1180" height="560"
+                     alt="Two panels sweeping each channel's spend: the true two-phase response in black, with three fitted curves and their uncertainty bands — the correct two-phase family covering the truth, a single-Hill fit averaging over the bend, and a logistic fit confidently missing it outside the tested spend range.">
+                <figcaption>
+                    <span class="shot-tag">Simulated · misspecification study, one cycle</span>
+                    The true response (black) ramps twice. All three fitted families — the correct two-phase curve
+                    (green), a single-phase Hill (blue), and a logistic with no bend at all (orange) — <strong>agree
+                    where the experiments actually probed</strong> (the shaded spend range) and diverge where the data
+                    is thin. The dangerous one is the orange curve: it is confidently wrong <em>outside</em> the tested
+                    range, with a band too narrow to admit it.
+                </figcaption>
+            </figure>
+
+            <p>The study's verdict separates two things that usually get conflated
+            (numbers from the single-cycle study; the section &ldquo;When the response family is wrong&rdquo; in
+            <code>technical-docs/continuous-learning.md</code> records them):</p>
+
+            <ul>
+                <li><strong>The decision barely notices.</strong> The recommended split captured ~99% of the true
+                optimum's profit under <em>every</em> family — a profit gap of 0.9% with the wrong single-phase Hill,
+                1.4% with the logistic, 0.9% with the correct two-phase mixture. Near the best split the profit surface
+                is nearly flat, and any smooth saturating curve fit to the tested cells gets the <em>local ranking of
+                next dollars</em> right — which is all the allocator uses.</li>
+                <li><strong>The confidence intervals lie.</strong> The per-channel &ldquo;return on the next dollar&rdquo;
+                interval covered the true value on 4 of 4 channels for the correct family (which was also honest enough
+                to be the widest), 3 of 4 for the single Hill — and only 2 of 4 for the logistic, whose intervals were
+                also the <em>narrowest</em>. A wrong model doesn't know it's wrong, so it gets tighter exactly where it
+                shouldn't.</li>
+                <li><strong>The sampler complains first.</strong> Forcing a single curve onto two-phase data often shows
+                up as a fit that won't converge (R&#770;&nbsp;&asymp;&nbsp;1.5 in the study) — there is no one curve that
+                reconciles all the test cells. Treat a convergence warning as a <em>misspecification alarm</em>, not a
+                nuisance: it's the cue to switch to a more flexible curve, never to trust the tight intervals.</li>
+                <li><strong>The loop forgives.</strong> Run the full wave-by-wave loop under the mild misspecification and
+                the damage washes out: the wrong family's profit gap fell 0.9% &rarr; 0.5% &rarr; 0.2% &rarr; 0.3% across
+                waves, tracking the correctly-specified loop's 0.9% &rarr; 0.5% &rarr; 0.1% &rarr; 0.1% to a fraction of a
+                percent. Because each wave re-tests <em>locally</em> and refits on everything, the loop never leans on the
+                far extrapolation where the wrong curve is worst.</li>
+            </ul>
+
+            <figure class="screenshot-figure">
+                <img src="assets/animations/continuous-learning-misspec.gif" loading="lazy"
+                     width="1180" height="780"
+                     alt="An animation of two learning loops on the same two-phase world: the correct family's band tightens around the truth while the wrong family's band tightens past it; below, the two profit-gap traces overlap and settle while the wrong family's interval width shrinks below the correct one's.">
+                <figcaption>
+                    <span class="shot-tag">Simulated · wrong-family animation (a separate seven-wave run)</span>
+                    Two loops learning the same two-phase world, side by side — one fitting the <strong>correct</strong>
+                    family, one the <strong>wrong</strong> single-phase one. Top row: the correct band tightens
+                    <em>around</em> the truth; the wrong band tightens too — and misses. Bottom row: the
+                    <em>decision</em> (profit gap) converges for both, while the wrong family's interval width shrinks
+                    <em>below</em> the correct one's (0.70 vs 0.97 by the final wave) and its coverage decays from 4/4
+                    channels to 0/4 while the correct family holds 3/4 — narrow and wrong. This run's numbers differ
+                    from the single-cycle study above because it is a separate simulation; the pattern is the point.
+                </figcaption>
+            </figure>
+
+            <div class="takeaway">
+                <strong>Operating rule.</strong> Trust the <em>ranking</em> and the funded set; distrust
+                channel-by-channel magnitudes and their intervals. Fit the most flexible curve you can identify — honest
+                and uncertain beats tight and wrong — and treat convergence warnings or systematic residuals across the
+                test cells as the signal that the curve family is too rigid. One more catch the study surfaced: the
+                loop's self-correction depends on testing the <strong>same market list</strong> wave after wave — swap
+                the geo set mid-programme and the baselines stop cancelling, and the loop can drift instead of converge.
+            </div>
+
             <h2 id="why">Why plan this way</h2>
             <p>Because the numbers a plan rests on are rarely known, and pretending otherwise is where budgets go to
             waste.</p>
@@ -573,6 +750,131 @@
                 this.</p>
             </div>
 
+            <h3 id="carryover">Carry-over and noise — two practical helpers</h3>
+            <p>Two real-world wrinkles the loop handles rather than assumes away:</p>
+            <p><strong>Yesterday's spend still works today.</strong> Media carries over — a burst of Chatter spend keeps
+            nudging sales for a week or two after it stops, so a market's sales this week partly reflect <em>last</em>
+            week's budget. An <strong>adstock pre-pass</strong> (<code>adstock_prepass</code> in
+            <code>continuous_learning.preprocess</code>) converts each market's raw spend history into
+            &ldquo;effective exposure&rdquo; before the fit, using the same carry-over convention as the full
+            marketing-mix model. In a steady flight this is nearly a no-op — the designed test cells hold each market's
+            level constant, so carry-over settles — but on a <em>short</em> test window it matters: in the simulated
+            check it roughly halved the error in the channel-strength reads.</p>
+            <p><strong>Use last year's baseline to cancel noise.</strong> Markets differ enormously in base demand, and
+            that spread is noise for the experiment. But each market's own <em>pre-test</em> level predicts its test-period
+            level well — so subtract the predictable part (<code>cuped_adjust</code>, the standard CUPED adjustment from
+            large-scale A/B testing). If the pre-period correlates with the test period at \( \rho \), the noise variance
+            falls by \( 1-\rho^2 \): at \( \rho = 0.8 \), 64% of the noise is cancelled before the model sees the data —
+            the same read from roughly a third of the geo-weeks, for free.</p>
+
+            <h2 id="past-tests">Start from the tests you've already run</h2>
+            <p>Most teams don't start from zero. There is a drawer of finished lift tests — a Chatter holdout from Q3,
+            a Pulse scale-up from last spring — each concluded, read out, and then filed. The loop can take those
+            directly as its starting evidence: <strong>each finished test becomes one measured fact about the response
+            surface</strong> — <em>at this spend level, this channel produced this much lift, plus or minus this
+            much</em>. The lift keeps its sign: a scale-up that grew sales enters positive, and a holdout enters
+            <em>negative</em> — spend went down and sales followed, which is exactly the evidence that the spend was
+            working. No geo panel, no re-analysis, no model of history required.</p>
+            <p>Two properties make this work. First, <strong>no pre-period is needed</strong>: a lift readout is already
+            a difference — test minus control — so each market's baseline has cancelled out of the number before it
+            reaches the loop. The only assumption you carry is the one every re-used test result carries anyway: the
+            channel's response hasn't structurally changed since the test ran. Second, the readouts slot in as
+            constraints, not gospel — a test with a wide standard error tugs the curve gently; a precise one anchors
+            it.</p>
+            <div class="note">
+                <h4>💡 What a few old tests can — and can't — tell you</h4>
+                <p>A handful of past tests gives a solid <strong>funded / not-funded read</strong> at the spend levels
+                you actually tested. What they cannot give is the <em>shape</em> of the curve: only tests at several
+                distinct spend levels reveal where saturation bites, so with sparse history the curvature stays a
+                prior-informed guess and the program's status readout says so (&ldquo;shape identified: no&rdquo;)
+                rather than pretending. Designed waves fill that in later.</p>
+            </div>
+            <p>In the workspace this is one step: <code>import_past_experiments</code> pulls your completed and
+            calibrated experiments from the registry, converts each readout into a surface constraint, refits, and
+            reports what it imported — and what it skipped, with reasons (a marginal-ROAS readout, for example, is a
+            slope rather than a lift, so it is skipped rather than mangled). In code:</p>
+
+            <pre><code class="language-python">import mmm_framework.continuous_learning as cl
+
+summaries = [
+    # One finished lift test = one constraint on the surface:
+    # "at this spend vs that spend, we measured this total lift, +/- this SE."
+    {"spend_test": [0.9, 0.7], "spend_base": [0.7, 0.7],
+     "lift": 4200.0, "se": 900.0, "scale": 240.0},   # 24 geos x 10 weeks
+    # A holdout keeps its sign: spend down, measured lift NEGATIVE.
+    {"spend_test": [0.7, 0.0], "spend_base": [0.7, 0.7],
+     "lift": -2600.0, "se": 700.0, "scale": 160.0},  # 16 geos x 10 weeks, Pulse dark
+]
+post = cl.fit({"summaries": summaries}, channels=["Chatter", "Pulse"])</code></pre>
+
+            <h2 id="arms">Creative and keyword arms</h2>
+            <p>Often the live question isn't <em>which channel</em> — it's which creative family inside Chatter, or
+            brand versus non-brand keywords inside search. The loop handles this by splitting a channel into
+            <strong>arms</strong>: &ldquo;Search&nbsp;│&nbsp;Brand&rdquo; and &ldquo;Search&nbsp;│&nbsp;Non-brand&rdquo;
+            become two entries on the same surface, each with its own curve, while the parent's total budget stays
+            fixed — the optimizer re-mixes <em>inside</em> Search without changing what Search spends overall.</p>
+            <p>Arms come with an honest default: <strong>siblings cannibalize</strong>. Two creatives in the same
+            channel chase the same audience, and two keyword groups harvest the same queries — so within-parent pairs
+            start with a &ldquo;competes&rdquo; prior, and the data has to earn anything friendlier. It's the same
+            machinery that keeps a walled-garden channel honest: pairs you can't (or don't) test are constrained by an
+            assumption that is <em>stated</em>, not silently estimated.</p>
+            <p>The economics are the real constraint. Each extra arm adds about <strong>three test cells per wave</strong>
+            (a nudge up, a nudge down, and a shut-off) plus two more for every sibling pair you probe (a joint
+            nudge-up and a joint nudge-down) — and every cell needs at least one market. So split one or two parents at a time, where the mix question is actually worth
+            money, rather than atomising the whole plan into arms the market count can't support.</p>
+
+            <h2 id="in-the-app">In the app</h2>
+            <p>In the platform the loop is a <strong>learning program</strong>: a named, long-running measurement object
+            your project carries across quarters, with every wave and readout on the record. The
+            <strong>Sextant</strong> page (<code>/learning</code>) is its home — per program you get the wave timeline,
+            the funding line with per-channel FUND / HOLD / CUT verdicts, the synergy map, response curves with their
+            uncertainty bands, and the stop-or-continue call with the economics behind it. Designs are shown in dollars
+            <em>per market per period</em> — the engine works on market-week rows, so every dollar figure it takes or
+            gives is a per-market spend level, not a national total — and results are ingested as a simple market-week
+            table.</p>
+            <div class="stage-grid">
+                <div class="card">
+                    <span class="stage-tag">Set up</span>
+                    <h4><code>start_learning_program</code></h4>
+                    <p>Name the channels (and any creative/keyword arms), the budget and current split — in dollars per
+                    market per period — the value of a unit of outcome, and what a wave costs. The program starts from
+                    stated priors — and anything you import.</p>
+                </div>
+                <div class="card">
+                    <span class="stage-tag">Import</span>
+                    <h4><code>import_past_experiments</code></h4>
+                    <p>Turn completed and calibrated lift tests from the experiment registry into surface evidence —
+                    with a per-test imported/skipped report, and reasons for every skip.</p>
+                </div>
+                <div class="card">
+                    <span class="stage-tag">Design</span>
+                    <h4><code>design_learning_wave</code></h4>
+                    <p>The next designed wave as concrete cells in dollars — which markets nudge which channels up,
+                    down, or off — sized to what your market count supports.</p>
+                </div>
+                <div class="card">
+                    <span class="stage-tag">Record</span>
+                    <h4><code>record_learning_wave</code></h4>
+                    <p>Ingest the wave's market-week results (CSV or rows), refit on everything so far, and re-plan —
+                    the readouts update in place.</p>
+                </div>
+                <div class="card">
+                    <span class="stage-tag">Read</span>
+                    <h4><code>get_learning_program_status</code></h4>
+                    <p>The current state of belief: recommended split with its range, the funding line, the synergy
+                    read, diagnostics, and any honesty flags (e.g. &ldquo;shape not yet identified&rdquo;).</p>
+                </div>
+                <div class="card">
+                    <span class="stage-tag">Stop</span>
+                    <h4><code>check_learning_stopping</code></h4>
+                    <p>Re-run the stop rule under your economics — margin, horizon, wave cost. It recommends
+                    stop-or-continue and only closes the program when you confirm.</p>
+                </div>
+            </div>
+            <p>The same six steps are available conversationally in the agent workspace and as REST endpoints for
+            automation; agent, page, and API all read from the same program record, so there is one version of the
+            truth per program.</p>
+
             <h2 id="deeper">Under the hood (if you're curious)</h2>
             <p>You don't need any of this to read the charts above, but here's the one idea that makes it all work. For each
             channel, the loop fits a <strong>saturation curve</strong> — spend buys outcome, with diminishing returns as you
@@ -589,6 +891,98 @@
                 in the <a href="continuous-learning-math.html">mathematical foundations</a> companion. This page is the
                 view from the analyst's desk; that one is the view from under the hood.</p>
             </div>
+
+            <h2 id="playground">Play with the surface</h2>
+            <p>This is the exact arithmetic under every chart above, live: two channels, one synergy term, one fixed
+            budget. Drag the sliders and watch two things — how each channel's curve responds, and where the best split
+            of the budget lands. The formula is the one the engine fits
+            (\( f(s) = s^{\alpha} / (s^{\alpha} + \kappa^{\alpha}) \), response
+            \( R = \beta_1 f_1 + \beta_2 f_2 + \gamma f_1 f_2 \)) — mirrored here in page JavaScript.</p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label>&beta;&#8321; Chatter strength</label>
+                    <input type="range" id="plB1" min="0" max="3" step="0.05" value="1.6">
+                    <span class="ctrl-val" id="plB1Val">1.60</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>&beta;&#8322; Pulse strength</label>
+                    <input type="range" id="plB2" min="0" max="3" step="0.05" value="1.0">
+                    <span class="ctrl-val" id="plB2Val">1.00</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>&gamma; synergy</label>
+                    <input type="range" id="plG" min="-1" max="1" step="0.05" value="-0.4">
+                    <span class="ctrl-val" id="plGVal">-0.40</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>&kappa; half-sat</label>
+                    <input type="range" id="plK" min="0.2" max="1.5" step="0.05" value="0.6">
+                    <span class="ctrl-val" id="plKVal">0.60</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>&alpha; shape</label>
+                    <input type="range" id="plA" min="0.6" max="3" step="0.1" value="1.6">
+                    <span class="ctrl-val" id="plAVal">1.6</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>your split &rarr; Chatter</label>
+                    <input type="range" id="plX" min="0" max="1" step="0.01" value="0.5">
+                    <span class="ctrl-val" id="plXVal">50%</span>
+                </div>
+            </div>
+            <div class="chart-container tall" id="surfacePlayground"></div>
+            <p class="chart-note">
+                <strong>Computed live in your browser — the same math as <code>surface.py</code>.</strong>
+                Left: each channel's response, solo (solid) and with its partner at your current split (dashed) — the
+                shading between them is the synergy's lift (or, with \( \gamma &lt; 0 \), the cannibalisation drag).
+                Right: total profit versus the split, with the best split starred, your split marked, and the splits
+                where a channel's <em>next dollar stops paying for itself</em> shaded. Push \( \gamma \) negative and
+                watch the profit curve flatten into a ridge — the &ldquo;harder problem&rdquo; from the animation above.
+                Budget and value are fixed (in the engine's scaled units) so the sliders isolate the curve itself.
+            </p>
+
+            <h2 id="wave-calculator">Should we run another wave?</h2>
+            <p>The stop rule is arithmetic you can do on a napkin — so here is the napkin. Four numbers: how much profit
+            is still at risk from what you don't know (the <em>expected regret</em>, in outcome units per week), what a
+            unit of outcome is worth, how long the improved plan would run, and what a test wave costs. Testing pays
+            while the value of resolving the uncertainty exceeds the cost of the wave.</p>
+
+            <div class="controls-row">
+                <div class="ctrl-group">
+                    <label>E[regret] (thousand units/week)</label>
+                    <input type="range" id="enR" min="0" max="20" step="0.1" value="3.2">
+                    <span class="ctrl-val" id="enRVal">3.2</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>margin (\$/unit)</label>
+                    <input type="range" id="enM" min="0.5" max="20" step="0.5" value="2.5">
+                    <span class="ctrl-val" id="enMVal">2.50</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>horizon (weeks)</label>
+                    <input type="range" id="enH" min="1" max="52" step="1" value="13">
+                    <span class="ctrl-val" id="enHVal">13</span>
+                </div>
+                <div class="ctrl-group">
+                    <label>wave cost (\$)</label>
+                    <input type="range" id="enC" min="0" max="100000" step="1000" value="25000">
+                    <span class="ctrl-val" id="enCVal">25,000</span>
+                </div>
+            </div>
+            <div class="verdict-banner run" id="enbsVerdict">
+                <span class="verdict" id="enbsVerdictText">RUN THE WAVE</span>
+                <span class="verdict-detail" id="enbsVerdictDetail"></span>
+            </div>
+            <div class="chart-container short" id="enbsChart"></div>
+            <p class="chart-note">
+                <strong>The rule the loop runs</strong> (<code>enbs</code> / <code>should_stop</code>): keep testing while
+                E[regret] &times; margin &times; horizon &minus; wave cost &gt; 0 — the <em>expected net benefit of
+                sampling</em>. The engine's &ldquo;population&rdquo; factor plays the horizon's role here: it counts the
+                geo-periods — markets &times; horizon periods — the sharper plan will apply to (the calculator's
+                E[regret] is already summed across markets, so only the horizon remains). Note what the rule does <em>not</em> ask — whether the
+                estimates are &ldquo;precise enough.&rdquo; It asks whether precision is still worth buying.
+            </p>
 
             <h2 id="try">Try it</h2>
             <p>The whole loop is a small Python API. One designed wave, a fit, and the three decision readouts you saw
@@ -625,9 +1019,13 @@ for wave in trace["history"]:
 
             <div class="info">
                 <h4>Where to go next</h4>
-                <p>The two executed notebooks — a brand's full measurement story and the engine's recovery/stopping
-                walkthrough — are in the
-                <a href="https://github.com/redam94/mmm-framework" target="_blank" rel="noopener">source</a>. The precise
+                <p>The two executed notebooks are the evidence behind this page:
+                <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/continuous_learning_story.ipynb"
+                   target="_blank" rel="noopener"><code>nbs/continuous_learning_story.ipynb</code></a> — the Nomi
+                measurement story, end to end — and
+                <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/continuous_learning.ipynb"
+                   target="_blank" rel="noopener"><code>nbs/continuous_learning.ipynb</code></a> — the engine's
+                recovery, acquisition, stopping, and misspecification walkthrough. The precise
                 methodology is in the <a href="continuous-learning-math.html">mathematical foundations</a>. And the
                 model-anchored counterpart — prioritizing experiments <em>from</em> a fitted model — is the
                 <a href="measurement-calibration.html">calibration loop</a>. Use the model-free loop when you have little
@@ -638,6 +1036,263 @@ for wave in trace["history"]:
 
     <!-- Footer injected by components.js -->
     <script src="shared/components.js"></script>
+
+    <!-- Live explorers: the surface playground and the ENBS calculator -->
+    <script>
+    (function() {
+        'use strict';
+        if (typeof Plotly === 'undefined') return;
+
+        // Page-local Plotly theme (house pattern from the math series).
+        const PT = {
+            colors: {
+                chatter: '#8fa86a', pulse: '#6a8fa8', accent: '#d4a86a', rust: '#c97067',
+                truth: '#2d3a2d', grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 60, r: 20, t: 40, b: 55 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        function linspace(a, b, n) {
+            const out = new Array(n);
+            for (let i = 0; i < n; i++) out[i] = a + (b - a) * i / (n - 1);
+            return out;
+        }
+
+        // ------------------------------------------------------------------
+        // The surface math — mirrors continuous_learning/surface.py exactly:
+        //   f(s)  = s^alpha / (s^alpha + kappa^alpha)          (Hill activation)
+        //   R(s)  = b1*f(s1) + b2*f(s2) + g*f(s1)*f(s2)        (incremental)
+        // ------------------------------------------------------------------
+        function hillF(s, kappa, alpha) {
+            if (s <= 0) return 0;
+            const sa = Math.pow(s, alpha), ka = Math.pow(kappa, alpha);
+            return sa / (ka + sa);
+        }
+        function hillFPrime(s, kappa, alpha) {
+            if (s <= 0) return alpha >= 1 ? (alpha > 1 ? 0 : 1 / kappa) : Infinity;
+            const sa = Math.pow(s, alpha), ka = Math.pow(kappa, alpha);
+            const denom = (ka + sa) * (ka + sa);
+            return alpha * ka * Math.pow(s, alpha - 1) / denom;
+        }
+
+        const B_TOTAL = 2.0;   // fixed budget, scaled units
+        const VALUE = 2.0;     // fixed $ value per unit outcome
+
+        const pl = {
+            b1: document.getElementById('plB1'), b2: document.getElementById('plB2'),
+            g: document.getElementById('plG'), k: document.getElementById('plK'),
+            a: document.getElementById('plA'), x: document.getElementById('plX')
+        };
+        const plVals = {
+            b1: document.getElementById('plB1Val'), b2: document.getElementById('plB2Val'),
+            g: document.getElementById('plGVal'), k: document.getElementById('plKVal'),
+            a: document.getElementById('plAVal'), x: document.getElementById('plXVal')
+        };
+
+        function drawPlayground() {
+            if (!pl.b1) return;
+            const b1 = +pl.b1.value, b2 = +pl.b2.value, g = +pl.g.value,
+                  kappa = +pl.k.value, alpha = +pl.a.value, split = +pl.x.value;
+            plVals.b1.textContent = b1.toFixed(2);
+            plVals.b2.textContent = b2.toFixed(2);
+            plVals.g.textContent = g.toFixed(2);
+            plVals.k.textContent = kappa.toFixed(2);
+            plVals.a.textContent = alpha.toFixed(1);
+            plVals.x.textContent = Math.round(split * 100) + '%';
+
+            const s1Cur = split * B_TOTAL, s2Cur = (1 - split) * B_TOTAL;
+            const f1Cur = hillF(s1Cur, kappa, alpha), f2Cur = hillF(s2Cur, kappa, alpha);
+
+            // Left panel: solo curves vs with-partner curves (shading = synergy).
+            const sGrid = linspace(0, B_TOTAL, 120);
+            const ch1Solo = sGrid.map(function(s) { return b1 * hillF(s, kappa, alpha); });
+            const ch1With = sGrid.map(function(s) { return (b1 + g * f2Cur) * hillF(s, kappa, alpha); });
+            const ch2Solo = sGrid.map(function(s) { return b2 * hillF(s, kappa, alpha); });
+            const ch2With = sGrid.map(function(s) { return (b2 + g * f1Cur) * hillF(s, kappa, alpha); });
+            const synColor = g >= 0 ? PT.colors.chatter : PT.colors.rust;
+
+            // Right panel: profit vs split, optimum, and unfunded shading.
+            const xGrid = linspace(0.001, 0.999, 241);
+            const profit = [], m1 = [], m2 = [];
+            let bestI = 0;
+            for (let i = 0; i < xGrid.length; i++) {
+                const s1 = xGrid[i] * B_TOTAL, s2 = (1 - xGrid[i]) * B_TOTAL;
+                const f1 = hillF(s1, kappa, alpha), f2 = hillF(s2, kappa, alpha);
+                const R = b1 * f1 + b2 * f2 + g * f1 * f2;
+                profit.push(VALUE * R - B_TOTAL);
+                m1.push(VALUE * (b1 + g * f2) * hillFPrime(s1, kappa, alpha));
+                m2.push(VALUE * (b2 + g * f1) * hillFPrime(s2, kappa, alpha));
+                if (profit[i] > profit[bestI]) bestI = i;
+            }
+
+            // Contiguous split-regions where a channel's next dollar is under water.
+            function underwaterSegments(marginals) {
+                const segs = [];
+                let start = null;
+                for (let i = 0; i < xGrid.length; i++) {
+                    const under = isFinite(marginals[i]) && marginals[i] < 1;
+                    if (under && start === null) start = xGrid[i];
+                    if (!under && start !== null) { segs.push([start, xGrid[i]]); start = null; }
+                }
+                if (start !== null) segs.push([start, xGrid[xGrid.length - 1]]);
+                return segs;
+            }
+            const shapes = [];
+            underwaterSegments(m1).concat(underwaterSegments(m2)).forEach(function(seg) {
+                shapes.push({
+                    type: 'rect', xref: 'x2', yref: 'paper',
+                    x0: seg[0], x1: seg[1], y0: 0, y1: 1,
+                    fillcolor: PT.band(PT.colors.rust, 0.10), line: { width: 0 }, layer: 'below'
+                });
+            });
+            // Your-split marker line.
+            shapes.push({
+                type: 'line', xref: 'x2', yref: 'paper',
+                x0: split, x1: split, y0: 0, y1: 1,
+                line: { color: PT.colors.truth, width: 1.4, dash: 'dot' }
+            });
+
+            const traces = [
+                { type: 'scatter', mode: 'lines', x: sGrid, y: ch1Solo, name: 'Chatter, solo',
+                  line: { color: PT.colors.chatter, width: 2.4 }, xaxis: 'x', yaxis: 'y',
+                  hovertemplate: 'spend %{x:.2f}<br>response %{y:.3f}<extra>Chatter solo</extra>' },
+                { type: 'scatter', mode: 'lines', x: sGrid, y: ch1With, name: 'Chatter + partner',
+                  line: { color: PT.colors.chatter, width: 2, dash: 'dash' },
+                  fill: 'tonexty', fillcolor: PT.band(synColor, 0.16), xaxis: 'x', yaxis: 'y',
+                  hovertemplate: 'spend %{x:.2f}<br>response %{y:.3f}<extra>Chatter w/ Pulse</extra>' },
+                { type: 'scatter', mode: 'lines', x: sGrid, y: ch2Solo, name: 'Pulse, solo',
+                  line: { color: PT.colors.pulse, width: 2.4 }, xaxis: 'x', yaxis: 'y',
+                  hovertemplate: 'spend %{x:.2f}<br>response %{y:.3f}<extra>Pulse solo</extra>' },
+                { type: 'scatter', mode: 'lines', x: sGrid, y: ch2With, name: 'Pulse + partner',
+                  line: { color: PT.colors.pulse, width: 2, dash: 'dash' },
+                  fill: 'tonexty', fillcolor: PT.band(synColor, 0.16), xaxis: 'x', yaxis: 'y',
+                  hovertemplate: 'spend %{x:.2f}<br>response %{y:.3f}<extra>Pulse w/ Chatter</extra>' },
+                { type: 'scatter', mode: 'lines', x: xGrid, y: profit, name: 'total profit',
+                  line: { color: PT.colors.truth, width: 2.6 }, xaxis: 'x2', yaxis: 'y2',
+                  hovertemplate: 'Chatter share %{x:.0%}<br>profit %{y:.3f}<extra></extra>' },
+                { type: 'scatter', mode: 'markers', x: [xGrid[bestI]], y: [profit[bestI]],
+                  name: 'best split', xaxis: 'x2', yaxis: 'y2',
+                  marker: { color: PT.colors.accent, size: 14, symbol: 'star' },
+                  hovertemplate: 'best split: ' + Math.round(xGrid[bestI] * 100) +
+                      '% Chatter<br>profit %{y:.3f}<extra></extra>' },
+                { type: 'scatter', mode: 'markers', x: [split],
+                  y: [profit[Math.min(240, Math.round(split * 240))]],
+                  name: 'your split', xaxis: 'x2', yaxis: 'y2',
+                  marker: { color: PT.colors.truth, size: 10, symbol: 'circle' },
+                  hovertemplate: 'your split: ' + Math.round(split * 100) +
+                      '% Chatter<br>profit %{y:.3f}<extra></extra>' }
+            ];
+
+            const axStyle = { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' };
+            const layout = PT.layout({
+                xaxis: Object.assign({ domain: [0, 0.45], title: 'channel spend (scaled)' }, axStyle),
+                yaxis: Object.assign({ title: 'incremental response' }, axStyle),
+                xaxis2: Object.assign({ domain: [0.55, 1], title: 'share of budget to Chatter',
+                                        tickformat: '.0%', anchor: 'y2' }, axStyle),
+                yaxis2: Object.assign({ title: 'profit = value·R − budget', anchor: 'x2' }, axStyle),
+                showlegend: true,
+                legend: { orientation: 'h', y: -0.24 },
+                margin: { l: 60, r: 20, t: 50, b: 60 },
+                shapes: shapes,
+                annotations: [
+                    { xref: 'paper', yref: 'paper', x: 0.16, y: 1.09, text: '<b>response curves</b>', showarrow: false, font: { size: 13 } },
+                    { xref: 'paper', yref: 'paper', x: 0.84, y: 1.09, text: '<b>profit vs split</b> (shaded: next dollar under water)', showarrow: false, font: { size: 12 } }
+                ]
+            });
+            Plotly.react('surfacePlayground', traces, layout, PT.config);
+        }
+
+        // ------------------------------------------------------------------
+        // ENBS calculator: ENBS = E[regret] * margin * horizon - wave cost.
+        // ------------------------------------------------------------------
+        const en = {
+            r: document.getElementById('enR'), m: document.getElementById('enM'),
+            h: document.getElementById('enH'), c: document.getElementById('enC')
+        };
+        const enVals = {
+            r: document.getElementById('enRVal'), m: document.getElementById('enMVal'),
+            h: document.getElementById('enHVal'), c: document.getElementById('enCVal')
+        };
+        const fmtUsd = function(x) {
+            return '$' + Math.round(x).toLocaleString('en-US');
+        };
+
+        function drawEnbs() {
+            if (!en.r) return;
+            const regret = +en.r.value, margin = +en.m.value,
+                  horizon = +en.h.value, cost = +en.c.value;
+            enVals.r.textContent = regret.toFixed(1);
+            enVals.m.textContent = margin.toFixed(2);
+            enVals.h.textContent = String(horizon);
+            enVals.c.textContent = Math.round(cost).toLocaleString('en-US');
+
+            // The slider reads in thousands of units/week so defaults land in a
+            // realistic $ range (3.2k units/wk x $2.5 x 13wk ~= $104k at stake).
+            const value = regret * 1000 * margin * horizon;
+            const enbs = value - cost;
+
+            const banner = document.getElementById('enbsVerdict');
+            const text = document.getElementById('enbsVerdictText');
+            const detail = document.getElementById('enbsVerdictDetail');
+            if (enbs > 0) {
+                banner.className = 'verdict-banner run';
+                text.textContent = 'RUN THE WAVE';
+                detail.textContent = 'ENBS = ' + fmtUsd(value) + ' − ' + fmtUsd(cost) +
+                    ' = +' + fmtUsd(enbs) + ' — the uncertainty still costs more than the test.';
+            } else {
+                banner.className = 'verdict-banner stop';
+                text.textContent = 'STOP — LOCK THE PLAN';
+                detail.textContent = 'ENBS = ' + fmtUsd(value) + ' − ' + fmtUsd(cost) +
+                    ' = ' + fmtUsd(enbs) + ' — another wave costs more than it could unlock.';
+            }
+
+            const traces = [{
+                type: 'bar',
+                x: ['value of resolving uncertainty<br>E[regret] × margin × horizon', 'cost of one more wave'],
+                y: [value, cost],
+                marker: { color: [enbs > 0 ? PT.colors.chatter : PT.colors.accent, PT.colors.rust] },
+                hovertemplate: '%{x}<br>%{y:$,.0f}<extra></extra>'
+            }];
+            const layout = PT.layout({
+                yaxis: { title: 'dollars over the horizon', tickprefix: '$', gridcolor: '#e3e9e3' },
+                margin: { l: 80, r: 20, t: 20, b: 60 },
+                showlegend: false
+            });
+            Plotly.react('enbsChart', traces, layout, PT.config);
+        }
+
+        ['change', 'input'].forEach(function(evt) {
+            Object.keys(pl).forEach(function(k) { if (pl[k]) pl[k].addEventListener(evt, drawPlayground); });
+            Object.keys(en).forEach(function(k) { if (en[k]) en[k].addEventListener(evt, drawEnbs); });
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            drawPlayground();
+            drawEnbs();
+        });
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

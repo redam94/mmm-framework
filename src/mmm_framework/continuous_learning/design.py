@@ -22,6 +22,8 @@ behaves the same whether spend is scaled to O(1) or left in dollars.
 
 from __future__ import annotations
 
+from typing import Sequence
+
 import numpy as np
 
 Pair = tuple[int, int]
@@ -86,21 +88,37 @@ def assign_geos(
     *,
     n_holdout: int = 0,
     center: np.ndarray | None = None,
+    baseline: np.ndarray | Sequence[float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Round-robin (shuffled) assignment of CCD cells to geos.
+    """Assign CCD cells to geos — shuffled round-robin, or stratified/blocked.
 
-    Round-robin keeps cells balanced across geos. In production, stratify on
-    pre-period KPI level/variance (matched-market style) rather than pure
-    round-robin to minimize baseline imbalance — see
-    :func:`mmm_framework.planning.design.matched_pairs`.
+    Without a ``baseline`` (the default, byte-identical to the historical
+    behavior) cells are tiled round-robin and shuffled: balanced cell counts,
+    zero covariate awareness, and the *first* ``n_holdout`` geos (positional)
+    become holdouts.
+
+    With a ``baseline`` (a per-geo covariate such as the pre-period KPI level,
+    matched-market style) the assignment is a classic **blocked randomization**:
+    geos are sorted by baseline, walked in blocks of ``n_cells``, and each block
+    receives a random permutation of the cell indices (the ragged tail gets a
+    random subset without replacement). Every cell's geos are then spread evenly
+    across the baseline distribution, so between-cell baseline means are nearly
+    equal. Holdouts are carved FIRST and are stratum-aware too: exactly
+    ``n_holdout`` evenly spaced positions in baseline-sorted order, so the
+    status-quo counterfactual spans the baseline range AND honors the requested
+    count (a strided pick would silently under-deliver whenever ``n_holdout``
+    does not divide ``n_geo`` evenly).
 
     Args:
         design: CCD cells, shape ``(n_cells, K)``.
         n_geo: number of geos.
         rng: a numpy random generator (caller owns the seed).
-        n_holdout: hold the first ``n_holdout`` geos at ``center`` for the test
-            window (a status-quo counterfactual). Requires ``center``.
+        n_holdout: hold ``n_holdout`` geos at ``center`` for the test window (a
+            status-quo counterfactual). Requires ``center``.
         center: the status-quo allocation for holdout geos, shape ``(K,)``.
+        baseline: optional per-geo covariate, length ``n_geo``, positionally
+            aligned with the geo indices (the caller resolves geo ids). ``None``
+            keeps the legacy shuffled round-robin path.
 
     Returns:
         ``(geo_alloc, cell_idx)`` where ``geo_alloc`` is ``(n_geo, K)`` (each
@@ -108,15 +126,68 @@ def assign_geos(
         index, or ``-1`` for a holdout geo).
     """
     n_cells = design.shape[0]
-    reps = int(np.ceil(n_geo / n_cells))
-    cell_idx = np.tile(np.arange(n_cells), reps)[:n_geo].copy()
-    rng.shuffle(cell_idx)
-    geo_alloc = design[cell_idx].copy()
 
+    if baseline is None:
+        # Legacy shuffled round-robin (byte-identical rng stream).
+        reps = int(np.ceil(n_geo / n_cells))
+        cell_idx = np.tile(np.arange(n_cells), reps)[:n_geo].copy()
+        rng.shuffle(cell_idx)
+        geo_alloc = design[cell_idx].copy()
+
+        if n_holdout > 0:
+            if center is None:
+                raise ValueError(
+                    "n_holdout > 0 requires center for the status-quo cell"
+                )
+            n_holdout = min(n_holdout, n_geo)
+            geo_alloc[:n_holdout] = np.asarray(center, dtype=float)
+            cell_idx[:n_holdout] = -1
+        return geo_alloc, cell_idx
+
+    baseline = np.asarray(baseline, dtype=float)
+    if baseline.shape != (n_geo,):
+        raise ValueError(
+            f"baseline must have shape ({n_geo},) — one value per geo, "
+            f"positionally aligned; got {baseline.shape}"
+        )
+    order = np.argsort(baseline, kind="stable")  # geo positions, baseline-sorted
+
+    # Holdouts first: EXACTLY n_holdout evenly spaced positions in
+    # baseline-sorted order — the status-quo counterfactual covers the baseline
+    # range. (A strided ``order[::step][:n_holdout]`` pick returns only
+    # ceil(n_geo/step) geos — fewer than requested whenever n_holdout does not
+    # divide n_geo evenly — so the pre-registered design would contradict its
+    # own assignment.)
+    holdout_geos = np.empty(0, dtype=int)
     if n_holdout > 0:
         if center is None:
             raise ValueError("n_holdout > 0 requires center for the status-quo cell")
         n_holdout = min(n_holdout, n_geo)
-        geo_alloc[:n_holdout] = np.asarray(center, dtype=float)
-        cell_idx[:n_holdout] = -1
+        pos = np.unique(np.round(np.linspace(0.0, n_geo - 1.0, n_holdout)).astype(int))
+        if pos.size < n_holdout:  # defensive: rounding collisions (spacing >= 1
+            # makes them impossible for n_holdout <= n_geo, but never silently
+            # under-deliver) — top up with the nearest unused sorted positions.
+            unused = np.setdiff1d(np.arange(n_geo), pos)
+            dist = np.abs(unused[:, None] - pos[None, :]).min(axis=1)
+            take = unused[np.argsort(dist, kind="stable")][: n_holdout - pos.size]
+            pos = np.sort(np.concatenate([pos, take]))
+        holdout_geos = order[pos]
+
+    # Blocked randomization over the remaining geos (still baseline-sorted):
+    # each block of n_cells gets a random permutation of the cell indices, so
+    # per-cell counts match the round-robin tiling and each cell's geos spread
+    # evenly over the baseline distribution.
+    remaining = order[~np.isin(order, holdout_geos)]
+    cell_idx = np.zeros(n_geo, dtype=int)
+    for start in range(0, remaining.size, n_cells):
+        block = remaining[start : start + n_cells]
+        if block.size == n_cells:
+            cell_idx[block] = rng.permutation(n_cells)
+        else:  # ragged tail: a random subset without replacement
+            cell_idx[block] = rng.choice(n_cells, size=block.size, replace=False)
+    geo_alloc = design[cell_idx].copy()
+
+    if holdout_geos.size:
+        geo_alloc[holdout_geos] = np.asarray(center, dtype=float)
+        cell_idx[holdout_geos] = -1
     return geo_alloc, cell_idx

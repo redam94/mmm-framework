@@ -3719,6 +3719,16 @@ _LIBRARY_MENU = """\
 - `from mmm_framework.calibration.likelihood import ExperimentMeasurement, ExperimentEstimand`
 - Pass `experiments=[...]` to BayesianMMM, OR `mmm.add_experiment_calibration([...])` **before** `.fit()`.
 
+## Continuous learning  (model-free geo response-surface bandit — NO fitted MMM required)
+- Dedicated tools cover the whole loop: `start_learning_program` →
+  `import_past_experiments` (registry readouts as evidence) / `design_learning_wave` →
+  `record_learning_wave` → `get_learning_program_status` → `check_learning_stopping` (ENBS).
+- Library: `from mmm_framework.continuous_learning import LearningState, fit, plan_from_posterior,
+  central_composite, experiments_to_summaries, expand_arms, to_scaled, to_dollars`.
+- Traps: spend is SCALED (`dollars / spend_ref`, fixed at program start — never re-estimate);
+  NEVER normalize/center/log `y`; the geo set must stay STABLE across waves; trust the funded
+  set, not channel magnitudes, until a channel has ≥3 distinct spend levels.
+
 ## Diagnostics & reporting
 - `from mmm_framework.diagnostics import parameter_learning` (prior→posterior contraction)
 - `from mmm_framework.reporting import MMMReportGenerator, ReportBuilder` (HTML reports)
@@ -3884,6 +3894,7 @@ def log_experiment(
     value: float = None,
     se: float = None,
     notes: str = None,
+    subchannel: str = None,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -3899,9 +3910,17 @@ def log_experiment(
 
     Create: pass `channel` (+ optional design fields), status defaults to
     'planned'. Update: pass `experiment_id` plus only the fields that changed.
-    Lifecycle: draft → planned → running → completed → calibrated.
+    Lifecycle: draft → planned → running → completed → calibrated. Forward
+    status jumps (e.g. planned→completed) are legal — skipped hops are
+    backfilled into the audit history — but 'calibrated' is stamped only by
+    the calibrated refit (apply_experiment_calibration + fit_mmm_model), never
+    here, and a calibrated experiment's measurement fields can only be
+    corrected via record_experiment_readout with overwrite_calibrated=True.
     Results: status='completed' with `value`, `se`, `estimand`
     ('roas' | 'contribution' | 'mroas'). Dates are ISO strings.
+    `subchannel` is an optional creative/keyword/campaign identifier —
+    calibration to an MMM stays channel-level; sub-channel readouts feed
+    continuous-learning programs with arms.
     """
     from mmm_framework.api import sessions as sessions_store
 
@@ -3918,6 +3937,7 @@ def log_experiment(
             project_id=project_id,
             thread_id=tid,
             channel=channel,
+            subchannel=subchannel,
             design_type=design_type,
             status=status,
             start_date=start_date,
@@ -3950,9 +3970,9 @@ def log_experiment(
     )
     if exp["status"] == "completed":
         msg += (
-            " This result is not yet calibrated into a fit — when you refit "
-            "with it via add_experiment_calibration, update the entry to "
-            "status='calibrated'."
+            " This result is not yet calibrated into a fit — stage it with "
+            "apply_experiment_calibration and refit via fit_mmm_model, which "
+            "marks the entry calibrated."
         )
     return Command(
         update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}
@@ -4037,6 +4057,7 @@ def plan_experiment(
     start_date: str = None,
     end_date: str = None,
     preregister: bool = False,
+    subchannel: str = None,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -4048,7 +4069,9 @@ def plan_experiment(
     pre-registration step) — or call preregister_experiment after review.
 
     Lifecycle: draft → planned → running → completed → calibrated. Dates are
-    ISO strings for the intended test window.
+    ISO strings for the intended test window. `subchannel` optionally targets a
+    creative/keyword/campaign within the channel — MMM calibration stays
+    channel-level; sub-channel readouts feed learning programs with arms.
     """
     from mmm_framework.api import sessions as sessions_store
 
@@ -4091,6 +4114,7 @@ def plan_experiment(
             project_id=project_id,
             thread_id=tid,
             channel=channel,
+            subchannel=subchannel,
             design_type=(design or {}).get("design_key")
             or (design or {}).get("design_type"),
             status="draft",
@@ -4164,6 +4188,8 @@ def record_experiment_readout(
     spend_per_period: float = None,
     n_treated_units: int = 1,
     adstock_state: str = "steady_state",
+    subchannel: str = None,
+    overwrite_calibrated: bool = False,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -4172,6 +4198,14 @@ def record_experiment_readout(
     'mroas'), plus the actual test window (ISO dates) and the measurement
     method (e.g. 'geo holdout DiD', 'synthetic control'). A planned experiment
     is moved through 'running' automatically.
+
+    `spend_per_period` is a SIGNED per-period spend delta vs business-as-usual:
+    a holdout/go-dark test must record it NEGATIVE (spend was cut), a scale-up
+    positive. The sign matters twice — off-panel MMM calibration and the
+    model-free `import_past_experiments` bridge both read it. `subchannel`
+    optionally tags the readout with a creative/keyword/campaign identifier
+    (MMM calibration stays channel-level; sub-channel readouts feed learning
+    programs with arms).
 
     Off-panel calibration (experiment ran OUTSIDE the model's fitted date
     range): also pass `spend_per_period` — the channel's spend per period per
@@ -4183,6 +4217,15 @@ def record_experiment_readout(
     requiring the window to overlap the data, so an experiment from a different
     period can still be folded in (assuming the response curve is stable across
     the two periods). Not needed when the window falls inside the data.
+
+    `overwrite_calibrated` (default False) is required to CHANGE value / se /
+    estimand / start_date / end_date — or any readout field that is ALREADY
+    SET, e.g. an existing spend_per_period / n_treated_units / adstock_state —
+    on an experiment that is already 'calibrated': those fields feed the
+    model's likelihood, so pass True only after the user confirms the
+    correction. First-time attachment of a readout key (e.g. adding
+    spend_per_period for the off-panel flow) is additive and never needs the
+    flag.
 
     'completed' means measured but NOT yet in the model — follow with
     apply_experiment_calibration + fit_mmm_model to close the loop.
@@ -4200,12 +4243,15 @@ def record_experiment_readout(
         # Merge onto any existing readout so re-recording (e.g. adding a spend
         # level for off-panel calibration) only adds fields rather than wiping
         # method/notes that weren't re-passed.
-        readout = dict(exp.get("readout") or {})
+        old_readout = exp.get("readout") or {}
+        readout = dict(old_readout)
         readout.update({"value": value, "se": se, "estimand": estimand})
         if method is not None:
             readout["method"] = method
         if notes is not None:
             readout["notes"] = notes
+        if subchannel is not None:
+            readout["subchannel"] = subchannel
         # Off-panel calibration inputs (used when the test window is outside the
         # dataset): the response curve is evaluated at this spend level.
         if spend_per_period is not None:
@@ -4213,12 +4259,60 @@ def record_experiment_readout(
             readout["n_treated_units"] = int(n_treated_units or 1)
             readout["adstock_state"] = adstock_state
 
-        if exp["status"] in ("completed", "calibrated"):
+        was_measured = exp["status"] in ("completed", "calibrated")
+        diff: dict = {}
+        if was_measured:
             # Already measured: update the readout in place. A completed->completed
             # transition is illegal (and we must not bounce a calibrated experiment
             # back), so re-recording is an idempotent self-update — this is exactly
             # the path the off-panel advisory tells the user to take to attach a
-            # spend level after the fact.
+            # spend level after the fact. Every change leaves an audit event.
+            for field, new_val in (
+                ("value", float(value)),
+                ("se", float(se)),
+                ("estimand", estimand),
+                ("start_date", start_date),
+                ("end_date", end_date),
+            ):
+                if new_val is not None and new_val != exp.get(field):
+                    diff[field] = [exp.get(field), new_val]
+            for k, v in readout.items():
+                if k in ("value", "se", "estimand"):
+                    continue  # mirrored by the top-level fields above
+                if v != old_readout.get(k):
+                    diff[k] = [old_readout.get(k), v]
+            core_changed = [
+                f
+                for f in ("value", "se", "estimand", "start_date", "end_date")
+                if f in diff
+            ]
+            # A readout key that PREVIOUSLY existed and changes value is a
+            # modification, not an additive attach: e.g. changing an existing
+            # off-panel spend_per_period moves the point where the calibration
+            # likelihood evaluates the response curve — as material as a value
+            # edit. Only first-time attachment ([None-absent, x]) is additive.
+            modified_readout = [
+                k
+                for k in diff
+                if k not in ("value", "se", "estimand", "start_date", "end_date")
+                and k in old_readout
+            ]
+            if (
+                exp["status"] == "calibrated"
+                and (core_changed or modified_readout)
+                and not overwrite_calibrated
+            ):
+                return _simple_msg(
+                    f"Experiment `{experiment_id}` is already **calibrated** — "
+                    "its readout feeds the model's likelihood, and this call "
+                    f"would change: {', '.join(core_changed + modified_readout)}. "
+                    "If the user has confirmed the correction, re-run with "
+                    "`overwrite_calibrated=True` (first-time attachment of "
+                    "off-panel fields like spend_per_period stays flag-free; "
+                    "changing one that is already set needs the flag). Nothing "
+                    "was changed.",
+                    tool_call_id,
+                )
             exp = sessions_store.upsert_experiment(
                 experiment_id=experiment_id,
                 value=float(value),
@@ -4227,6 +4321,9 @@ def record_experiment_readout(
                 start_date=start_date,
                 end_date=end_date,
                 readout=readout,
+                # Sanctioned write path: the guard above already vetted any
+                # calibrated-row modification (or the user passed the flag).
+                allow_calibrated_edit=True,
             )
         else:
             if exp["status"] == "planned":
@@ -4244,6 +4341,21 @@ def record_experiment_readout(
                 readout=readout,
                 note=method,
             )
+        if subchannel is not None:
+            # Mirror the readout's subchannel onto the registry column so
+            # list_experiments(subchannel=...) filtering sees it. (Folded into
+            # the same audit event below when it changed.)
+            exp = sessions_store.upsert_experiment(
+                experiment_id=experiment_id,
+                subchannel=subchannel,
+                allow_calibrated_edit=True,
+            )
+        if was_measured and diff:
+            sessions_store.append_experiment_event(
+                experiment_id,
+                note="readout updated via record_experiment_readout",
+                changed=diff,
+            )
     except ValueError as exc:
         return _simple_msg(f"Could not record readout: {exc}", tool_call_id)
     return _simple_msg(
@@ -4259,6 +4371,7 @@ def record_experiment_readout(
 def apply_experiment_calibration(
     state: Annotated[dict, InjectedState],
     experiment_ids: list[str] = None,
+    replace: bool = False,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -4267,11 +4380,16 @@ def apply_experiment_calibration(
     model spec. The next fit_mmm_model folds them into the model as in-graph
     likelihood terms and marks the registry entries 'calibrated'.
 
-    Uses every measured experiment in the project — 'completed' AND already
-    'calibrated' (from earlier fits) — unless `experiment_ids` narrows it, so a
-    refit that adds one experiment keeps all the prior calibrations. Each
-    experiment needs value, se, estimand, and a test window (start/end dates);
-    out-of-window experiments calibrate off-panel from their recorded spend.
+    With no `experiment_ids`, stages every measured experiment in the project
+    — 'completed' AND already 'calibrated' (from earlier fits) — so a refit
+    that adds one experiment keeps all the prior calibrations. With
+    `experiment_ids`, the listed experiments are MERGED with whatever is
+    already staged in the spec (previously staged ids that no longer resolve
+    to a measured registry row are dropped with a note); pass `replace=True`
+    to stage ONLY the listed experiments — that un-stages everything else, so
+    the next fit drops those calibration terms. Each experiment needs value,
+    se, estimand, and a test window (start/end dates); out-of-window
+    experiments calibrate off-panel from their recorded spend.
     """
     from mmm_framework.api import sessions as sessions_store
 
@@ -4299,16 +4417,29 @@ def apply_experiment_calibration(
         for e in sessions_store.list_experiments(project_id=project_id)
         if e.get("status") in ("completed", "calibrated")
     ]
+    n_new = n_kept = 0
+    dropped: set[str] = set()
     if experiment_ids:
         wanted = set(experiment_ids)
-        missing = wanted - {e["id"] for e in completed}
+        measured_ids = {e["id"] for e in completed}
+        missing = wanted - measured_ids
         if missing:
             return _simple_msg(
                 f"Not measured yet (or unknown): {', '.join(sorted(missing))}. "
                 "Only completed or already-calibrated experiments can be staged.",
                 tool_call_id,
             )
-        completed = [e for e in completed if e["id"] in wanted]
+        prev_staged = set(spec.get("experiment_ids") or [])
+        if replace:
+            staged_ids = wanted
+        else:
+            # Merge with the current staging so "apply just this new
+            # experiment" never silently un-stages the earlier calibrations.
+            dropped = prev_staged - measured_ids
+            staged_ids = wanted | (prev_staged & measured_ids)
+        n_new = len(staged_ids - prev_staged)
+        n_kept = len(staged_ids & prev_staged)
+        completed = [e for e in completed if e["id"] in staged_ids]
     if not completed:
         return _simple_msg(
             "No measured experiments to calibrate. Record results first with "
@@ -4401,8 +4532,25 @@ def apply_experiment_calibration(
     n_off = sum(1 for m in measurements if "eval_spend" in m)
     detail = f" ({n_off} off-panel)" if n_off else ""
     tail = ""
+    if experiment_ids:
+        if replace:
+            tail += (
+                f" replace=True: staged ONLY the {len(measurements)} listed "
+                "experiment(s) — anything previously staged was dropped."
+            )
+        else:
+            tail += (
+                f" Merged with the previous staging: {n_new} newly staged, "
+                f"{n_kept} kept."
+            )
+            if dropped:
+                short = ", ".join(f"`{d[:8]}`" for d in sorted(dropped))
+                tail += (
+                    f" Dropped {len(dropped)} previously staged id(s) that no "
+                    f"longer resolve to a measured experiment: {short}."
+                )
     if needs_spend:
-        tail = (
+        tail += (
             f" Skipped {len(needs_spend)} out-of-window experiment(s) missing a "
             "test spend level — add `spend_per_period` via record_experiment_readout "
             "to calibrate those off-panel."
@@ -5059,6 +5207,7 @@ def identify_structural_parameters(
 
 
 from mmm_framework.agents.eda_tools import EDA_TOOLS
+from mmm_framework.agents.learning_tools import LEARNING_TOOLS
 
 # ── Two-tier delegation: orchestrator (fast) → expert (strong) ──────────────
 
@@ -6030,6 +6179,8 @@ TOOLS = [
     log_experiment,
     list_experiment_log,
     get_run_history,
+    # Continuous learning programs — model-free geo bandit (no MMM required)
+    *LEARNING_TOOLS,
     # Step 8 — Sensitivity (post-fit)
     *[t for t in CAUSAL_TOOLS if t.name == "leave_one_out_decomposition"],
     # Pre-registration: lock the plan + check divergence (were previously unregistered)

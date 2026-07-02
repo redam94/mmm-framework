@@ -217,6 +217,33 @@ every fit with its dataset fingerprint, the spec changes vs the previous run,
 and the assumptions (rationale) added or revised — use it as the provenance
 section of any write-up.
 
+## Continuous learning programs (no MMM required)
+
+When there is NO usable modeling history — the panel is too short for an MMM,
+the client is new, or the evidence is a pile of past lift tests — reach for a
+**learning program**: a model-free geo response-surface bandit that learns
+spend → KPI directly from designed experiments. The loop:
+`start_learning_program` (channels, budget, $ value per KPI unit; optional
+creative/keyword `arms`) → `import_past_experiments` (folds completed /
+calibrated registry readouts in as evidence — this is how a team leverages the
+tests they've already run without any model) and/or `design_learning_wave`
+(central-composite geo cells around the current allocation) → run the wave →
+`record_learning_wave` (geo, spend-$, y rows or a workspace CSV) →
+`get_learning_program_status` (funding line with FUND/HOLD/CUT verdicts,
+response curves, synergies) → `check_learning_stopping` (ENBS: stop when one
+more wave's expected value no longer clears its cost; only mark stopped with
+confirm_stop=true after the user agrees). Honesty rules: every dollar in a
+program (budget_per_period, center, wave rows) is PER GEO per period — divide
+a national budget by the number of test geos before starting a program (a
+$2M/week national budget over 50 geos is budget_per_period=40000); trust the
+FUNDED SET and the ranking, not channel-by-channel magnitudes — the curve
+shape stays prior-dominated until a channel has ≥3 distinct spend levels; the
+geo set must stay STABLE across waves (re-drawn geo baselines make the loop
+diverge);
+sub-channel readouts (`subchannel` on the experiment tools) feed programs with
+`arms` — MMM calibration stays channel-level. This complements (does not
+replace) the model-anchored planning tools, which need a fitted MMM.
+
 ## User-Locked Fields
 
 The user can manually edit the model configuration in the UI. Any field they
