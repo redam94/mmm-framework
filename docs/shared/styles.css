@@ -1204,10 +1204,18 @@ tbody tr:last-child td {
    -------------------------------------------------------------------------- */
 .page-layout {
     display: grid;
-    grid-template-columns: 280px 1fr;
+    /* minmax(0, …): let the content column shrink below its min-content width
+       (long code tokens, wide tables) instead of blowing the grid out — the
+       inner overflow-x scrollers then take over. */
+    grid-template-columns: 280px minmax(0, 1fr);
     max-width: 1400px;
     margin: 0 auto;
     padding-top: 5rem;
+}
+
+.page-layout > .sidebar,
+.page-layout > .main-content {
+    min-width: 0;
 }
 
 /* When page-layout follows a hero section, remove duplicate top padding */
@@ -1626,6 +1634,7 @@ tbody tr:last-child td {
 /* Chart tabs */
 .chart-tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 1.5rem;
 }
@@ -2000,7 +2009,7 @@ tbody tr:last-child td {
     }
 
     .page-layout {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .sidebar {
@@ -3024,4 +3033,98 @@ tbody tr:last-child td {
     overflow-x: auto;
     overflow-y: hidden;
     max-width: 100%;
+}
+
+/* KaTeX's hidden MathML annotation is visually clipped but still widens the
+   document's scrollable area in Chrome. position:fixed takes it out of the
+   scroll-overflow computation while keeping it in the accessibility tree.
+   (!important: the KaTeX CDN stylesheet may load after this one.) */
+.katex-mathml {
+    position: fixed !important;
+}
+
+/* --------------------------------------------------------------------------
+   Mobile hardening — nothing may push the page wider than the viewport
+   -------------------------------------------------------------------------- */
+
+/* Content media scale down instead of overflowing. (Plotly manages its own
+   SVG sizing, so the rule stays off bare <svg>.) */
+img,
+iframe,
+video {
+    max-width: 100%;
+}
+
+/* Form controls never force a wider column than the viewport allows. */
+select,
+input,
+textarea {
+    max-width: 100%;
+}
+
+/* A single long inline-code token (URL, module path) may break mid-token
+   rather than overflow the column. Scoped off <pre>, whose blocks scroll. */
+:not(pre) > code {
+    overflow-wrap: anywhere;
+}
+
+/* Grid items may shrink below their min-content width (long code lines,
+   wide charts) instead of blowing the whole grid — inner overflow-x
+   scrollers then take over. */
+.hero-content > *,
+.card-grid > *,
+.principle-grid > *,
+.model-cards > *,
+.method-cards > *,
+.problem-grid > *,
+.feature-grid > *,
+.demo-grid > *,
+.chart-grid > *,
+.dag-container > *,
+.cross-effects-grid > *,
+.two-col > *,
+.three-col > *,
+.role-grid > *,
+.metric-grid > *,
+.scenario-grid > *,
+.comparison-layout > *,
+.docs-grid > * {
+    min-width: 0;
+}
+
+/* Utility: wrap any wide element (table, diagram, stepper) so it scrolls in
+   place rather than stretching the page. */
+.table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 1.5rem 0;
+}
+.table-scroll > table {
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    /* Wide tables scroll inside their own box instead of stretching the page.
+       display:block keeps the inner table layout while letting overflow-x
+       work — the base table style's overflow:hidden would clip, not scroll. */
+    table {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* Very narrow phones: trade gutter for content width. */
+@media (max-width: 380px) {
+    .container {
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+    }
+
+    .main-content {
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+    }
 }

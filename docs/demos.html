@@ -20,10 +20,11 @@
         /* Hub-specific styles */
         .demo-hub-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
             gap: 1.75rem;
             margin: 2rem 0;
         }
+        .demo-hub-grid > * { min-width: 0; }
 
         .demo-card {
             background: var(--color-surface);
@@ -81,6 +82,7 @@
 
         .demo-card-meta {
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             gap: 0.75rem;
             font-size: 0.8rem;

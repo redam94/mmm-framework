@@ -136,7 +136,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-06-12",
+          "dateModified": "2026-07-02",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/changelog.html#breadcrumb"
           },
@@ -224,14 +224,17 @@
                     <div class="tier">Beta</div>
                     <h3>Active surface</h3>
                     <ul>
-                        <li><code>reporting</code> (charts, extractors, generator)</li>
+                        <li><code>reporting</code> (charts, extractors, generator; Augur client readout)</li>
                         <li><code>analysis</code> (counterfactual, marginal)</li>
+                        <li><code>estimands</code> (declarative, named, serializable estimand registry)</li>
                         <li><code>serialization</code> (<code>MMMSerializer</code>)</li>
-                        <li>FastAPI endpoints (<code>api/</code>)</li>
-                        <li>React web UI &mdash; the modern frontend (Program, Experiments, Performance, Agent workspace, Knowledge, Team)</li>
+                        <li>FastAPI endpoints (<code>api/</code>) and org/tenant auth (<code>auth/</code>)</li>
+                        <li>React web UI &mdash; the Augur frontend (Orrery, Auspices, Sextant, Chronicle, Almanac, Constellation, Oracle, Atelier, Codex, College, Curia, Sanctum)</li>
                         <li>Agent workspace (LLM providers: Anthropic, OpenAI, Google Gemini, Vertex AI, LM Studio)</li>
-                        <li>Measurement-loop planning engine (EIG/EVOI priorities, experiment lifecycle, calibration)</li>
-                        <li><code>eda</code> (pre-fit data quality: validation, EDA, outlier detection and treatment)</li>
+                        <li>Measurement-loop planning engine (EIG/EVOI priorities, experiment lifecycle, design studio, experiment economics, Pareto-front optimizer, calibration)</li>
+                        <li><code>eda</code> + Data Studio (pre-fit data quality: validation, EDA, outlier detection and treatment, cleaning pipelines)</li>
+                        <li><code>diagnostics</code> (convergence gate, prior&rarr;posterior learning, Simulation-Based Calibration)</li>
+                        <li><code>validation</code> (rolling-origin backtests, SBC + LOO-PIT interval checks)</li>
                     </ul>
                 </div>
                 <div class="stability-card exp">
@@ -239,6 +242,9 @@
                     <h3>Subject to change</h3>
                     <ul>
                         <li><code>mmm_extensions</code> (NestedMMM, MultivariateMMM, CombinedMMM)</li>
+                        <li><code>continuous_learning</code> (model-free geo response-surface learning loop)</li>
+                        <li><code>garden</code> / Atelier (bespoke-model authoring, compatibility suite, Model Garden)</li>
+                        <li>Non-MMM model families (CFA / latent-class garden examples)</li>
                         <li><code>dag_model_builder</code></li>
                         <li>Excel config workflow</li>
                         <li>Streamlit UI (legacy)</li>
@@ -293,11 +299,57 @@
                     <li>HTML report generator with Plotly charts and design-token theming</li>
                     <li>Extension models (NestedMMM, MultivariateMMM, CombinedMMM) &mdash; experimental</li>
                     <li>FastAPI service + ARQ worker for async job execution</li>
-                    <li>React (TypeScript) web UI as the modern frontend &mdash; Program, Experiments, Performance, Agent workspace, Knowledge, and Team pages (Beta); Streamlit UI retained as a legacy surface</li>
+                    <li>React (TypeScript) web UI as the modern frontend &mdash; the Augur application (Beta); Streamlit UI retained as a legacy surface</li>
                     <li>AI agent workspace: an analyst-assistant with tools for data validation and EDA, model configuration and fitting, ROI and decomposition analysis, experiment planning, sandboxed Python execution, knowledge-base search, and branded client reports &mdash; with LLM providers Anthropic, OpenAI, Google (Gemini), Vertex AI (Anthropic &amp; Gemini via ADC), and local LM Studio</li>
                     <li>Measurement-loop planning engine: EIG/EVOI experiment priorities, an experiment lifecycle (draft &rarr; pre-registered &rarr; running &rarr; completed &rarr; calibrated), and calibration of experiment readouts into the next model fit</li>
                     <li>EDA / data-quality module for pre-fit validation, exploratory checks, and outlier detection and treatment</li>
                     <li>Sphinx-generated API reference + this static documentation site</li>
+                </ul>
+            </div>
+
+            <h3 id="highlights" style="margin-top: 2.5rem;">Development highlights (within the 0.1.0 line)</h3>
+            <p>The largest additions since the initial feature set, newest first:</p>
+
+            <div class="release">
+                <div class="release-header">
+                    <span class="release-version">July 2026</span>
+                    <span class="release-date">2026-07</span>
+                </div>
+                <ul>
+                    <li><strong>Continuous sequential learning</strong> (<code>continuous_learning</code>, experimental) &mdash; a model-free geo response-surface learning loop that estimates channel response and synergies directly from designed geo experiments, with central-composite designs, Thompson-sampling allocation, a marginal-ROAS funding line, expected-net-benefit stopping, and Laplace knowledge-gradient design selection. Wired end to end: agent tools, <code>/learning-programs</code> API, and the <strong>Sextant</strong> page in the web UI. Supports NegBinomial likelihoods for count KPIs, an optional national time effect, and stratified geo assignment. See the <a href="continuous-learning.html">analyst guide</a> and <a href="continuous-learning-math.html">the math companion</a>.</li>
+                    <li><strong>Experiment-registry hardening</strong> &mdash; lifecycle state-machine enforcement (illegal transitions are rejected), a full audit trail on every experiment write, and additive calibration staging so applying one experiment no longer silently un-stages others.</li>
+                    <li><strong>Sub-channel (breakout) calibration</strong> &mdash; a share-based likelihood for calibrating sub-channel splits inside a parent channel, plus a partial-pooled breakout-weighted MMM in the Model Garden.</li>
+                </ul>
+            </div>
+
+            <div class="release">
+                <div class="release-header">
+                    <span class="release-version">Late June 2026</span>
+                    <span class="release-date">2026-06</span>
+                </div>
+                <ul>
+                    <li><strong>Impression- and click-measured media</strong> &mdash; per-channel measurement descriptors (spend / impressions / clicks with optional spend column, CPM, or CPC) so ROI, marginal ROAS, and report labels are computed on the right cost basis, or degrade honestly to efficiency-per-unit metrics.</li>
+                    <li><strong>Data Studio</strong> &mdash; upload a raw file, explore it with interactive EDA (distributions, correlation, missingness, outliers), build a replayable cleaning pipeline, and commit the result as the session&rsquo;s working dataset without a chat round-trip.</li>
+                    <li><strong>Simulation-Based Calibration (SBC)</strong> &mdash; a Talts-style posterior-calibration check with rank-histogram and ECDF-difference diagnostics, available as an agent tool and a one-click validation job; joins SBC + LOO-PIT interval checks in the validation module.</li>
+                    <li><strong>Almanac budget planner</strong> &mdash; persistent budget plans with optimal allocation, geo/DMA splits, a forward flighting calendar, CSV export, and an allocation section in client reports.</li>
+                    <li><strong>Augur client report</strong> &mdash; the default client deliverable is now an editorial, evidence-coded &ldquo;Media Performance Readout&rdquo; with posterior-predictive fit sections and AI-drafted planner insights; the classic technical readout remains available. MMM reports also gained estimand credible-interval tables and posterior-predictive goodness-of-fit sections.</li>
+                    <li><strong>Model validation surface</strong> &mdash; first-class validation/verification/plotting agent tools, a one-click Validation tab in the Oracle workspace, and a persona review panel (statistician / planner / CMO) for adversarial readouts.</li>
+                    <li><strong>Per-geo channel effectiveness</strong> (<code>vary_media_by_geo</code>) &mdash; opt-in partial-pooled per-geo channel betas, plus geo-panel and spline/GP-trend out-of-time backtests.</li>
+                    <li><strong>Estimands on the Performance page</strong> &mdash; fitted models grouped by estimand &times; KPI with fit-time persistence, alongside the existing trajectory, agreement, and model-health views.</li>
+                    <li><strong>SaaS foundations</strong> &mdash; a dependency-free org/tenant auth layer (built-in JWT, IdP-ready), S3-capable object storage, content-addressed dataset lineage, CI (lint, fast tests, coverage, dependency audit, mypy baseline), and a convergence gate on core and extended fits.</li>
+                </ul>
+            </div>
+
+            <div class="release">
+                <div class="release-header">
+                    <span class="release-version">Mid-June 2026</span>
+                    <span class="release-date">2026-06</span>
+                </div>
+                <ul>
+                    <li><strong>Model Garden &amp; Atelier</strong> (experimental) &mdash; author bespoke Bayesian models in an in-app studio (editor, docs, Jupyter-like notebook, modeling copilot), prove them against a nine-tier compatibility suite on synthetic ground truth, and publish immutable versions any analyst can fit through the agent. The contract is family-aware: per-model config schemas, pluggable likelihoods, and non-MMM families (confirmatory factor analysis, latent-class analysis) ride the same fit &rarr; estimand &rarr; report rails.</li>
+                    <li><strong>Declarative estimands</strong> &mdash; a named, serializable estimand registry (contribution ROI, counterfactual ROI, marginal ROAS, contribution, latent quantities) evaluated post-hoc or in-graph, unifying the framework&rsquo;s previously scattered ROI notions while keeping every legacy number bit-stable.</li>
+                    <li><strong>Experiment design engine</strong> &mdash; the design studio gained model-anchored economics (incremental-ROAS expectations, opportunity cost, powered/underpowered verdicts), A/A &amp; A/B methodology simulation with an empirical false-positive-rate check, a Pareto-front optimizer over MDE &times; power &times; cost &times; duration, off-panel calibration for experiments run outside the training window, and multi-level flighting designs that identify saturation and adstock parameters.</li>
+                    <li><strong>Parametric adstock by default</strong> &mdash; see the behavioral-change note above.</li>
                 </ul>
             </div>
 

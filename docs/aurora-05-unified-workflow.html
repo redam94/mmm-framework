@@ -461,9 +461,9 @@ results = mmm.fit(draws=500, tune=500, chains=2, cores=1, random_seed=0)</code><
             <div class="chart-container short" id="valueChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — the notebook's annual-revenue-impact chart. The dashboard
-                plan doesn't just underperform; it <em>destroys</em> $5.9M/yr by moving money from
+                plan doesn't just underperform; it <em>destroys</em> <span>$</span>5.9M/yr by moving money from
                 ROAS-2.1 channels into ROAS-0.5–0.7 channels. The causal plan earns the mirror-image
-                +$5.9M/yr. Gap: <strong>$11,884k/yr ≈ +$11.9M/yr</strong> on the same budget.
+                +<span>$</span>5.9M/yr. Gap: <strong><span>$</span>11,884k/yr ≈ +<span>$</span>11.9M/yr</strong> on the same budget.
             </p>
 
             <div class="warning">
@@ -532,9 +532,9 @@ results = mmm.fit(draws=500, tune=500, chains=2, cores=1, random_seed=0)</code><
             <p class="chart-note">
                 <strong>Illustrative</strong> — computed live in your browser on toy saturating response
                 curves, <em>not</em> a model output. Note what saturation does to the notebook's
-                first-order ±$5.9M: at the 25% shift the causal plan's gain flattens to roughly
-                +$2.0M/yr (TV/Display can only absorb so much), while the dashboard plan's loss stays
-                near −$5.2M/yr — moving money <em>out</em> of high-ROAS channels hurts at nearly full
+                first-order ±<span>$</span>5.9M: at the 25% shift the causal plan's gain flattens to roughly
+                +<span>$</span>2.0M/yr (TV/Display can only absorb so much), while the dashboard plan's loss stays
+                near −<span>$</span>5.2M/yr — moving money <em>out</em> of high-ROAS channels hurts at nearly full
                 first-order strength. The direction never flips; the magnitude is curve-dependent. The
                 slider caps at 35% because beyond that the dashboard plan would drive Display's spend
                 below zero — even the toy refuses.
@@ -594,7 +594,7 @@ results = mmm.fit(draws=500, tune=500, chains=2, cores=1, random_seed=0)</code><
                     <li><strong>The pipeline composes:</strong> data → causal spec → fit → experiment calibration → extensions where structure demands → decision. One pass, every chapter a rung.</li>
                     <li><strong>Experiment anchoring works:</strong> with four geo-lift results in the likelihood, the model recovers the true ROAS ranking <em>and</em> levels (worst miss 0.07 on a scale of 2.1).</li>
                     <li><strong>The plans are mirror images:</strong> the dashboard funds Search/Social (r = 0.85, 0.69; true ROAS 0.66, 0.49); the causal plan funds TV/Display (true ROAS 2.14, 2.11). Same budget, opposite directions.</li>
-                    <li><strong>The gap is the headline:</strong> ≈ +$11.9M/yr ($11,884k, measured) — an illustrative first-order upper bound, but the <em>direction</em> is verified against ground truth.</li>
+                    <li><strong>The gap is the headline:</strong> ≈ +<span>$</span>11.9M/yr (<span>$</span>11,884k, measured) — an illustrative first-order upper bound, but the <em>direction</em> is verified against ground truth.</li>
                     <li><strong>Decide on probabilities, not points:</strong> propagate posterior uncertainty into the plan's value; act when the probability of being directionally right is high, experiment when it isn't.</li>
                 </ul>
             </div>
