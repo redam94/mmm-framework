@@ -125,7 +125,7 @@
 
         .guide-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
             gap: 1.5rem;
             margin: 2rem 0;
         }
@@ -323,7 +323,7 @@
                 </p>
                 <p><strong>You will learn:</strong></p>
                 <ul>
-                    <li>Why correlation ranks Aurora's channels exactly backwards — the dashboard hero (Search, corr 0.85) truly returns $0.66 per $1, while the first cut (TV) returns $2.14.</li>
+                    <li>Why correlation ranks Aurora's channels exactly backwards — the dashboard hero (Search, corr 0.85) truly returns <span>$</span>0.66 per <span>$</span>1, while the first cut (TV) returns <span>$</span>2.14.</li>
                     <li>How three ordinary behaviors — demand-chasing spend, brand effects through awareness, and product cannibalization — mechanically manufacture misleading correlations.</li>
                     <li>How the sealed synthetic answer key grades every estimate in the series, and why the causal-vs-naive gap is worth roughly $12M/year.</li>
                 </ul>
@@ -445,7 +445,7 @@
                         <td>Latent demand drives <em>both</em> Search/Social spend and sales
                             (demand&ndash;Search-spend correlation 0.94).</td>
                         <td>Search looks like the hero (corr 0.85) while truly losing money (ROAS 0.66);
-                            budget flows to a channel that returns $0.66 per $1.</td>
+                            budget flows to a channel that returns <span>$</span>0.66 per <span>$</span>1.</td>
                         <td><a href="aurora-01-causality.html">01 · Causality</a> — DAG, the demand-proxy
                             control, experiment calibration. See also
                             <a href="stress-03-confounding-selection.html">stress&nbsp;03</a>.</td>
@@ -580,8 +580,8 @@
                 <h4>What to take away</h4>
                 <ul>
                     <li><strong>Correlation ranks Aurora's channels exactly backwards.</strong> The hero
-                        (Search, corr 0.85) truly returns $0.66 per $1; the first cut (TV, corr 0.29) truly
-                        returns $2.14.</li>
+                        (Search, corr 0.85) truly returns <span>$</span>0.66 per <span>$</span>1; the first cut (TV, corr 0.29) truly
+                        returns <span>$</span>2.14.</li>
                     <li><strong>Three ordinary behaviors break the dashboard:</strong> spend that chases demand,
                         brand channels that work through awareness, and products that cannibalize each other
                         (Cold Brew vs Original at &minus;0.90).</li>

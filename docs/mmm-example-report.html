@@ -227,7 +227,7 @@
 
         .control-row input[type="range"] {
             flex: 1;
-            min-width: 200px;
+            min-width: min(100%, 200px);
             max-width: 400px;
             height: 6px;
             border-radius: 3px;
@@ -395,6 +395,7 @@
 
         .tab-buttons {
             display: flex;
+            flex-wrap: wrap;
             gap: 0.5rem;
             margin-bottom: 1rem;
             border-bottom: 2px solid var(--color-border);
@@ -438,7 +439,11 @@
             .report-container { padding: 1rem; }
             .chart-grid { grid-template-columns: 1fr; }
             .metrics-grid { grid-template-columns: 1fr 1fr; }
+            .metrics-grid > *, .chart-grid > * { min-width: 0; }
             .report-header h1 { font-size: 1.8rem; }
+        }
+        @media (max-width: 380px) {
+            .metrics-grid { grid-template-columns: 1fr; }
         }
     </style>
     <!-- seo:augmented (structured data + social cards) -->
@@ -722,7 +727,7 @@
                 <h4>Channel Selection</h4>
                 <div class="control-row">
                     <label>Select Channel:</label>
-                    <select id="saturationChannel" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border); min-width: 200px;">
+                    <select id="saturationChannel" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border); min-width: min(100%, 200px);">
                         <option value="search">Paid Search</option>
                         <option value="social">Paid Social</option>
                         <option value="tv">TV (National)</option>
@@ -816,7 +821,7 @@
                 <h4>Select Parameter</h4>
                 <div class="control-row">
                     <label>Parameter:</label>
-                    <select id="priorPosteriorParam" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border); min-width: 200px;">
+                    <select id="priorPosteriorParam" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--color-border); min-width: min(100%, 200px);">
                         <option value="tv_beta">TV Effect (β)</option>
                         <option value="search_beta">Paid Search Effect (β)</option>
                         <option value="social_beta">Paid Social Effect (β)</option>

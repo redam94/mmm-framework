@@ -388,7 +388,7 @@
                 </p>
                 
                 <div class="dag-container" style="margin: 1.5rem 0;">
-                    <div class="dag-box bad" style="flex: 1; min-width: 300px;">
+                    <div class="dag-box bad" style="flex: 1; min-width: min(100%, 300px);">
                         <h4>❌ The "Optimization" Loop</h4>
                         <div style="text-align: left; padding: 1rem; font-size: 0.95rem;">
                             <ol style="margin: 0; padding-left: 1.5rem; color: var(--color-text-muted);">
@@ -634,7 +634,7 @@
 
                 <!-- DAG Illustration -->
                 <div style="display: flex; gap: 2rem; align-items: flex-start; flex-wrap: wrap; margin: 1.5rem 0;">
-                    <div style="flex: 1; min-width: 280px;">
+                    <div style="flex: 1; min-width: min(100%, 280px);">
                         <svg viewBox="0 0 300 200" style="max-width: 300px; width: 100%;">
                             <!-- Background -->
                             <rect x="0" y="0" width="300" height="200" fill="transparent"/>
@@ -682,7 +682,7 @@
                         </svg>
                     </div>
                     
-                    <div style="flex: 1.5; min-width: 280px;">
+                    <div style="flex: 1.5; min-width: min(100%, 280px);">
                         <p style="margin-top: 0;"><strong>In this DAG:</strong></p>
                         <ul style="margin: 0.5rem 0 0 1.2rem; padding: 0; line-height: 1.6;">
                             <li><strong>Distribution</strong> confounds media → we must include it</li>
@@ -709,14 +709,14 @@
 
                 <!-- Key takeaway -->
                 <div style="display: flex; gap: 1.5rem; margin-top: 1.5rem; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 240px; background: rgba(139, 195, 74, 0.1); padding: 1rem; border-radius: 4px; border-left: 3px solid var(--color-success);">
+                    <div style="flex: 1; min-width: min(100%, 240px); background: rgba(139, 195, 74, 0.1); padding: 1rem; border-radius: 4px; border-left: 3px solid var(--color-success);">
                         <strong style="color: var(--color-success);">✓ Still Include Distribution</strong>
                         <p style="margin: 0.5rem 0 0 0; font-size: 0.95rem;">
                             Even with its biased coefficient, distribution blocks the backdoor path to media, 
                             giving us <strong>unbiased media effect estimates</strong>.
                         </p>
                     </div>
-                    <div style="flex: 1; min-width: 240px; background: rgba(201, 112, 103, 0.1); padding: 1rem; border-radius: 4px; border-left: 3px solid var(--color-danger);">
+                    <div style="flex: 1; min-width: min(100%, 240px); background: rgba(201, 112, 103, 0.1); padding: 1rem; border-radius: 4px; border-left: 3px solid var(--color-danger);">
                         <strong style="color: var(--color-danger);">✗ Don't Over-Interpret</strong>
                         <p style="margin: 0.5rem 0 0 0; font-size: 0.95rem;">
                             Avoid making strategic recommendations about distribution based on its model coefficient—that 
