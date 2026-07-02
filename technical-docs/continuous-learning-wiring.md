@@ -596,8 +596,20 @@ example have been updated in place to match:
 
 ## 7. Out of scope (recorded as deferred)
 
-* Laplace KG inside the closed loop; vectorized Thompson solves; NegBinomial
-  likelihood; national time effect τ_t; stratified geo assignment.
-* Breakout-model share likelihood for sub-channel readouts in the MMM graph.
+* Vectorized Thompson solves.
 * Postgres migration (WS-4) — new tables use the existing SQLite idiom.
 * Automatic experiment-registry → learning-program sync (import is explicit).
+
+Shipped in the follow-up hardening/features pass (same branch, after this
+contract's phases): Laplace KG inside the closed loop
+(`loop.select_next_design` + `design_wave(optimize=…)`), NegBinomial
+likelihood (`fit(likelihood="negbinomial")`), national time effect τ_t
+(`fit(time_effect="national")` + `period_idx` plumbing), stratified geo
+assignment (`assign_geos(baseline=…)` + `design_wave(stratify=…)`), the
+breakout-model share likelihood (`calibration.likelihood.ShareMeasurement` +
+`arms.arm_shares`), and the experiment-registry hardening (audit events via
+`append_experiment_event`, state-machine enforcement in `upsert_experiment`,
+`record_experiment_readout(overwrite_calibrated=…)`,
+`apply_experiment_calibration` merge-by-default + `replace=`). See
+`technical-docs/continuous-learning.md` and
+`technical-docs/subchannel-measurement.md` for the feature docs.
