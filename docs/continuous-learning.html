@@ -259,6 +259,7 @@
             <ul class="sidebar-nav">
                 <li><a href="#hard">A harder problem</a></li>
                 <li><a href="#misspec">When the curve is wrong</a></li>
+                <li><a href="#spline">Skip the curve &mdash; splines</a></li>
                 <li><a href="#why">Why plan this way</a></li>
                 <li><a href="#assumptions">What it assumes</a></li>
                 <li><a href="#carryover">Carry-over and noise</a></li>
@@ -688,11 +689,67 @@
             <div class="takeaway">
                 <strong>Operating rule.</strong> Trust the <em>ranking</em> and the funded set; distrust
                 channel-by-channel magnitudes and their intervals. Fit the most flexible curve you can identify — honest
-                and uncertain beats tight and wrong — and treat convergence warnings or systematic residuals across the
+                and uncertain beats tight and wrong; the <a href="#spline">next section</a> takes that advice to its
+                limit — and treat convergence warnings or systematic residuals across the
                 test cells as the signal that the curve family is too rigid. One more catch the study surfaced: the
                 loop's self-correction depends on testing the <strong>same market list</strong> wave after wave — swap
                 the geo set mid-programme and the baselines stop cancelling, and the loop can drift instead of converge.
             </div>
+
+            <h2 id="spline">When you'd rather not pick a curve at all</h2>
+            <p>The last section's dilemma &mdash; pick a curve family and risk being confidently wrong &mdash; has a
+            third answer: <strong>don't pick one</strong>. Setting <code>activation="monotone_spline"</code> swaps the
+            named curve for a <strong>monotone spline</strong>: a flexible curve assembled from nine S-shaped building
+            blocks, each rising from zero to full height a little later than the last, with the fit learning how much
+            weight each block deserves. Any mix of positive weights produces a curve that only ever rises and
+            eventually levels off &mdash; which is everything the loop assumed in the first place, and nothing more.
+            Weight the early blocks and you get a channel that saturates fast; weight the late ones, a slow burner;
+            weight both ends and you get exactly the two-phase ramp that broke the named families above. No family is
+            chosen, so no family can be wrong.</p>
+
+            <figure class="screenshot-figure">
+                <img src="assets/animations/continuous-learning-spline.gif" loading="lazy"
+                     width="1240" height="820"
+                     alt="An animation of two learning loops on the same two-phase world: the monotone spline's wide band tightens onto the true curve while keeping most of it inside the band; the no-bend logistic's band tightens onto a biased curve with the truth marked red outside it; below, both profit gaps fall while the curve-coverage traces separate completely.">
+                <figcaption>
+                    <span class="shot-tag">Simulated &middot; known truth, six-wave run</span>
+                    The same two-phase world, learned two ways. Left: the spline's band starts wide &mdash; an honest
+                    &ldquo;some rising, saturating curve&rdquo; &mdash; and tightens <em>onto</em> the black truth,
+                    keeping 86&ndash;78% of the curve inside its band even as the band narrows by two-thirds. Right:
+                    the no-bend curve (the logistic from the study above) tightens too &mdash; onto its own answer,
+                    with the truth in red wherever it escapes the band, ending at 0% coverage. Both nail the budget
+                    split (bottom left: final profit gaps of 0.06% and 0.7%); only one is still telling the truth
+                    about the curve.
+                </figcaption>
+            </figure>
+
+            <p>Flexibility has one honest cost, and it is worth naming because we hit it while building this: the
+            spline can only bend where its building blocks let it. With too few blocks there is a small gap between
+            the <em>best curve the spline can make</em> and the truth. Early on that gap hides inside the wide
+            uncertainty band &mdash; but as waves accumulate and the band tightens past it, coverage quietly decays:
+            an earlier six-block version of this exact run slid from 82% to 62% coverage by wave six. The shipped
+            nine-block basis keeps that gap smaller than the band ever gets, which is why the coverage above holds.
+            The working rule, recorded in the technical spec: <strong>if the uncertainty band gets as tight as the
+            family's best-approximation gap, add blocks</strong>.</p>
+
+            <p>And because every part of the loop reads whatever curve the fit carries through one shared interface,
+            the full two-dimensional machinery from the harder-problem animation runs unchanged. Below, <em>both</em>
+            pictured channels genuinely ramp twice &mdash; each one's true response is a weighted sum of two curves
+            &mdash; and the loop fits the monotone spline, never told what it is looking at:</p>
+
+            <figure class="screenshot-figure">
+                <img src="assets/animations/continuous-learning-spline-2d.gif" loading="lazy"
+                     width="1180" height="760"
+                     alt="The 2-D acquisition animation on a world where both pictured channels have two-phase responses, fitted with the monotone spline: the uncertainty surface collapses where cells are probed, the exploit optimum converges onto the true optimum, and the acquisition optimum keeps hunting the untested high-spend corner.">
+                <figcaption>
+                    <span class="shot-tag">Simulated &middot; two-phase 2-D world, eighteen lean waves</span>
+                    The acquisition view from the earlier animations, with both channels' true responses ramping twice
+                    and the spline doing the learning. The uncertainty surface collapses where the test cells probe,
+                    the search trajectory walks the exploit optimum (&#9733;) onto the true optimum (gold &#9733;),
+                    and the acquisition optimum (&#9670;) keeps hunting the untested high-spend corner &mdash; the
+                    same explore/exploit story as before, with no curve family assumed anywhere.
+                </figcaption>
+            </figure>
 
             <h2 id="why">Why plan this way</h2>
             <p>Because the numbers a plan rests on are rarely known, and pretending otherwise is where budgets go to

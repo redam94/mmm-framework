@@ -55,7 +55,7 @@ posterior is carried across waves by refitting on **all** accumulated data
 
 | Module | Role |
 |---|---|
-| `surface.py` | The differentiable JAX response surface — the **single source of truth**. `R(s) = Σ β_c·f_c(s_c) + Σ_{c<c'} γ_{cc'} f_c f_c'`. Used by the likelihood, the DGP, **and** the allocator (which `jax.grad`s it), so the optimizer can never disagree with the fitted surface. The activation `f_c` is **pluggable** (an `ACTIVATIONS` registry): any smooth, monotone, saturating curve with `f(0)=0` and a finite gradient. `hill` (default), `logistic` (`f=1−e^{−λs}`, concave), and `hill_mixture` (`w·Hill+(1−w)·Hill`, a two-phase misspecification stress test) ship; add a family with a registry entry + a `_sample_activation_shape` case. `surface_value` / `surface_over_rows` evaluate any family. |
+| `surface.py` | The differentiable JAX response surface — the **single source of truth**. `R(s) = Σ β_c·f_c(s_c) + Σ_{c<c'} γ_{cc'} f_c f_c'`. Used by the likelihood, the DGP, **and** the allocator (which `jax.grad`s it), so the optimizer can never disagree with the fitted surface. The activation `f_c` is **pluggable** (an `ACTIVATIONS` registry): any smooth, monotone, saturating curve with `f(0)=0` and a finite gradient. `hill` (default), `logistic` (`f=1−e^{−λs}`, concave), `hill_mixture` (`w·Hill+(1−w)·Hill`, a two-phase misspecification stress test), and `monotone_spline` (normalized monotone I-splines — the **shape-agnostic** family, see below) ship; add a family with a registry entry + a `_sample_activation_shape` case. `surface_value` / `surface_over_rows` evaluate any family. |
 | `model.py` | The NumPyro generative model + priors (guide §4.2), sign-informed interaction priors (`PAIR_SIGNS`, guide §4.3), the `Posterior` container, `fit`, and `demote_channel` / `probe_pairs_excluding` for non-randomizable channels (guide §5.4). |
 | `design.py` | `central_composite(center, delta, probe_pairs)` (1 center + 2K axial + 2·\|probe\| off-axis + K shutoff cells) and `assign_geos` (shuffled round-robin, optional holdouts; pass a per-geo `baseline` for **stratified/blocked randomization** — geos sorted by baseline, each block of `n_cells` gets a random permutation of the cells, holdouts at EXACTLY `n_holdout` evenly spaced positions in baseline-sorted order so the counterfactual spans the range and honors the requested count). |
 | `dgp.py` | A synthetic `TrueWorld` with causal ground truth, `simulate_panel` (the recovery harness), `simulate_wave` (later waves over the same geos), and `make_world` (a worked 4-channel world). Evaluates the **same** `surface` functions the model fits. |
@@ -253,6 +253,85 @@ wrong-single-Hill loops side by side: the profit-gap trackers overlap and descen
 (the *decision* converges) while the wrong family's credible-interval width shrinks
 *below* the correct one and its coverage collapses (calibration stays confidently
 wrong).
+
+## The shape-agnostic activation — monotone I-splines
+
+The misspecification study's "fit the most flexible activation you can identify"
+has a limit case: **assume no family at all**. `activation="monotone_spline"`
+fits a monotone regression spline (Ramsay-1988 I-splines):
+
+```
+f(s) = Σ_j w_j · I_j(s / MSPLINE_S_MAX) / Σ_j w_j,   w_j > 0
+```
+
+where the `MSPLINE_J = 9` basis functions `I_j` are the **suffix sums of a
+clamped cubic B-spline basis** on `[0, 1]` (partition of unity ⇒ each `I_j`
+rises monotonically 0 → 1; earlier ones rise earlier). Fixed interior knots at
+scaled spends `{0.25, 0.5, 0.75, 1.0, 1.5, 2.0}` — dense where saturation
+action lives, sparse in the tail; full saturation at/after
+`MSPLINE_S_MAX = 3.0` (zero gradient there, like Hill's asymptote — a
+deployment whose scaled spends exceed ~3 should rescale `spend_ref`). **Knot
+density sets the family's approximation bias floor, and the bias floor sets
+interval coverage under accumulation**: an earlier 3-knot (J=6) grid left a
+~0.05 worst-case activation bias on the mixture world, so as waves accumulated
+the shrinking band contracted onto the best spline *approximation* and coverage
+of the true curve decayed (~60% by wave 5, probed-range Orbit coverage 0.36
+after one wave); the 6-knot grid cuts the worst-case floor to ~0.036 (RMSE
+0.014) and one-wave probed coverage jumps to 0.93–0.95 with mixing intact
+(R̂ 1.02, min ESS ~50) and the decision unchanged. Rule of thumb: if the
+band width approaches the family's bias floor, add knots (or accept ranked
+decisions only). Any positive weight vector is a valid monotone saturating
+curve with `f(0)=0`, so the ONLY assumptions are the ones the loop already
+requires. Implementation notes:
+
+* **Static Cox–de Boor.** The knots are Python constants, so the recursion in
+  `surface._bspline_basis` unrolls at trace time with constant denominators
+  (zero-width spans skipped in Python) — no traced division, no `jnp.where`
+  nan-grad hazard; gradients are finite everywhere including `s = 0` (unlike
+  Hill's `s^α` cusp, no spend floor is even needed). `monotone_spline_basis`
+  is exported for plotting.
+* **Normalized weights, scale-free priors.** Only the weight *ratios* matter,
+  so `w_j ~ LogNormal(0, 1)` per channel is proper at any KPI scale; the prior
+  median is a near-linear ramp. `sd=1.0` (not tighter) matters: on the
+  reference mixture world it improved mixing (R̂ 1.03 → 1.01, min ESS 30 → 72)
+  AND one-wave curve calibration — a tight weight prior leaves the prior ramp
+  shape lingering where the design hasn't probed. The normalization leaves a
+  soft scale non-identifiability (pinned by the prior), so ESS runs lower than
+  Hill's; gate on R̂.
+* **Full downstream support.** `SHAPE_TRANSFORMS["monotone_spline"]` maps all
+  nine weights through log space, so the Laplace-KG / pure-EIG acquisition,
+  `select_next_design`, the planner, serialization, and the service layer
+  (which validates against `ACTIVATIONS`) all work unchanged.
+
+**Measured behaviour on the two-Hill-mixture world** (one wave, n_geo=72,
+seed-pinned in `tests/test_continuous_learning.py::
+test_monotone_spline_recovers_and_plans_on_mixture_world`): R̂ ≈ 1.01, profit
+gap ~1% — a near-optimal decision with no family knowledge. After ONE local
+wave the curve is honestly under-identified outside the probed range (wide,
+prior-shaped band); across the accumulating trust-region loop it **converges
+toward the true curve** — the convergence animation
+(`nbs/build_spline_animation.py` → `continuous_learning_spline.gif`, notebook
+§15) runs spline-vs-**logistic** (§14's severe misspecification) loops side by
+side: both profit gaps fall (spline 0.9% → 0.06%, logistic 1.4% → 0.7% — the
+decision was never the problem) and both bands shrink to a similar width
+(~0.36 → ~0.13 vs ~0.35 → ~0.10), but the **curve coverage** separates them
+completely — the spline HOLDS 86% → 78% of the sweep inside the 90% band while
+its band tightens, vs logistic 20% → 0%: the spline converges toward the truth,
+the wrong family toward its own bias. (Two fairness notes the study forced:
+(1) with `SPL_REF=hill` the contrast largely disappears on this world — a
+single Hill copes with the Pulse mixture and its coverage decays no faster than
+the spline's; the differentiator is the *structurally* wrong family, exactly as
+§14 found. (2) Coverage holding high under accumulation is a property of the
+J=9 grid — the earlier J=6 grid's coverage decayed 82% → 62% as the band hit
+its bias floor, which is what motivated the denser knots.) A **2-D
+demonstration** rides the §11/§12 acquisition animation:
+`ACQ_WORLD=mixture ACQ_FIT=monotone_spline` (both slice channels weighted Hill
+sums, spline fit) → `continuous_learning_acquisition_spline2d.gif` — the
+exploit optimum converges onto the true optimum while the acquisition keeps
+hunting, with no family told to the model. Expressiveness is pinned by
+`test_monotone_spline_beats_single_hill_on_two_phase_shape` (positive spline
+weights approximate the mixture activation with < 0.75× the best single Hill's
+RMSE).
 
 ## Count KPIs — the NegativeBinomial likelihood (opt-in)
 

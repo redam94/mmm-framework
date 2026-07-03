@@ -114,7 +114,9 @@ def response_curve(spend_matrix, beta, kappa, alpha, gamma):
 # saturating activation ``f_c`` with ``f_c(0)=0``, values in ``[0, 1)``, and a
 # finite gradient everywhere (the allocator follows ``dR/ds``). Hill is the
 # default; ``logistic`` is a genuinely different family — concave (no S-shape),
-# with a single shape parameter — used to show the machinery generalizes.
+# with a single shape parameter — used to show the machinery generalizes;
+# ``monotone_spline`` is the SHAPE-AGNOSTIC family (a normalized monotone
+# I-spline) for when no parametric curve should be assumed at all.
 
 
 def logistic(spend, lam):
@@ -143,6 +145,126 @@ def hill_mixture(spend, kappa1, alpha1, kappa2, alpha2, w):
     return w * f1 + (1.0 - w) * f2
 
 
+# ── Monotone I-spline activation (shape-agnostic) ─────────────────────────────
+# A monotone regression spline (Ramsay 1988 I-splines): the activation is a
+# NORMALIZED positive combination of monotone basis functions,
+#
+#     f(s) = sum_j w_j I_j(s / MSPLINE_S_MAX) / sum_j w_j,   w_j > 0,
+#
+# where each I_j is a cubic I-spline — the suffix sum of the clamped cubic
+# B-spline basis on [0, 1] (partition of unity => each I_j rises monotonically
+# from 0 to 1). Any positive weight vector therefore yields a smooth (C^2),
+# monotone, saturating curve with f(0) = 0 and values in [0, 1) — concave,
+# S-shaped, two-phase, plateaued, whatever the data asks for — WITHOUT assuming
+# a parametric family. Only the weight RATIOS matter (the sum normalizes out),
+# which is why the model's priors on w_j can stay O(1) at any KPI scale.
+#
+# The knots are FIXED module constants (in scaled-spend units, half of the
+# domain knot grid below): spend is O(1) by the data contract (scaled by
+# ``spend_ref``), so a [0, MSPLINE_S_MAX] domain covers every CCD cell the loop
+# probes. Spend at or beyond MSPLINE_S_MAX is treated as fully saturated
+# (f -> 1, zero gradient) — the same statement Hill makes asymptotically.
+# Because the knots are static Python floats, the Cox–de Boor recursion below
+# unrolls at trace time with CONSTANT denominators (zero-width spans dropped in
+# Python), so there is no traced division and no ``jnp.where`` nan-grad hazard.
+
+MSPLINE_S_MAX = 3.0  # scaled-spend domain ceiling (full saturation at/after it)
+_MSPLINE_DEGREE = 3  # cubic
+# Interior knots in x = s/S_MAX units -> scaled spends {0.25, 0.5, 0.75, 1.0,
+# 1.5, 2.0}: dense where saturation action lives (spend is O(1) by the data
+# contract), sparse in the tail. Knot density sets the family's APPROXIMATION
+# BIAS FLOOR — with too few knots, accumulated waves contract the posterior
+# band onto the best *spline approximation* of the truth rather than the truth
+# itself, and interval coverage of the true curve decays (measured on the
+# two-Hill-mixture world: a 3-knot grid's coverage fell to ~60% by wave 5;
+# this 6-knot grid holds it high while the band still shrinks).
+_MSPLINE_INTERIOR = (
+    1.0 / 12.0,
+    1.0 / 6.0,
+    1.0 / 4.0,
+    1.0 / 3.0,
+    1.0 / 2.0,
+    2.0 / 3.0,
+)
+_MSPLINE_KNOTS: tuple[float, ...] = (
+    (0.0,) * (_MSPLINE_DEGREE + 1) + _MSPLINE_INTERIOR + (1.0,) * (_MSPLINE_DEGREE + 1)
+)
+_MSPLINE_NBASIS = len(_MSPLINE_KNOTS) - _MSPLINE_DEGREE - 1  # 6 cubic B-splines
+#: Number of monotone I-spline basis functions (= weight parameters w1..wJ).
+MSPLINE_J = _MSPLINE_NBASIS - 1  # suffix sums, dropping the constant I_0 == 1
+# guard just below 1.0: the half-open order-1 indicators vanish AT x = 1 exactly
+_MSPLINE_X_HI = 1.0 - 1e-6
+
+
+def _bspline_basis(x):
+    """Clamped cubic B-spline basis at ``x`` in [0, 1) -> ``x.shape + (nbasis,)``.
+
+    Cox–de Boor with the fixed knot vector above. All knot arithmetic happens
+    on Python floats at trace time; zero-width spans contribute nothing (their
+    terms are skipped statically), so every emitted JAX op is a finite
+    polynomial in ``x``.
+    """
+    t = _MSPLINE_KNOTS
+    x = jnp.asarray(x, dtype=float)
+    # order 1 (degree 0): half-open interval indicators
+    basis = [
+        (
+            jnp.where((x >= t[i]) & (x < t[i + 1]), 1.0, 0.0)
+            if t[i] < t[i + 1]
+            else jnp.zeros_like(x)
+        )
+        for i in range(len(t) - 1)
+    ]
+    for d in range(1, _MSPLINE_DEGREE + 1):  # raise the degree
+        nxt = []
+        for i in range(len(t) - d - 1):
+            term = jnp.zeros_like(x)
+            den_l = t[i + d] - t[i]
+            if den_l > 0.0:
+                term = term + (x - t[i]) / den_l * basis[i]
+            den_r = t[i + d + 1] - t[i + 1]
+            if den_r > 0.0:
+                term = term + (t[i + d + 1] - x) / den_r * basis[i + 1]
+            nxt.append(term)
+        basis = nxt
+    return jnp.stack(basis, axis=-1)  # x.shape + (_MSPLINE_NBASIS,)
+
+
+def monotone_spline_basis(spend):
+    """The ``MSPLINE_J`` monotone I-spline basis functions at ``spend``.
+
+    Returns shape ``spend.shape + (MSPLINE_J,)``; column ``j`` is
+    ``I_{j+1}(spend / MSPLINE_S_MAX)``, rising monotonically 0 -> 1 (earlier
+    columns rise earlier). Useful for plotting and for understanding what the
+    fitted weights mean.
+    """
+    x = jnp.clip(jnp.asarray(spend, dtype=float) / MSPLINE_S_MAX, 0.0, _MSPLINE_X_HI)
+    b = _bspline_basis(x)
+    # I-splines are the suffix sums of the (order k+1) B-spline basis; drop
+    # I_0 = sum of ALL B-splines == 1 (the constant).
+    isp = jnp.cumsum(b[..., ::-1], axis=-1)[..., ::-1]
+    return isp[..., 1:]
+
+
+def monotone_spline(spend, w1, w2, w3, w4, w5, w6, w7, w8, w9):
+    """Shape-agnostic monotone-spline activation, values in ``[0, 1)``.
+
+    ``f(s) = sum_j w_j I_j(s / MSPLINE_S_MAX) / sum_j w_j`` with positive
+    weights ``w1..w9`` (one per I-spline basis function; only the ratios
+    matter). Smooth, strictly monotone on ``[0, MSPLINE_S_MAX)``, ``f(0) = 0``,
+    fully saturated at/after ``MSPLINE_S_MAX``. Early weights buy an early,
+    steep rise; late weights buy a slow, late one — mixtures express two-phase
+    and plateau shapes no single Hill or logistic can.
+    """
+    isp = monotone_spline_basis(spend)
+    ws = [
+        jnp.maximum(jnp.asarray(w, dtype=float), 1e-9)
+        for w in (w1, w2, w3, w4, w5, w6, w7, w8, w9)
+    ]
+    num = sum(w * isp[..., j] for j, w in enumerate(ws))
+    return num / sum(ws)
+
+
 # Registry: name -> (ordered shape-parameter names, jax ``fn(spend, *shape)``).
 ACTIVATIONS: dict[str, tuple] = {
     "hill": (("kappa", "alpha"), activation),
@@ -151,7 +273,12 @@ ACTIVATIONS: dict[str, tuple] = {
         ("kappa1", "alpha1", "kappa2", "alpha2", "w"),
         hill_mixture,
     ),
+    "monotone_spline": (
+        ("w1", "w2", "w3", "w4", "w5", "w6", "w7", "w8", "w9"),
+        monotone_spline,
+    ),
 }
+assert len(ACTIVATIONS["monotone_spline"][0]) == MSPLINE_J  # keep grid + args in sync
 
 
 def surface_value(spend, beta, gamma, act_fn, shape):

@@ -227,7 +227,8 @@ def _sample_activation_shape(activation: str, k: int, numpyro, dist) -> tuple:
     """Sample the shape parameters for the chosen activation (in param order).
 
     Hill: half-saturation ``kappa`` and shape ``alpha``. Logistic: a single
-    saturation rate ``lam``. Add a case here (plus an entry in
+    saturation rate ``lam``. Monotone spline: positive I-spline basis weights
+    ``w1..wJ`` (shape-agnostic). Add a case here (plus an entry in
     :data:`surface.ACTIVATIONS`) to plug in another smooth, saturating family.
     """
     if activation == "hill":
@@ -266,6 +267,21 @@ def _sample_activation_shape(activation: str, k: int, numpyro, dist) -> tuple:
         )
         w = numpyro.sample("w", dist.Beta(2.0, 2.0).expand([k]).to_event(1))
         return (kappa1, alpha1, kappa2, alpha2, w)
+    if activation == "monotone_spline":
+        # Shape-agnostic monotone I-spline: positive basis weights w1..wJ,
+        # normalized inside the activation, so only the RATIOS matter and the
+        # O(1) LogNormal prior is scale-free by construction. Equal weights
+        # (the prior median) give a near-linear ramp that saturates at
+        # surface.MSPLINE_S_MAX — a neutral starting shape the designed cells
+        # then bend into whatever the data supports (concave, S, two-phase, …).
+        # sd=1.0 (vs a tighter 0.75) measurably improves BOTH mixing (R̂ 1.03
+        # -> 1.01, min ESS 30 -> 72 on the reference mixture world) and
+        # one-wave curve calibration — a tight weight prior makes the prior
+        # ramp shape linger where the design has not probed.
+        return tuple(
+            numpyro.sample(nm, dist.LogNormal(0.0, 1.0).expand([k]).to_event(1))
+            for nm in ACTIVATIONS["monotone_spline"][0]
+        )
     raise ValueError(f"unknown activation {activation!r}; known: {tuple(ACTIVATIONS)}")
 
 

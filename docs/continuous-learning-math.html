@@ -196,6 +196,7 @@
             <ul class="sidebar-nav">
                 <li><a href="#sequential">Greedy-adaptive BED</a></li>
                 <li><a href="#misspec">Misspecification</a></li>
+                <li><a href="#spline">Monotone splines</a></li>
                 <li><a href="#references">References</a></li>
             </ul>
         </aside>
@@ -354,11 +355,12 @@
             shape, and \( \gamma_{cc'} \) the pairwise synergy — <strong>positive</strong> for complementarity,
             <strong>negative</strong> for cannibalisation. The activation \( f_c \) is <strong>pluggable</strong>
             (the <code>ACTIVATIONS</code> registry): any smooth, monotone, saturating curve with \( f_c(0)=0 \) and a
-            finite gradient. Three families ship as <em>fittable</em> activations — <code>hill</code> (the default,
+            finite gradient. Four families ship as <em>fittable</em> activations — <code>hill</code> (the default,
             convention-identical to the framework's <code>SaturationType.HILL</code>), <code>logistic</code>
-            (\( f(s)=1-e^{-\lambda s} \), concave, no inflection), and <code>hill_mixture</code>
+            (\( f(s)=1-e^{-\lambda s} \), concave, no inflection), <code>hill_mixture</code>
             (\( w\,\mathrm{Hill}(\kappa_1,\alpha_1) + (1{-}w)\,\mathrm{Hill}(\kappa_2,\alpha_2) \), a two-phase shape a
-            single Hill can only average over) — selected via <code>fit(data, activation=...)</code>. The matching truth
+            single Hill can only average over), and <code>monotone_spline</code> (a shape-agnostic monotone
+            I-spline — §<a href="#spline">Monotone splines</a>) — selected via <code>fit(data, activation=...)</code>. The matching truth
             constructors <code>make_world_logistic</code> and <code>make_world_hill_mixture</code> build simulated worlds
             in each family, which is what powers the misspecification study in
             §<a href="#misspec">Misspecification</a>. The observation model is a geo-week panel with a pinned
@@ -373,8 +375,9 @@
                     The same closed loop fit with <code>activation="logistic"</code> instead of Hill: the surfaces
                     sharpen and the recommendation converges exactly as in the Hill run. The planner differentiates
                     whatever activation the posterior carries (<code>surface_value</code> /
-                    <code>surface_over_rows</code>), so the decision machinery is family-agnostic — the fast Laplace
-                    acquisition path is the one Hill-only exception (see §<a href="#laplace">the surrogate</a>).
+                    <code>surface_over_rows</code>), so the decision machinery is family-agnostic — and the fast Laplace
+                    acquisition covers every registered family too, through an unconstrained reparameterisation
+                    (see §<a href="#laplace">the surrogate</a>).
                 </figcaption>
             </figure>
 
@@ -538,16 +541,20 @@
             <p>Both objectives become closed-form under a local Gaussian model of the posterior — the engine in
             <code>acquisition.py</code>. Three steps:</p>
 
-            <div class="warning">
-                <h4>⚠️ The Laplace acquisition path is Hill-only</h4>
-                <p><code>theta_moments</code> packs \( \theta = (\beta, \kappa, \alpha, \gamma) \) — the <em>Hill</em>
-                parameter vector. For any other activation (<code>logistic</code>, <code>hill_mixture</code>) it raises
-                <code>NotImplementedError</code>, and everything downstream of it —
-                <code>design_eig</code> and <code>laplace_knowledge_gradient</code> — is therefore Hill-only too. The
-                <em>decision</em> readouts are unaffected: <code>thompson_wave</code>, <code>marginal_roas</code>,
-                <code>expected_regret</code>, and the NUTS-refit <code>planner.knowledge_gradient</code> are
-                activation-agnostic. If you fit a non-Hill family, price candidate waves with the refit KG (slow) or fall
-                back to the trust-region default design rather than the Laplace scores.</p>
+            <div class="info">
+                <h4>Any registered activation — via an unconstrained reparameterisation</h4>
+                <p><code>theta_moments</code> packs the surface parameters as
+                \( \eta = (\log\beta,\ \text{shape sites},\ \gamma) \) in an <strong>unconstrained</strong> space
+                (the <code>ThetaMap</code>): positive parameters (\( \beta, \kappa, \lambda \), the spline weights
+                \( w_j \)) in log space, bounded ones (\( \alpha \), the mixture weight) through a scaled logit,
+                sign-constrained synergies through a sign-aware log. Skewed positive posteriors are far closer to
+                Gaussian on the log scale, and every fantasy sample maps back to a <em>valid</em> parameter vector by
+                construction. Any activation with a <code>SHAPE_TRANSFORMS</code> entry — Hill, logistic, the two-Hill
+                mixture, the monotone spline — is supported; an unregistered family fails loudly, and the decision
+                readouts (<code>thompson_wave</code>, <code>marginal_roas</code>, <code>expected_regret</code>, the
+                NUTS-refit KG) remain available regardless. EIG <em>differences</em> are invariant to the fixed
+                reparameterisation (the log-Jacobian cancels between the prior and posterior terms), so the
+                D/D<sub>s</sub> orderings match the constrained-space treatment.</p>
             </div>
 
             <p><strong>1 · Moment-match.</strong> Approximate the carried posterior over \( \theta \) by a Gaussian matched
@@ -561,8 +568,8 @@
 
             <p><strong>2 · Linearise the surface (the Laplace step).</strong> For a candidate design with cells
             \( \{s_c\}_{c=1}^{n} \), take the parameter gradient of the response at each cell,
-            \( g_c = \partial R(s_c)/\partial\theta\,\big|_{\mu}\in\mathbb{R}^P \) (<code>param_grad</code>, by
-            <code>jax.grad</code>). Under Eq. (7) the <strong>Fisher information</strong> a design carries about
+            \( g_c = \partial R(s_c)/\partial\eta\,\big|_{\mu}\in\mathbb{R}^P \) (<code>eta_grad</code>, by
+            <code>jax.grad</code> straight through the constraining bijection). Under Eq. (7) the <strong>Fisher information</strong> a design carries about
             \( \theta \) is</p>
 
             <div class="math-block">
@@ -572,7 +579,10 @@
             </div>
 
             <p>where \( w_c \) is the cell's replication weight (geos \( \times \) test weeks) and the centring by
-            \( \bar g \) profiles out the geo intercept (<code>design_information</code>, <code>residualize=True</code>).</p>
+            \( \bar g \) profiles out the geo intercept (<code>design_information</code>, <code>residualize=True</code>).
+            For the non-Gaussian likelihood families the constant \( \sigma^{-2} \) generalises to a per-cell GLM
+            unit information (<code>observation_unit_info</code>: the Student-t's heavy-tail discount, the count
+            family's softplus-link weight at each cell's predicted mean).</p>
 
             <p><strong>3 · Update the covariance.</strong> The Gaussian-linear posterior after running \( \xi \) has
             precision \( \Sigma^{-1}+\Lambda \):</p>
@@ -789,12 +799,12 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             <p>Assembled, the loop is a <strong>greedy (myopic) adaptive BED</strong> policy — the classical
             design→run→infer cycle of traditional Bayesian adaptive design:</p>
 
-            <div class="loop-diagram" style="background:var(--color-bg-alt);border:1px solid var(--color-border);border-radius:10px;padding:1.2rem 1.4rem;font-family:'JetBrains Mono',monospace;font-size:0.8rem;line-height:1.6;overflow-x:auto;">for each wave t:
+            <div class="loop-diagram" style="background:var(--color-bg-alt);border:1px solid var(--color-border);border-radius:10px;padding:1.2rem 1.4rem;font-family:'JetBrains Mono',monospace;font-size:0.8rem;line-height:1.6;overflow-x:auto;"><pre style="margin:0;white-space:pre;font-family:inherit;font-size:inherit;line-height:inherit;">for each wave t:
     p(θ | h_t)          ← refit on ALL data                         # Eq. (9)  sequential Bayes
     ξ_t   = argmax_ξ  A(ξ ; p(θ | h_t))                             # Eqs. (15)/(17)  acquisition
     y_t   ← run the designed wave ξ_t (central-composite, holdouts) # Eq. (7)  causal by design
     ā, fund, E[regret]  ← Thompson / funding line / regret          # Eqs. (18)-(20)  the decision
-    if ENBS ≤ 0:  stop and allocate ā                               # Eq. (21)  decision-theoretic stop</div>
+    if ENBS ≤ 0:  stop and allocate ā                               # Eq. (21)  decision-theoretic stop</pre></div>
 
             <p>The incremental EIG at step \( t \) is an ordinary EIG whose prior is the carried posterior,
             \( \mathrm{EIG}(\xi_t\mid h_{t-1}) = \mathbb{E}\big[\log \tfrac{p(y_t\mid\theta,\xi_t,h_{t-1})}{p(y_t\mid\xi_t,h_{t-1})}\big] \),
@@ -833,7 +843,8 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             <p>Rainforth et al. give the sharp cautionary example: for a <em>linear</em> model the EIG of the coefficients
             is always maximised at the extremes of the input range regardless of the prior, so a misspecified linear model
             never explores the interior. The mitigations here are the trust-region locality above, the shut-off cells that
-            expose gross misfit, and fitting the most flexible activation you can identify.</p>
+            expose gross misfit, and fitting the most flexible activation you can identify — taken to its limit by the
+            <a href="#spline">monotone spline</a> below.</p>
 
             <p>The worked study (single-cycle numbers, recorded in the misspecification section of
             <code>technical-docs/continuous-learning.md</code> and demonstrated in
@@ -846,6 +857,72 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             converges 0.9% &rarr; 0.5% &rarr; 0.2% &rarr; 0.3% against the correct family's
             0.9% &rarr; 0.5% &rarr; 0.1% &rarr; 0.1%. The analyst-level version, with the study's figures and animation,
             is on the <a href="continuous-learning.html#misspec">narrative page</a>.</p>
+
+            <h2 id="spline">The shape-agnostic activation — monotone I-splines</h2>
+            <p>The mitigation above — fit the most flexible activation you can identify — has a limit case:
+            assume no family at all. <code>activation="monotone_spline"</code> replaces the named curve in Eq. (6)
+            with a <strong>monotone regression spline</strong> (Ramsay's I-splines): a normalised positive
+            combination of monotone basis functions,</p>
+
+            <div class="math-block">
+                \[ f(s) \;=\; \frac{\sum_{j=1}^{J} w_j\, I_j\!\big(s/s_{\max}\big)}{\sum_{j=1}^{J} w_j},
+                \qquad w_j > 0,\;\; J = 9,
+                \qquad I_j(x) \;=\; \sum_{m \,\ge\, j} B_m(x), \]
+                <span class="equation-label">(23)</span>
+            </div>
+
+            <p>where \( \{B_m\} \) is the clamped cubic B-spline basis on \( [0,1] \) with interior knots at
+            scaled spends 0.25, 0.5, 0.75, 1.0, 1.5, 2.0 and \( s_{\max}=3 \) (full saturation, zero gradient, at
+            and beyond it — the statement Hill makes asymptotically). Because the B-splines are a partition of unity,
+            each suffix sum \( I_j \) rises monotonically from 0 to 1 — earlier ones earlier — so <em>every</em>
+            positive weight vector yields a smooth \( C^2 \), monotone, saturating curve with \( f(0)=0 \):
+            exactly the structure Eq. (6) requires, and nothing else. Only the weight <em>ratios</em> matter (the
+            normalisation removes the scale), so the per-channel priors \( w_j \sim \mathrm{LogNormal}(0,1) \)
+            are scale-free at any KPI magnitude; their median is a near-linear ramp the designed cells then bend into
+            whatever the data supports. The knots are compile-time constants, so the Cox–de Boor recursion unrolls at
+            trace time with constant denominators — finite gradients everywhere, including \( s=0 \), where the
+            Hill's \( s^{\alpha} \) needs a floor.</p>
+
+            <p><strong>Knot density is the coverage knob.</strong> A fixed-basis family has an approximation bias
+            floor</p>
+
+            <div class="math-block">
+                \[ b \;=\; \min_{w \,>\, 0}\; \max_{s \,\in\, [0,\, s_{\mathrm{hi}}]}\;
+                \big|\, f_w(s) - f_{\mathrm{true}}(s) \,\big|, \]
+                <span class="equation-label">(24)</span>
+            </div>
+
+            <p>and sequential accumulation guarantees a collision with it: the posterior band contracts as waves
+            accumulate (Eq. 9), and once its half-width falls below \( b \) the true curve <em>must</em> exit the
+            band — coverage decays no matter how well the sampler mixes. Measured on the two-Hill-mixture world: a
+            six-basis grid left \( b \approx 0.05 \) and its six-wave coverage slid 82% &rarr; 62%; the shipped
+            nine-basis grid cuts \( b \) to \( \approx 0.036 \) (RMSE 0.014) and coverage holds
+            86% &rarr; 78% while the band still narrows from 0.36 to 0.13 — with the decision improving to a 0.06%
+            profit gap and mixing intact (\( \hat R \approx 1.02 \)). Effective sample size runs lower than the
+            parametric families' — the weight <em>scale</em> is a soft non-identifiability pinned only by the prior —
+            so gate spline fits on \( \hat R \), not ESS.</p>
+
+            <figure class="screenshot-figure">
+                <img src="assets/animations/continuous-learning-spline.gif" loading="lazy"
+                     width="1240" height="820"
+                     alt="Two accumulating loops on a two-phase world: the monotone spline's band tightens onto the truth with coverage held high, while the logistic's band tightens onto its own bias and its coverage collapses to zero.">
+                <figcaption>
+                    <span class="shot-tag">Simulated · known truth, six waves</span>
+                    Both bands shrink at essentially the same rate (0.36 &rarr; ~0.1); only the <em>coverage</em>
+                    separates them — spline held at 86% &rarr; 78% vs logistic 20% &rarr; 0%. The spline converges
+                    toward the truth; the structurally wrong family converges toward its own bias. (Against the
+                    mildly-wrong single Hill the coverage contrast largely disappears on this world — the
+                    differentiator is <em>structural</em> wrongness, consistent with the study above.)
+                </figcaption>
+            </figure>
+
+            <p>The weights enter the acquisition layer's unconstrained reparameterisation in log space (a
+            <code>SHAPE_TRANSFORMS</code> entry), so §<a href="#laplace">the surrogate</a>,
+            §<a href="#doptimal">D/D<sub>s</sub>-optimal EIG</a> and the in-loop design search price candidate waves
+            for a spline program exactly as for the parametric families; the planner readouts were always
+            family-agnostic. The 2-D acquisition animation fitted with the spline — on a world where <em>both</em>
+            slice channels are weighted Hill sums — is on the
+            <a href="continuous-learning.html#spline">narrative page</a>.</p>
 
             <div class="info">
                 <h4>Where to go next</h4>
@@ -890,8 +967,8 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             </ul>
 
             <p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:2rem;">The equations on this page map
-            one-to-one to <code>mmm_framework.continuous_learning</code>: <code>surface.py</code> (Eq. 6, the pluggable
-            activations), <code>model.py</code> (Eqs. 7–9), <code>design.py</code> (the central-composite cells),
+            one-to-one to <code>mmm_framework.continuous_learning</code>: <code>surface.py</code> (Eqs. 6 &amp; 23, the pluggable
+            activations incl. the monotone I-spline), <code>model.py</code> (Eqs. 7–9), <code>design.py</code> (the central-composite cells),
             <code>dgp.py</code> (the known-truth worlds, incl. <code>make_world_logistic</code> /
             <code>make_world_hill_mixture</code>), <code>preprocess.py</code> (the adstock pre-pass and CUPED),
             <code>evidence.py</code> (Eq. 7a, registry readouts &rarr; summaries), <code>planner.py</code>

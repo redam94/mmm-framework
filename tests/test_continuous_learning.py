@@ -681,6 +681,97 @@ def test_true_world_hill_mixture_response_matches_surface():
     np.testing.assert_allclose(got, want, atol=1e-6)
 
 
+def test_monotone_spline_activation_properties():
+    """The shape-agnostic monotone I-spline family is registered and
+    well-behaved: monotone basis, f(0)=0, values in [0, 1), finite gradients
+    everywhere (incl. zero spend and past full saturation), and weight
+    placement steers where the curve rises."""
+    import jax
+    import jax.numpy as jnp
+
+    assert "monotone_spline" in cl.ACTIVATIONS
+    names, fn = cl.ACTIVATIONS["monotone_spline"]
+    assert names == tuple(f"w{j + 1}" for j in range(surface.MSPLINE_J))
+    s = np.linspace(0.0, 1.2 * surface.MSPLINE_S_MAX, 300)
+    # each I-spline basis column rises monotonically 0 -> 1; earlier columns
+    # rise earlier (tolerances are float32-appropriate — JAX default dtype)
+    basis = np.asarray(surface.monotone_spline_basis(s))
+    assert basis.shape == (s.size, surface.MSPLINE_J)
+    assert np.allclose(basis[0], 0.0, atol=1e-6)
+    assert np.all(basis[-1] > 1 - 1e-4)
+    assert np.all(np.diff(basis, axis=0) >= -1e-6)
+    mid = int(np.searchsorted(s, 1.5))
+    assert basis[mid, 0] > basis[mid, -1]
+    # the normalized activation: f(0)=0, monotone, saturating below 1
+    w = [1.0] * surface.MSPLINE_J
+    f = np.asarray(fn(s, *w))
+    assert abs(float(f[0])) < 1e-6
+    assert np.all(np.diff(f) >= -1e-6) and np.all(f < 1.0)
+    # early-heavy weights buy an early rise; late-heavy weights a late one
+    f_early = np.asarray(fn(s, 5.0, 3.0, 2.0, 1.0, *([0.1] * (surface.MSPLINE_J - 4))))
+    f_late = np.asarray(fn(s, *([0.05] * (surface.MSPLINE_J - 3)), 0.2, 1.0, 5.0))
+    assert f_early[mid] > 0.8 and f_late[mid] < 0.4
+    # finite, non-negative spend-gradient everywhere; flat past MSPLINE_S_MAX
+    g = np.asarray(jax.grad(lambda x: jnp.sum(fn(x, *w)))(jnp.asarray(s)))
+    assert np.all(np.isfinite(g)) and np.all(g >= -1e-6)
+    assert np.allclose(g[s > surface.MSPLINE_S_MAX * 1.02], 0.0, atol=1e-7)
+
+
+def test_monotone_spline_beats_single_hill_on_two_phase_shape():
+    """Expressiveness: positive spline weights approximate a two-Hill-mixture
+    activation substantially better than the BEST single Hill — the reason to
+    reach for the shape-agnostic family when the response family is unknown."""
+    from scipy.optimize import nnls
+
+    world = cl.make_world_hill_mixture(seed=0)
+    p = world.shape
+    grid = np.linspace(0.0, 1.8, 150)
+    c = 1  # Pulse — the strongly two-phase channel
+    target = np.asarray(
+        surface.hill_mixture(
+            grid,
+            p["kappa1"][c],
+            p["alpha1"][c],
+            p["kappa2"][c],
+            p["alpha2"][c],
+            p["w"][c],
+        )
+    )
+    basis = np.asarray(surface.monotone_spline_basis(grid))
+    coef, _ = nnls(basis, target)
+    spline_rmse = float(np.sqrt(np.mean((basis @ coef - target) ** 2)))
+    # best single Hill by grid search over (kappa, alpha)
+    hill_rmse = np.inf
+    for kappa in np.linspace(0.2, 2.0, 40):
+        for alpha in np.linspace(0.6, 5.0, 40):
+            f = np.asarray(surface.activation(grid, kappa, alpha))
+            hill_rmse = min(hill_rmse, float(np.sqrt(np.mean((f - target) ** 2))))
+    assert spline_rmse < 0.75 * hill_rmse
+
+
+def test_true_world_monotone_spline_response_matches_surface():
+    """A TrueWorld can carry the spline family generically (activation +
+    shape dict) — the DGP evaluates the same registered surface function."""
+    weights = np.linspace(1.0, 0.2, surface.MSPLINE_J)
+    world = cl.TrueWorld(
+        beta=np.array([2.0, 1.5, 1.0, 0.8]),
+        gamma_pairs=np.zeros(6),
+        channels=["Chatter", "Pulse", "Orbit", "Vibe"],
+        activation="monotone_spline",
+        shape={f"w{j + 1}": np.full(4, v) for j, v in enumerate(weights)},
+    )
+    assert world.activation == "monotone_spline"
+    spend = np.array([[0.5, 0.6, 0.7, 0.4], [1.0, 0.2, 0.8, 0.9]])
+    got = world.response_mean(spend)
+    want = np.asarray(
+        cl.surface_over_rows(
+            spend, world.beta, world.gamma_matrix(), world.act_fn(), world.shape_tuple()
+        )
+    )
+    np.testing.assert_allclose(got, want, atol=1e-6)
+    assert np.all(got > 0)
+
+
 def _fake_logistic_posterior(world, n=100, seed=0, with_sigma=True):
     rng = np.random.default_rng(seed)
     k = world.n_channels
@@ -720,6 +811,44 @@ def test_acquisition_supports_registered_non_hill_activations():
     post.activation = "not_registered"
     with pytest.raises(NotImplementedError, match="transform spec"):
         acquisition.theta_map(post)
+
+
+def test_acquisition_supports_monotone_spline():
+    """The monotone-spline family has a full transform spec: log-space weight
+    moments, positive EIG, and a finite Laplace KG — so design scoring works
+    for the shape-agnostic activation too."""
+    world = cl.make_world(seed=0)
+    rng = np.random.default_rng(3)
+    k = world.n_channels
+    n = 100
+    s = {
+        "beta": np.abs(world.beta + 0.1 * rng.standard_normal((n, k))),
+        "a_geo": rng.normal(4, 1, (n, 30)),
+        "sigma": np.abs(rng.normal(0.5, 0.05, n)),
+    }
+    for nm in cl.ACTIVATIONS["monotone_spline"][0]:
+        s[nm] = np.abs(1.0 + 0.2 * rng.standard_normal((n, k)))
+    for idx, (i, j) in enumerate(world.pairs):
+        s[model.pair_name(world.channels, (i, j))] = world.gamma_pairs[
+            idx
+        ] + 0.1 * rng.standard_normal(n)
+    post = cl.Posterior(
+        samples=s,
+        channels=world.channels,
+        pairs=world.pairs,
+        activation="monotone_spline",
+    )
+    tmap = acquisition.theta_map(post)
+    assert tmap.dim == (1 + surface.MSPLINE_J) * k + len(world.pairs)
+    mu, sigma0 = acquisition.theta_moments(post, tmap=tmap)
+    assert np.all(np.isfinite(mu)) and np.all(np.isfinite(sigma0))
+    dsg = cl.central_composite(np.full(k, 0.7), 0.6, world.pairs)
+    eig = cl.design_eig(post, dsg, sigma=0.5, n_geo=40, t_test=8)
+    assert np.isfinite(eig) and eig > 0
+    kg = cl.laplace_knowledge_gradient(
+        post, dsg, B=3.2, value=5.0, n_geo=40, t_test=8, n_outcomes=8, seed=0
+    )
+    assert np.isfinite(kg)
 
 
 def test_acquisition_negbinomial_glm_weights():
@@ -1041,6 +1170,49 @@ def test_misspecified_single_hill_still_makes_a_near_optimal_decision():
     rec = cl.recommend_allocation(post, B, value, q=200, mode="fixed")
     achieved = value * float(world.response_mean(np.asarray(rec)[None, :])[0]) - B
     # the misspecified plan captures >=95% of the achievable profit
+    assert achieved >= 0.95 * true_profit
+
+
+@pytest.mark.slow
+def test_monotone_spline_recovers_and_plans_on_mixture_world():
+    """Shape-agnostic gate: fit the monotone I-spline on the two-Hill-mixture
+    world WITHOUT telling it the family. The chains mix, the spline's own
+    weight sites are sampled (no Hill params), and the activation-agnostic
+    planner still lands a near-optimal allocation — the whole loop runs on a
+    family nobody hand-picked."""
+    world = cl.make_world_hill_mixture(seed=0)
+    B, value = 3.2, 5.0
+    _, true_profit = cl.world_optimal_allocation(world, B, value, mode="fixed")
+    data = cl.simulate_panel(
+        world,
+        np.full(4, 0.7),
+        n_geo=72,
+        t_pre=6,
+        t_test=10,
+        delta=0.6,
+        noise=0.4,
+        seed=1,
+    )
+    post = cl.fit(
+        data,
+        channels=world.channels,
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        activation="monotone_spline",
+        num_warmup=400,
+        num_samples=400,
+        num_chains=2,
+        seed=0,
+    )
+    assert post.activation == "monotone_spline"
+    assert "w1" in post.samples and f"w{surface.MSPLINE_J}" in post.samples
+    assert "kappa" not in post.samples and "lam" not in post.samples
+    # the weights are only identified up to normalization, so ESS runs low —
+    # gate on R-hat (measured ~1.03 on this seed)
+    assert post.diagnostics["max_rhat"] is None or post.diagnostics["max_rhat"] < 1.2
+    rec = cl.recommend_allocation(post, B, value, q=200, mode="fixed")
+    assert rec.sum() == pytest.approx(B, abs=0.05)
+    achieved = value * float(world.response_mean(np.asarray(rec)[None, :])[0]) - B
+    # measured gap ~1.1% on this seed; 95% is the shared misspec-gate bar
     assert achieved >= 0.95 * true_profit
 
 

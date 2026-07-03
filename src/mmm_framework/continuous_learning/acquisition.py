@@ -40,7 +40,8 @@ From this one linear-algebra object two acquisitions fall out cheaply:
   treatment.)
 
 Any activation registered in :data:`surface.ACTIVATIONS` with a transform spec
-in :data:`SHAPE_TRANSFORMS` is supported (Hill, logistic, hill_mixture), as is
+in :data:`SHAPE_TRANSFORMS` is supported (Hill, logistic, hill_mixture,
+monotone_spline), as is
 any observation family in :data:`model.VALID_LIKELIHOODS`. The geo intercept is
 profiled out by centering the cell gradients across cells (the per-geo
 baselines are randomized, so the identifying variation is between-cell),
@@ -129,6 +130,8 @@ SHAPE_TRANSFORMS: dict[str, dict[str, Transform]] = {
         "alpha2": _interval(0.5, 5.0),
         "w": _interval(0.0, 1.0),
     },
+    # positive normalized I-spline weights (LogNormal prior) -> log space
+    "monotone_spline": {nm: _LOG for nm in ACTIVATIONS["monotone_spline"][0]},
 }
 
 

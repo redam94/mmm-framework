@@ -325,7 +325,7 @@ print(f"panel: {data['spend'].shape[0]} geo-weeks across {data['n_geo']} geos, "
       f"{data['design'].shape[0]} CCD cells")
 
 post = cl.fit(data, channels=world.channels, pair_signs=cl.PAIR_SIGNS_EXAMPLE,
-              num_warmup=500, num_samples=500, num_chains=2, seed=0)
+              num_warmup=800, num_samples=500, num_chains=2, seed=0)
 _rhat = post.diagnostics.get("max_rhat")
 print(f"posterior: {post.n_draws} draws | max R-hat = "
       f"{_rhat:.3f}" if _rhat is not None else f"posterior: {post.n_draws} draws")
@@ -489,7 +489,7 @@ out = cl.run_closed_loop(
     world, center=CENTER, B=B, value=VALUE,
     n_geo=80, t_pre=6, t_test=10, delta=0.6, noise=0.6,
     mode="fixed", pair_signs=cl.PAIR_SIGNS_EXAMPLE,
-    margin=1.0, population=2.0, wave_cost=0.45, max_waves=4, planner_q=200,
+    margin=1.0, population=2.0, wave_cost=0.5, max_waves=4, planner_q=200,
     fit_kwargs=dict(num_warmup=400, num_samples=400, num_chains=2, seed=0),
     seed=7,
 )
@@ -1217,7 +1217,234 @@ _IPImageM(filename=_mis_gif)
   that is your cue to widen the activation, not to narrow the intervals.
 """),
     # ====================================================================
-    # 15. Recap
+    # 15. Monotone splines — drop the family assumption
+    # ====================================================================
+    md(r"""
+## 15 · Monotone splines — drop the family assumption entirely
+
+§14's dilemma — pick a family and risk being confidently wrong — has a third
+answer: **don't pick one**. `activation="monotone_spline"` fits a **monotone
+regression spline** (Ramsay-style I-splines), whose only assumptions are the
+ones the loop already requires: *monotone* and *saturating*.
+
+$$
+f(s) \;=\; \frac{\sum_{j} w_j\, I_j\!\big(s / s_{\max}\big)}{\sum_j w_j},
+\qquad w_j > 0,
+$$
+
+where each $I_j$ is a cubic **I-spline** basis function (the suffix sums of a
+clamped cubic B-spline basis — each rises monotonically from 0 to 1, earlier
+ones earlier), with fixed knots at scaled spends
+$\{0.25, 0.5, 0.75, 1.0, 1.5, 2.0\}$ and full saturation at $s_{\max} = 3$.
+Knot density matters: it sets the family's **approximation bias floor**, and
+with too few knots the accumulating waves would contract the credible band onto
+the best spline *approximation* rather than the truth — decaying coverage. This
+grid keeps the worst-case bias well inside the band. Any positive weight vector gives a smooth,
+monotone, saturating curve with $f(0)=0$ — concave, S-shaped, two-phase,
+plateaued, whatever the data asks for. Only the weight *ratios* matter (the sum
+normalizes out), so the `LogNormal` priors are scale-free by construction.
+
+Everything downstream is already activation-agnostic: the same `fit`, Thompson
+plan, funding line, ENBS stop, Laplace-KG design scoring, and animation run
+unchanged — this is one more registry entry (`w1..w9` weight sites), not a new
+code path.
+"""),
+    code(r"""
+# The monotone I-spline basis, and what the weights buy you.
+s = np.linspace(0, 1.1 * surface.MSPLINE_S_MAX, 300)
+basis = np.asarray(surface.monotone_spline_basis(s))            # (grid, J)
+
+fig = make_subplots(rows=1, cols=2, subplot_titles=(
+    f"the {surface.MSPLINE_J} monotone I-spline basis functions",
+    "weights steer the shape (all curves monotone by construction)"))
+for j in range(surface.MSPLINE_J):
+    fig.add_trace(go.Scatter(x=s, y=basis[:, j], name=f"I{j+1}",
+                             line=dict(width=2)), row=1, col=1)
+shapes = {
+    "early-heavy (steep, fast saturation)": (5.0, 3.0, 2.0, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1),
+    "equal weights (the prior median)":     (1.0,) * surface.MSPLINE_J,
+    "late-heavy (slow burn)":               (0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.2, 1.0, 5.0),
+    "two-phase (early step + late rise)":   (0.3, 3.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.5, 2.0),
+}
+for nm, w in shapes.items():
+    f = np.asarray(surface.monotone_spline(s, *w))
+    fig.add_trace(go.Scatter(x=s, y=f, name=nm), row=1, col=2)
+for col in (1, 2):
+    fig.update_xaxes(title_text="scaled spend s", row=1, col=col)
+fig.update_yaxes(title_text="basis I(s)", row=1, col=1)
+fig.update_yaxes(title_text="activation f(s)", row=1, col=2)
+style(fig, "A shape-agnostic activation: normalized monotone I-splines", height=400)
+fig.show()
+
+# monotone + saturating for ANY positive weights, f(0) = 0 (float32 tolerances)
+for w in shapes.values():
+    f = np.asarray(surface.monotone_spline(s, *w))
+    assert abs(f[0]) < 1e-6 and np.all(np.diff(f) >= -1e-6) and np.all(f < 1.0)
+assert np.all(np.diff(np.asarray(surface.monotone_spline_basis(s)), axis=0) >= -1e-6)
+"""),
+    md(r"""
+### Usage: one flag, no family knowledge
+
+We fit the **same two-Hill-mixture data** from §14 with
+`activation="monotone_spline"` and put it through the same decision + honesty
+scoreboard. After a single local wave the flexible family is honestly
+under-identified *outside* the probed range (the band there stays wide and
+prior-shaped — that is the correct behaviour, not a bug), but inside the probed
+range it already tracks the two-phase truth **without ever being told a
+family**, and the activation-agnostic planner allocates within about a point of
+truth-optimal.
+"""),
+    code(r"""
+# Fit the SAME mixture-truth data — no family assumption this time.
+post_spl = cl.fit(data_mix, channels=world_mix.channels, pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+                  activation="monotone_spline", num_warmup=400, num_samples=400,
+                  num_chains=2, seed=0)
+FITS["monotone_spline"] = post_spl
+print(f"activation: {post_spl.activation} | shape sites: {post_spl.shape_names} | "
+      f"max R-hat = {post_spl.diagnostics['max_rhat']:.3f}")
+
+rec_spl = cl.recommend_allocation(post_spl, B, VALUE, q=200, mode="fixed")
+gap_spl = 100 * (true_profit - prof_true(rec_spl)) / abs(true_profit)
+_, _, mr_spl = cl.marginal_roas(post_spl, rec_spl, VALUE, q=200)
+lo_s, hi_s = np.percentile(mr_spl, 5, 0), np.percentile(mr_spl, 95, 0)
+tmr_s = true_mroas(rec_spl)
+cov_spl = int(((lo_s <= tmr_s) & (tmr_s <= hi_s)).sum())
+
+print(f"\n{'fitted family':18s}{'profit gap':>11s}{'mROAS-CI covers':>17s}{'CI width':>10s}")
+for act, rh, gap, cov, ciw in rows:
+    print(f"{act:18s}{gap:9.1f}% {cov:>13}/4 {ciw:>9.2f}")
+print(f"{'monotone_spline':18s}{gap_spl:9.1f}% {cov_spl:>13}/4 {float(np.mean(hi_s - lo_s)):>9.2f}")
+
+assert post_spl.diagnostics["max_rhat"] is None or post_spl.diagnostics["max_rhat"] < 1.2
+assert gap_spl < 5.0        # near-optimal decision with NO family assumption
+"""),
+    code(r"""
+# Where the families put the curve: truth vs spline band vs parametric means.
+fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.12,
+                    subplot_titles=[f"Response as {nm} is swept" for _, nm in chans])
+for col, (c, nm) in enumerate(chans, start=1):
+    show = col == 1
+    fig.add_vrect(x0=PROBE_LO, x1=PROBE_HI, fillcolor="rgba(120,120,120,0.07)",
+                  line_width=0, row=1, col=col)
+    fig.add_trace(go.Scatter(x=grid, y=true_anchored(c, grid, x0), mode="lines",
+        line=dict(color="black", width=3.3), name="true (mixture)", legendgroup="t",
+        showlegend=show), row=1, col=col)
+    cur = anchored_slice(FITS["monotone_spline"], c, grid, x0)
+    m = cur.mean(0); lo = np.percentile(cur, 5, 0); hi = np.percentile(cur, 95, 0)
+    fig.add_trace(go.Scatter(x=np.r_[grid, grid[::-1]], y=np.r_[hi, lo[::-1]],
+        fill="toself", fillcolor="rgba(123,90,166,0.15)", line=dict(width=0),
+        hoverinfo="skip", legendgroup="spl", showlegend=False), row=1, col=col)
+    fig.add_trace(go.Scatter(x=grid, y=m, mode="lines",
+        line=dict(color="#7b5aa6", width=2.4),
+        name="fit: monotone spline (agnostic)", legendgroup="spl",
+        showlegend=show), row=1, col=col)
+    for act, dash in [("hill", "dash"), ("logistic", "dot")]:
+        mp = anchored_slice(FITS[act], c, grid, x0).mean(0)
+        fig.add_trace(go.Scatter(x=grid, y=mp, mode="lines",
+            line=dict(color=COL[act], width=1.8, dash=dash), name=LAB[act],
+            legendgroup=act, showlegend=show), row=1, col=col)
+    fig.update_xaxes(title_text=f"{nm} spend (scaled)", row=1, col=col)
+    fig.update_yaxes(title_text="Δ response vs. off" if col == 1 else "", row=1, col=col)
+fig.update_layout(template="plotly_white", height=430,
+    title=dict(text="The spline tracks the two-phase truth without being told a family",
+               x=0.5, xanchor="center", font=dict(size=15)),
+    legend=dict(orientation="h", yanchor="bottom", y=-0.32, xanchor="center", x=0.5),
+    margin=dict(l=70, r=25, t=80, b=95))
+fig.show()
+
+# inside the probed range the agnostic spline tracks the truth far better than
+# the severe parametric misfit (logistic), on the strongly two-phase channel
+PROBED = (grid >= PROBE_LO) & (grid <= PROBE_HI)
+perr = {act: float(np.max(np.abs(anchored_slice(FITS[act], 1, grid, x0).mean(0)
+                                  - true_anchored(1, grid, x0))[PROBED]))
+        for act in ("monotone_spline", "hill", "logistic")}
+print("probed-range max shape error (Pulse):", {k: round(v, 2) for k, v in perr.items()})
+assert perr["monotone_spline"] < perr["logistic"]
+# and its 90% band covers the truth across (nearly all of) the probed range
+cur = anchored_slice(FITS["monotone_spline"], 1, grid, x0)
+t1 = true_anchored(1, grid, x0)
+band_cov = np.mean(((t1 >= np.percentile(cur, 5, 0)) &
+                    (t1 <= np.percentile(cur, 95, 0)))[PROBED])
+print(f"spline 90%-band coverage of the truth (Pulse, probed range): {band_cov:.0%}")
+assert band_cov > 0.8
+"""),
+    md(r"""
+### Watching it converge
+
+The animation below is the convergence story for the spline: the same
+accumulating trust-region loop as §14 (same geos, refit on all data, recenter
+each wave), run once with the **monotone spline** and once with the
+**logistic** — §14's *severe* misspecification, a concave family that cannot
+represent an S-shape at any sample size.
+
+* **Top row — the curve.** The spline's band starts wide — an honest "some
+  monotone saturating shape" — and **tightens onto the black truth** wave by
+  wave. The logistic's band tightens too, but onto its own bias — red wherever
+  the truth escapes it.
+* **Bottom row.** Both profit gaps fall (the *decision* was never the problem —
+  §14's lesson). The **curve-coverage** tracker is what separates them: as both
+  bands shrink, the spline's coverage stays far above the wrong family's — the
+  spline is converging toward the *truth*, the logistic toward its own bias.
+  Neither band is a promise about spends the design never probed.
+
+(Rendered by `build_spline_animation.py`; `SPL_REF=hill` renders the mild-case
+comparison instead, where §14 showed the contrast is decision-only; cadence
+env-tunable via `SPL_N_WAVES` / `SPL_N_GEO` / …)
+"""),
+    code(r"""
+import os
+import subprocess
+import sys
+sys.path.insert(0, ".")
+from IPython.display import Image as _IPImageS
+import build_spline_animation as _animS
+
+_spl_gif = os.path.join(_animS.OUTDIR, "continuous_learning_spline.gif")
+if not os.path.exists(_spl_gif):     # build on demand (12 short fits) if missing
+    subprocess.run(
+        [sys.executable, "build_spline_animation.py"],
+        cwd=os.path.dirname(_animS.__file__), check=True,
+    )
+assert os.path.exists(_spl_gif)
+_IPImageS(filename=_spl_gif)
+"""),
+    md(r"""
+### The 2-D view — the spline steering the acquisition loop
+
+The same 2-D acquisition machinery as §11/§12, now on a world where **both
+slice channels (Pulse × Orbit) are weighted sums of two Hill curves** —
+two-phase truths no single parametric family in the registry matches — while
+the loop **fits the monotone spline**. Every planner readout is
+activation-agnostic (`response_grid` reads the posterior's own family), so the
+surfaces, optima and readouts render identically: the uncertainty collapses
+where the CCD cells probe, the exploit optimum (★) closes in on the true
+optimum (gold ★), and the acquisition optimum (◆) keeps hunting the
+still-uncertain regions — the spline never needed to be told what family it
+was learning. (Same builder as §11/§12, with `ACQ_WORLD=mixture
+ACQ_FIT=monotone_spline`.)
+"""),
+    code(r"""
+import os
+import subprocess
+import sys
+sys.path.insert(0, ".")
+from IPython.display import Image as _IPImage2D
+import build_acquisition_animation as _anim2D
+
+_spl2d_gif = os.path.join(_anim2D.OUTDIR,
+                          "continuous_learning_acquisition_spline2d.gif")
+if not os.path.exists(_spl2d_gif):  # build on demand (env picks world + fit family)
+    subprocess.run(
+        [sys.executable, "build_acquisition_animation.py"],
+        env={**os.environ, "ACQ_WORLD": "mixture", "ACQ_FIT": "monotone_spline",
+             "ACQ_TAG": "spline2d"},
+        cwd=os.path.dirname(_anim2D.__file__), check=True,
+    )
+assert os.path.exists(_spl2d_gif)
+_IPImage2D(filename=_spl2d_gif)
+"""),
+    # ====================================================================
+    # 16. Recap
     # ====================================================================
     md(r"""
 ## Recap
@@ -1255,6 +1482,15 @@ _IPImageM(filename=_mis_gif)
   profit) — but the credible intervals get narrow and biased. Misspecification
   costs calibration, not portfolio profit; trust the ranking, distrust the
   channel-by-channel magnitudes, and keep the loop local.
+* **Or assume no family at all.** `activation="monotone_spline"` (normalized
+  monotone I-splines) assumes only what the loop already requires — monotone +
+  saturating. On the two-Hill world it planned within about a point of optimal,
+  tracked the truth inside the probed range with an honest wide band outside it,
+  and — run through the accumulating loop — **converged toward the true curve**,
+  where the severely-wrong logistic converged onto its own bias: same falling
+  profit gap, very different curve coverage (§15's animation). The §11/§12-style
+  2-D acquisition loop also runs unchanged with the spline fitting a world where
+  both slice channels are weighted Hill sums.
 
 This is the model-free half of the framework's measurement story. The
 model-anchored half lives in `mmm_framework.planning` (it sits on top of a
