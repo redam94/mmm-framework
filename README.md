@@ -220,9 +220,10 @@ results = model.fit(
 )
 
 # Get contributions with uncertainty
-contributions = model.compute_contributions()
-print(contributions.mean_contributions)
-print(contributions.hdi_contributions)  # 94% credible intervals
+contributions = model.compute_counterfactual_contributions()
+print(contributions.total_contributions)
+print(contributions.contribution_hdi_low)   # lower bound of 94% credible interval
+print(contributions.contribution_hdi_high)  # upper bound of 94% credible interval
 ```
 
 ### Fluent Configuration API
@@ -470,7 +471,7 @@ model = MultivariateMMM(
 results = model.fit()
 
 # Analyze cross-effects
-cross_effects = model.get_cross_effect_summary()
+cross_effects = model.get_cross_effects_summary()
 print(cross_effects)
 
 # Get correlation matrix
@@ -567,7 +568,7 @@ for e in effects:
     print(e.to_dict())
 
 # Cross-effect summary with HDI
-cross_df = model.get_cross_effect_summary()
+cross_df = model.get_cross_effects_summary()
 # Returns: source, target, effect_type, mean, sd, hdi_3%, hdi_97%
 
 # Correlation matrix for multivariate outcomes
