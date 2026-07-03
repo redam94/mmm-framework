@@ -477,27 +477,55 @@ def prior_predictive_check(
             "No model in the session and no spec/dataset to build one from. "
             "Configure a model and load a dataset first."
         )
-    try:
-        idata = mmm.sample_prior_predictive(samples=int(n_samples))
-    except Exception as e:  # noqa: BLE001
-        return _err(f"Prior predictive sampling failed: {e}")
+    # Shared facts layer with the pre-fit Model Design Readout — the numbers
+    # the oracle chat reports here are BY CONSTRUCTION the numbers the prefit
+    # HTML reports (original KPI scale, same prior draw, same estimand math).
     try:
         import numpy as np
 
-        pp = idata.prior_predictive
-        var = list(pp.data_vars)[0]
-        arr = pp[var].values.reshape(-1)
-        summary = {
-            "samples": int(arr.size),
-            "min": float(np.nanmin(arr)),
-            "p05": float(np.nanpercentile(arr, 5)),
-            "median": float(np.nanmedian(arr)),
-            "p95": float(np.nanpercentile(arr, 95)),
-            "max": float(np.nanmax(arr)),
-            "frac_negative": float(np.mean(arr < 0)),
-        }
+        from mmm_framework.reporting.helpers.prefit import (
+            prior_estimand_facts,
+            prior_predictive_facts,
+            sample_prior,
+        )
+
+        idata = sample_prior(mmm, int(n_samples), 42)
     except Exception as e:  # noqa: BLE001
-        summary = {"error": str(e)}
+        return _err(f"Prior predictive sampling failed: {e}")
+
+    try:
+        ppc = prior_predictive_facts(mmm, idata)
+    except Exception as e:  # noqa: BLE001
+        ppc = None
+        ppc_err = str(e)
+    try:
+        est = prior_estimand_facts(mmm, idata)
+    except Exception:  # noqa: BLE001
+        est = {}
+
+    # Original-scale per-observation KPI summary (the old op reported this on
+    # the STANDARDIZED scale — the misalignment the shared layer removes).
+    summary: dict = {"samples": int(n_samples)}
+    try:
+        pp = idata.prior_predictive
+        var = "y_obs" if "y_obs" in pp.data_vars else list(pp.data_vars)[0]
+        arr = np.asarray(pp[var].values, dtype=float).reshape(-1)
+        y_std = float(getattr(mmm, "y_std", 1.0) or 1.0)
+        y_mean = float(getattr(mmm, "y_mean", 0.0) or 0.0)
+        arr = arr * y_std + y_mean
+        summary.update(
+            {
+                "scale": "original",
+                "min": float(np.nanmin(arr)),
+                "p05": float(np.nanpercentile(arr, 5)),
+                "median": float(np.nanmedian(arr)),
+                "p95": float(np.nanpercentile(arr, 95)),
+                "max": float(np.nanmax(arr)),
+                "frac_negative": float(np.mean(arr < 0)),
+            }
+        )
+    except Exception as e:  # noqa: BLE001
+        summary["error"] = str(e)
 
     flag_neg = summary.get("frac_negative", 0) > 0.05
     lines = ["### Prior Predictive Check", "", f"- Mode: {mode}"]
@@ -506,19 +534,110 @@ def prior_predictive_check(
     else:
         lines.append(f"- Samples: {summary['samples']:,}")
         lines.append(
-            f"- Implied KPI range (5–95%): [{summary['p05']:,.0f}, {summary['p95']:,.0f}]"
+            f"- Implied KPI range per observation (5–95%, original scale): "
+            f"[{summary['p05']:,.0f}, {summary['p95']:,.0f}]"
         )
         lines.append(f"- Median: {summary['median']:,.0f}")
         lines.append(f"- Fraction negative: {summary['frac_negative']:.1%}")
-        if flag_neg:
+    if ppc is not None:
+        cov = ppc.get("coverage_90")
+        if cov is not None and np.isfinite(cov):
             lines.append(
-                "\n⚠️ >5% of prior-predictive draws are negative. Tighten priors before fitting."
+                f"- Observed-series coverage: the 90% prior band covers "
+                f"{cov * 100:.0f}% of periods"
             )
-    res = _ok("\n".join(lines), {"prior_predictive_summary": summary})
+        zbar = ppc.get("scale_z_abs_mean")
+        if zbar is not None and np.isfinite(zbar):
+            lines.append(
+                f"- Original-scale distance: observed runs {zbar:.1f} prior-sd "
+                f"from the prior median on average"
+                + (" ⚠️ (location/scale off — revisit priors)" if zbar > 1.0 else "")
+            )
+    elif "error" not in summary:
+        lines.append(f"- (period-axis checks unavailable: {ppc_err})")
+    if flag_neg:
+        lines.append(
+            "\n⚠️ >5% of prior-predictive draws are negative. Tighten priors before fitting."
+        )
+
+    tables = []
+    if est.get("channels"):
+        lines.append("")
+        lines.append("**What the priors imply for the estimands** (same math as")
+        lines.append("the Model Design Readout — prior contribution ÷ observed")
+        lines.append("spend/volume):")
+        for r in est["channels"]:
+            lines.append(
+                f"- {r['channel']} prior {r['label']}: {r['mean']:.2f} "
+                f"(90% {r['lower']:.2f}–{r['upper']:.2f}), "
+                f"P(>{r['reference']:g}) = {r['p_above_reference']:.0%}"
+            )
+        if est.get("blended"):
+            b = est["blended"]
+            lines.append(
+                f"- Blended prior return: {b['mean']:.2f} "
+                f"(90% {b['lower']:.2f}–{b['upper']:.2f})"
+            )
+        if est.get("marketing_share"):
+            s = est["marketing_share"]
+            lines.append(
+                f"- Prior marketing share of KPI: {s['mean']:.0%} "
+                f"(90% {s['lower']:.0%}–{s['upper']:.0%})"
+            )
+        try:
+            import pandas as _pd
+
+            from mmm_framework.agents.tables import df_to_table_json
+
+            tables.append(
+                df_to_table_json(
+                    _pd.DataFrame(
+                        [
+                            {
+                                "channel": r["channel"],
+                                "metric": r["label"],
+                                "prior_mean": round(r["mean"], 3),
+                                "p05": round(r["lower"], 3),
+                                "p95": round(r["upper"], 3),
+                                "p_above_break_even": round(r["p_above_reference"], 3),
+                            }
+                            for r in est["channels"]
+                        ]
+                    ),
+                    title="Prior estimands (before data)",
+                    source="prior_predictive_check",
+                    group="validation",
+                )
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+    # JSON-safe estimand payload (drop the raw draws arrays).
+    est_payload = {
+        k: (
+            [{kk: vv for kk, vv in r.items() if kk != "draws"} for r in v]
+            if k == "channels"
+            else v
+        )
+        for k, v in est.items()
+    }
+    dash = {"prior_predictive_summary": summary}
+    if est_payload:
+        dash["prior_estimands"] = est_payload
+    if ppc is not None:
+        dash["prior_predictive_summary"]["coverage_90"] = ppc.get("coverage_90")
+        dash["prior_predictive_summary"]["scale_z_abs_mean"] = ppc.get(
+            "scale_z_abs_mean"
+        )
+
+    res = _ok("\n".join(lines), dash)
+    if tables:
+        res["tables"] = tables
     res["assumption"] = {
         "key": "prior_predictive_check",
-        "value": summary,
-        "rationale": "Prior predictive sanity check. "
+        "value": {**summary, "prior_estimands": est_payload or None},
+        "rationale": "Prior predictive sanity check (original scale; shared "
+        "facts with the Model Design Readout). "
         + (
             "⚠️ More than 5% of samples imply negative outcomes — consider tighter priors."
             if flag_neg
@@ -2917,7 +3036,7 @@ def render_slide_deck(
         from mmm_framework.agents.runtime import get_current_thread
         from mmm_framework.reporting.deck.builder import build_pptx
 
-        out = str(_ws.report_path(filename, get_current_thread()))
+        out = str(_ws.session_artifact_path(filename))
         build_pptx(
             mmm,
             template_path=template_path,

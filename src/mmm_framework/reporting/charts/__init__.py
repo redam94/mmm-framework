@@ -78,6 +78,18 @@ from .ppc import (
     create_ppc_residual_plot,
 )
 
+# Pre-fit charts (prior densities, prior predictive, SBC)
+from .prior import (
+    create_prior_predictive_fan,
+    create_prior_stat_distribution,
+    create_prior_density_chart,
+    create_prior_component_chart,
+    create_prior_saturation_band,
+    create_prior_adstock_band,
+    create_sbc_rank_histogram,
+    create_sbc_ecdf_diff,
+)
+
 # Also import ChartConfig for convenience
 from ..config import ChartConfig
 
@@ -124,4 +136,13 @@ __all__ = [
     "create_ppc_density_overlay",
     "create_ppc_interval_calibration",
     "create_ppc_residual_plot",
+    # Pre-fit charts (prior densities, prior predictive, SBC)
+    "create_prior_predictive_fan",
+    "create_prior_stat_distribution",
+    "create_prior_density_chart",
+    "create_prior_component_chart",
+    "create_prior_saturation_band",
+    "create_prior_adstock_band",
+    "create_sbc_rank_histogram",
+    "create_sbc_ecdf_diff",
 ]

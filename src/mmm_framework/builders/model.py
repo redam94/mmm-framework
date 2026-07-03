@@ -278,6 +278,9 @@ class ModelConfigBuilder:
         self._target_accept: float = 0.9
         self._intercept_prior_mu: float = 0.0
         self._intercept_prior_sigma: float = 0.5
+        self._media_prior_mode: str = "coefficient"
+        self._media_roi_prior_mu: float = 0.0
+        self._media_roi_prior_sigma: float = 1.0
         self._hierarchical: HierarchicalConfig | None = None
         self._seasonality: SeasonalityConfig | None = None
         self._control_selection: ControlSelectionConfig | None = None
@@ -402,6 +405,42 @@ class ModelConfigBuilder:
         self._intercept_prior_sigma = sigma
         return self
 
+    def with_media_prior_mode(
+        self,
+        mode: str = "roi",
+        *,
+        roi_mu: float | None = None,
+        roi_sigma: float | None = None,
+    ) -> Self:
+        """Choose the DEFAULT media-effect prior parameterization.
+
+        ``"roi"`` samples each channel's prior ROI directly
+        (``roi_<ch> ~ LogNormal(roi_mu, roi_sigma)``, default median 1.0 =
+        break-even) and derives ``beta_<ch>`` in-graph — the default prior
+        lives on the decision scale and is comparable across channels.
+        ``"coefficient"`` keeps the historical standardized-coefficient Gamma.
+        Only applies to channels without an experiment-calibrated ``roi_prior``
+        or an explicit ``coefficient_prior``.
+        """
+        if mode not in ("coefficient", "roi"):
+            raise ValueError(
+                f"media_prior_mode must be 'coefficient' or 'roi', got {mode!r}"
+            )
+        self._media_prior_mode = mode
+        if roi_mu is not None:
+            self._media_roi_prior_mu = float(roi_mu)
+        if roi_sigma is not None:
+            if roi_sigma <= 0:
+                raise ValueError(f"roi_sigma must be positive, got {roi_sigma}")
+            self._media_roi_prior_sigma = float(roi_sigma)
+        return self
+
+    def roi_based_media_priors(
+        self, roi_mu: float = 0.0, roi_sigma: float = 1.0
+    ) -> Self:
+        """Convenience: switch the default media priors to the ROI scale."""
+        return self.with_media_prior_mode("roi", roi_mu=roi_mu, roi_sigma=roi_sigma)
+
     # Component configs
     def with_hierarchical(self, config: HierarchicalConfig) -> Self:
         """Set hierarchical configuration."""
@@ -468,6 +507,9 @@ class ModelConfigBuilder:
             target_accept=self._target_accept,
             intercept_prior_mu=self._intercept_prior_mu,
             intercept_prior_sigma=self._intercept_prior_sigma,
+            media_prior_mode=self._media_prior_mode,
+            media_roi_prior_mu=self._media_roi_prior_mu,
+            media_roi_prior_sigma=self._media_roi_prior_sigma,
             hierarchical=self._hierarchical or HierarchicalConfigBuilder().build(),
             seasonality=self._seasonality or SeasonalityConfigBuilder().build(),
             control_selection=self._control_selection

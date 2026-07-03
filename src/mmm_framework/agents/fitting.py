@@ -90,6 +90,9 @@ _MEDIA_PRIOR_PARAMS = {
 _CONTROL_PRIOR_PARAMS = {"coefficient", "allow_negative"}
 _SCALAR_PRIOR_KEYS = {
     "intercept": {"mu", "sigma"},
+    # Hyper-params of the ROI-based DEFAULT media prior (media_prior_mode="roi",
+    # the agent default): roi_<ch> ~ LogNormal(roi_mu, roi_sigma).
+    "media_default": {"roi_mu", "roi_sigma"},
     "seasonality": {
         "prior_sigma",
         "yearly_prior_sigma",
@@ -123,7 +126,7 @@ def unconsumed_prior_path(parts: list[str], value, spec: dict) -> str | None:
             return out
         return [p]
 
-    groups = "media, controls, seasonality, trend, intercept"
+    groups = "media, controls, seasonality, trend, intercept, media_default"
     channels = {m.get("name") for m in spec.get("media_channels", [])}
     controls = {c.get("name") for c in spec.get("control_variables", [])}
 
@@ -387,6 +390,27 @@ def build_model(
         .with_tune(tune)
         .with_target_accept(target_accept)
     )
+    # Agent-built models default to ROI-BASED media priors: the default prior
+    # is placed on each channel's ROI (LogNormal, median 1.0 = break-even) and
+    # beta is derived in-graph, so the prior predictive ROI the oracle reports
+    # is the prior that was actually set — comparable across channels and
+    # independent of spend/KPI units. Opt out with spec["media_prior_mode"] =
+    # "coefficient" (the library's historical standardized-coefficient Gamma).
+    # Per-channel `priors.media.<ch>.coefficient` and experiment-calibrated
+    # priors still take precedence per channel.
+    media_mode = str(spec.get("media_prior_mode", "roi")).strip().lower()
+    if media_mode not in ("coefficient", "roi"):
+        raise ValueError(
+            f"spec.media_prior_mode must be 'coefficient' or 'roi', got {media_mode!r}"
+        )
+    roi_default = spec.get("priors", {}).get("media_default", {})
+    model_config_builder.with_media_prior_mode(
+        media_mode,
+        roi_mu=(float(roi_default["roi_mu"]) if "roi_mu" in roi_default else None),
+        roi_sigma=(
+            float(roi_default["roi_sigma"]) if "roi_sigma" in roi_default else None
+        ),
+    )
     intercept_prior = spec.get("priors", {}).get("intercept", {})
     if "mu" in intercept_prior or "sigma" in intercept_prior:
         model_config_builder.with_intercept_prior(
@@ -648,8 +672,16 @@ def build_and_fit(spec: dict, dataset_path: str):
             f"Inference: {chains} chains × {draws} draws."
         )
 
-    # 6. Report (best-effort)
-    report_path = "agent_mmm_report.html"
+    # 6. Report (best-effort) — stored in the oracle session, not a shared CWD
+    # file. session_artifact_path resolves the session dir host-side (ContextVar)
+    # and falls back to the kernel's cwd (which IS the session work_dir) inside
+    # a subprocess/container kernel.
+    try:
+        from mmm_framework.agents import workspace as _wsp
+
+        report_path = str(_wsp.session_artifact_path("agent_mmm_report.html"))
+    except Exception:  # noqa: BLE001
+        report_path = "agent_mmm_report.html"
     try:
         from mmm_framework.reporting.generator import ReportBuilder
 

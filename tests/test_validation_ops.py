@@ -45,6 +45,56 @@ def test_publish_modelop_plots_drops_invalid(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# PPC check p-value convention (fast — no fit)
+# ---------------------------------------------------------------------------
+
+
+def test_ppc_checks_pass_when_observed_is_central():
+    """One-sided Bayesian p-value: an observed statistic at the median of the
+    replicated distribution (the best possible fit) must PASS.
+
+    Regression: the old two-tailed folding mapped a central statistic to
+    p ≈ 1.0, which the 0.05 < p < 0.95 band then flagged as a failure — the
+    better the fit, the more likely the check failed.
+    """
+    import numpy as np
+
+    from mmm_framework.validation.posterior_predictive import (
+        AutocorrelationCheck,
+        MeanCheck,
+        SkewnessCheck,
+        VarianceCheck,
+    )
+
+    # seed chosen so the observed draw is comfortably central on all four
+    # statistics (any single draw can legitimately land in a 5% tail)
+    rng = np.random.default_rng(4)
+    y_rep = rng.normal(814.0, 136.0, size=(1000, 156))
+    y_obs = rng.normal(814.0, 136.0, size=156)
+
+    for check in (MeanCheck(), VarianceCheck(), SkewnessCheck(), AutocorrelationCheck()):
+        res = check.compute(y_obs, y_rep, significance_level=0.05)
+        assert res.passed, f"{res.check_name} failed with p={res.p_value}"
+        # one-sided convention: central observed statistic → p near 0.5
+        assert 0.05 < res.p_value < 0.95
+
+
+def test_ppc_variance_check_fails_on_real_misfit():
+    """Under-dispersed replicates vs observed → p in a tail → Fail."""
+    import numpy as np
+
+    from mmm_framework.validation.posterior_predictive import VarianceCheck
+
+    rng = np.random.default_rng(0)
+    y_rep = rng.normal(814.0, 50.0, size=(1000, 156))  # too little variance
+    y_obs = rng.normal(814.0, 136.0, size=156)
+
+    res = VarianceCheck().compute(y_obs, y_rep, significance_level=0.05)
+    assert not res.passed
+    assert res.p_value < 0.05 or res.p_value > 0.95
+
+
+# ---------------------------------------------------------------------------
 # graceful degradation (fast — no fit)
 # ---------------------------------------------------------------------------
 

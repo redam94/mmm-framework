@@ -894,10 +894,19 @@ def fit_mmm_model(
 # where the model lives — in-process today (MODEL_CACHE), in the subprocess kernel
 # once fits move there (PR-C). The no-model / unknown-op cases come back as the
 # result's `error`, rendered below.
-def _modelop_command(res: dict, state: dict, tool_call_id) -> Command:
+def _modelop_command(
+    res: dict, state: dict, tool_call_id, persist_check: str | None = None
+) -> Command:
     """Turn a model_ops result ``{content, dashboard, error, tables?}`` into a
     Command, merging any dashboard payload into ``dashboard_data`` and storing
-    any structured table payloads as content-addressed dashboard refs."""
+    any structured table payloads as content-addressed dashboard refs.
+
+    ``persist_check`` names a validation check ("validate" / "ppc" / "sbc" /
+    ...): the result is ALSO persisted to the project's validation history
+    (the same ``model_validation`` artifacts the UI's Validation tab jobs use,
+    in the ``__valjobs__<project>`` thread) — so chat-run validations survive
+    the session and show up in the Validation tab's history. Best-effort;
+    never blocks the tool result."""
     if res.get("error"):
         return Command(
             update={
@@ -907,25 +916,72 @@ def _modelop_command(res: dict, state: dict, tool_call_id) -> Command:
             }
         )
     content = res["content"]
+    raw_content = content
     dash = res.get("dashboard") or {}
     tables = res.get("tables") or []
     plots = res.get("plots") or []
     update: dict = {}
+    table_refs: list = []
+    new_plot_refs: list = []
     if dash or tables or plots:
         dashboard_data = dict(state.get("dashboard_data") or {})
         dashboard_data.update(dash)
         if tables:
             from mmm_framework.agents.tables import publish_tables, tables_note
 
-            refs, dropped = publish_tables(tables, dashboard_data, get_current_thread())
-            content += tables_note(refs, dropped)
+            table_refs, dropped = publish_tables(
+                tables, dashboard_data, get_current_thread()
+            )
+            content += tables_note(table_refs, dropped)
         if plots:
+            plots_before = len(dashboard_data.get("plots") or [])
             content += _publish_modelop_plots(
                 plots, dashboard_data, get_current_thread()
             )
+            new_plot_refs = list((dashboard_data.get("plots") or [])[plots_before:])
         update["dashboard_data"] = dashboard_data
+    if persist_check:
+        _persist_chat_validation(persist_check, raw_content, table_refs, new_plot_refs)
     update["messages"] = [ToolMessage(content=content, tool_call_id=tool_call_id)]
     return Command(update=update)
+
+
+def _persist_chat_validation(
+    check: str, content: str, table_refs: list, plot_refs: list
+) -> None:
+    """Record a chat-run validation into the project's validation history.
+
+    Same artifact kind + payload shape as the UI's `POST /projects/{id}/validate`
+    jobs, so `GET /projects/{id}/validations` lists both and the Validation tab
+    renders them identically. Best-effort: a persistence failure must never
+    break the chat tool."""
+    try:
+        from mmm_framework.api import sessions as _sessions
+
+        tid = get_current_thread()
+        sess = _sessions.get_session(tid) or {}
+        project_id = sess.get("project_id")
+        if not project_id:
+            return
+        _sessions.add_artifact(
+            f"__valjobs__{project_id}",
+            "model_validation",
+            {
+                "status": "done",
+                "project_id": project_id,
+                "check": check,
+                "source": "chat",
+                "thread_id": tid,
+                "result": {
+                    "content": content,
+                    "tables": table_refs,
+                    "plots": plot_refs,
+                },
+                "error": None,
+            },
+        )
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _publish_modelop_plots(plots: list, dashboard_data: dict, thread_id) -> str:
@@ -1157,7 +1213,7 @@ def validate_model(
     """
     _activate_thread(config)
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op("validate_model", {})
-    return _modelop_command(res, state, tool_call_id)
+    return _modelop_command(res, state, tool_call_id, persist_check="validate")
 
 
 @tool
@@ -1174,7 +1230,7 @@ def run_posterior_predictive_checks(
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
         "posterior_predictive_checks", {}
     )
-    return _modelop_command(res, state, tool_call_id)
+    return _modelop_command(res, state, tool_call_id, persist_check="ppc")
 
 
 @tool
@@ -1191,7 +1247,7 @@ def run_residual_diagnostics(
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
         "residual_diagnostics", {}
     )
-    return _modelop_command(res, state, tool_call_id)
+    return _modelop_command(res, state, tool_call_id, persist_check="residuals")
 
 
 @tool
@@ -1208,7 +1264,7 @@ def run_channel_diagnostics(
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
         "channel_diagnostics", {}
     )
-    return _modelop_command(res, state, tool_call_id)
+    return _modelop_command(res, state, tool_call_id, persist_check="channels")
 
 
 @tool
@@ -1225,7 +1281,7 @@ def run_refutation_suite(
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
         "refutation_suite", {}
     )
-    return _modelop_command(res, state, tool_call_id)
+    return _modelop_command(res, state, tool_call_id, persist_check="refutation")
 
 
 @tool
@@ -1242,7 +1298,7 @@ def run_cross_validation(
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
         "cross_validation", {}
     )
-    return _modelop_command(res, state, tool_call_id)
+    return _modelop_command(res, state, tool_call_id, persist_check="cross_validation")
 
 
 # ── Plot normalization + error formatting (shared with the kernel impls) ──────
@@ -2747,6 +2803,7 @@ def generate_client_report(
     report_title: Optional[str] = None,
     analysis_period: Optional[str] = None,
     template: str = "augur",
+    ai_insights: bool = True,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
     config: InjectedConfig = None,
 ) -> Command:
@@ -2773,6 +2830,9 @@ def generate_client_report(
         report_title: Optional report title (defaults to the readout title).
         analysis_period: Optional period string, e.g. "Q1–Q2 2024".
         template: Report template name ("augur" default).
+        ai_insights: True (default) weaves AI-written narrative through the
+            augur readout; False produces the fully templated version (grounded
+            deterministic prose — reproducible, no LLM call).
     """
     _activate_thread(config)
     mmm = _MODEL_CACHE.get("fitted_model")
@@ -2823,12 +2883,14 @@ def generate_client_report(
             builder = builder.augur_readout()
             # CMO/planner narrative is enriched by the LLM when available; the
             # report falls back to grounded templated insights otherwise.
-            try:
-                from mmm_framework.agents.llm import build_llm
+            # ai_insights=False skips the LLM for the fully templated version.
+            if ai_insights:
+                try:
+                    from mmm_framework.agents.llm import build_llm
 
-                builder = builder.with_llm(build_llm())
-            except Exception:
-                pass
+                    builder = builder.with_llm(build_llm())
+                except Exception:
+                    pass
         elif tpl == "minimal":
             builder = builder.minimal_report()
         elif tpl in ("full", "technical"):
@@ -2895,6 +2957,233 @@ def generate_client_report(
 
     dashboard_data = dict(state.get("dashboard_data") or {})
     dashboard_data["client_report_path"] = report_path
+
+    return Command(
+        update={
+            "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
+            "dashboard_data": dashboard_data,
+        }
+    )
+
+
+@tool
+def generate_model_design_readout(
+    state: Annotated[dict, InjectedState],
+    client_name: str = None,
+    report_title: Optional[str] = None,
+    ai_insights: bool = True,
+    n_prior_samples: int = 500,
+    run_sbc: bool = True,
+    sbc_sims: int = 20,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Generate the PRE-FIT "Model Design Readout" — a pre-registration HTML
+    document recording the model design BEFORE it is fitted: the specification
+    and structural assumptions, every prior (table + density charts), the
+    response shapes the priors imply, the priors' structural components in
+    time (trend / seasonality / control and media contributions on the
+    original KPI scale), prior predictive checks against the observed KPI
+    (fan + individual prior traces), the PRIOR distributions of the estimands
+    (per-channel return, blended return, marketing share), the SBC calibration
+    verdict, and the session's change record — a durable, auditable record of
+    the prior checks and changes the model went through before the final fit.
+
+    Runs PRE-FIT by design: builds an unfitted model from the ACTIVE spec +
+    dataset (so it reflects the priors the next fit would use). SBC runs BY
+    DEFAULT: a stored result from this session (`run_calibration_check` / the
+    validation job) is reused when present; otherwise a smoke-level SBC
+    (`sbc_sims` refits) runs as part of generation — set run_sbc=False to skip
+    when speed matters. The change record comes from the session's versioned
+    assumption log (`record_assumption`).
+
+    EXPENSIVE when SBC runs (one model refit per simulation). Call after
+    configuring the model, before `fit_mmm_model`.
+
+    Args:
+        client_name: Client/company name (defaults to the branded client name).
+        report_title: Optional title (default "Model Design Readout").
+        ai_insights: True (default) enriches the narrative with AI-written
+            section glosses grounded in the computed facts; False produces the
+            fully templated version (deterministic, reproducible, no LLM call).
+        n_prior_samples: Prior-predictive draws used for the checks (default 500).
+        run_sbc: run simulation-based calibration when no stored result exists
+            (default True — the readout should not silently omit it).
+        sbc_sims: simulations for the default SBC smoke run (default 20).
+    """
+    tid = _activate_thread(config)
+
+    # Build an unfitted model from the ACTIVE spec so the readout reflects the
+    # priors the NEXT fit would use (mirrors prior_predictive_check).
+    spec = _normalized_spec(state.get("model_spec"))
+    ds_path = state.get("dataset_path")
+    model = None
+    mode = ""
+    if spec and ds_path:
+        try:
+            from mmm_framework.agents.fitting import build_model
+
+            model = build_model(spec, ds_path)
+            mode = "pre-fit (built from the active spec)"
+        except Exception as e:
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content=f"Could not build the model for the design readout: {e}",
+                            tool_call_id=tool_call_id,
+                        )
+                    ]
+                }
+            )
+    elif _MODEL_CACHE.get("fitted_model") is not None:
+        model = _MODEL_CACHE.get("fitted_model")
+        mode = "fallback (fitted model's graph — priors as of fit time)"
+    else:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            "No model spec + dataset in the session to build the "
+                            "design readout from. Configure a model and load a "
+                            "dataset first."
+                        ),
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+    dashboard_data = dict(state.get("dashboard_data") or {})
+    sbc = dashboard_data.get("sbc")
+
+    # Change record: the session's versioned assumption log, oldest first.
+    revisions: list[dict] = []
+    try:
+        from mmm_framework.api import sessions as _sessions
+
+        hist = _sessions.list_assumptions(tid, include_history=True)
+        hist.sort(key=lambda a: str(a.get("created_at", "")))
+        for a in hist[-25:]:
+            if a.get("is_tombstone"):
+                continue
+            note = a.get("change_note") or (
+                f"Recorded {a.get('key')}"
+                if int(a.get("version", 1)) == 1
+                else f"Updated {a.get('key')}"
+            )
+            revisions.append(
+                {
+                    "date": str(a.get("created_at", ""))[:10],
+                    "author": str(a.get("category", "") or "—"),
+                    "change": f"{a.get('key')} v{a.get('version')}: {note}",
+                    "rationale": a.get("rationale") or "—",
+                }
+            )
+    except Exception:
+        pass
+
+    from mmm_framework.agents.branding import resolve_branding
+
+    branding = resolve_branding(get_current_thread())
+    if not client_name:
+        client_name = (branding or {}).get("client_name") or "Client"
+
+    llm = None
+    if ai_insights:
+        try:
+            from mmm_framework.agents.llm import build_llm
+
+            llm = build_llm()
+        except Exception:
+            llm = None
+
+    report_path = str(_ws.report_path("agent_prefit_readout.html"))
+    try:
+        from mmm_framework.reporting import PrefitReadoutGenerator
+        from mmm_framework.reporting.config import (
+            ColorPalette,
+            ColorScheme,
+            ReportConfig,
+        )
+
+        gen = PrefitReadoutGenerator(
+            model,
+            config=ReportConfig(
+                title=report_title or "Model Design Readout",
+                client=client_name,
+                color_scheme=ColorScheme.from_palette(ColorPalette.AUGUR),
+                confidential=True,
+            ),
+            sbc=sbc,
+            revisions=revisions,
+            llm=llm,
+            n_prior_samples=int(n_prior_samples),
+            run_sbc=bool(run_sbc),
+            sbc_kwargs={"n_sims": int(sbc_sims)},
+        )
+        gen.save_report(report_path)
+    except Exception as e:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Failed to generate the model design readout: {e}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+    # Quick verdict line for the chat.
+    import math
+
+    bits = [f"mode: {mode}"]
+    ppc = (gen.facts or {}).get("ppc") or {}
+    cov = ppc.get("coverage_90")
+    if cov is not None and math.isfinite(cov):
+        bits.append(
+            f"prior-predictive 90% band covers {cov * 100:.0f}% of the observed series"
+        )
+    if ppc.get("frac_negative", 0) > 0.05:
+        bits.append(f"⚠️ {ppc['frac_negative'] * 100:.0f}% of prior draws negative")
+    est = (gen.facts or {}).get("estimands") or {}
+    if est.get("blended"):
+        b = est["blended"]
+        bits.append(
+            f"prior blended return {b['mean']:.2f} "
+            f"(90% {b['lower']:.2f}–{b['upper']:.2f})"
+        )
+    # SBC verdict — reused from the session, or the default in-generation run.
+    sbc_final = (gen.facts or {}).get("sbc")
+    if sbc_final:
+        src = "stored" if sbc else f"ran {sbc_final.get('n_sims_effective', '?')} sims"
+        bits.append(
+            f"SBC ({src}): "
+            + (
+                "calibrated"
+                if sbc_final.get("all_calibrated")
+                else "⚠️ miscalibration flagged"
+            )
+        )
+        # Persist the fresh run so future turns / the validation UI reuse it.
+        if not sbc:
+            dashboard_data["sbc"] = sbc_final
+    else:
+        bits.append(
+            "SBC: not run"
+            + ("" if run_sbc else " (run_sbc=False)")
+            + " — consider run_calibration_check"
+        )
+    if revisions:
+        bits.append(f"{len(revisions)} change-record entries")
+    summary = (
+        f"Model Design Readout ({'AI' if llm is not None else 'templated'} insights) "
+        f"generated at `{report_path}` — " + "; ".join(bits) + "."
+    )
+
+    dashboard_data["prefit_report_path"] = report_path
 
     return Command(
         update={
@@ -6228,6 +6517,7 @@ TOOLS = [
     generate_project_report,
     generate_slide_deck,
     generate_client_report,
+    generate_model_design_readout,
     generate_model_defense_report,
     generate_client_slides,
 ]

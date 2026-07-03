@@ -68,9 +68,9 @@ class MeanCheck:
         rep_mean = np.mean(rep_means)
         rep_std = np.std(rep_means)
 
-        # Bayesian p-value: proportion of replicated means more extreme
+        # One-sided Bayesian p-value: P(T(y_rep) >= T(y_obs)). Values near 0.5
+        # indicate the observed statistic is central; either tail is a misfit.
         p_value = np.mean(rep_means >= obs_mean)
-        p_value = min(p_value, 1 - p_value) * 2  # Two-tailed
 
         # Pass if p-value is not extreme (between 0.05 and 0.95)
         passed = significance_level < p_value < (1 - significance_level)
@@ -105,7 +105,6 @@ class VarianceCheck:
         rep_std = np.std(rep_vars)
 
         p_value = np.mean(rep_vars >= obs_var)
-        p_value = min(p_value, 1 - p_value) * 2
 
         passed = significance_level < p_value < (1 - significance_level)
 
@@ -141,7 +140,6 @@ class SkewnessCheck:
         rep_std = np.std(rep_skews)
 
         p_value = np.mean(rep_skews >= obs_skew)
-        p_value = min(p_value, 1 - p_value) * 2
 
         passed = significance_level < p_value < (1 - significance_level)
 
@@ -189,7 +187,6 @@ class AutocorrelationCheck:
             rep_mean = np.mean(rep_acfs)
             rep_std = np.std(rep_acfs)
             p_value = np.mean(rep_acfs >= obs_acf)
-            p_value = min(p_value, 1 - p_value) * 2
 
         passed = significance_level < p_value < (1 - significance_level)
 
@@ -230,7 +227,6 @@ class ExtremesCheck:
 
         # P-value based on range comparison
         p_value = np.mean(rep_ranges >= obs_range)
-        p_value = min(p_value, 1 - p_value) * 2
 
         # Also check if observed extremes fall within replicated extremes
         max_captured = np.mean(rep_maxs >= obs_max)

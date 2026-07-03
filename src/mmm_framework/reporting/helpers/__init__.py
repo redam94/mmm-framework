@@ -72,6 +72,19 @@ from .prior_posterior import (
     get_prior_posterior_comparison,
 )
 
+# Pre-fit model-design facts (priors, assumptions, prior predictive)
+from .prefit import (
+    AssumptionRow,
+    PriorRow,
+    enumerate_model_priors,
+    model_assumptions,
+    prior_predictive_facts,
+    prior_component_facts,
+    prior_estimand_facts,
+    prior_response_curves,
+    sample_prior,
+)
+
 # Saturation curves
 from .saturation import (
     _apply_saturation,
@@ -145,6 +158,16 @@ __all__ = [
     "get_prior_posterior_comparison",
     "compute_shrinkage_summary",
     "_select_key_parameters",
+    # Pre-fit model-design facts
+    "PriorRow",
+    "AssumptionRow",
+    "enumerate_model_priors",
+    "model_assumptions",
+    "prior_predictive_facts",
+    "prior_component_facts",
+    "prior_estimand_facts",
+    "prior_response_curves",
+    "sample_prior",
     # Saturation
     "compute_saturation_curves_with_uncertainty",
     "compute_response_zones",

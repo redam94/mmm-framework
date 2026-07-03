@@ -139,3 +139,97 @@ async def test_validation_job_end_to_end(store, tmp_path, monkeypatch):
     # a PPC plot ref should resolve on disk
     if result["plots"]:
         assert ws.plot_path(result["plots"][0]["id"]) is not None
+
+
+@pytest.mark.asyncio
+async def test_validations_history_lists_jobs_and_chat_runs(store):
+    """`GET /projects/{id}/validations` returns every persisted run, newest
+    first — UI jobs and chat-persisted checks alike — so the Validation tab
+    keeps track across reloads."""
+    from mmm_framework.api import main as M
+
+    pid = store.create_project("P")["project_id"]
+
+    # unknown project -> 404
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as ei:
+        await M.list_model_validations("nope")
+    assert ei.value.status_code == 404
+
+    # empty history
+    assert _body(await M.list_model_validations(pid)) == {
+        "validations": [],
+        "total": 0,
+    }
+
+    # a UI job (pending)
+    resp = await M.start_model_validation(pid, M.ValidationRunRequest(check="ppc"))
+    job_id = _body(resp)["job_id"]
+
+    # a chat-persisted run (same artifact shape the chat tools write)
+    store.add_artifact(
+        f"__valjobs__{pid}",
+        "model_validation",
+        {
+            "status": "done",
+            "project_id": pid,
+            "check": "sbc",
+            "source": "chat",
+            "thread_id": "t1",
+            "result": {"content": "# ok", "tables": [], "plots": []},
+            "error": None,
+        },
+    )
+
+    body = _body(await M.list_model_validations(pid))
+    assert body["total"] == 2
+    checks = {r["check"]: r for r in body["validations"]}
+    assert checks["ppc"]["status"] == "pending"
+    assert checks["ppc"]["source"] == "job"  # legacy jobs default to "job"
+    assert checks["sbc"]["source"] == "chat"
+    assert checks["sbc"]["job_id"] != job_id
+    # newest first
+    created = [r["created_at"] for r in body["validations"]]
+    assert created == sorted(created, reverse=True)
+
+    # a past run's full result is retrievable through the existing poll endpoint
+    full = _body(await M.get_model_validation(pid, checks["sbc"]["job_id"]))
+    assert full["result"]["content"] == "# ok"
+
+
+def test_persist_chat_validation_writes_project_history(store, monkeypatch):
+    """The chat validation tools' persistence helper lands in the SAME
+    `__valjobs__<project>` thread the UI jobs use (and silently no-ops for a
+    session with no project)."""
+    from mmm_framework.agents import runtime as R
+    from mmm_framework.agents.tools import _persist_chat_validation
+
+    pid = store.create_project("P")["project_id"]
+    tid = store.create_session("s", project_id=pid)["thread_id"]
+
+    tok = R.set_current_thread(tid)
+    try:
+        _persist_chat_validation(
+            "validate", "## verdict", [{"id": "tbl1"}], [{"id": "plt1"}]
+        )
+    finally:
+        R.current_thread_id.reset(tok)
+
+    arts = store.list_artifacts(f"__valjobs__{pid}")
+    assert len(arts) == 1
+    p = arts[0]["payload"]
+    assert p["check"] == "validate" and p["source"] == "chat"
+    assert p["thread_id"] == tid and p["status"] == "done"
+    assert p["result"]["content"] == "## verdict"
+    assert p["result"]["tables"] == [{"id": "tbl1"}]
+    assert p["result"]["plots"] == [{"id": "plt1"}]
+
+    # no project on the session -> silent no-op
+    tid2 = store.create_session("orphan")["thread_id"]
+    tok = R.set_current_thread(tid2)
+    try:
+        _persist_chat_validation("validate", "x", [], [])
+    finally:
+        R.current_thread_id.reset(tok)
+    assert len(store.list_artifacts(f"__valjobs__{pid}")) == 1
