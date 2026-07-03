@@ -1607,7 +1607,12 @@ class BayesianMMM:
                 #      ``with_coefficient_prior``, the DAG builder) — factory
                 #      defaults are NOT honored (``_explicit_prior``), so
                 #      untouched configs keep the historical graph;
-                #   3. the DEFAULT per ``ModelConfig.media_prior_mode``:
+                #   3. a per-channel ROI-SCALE prior (``roi_prior_mu`` /
+                #      ``roi_prior_sigma`` — the agent's
+                #      ``priors.media.<ch>.roi``): the channel samples its ROI
+                #      directly, ``roi_<ch> ~ LogNormal``, even under
+                #      ``media_prior_mode="coefficient"``;
+                #   4. the DEFAULT per ``ModelConfig.media_prior_mode``:
                 #      ``"roi"`` samples the channel's prior ROI directly and
                 #      derives beta in-graph (the prior lives on the decision
                 #      scale, comparable across channels); ``"coefficient"``
@@ -1616,6 +1621,21 @@ class BayesianMMM:
                 roi_prior = getattr(media_cfg, "roi_prior", None)
                 coef_prior = _explicit_prior(media_cfg, "coefficient_prior")
                 beta_prior = roi_prior if roi_prior is not None else coef_prior
+                # Per-channel ROI-scale prior (a LogNormal on raw ROI): when
+                # either hyper-param is set the channel opts into the ROI
+                # parameterization regardless of the global media_prior_mode.
+                ch_roi_mu = getattr(media_cfg, "roi_prior_mu", None)
+                ch_roi_sigma = getattr(media_cfg, "roi_prior_sigma", None)
+                per_channel_roi = ch_roi_mu is not None or ch_roi_sigma is not None
+                if per_channel_roi and beta_prior is not None:
+                    warnings.warn(
+                        f"Channel '{channel_name}': both an ROI-scale prior "
+                        f"(roi_prior_mu/sigma) and a "
+                        f"{'calibrated roi_prior' if roi_prior is not None else 'coefficient_prior'} "
+                        "are set — the coefficient-scale prior wins; the "
+                        "ROI-scale hyper-params are ignored."
+                    )
+                    per_channel_roi = False
                 # V3: per-geo (partial-pooled) effectiveness when enabled + geo data
                 # and no explicit per-channel prior (an explicit prior — calibrated
                 # or user-set — pins the coefficient's scale, which the per-geo
@@ -1626,22 +1646,33 @@ class BayesianMMM:
                     self.has_geo
                     and getattr(self.hierarchical_config, "vary_media_by_geo", False)
                     and beta_prior is None
+                    and not per_channel_roi
                 ):
                     beta_geo = self._build_channel_betas_geo(channel_name)
                     beta_eff = beta_geo[geo_idx_data]
                     beta_pop = pt.mean(beta_geo)
                 else:
+                    roi_requested = beta_prior is None and (
+                        per_channel_roi
+                        or getattr(self.model_config, "media_prior_mode", "coefficient")
+                        == "roi"
+                    )
                     roi_divisor = (
                         self._roi_mode_divisor(channel_name, c)
-                        if beta_prior is None
-                        and getattr(
-                            self.model_config, "media_prior_mode", "coefficient"
-                        )
-                        == "roi"
+                        if roi_requested
                         and self.use_parametric_adstock
                         and adstock_apply is not None
                         else None
                     )
+                    if per_channel_roi and roi_divisor is None:
+                        warnings.warn(
+                            f"Channel '{channel_name}': an ROI-scale prior is "
+                            "set but the channel cannot take the ROI "
+                            "parameterization (non-spend measurement, "
+                            "zero/absent spend, or legacy non-parametric "
+                            "adstock) — falling back to the coefficient "
+                            "default; the ROI-scale prior is ignored."
+                        )
                     if roi_divisor is not None:
                         # ROI-parameterized default: the free RV is the
                         # channel's ROI itself; beta is derived so that on the
@@ -1661,9 +1692,22 @@ class BayesianMMM:
                         )
                         roi_rv = pm.LogNormal(
                             f"roi_{channel_name}",
-                            mu=getattr(self.model_config, "media_roi_prior_mu", 0.0),
-                            sigma=getattr(
-                                self.model_config, "media_roi_prior_sigma", 1.0
+                            # Per-channel ROI hyper-params override the global
+                            # defaults field-by-field (set only sigma to keep
+                            # the break-even median but tighten the spread).
+                            mu=(
+                                ch_roi_mu
+                                if ch_roi_mu is not None
+                                else getattr(
+                                    self.model_config, "media_roi_prior_mu", 0.0
+                                )
+                            ),
+                            sigma=(
+                                ch_roi_sigma
+                                if ch_roi_sigma is not None
+                                else getattr(
+                                    self.model_config, "media_roi_prior_sigma", 1.0
+                                )
                             ),
                         )
                         beta_eff = pm.Deterministic(

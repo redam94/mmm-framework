@@ -86,7 +86,13 @@ _MEDIA_PRIOR_PARAMS = {
     "adstock_theta",
     "saturation_kappa",
     "saturation_slope",
+    # ROI-scale prior: {median|mu, sigma} of roi_<ch> ~ LogNormal. Forces the
+    # channel onto the ROI parameterization even in coefficient mode.
+    "roi",
 }
+# Valid keys of the per-channel `roi` dict (unlike the other media params it is
+# NOT a {distribution, params} PriorConfig — the family is pinned to LogNormal).
+_MEDIA_ROI_KEYS = {"median", "mu", "sigma"}
 _CONTROL_PRIOR_PARAMS = {"coefficient", "allow_negative"}
 _SCALAR_PRIOR_KEYS = {
     "intercept": {"mu", "sigma"},
@@ -158,7 +164,15 @@ def unconsumed_prior_path(parts: list[str], value, spec: dict) -> str | None:
                     f"`{path}` would have no effect — the model builder never "
                     f"reads it. Valid per-channel prior params: "
                     f"{', '.join(sorted(_MEDIA_PRIOR_PARAMS))} "
-                    "(each a {distribution, params} dict)."
+                    "(each a {distribution, params} dict, except `roi` which "
+                    "is {median|mu, sigma})."
+                )
+            if leaf[3] == "roi" and len(leaf) > 4 and leaf[4] not in _MEDIA_ROI_KEYS:
+                return (
+                    f"`{path}` would have no effect — the model builder never "
+                    f"reads it. Valid `priors.media.<ch>.roi` keys: "
+                    f"{', '.join(sorted(_MEDIA_ROI_KEYS))} (LogNormal on raw "
+                    "ROI; `median` in ROI units, `sigma` on the log scale)."
                 )
         elif group == "controls":
             if controls and leaf[2] not in controls:
@@ -234,6 +248,31 @@ def _mff_config_from_spec(spec: dict):
 
         if "coefficient" in ch_priors:
             ch_builder.with_coefficient_prior(_build_prior(ch_priors["coefficient"]))
+
+        # ROI-scale prior: a LogNormal stated directly on the channel's raw
+        # ROI ({median|mu, sigma}); opts the channel into the ROI
+        # parameterization even when media_prior_mode is "coefficient".
+        if "roi" in ch_priors:
+            roi_cfg = ch_priors["roi"] or {}
+            if not isinstance(roi_cfg, dict):
+                raise ValueError(
+                    f"priors.media.{ch_name}.roi must be a dict with "
+                    "median|mu and/or sigma, got "
+                    f"{type(roi_cfg).__name__}: {roi_cfg!r}"
+                )
+            ch_builder.with_roi_prior(
+                median=(
+                    float(roi_cfg["median"])
+                    if roi_cfg.get("median") is not None
+                    else None
+                ),
+                mu=(float(roi_cfg["mu"]) if roi_cfg.get("mu") is not None else None),
+                sigma=(
+                    float(roi_cfg["sigma"])
+                    if roi_cfg.get("sigma") is not None
+                    else None
+                ),
+            )
 
         # Measurement descriptor for impression-level ROI. Optional; absent ⇒
         # the modeled variable is dollars (normal ROI). ``measurement_unit`` of

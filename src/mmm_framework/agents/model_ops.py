@@ -584,6 +584,12 @@ def prior_predictive_check(
                 f"- Prior marketing share of KPI: {s['mean']:.0%} "
                 f"(90% {s['lower']:.0%}–{s['upper']:.0%})"
             )
+        lines.append(
+            "\nTo restate a channel's prior directly on this scale, set "
+            "`priors.media.<channel>.roi.median` (ROI units) and "
+            "`.roi.sigma` (log-scale spread) via `update_model_setting`, "
+            "then re-run this check."
+        )
         try:
             import pandas as _pd
 

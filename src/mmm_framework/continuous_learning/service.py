@@ -480,9 +480,10 @@ def design_wave(
     (:func:`~mmm_framework.continuous_learning.loop.select_next_design`) and
     designs the EVSI-best candidate; the returned ``delta``/``probe_pairs``/
     cells/labels reflect the CHOSEN candidate and a ``"kg"`` key carries the
-    per-candidate scores. Requires a fitted posterior with the Hill activation
-    and a Gaussian likelihood — otherwise the fixed-``delta`` design is kept
-    and a warning explains why.
+    per-candidate scores. Requires a fitted panel posterior carrying its
+    observation sites (any registered activation; Gaussian/Student-t need
+    ``sigma``, NegBinomial needs ``phi`` + baseline) — otherwise the
+    fixed-``delta`` design is kept and a warning explains why.
     """
     from .loop import select_next_design
 

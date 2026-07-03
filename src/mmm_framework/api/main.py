@@ -3516,7 +3516,8 @@ class LearningDesignWaveRequest(BaseModel):
     n_geo: int | None = None
     n_holdout: int = 0
     seed: int = 0
-    # Laplace-KG design optimization (needs a fitted Hill/Gaussian posterior;
+    # Laplace-KG design optimization (needs a fitted panel posterior with its
+    # observation sites — any registered activation and likelihood family;
     # degrades to the fixed delta with a warning otherwise). Bounded: the KG
     # runs one multi-start SLSQP allocation PER fantasy outcome PER candidate,
     # so unbounded values would let one request monopolize the worker thread.

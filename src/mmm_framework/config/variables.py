@@ -74,6 +74,20 @@ class MediaChannelConfig(VariableConfig):
     # calibration module maps a measured lift to this coefficient scale.
     roi_prior: PriorConfig | None = None
 
+    # Per-channel hyper-parameters of the ROI-PARAMETERIZED prior (a genuine
+    # prior on raw ROI, unlike ``roi_prior`` above): when either is set the
+    # channel samples ``roi_<ch> ~ LogNormal(mu, sigma)`` and derives ``beta``
+    # in-graph -- even when ``ModelConfig.media_prior_mode == "coefficient"`` --
+    # so a prior can be stated directly on the decision scale ("median ROI
+    # 1.2x, 90% within [0.4x, 3.5x]"). An unset field inherits the global
+    # default (``ModelConfig.media_roi_prior_mu`` / ``_sigma``). Ignored (with
+    # a warning) for channels that cannot take the ROI parameterization:
+    # non-spend-measured channels and the legacy non-parametric adstock path.
+    # Precedence stays: calibrated ``roi_prior`` > explicit
+    # ``coefficient_prior`` > these > the global mode default.
+    roi_prior_mu: float | None = None
+    roi_prior_sigma: float | None = None
+
     # Hierarchical grouping (e.g., "social" groups meta, snapchat, twitter)
     parent_channel: str | None = None
 
@@ -143,6 +157,11 @@ class MediaChannelConfig(VariableConfig):
                 raise ValueError(
                     f"Media channel '{self.name}': {fld} must be positive, got {val}."
                 )
+        if self.roi_prior_sigma is not None and self.roi_prior_sigma <= 0:
+            raise ValueError(
+                f"Media channel '{self.name}': roi_prior_sigma must be positive "
+                f"(it is the LogNormal log-scale sd), got {self.roi_prior_sigma}."
+            )
         return self
 
     @property

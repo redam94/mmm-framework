@@ -181,6 +181,112 @@ class TestRoiModeDefaultPriors:
         assert np.std(np.log(roi)) < 0.35
 
 
+class TestPerChannelRoiPrior:
+    """`priors.media.<ch>.roi` states the prior DIRECTLY on the ROI scale
+    ({median|mu, sigma} of roi_<ch> ~ LogNormal) and forces the channel onto
+    the ROI parameterization even under media_prior_mode='coefficient' — the
+    'set the prior with an ROI in mind' path."""
+
+    def test_registry_accepts_roi_and_rejects_bad_subkeys(self):
+        from mmm_framework.agents.fitting import unconsumed_prior_path
+
+        spec = _spec()
+        ok = unconsumed_prior_path(
+            ["priors", "media", "TV", "roi"], {"median": 1.2, "sigma": 0.6}, spec
+        )
+        assert ok is None
+        bad = unconsumed_prior_path(
+            ["priors", "media", "TV", "roi"], {"stdev": 0.6}, spec
+        )
+        assert bad is not None and "roi" in bad
+
+    def test_roi_prior_applies_even_in_coefficient_mode(self, dataset_path):
+        spec = _spec({"media": {"TV": {"roi": {"median": 2.0, "sigma": 0.3}}}})
+        spec["media_prior_mode"] = "coefficient"
+        m = build_model(spec, dataset_path)
+        free = {rv.name for rv in m.model.free_RVs}
+        assert "roi_TV" in free  # opted into the ROI parameterization
+        assert "beta_TV" not in free
+        # The untouched channel keeps the coefficient-mode Gamma.
+        assert "beta_Digital" in free and "roi_Digital" not in free
+        # And the hyper-params are honored: median 2.0, tight spread.
+        idata = m.sample_prior_predictive(300, 3)
+        roi = np.asarray(idata.prior["roi_TV"].values).reshape(-1)
+        assert np.median(roi) == pytest.approx(2.0, rel=0.2)
+        assert np.std(np.log(roi)) == pytest.approx(0.3, abs=0.1)
+
+    def test_roi_prior_overrides_the_roi_mode_default(self, dataset_path):
+        m = build_model(
+            _spec({"media": {"TV": {"roi": {"median": 0.5, "sigma": 0.2}}}}),
+            dataset_path,
+        )
+        idata = m.sample_prior_predictive(300, 3)
+        roi_tv = np.asarray(idata.prior["roi_TV"].values).reshape(-1)
+        roi_dig = np.asarray(idata.prior["roi_Digital"].values).reshape(-1)
+        assert np.median(roi_tv) == pytest.approx(0.5, rel=0.2)
+        assert np.median(roi_dig) == pytest.approx(1.0, rel=0.25)  # global default
+        assert np.std(np.log(roi_tv)) < np.std(np.log(roi_dig))
+
+    def test_sigma_only_override_keeps_break_even_median(self, dataset_path):
+        m = build_model(
+            _spec({"media": {"TV": {"roi": {"sigma": 0.15}}}}), dataset_path
+        )
+        idata = m.sample_prior_predictive(300, 3)
+        roi = np.asarray(idata.prior["roi_TV"].values).reshape(-1)
+        assert np.median(roi) == pytest.approx(1.0, rel=0.15)
+        assert np.std(np.log(roi)) < 0.25
+
+    def test_explicit_coefficient_prior_beats_roi_prior(self, dataset_path):
+        spec = _spec(
+            {
+                "media": {
+                    "TV": {
+                        "coefficient": {
+                            "distribution": "half_normal",
+                            "params": {"sigma": 0.05},
+                        },
+                        "roi": {"median": 3.0},
+                    }
+                }
+            }
+        )
+        with pytest.warns(UserWarning, match="coefficient-scale prior wins"):
+            m = build_model(spec, dataset_path)
+            free = {rv.name for rv in m.model.free_RVs}  # graph builds lazily
+        assert "beta_TV" in free and "roi_TV" not in free
+
+    def test_non_spend_channel_falls_back_with_warning(self, dataset_path):
+        spec = _spec({"media": {"TV": {"roi": {"median": 2.0}}}})
+        spec["media_channels"] = [
+            {"name": "TV", "measurement_unit": "impressions"},
+            {"name": "Digital"},
+        ]
+        spec["media_prior_mode"] = "coefficient"
+        with pytest.warns(UserWarning, match="cannot take the ROI"):
+            m = build_model(spec, dataset_path)
+            free = {rv.name for rv in m.model.free_RVs}  # graph builds lazily
+        assert "beta_TV" in free and "roi_TV" not in free
+
+    def test_prefit_prior_roi_matches_the_stated_prior(self, dataset_path):
+        """The loop the feature closes: state the prior as ROI, and the prior
+        estimand facts (prefit readout / prior_predictive_check) report back
+        that same ROI."""
+        from mmm_framework.reporting.helpers.prefit import (
+            prior_estimand_facts,
+            sample_prior,
+        )
+
+        m = build_model(
+            _spec({"media": {"TV": {"roi": {"median": 2.5, "sigma": 0.2}}}}),
+            dataset_path,
+        )
+        idata = sample_prior(m, 300, 7)
+        est = prior_estimand_facts(m, idata)
+        row = next(r for r in est["channels"] if r["channel"] == "TV")
+        assert row["mean"] == pytest.approx(2.5, rel=0.2)
+        assert row["p_above_reference"] > 0.95  # median 2.5, sigma 0.2 ⇒ ROI ≫ 1
+
+
 class TestExplicitPriorsFlow:
     def test_media_coefficient_prior_changes_the_graph(self, dataset_path):
         m = build_model(

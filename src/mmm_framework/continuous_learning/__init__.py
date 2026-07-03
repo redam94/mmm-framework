@@ -95,6 +95,8 @@ from .acquisition import (
     design_information,
     gaussian_eig,
     laplace_knowledge_gradient,
+    observation_unit_info,
+    theta_map,
     theta_moments,
 )
 from .scaling import to_dollars, to_scaled
@@ -167,6 +169,8 @@ __all__ = [
     "design_eig",
     "design_information",
     "gaussian_eig",
+    "observation_unit_info",
+    "theta_map",
     "theta_moments",
     # scaling (dollars <-> scaled units)
     "to_scaled",

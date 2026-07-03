@@ -125,13 +125,20 @@ pre/test split in; a real ingestion must provide it.
   next `WaveRecord` as `kg_used`/`chosen_delta`), `service.design_wave(
   optimize=True)` → agent tool `design_learning_wave(optimize=true)` → REST
   `POST …/design-wave {"optimize": true}` (the response's `kg` key carries the
-  per-candidate scores). Non-Hill activations and non-Gaussian likelihoods are
-  outside the fast acquisition's Gaussian-linear assumptions — the selector
-  falls back to the fixed-`delta` design with an explicit reason/warning. The
-  same fallback fires for a posterior with no `sigma` site (a summaries-only
-  fit: its θ lives on the KPI's natural scale under `prior_scaling="auto"`, so
-  no fixed noise guess is meaningful — Fisher weights `w/σ²` would make every
-  candidate score identically while claiming `kg_used=True`) and for any
+  per-candidate scores). The fast acquisition works for **any registered
+  activation** (the `ThetaMap` in `acquisition.py` moment-matches in an
+  unconstrained reparameterization — log for positive parameters, scaled
+  logit for bounded ones, sign-aware log for `neg`/`pos` synergies — so every
+  fantasy maps back to valid parameters with no clipping) and for **any
+  fitted observation family** (per-cell GLM Fisher weights via
+  `observation_unit_info`: `1/σ²` Gaussian, `(ν+1)/((ν+3)σ²)` Student-t,
+  `sigmoid(η)²/(m+m²/φ)` softplus-link NegBinomial). The selector still falls
+  back to the fixed-`delta` design with an explicit reason/warning for an
+  activation with no `SHAPE_TRANSFORMS` entry, an unknown likelihood family,
+  or a posterior missing its observation sites (a summaries-only fit: its θ
+  lives on the KPI's natural scale under `prior_scaling="auto"`, so no fixed
+  noise guess is meaningful — Fisher weights would make every candidate score
+  identically while claiming `kg_used=True`) and for any
   non-finite candidate score (NaN would silently argmax to the first
   candidate). The REST body bounds `kg_n_outcomes` (8–256) and
   `candidate_deltas` (≤8 entries in (0, 1.5]) and the endpoint runs the
@@ -272,17 +279,37 @@ of a few counts) they OVERSTATE the count-scale marginal response by up to
 monotone, so per-draw optima are invariant. `y` must be non-negative integer counts
 (`_validate_panel` enforces it loudly); `preprocess.cuped_adjust` is
 **incompatible** (it mutates `y` to non-integer/negative values). The summary
-block stays **Gaussian for both** likelihoods: a `lift ± se` readout is already
-a normal-approximation aggregate. Guarded Gaussian-only paths raise
-`NotImplementedError` instead of returning plausible nonsense:
-`planner.knowledge_gradient` (fantasies are `mu + Normal`) via `_default_noise`,
-and the Laplace/EIG acquisition via `theta_moments` (Fisher weights assume a
-homoskedastic `sigma`). Threaded end-to-end like `activation`:
+block stays **Gaussian for all** likelihoods: a `lift ± se` readout is already
+a normal-approximation aggregate. The previously Gaussian-only paths now
+dispatch on the family instead of raising: `planner.knowledge_gradient`
+fantasizes from the fitted family (`_fantasy_outcomes` — Gaussian, Student-t
+with the posterior-mean `nu`, or gamma–Poisson counts with the posterior-mean
+`phi`; build the refit closure with the matching
+`refit_fn_from_data(likelihood=…)`), and the Laplace/EIG acquisition uses the
+family's per-cell GLM Fisher weights (`observation_unit_info` — for NB,
+`sigmoid(η)²/(m+m²/φ)` through the softplus link at the design cell's
+predicted mean). An *unknown* family still raises `NotImplementedError`
+rather than returning plausible nonsense. Threaded end-to-end like `activation`:
 `LearningState.likelihood`, `config["likelihood"]` in `service.new_program_state`,
 serialization with `"normal"` back-compat defaults, and a DGP
 `noise_family="negbinomial"` (gamma–Poisson around `softplus(mu)`, world
 `phi_true`) for the recovery gate
 (`test_negbinomial_recovery_counts_world`).
+
+## Heavy-tailed KPIs — the Student-t likelihood (opt-in)
+
+`fit(likelihood="studentt")` keeps the Gaussian's location/scale structure and
+adds a learned tail df `nu ~ Gamma(2, 0.1)` (the Juárez–Steel robustness
+prior: mean 20 ≈ near-Gaussian a priori, real mass below `nu ~ 5` so a few
+wild geo-weeks buy heavy tails instead of dragging `beta`/`gamma`);
+`y ~ StudentT(nu, mu, sigma)` with `sigma` the t SCALE (sd is
+`sigma·sqrt(nu/(nu−2))`). Everything reading only the surface parameters is
+untouched; the acquisition discounts the per-observation Fisher information by
+`(nu+1)/(nu+3)` (the classic heavy-tail efficiency factor, → 1 as `nu → ∞`).
+`y` stays continuous/natural-scale (CUPED **is** compatible, unlike NB). DGP:
+`noise_family="studentt"` with world `nu_true`. Recovery gate:
+`test_studentt_recovery_heavy_tailed_world` (t(3) residuals; beta ordering
+recovered, posterior `nu` concentrates well below the prior mean).
 
 ## National time effect τ_t (opt-in)
 

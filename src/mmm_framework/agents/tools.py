@@ -2272,6 +2272,24 @@ def update_model_setting(
       setting_path="priors.seasonality.monthly_prior_sigma", value=0.2
       setting_path="priors.seasonality.weekly_prior_sigma",  value=0.2
 
+    Media priors — PREFER the ROI scale (the business/decision scale). A
+    per-channel ROI prior is a LogNormal on the channel's raw ROI: `median` is
+    in ROI units (1.0 = break-even), `sigma` is the log-scale spread (0.5 ⇒
+    90% within ~[0.44x, 2.3x] of the median; 1.0 ⇒ ~[0.19x, 5.2x]). It applies
+    even when media_prior_mode is "coefficient":
+      setting_path="priors.media.TV.roi.median",  value=1.2
+      setting_path="priors.media.TV.roi.sigma",   value=0.6
+    Global default hyper-params for channels without a per-channel prior
+    (media_prior_mode="roi", the default for agent-built models):
+      setting_path="priors.media_default.roi_mu",     value=0.0   (log scale)
+      setting_path="priors.media_default.roi_sigma",  value=1.0
+    A coefficient-scale prior (standardized-y scale — its implied ROI depends
+    on the data; verify with prior_predictive_check) overrides the ROI prior:
+      setting_path="priors.media.TV.coefficient.distribution",  value="half_normal"
+      setting_path="priors.media.TV.coefficient.params.sigma",  value=0.5
+    After changing media priors, run `prior_predictive_check` to see the
+    implied prior ROI per channel (same math as the Model Design Readout).
+
     For media_channels and control_variables, use the channel/variable name as the key after the list name.
 
     If the user manually locked this field, the change is NOT applied silently —

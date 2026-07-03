@@ -1139,13 +1139,24 @@ class TestNegBinomialGuards:
             )
         assert not [w for w in rec if "sigmoid" in str(w.message)]
 
-    def test_theta_moments_raises(self):
+    def test_theta_moments_and_glm_weights_support_nb(self):
+        # theta moments are likelihood-agnostic (they read only the surface
+        # sites); the count family enters through the softplus-link GLM
+        # Fisher weights instead of a Gaussian sigma.
         from mmm_framework.continuous_learning import acquisition
 
         world = cl.make_world(seed=0)
         post = _nb_posterior(world)
-        with pytest.raises(NotImplementedError, match="likelihood"):
-            acquisition.theta_moments(post)
+        tmap = acquisition.theta_map(post)
+        mu, sigma0 = acquisition.theta_moments(post, tmap=tmap)
+        assert np.all(np.isfinite(mu)) and np.all(np.isfinite(sigma0))
+        dsg = cl.central_composite(np.full(4, 0.7), 0.6, world.pairs)
+        ui = acquisition.observation_unit_info(post, dsg, tmap, mu)
+        assert np.all(np.isfinite(ui)) and np.all(ui > 0)
+        # ... and a count posterior missing its sites still fails loudly
+        del post.samples["phi"]
+        with pytest.raises(ValueError, match="phi"):
+            acquisition.observation_unit_info(post, dsg, tmap, mu)
 
     def test_surface_readouts_still_work_for_nb(self):
         # thompson/recommend/mroas/regret read only beta/gamma/shape — a NB

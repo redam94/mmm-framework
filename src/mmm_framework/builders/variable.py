@@ -51,6 +51,8 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
         self._adstock: AdstockConfig | None = None
         self._saturation: SaturationConfig | None = None
         self._coefficient_prior: PriorConfig | None = None
+        self._roi_prior_mu: float | None = None
+        self._roi_prior_sigma: float | None = None
         self._parent_channel: str | None = None
         self._split_dimensions: list[DimensionType] = []
         self._measurement_unit: MeasurementUnit = MeasurementUnit.SPEND
@@ -111,6 +113,39 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
     def with_positive_prior(self, sigma: float = 2.0) -> Self:
         """Convenience: set HalfNormal prior for positive effects."""
         self._coefficient_prior = PriorConfigBuilder().half_normal(sigma).build()
+        return self
+
+    def with_roi_prior(
+        self,
+        *,
+        median: float | None = None,
+        mu: float | None = None,
+        sigma: float | None = None,
+    ) -> Self:
+        """State the channel's prior directly on the ROI (decision) scale.
+
+        Sets the hyper-parameters of the ROI-parameterized prior
+        ``roi_<ch> ~ LogNormal(mu, sigma)`` — the channel then uses the ROI
+        parameterization even under ``media_prior_mode="coefficient"``. Give
+        the location as ``median`` (ROI units, e.g. ``1.2`` for a break-even+
+        belief; ``mu = log(median)``) or as ``mu`` (log scale) — not both.
+        ``sigma`` is the log-scale spread: 0.5 ⇒ 90% within ~[0.44×, 2.3×] of
+        the median; the default 1.0 within ~[0.19×, 5.2×].
+        """
+        if median is not None and mu is not None:
+            raise ValueError("with_roi_prior: give median OR mu, not both.")
+        if median is not None:
+            if median <= 0:
+                raise ValueError(
+                    f"with_roi_prior: median must be positive, got {median}."
+                )
+            import math
+
+            mu = math.log(median)
+        self._roi_prior_mu = mu if mu is not None else self._roi_prior_mu
+        self._roi_prior_sigma = sigma if sigma is not None else self._roi_prior_sigma
+        if self._roi_prior_mu is None and self._roi_prior_sigma is None:
+            raise ValueError("with_roi_prior: set at least one of median/mu/sigma.")
         return self
 
     def with_parent_channel(self, parent: str) -> Self:
@@ -192,6 +227,10 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
         # silently change all default fits.
         if self._coefficient_prior is not None:
             kwargs["coefficient_prior"] = self._coefficient_prior
+        if self._roi_prior_mu is not None:
+            kwargs["roi_prior_mu"] = self._roi_prior_mu
+        if self._roi_prior_sigma is not None:
+            kwargs["roi_prior_sigma"] = self._roi_prior_sigma
         return MediaChannelConfig(**kwargs)
 
 

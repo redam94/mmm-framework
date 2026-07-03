@@ -96,10 +96,44 @@ export const ANY_DISTS: DistKey[]      = ['normal', 'half_normal', 'log_normal',
 
 export interface PriorValue { distribution: string; params: Record<string, number> }
 
+// ROI-scale media prior: roi_<ch> ~ LogNormal(ln(median), sigma). `median` is
+// in ROI units (1.0 = break-even); `sigma` is the log-scale spread. Mirrors
+// the backend's `priors.media.<ch>.roi` spec key.
+export interface RoiPriorValue { median: number; sigma: number }
+
+// How a channel's effect prior is stated: directly on the ROI (decision)
+// scale, or on the standardized coefficient scale (advanced).
+export type MediaPriorMode = 'roi' | 'coefficient';
+
+// Standard normal CDF (Abramowitz–Stegun 7.1.26 erf approximation; max abs
+// error ~1.5e-7 — plenty for a UI readout).
+export function normalCdf(x: number): number {
+  const z = Math.abs(x) / Math.SQRT2; // Φ(x) = (1 + erf(x/√2)) / 2
+  const t = 1 / (1 + 0.3275911 * z);
+  const erf = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-z * z);
+  return 0.5 * (1 + Math.sign(x) * erf);
+}
+
+// Closed-form implications of an ROI-scale prior — the instant feedback the
+// widget shows as the user types ("what does this prior say about ROI?").
+export function roiPriorStats(median: number, sigma: number): { lower: number; upper: number; pAbove1: number } {
+  const m = Math.max(median, 1e-9);
+  const s = Math.max(sigma, 1e-9);
+  const z90 = 1.6448536269514722; // 95th percentile of N(0,1) → central 90%
+  return {
+    lower: m * Math.exp(-z90 * s),
+    upper: m * Math.exp(z90 * s),
+    pAbove1: normalCdf(Math.log(m) / s),
+  };
+}
+
 // --- Prior defaults per context ---
 
 export const PRIOR_DEFAULTS = {
   media_coefficient: { distribution: 'half_normal', params: { sigma: 2.0 } },
+  // Matches the backend ROI-mode default: LogNormal(0, 1) — median 1.0
+  // (break-even), 90% within ~[0.19x, 5.2x], P(ROI>1) = 50%.
+  media_roi:         { median: 1.0, sigma: 1.0 },
   adstock_alpha:     { distribution: 'beta',        params: { alpha: 1.0, beta: 3.0 } },
   sat_kappa:         { distribution: 'beta',        params: { alpha: 2.0, beta: 2.0 } },
   sat_slope:         { distribution: 'half_normal', params: { sigma: 1.5 } },
@@ -109,6 +143,11 @@ export const PRIOR_DEFAULTS = {
 // Shape of the priors object produced by initPriors. Each prior is a normalized
 // {distribution, params} value; trend/seasonality are concrete numeric configs.
 export interface MediaPriors {
+  // Which scale the effect prior is stated on. 'roi' (the default, matching
+  // the backend's media_prior_mode="roi") writes `roi` and omits
+  // `coefficient` on apply; 'coefficient' does the reverse.
+  mode: MediaPriorMode;
+  roi: RoiPriorValue;
   coefficient: PriorValue;
   adstock_alpha: PriorValue;
   saturation_kappa: PriorValue;
@@ -146,11 +185,27 @@ export function initPriors(spec: unknown): InitializedPriors {
   const specObj = (spec ?? {}) as Record<string, unknown>;
   const specPriors = (specObj.priors ?? {}) as Record<string, unknown>;
   const media: Record<string, MediaPriors> = {};
-  const mediaPriors = (specPriors.media ?? {}) as Record<string, Partial<MediaPriors>>;
+  const mediaPriors = (specPriors.media ?? {}) as Record<
+    string, Partial<MediaPriors> & { roi?: { median?: number; mu?: number; sigma?: number } }
+  >;
   for (const ch of asVarArray(specObj.media_channels)) {
     const name = ch.name;
     const existing = mediaPriors[name] ?? {};
+    // The spec's roi dict may carry `mu` (log scale) instead of `median`.
+    const roiRaw = existing.roi;
+    const roi: RoiPriorValue = {
+      median: roiRaw?.median ?? (roiRaw?.mu != null ? Math.exp(roiRaw.mu) : PRIOR_DEFAULTS.media_roi.median),
+      sigma:  roiRaw?.sigma  ?? PRIOR_DEFAULTS.media_roi.sigma,
+    };
     media[name] = {
+      // A channel with an explicit coefficient prior in the spec stays on the
+      // coefficient scale; one with an roi entry stays on the ROI scale; the
+      // rest follow the spec's media_prior_mode (agent default: "roi") so an
+      // untouched Apply never flips a coefficient-mode model onto ROI priors.
+      mode: existing.coefficient
+        ? 'coefficient'
+        : roiRaw || specObj.media_prior_mode !== 'coefficient' ? 'roi' : 'coefficient',
+      roi,
       coefficient:      existing.coefficient      ?? { ...PRIOR_DEFAULTS.media_coefficient },
       adstock_alpha:    existing.adstock_alpha    ?? { ...PRIOR_DEFAULTS.adstock_alpha },
       saturation_kappa: existing.saturation_kappa ?? { ...PRIOR_DEFAULTS.sat_kappa },
@@ -194,4 +249,21 @@ export function initPriors(spec: unknown): InitializedPriors {
   };
 
   return { media, controls, trend, seasonality };
+}
+
+// What actually gets written to spec.priors.media on Apply. The `mode` marker
+// is internal; per channel exactly ONE of `roi` / `coefficient` is emitted —
+// the backend treats an explicit coefficient prior as overriding the ROI
+// prior, so writing both would silently disable the ROI entry.
+export function serializeMediaPriors(
+  media: Record<string, MediaPriors>,
+): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const [name, p] of Object.entries(media)) {
+    const { mode, roi, coefficient, ...rest } = p;
+    out[name] = mode === 'roi'
+      ? { roi: { median: roi.median, sigma: roi.sigma }, ...rest }
+      : { coefficient, ...rest };
+  }
+  return out;
 }

@@ -374,26 +374,29 @@ def select_next_design(
     :func:`~mmm_framework.continuous_learning.acquisition.laplace_knowledge_gradient`
     — decision-aware EVSI, no MCMC — using the SAME ``seed`` for every
     candidate (common random numbers, so the Monte-Carlo argmax does not flap).
-    The observation noise is the posterior mean of ``samples["sigma"]`` — there
-    is deliberately NO numeric fallback: a posterior without a ``sigma`` site
-    (e.g. a summaries-only fit, whose ``beta``/``gamma`` live on the KPI's
-    natural scale under ``prior_scaling="auto"``) has no meaningful noise scale
+    The Fisher weights come from the fitted observation family
+    (:func:`~mmm_framework.continuous_learning.acquisition.observation_unit_info`):
+    Gaussian and Student-t posteriors need the ``sigma`` site (the noise
+    scale), NegBinomial posteriors need ``phi`` plus the ``A``/``a_geo``
+    baseline. There is deliberately NO numeric fallback for missing sites: a
+    summaries-only fit (whose ``beta``/``gamma`` live on the KPI's natural
+    scale under ``prior_scaling="auto"``) has no meaningful observation scale
     to score with, so a hard-coded guess would make every candidate's Fisher
     information explode identically and the reported per-candidate scores
     carry no information while claiming ``kg_used=True``.
 
-    Degrades gracefully: a non-Hill activation or a non-Gaussian likelihood
-    (the fast acquisition is Hill/Gaussian-only), a posterior with no
-    observation-noise site (summaries-only fit), a non-finite candidate score,
-    a near-singular moment-matched covariance, or any scoring ``ValueError``
-    falls back to the fixed design
-    ``central_composite(center, fallback_delta, pairs)``.
+    Degrades gracefully: an activation without a transform spec, an unknown
+    likelihood family, a posterior missing its observation-noise sites
+    (summaries-only fit), a non-finite candidate score, a near-singular
+    moment-matched covariance, or any scoring ``ValueError`` falls back to the
+    fixed design ``central_composite(center, fallback_delta, pairs)``.
 
     Returns:
         ``(cells, meta)`` — the chosen design array and a JSON-safe meta dict:
         on success ``{"kg_used": True, "chosen_delta", "chosen_probe_pairs",
-        "kg_scores": [{"delta", "probe_pairs", "score"}, ...], "sigma"}``; on
-        fallback ``{"kg_used": False, "reason"}``.
+        "kg_scores": [{"delta", "probe_pairs", "score"}, ...], "sigma"}``
+        (``sigma`` is ``None`` for a count posterior, which has no Gaussian
+        noise scale); on fallback ``{"kg_used": False, "reason"}``.
     """
     from .acquisition import laplace_knowledge_gradient
 
@@ -406,19 +409,35 @@ def select_next_design(
     )
     try:
         likelihood = getattr(post, "likelihood", "normal")
-        if likelihood != "normal":
-            raise NotImplementedError(
-                "the fast Laplace-KG acquisition assumes a Gaussian observation "
-                f"model; posterior likelihood is {likelihood!r}"
-            )
         samples = post.samples
-        if "sigma" not in samples:
-            raise ValueError(
-                "posterior has no observation-noise site (summaries-only fit) "
-                "— the Laplace-KG Fisher weights need the fitted panel noise "
-                "sigma, and no fixed guess is meaningful across KPI scales"
+        sigma: float | None = None
+        if likelihood in ("normal", "studentt"):
+            if "sigma" not in samples:
+                raise ValueError(
+                    "posterior has no observation-noise site (summaries-only "
+                    "fit) — the Laplace-KG Fisher weights need the fitted "
+                    "panel noise sigma, and no fixed guess is meaningful "
+                    "across KPI scales"
+                )
+            if likelihood == "studentt" and "nu" not in samples:
+                raise ValueError(
+                    "likelihood='studentt' posterior has no 'nu' site — the "
+                    "Fisher weights need the fitted tail df"
+                )
+            sigma = float(np.mean(samples["sigma"]))
+        elif likelihood == "negbinomial":
+            if "phi" not in samples or ("A" not in samples and "a_geo" not in samples):
+                raise ValueError(
+                    "likelihood='negbinomial' posterior is missing the 'phi' "
+                    "and/or 'A'/'a_geo' sites (summaries-only fit?) — the "
+                    "softplus-link GLM Fisher weights need the concentration "
+                    "and the baseline level"
+                )
+        else:
+            raise NotImplementedError(
+                "the fast Laplace-KG acquisition does not know the "
+                f"observation family {likelihood!r}"
             )
-        sigma = float(np.mean(samples["sigma"]))
         scores: list[dict[str, Any]] = []
         best: tuple[float, np.ndarray, float, list[Pair]] | None = None
         for d in candidate_deltas:

@@ -82,7 +82,11 @@ Chronicle, Almanac, Atelier.
 Deliberately NOT fixed (documented as known limitations in
 `continuous-learning.md`): float32 Laplace path fragility at large K; Python
 draw-loop performance; `cuped_adjust` ddof mix (benign under the `a_geo`
-absorption invariant); Hill-only acquisition (guard exists + is documented).
+absorption invariant). (The "Hill-only acquisition" limitation listed here
+historically was LIFTED on 2026-07-03: `acquisition.ThetaMap` moment-matches
+any registered activation in an unconstrained reparameterization, and
+`observation_unit_info` supplies GLM Fisher weights for
+normal/studentt/negbinomial — see `continuous-learning.md`.)
 
 ### 2.2 Summary-observation likelihood (past experiments, no panel required)
 
@@ -472,9 +476,11 @@ seeded registry row; subchannel passthrough), `tests/test_learning_tools.py`
    (E[regret], margin, horizon, wave cost sliders → verdict + bar).
 2. **`docs/continuous-learning-math.html`** — add: the summary-observation
    likelihood (equation + “geo intercept cancels ⇒ no pre-period” note); the
-   `hill_mixture` fittable activation + `make_world_*` constructors; an explicit
-   warning box that the Laplace/EIG acquisition path is Hill-only
-   (`theta_moments` raises otherwise); preprocess/design/dgp in the closing
+   `hill_mixture` fittable activation + `make_world_*` constructors; a note
+   that the Laplace/EIG acquisition covers any registered activation +
+   normal/studentt/negbinomial (unconstrained-space `ThetaMap` + GLM Fisher
+   weights, 2026-07-03 — it was Hill/Gaussian-only before, and still falls
+   back loudly for unknown families); preprocess/design/dgp in the closing
    code map; the stable-geo-set gotcha stated as a rule; grouped-budget arms
    formulation (`Σ_{i∈g} s_i = B_g`); fix the `mu, sigma = theta_moments(...)`
    naming collision in the snippet.
