@@ -504,10 +504,10 @@ def design_eig(
 # ── Laplace knowledge-gradient ────────────────────────────────────────────────
 
 
-def _allocate_eta(eta, tmap, B, value, *, mode, cap, n_starts, seed):
+def _allocate_eta(eta, tmap, B, value, *, mode, cap, n_starts, seed, x0=None):
     params = tmap.constrain_params(np.asarray(eta, dtype=float))
     return _planner.allocate_under_sample(
-        params, B, value, mode=mode, cap=cap, n_starts=n_starts, seed=seed
+        params, B, value, mode=mode, cap=cap, n_starts=n_starts, seed=seed, x0=x0
     )
 
 
@@ -539,6 +539,18 @@ def laplace_knowledge_gradient(
     Works for any registered activation and fitted observation family (the
     Fisher weights come from :func:`observation_unit_info`); ``sigma=None``
     derives the Gaussian-family noise scale from the posterior.
+
+    Each fantasy's re-optimization is warm-started at the base (``mu``)
+    allocation, in addition to the usual uniform/random multi-starts. Fantasy
+    means are draws local to ``mu`` (``V`` is a *reduction* in spread from the
+    prior), so the true optimum is almost always near the base one; without
+    the anchor, a non-concave surface (``gamma`` can be negative) evaluated
+    with only a handful of random restarts can converge to a different local
+    optimum depending on the platform's BLAS/LAPACK build (SLSQP's floating-
+    point path through the same starting point is not bitwise-portable),
+    occasionally flipping a close two-candidate comparison. Anchoring removes
+    that basin-hopping risk at no extra cost (it replaces one of the existing
+    random starts, per :func:`~mmm_framework.continuous_learning.planner._starts`).
     """
     tmap = theta_map(post)
     mu, sigma0 = theta_moments(post, tmap=tmap)
@@ -558,14 +570,22 @@ def laplace_knowledge_gradient(
     evals, evecs = np.linalg.eigh(v)
     v = (evecs * np.clip(evals, 0.0, None)) @ evecs.T
 
-    _, base_value = _allocate_eta(
+    base_alloc, base_value = _allocate_eta(
         mu, tmap, B, value, mode=mode, cap=cap, n_starts=n_starts + 1, seed=seed
     )
     rng = np.random.default_rng(seed)
     etas = rng.multivariate_normal(mu, v, size=n_outcomes)
     vals = [
         _allocate_eta(
-            eta, tmap, B, value, mode=mode, cap=cap, n_starts=n_starts, seed=seed + i
+            eta,
+            tmap,
+            B,
+            value,
+            mode=mode,
+            cap=cap,
+            n_starts=n_starts,
+            seed=seed + i,
+            x0=base_alloc,
         )[1]
         for i, eta in enumerate(etas)
     ]
