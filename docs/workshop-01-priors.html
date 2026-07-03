@@ -313,8 +313,8 @@
                 <li>A <strong>flat (uninformative) prior</strong> — a distribution that spreads belief
                 evenly over a huge range, trying to say "I know nothing." Here: <em>"any value between
                 &minus;10 and +10 is equally likely."</em> Sounds humble. But look at what it actually
-                asserts: TV <em>destroying</em> $8 of sales per dollar is exactly as plausible as TV
-                earning $2 — and half of all belief sits on TV being harmful.</li>
+                asserts: TV <em>destroying</em> <span>$</span>8 of sales per dollar is exactly as plausible as TV
+                earning <span>$</span>2 — and half of all belief sits on TV being harmful.</li>
                 <li>A <strong>weakly informative prior</strong> — a distribution that rules out the absurd
                 while staying loose about everything plausible. Here: <em>"the effect is not negative,
                 probably modest, and values beyond ~6 would be extraordinary."</em> This is the workhorse
@@ -600,9 +600,9 @@
                 exact MMM skeleton you'll meet for real in
                 <a href="workshop-03-first-mmm.html">Workshop 03</a>: intercept +
                 &beta;·saturate(adstock(spend)) per channel + noise. History says weekly sales live
-                roughly between $800k and $1.3M (the green band). First attempt: an analyst who "doesn't
+                roughly between <span>$</span>800k and <span>$</span>1.3M (the green band). First attempt: an analyst who "doesn't
                 want to assume anything" sets huge, vague priors. Then the fix: say what you actually
-                know — sales hover around $1M/week, no channel plausibly adds more than a few hundred $k
+                know — sales hover around <span>$</span>1M/week, no channel plausibly adds more than a few hundred $k
                 at full saturation, week-to-week noise is tens of $k.
             </p>
 
@@ -619,7 +619,7 @@
                 band = where real weekly sales actually live, dashed red = zero sales. Measured under the
                 vague priors: <strong>43% of prior draws contain at least one negative sales week</strong>
                 and only <strong>27%</strong> of simulated weekly values land within shouting distance
-                ($400k&ndash;$2.2M) of reality. After the check: <strong>0%</strong> negative weeks,
+                (<span>$</span>400k&ndash;<span>$</span>2.2M) of reality. After the check: <strong>0%</strong> negative weeks,
                 <strong>100%</strong> in the sane range — and the 90% band is still comfortably wider than
                 the historical range, so the data keeps room to speak.
             </p>
