@@ -28,7 +28,7 @@ Usage::
 from __future__ import annotations
 
 import html as _html
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -1181,7 +1181,6 @@ class PrefitReadoutGenerator:
 
         table_rows = []
         for r in rows:
-            ref = r["reference"]
             table_rows.append(
                 f'<tr><td class="chname">{_esc(r["channel"])}</td>'
                 f"<td>{_esc(r['label'])}</td>"
