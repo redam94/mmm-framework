@@ -1,7 +1,3 @@
-export { dataService } from './dataService';
-export { configService } from './configService';
-export { modelService } from './modelService';
-export { healthService } from './healthService';
 export { projectService } from './projectService';
 export { sessionService } from './sessionService';
 export { teamService } from './teamService';
