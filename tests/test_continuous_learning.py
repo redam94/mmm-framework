@@ -20,6 +20,7 @@ from mmm_framework.continuous_learning import (
     model,
     planner,
     preprocess,
+    stationarity,
     surface,
 )
 
@@ -1359,3 +1360,286 @@ def test_national_time_effect_recovery():
     beta_hat = post.samples["beta"].mean(0)
     assert int(np.argmax(beta_hat)) == int(np.argmax(world.beta))
     assert post.diagnostics["max_rhat"] is None or post.diagnostics["max_rhat"] < 1.2
+
+
+# ── fast: audit fixes — surrogate validity, PSD guard, cost-aware KG, ─────────
+# ── stop patience, decay half-life, within-wave stationarity ─────────────────
+
+
+def _eta_gaussian_posterior(world, n=3000, seed=0):
+    """A posterior that is EXACTLY Gaussian in the unconstrained eta space:
+    log-normal positives, logit-normal alpha, normal gammas — the null case
+    the surrogate-validity diagnostic must wave through."""
+    rng = np.random.default_rng(seed)
+    k = world.n_channels
+    frac = (world.alpha - 0.5) / 4.5
+    z0 = np.log(frac) - np.log1p(-frac)
+    z = z0 + 0.15 * rng.standard_normal((n, k))
+    s = {
+        "beta": np.exp(np.log(world.beta) + 0.10 * rng.standard_normal((n, k))),
+        "kappa": np.exp(np.log(world.kappa) + 0.10 * rng.standard_normal((n, k))),
+        "alpha": 0.5 + 4.5 / (1.0 + np.exp(-z)),
+        "sigma": np.abs(rng.normal(0.5, 0.05, n)),
+    }
+    for idx, (i, j) in enumerate(world.pairs):
+        s[model.pair_name(world.channels, (i, j))] = world.gamma_pairs[
+            idx
+        ] + 0.15 * rng.standard_normal(n)
+    return cl.Posterior(
+        samples=s, channels=world.channels, pairs=world.pairs, pair_signs={}
+    )
+
+
+def test_surrogate_validity_passes_a_gaussian_posterior():
+    world = cl.make_world(seed=0)
+    post = _eta_gaussian_posterior(world)
+    sv = cl.surrogate_validity(post)
+    assert sv["ok"] is True
+    assert sv["khat"] < 0.7
+    assert sv["params_flagged"] == []
+    assert sv["max_abs_skew"] < 0.5
+    assert set(sv["per_param"]) >= {"beta[Chatter]", "kappa[Pulse]"}
+
+
+def test_surrogate_validity_flags_a_heavy_tailed_posterior():
+    # Replace one weak-sign gamma (identity transform) with Student-t(2) draws:
+    # a heavy-tailed, ridge-like direction the Gaussian moment-match cannot
+    # represent — exactly the negative-synergy failure mode the audit names.
+    world = cl.make_world(seed=0)
+    post = _eta_gaussian_posterior(world)
+    rng = np.random.default_rng(1)
+    nm = model.pair_name(world.channels, world.pairs[0])
+    post.samples[nm] = world.gamma_pairs[0] + 0.5 * rng.standard_t(2, size=3000)
+    sv = cl.surrogate_validity(post)
+    assert sv["ok"] is False
+    assert sv["khat"] > 0.7 or nm in sv["params_flagged"]
+
+
+def test_logdet_psd_guard_survives_indefinite_noise():
+    # exact-arithmetic-PSD matrices can pick up tiny negative eigenvalues in
+    # float; the guard must return a finite log-det, and match slogdet on a
+    # clean SPD matrix.
+    clean = np.array([[2.0, 0.3], [0.3, 1.0]])
+    _, ld = np.linalg.slogdet(clean)
+    assert acquisition._logdet_psd(clean) == pytest.approx(float(ld), rel=1e-10)
+    dirty = np.array([[1.0, 0.0], [0.0, -1e-18]])
+    assert np.isfinite(acquisition._logdet_psd(dirty))
+
+
+def test_select_next_design_reports_surrogate_validity():
+    world = cl.make_world(seed=0)
+    post = _fake_posterior(world)
+    _, meta = cl.select_next_design(
+        post,
+        np.full(4, 0.7),
+        world.pairs,
+        B=3.2,
+        value=5.0,
+        candidate_deltas=(0.6,),
+        n_geo=40,
+        t_test=8,
+        n_outcomes=8,
+        seed=0,
+    )
+    assert meta["kg_used"] is True
+    assert meta["cost_aware"] is False
+    assert "cost" not in meta["kg_scores"][0]
+    assert "ok" in meta["surrogate"] and "khat" in meta["surrogate"]
+
+
+def test_select_next_design_cost_aware_ranking(monkeypatch):
+    # Rig the scorer so raw KG grows with design size (the cost-blind
+    # preference the audit flags); a size-penalizing cost must flip the
+    # winner to the smaller (no-probe) candidate under score-per-cost.
+    world = cl.make_world(seed=0)
+    post = _fake_posterior(world)
+    monkeypatch.setattr(
+        acquisition,
+        "laplace_knowledge_gradient",
+        lambda post, cells, B, value, **kw: float(len(cells)),
+    )
+    kwargs = dict(
+        B=3.2,
+        value=5.0,
+        candidate_deltas=(0.6,),
+        candidate_probe_sets=[[], world.pairs],
+        n_geo=40,
+        t_test=8,
+        n_outcomes=8,
+        seed=0,
+    )
+    _, raw = cl.select_next_design(post, np.full(4, 0.7), world.pairs, **kwargs)
+    assert raw["chosen_probe_pairs"] == [[int(i), int(j)] for i, j in world.pairs]
+    cells, meta = cl.select_next_design(
+        post,
+        np.full(4, 0.7),
+        world.pairs,
+        cost_fn=lambda cells: float(len(cells)) ** 2,
+        **kwargs,
+    )
+    assert meta["cost_aware"] is True
+    assert meta["chosen_probe_pairs"] == []  # small design wins per dollar
+    for entry in meta["kg_scores"]:
+        assert entry["cost"] > 0
+        assert entry["score_per_cost"] == pytest.approx(entry["score"] / entry["cost"])
+    best = max(meta["kg_scores"], key=lambda s: s["score_per_cost"])
+    assert best["probe_pairs"] == meta["chosen_probe_pairs"]
+    np.testing.assert_allclose(cells, cl.central_composite(np.full(4, 0.7), 0.6, []))
+
+
+def test_select_next_design_falls_back_on_bad_cost():
+    world = cl.make_world(seed=0)
+    post = _fake_posterior(world)
+    cells, meta = cl.select_next_design(
+        post,
+        np.full(4, 0.7),
+        world.pairs,
+        B=3.2,
+        value=5.0,
+        candidate_deltas=(0.6,),
+        n_geo=40,
+        t_test=8,
+        n_outcomes=8,
+        seed=0,
+        cost_fn=lambda cells: 0.0,  # a free design is a config error
+    )
+    assert meta["kg_used"] is False
+    assert "cost" in meta["reason"]
+    assert "surrogate" in meta
+
+
+def test_run_closed_loop_stop_patience(monkeypatch):
+    """stop_patience=1 stops on the first ENBS<=0 read; stop_patience=2 needs
+    two CONSECUTIVE stop verdicts (an isolated optimistic read cannot end the
+    programme). No MCMC — the fit/readouts are stubbed."""
+    from types import SimpleNamespace
+
+    world = cl.make_world(seed=0)
+    rec = np.full(4, 0.8)
+
+    monkeypatch.setattr(
+        cl.LearningState,
+        "fit",
+        lambda self, **kw: setattr(self, "posterior", SimpleNamespace(diagnostics={})),
+    )
+    monkeypatch.setattr(
+        cl.LearningState, "regret", lambda self, **kw: (0.1, rec, rec * 0, 0.0)
+    )
+    monkeypatch.setattr(cl.LearningState, "recommend", lambda self, **kw: rec)
+    monkeypatch.setattr(
+        cl.LearningState,
+        "funding",
+        lambda self, alloc=None, **kw: (np.ones(4), np.ones(4), None),
+    )
+
+    def run(verdicts, patience):
+        it = iter(verdicts)
+        monkeypatch.setattr(planner, "should_stop", lambda e, **kw: (next(it), -1.0))
+        out = cl.run_closed_loop(
+            world,
+            center=np.full(4, 0.7),
+            B=3.2,
+            value=5.0,
+            n_geo=20,
+            t_pre=2,
+            t_test=3,
+            max_waves=6,
+            stop_patience=patience,
+            seed=0,
+        )
+        return len(out["history"])
+
+    assert run([True, True, True, True, True, True], 1) == 1
+    # stop, go, stop, stop -> patience 2 ends after the 4th evaluation
+    assert run([True, False, True, True, True, True], 2) == 4
+
+
+def test_adstock_half_life_arithmetic():
+    assert cl.adstock_half_life(0.5) == pytest.approx(1.0)
+    assert cl.adstock_half_life(0.8) == pytest.approx(np.log(0.5) / np.log(0.8))
+    assert cl.adstock_half_life(0.0) == 0.0
+    assert cl.adstock_half_life(1.0) == float("inf")
+
+
+def test_estimate_half_life_recovers_planted_decay():
+    rng = np.random.default_rng(0)
+    h_true = 26.0
+    lam = np.log(2.0) / h_true
+    gaps = np.full(400, 8.0)
+    shifts = rng.normal(0.0, np.sqrt(np.expm1(lam * 8.0)), 400)
+    est = cl.estimate_half_life(gaps, shifts, np.ones(400))
+    assert 18.0 < est["half_life"] < 38.0
+    assert est["discount"] == pytest.approx(np.exp(-est["lambda"]))
+    # no observed drift -> the finding is not decaying measurably
+    still = cl.estimate_half_life(gaps, np.zeros(400), np.ones(400))
+    assert still["half_life"] == float("inf")
+    with pytest.raises(ValueError, match="equal-length"):
+        cl.estimate_half_life([8.0], [0.1, 0.2], [1.0])
+
+
+def test_bocd_flags_a_planted_level_shift_and_stays_quiet_on_noise():
+    rng = np.random.default_rng(0)
+    quiet = rng.normal(0.0, 1.0, 40)
+    res_q = stationarity.bocd(quiet)
+    assert res_q.changepoints == []
+    shifted = np.concatenate([rng.normal(0, 1, 20), rng.normal(6, 1, 20)])
+    res_s = stationarity.bocd(shifted)
+    assert any(18 <= t <= 22 for t in res_s.changepoints)
+    assert res_s.cp_prob.shape == (40,)
+
+
+def test_wave_stationarity_check_clean_and_contaminated():
+    world = cl.make_world(seed=0)
+    wave = cl.simulate_panel(
+        world, np.full(4, 0.7), n_geo=48, t_pre=4, t_test=12, noise=0.3, seed=3
+    )
+    clean = stationarity.wave_stationarity_check(wave)
+    assert clean.flagged is False
+    assert clean.n_test_periods == 12
+    assert clean.control == "center-cell"
+    assert clean.to_dict()["flagged"] is False
+
+    # a treatment-only shock from period 10 on (competitor hits one cell)
+    dirty = dict(wave)
+    dirty["y"] = np.asarray(wave["y"], dtype=float).copy()
+    row_cell = np.asarray(wave["cell_idx"])[np.asarray(wave["geo_idx"])]
+    hit = (row_cell == 2) & (np.asarray(wave["period_idx"]) >= 10)
+    assert hit.any()
+    dirty["y"][hit] += 3.0
+    report = stationarity.wave_stationarity_check(dirty)
+    assert report.flagged is True
+    assert 2 in report.cell_breaks
+    assert any(9 <= p <= 12 for p in report.break_periods)
+
+    censored = stationarity.censor_periods(dirty, report.break_periods)
+    dropped = np.isin(np.asarray(dirty["period_idx"]), report.break_periods).sum()
+    assert censored["y"].size == dirty["y"].size - dropped
+    assert not np.isin(censored["period_idx"], report.break_periods).any()
+
+    with pytest.raises(ValueError, match="cell_idx"):
+        stationarity.wave_stationarity_check(
+            {k: v for k, v in wave.items() if k != "cell_idx"}
+        )
+
+
+def test_ingest_check_stationarity_warns_and_records():
+    world = cl.make_world(seed=0)
+    wave = cl.simulate_panel(
+        world, np.full(4, 0.7), n_geo=48, t_pre=4, t_test=12, noise=0.3, seed=3
+    )
+    dirty = dict(wave)
+    dirty["y"] = np.asarray(wave["y"], dtype=float).copy()
+    row_cell = np.asarray(wave["cell_idx"])[np.asarray(wave["geo_idx"])]
+    dirty["y"][(row_cell == 2) & (np.asarray(wave["period_idx"]) >= 10)] += 3.0
+    state = cl.LearningState(
+        channels=world.channels,
+        center=np.full(4, 0.7),
+        B=3.2,
+        value=5.0,
+        pairs=world.pairs,
+    )
+    with pytest.warns(UserWarning, match="stationarity"):
+        state.ingest(dirty, check_stationarity=True)
+    assert len(state.stationarity_reports) == 1
+    assert state.stationarity_reports[0].flagged is True
+    assert state.data is not None  # the wave is still ingested; caller decides

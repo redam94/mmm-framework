@@ -122,7 +122,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-02",
+          "dateModified": "2026-07-03",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/continuous-learning-math.html#breadcrumb"
           },
@@ -181,6 +181,8 @@
                 <li><a href="#laplace">The Gaussian/Laplace surrogate</a></li>
                 <li><a href="#doptimal">D- and D<sub>s</sub>-optimal EIG</a></li>
                 <li><a href="#kg">The knowledge gradient</a></li>
+                <li><a href="#surrogate-error">Surrogate error &amp; diagnostics</a></li>
+                <li><a href="#cost-aware">Cost-aware acquisition</a></li>
             </ul>
 
             <h3>Decide &amp; stop</h3>
@@ -190,6 +192,7 @@
                 <li><a href="#arms">Arms &amp; grouped budgets</a></li>
                 <li><a href="#stopping">Regret &amp; ENBS</a></li>
                 <li><a href="#decay">Information decay</a></li>
+                <li><a href="#stationarity">Within-wave stationarity</a></li>
             </ul>
 
             <h3>Sequential &amp; refs</h3>
@@ -679,6 +682,101 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
                 matches your goal (a better plan → KG; a decision-pivotal interaction you cannot yet see → D<sub>s</sub>-EIG).</p>
             </div>
 
+            <h2 id="surrogate-error">How wrong can the surrogate be? — error, diagnostics, and numerical guards</h2>
+            <p>Eq. (3) states the NMC estimator's \( \mathcal{O}(1/M) \) bias openly; honesty demands the same
+            statement for the Laplace surrogate that replaces it. The surrogate makes two approximations — the Gaussian
+            moment-match of Eq. (12) and the linearisation of Eq. (13) — and both errors are characterised in the BOED
+            literature.</p>
+
+            <div class="theorem">
+                <h4>The Laplace EIG error is \( \mathcal{O}(1/M) \) in the effective replication</h4>
+                <p>For a nonlinear model observed with \( M \) conditionally independent replicates, the
+                Laplace-approximate EIG differs from the true EIG by a term that vanishes as
+                \( \mathcal{O}(1/M) \), with the leading correction driven by the third-order Taylor remainder of the
+                response (its curvature beyond the linearisation) weighted by the posterior covariance
+                (Long, Scavino, Tempone &amp; Wang 2013; extended beyond exactly-repeatable experiments — and shown to
+                shrink as receivers and measurement time grow — by Long, Motamed &amp; Tempone 2015). Here the role of
+                \( M \) is played by the design's <strong>effective replication</strong> \( M = \sum_c w_c \) (geos ×
+                test weeks across cells, exactly the weights in Eq. 13): the error is smallest precisely where the
+                framework operates — many geo-weeks per wave, each wave's posterior tightening the next linearisation
+                point. When still higher accuracy is wanted, Laplace-based importance sampling corrects the estimate at
+                modest extra cost; its residual floor is the Laplace bias itself (Beck, Dia, Espath, Long &amp; Tempone
+                2018).</p>
+                <p class="cite">Long et al. 2013; Long, Motamed &amp; Tempone 2015; Beck et al. 2018.</p>
+            </div>
+
+            <p>Where the bound is weakest — cells far from the operating point, or on a high-curvature stretch of the
+            activation (a Hill bend, a spline knot) — the surrogate's <em>ordering</em> should be spot-checked against
+            the reference NUTS-refit <code>planner.knowledge_gradient</code>, which stays available for exactly this
+            purpose.</p>
+
+            <p><strong>A runnable validity diagnostic.</strong> The bound says the error shrinks with replication; the
+            diagnostic detects the cases it does not cover. <code>surrogate_validity(post)</code> scores the Gaussian
+            moment-match against the carried NUTS draws — no densities, no refit — in the same unconstrained
+            \( \eta \) space the acquisitions use:</p>
+
+            <ul>
+                <li><strong>Shape flags.</strong> Per-parameter skewness and excess kurtosis of the unconstrained
+                draws. The <code>ThetaMap</code> bijection already absorbs the generic positivity skew (log/logit
+                space), so what remains is a real departure — the moment-matched Gaussian misplaces mass and
+                understates skew exactly the way Laplace-style approximations do on skewed or truncated posteriors
+                (Kuss &amp; Rasmussen 2005).</li>
+                <li><strong>A tail statistic with the PSIS alarm bar.</strong> Under a genuinely Gaussian posterior the
+                squared Mahalanobis distances of the draws are \( \chi^2_P \) — an exponential-class tail. The
+                diagnostic fits a generalized-Pareto shape \( \hat k \) to the distance exceedances with the same
+                Zhang–Stephens (2009) estimator PSIS uses, and applies the same <strong>\( \hat k &lt; 0.7 \)</strong>
+                reliability bar (Vehtari, Simpson, Gelman, Yao &amp; Gabry 2024). A heavy-tailed or ridge-shaped
+                posterior — the expected offender is a negative-synergy \( \gamma_{cc'} \) cannibalisation ridge, which
+                violates the log-concavity a Gaussian stand-in needs — inflates \( \hat k \) past the bar.</li>
+            </ul>
+
+            <p>The in-loop design search (<code>select_next_design</code>) computes the report every wave and records
+            it in its meta (<code>surrogate.ok</code> / <code>surrogate.khat</code> / flagged parameters). When it
+            fires, treat the wave's Laplace scores as suspect: fall back to the NUTS-refit KG for that wave (the
+            decision readouts — Thompson, funding line, regret — never used the Gaussian in the first place and are
+            unaffected). The literature's upgrade path, if the flag became chronic, is a skewness-corrected Gaussian
+            approximation in the INLA style (Rue, Martino &amp; Chopin 2009).</p>
+
+            <pre><code class="language-python">sv = cl.surrogate_validity(post)      # runs off the existing NUTS draws
+sv["ok"], sv["khat"], sv["params_flagged"]
+# select_next_design records the same report per wave:
+cells, meta = cl.select_next_design(post, center, world.pairs, B=3.2, value=5.0)
+meta["surrogate"]                      # {"ok": ..., "khat": ..., ...}</code></pre>
+
+            <p><strong>Numerical guards (exactness in exact arithmetic is not enough).</strong>
+            \( V = \Sigma - \Sigma_{\text{post}} \) is positive semi-definite in exact arithmetic (because
+            \( \Lambda \succeq 0 \)), but finite-precision inversion and subtraction can leave tiny negative
+            eigenvalues in \( V \) or in a near-singular log-det sub-block (equivalently the Schur complement
+            \( \Lambda_{S\mid\text{rest}} \)). Before fantasy sampling, \( V \) is symmetrised and its eigenvalues
+            clipped at zero — the nearest-PSD projection in the Frobenius norm (Higham 1988; 2002) — and every
+            log-determinant in Eq. (15) runs through the same symmetrise-and-clip guard, so numerical noise degrades
+            to a bounded perturbation instead of a NaN. The <code>ThetaMap</code> reparameterisation already
+            guarantees the <em>statistical</em> half of this robustness: every fantasy draw maps back to a valid
+            parameter vector by construction, with no clipping in parameter space.</p>
+
+            <h2 id="cost-aware">Cost-aware acquisition — value per dollar</h2>
+            <p>The ENBS stopping rule (Eq. 21) prices a wave in dollars, but the acquisitions above rank designs by
+            information or decision value <em>alone</em> — and designs are not equally priced. The cell count grows
+            roughly 3 cells per extra arm plus 2 per probed pair (§<a href="#arms">arms</a>), each cell needs geos,
+            and with all-pairs probing the pair count is quadratic in the number of arms: a cost-blind acquisition
+            systematically over-favours large central-composite designs. The standard fix from cost-aware Bayesian
+            optimisation is to rank by <strong>value per unit cost</strong>:</p>
+
+            <div class="math-block">
+                \[ \xi^\star \;=\; \arg\max_{\xi\in\Xi}\; \frac{\mathrm{KG}(\xi)}{\mathrm{cost}(\xi)}
+                \qquad\text{or}\qquad \arg\max_{\xi\in\Xi}\; \frac{\mathrm{EIG}(\xi)}{\mathrm{cost}(\xi)}, \]
+                <span class="equation-label">(17a)</span>
+            </div>
+
+            <p>the knowledge-gradient analogue of expected-improvement-per-unit-cost (EIpu — Lee, Perrone, Archambeau
+            &amp; Seeger 2020), and the BOED framing of information-subject-to-experiment-cost (Kleinegesse &amp;
+            Gutmann 2020). <code>select_next_design(..., cost_fn=...)</code> implements it: pass any positive design
+            cost (e.g. <code>lambda cells: fixed + per_cell_geo_cost * len(cells)</code>) and candidates are ranked by
+            \( \mathrm{KG}/\mathrm{cost} \), with both the raw and per-cost scores recorded. The coherence argument:
+            the per-wave cost-normalised acquisition is the greedy myopic version of the same cost–benefit trade ENBS
+            applies at the stopping boundary — the acquisition spends the budget the stopping rule audits, so they
+            should price a cell the same way.</p>
+
             <h2 id="thompson">Thompson allocation — a posterior over the optimal split</h2>
             <p>Given the carried posterior, the recommendation is <em>not</em> the optimiser of the mean curve. Instead the
             loop solves the allocation problem under each of \( q \) posterior draws — <strong>Thompson sampling</strong>:</p>
@@ -712,7 +810,9 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             funding line at the end of the loop is not a coincidence, it is the signature of a plan with no dollar left to
             move. A channel pinned at zero (e.g. a weak one) has marginal return below the shared line; a small
             complementarity term \( \gamma_{cc'}f_{c'} \) can lift a weak channel just over it, which is why measuring
-            interactions changes the funded set.</p>
+            interactions changes the funded set. (This single-\( \lambda \) statement holds for the single-constraint
+            budget; under grouped arm budgets each group adds its own shadow price and the line is flat only
+            <em>within</em> a group — Eq. 19b below.)</p>
 
             <h2 id="arms">Sub-channel arms and grouped budgets</h2>
             <p>Nothing in Eq. (6) requires the coordinates of \( s \) to be channels. A creative family or a keyword
@@ -742,6 +842,30 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             (<code>group_budgets</code> on <code>allocate_under_sample</code> / <code>thompson_wave</code> /
             <code>expected_regret</code>). Every Thompson draw, funding-line read, and regret pass respects the same
             constraints, so the posterior over the optimal split stays a posterior over <em>feasible</em> splits.</p>
+
+            <p><strong>The KKT conditions with groups — one shadow price per constraint.</strong> Eq. (19)'s
+            equalisation story must be re-derived once Eq. (19a)'s equality constraints join the Lagrangian: each
+            active constraint carries its own multiplier (Boyd &amp; Vandenberghe 2004, §5.5). With \( \lambda \) on
+            the total budget and \( \mu_g \) on group \( g \)'s budget, stationarity at the optimum reads</p>
+
+            <div class="math-block">
+                \[ \mathrm{value}\cdot\frac{\partial R}{\partial a_c} \;=\; \lambda + \mu_{g(c)}
+                \quad\text{for every funded } c, \qquad
+                \mathrm{value}\cdot\frac{\partial R}{\partial a_c} \;\le\; \lambda + \mu_{g(c)}
+                \quad\text{for } c \text{ at the zero bound}, \]
+                <span class="equation-label">(19b)</span>
+            </div>
+
+            <p>where \( g(c) \) is the (possibly empty, \( \mu_\varnothing = 0 \)) group containing channel \( c \).
+            The corrected interpretation: <strong>marginal ROAS equalises <em>within</em> a group; across groups it
+            equalises only net of each group's shadow price.</strong> A binding parent budget (\( \mu_g \neq 0 \))
+            drives a wedge — that group's channels run at their own flat line \( \lambda + \mu_g \), above or below
+            the global one, and the gap <em>is</em> the shadow price: exactly the dollar value per budget unit of
+            relaxing that parent's envelope, which is the number to show a client who asks "what would moving budget
+            <em>between</em> parents be worth?". The SLSQP solver has always enforced the constraints themselves
+            correctly; this paragraph corrects only the prose reading of the funding line across arm groups. The
+            nested-budget marginal-equalisation logic is the classic hierarchical allocation result of Fischer,
+            Albers, Wagner &amp; Frie (2011).</p>
 
             <p><strong>Design cost.</strong> Arms are not free: the central-composite design grows by roughly
             <strong>3 cells per extra arm</strong> (2 axial + 1 shut-off) plus 2 cells per probed pair, and each cell
@@ -780,6 +904,28 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             exactly to Wald's sequential probability-ratio test — but stated in <em>decision</em> units (profit) rather
             than information units, because the terminal act is an allocation, not an inference.</p>
 
+            <div class="info">
+                <h4>Why evaluating ENBS every wave is not "optional stopping"</h4>
+                <p>Peeking at a test statistic after every batch and stopping on the first significant read is the
+                classic repeated-significance problem — for a <em>frequentist</em> test, whose error rates are defined
+                over the sampling plan and therefore need alpha-spending corrections (O'Brien–Fleming, Pocock). ENBS
+                is not that object. It is a Bayesian expected-utility rule, and under the <strong>likelihood
+                principle</strong> the posterior — hence every posterior functional, including
+                \( \mathbb{E}[\text{regret}] \) — does not depend on the intention to stop: "the rules governing when
+                data collection stops are irrelevant to data interpretation" (Edwards, Lindman &amp; Savage 1963; the
+                formal treatment is Berger &amp; Wolpert 1988; simulation confirmation in Rouder 2014). There is no
+                \( \alpha \) to spend, so evaluating Eq. (21) every wave costs nothing statistically.</p>
+                <p><strong>The honest caveat is misspecification, not peeking.</strong> Stopping-rule invariance is a
+                property of a correctly specified model, and §<a href="#misspec">Misspecification</a> shows the
+                credible intervals — hence \( \mathbb{E}[\text{regret}] \), hence ENBS — can be narrow <em>and</em>
+                wrong. Two belt-and-suspenders guards: <code>run_closed_loop(stop_patience=2)</code> requires two
+                <em>consecutive</em> ENBS ≤ 0 reads, so one temporarily overconfident posterior cannot end the
+                programme on its own; and a client who wants a genuinely frequentist guarantee on the stop decision
+                should get an <em>anytime-valid</em> confidence sequence on the realised profit gap (e-processes —
+                Ramdas, Grünwald, Vovk &amp; Shafer 2023), the modern replacement for alpha-spending under continuous
+                monitoring.</p>
+            </div>
+
             <h2 id="decay">Information decay and re-testing</h2>
             <p>A measured surface is a snapshot; audiences drift and creative fatigues. The loop treats each finding as
             having a half-life: the effective uncertainty grows until a fresh wave is worth its cost. With posterior
@@ -794,6 +940,79 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             \( \sigma_{\text{exp}} \) would materially tighten it (<code>due_for_retest</code>, reusing the same
             information-decay clock as the model-anchored planner, so a continuous-learning programme and an MMM-anchored
             one agree on when evidence has gone stale).</p>
+
+            <p><strong>Where does \( h \) come from?</strong> The half-life is not a universal constant to be guessed
+            once — it is a per-channel <em>discount factor</em> in the West–Harrison sense: dynamic linear models
+            assign each component its own per-period information-retention fraction
+            \( \delta = e^{-\lambda} \) (West &amp; Harrison 1997, §6.3), and forecast quality is known to be
+            sensitive to getting it right. Two estimation routes, in order of preference:</p>
+
+            <ul>
+                <li><strong>Measure it from the programme's own drift (adaptive discounting).</strong> Under Eq. (22),
+                the extra variance a finding accrues over a gap \( t \) is \( \sigma^2(e^{\lambda t}-1) \) — so the
+                realised shift between two fits of the same quantity satisfies
+                \( \mathbb{E}\big[(\text{shift}/\sigma)^2\big] = e^{\lambda t}-1 \), and a method-of-moments solve
+                recovers \( \lambda \) from the loop's own wave-to-wave posteriors
+                (<code>estimate_half_life(gaps, shifts, sigmas)</code> — returns \( h \), \( \lambda \), and the
+                West–Harrison \( \delta \)). Once a programme has a few waves, this <em>measured</em> decay beats any
+                prior guess.</li>
+                <li><strong>Anchor it to the channel's measured carryover.</strong> Advertising half-lives are strongly
+                category-specific — industry FMCG figures cluster near 2–2.5 weeks against academic estimates of 7–12
+                (Fry, Broadbent &amp; Dixon 2000) — which is the empirical case against one global \( h \).
+                <code>adstock_half_life(alpha)</code> converts a channel's fitted carryover into its half-life
+                (\( h = \ln\tfrac12/\ln\alpha \)); use it as the per-channel <em>lower anchor</em> via
+                <code>due_for_retest(..., half_life_overrides={channel: h})</code> — a finding decays at least as
+                fast as the mechanism it measures drifts, and audience/creative drift usually puts the evidence
+                half-life at a multiple of the carryover one.</li>
+            </ul>
+
+            <p>Seasonality enters the same way: nothing in Eq. (22) requires \( \lambda \) constant over the calendar
+            — a category whose response curve reshapes into a peak season should carry a larger \( \lambda \)
+            approaching it (equivalently, a shorter \( h \) for findings measured in the off-season), which the
+            override mechanism expresses directly.</p>
+
+            <h2 id="stationarity">Within-wave stationarity — the changepoint guard</h2>
+            <p>Eq. (22) models drift <em>between</em> waves; nothing above guards against a regime change
+            <em>during</em> one — a competitor launch, an unplanned promo, a platform outage landing mid-window. The
+            identification argument of §<a href="#design">the design</a> rests on between-cell contrasts within a
+            stable test window, so a mid-wave shock that hits treatment cells differently from control contaminates
+            exactly the contrast the wave was built to measure. The geo-experiment literature manages this with a
+            contemporaneous control: common shocks cancel in a treatment-minus-control comparison (Vaver &amp; Koehler
+            2011; Kerman, Wang &amp; Vaver 2017), and a divergence of the observed series from its control-based
+            counterfactual is the alarm (the CausalImpact framing — Brodersen et al. 2015). The framework's randomized
+            holdout / center / shut-off cells already provide that control; what was missing was the <strong>detection
+            and censoring</strong> step.</p>
+
+            <p><code>stationarity.wave_stationarity_check</code> supplies it. For each design cell \( c \), form the
+            per-period contrast against the control cell (holdout geos when the wave has them, else the center cell):</p>
+
+            <div class="math-block">
+                \[ x_c(t) \;=\; \bar y_{c,t} - \bar y_{\text{ctrl},t},
+                \qquad t \in \text{test window}, \]
+                <span class="equation-label">(22a)</span>
+            </div>
+
+            <p>which under within-wave stationarity is constant + noise (the geo baselines are randomised across
+            cells; a national demand swing moves both terms and cancels). Each contrast series is monitored with
+            <strong>Bayesian online changepoint detection</strong> (Adams &amp; MacKay 2007; the multiple-changepoint
+            filtering view is Fearnhead &amp; Liu 2007): a run-length posterior under a constant hazard, with the
+            Normal–Inverse-Gamma conjugate model so the noise scale is learned, not assumed. The flag is deliberately
+            <em>not</em> \( P(r_t = 0) \) — under a constant hazard that probability identically equals the hazard,
+            data notwithstanding — nor \( P(r_t = 1) \), which any single-period spike trips. It is
+            \( P(r_t = 2) \): the posterior probability that the current regime consists of exactly the last
+            <em>two</em> periods — the minimum evidence for a sustained break rather than a blip, at the price of a
+            one-period detection lag.</p>
+
+            <pre><code class="language-python">report = cl.wave_stationarity_check(wave)     # per-cell BOCD on Eq. (22a)
+if report.flagged:
+    clean = cl.censor_periods(wave, report.break_periods)   # excise, or extend the wave
+state.ingest(wave, check_stationarity=True)    # or let ingest run the guard + warn</code></pre>
+
+            <p>When the guard fires, the readout options are the literature's: censor the contaminated periods before
+            they enter the posterior (<code>censor_periods</code>; from the break onward for a level shift, just the
+            flagged span for a transient), or extend/repeat the wave. Note the guard's scope precisely: it detects
+            shocks that break the treatment-control <em>contrast</em> — a shock common to all cells cancels in
+            Eq. (22a) and is correctly ignored, because it never biased the wave in the first place.</p>
 
             <h2 id="sequential">The sequential loop as greedy-adaptive BED</h2>
             <p>Assembled, the loop is a <strong>greedy (myopic) adaptive BED</strong> policy — the classical
@@ -827,8 +1046,9 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
                     <h4>The decision is robust</h4>
                     <p>Near an interior optimum the profit surface is flat, so any smooth, monotone, saturating curve fit
                     to the probed cells reproduces the <em>local marginal ordering</em> — which is all the allocator in
-                    Eq. (18) uses. Empirically the recommended split captures \( \gtrsim 99\% \) of the achievable profit
-                    even under a badly-wrong response family.</p>
+                    Eq. (18) uses. Measured over 24 replications: a mildly-wrong family costs the same
+                    \( \approx 1.3\% \) of achievable profit as the correct one, a badly-wrong family
+                    \( \approx 2.3\% \) — the plan keeps \( \approx 98\text{–}99\% \) either way.</p>
                 </div>
                 <div class="card">
                     <h4>The calibration is not</h4>
@@ -846,17 +1066,35 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             expose gross misfit, and fitting the most flexible activation you can identify — taken to its limit by the
             <a href="#spline">monotone spline</a> below.</p>
 
-            <p>The worked study (single-cycle numbers, recorded in the misspecification section of
-            <code>technical-docs/continuous-learning.md</code> and demonstrated in
-            <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/continuous_learning.ipynb"
-               target="_blank" rel="noopener"><code>nbs/continuous_learning.ipynb</code></a> §14): fitting
-            <code>hill_mixture</code> truth with a single Hill gives a 0.9% profit gap with 3/4 marginal-ROAS coverage;
-            with a logistic, 1.4% and 2/4 — on the <em>narrowest</em> intervals; the correct mixture, 0.9% and 4/4 on the
-            widest. The single-Hill fit also frequently fails to mix (\( \hat R \approx 1.5 \)) — the practical
-            misspecification alarm. Run sequentially with a fixed geo set, the wrong family's per-wave profit gap
-            converges 0.9% &rarr; 0.5% &rarr; 0.2% &rarr; 0.3% against the correct family's
-            0.9% &rarr; 0.5% &rarr; 0.1% &rarr; 0.1%. The analyst-level version, with the study's figures and animation,
-            is on the <a href="continuous-learning.html#misspec">narrative page</a>.</p>
+            <p>The worked study, <strong>re-run over independent replications with Monte Carlo standard errors</strong>
+            (Morris, White &amp; Crowther 2019; <code>scripts/run_misspec_mcse.py</code> &rarr; the artifact
+            <code>nbs/artifacts/misspec_mcse.json</code> — 24 seeds per family, each redrawing the geo panel, the
+            observation noise and the sampler seed; coverage pooled over 96 channel-reads with Wilson 95% intervals):
+            fitting <code>hill_mixture</code> truth with the <strong>correct mixture</strong> gives a profit gap of
+            1.27% ± 0.26 with 90%-interval marginal-ROAS coverage 0.89 [0.81, 0.93] — a 90% interval performing at its
+            nominal level — on the widest intervals (mean width 2.40). The <strong>mildly-wrong single Hill</strong>:
+            gap 1.30% ± 0.28, coverage 0.82 [0.73, 0.89], width 2.29. The <strong>badly-wrong logistic</strong>: gap
+            2.28% ± 0.25, coverage 0.28 [0.20, 0.38] — on the <em>narrowest</em> intervals (1.77). The single Hill
+            fails to mix (\( \hat R &gt; 1.1 \)) in 7 of 24 runs against the correct family's 3 of 24 — the practical
+            misspecification alarm. Run sequentially over four waves with a fixed geo set (10 seeds), the wrong
+            family's per-wave gap 1.15 ± 0.29% &rarr; 0.59 ± 0.06% &rarr; 0.62 ± 0.07% &rarr; 0.54 ± 0.06% tracks the
+            correct family's 1.19 ± 0.29% &rarr; 0.58 ± 0.07% &rarr; 0.53 ± 0.06% &rarr; 0.45 ± 0.05% within a tenth
+            of a percentage point.</p>
+
+            <div class="note">
+                <h4>💡 What replication changed</h4>
+                <p>The earlier single-cycle numbers (0.9% / 1.4% gaps; 3/4, 2/4, 4/4 coverage) were one-seed point
+                estimates — and a coverage read out of 4 Bernoulli draws carries a worst-case Monte Carlo SE of 25
+                percentage points, which is why the headline numbers above are estimate ± MCSE. Replication sharpened
+                the story in both directions: the apparent 0.9-vs-1.4 decision difference between the mild and correct
+                families was Monte-Carlo noise (measured Δ = 0.03 ± 0.38 pp — indistinguishable), while the severe
+                family is genuinely ~1 pp worse on the decision <em>and</em> its overconfidence is worse than the
+                one-seed 2/4 suggested: true coverage 28%, not 50%. The single-cycle walkthrough remains in
+                <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/continuous_learning.ipynb"
+                   target="_blank" rel="noopener"><code>nbs/continuous_learning.ipynb</code></a> §14 as a
+                demonstration; the analyst-level version with figures and animation is on the
+                <a href="continuous-learning.html#misspec">narrative page</a>.</p>
+            </div>
 
             <h2 id="spline">The shape-agnostic activation — monotone I-splines</h2>
             <p>The mitigation above — fit the most flexible activation you can identify — has a limit case:
@@ -964,6 +1202,71 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
                 <li>Chaloner, K., &amp; Verdinelli, I. (1995). <em>Bayesian Experimental Design: A Review.</em> Statistical
                 Science, 10(3), 273–304. <span style="color:var(--color-text-muted);">— the general expected-utility
                 formulation of which the EIG is the information special case.</span></li>
+                <li>Long, Q., Scavino, M., Tempone, R., &amp; Wang, S. (2013). <em>Fast Estimation of Expected
+                Information Gains for Bayesian Experimental Designs Based on Laplace Approximations.</em> Computer
+                Methods in Applied Mechanics and Engineering, 259, 24–39; and Long, Q., Motamed, M., &amp; Tempone, R.
+                (2015). <em>Fast Bayesian Optimal Experimental Design for Seismic Source Inversion.</em> CMAME, 291,
+                123–145. <span style="color:var(--color-text-muted);">— the \( \mathcal{O}(1/M) \) Laplace-EIG error
+                bound in the effective replication (§surrogate error).</span></li>
+                <li>Beck, J., Dia, B. M., Espath, L., Long, Q., &amp; Tempone, R. (2018). <em>Fast Bayesian
+                Experimental Design: Laplace-Based Importance Sampling for the Expected Information Gain.</em> CMAME,
+                334, 523–553. <span style="color:var(--color-text-muted);">— the Laplace-IS correction; its residual
+                floor is the Laplace bias.</span></li>
+                <li>Vehtari, A., Simpson, D., Gelman, A., Yao, Y., &amp; Gabry, J. (2024). <em>Pareto Smoothed
+                Importance Sampling.</em> JMLR 25(72); and Zhang, J., &amp; Stephens, M. A. (2009). <em>A New and
+                Efficient Estimation Method for the Generalized Pareto Distribution.</em> Technometrics 51(3).
+                <span style="color:var(--color-text-muted);">— the \( \hat k \) tail diagnostic and its estimator
+                (§surrogate validity).</span></li>
+                <li>Kuss, M., &amp; Rasmussen, C. E. (2005). <em>Assessing Approximate Inference for Binary Gaussian
+                Process Classification.</em> JMLR 6, 1679–1704; and Rue, H., Martino, S., &amp; Chopin, N. (2009).
+                <em>Approximate Bayesian Inference for Latent Gaussian Models (INLA).</em> JRSS-B 71(2), 319–392.
+                <span style="color:var(--color-text-muted);">— how and where Gaussian approximations fail on skewed
+                posteriors, and the skewness-corrected upgrade path.</span></li>
+                <li>Higham, N. J. (1988). <em>Computing a Nearest Symmetric Positive Semidefinite Matrix.</em> Linear
+                Algebra and its Applications, 103, 103–118; and (2002) <em>Computing the Nearest Correlation
+                Matrix.</em> IMA J. Numerical Analysis 22(3), 329–343.
+                <span style="color:var(--color-text-muted);">— the eigenvalue-clipping nearest-PSD projection guarding
+                \( V \) and the log-det blocks.</span></li>
+                <li>Boyd, S., &amp; Vandenberghe, L. (2004). <em>Convex Optimization.</em> Cambridge University Press,
+                §5.5; and Fischer, M., Albers, S., Wagner, N., &amp; Frie, M. (2011). <em>Dynamic Marketing Budget
+                Allocation Across Countries, Products, and Marketing Activities.</em> Marketing Science 30(4), 568–585.
+                <span style="color:var(--color-text-muted);">— KKT with equality constraints (one shadow price per
+                group) and the nested marketing-budget application (Eq. 19b).</span></li>
+                <li>Edwards, W., Lindman, H., &amp; Savage, L. J. (1963). <em>Bayesian Statistical Inference for
+                Psychological Research.</em> Psychological Review 70(3), 193–242; Berger, J. O., &amp; Wolpert, R. L.
+                (1988). <em>The Likelihood Principle</em>, 2nd ed., IMS; and Rouder, J. N. (2014). <em>Optional
+                Stopping: No Problem for Bayesians.</em> Psychonomic Bulletin &amp; Review 21(2), 301–308.
+                <span style="color:var(--color-text-muted);">— stopping-rule invariance of Bayesian inference (the
+                ENBS peeking note).</span></li>
+                <li>Ramdas, A., Grünwald, P., Vovk, V., &amp; Shafer, G. (2023). <em>Game-Theoretic Statistics and
+                Safe Anytime-Valid Inference.</em> Statistical Science 38(4), 576–597.
+                <span style="color:var(--color-text-muted);">— e-processes / confidence sequences, the frequentist
+                guarantee under continuous monitoring if a client demands one.</span></li>
+                <li>West, M., &amp; Harrison, J. (1997). <em>Bayesian Forecasting and Dynamic Models</em>, 2nd ed.,
+                Springer, §6.3; and Fry, T. R. L., Broadbent, S., &amp; Dixon, J. M. (2000). <em>Estimating Advertising
+                Half-life and the Data Interval Bias.</em> J. Targeting, Measurement &amp; Analysis for Marketing 8,
+                314–334. <span style="color:var(--color-text-muted);">— per-component discount factors and
+                category-specific half-lives (the decay clock's \( h \)).</span></li>
+                <li>Morris, T. P., White, I. R., &amp; Crowther, M. J. (2019). <em>Using Simulation Studies to
+                Evaluate Statistical Methods.</em> Statistics in Medicine 38(11), 2074–2102.
+                <span style="color:var(--color-text-muted);">— the ADEMP framework and the Monte Carlo standard errors
+                behind the misspecification study's numbers.</span></li>
+                <li>Lee, E. H., Perrone, V., Archambeau, C., &amp; Seeger, M. (2020). <em>Cost-Aware Bayesian
+                Optimization</em> (CArBO / EIpu), arXiv:2003.10870; and Kleinegesse, S., &amp; Gutmann, M. U. (2020).
+                <em>Bayesian Experimental Design for Implicit Models by Mutual Information Neural Estimation.</em>
+                ICML, PMLR 119. <span style="color:var(--color-text-muted);">— value-per-unit-cost acquisitions
+                (Eq. 17a).</span></li>
+                <li>Adams, R. P., &amp; MacKay, D. J. C. (2007). <em>Bayesian Online Changepoint Detection.</em>
+                arXiv:0710.3742; and Fearnhead, P., &amp; Liu, Z. (2007). <em>On-line Inference for Multiple
+                Changepoint Problems.</em> JRSS-B 69(4), 589–605.
+                <span style="color:var(--color-text-muted);">— the run-length filter behind the within-wave guard.</span></li>
+                <li>Vaver, J., &amp; Koehler, J. (2011). <em>Measuring Ad Effectiveness Using Geo Experiments.</em>
+                Google Research; Kerman, J., Wang, P., &amp; Vaver, J. (2017). <em>Estimating Ad Effectiveness Using
+                Geo Experiments in a Time-Based Regression Framework.</em> Google Research; and Brodersen, K. H.,
+                Gallusser, F., Koehler, J., Remy, N., &amp; Scott, S. L. (2015). <em>Inferring Causal Impact Using
+                Bayesian Structural Time-Series Models.</em> Annals of Applied Statistics 9(1), 247–274.
+                <span style="color:var(--color-text-muted);">— contemporaneous-control cancellation of common shocks
+                and the counterfactual-divergence alarm (§within-wave stationarity).</span></li>
             </ul>
 
             <p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:2rem;">The equations on this page map
@@ -972,8 +1275,10 @@ kg        = cl.laplace_knowledge_gradient(post, cells, B=3.2, value=5.0, sigma=0
             <code>dgp.py</code> (the known-truth worlds, incl. <code>make_world_logistic</code> /
             <code>make_world_hill_mixture</code>), <code>preprocess.py</code> (the adstock pre-pass and CUPED),
             <code>evidence.py</code> (Eq. 7a, registry readouts &rarr; summaries), <code>planner.py</code>
-            (Eqs. 18–21), <code>acquisition.py</code> (Eqs. 12–17), <code>arms.py</code> (Eq. 19a),
-            <code>loop.py</code> (Eqs. 9, 22), with <code>serialize.py</code> persisting the carried state and
+            (Eqs. 18–21), <code>acquisition.py</code> (Eqs. 12–17 &amp; 17a, incl. <code>surrogate_validity</code>),
+            <code>arms.py</code> (Eqs. 19a–19b), <code>stationarity.py</code> (Eq. 22a, the within-wave changepoint
+            guard), <code>loop.py</code> (Eqs. 9, 22, <code>estimate_half_life</code> / <code>adstock_half_life</code>,
+            <code>stop_patience</code>), with <code>serialize.py</code> persisting the carried state and
             <code>service.py</code> orchestrating the app-facing learning programs; the mathematical specification is
             in <code>technical-docs/continuous-learning.md</code>.</p>
         </main>

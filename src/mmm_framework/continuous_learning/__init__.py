@@ -60,7 +60,9 @@ from .evidence import experiments_to_summaries
 from .loop import (
     LearningState,
     WaveRecord,
+    adstock_half_life,
     due_for_retest,
+    estimate_half_life,
     run_closed_loop,
     select_next_design,
     world_optimal_allocation,
@@ -96,8 +98,16 @@ from .acquisition import (
     gaussian_eig,
     laplace_knowledge_gradient,
     observation_unit_info,
+    surrogate_validity,
     theta_map,
     theta_moments,
+)
+from .stationarity import (
+    BocdResult,
+    StationarityReport,
+    bocd,
+    censor_periods,
+    wave_stationarity_check,
 )
 from .scaling import to_dollars, to_scaled
 from .serialize import (
@@ -178,8 +188,15 @@ __all__ = [
     "design_information",
     "gaussian_eig",
     "observation_unit_info",
+    "surrogate_validity",
     "theta_map",
     "theta_moments",
+    # stationarity (within-wave changepoint guard)
+    "bocd",
+    "BocdResult",
+    "wave_stationarity_check",
+    "StationarityReport",
+    "censor_periods",
     # scaling (dollars <-> scaled units)
     "to_scaled",
     "to_dollars",
@@ -205,4 +222,6 @@ __all__ = [
     "select_next_design",
     "world_optimal_allocation",
     "due_for_retest",
+    "adstock_half_life",
+    "estimate_half_life",
 ]

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -128,6 +128,8 @@ class LearningState:
     history: list[WaveRecord] = field(default_factory=list)
     summaries: list[dict[str, Any]] = field(default_factory=list)
     geo_ids: list[str] | None = None
+    # per-wave stationarity-guard reports (session diagnostics; not persisted)
+    stationarity_reports: list[Any] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.center = np.asarray(self.center, dtype=float)
@@ -164,12 +166,24 @@ class LearningState:
                 f"geo baselines make it diverge): {detail}"
             )
 
-    def ingest(self, wave_data: dict[str, Any]) -> None:
+    def ingest(
+        self, wave_data: dict[str, Any], *, check_stationarity: bool = False
+    ) -> None:
         """Append a wave's rows to the accumulated panel (same geos throughout).
 
         ``wave_data`` may carry an optional ``"geo_ids"`` key (``list[str]`` of
         length ``n_geo``): the first wave pins the program's geo identities and
         later waves must match them exactly (order included).
+
+        ``check_stationarity=True`` (opt-in; requires the wave to carry
+        ``period_idx`` and ``cell_idx``) runs the within-wave stationarity
+        guard (:func:`~mmm_framework.continuous_learning.stationarity.wave_stationarity_check`)
+        before ingesting: the report is appended to
+        ``self.stationarity_reports`` and a flagged mid-wave regime change
+        raises a ``UserWarning`` — the wave is still ingested, so the caller
+        decides whether to
+        :func:`~mmm_framework.continuous_learning.stationarity.censor_periods`
+        and re-ingest, or extend/repeat the wave.
 
         When the program models a national time effect (``time_effect !=
         "none"``), every wave MUST carry a ``"period_idx"`` (wave-local,
@@ -203,6 +217,21 @@ class LearningState:
                 "the continuous-learning loop assumes a stable geo set"
             )
         self._check_geo_ids(wave_data, n_geo)
+        if check_stationarity:
+            from .stationarity import wave_stationarity_check
+
+            report = wave_stationarity_check(wave_data)
+            self.stationarity_reports.append(report)
+            if report.flagged:
+                warnings.warn(
+                    "within-wave stationarity guard: a mid-wave regime change "
+                    f"was detected in period(s) {report.break_periods} "
+                    f"(treatment-minus-{report.control} contrast, max "
+                    f"changepoint prob {report.max_cp_prob:.2f}). The wave was "
+                    "ingested anyway — consider stationarity.censor_periods() "
+                    "on the flagged segment, or extend/repeat the wave.",
+                    stacklevel=2,
+                )
         if self.data is None:
             self.data = {"spend": spend, "geo_idx": geo_idx, "y": y, "n_geo": n_geo}
             if period_idx is not None:
@@ -364,6 +393,7 @@ def select_next_design(
     n_outcomes: int = 32,
     seed: int = 0,
     fallback_delta: float = 0.6,
+    cost_fn: Callable[[np.ndarray], float] | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """Score candidate CCDs with the Laplace knowledge-gradient; pick the best.
 
@@ -385,20 +415,41 @@ def select_next_design(
     information explode identically and the reported per-candidate scores
     carry no information while claiming ``kg_used=True``.
 
+    ``cost_fn`` (optional) makes the selection **cost-aware**: each candidate
+    is ranked by ``KG / cost_fn(cells)`` — decision value *per dollar*, the
+    knowledge-gradient analogue of expected-improvement-per-unit-cost (EIpu;
+    Lee, Perrone, Archambeau & Seeger 2020). Cell counts grow ~3 per extra
+    arm plus 2 per probed pair, so a cost-blind KG systematically over-favors
+    large designs; dividing by the design's own cost is the greedy myopic
+    version of the ENBS cost-benefit trade (``planner.enbs``), which keeps
+    the acquisition and the stopping rule coherent. ``cost_fn`` receives the
+    candidate's cell matrix and must return a positive finite cost (e.g.
+    ``lambda cells: fixed + per_cell * len(cells)``). The raw ``score`` and
+    the ranking ``score_per_cost`` are both recorded; ``cost_fn=None`` is
+    byte-identical to the historical ranking.
+
     Degrades gracefully: an activation without a transform spec, an unknown
     likelihood family, a posterior missing its observation-noise sites
-    (summaries-only fit), a non-finite candidate score, a near-singular
-    moment-matched covariance, or any scoring ``ValueError`` falls back to the
-    fixed design ``central_composite(center, fallback_delta, pairs)``.
+    (summaries-only fit), a non-finite candidate score, a non-positive or
+    non-finite candidate cost, a near-singular moment-matched covariance, or
+    any scoring ``ValueError`` falls back to the fixed design
+    ``central_composite(center, fallback_delta, pairs)``.
 
     Returns:
         ``(cells, meta)`` — the chosen design array and a JSON-safe meta dict:
         on success ``{"kg_used": True, "chosen_delta", "chosen_probe_pairs",
-        "kg_scores": [{"delta", "probe_pairs", "score"}, ...], "sigma"}``
+        "kg_scores": [{"delta", "probe_pairs", "score"[, "cost",
+        "score_per_cost"]}, ...], "sigma", "cost_aware", "surrogate"}``
         (``sigma`` is ``None`` for a count posterior, which has no Gaussian
-        noise scale); on fallback ``{"kg_used": False, "reason"}``.
+        noise scale); on fallback ``{"kg_used": False, "reason",
+        "surrogate"}``. ``surrogate`` is the compact
+        :func:`~mmm_framework.continuous_learning.acquisition.surrogate_validity`
+        report (``ok``/``khat``/``params_flagged``…) — when ``ok`` is False
+        the Gaussian surrogate is suspect for this posterior and the wave's
+        scores should be spot-checked against (or replaced by) the NUTS-refit
+        :func:`~mmm_framework.continuous_learning.planner.knowledge_gradient`.
     """
-    from .acquisition import laplace_knowledge_gradient
+    from .acquisition import laplace_knowledge_gradient, surrogate_validity
 
     center = np.asarray(center, dtype=float)
     pairs = list(pairs or [])
@@ -407,6 +458,22 @@ def select_next_design(
         if candidate_probe_sets is not None
         else [pairs]
     )
+    # Surrogate-validity report (Gaussian moment-match vs. the carried NUTS
+    # draws). Purely diagnostic — a failure here must not kill selection.
+    try:
+        _sv = surrogate_validity(post)
+        surrogate: dict[str, Any] = {
+            k: _sv[k]
+            for k in (
+                "ok",
+                "khat",
+                "params_flagged",
+                "max_abs_skew",
+                "max_excess_kurtosis",
+            )
+        }
+    except Exception as exc:  # unknown activation, too few draws, ...
+        surrogate = {"ok": None, "error": str(exc)}
     try:
         likelihood = getattr(post, "likelihood", "normal")
         samples = post.samples
@@ -466,21 +533,31 @@ def select_next_design(
                         f"non-finite KG score ({score}) for candidate "
                         f"delta={d}, probe_pairs={ps}"
                     )
-                scores.append(
-                    {
-                        "delta": d,
-                        "probe_pairs": [[int(i), int(j)] for i, j in ps],
-                        "score": score,
-                    }
-                )
-                if best is None or score > best[0]:
-                    best = (score, cells, d, ps)
+                entry: dict[str, Any] = {
+                    "delta": d,
+                    "probe_pairs": [[int(i), int(j)] for i, j in ps],
+                    "score": score,
+                }
+                rank_key = score
+                if cost_fn is not None:
+                    cost = float(cost_fn(cells))
+                    if not np.isfinite(cost) or cost <= 0.0:
+                        raise ValueError(
+                            f"cost_fn returned {cost} for candidate delta={d}, "
+                            f"probe_pairs={ps} — a design cost must be positive "
+                            "and finite"
+                        )
+                    entry["cost"] = cost
+                    entry["score_per_cost"] = rank_key = score / cost
+                scores.append(entry)
+                if best is None or rank_key > best[0]:
+                    best = (rank_key, cells, d, ps)
         if best is None:
             raise ValueError("no candidate designs to score")
     except (NotImplementedError, np.linalg.LinAlgError, ValueError) as exc:
         return (
             central_composite(center, float(fallback_delta), pairs),
-            {"kg_used": False, "reason": str(exc)},
+            {"kg_used": False, "reason": str(exc), "surrogate": surrogate},
         )
     return best[1], {
         "kg_used": True,
@@ -488,6 +565,8 @@ def select_next_design(
         "chosen_probe_pairs": [[int(i), int(j)] for i, j in best[3]],
         "kg_scores": scores,
         "sigma": sigma,
+        "cost_aware": cost_fn is not None,
+        "surrogate": surrogate,
     }
 
 
@@ -518,6 +597,7 @@ def run_closed_loop(
     candidate_deltas: tuple[float, ...] = (0.3, 0.6, 0.9),
     kg_n_outcomes: int = 32,
     stratify_geos: bool = False,
+    stop_patience: int = 1,
     seed: int = 0,
 ) -> dict[str, Any]:
     """Run the full loop against a known world and return the decision trace.
@@ -535,7 +615,20 @@ def run_closed_loop(
     :class:`WaveRecord` (``kg_used`` / ``chosen_delta``). ``stratify_geos=True``
     (opt-in) blocks the geo→cell randomization on the true per-geo baselines
     ``a_geo`` (see :func:`~mmm_framework.continuous_learning.design.assign_geos`).
+
+    ``stop_patience`` (default 1 — byte-identical to the historical loop)
+    requires that many *consecutive* ``ENBS <= 0`` evaluations before the
+    loop stops. Evaluating ENBS every wave is NOT frequentist optional
+    stopping — a Bayesian expected-value rule is stopping-rule-invariant
+    under the likelihood principle (Edwards, Lindman & Savage 1963; Berger &
+    Wolpert 1988) — but that invariance assumes a correctly specified model,
+    and the misspecification study shows intervals can be narrow *and*
+    wrong. ``stop_patience=2`` is the cheap belt-and-suspenders guard: one
+    optimistically-low regret read (from a temporarily overconfident,
+    possibly misspecified posterior) cannot end the programme on its own.
+    Each :class:`WaveRecord`'s ``stop`` stays the raw per-wave verdict.
     """
+    stop_patience = max(1, int(stop_patience))
     fit_kwargs = fit_kwargs or {}
     center = np.asarray(center, dtype=float)
     state = LearningState(
@@ -576,6 +669,7 @@ def run_closed_loop(
     # data, so the selection made at wave w is recorded on wave w+1's record.
     kg_used_wave = False
     chosen_delta_wave: float | None = None
+    consecutive_stops = 0
 
     for wave in range(max_waves):
         e_regret, _consensus, _alloc_sd, _profit_sd = state.regret(q=planner_q)
@@ -610,7 +704,8 @@ def run_closed_loop(
             )
         )
 
-        if stop or wave == max_waves - 1:
+        consecutive_stops = consecutive_stops + 1 if stop else 0
+        if consecutive_stops >= stop_patience or wave == max_waves - 1:
             break
 
         new_center = rec if recenter else center
@@ -681,3 +776,111 @@ def due_for_retest(
 
     half_life = channel_half_life(channel, half_life_overrides)
     return reexperiment_due(sigma_post, weeks_elapsed, half_life, sigma_exp)
+
+
+def adstock_half_life(adstock_alpha: float) -> float:
+    """Half-life (periods) of a geometric adstock with retention ``alpha``.
+
+    ``alpha**h = 1/2  =>  h = ln(1/2) / ln(alpha)``. The advertising
+    literature finds carryover half-lives are strongly **category-specific**
+    (industry FMCG figures cluster near 2–2.5 weeks against academic
+    estimates of 7–12 — Fry, Broadbent & Dixon 2000), which is the empirical
+    argument against one global decay constant: use each channel's measured
+    carryover as the anchor for its own evidence half-life, via
+    ``due_for_retest(..., half_life_overrides={channel: h})``. The carryover
+    half-life is a *lower* anchor — a finding decays at least as fast as the
+    mechanism that produced it drifts, and audience/creative drift usually
+    puts the evidence half-life at a multiple of it; when the programme has
+    accumulated waves, prefer the measured :func:`estimate_half_life`.
+
+    ``alpha <= 0`` (no carryover) returns ``0.0``; ``alpha >= 1`` (no decay)
+    returns ``inf``.
+    """
+    a = float(adstock_alpha)
+    if a <= 0.0:
+        return 0.0
+    if a >= 1.0:
+        return float("inf")
+    return float(np.log(0.5) / np.log(a))
+
+
+def estimate_half_life(
+    gaps_weeks: np.ndarray,
+    shifts: np.ndarray,
+    sigmas: np.ndarray,
+) -> dict[str, float]:
+    """Estimate the information-decay half-life from realized posterior drift.
+
+    The decay clock (math page Eq. 22) inflates a finding's variance as
+    ``sigma_eff^2(t) = sigma_post^2 * exp(lambda * t)`` with
+    ``lambda = ln2 / h`` — but ``h`` need not be guessed: the loop *observes*
+    how fast its own beliefs drift. Between two fits of the same quantity
+    separated by a gap ``t_j`` (weeks), the decay model says the realized
+    mean shift is a draw with variance ``sigma_j^2 * (exp(lambda t_j) - 1)``
+    on top of the posterior spread, so ``z_j = (shift_j / sigma_j)^2`` has
+    expectation ``exp(lambda t_j) - 1``. The method-of-moments estimate
+    solves ``mean_j[z_j] = mean_j[exp(lambda t_j) - 1]`` for ``lambda``
+    (monotone — a bisection). This is the adaptive-discounting idea of the
+    dynamic-linear-model literature: West & Harrison (1997, §6.3) model each
+    component as losing a constant information fraction ``delta`` per period
+    (``delta = exp(-lambda)`` here, returned as ``"discount"``), with
+    separate discounts per component — i.e. estimate one ``h`` per channel,
+    not one global constant.
+
+    Args:
+        gaps_weeks: per-observation elapsed weeks between the two fits.
+        shifts: realized posterior-mean shifts of the tracked quantity (e.g.
+            a channel's marginal ROAS) over each gap.
+        sigmas: the posterior sd of the quantity at the *earlier* fit.
+
+    Returns:
+        ``{"half_life": h, "lambda": lam, "discount": exp(-lam), "n": J}`` —
+        ``half_life = inf`` when no excess drift is observed (the findings
+        are not decaying measurably). Requires at least one observation with
+        positive gap and sigma.
+    """
+    t = np.asarray(gaps_weeks, dtype=float).ravel()
+    s = np.asarray(shifts, dtype=float).ravel()
+    sig = np.asarray(sigmas, dtype=float).ravel()
+    if not (t.size == s.size == sig.size) or t.size == 0:
+        raise ValueError(
+            "estimate_half_life needs equal-length, non-empty gaps_weeks / "
+            f"shifts / sigmas (got {t.size}/{s.size}/{sig.size})"
+        )
+    keep = (t > 0) & (sig > 0) & np.isfinite(t) & np.isfinite(s) & np.isfinite(sig)
+    if not keep.any():
+        raise ValueError(
+            "estimate_half_life has no usable observations (positive gap and "
+            "sigma required)"
+        )
+    t, s, sig = t[keep], s[keep], sig[keep]
+    z_bar = float(np.mean((s / sig) ** 2))
+    if z_bar <= 0.0:
+        return {
+            "half_life": float("inf"),
+            "lambda": 0.0,
+            "discount": 1.0,
+            "n": int(t.size),
+        }
+
+    def gap(lam: float) -> float:
+        return float(np.mean(np.expm1(lam * t))) - z_bar
+
+    lo, hi = 0.0, 1.0
+    for _ in range(60):  # find an upper bracket
+        if gap(hi) > 0.0:
+            break
+        hi *= 2.0
+    for _ in range(200):  # bisection (gap is increasing in lambda)
+        mid = 0.5 * (lo + hi)
+        if gap(mid) > 0.0:
+            hi = mid
+        else:
+            lo = mid
+    lam = 0.5 * (lo + hi)
+    return {
+        "half_life": float(np.log(2.0) / lam) if lam > 0 else float("inf"),
+        "lambda": float(lam),
+        "discount": float(np.exp(-lam)),
+        "n": int(t.size),
+    }

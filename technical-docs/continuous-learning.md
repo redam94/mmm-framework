@@ -211,35 +211,49 @@ Hills** — an early, steep (low-κ, high-α) component plus a later, gentler on
 two-phase shape a single Hill can only average over and a logistic (concave, no
 inflection) cannot represent at all. The same mixture-truth panel was fit with
 the correct `hill_mixture`, a `hill` (mild misspecification), and a `logistic`
-(severe). The result separates two things that are usually conflated:
+(severe). **Headline numbers are means ± Monte Carlo SE over 24 independent
+replications per family** (10 for the sequential loops; coverage pooled over 96
+channel-reads, Wilson 95% intervals) from `scripts/run_misspec_mcse.py` →
+`nbs/artifacts/misspec_mcse.json` — re-run the script before changing them
+(Morris–White–Crowther 2019 discipline; the earlier single-seed 0.9%/1.4%,
+3/4–2/4–4/4 numbers survive only in the notebook §14 demonstration). The result
+separates two things that are usually conflated:
 
-* **Decisions are robust.** The recommended allocation captured ~99% of the true
-  optimum's profit under *every* family (profit gap: Hill 0.9%, logistic 1.4%,
-  mixture 0.9%). Near an interior optimum the profit surface is flat, and any
-  smooth monotone-saturating curve fit to the probed cells reproduces the *local
+* **Decisions are robust.** The recommended allocation kept ~98–99% of the true
+  optimum's profit under *every* family (profit gap: single Hill 1.30% ± 0.28 —
+  statistically indistinguishable from the correct mixture's 1.27% ± 0.26
+  (Δ = 0.03 ± 0.38 pp; the single-seed "0.9 vs 1.4" contrast between them was
+  Monte-Carlo noise) — logistic 2.28% ± 0.25, a genuine ~1 pp penalty). Near an
+  interior optimum the profit surface is flat, and any smooth
+  monotone-saturating curve fit to the probed cells reproduces the *local
   marginal ordering* — which is all the allocator needs.
 * **Calibration is not.** The marginal-ROAS 90% credible interval covered the
-  true value 4/4 channels for the (widest) mixture, 3/4 for the single Hill, and
-  only 2/4 for the logistic — which was also the **narrowest**. A misspecified
-  model does not know it is wrong, so it under-states its own uncertainty:
+  truth 89% [81, 93] for the (widest, nominally-calibrated) mixture, 82%
+  [73, 89] for the single Hill, and only **28% [20, 38]** for the logistic —
+  which was also the **narrowest** (mean width 1.77 vs 2.40). Replication made
+  the overconfidence *worse* than the one-seed 2/4 read. A misspecified model
+  does not know it is wrong, so it under-states its own uncertainty:
   confidently biased exactly where the experiments did not probe (see the
   anchored response-curve recovery, `nbs/artifacts/continuous_learning_misspec.png`).
-* **Non-convergence is a tell.** A single Hill fit to two-Hill data frequently
-  fails to mix (R̂ ≈ 1.5): there is no single (κ, α) that reconciles all the
-  cross-sectional cells, so the sampler wanders. Poor R̂ / systematic residuals
-  across the CCD cross-section are the practical signal that the family is too
-  rigid — the cue to widen the activation, not to trust the tight intervals.
+* **Non-convergence is a tell.** A single Hill fit to two-Hill data fails to
+  mix (R̂ > 1.1) in 7/24 runs vs the correct family's 3/24: there is no single
+  (κ, α) that reconciles all the cross-sectional cells, so the sampler wanders.
+  Poor R̂ / systematic residuals across the CCD cross-section are the practical
+  signal that the family is too rigid — the cue to widen the activation, not to
+  trust the tight intervals.
 * **The loop erases the mild misspecification.** Because each wave re-probes
   *locally* over the same geos (fixed `a_geo`) and refits on all accumulated data,
   the loop never commits to a far extrapolation. Running the real accumulating
   loop (`LearningState` + `simulate_wave`) under the mild misspecification, the
-  profit gap converged 0.9% → 0.5% → 0.2% → 0.3% — **tracking the correctly-
-  specified mixture loop** (0.9% → 0.5% → 0.1% → 0.1%) to a fraction of a percent,
-  with healthy R̂ throughout. Local sequential experimentation makes the wrong
-  family nearly irrelevant to the *decision trajectory*. (An earlier draft that
-  re-drew geo baselines each wave instead of holding `a_geo` fixed diverged — a
-  reminder that the loop's guarantee rests on a **stable geo set**; conflating two
-  intercept draws under one `geo_idx` corrupts the fit.)
+  profit gap converged 1.15 ± 0.29% → 0.59 ± 0.06% → 0.62 ± 0.07% → 0.54 ± 0.06%
+  — **tracking the correctly-specified mixture loop**
+  (1.19 ± 0.29% → 0.58 ± 0.07% → 0.53 ± 0.06% → 0.45 ± 0.05%) within a tenth of
+  a percentage point, with healthy R̂ throughout. Local sequential
+  experimentation makes the wrong family nearly irrelevant to the *decision
+  trajectory*. (An earlier draft that re-drew geo baselines each wave instead of
+  holding `a_geo` fixed diverged — a reminder that the loop's guarantee rests on
+  a **stable geo set**; conflating two intercept draws under one `geo_idx`
+  corrupts the fit.)
 
 **Operating rule:** trust the *ranking* and the funded set; distrust the
 channel-by-channel magnitudes and their intervals. Fit the most flexible
@@ -435,6 +449,64 @@ with β recovery intact).
 * **Outcome transformed** → never normalize/center/log `y`; only scale spend, by
   a fixed global constant (not a cluster mean).
 * **No designed variation** → output is not causal.
+
+## Audit follow-ups (2026-07-04) — surrogate honesty, cost-aware KG, stopping patience, decay estimation, stationarity guard
+
+A gap-by-gap technical audit of `docs/continuous-learning-math.html`
+(`assets/Augur Continuous Learning Math_ Gap-by-Gap Technical Audit and R.md`)
+was addressed end-to-end; the math page gained the sections
+`#surrogate-error`, `#cost-aware`, `#stationarity`, the Eq. 19b grouped-KKT
+re-derivation, the ENBS/likelihood-principle note, and the decay-`h`
+estimation guidance, each with sourced references. Code changes (all
+default-off or byte-identical defaults; tests in
+`tests/test_continuous_learning.py` under "audit fixes"):
+
+* **`acquisition.surrogate_validity(post)`** — density-free diagnostic of the
+  Gaussian moment-match against the carried NUTS draws in the unconstrained
+  `eta` space: per-parameter skew / excess-kurtosis flags plus a
+  generalized-Pareto tail shape `khat` of the Mahalanobis exceedances
+  (Zhang–Stephens estimator, the PSIS 0.7 alarm bar). `select_next_design`
+  computes it every wave and records the compact report in `meta["surrogate"]`
+  (also on the fallback path). When `ok=False`, spot-check/replace that wave's
+  Laplace scores with the NUTS-refit `planner.knowledge_gradient`.
+* **PSD guards documented + hardened** — `gaussian_eig` log-dets now run
+  through `_logdet_psd` (symmetrize + eigenvalue-clip, Higham nearest-PSD);
+  the existing `V` clip in `laplace_knowledge_gradient` is documented as such.
+* **Cost-aware KG (EIpu)** — `select_next_design(..., cost_fn=cells -> $)`
+  ranks candidates by `KG / cost` (raw + per-cost scores recorded,
+  `meta["cost_aware"]`); non-positive/non-finite cost → fallback. `cost_fn=None`
+  is byte-identical.
+* **`run_closed_loop(stop_patience=N)`** — require N *consecutive* ENBS ≤ 0
+  reads before stopping (default 1 = historical behavior). ENBS peeking is
+  NOT frequentist optional stopping (likelihood principle), but patience=2 is
+  the cheap guard against a temporarily overconfident (possibly misspecified)
+  posterior; `WaveRecord.stop` stays the raw per-wave verdict.
+* **Decay half-life estimation** — `adstock_half_life(alpha)` (carryover
+  half-life, the per-channel lower anchor for `due_for_retest`'s
+  `half_life_overrides`) and `estimate_half_life(gaps, shifts, sigmas)`
+  (method-of-moments `lambda` from realized wave-to-wave posterior drift,
+  `E[(shift/sigma)^2] = e^{lambda t} - 1`; returns `half_life`/`lambda`/the
+  West–Harrison `discount`).
+* **`stationarity.py` — within-wave changepoint guard.** Per design cell,
+  the per-period treatment-minus-control contrast (holdout geos if present,
+  else the center cell; pre-periods auto-detected as all-geos-identical spend
+  rows) is monitored with Bayesian online changepoint detection
+  (Adams–MacKay, Normal-Inverse-Gamma → Student-t predictive). **The flag is
+  `P(run length = 2)`** — `P(r=0)` is identically the hazard under constant
+  hazard (the cp/growth branches share predictive weights), and `P(r=1)`
+  fires on single-period spikes; requiring the restarted run to explain two
+  consecutive points detects sustained shifts with a one-period lag and
+  ignores blips. The empirical-Bayes noise prior comes from the MAD of
+  **first differences** (a full-series spread folds the shift being tested
+  into the noise and masks it). `wave_stationarity_check(wave)` →
+  `StationarityReport`; `censor_periods(wave, periods)` excises flagged
+  periods; `LearningState.ingest(wave, check_stationarity=True)` runs it
+  inline (warn + record on `state.stationarity_reports`, not persisted).
+* **Misspecification numbers now carry Monte Carlo SEs** — the §14 study was
+  re-run over many seeds (`scripts/run_misspec_mcse.py` →
+  `nbs/artifacts/misspec_mcse.json`, quoted by the docs pages); headline
+  numbers are reported as mean ± MCSE with Wilson 95% intervals on coverage
+  (Morris–White–Crowther). Re-run the script before changing those numbers.
 
 ## Deferred
 

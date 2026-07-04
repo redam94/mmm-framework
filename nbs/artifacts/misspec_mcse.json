@@ -1,0 +1,1484 @@
+{
+  "config": {
+    "world": "make_world_hill_mixture(seed=0)",
+    "center": [
+      0.7,
+      0.7,
+      0.7,
+      0.7
+    ],
+    "B": 3.2,
+    "value": 5.0,
+    "n_geo": 72,
+    "t_pre": 6,
+    "t_test": 10,
+    "delta": 0.6,
+    "noise": 0.4,
+    "one_wave_seeds": 24,
+    "seq_seeds": 10,
+    "fit": {
+      "families": {
+        "hill_mixture": 600,
+        "hill": 400,
+        "logistic": 400
+      },
+      "seq_families": {
+        "hill": 300,
+        "hill_mixture": 500
+      },
+      "num_chains": 2
+    },
+    "ci": "90% equal-tailed (percentile 5/95), as in nbs \u00a714",
+    "runtime_seconds": 4001.5
+  },
+  "aggregates": {
+    "one_wave": {
+      "hill_mixture": {
+        "profit_gap_pct": {
+          "n": 24,
+          "mean": 1.271901236577424,
+          "sd": 1.2566937551449355,
+          "mcse": 0.25652153858726623
+        },
+        "coverage": {
+          "n": 24,
+          "mean": 0.8854166666666666,
+          "sd": 0.1802650021898115,
+          "mcse": 0.036796439487227536,
+          "pooled": 0.8854166666666666,
+          "pooled_hits": 85,
+          "pooled_n": 96,
+          "wilson95": [
+            0.8063720685325512,
+            0.9348019511145699
+          ]
+        },
+        "ci_width": {
+          "n": 24,
+          "mean": 2.401720557616368,
+          "sd": 0.13785484029982814,
+          "mcse": 0.028139501442286847
+        },
+        "rhat_gt_1.1_share": 0.125,
+        "rhat_gt_1.1_n": 3,
+        "rhat_n": 24
+      },
+      "hill": {
+        "profit_gap_pct": {
+          "n": 24,
+          "mean": 1.2975813415016033,
+          "sd": 1.3532069843833612,
+          "mcse": 0.2762222190091333
+        },
+        "coverage": {
+          "n": 24,
+          "mean": 0.8229166666666666,
+          "sd": 0.18765090545702298,
+          "mcse": 0.03830408067841281,
+          "pooled": 0.8229166666666666,
+          "pooled_hits": 79,
+          "pooled_n": 96,
+          "wilson95": [
+            0.7345877787621297,
+            0.8863958593205933
+          ]
+        },
+        "ci_width": {
+          "n": 24,
+          "mean": 2.29194647853747,
+          "sd": 0.12938924424720397,
+          "mcse": 0.026411468884166123
+        },
+        "rhat_gt_1.1_share": 0.2916666666666667,
+        "rhat_gt_1.1_n": 7,
+        "rhat_n": 24
+      },
+      "logistic": {
+        "profit_gap_pct": {
+          "n": 24,
+          "mean": 2.2758791986363724,
+          "sd": 1.205061951309553,
+          "mcse": 0.245982240762586
+        },
+        "coverage": {
+          "n": 24,
+          "mean": 0.28125,
+          "sd": 0.18522166508643448,
+          "mcse": 0.03780821406420353,
+          "pooled": 0.28125,
+          "pooled_hits": 27,
+          "pooled_n": 96,
+          "wilson95": [
+            0.2010728263750154,
+            0.3782608381495917
+          ]
+        },
+        "ci_width": {
+          "n": 24,
+          "mean": 1.7672567333678986,
+          "sd": 0.1099821344778505,
+          "mcse": 0.02245000919107458
+        },
+        "rhat_gt_1.1_share": 0.3333333333333333,
+        "rhat_gt_1.1_n": 8,
+        "rhat_n": 24
+      }
+    },
+    "sequential": {
+      "hill": [
+        {
+          "n": 10,
+          "mean": 1.149446273036665,
+          "sd": 0.905858923300114,
+          "mcse": 0.28645774364161314
+        },
+        {
+          "n": 10,
+          "mean": 0.5944795829180409,
+          "sd": 0.18456052716062046,
+          "mcse": 0.058363163198892946
+        },
+        {
+          "n": 10,
+          "mean": 0.6202012991713265,
+          "sd": 0.2204917968508953,
+          "mcse": 0.06972562834319708
+        },
+        {
+          "n": 10,
+          "mean": 0.5362609229062716,
+          "sd": 0.18922607122982327,
+          "mcse": 0.05983853777715006
+        }
+      ],
+      "hill_mixture": [
+        {
+          "n": 10,
+          "mean": 1.1868814150084928,
+          "sd": 0.9049089721890214,
+          "mcse": 0.2861573427239272
+        },
+        {
+          "n": 10,
+          "mean": 0.5777474627860679,
+          "sd": 0.2313087936869734,
+          "mcse": 0.07314626308768127
+        },
+        {
+          "n": 10,
+          "mean": 0.5294692451149279,
+          "sd": 0.17990353188602698,
+          "mcse": 0.05689049198685728
+        },
+        {
+          "n": 10,
+          "mean": 0.44708503742695793,
+          "sd": 0.16081368000980184,
+          "mcse": 0.05085375077444626
+        }
+      ]
+    }
+  },
+  "rows": [
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1000,
+      "profit_gap_pct": 1.1437393328529977,
+      "covers": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.3631103888431575,
+      "max_rhat": 1.0070818529090517
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1001,
+      "profit_gap_pct": 0.15792429399472285,
+      "covers": [
+        1,
+        0,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.4543421890983748,
+      "max_rhat": 1.1554896876202034
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1002,
+      "profit_gap_pct": 3.9491441868117247,
+      "covers": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.506083323529024,
+      "max_rhat": 1.02637375899882
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1003,
+      "profit_gap_pct": 0.8643688937688132,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.222572741360807,
+      "max_rhat": 1.0181067001977466
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1004,
+      "profit_gap_pct": 0.8764684091601295,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.54315923976125,
+      "max_rhat": 1.0091979652926562
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1005,
+      "profit_gap_pct": 2.413590639037409,
+      "covers": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.500658368937346,
+      "max_rhat": 1.045190622810206
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1006,
+      "profit_gap_pct": 0.7495346733686752,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.298974595019034,
+      "max_rhat": 1.129108774269746
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1007,
+      "profit_gap_pct": 1.5975590614614277,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.3316790320835654,
+      "max_rhat": 1.0683711426219107
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1008,
+      "profit_gap_pct": 0.5204783180815082,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.287317533515274,
+      "max_rhat": 1.087242985814387
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1009,
+      "profit_gap_pct": 1.4049173866372566,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.285401281751096,
+      "max_rhat": 1.0342135100366512
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1010,
+      "profit_gap_pct": 0.2725522438305394,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.4142617353300473,
+      "max_rhat": 1.022000486012428
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1011,
+      "profit_gap_pct": 1.9470296180680189,
+      "covers": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.3338444269977927,
+      "max_rhat": 1.0207593579272705
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1012,
+      "profit_gap_pct": 0.18920448369727724,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.650162249129572,
+      "max_rhat": 1.0092963543035383
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1013,
+      "profit_gap_pct": 5.609998590517257,
+      "covers": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.152116986232073,
+      "max_rhat": 1.0095750854026369
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1014,
+      "profit_gap_pct": 0.4300686413210749,
+      "covers": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.6635556200847135,
+      "max_rhat": 1.010773945642033
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1015,
+      "profit_gap_pct": 1.4249657272870315,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.5205895170468646,
+      "max_rhat": 1.0199066141228819
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1016,
+      "profit_gap_pct": 0.3012573403741651,
+      "covers": [
+        1,
+        0,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.6351006126870127,
+      "max_rhat": 1.0287936332667105
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1017,
+      "profit_gap_pct": 1.420301577526749,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.394267883902826,
+      "max_rhat": 1.032334702147151
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1018,
+      "profit_gap_pct": 1.745371113248051,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.4016395958833514,
+      "max_rhat": 1.0069979493369248
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1019,
+      "profit_gap_pct": 0.9577902942561687,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.4394197327820706,
+      "max_rhat": 1.0096576980626566
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1020,
+      "profit_gap_pct": 0.7425723408667488,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.241463521083573,
+      "max_rhat": 1.008576108234926
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1021,
+      "profit_gap_pct": 0.3546569322243254,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.315548282919332,
+      "max_rhat": 1.1080381517594509
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1022,
+      "profit_gap_pct": 0.4721653132998101,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.4156411387817562,
+      "max_rhat": 1.016098928287021
+    },
+    {
+      "part": "one_wave",
+      "family": "hill_mixture",
+      "seed": 1023,
+      "profit_gap_pct": 0.9799702661662993,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.2703833860329126,
+      "max_rhat": 1.0118762917683108
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1000,
+      "profit_gap_pct": 0.994962607413638,
+      "covers": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.2022586306128957,
+      "max_rhat": 1.2402737109232755
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1001,
+      "profit_gap_pct": 0.2298935076382971,
+      "covers": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.2491626782418557,
+      "max_rhat": 1.2037444773621737
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1002,
+      "profit_gap_pct": 5.126049839167492,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.651134870916213,
+      "max_rhat": 1.0039270503639945
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1003,
+      "profit_gap_pct": 0.9260174533943604,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.242551764230319,
+      "max_rhat": 1.0942983817988732
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1004,
+      "profit_gap_pct": 0.8112774023338319,
+      "covers": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.275144511433634,
+      "max_rhat": 1.7418303228041223
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1005,
+      "profit_gap_pct": 1.9255891469754864,
+      "covers": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.2729795294807555,
+      "max_rhat": 1.0654759320169387
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1006,
+      "profit_gap_pct": 0.7205631870761237,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.267948174366626,
+      "max_rhat": 1.1439798761809556
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1007,
+      "profit_gap_pct": 1.4507363995118503,
+      "covers": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.1818607904615828,
+      "max_rhat": 1.0760813294035056
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1008,
+      "profit_gap_pct": 0.6049578899725317,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.9847366283809764,
+      "max_rhat": 1.0040225753444456
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1009,
+      "profit_gap_pct": 1.399118347816445,
+      "covers": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.345979130543474,
+      "max_rhat": 1.060968125070271
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1010,
+      "profit_gap_pct": 0.35120210527609635,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.3015229178710035,
+      "max_rhat": 1.0172302203237906
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1011,
+      "profit_gap_pct": 2.2318339385172155,
+      "covers": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.457120868200498,
+      "max_rhat": 1.1839164735177146
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1012,
+      "profit_gap_pct": 0.2854300352075645,
+      "covers": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.2853106260330147,
+      "max_rhat": 1.1046316900247801
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1013,
+      "profit_gap_pct": 5.528606078421696,
+      "covers": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.262113144836482,
+      "max_rhat": 1.0097097294169743
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1014,
+      "profit_gap_pct": 0.4279343951478255,
+      "covers": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.2163200856166054,
+      "max_rhat": 1.0296283956510006
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1015,
+      "profit_gap_pct": 1.4773587101266132,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.330276076507456,
+      "max_rhat": 1.008302350460817
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1016,
+      "profit_gap_pct": 0.3190279160765838,
+      "covers": [
+        1,
+        0,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.422340092215306,
+      "max_rhat": 1.017587384799858
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1017,
+      "profit_gap_pct": 1.4567201911570944,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.5110704756497886,
+      "max_rhat": 1.026440644084105
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1018,
+      "profit_gap_pct": 1.4237731926746315,
+      "covers": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.2792687942144907,
+      "max_rhat": 1.2007178328688788
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1019,
+      "profit_gap_pct": 1.036232649020884,
+      "covers": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.347810367030446,
+      "max_rhat": 1.0335595396260764
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1020,
+      "profit_gap_pct": 0.6427044359410853,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.2113650251803243,
+      "max_rhat": 1.0391946511939656
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1021,
+      "profit_gap_pct": 0.32570813408044946,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.2355739602185327,
+      "max_rhat": 1.0497143631172674
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1022,
+      "profit_gap_pct": 0.6023137694935435,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.318471717565804,
+      "max_rhat": 1.0119413549018939
+    },
+    {
+      "part": "one_wave",
+      "family": "hill",
+      "seed": 1023,
+      "profit_gap_pct": 0.8439408635971405,
+      "covers": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.154394625091188,
+      "max_rhat": 1.039910898474886
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1000,
+      "profit_gap_pct": 1.463481067573744,
+      "covers": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.7268337107329863,
+      "max_rhat": 1.1469573398048714
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1001,
+      "profit_gap_pct": 0.8009567544664118,
+      "covers": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.647326819995757,
+      "max_rhat": 1.1873761988697786
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1002,
+      "profit_gap_pct": 4.399448228730371,
+      "covers": [
+        0,
+        0,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.0188771147119224,
+      "max_rhat": 1.016563416268026
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1003,
+      "profit_gap_pct": 1.7204835158560807,
+      "covers": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.6448750710185447,
+      "max_rhat": 1.2638862583767447
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1004,
+      "profit_gap_pct": 1.4890512476131685,
+      "covers": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.7178006719775296,
+      "max_rhat": 1.0182542834163486
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1005,
+      "profit_gap_pct": 2.7765332194218164,
+      "covers": [
+        0,
+        0,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.9533600838600385,
+      "max_rhat": 1.09872447928563
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1006,
+      "profit_gap_pct": 2.4914489669926563,
+      "covers": [
+        0,
+        0,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.808045304784264,
+      "max_rhat": 1.0317452490368937
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1007,
+      "profit_gap_pct": 2.7292294394649232,
+      "covers": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.7714673005616572,
+      "max_rhat": 1.0037847695772157
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1008,
+      "profit_gap_pct": 2.1167719021008837,
+      "covers": [
+        1,
+        0,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.7228187450213208,
+      "max_rhat": 1.0772443450394902
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1009,
+      "profit_gap_pct": 2.289102440932918,
+      "covers": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.6798897685802232,
+      "max_rhat": 1.0321555096553245
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1010,
+      "profit_gap_pct": 0.5996793425029084,
+      "covers": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.718780490128635,
+      "max_rhat": 1.0248427814459122
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1011,
+      "profit_gap_pct": 4.03203916552819,
+      "covers": [
+        0,
+        0,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.8695071712511924,
+      "max_rhat": 1.1605701122200962
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1012,
+      "profit_gap_pct": 0.7539173025527284,
+      "covers": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.6920665523967127,
+      "max_rhat": 1.0023892961029324
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1013,
+      "profit_gap_pct": 5.752222609927009,
+      "covers": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 2.007818129548408,
+      "max_rhat": 1.0315968255069188
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1014,
+      "profit_gap_pct": 1.013173398512792,
+      "covers": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.6556851485572963,
+      "max_rhat": 1.118987096726863
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1015,
+      "profit_gap_pct": 2.9928760191709904,
+      "covers": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.7950588938443484,
+      "max_rhat": 1.045194807055717
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1016,
+      "profit_gap_pct": 0.9965904048781965,
+      "covers": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.8053771848539943,
+      "max_rhat": 1.0423216579657932
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1017,
+      "profit_gap_pct": 2.837616392447446,
+      "covers": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.8122172515584056,
+      "max_rhat": 1.0837247126413798
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1018,
+      "profit_gap_pct": 2.1316913780953928,
+      "covers": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.7011145609244265,
+      "max_rhat": 1.2088192532197737
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1019,
+      "profit_gap_pct": 2.4466473924075753,
+      "covers": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.8585277496312997,
+      "max_rhat": 1.0341953571368478
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1020,
+      "profit_gap_pct": 2.2642334076295523,
+      "covers": [
+        0,
+        0,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.6340145775901995,
+      "max_rhat": 1.0085285271624782
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1021,
+      "profit_gap_pct": 2.012481815910813,
+      "covers": [
+        0,
+        1,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.7880298262758152,
+      "max_rhat": 1.422209737381353
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1022,
+      "profit_gap_pct": 2.504087015639929,
+      "covers": [
+        0,
+        0,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.7063305549838041,
+      "max_rhat": 1.1104545024776167
+    },
+    {
+      "part": "one_wave",
+      "family": "logistic",
+      "seed": 1023,
+      "profit_gap_pct": 2.0073383389164356,
+      "covers": [
+        0,
+        0,
+        1,
+        0
+      ],
+      "n_channels": 4,
+      "ci_width_mean": 1.6783389180407884,
+      "max_rhat": 1.0174891823344498
+    },
+    {
+      "part": "sequential",
+      "family": "hill",
+      "seed": 2000,
+      "gaps_pct": [
+        3.0288336996584917,
+        0.7823663238754084,
+        1.1154963569449676,
+        0.8229742766504585
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill",
+      "seed": 2001,
+      "gaps_pct": [
+        0.12113944571104457,
+        0.34646592984149494,
+        0.4201007296121137,
+        0.2573984525232046
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill",
+      "seed": 2002,
+      "gaps_pct": [
+        0.9287965505422757,
+        0.6240883774766669,
+        0.3299615815021426,
+        0.32691893232492947
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill",
+      "seed": 2003,
+      "gaps_pct": [
+        0.5185974739337259,
+        0.6647687212661259,
+        0.6787446920296333,
+        0.7561715299750493
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill",
+      "seed": 2004,
+      "gaps_pct": [
+        1.6028605020711788,
+        0.5084423968987516,
+        0.6322985628031944,
+        0.5541487179143256
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill",
+      "seed": 2005,
+      "gaps_pct": [
+        0.5160510729589948,
+        0.5544414158230304,
+        0.47309947458056584,
+        0.6421455583390164
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill",
+      "seed": 2006,
+      "gaps_pct": [
+        0.5901887807507479,
+        0.7753704056003766,
+        0.7843574108628832,
+        0.4808343474613345
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill",
+      "seed": 2007,
+      "gaps_pct": [
+        1.3363908921959093,
+        0.8885234849783633,
+        0.6820801473514593,
+        0.32133127094993313
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill",
+      "seed": 2008,
+      "gaps_pct": [
+        0.6378241622310106,
+        0.4108485156101629,
+        0.5394165191150255,
+        0.6237263160902367
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill",
+      "seed": 2009,
+      "gaps_pct": [
+        2.213780150313271,
+        0.3894802578100279,
+        0.5464575169112795,
+        0.5769598268342274
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill_mixture",
+      "seed": 2000,
+      "gaps_pct": [
+        2.992940332507008,
+        0.8297166394072791,
+        0.8580977345909601,
+        0.6578133458560477
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill_mixture",
+      "seed": 2001,
+      "gaps_pct": [
+        0.12590631485336004,
+        0.2275203476394602,
+        0.3253764028551108,
+        0.16787441929730806
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill_mixture",
+      "seed": 2002,
+      "gaps_pct": [
+        1.0147041893012512,
+        0.6346744870956358,
+        0.3262771199949553,
+        0.31273049800030817
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill_mixture",
+      "seed": 2003,
+      "gaps_pct": [
+        0.6318391690975761,
+        0.7093057564847244,
+        0.6933793015049524,
+        0.6804883773389362
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill_mixture",
+      "seed": 2004,
+      "gaps_pct": [
+        1.679931316534083,
+        0.5414931125945165,
+        0.5106170400699422,
+        0.3931317996115438
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill_mixture",
+      "seed": 2005,
+      "gaps_pct": [
+        0.43478260873943225,
+        0.47791291838886485,
+        0.3395468731395602,
+        0.47928308501449796
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill_mixture",
+      "seed": 2006,
+      "gaps_pct": [
+        0.6037211787625046,
+        0.6695101074014146,
+        0.5546915263840388,
+        0.41004813048485944
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill_mixture",
+      "seed": 2007,
+      "gaps_pct": [
+        1.4675184857651287,
+        0.971692190651436,
+        0.697718920961339,
+        0.31858650620241724
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill_mixture",
+      "seed": 2008,
+      "gaps_pct": [
+        0.6621439542305745,
+        0.39789770839373023,
+        0.5477235047028677,
+        0.5687114547860204
+      ]
+    },
+    {
+      "part": "sequential",
+      "family": "hill_mixture",
+      "seed": 2009,
+      "gaps_pct": [
+        2.25532660029401,
+        0.3177513598036181,
+        0.4412640269455518,
+        0.4821827576776405
+      ]
+    }
+  ]
+}

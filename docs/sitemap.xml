@@ -14,7 +14,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/aurora-00-overview.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-02</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -34,17 +34,17 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/aurora-04-reporting.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-02</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/aurora-05-unified-workflow.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-02</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/bayesian-workflow.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -64,7 +64,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/causal-inference.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -74,12 +74,12 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/continuous-learning-math.html</loc>
-        <lastmod>2026-07-02</lastmod>
+        <lastmod>2026-07-03</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/continuous-learning.html</loc>
-        <lastmod>2026-07-02</lastmod>
+        <lastmod>2026-07-03</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -104,19 +104,19 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/faq.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-02</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/getting-started.html</loc>
-        <lastmod>2026-06-30</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/glossary.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-02</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -131,47 +131,47 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/math-00-overview.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/math-01-adstock.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/math-02-saturation.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/math-03-seasonality-trend.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/math-04-bayesian-model.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/math-05-calibration.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/math-06-extensions.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/measurement-calibration.html</loc>
-        <lastmod>2026-07-02</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/mmm-example-report.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-02</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -181,13 +181,13 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/model-garden.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/modeling-guide.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -198,7 +198,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/pressure-testing.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -274,7 +274,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/technical-guide.html</loc>
-        <lastmod>2026-06-30</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -284,22 +284,22 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/variable-selection.html</loc>
-        <lastmod>2026-07-02</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/workflow-budget-optimization.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-02</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/workflow-calibration-decisions.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/workflow-channel-effectiveness.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-02</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -309,32 +309,32 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/workshop-00-thinking-in-distributions.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/workshop-01-priors.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/workshop-02-sampling.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/workshop-03-first-mmm.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/workshop-04-reading-the-posterior.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/workshop-05-from-draws-to-decisions.html</loc>
-        <lastmod>2026-06-24</lastmod>
+        <lastmod>2026-07-04</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
