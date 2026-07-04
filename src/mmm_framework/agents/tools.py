@@ -31,7 +31,7 @@ from mmm_framework.agents import model_ops as _model_ops
 from mmm_framework.agents.fitting import (
     _mff_config_from_spec,
     build_and_fit,
-    unconsumed_prior_path,
+    unconsumed_spec_path,
 )
 from mmm_framework.agents.spec_locks import (
     get_at,
@@ -2242,14 +2242,38 @@ def update_model_setting(
     Examples:
       setting_path="inference.draws",           value=2000
       setting_path="inference.chains",          value=4
+      setting_path="inference.method",          value="map"      (approximate fit: map|advi|fullrank_advi|pathfinder|nuts)
+      setting_path="inference.metrics_draws",   value=0          (0 disables per-run history metrics)
       setting_path="trend.type",                value="piecewise"
       setting_path="trend.n_changepoints",      value=10
       setting_path="seasonality.yearly",        value=4
       setting_path="kpi",                       value="Revenue"
-      setting_path="time_granularity",          value="daily"
+      setting_path="kpi_level",                 value="geo"      (national|geo)
+      setting_path="time_granularity",          value="daily"    (weekly|daily|monthly)
       setting_path="media_channels.TV.adstock.type",      value="delayed"
       setting_path="media_channels.TV.adstock.l_max",     value=13
       setting_path="media_channels.TV.saturation.type",   value="logistic"
+
+    Measurement descriptor (impression-/click-measured media — drives ROI vs
+    efficiency reporting; absent means the modeled variable is dollars):
+      setting_path="media_channels.Display.measurement_unit", value="impressions"  (spend|impressions|clicks|other)
+      setting_path="media_channels.Display.cpm",              value=5.5  ($ per 1k impressions)
+      setting_path="media_channels.Search.measurement_unit",  value="clicks"
+      setting_path="media_channels.Search.cpc",               value=0.8  ($ per click)
+      setting_path="media_channels.Display.spend_column",     value="Display_spend"  (external $ series; exclusive with cpm/cpc)
+
+    Observation model / global knobs:
+      setting_path="likelihood.family",   value="student_t"     (default "normal"; non-Gaussian needs a model that owns its likelihood)
+      setting_path="media_prior_mode",    value="coefficient"   (default "roi" for agent-built models)
+      setting_path="skip_quality_gate",   value=True            (bypass the pre-fit data-quality gate — use only when the user insists)
+      setting_path="control_variables.price.role", value="confounder"  (confounder|precision)
+
+    Also consumed at fit time (usually set by their dedicated tools, but
+    reachable here): `estimands` (declared estimand list), `experiments` /
+    `experiment_ids` (staged by apply_experiment_calibration), `garden_ref` +
+    `model_params` (set by load_garden_model / configure), `dataset` (native
+    role-tagged dataset). Any OTHER path is rejected — the model builder would
+    silently ignore it.
 
     Intercept prior (Normal on standardized y — mu is in KPI standard deviations
     from the mean, so values beyond ±2 put the baseline outside the observed KPI
@@ -2345,21 +2369,31 @@ def update_model_setting(
 
     parts = setting_path.split(".")
 
-    # Refuse priors the model builder would silently drop (writing an unread
-    # spec key looks like success but changes nothing — see agents/fitting.py).
-    if parts[0] == "priors":
-        err = unconsumed_prior_path(parts, value, new_spec)
-        if err:
-            return Command(
-                update={
-                    "messages": [
-                        ToolMessage(
-                            content=f"Rejected `{setting_path}`: {err}",
-                            tool_call_id=tool_call_id,
-                        )
-                    ]
-                }
-            )
+    # Store enum-valued spec strings canonically (lowercase): some builder
+    # reads compare exactly (kpi_level == "geo", MeasurementUnit(unit)), so a
+    # cased write like "Geo" would validate here yet silently no-op at build.
+    if isinstance(value, str) and (
+        setting_path in ("kpi_level", "time_granularity", "media_prior_mode")
+        or parts[-1] == "measurement_unit"
+        or (parts[0] == "media_channels" and parts[-1] == "type")
+    ):
+        value = value.strip().lower()
+
+    # Refuse writes the model builder would silently drop — or enum values
+    # that would silently fall back to a default (writing an unread spec key
+    # looks like success but changes nothing — see agents/fitting.py).
+    err = unconsumed_spec_path(parts, value, new_spec)
+    if err:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Rejected `{setting_path}`: {err}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
 
     try:
         _set(new_spec, parts, value)
