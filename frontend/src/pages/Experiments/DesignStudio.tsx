@@ -10,6 +10,7 @@ import {
   useDesignOptions,
   useExperimentOptimization,
   useExperimentSimulation,
+  useStructuralIdentification,
   useTransitionExperiment,
 } from '../../api/hooks/useMeasurement';
 import { useUpsertExperiment } from '../../api/hooks/usePortfolio';
@@ -27,6 +28,8 @@ import type {
   PrioritiesPayload,
   ExperimentDesignPayload,
   SimulateRequest,
+  StructuralIdentificationPayload,
+  StructuralParamIdent,
 } from '../../api/services/measurementService';
 
 function errorDetail(e: unknown): string {
@@ -111,6 +114,7 @@ export function DesignStudio({
 
   useEffect(() => {
     optimization.reset();
+    identification.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel]);
 
@@ -125,6 +129,7 @@ export function DesignStudio({
   const transition = useTransitionExperiment();
   const simulation = useExperimentSimulation(projectId);
   const optimization = useExperimentOptimization(projectId);
+  const identification = useStructuralIdentification(projectId);
 
   const priorityRow = useMemo(
     () => priorities?.channels.find((c) => c.channel === channel) ?? null,
@@ -457,6 +462,22 @@ export function DesignStudio({
           onSelect={applyCandidate}
           selectedIndex={selectedCandidate?.index ?? null}
           applying={compute.isPending}
+        />
+
+        <IdentificationPanel
+          channel={channel}
+          jobStatus={identification.job.data?.status ?? null}
+          jobError={identification.job.data?.error ?? null}
+          result={
+            identification.job.data?.status === 'done'
+              ? identification.job.data.result
+              : null
+          }
+          isStarting={identification.start.isPending}
+          startError={
+            identification.start.isError ? errorDetail(identification.start.error) : null
+          }
+          onRun={(opts) => identification.start.mutate({ channel, ...opts })}
         />
 
         {/* ── Results ── */}
@@ -1178,6 +1199,238 @@ function OptimizerPanel({
             />
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+const IDENT_HINT: Record<string, string> = {
+  beta: 'widen the spend contrast',
+  alpha: 'sharpen / lengthen the spend pulses',
+  lam: 'add ≥3 in-support spend levels',
+};
+
+function IdentRow({
+  name,
+  paramKey,
+  d,
+}: {
+  name: string;
+  paramKey: 'beta' | 'alpha' | 'lam';
+  d: StructuralParamIdent;
+}) {
+  return (
+    <tr className="border-t border-line-200">
+      <td className="py-1.5 pr-3 text-xs font-medium text-ink-700">{name}</td>
+      {d.claimed ? (
+        <>
+          <td className="num py-1.5 pr-3 text-xs text-ink-900">{fmtPct(d.contraction, 0)}</td>
+          <td className="num py-1.5 pr-3 text-xs text-ink-700">
+            {d.mde != null ? d.mde.toPrecision(3) : '—'}
+            {d.mde_relative != null && (
+              <span className="text-ink-400"> ({fmtPct(d.mde_relative, 0)} of est.)</span>
+            )}
+          </td>
+          <td className="num py-1.5 text-xs text-ink-700">{fmtPct(d.power, 0)}</td>
+        </>
+      ) : (
+        <td colSpan={3} className="py-1.5 text-xs text-gold-700">
+          not identified by this design — {IDENT_HINT[paramKey]}
+        </td>
+      )}
+    </tr>
+  );
+}
+
+/**
+ * Structural identification: design a multi-level flighting schedule and show
+ * how well its refit would pin the channel's saturation / adstock / beta — an
+ * optimistic Laplace UPPER BOUND on the next refit, never a guarantee.
+ */
+function IdentificationPanel({
+  channel,
+  jobStatus,
+  jobError,
+  result,
+  isStarting,
+  startError,
+  onRun,
+}: {
+  channel: string;
+  jobStatus: 'pending' | 'running' | 'done' | 'error' | null;
+  jobError: string | null;
+  result: StructuralIdentificationPayload | null;
+  isStarting: boolean;
+  startError: string | null;
+  onRun: (opts: { levels?: number[]; block_weeks?: number; duration?: number }) => void;
+}) {
+  const running = isStarting || jobStatus === 'pending' || jobStatus === 'running';
+  const [levelsText, setLevelsText] = useState('0.5, 1, 1.5');
+  const [blockWeeks, setBlockWeeks] = useState(''); // '' = auto (adstock cool-down)
+  const [duration, setDuration] = useState(12);
+
+  const run = () => {
+    const levels = levelsText
+      .split(/[,\s]+/)
+      .map(Number)
+      .filter((m) => Number.isFinite(m) && m >= 0)
+      .slice(0, 8);
+    onRun({
+      ...(levels.length >= 2 ? { levels } : {}),
+      ...(blockWeeks !== '' ? { block_weeks: Math.max(1, Math.round(Number(blockWeeks))) } : {}),
+      duration,
+    });
+  };
+
+  const struct = result?.structural ?? null;
+
+  return (
+    <div className="space-y-4 border-t border-line-200 pt-4">
+      <div>
+        <div className="mb-3 grid grid-cols-3 gap-3">
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-ink-700">
+              Spend levels (× current)
+            </span>
+            <input
+              value={levelsText}
+              onChange={(e) => setLevelsText(e.target.value)}
+              placeholder="0.5, 1, 1.5"
+              className="num w-full rounded-md border border-line-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-ink-700">
+              Block weeks (blank = washout)
+            </span>
+            <input
+              type="number" min={1} max={13} value={blockWeeks}
+              onChange={(e) => setBlockWeeks(e.target.value)}
+              placeholder="auto"
+              className="num w-full rounded-md border border-line-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-ink-700">
+              Duration (weeks)
+            </span>
+            <input
+              type="number" min={4} max={52} value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              className="num w-full rounded-md border border-line-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+            />
+          </label>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={run} disabled={!channel || running}>
+            {running ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FlaskConical className="h-4 w-4" />
+            )}
+            {running ? 'Analyzing…' : 'Check structural identification'}
+          </Button>
+          {running && (
+            <span className="text-xs text-ink-400">
+              Designing the multi-level flighting schedule and scoring the Laplace
+              information it would add…
+            </span>
+          )}
+        </div>
+        {!result && !running && (
+          <p className="mt-1.5 text-xs text-ink-400">
+            Would the next refit actually pin this channel's saturation curve, adstock
+            carryover, and coefficient? Designs a multi-level flighting schedule and
+            reports each parameter's expected posterior contraction — an optimistic
+            upper bound, not a guarantee.
+          </p>
+        )}
+      </div>
+
+      {(startError || jobError) && (
+        <p className="text-sm text-rust-600">{startError ?? jobError}</p>
+      )}
+
+      {result && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-full bg-steel-100 px-2.5 py-1 text-steel-700">
+              <span className="num">{result.n_levels}</span> spend levels
+            </span>
+            <span className="rounded-full bg-steel-100 px-2.5 py-1 text-steel-700">
+              <span className="num">{result.block_weeks}</span>w blocks ·{' '}
+              <span className="num">{result.duration}</span>w total
+            </span>
+            <span
+              className={
+                result.block_ge_cooldown
+                  ? 'rounded-full bg-sage-100 px-2.5 py-1 text-sage-800'
+                  : 'rounded-full bg-gold-100 px-2.5 py-1 text-gold-700'
+              }
+            >
+              adstock washout {result.cooldown_weeks ?? '?'}w{' '}
+              {result.block_ge_cooldown ? '≤ block ✓' : '> block — carryover smears the contrast'}
+            </span>
+            {result.extrapolation_warning && (
+              <span className="rounded-full bg-gold-100 px-2.5 py-1 text-gold-700">
+                top level clamped to historical spend support
+              </span>
+            )}
+          </div>
+
+          {!result.structural_gated ? (
+            <p className="rounded-md bg-cream-100 px-3 py-2 text-xs text-ink-600">
+              Structural readout unavailable
+              {result.structural_gate_reason ? ` — ${result.structural_gate_reason}` : ''}.
+              The reduced-form curve / marginal power still applies.
+            </p>
+          ) : struct ? (
+            <>
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-ink-400">
+                    <th className="pb-1 pr-3 font-medium">Parameter</th>
+                    <th className="pb-1 pr-3 font-medium">Contraction</th>
+                    <th className="pb-1 pr-3 font-medium">MDE</th>
+                    <th className="pb-1 font-medium">Power vs 0</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <IdentRow name="Coefficient β" paramKey="beta" d={struct.params.beta} />
+                  <IdentRow name="Adstock α (carryover)" paramKey="alpha" d={struct.params.alpha} />
+                  <IdentRow name="Saturation ψ" paramKey="lam" d={struct.params.lam} />
+                </tbody>
+              </table>
+              {struct.identifies_anything ? (
+                <p className="text-xs text-ink-600">
+                  Binding identification:{' '}
+                  <span className="num font-medium">{fmtPct(struct.binding_contraction, 0)}</span>{' '}
+                  contraction (power {fmtPct(struct.binding_power, 0)}, target{' '}
+                  {fmtPct(struct.power_target, 0)}) — the worst-identified claimed parameter.
+                  Recommended estimator: a full structural refit with the experiment weeks
+                  appended. This is an optimistic upper bound.
+                </p>
+              ) : (
+                <p className="rounded-md bg-gold-100 px-3 py-2 text-xs text-gold-700">
+                  This schedule doesn't move the structural parameters off their priors —
+                  add spend levels and sharpen the pulses.
+                </p>
+              )}
+              {(struct.n_clamped ?? 0) > 0 && (
+                <p className="text-xs text-gold-700">
+                  <span className="num">{struct.n_clamped}</span> test week(s) are fully
+                  saturated (no marginal information there) — keep levels in the responsive
+                  range.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="rounded-md bg-cream-100 px-3 py-2 text-xs text-ink-600">
+              {result.note ?? 'Structural design degenerate — no identifiable contrast.'}
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

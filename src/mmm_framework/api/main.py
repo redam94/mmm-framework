@@ -5162,6 +5162,90 @@ async def get_experiment_optimization(project_id: str, job_id: str):
     return JSONResponse(content=safe_json_dumps_load(art["payload"]))
 
 
+class ExperimentIdentifyRequest(BaseModel):
+    channel: str
+    # spend multipliers for the flighting levels (≥3 in-support levels trace
+    # the saturation curve); None -> the op's default (0.5, 1.0, 1.5)
+    levels: list[float] | None = Field(None, max_length=8)
+    # None -> the channel's adstock cool-down (washout) sets the block length
+    block_weeks: int | None = Field(None, ge=1, le=13)
+    duration: int = Field(12, ge=4, le=52)
+    max_draws: int = Field(200, ge=20, le=1000)
+    seed: int = 42
+
+
+@app.post(
+    "/projects/{project_id}/experiment-design/identify",
+    dependencies=[_proj_write, _rl_heavy],
+)
+async def start_structural_identification(
+    project_id: str, body: ExperimentIdentifyRequest
+):
+    """Start a NON-BLOCKING structural-identification analysis: designs a
+    multi-level flighting schedule and reports how well its refit would
+    identify the channel's saturation (psi), adstock carryover (alpha) and
+    coefficient (beta) — an optimistic Laplace upper bound, never a guarantee.
+    Poll the returned job_id."""
+    from mmm_framework.api.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    dataset_path, kpi = _design_inputs(project_id, body.channel)
+    run = latest_model_run_payload(project_id)
+
+    op_kwargs: dict = {
+        "dataset_path": dataset_path,
+        "kpi": kpi,
+        "channel": body.channel,
+        "duration": int(body.duration),
+        "max_draws": int(body.max_draws),
+        "random_seed": int(body.seed),
+    }
+    if body.levels:
+        op_kwargs["levels"] = [float(m) for m in body.levels]
+    if body.block_weeks is not None:
+        op_kwargs["block_weeks"] = int(body.block_weeks)
+
+    synthetic_tid = f"__simjobs__{project_id}"
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        "structural_identification",
+        {
+            "status": "pending",
+            "project_id": project_id,
+            "channel": body.channel,
+            "result": None,
+            "error": None,
+        },
+    )
+    job_id = job["id"]
+    _spawn_job_task(
+        _run_model_op_job(
+            job_id,
+            synthetic_tid,
+            run,
+            "identify_structural_parameters",
+            op_kwargs,
+            "structural_identification",
+        )
+    )
+    return JSONResponse(
+        status_code=202, content={"job_id": job_id, "status": "pending"}
+    )
+
+
+@app.get(
+    "/projects/{project_id}/experiment-design/identify/{job_id}",
+    dependencies=[_proj_read],
+)
+async def get_structural_identification(project_id: str, job_id: str):
+    """Poll a structural-identification job: {status, result|null, error|null}."""
+    art = sessions_store.get_artifact(job_id)
+    if art is None or (art.get("payload") or {}).get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Identification job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
 # ── Artifacts ─────────────────────────────────────────────────────────────────
 
 
