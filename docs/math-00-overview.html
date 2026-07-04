@@ -787,6 +787,29 @@
                 </ul>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>Why is the MMM described as a generative model, and what does fitting it correspond to?</summary>
+                    <div class="quiz-answer">
+                        <p>The model is a complete forward recipe for the KPI: sample parameters from the priors, compute the additive mean <em>&mu;<sub>t</sub></em>, then draw the observation from the Normal likelihood. Fitting runs that recipe backwards — NUTS explores the posterior, proportional to likelihood times prior, to infer which parameter settings could have generated the observed series. The definition box at the top of the page and "The generative equation" section develop this.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>The default priors commit the model to two structural properties of every channel's response curve before any data arrive. What are they, and which choices enforce them?</summary>
+                    <div class="quiz-answer">
+                        <p>Every prior response curve is monotone increasing and concave (saturating). Monotonicity comes from the Gamma prior on <em>&beta;<sub>c</sub></em>, which is strictly positive; concavity comes from the 1 &minus; e<sup>&minus;&lambda;u</sup> saturation form, which bends downward at every spend level. The "Many prior draws of a single channel's response curve" section shows both properties as notebook-asserted facts.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Why does the framework standardize the KPI before modeling, and why does that mean <em>&beta;<sub>c</sub></em> is not a channel's ROI?</summary>
+                    <div class="quiz-answer">
+                        <p>Standardizing puts the KPI on a common, unit-free scale, so one set of weakly informative priors makes sense for any dataset. On that scale <em>&beta;<sub>c</sub></em> is the channel's standardized maximum-contribution ceiling, not its ROI — a dollar ROI also depends on spend, saturation, and the KPI's original scale. The priors table in "The priors" section makes this distinction explicit.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>

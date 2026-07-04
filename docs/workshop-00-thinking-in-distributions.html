@@ -719,6 +719,29 @@
                 </ul>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>Creative B measured a 5.4% CTR against A's 5.1%. Why is "5.4 is bigger than 5.1" not an answer to the buyer's question?</summary>
+                    <div class="quiz-answer">
+                        <p>Both numbers came from a finite sample, so rerunning the test would produce different ones — each observed rate is one draw from a range of plausible true CTRs. The two posteriors overlap heavily, which is why the honest answer is a probability: about a 73% chance B's true CTR beats A's, which also means a real chance it does not. Section 5 works through this comparison.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Bayes' rule combines three ingredients. What are they, and what does each one contribute?</summary>
+                    <div class="quiz-answer">
+                        <p>The prior is your belief about the unknown quantity before the new data — for example, "new creatives in this account usually land near 5%". The likelihood scores every candidate value by how probable it makes the data you actually observed. The posterior is the updated belief: prior multiplied by likelihood, rescaled into a proper distribution. Section 2 shows the three curves negotiating on one chart.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>The media buyer cares about monthly revenue, not click-through rates. How do you turn a posterior over CTRs into a distribution over dollars?</summary>
+                    <div class="quiz-answer">
+                        <p>Monte Carlo: push every posterior draw through the revenue formula, and the derived quantity inherits a full distribution — no new model, no calculus. That is how the page turned 200,000 CTR draws into a median uplift of <span>$</span>2,981 a month alongside a 27% chance the switch loses money. Section 6 covers this, and the same mechanism is how an MMM turns parameter draws into ROAS distributions.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>

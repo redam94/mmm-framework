@@ -830,6 +830,29 @@
                 </ul>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>Why does the Fourier seasonality basis always come in sine/cosine pairs, making the design matrix (<em>T</em>, 2<em>K</em>) rather than (<em>T</em>, <em>K</em>)?</summary>
+                    <div class="quiz-answer">
+                        <p>A lone sine at a given frequency is pinned to a fixed phase, but real seasonal peaks land wherever the calendar puts them. The identity <em>A</em> sin(<em>&omega;t</em> + <em>&phi;</em>) = <em>a</em> sin(<em>&omega;t</em>) + <em>b</em> cos(<em>&omega;t</em>) shows that a sine/cosine pair spans every amplitude and every phase at that frequency, so two columns per harmonic buy arbitrary phase. See "Why both sine and cosine?" in Part I.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>In the piecewise trend, why must the changepoint effects <em>A&delta;</em> multiply <em>t</em>, and what does the correction <em>&gamma;<sub>j</sub></em> = &minus;<em>s<sub>j</sub>&delta;<sub>j</sub></em> accomplish?</summary>
+                    <div class="quiz-answer">
+                        <p>Each <em>&delta;<sub>j</sub></em> is meant to change the slope, which only happens if <em>A&delta;</em> enters as a coefficient on <em>t</em>; used as a bare additive term it produces piecewise-constant level shifts instead — a real framework bug that was found and fixed. Multiplying by <em>t</em> alone would make the trend jump at each changepoint, because the new slope would retroactively apply to all elapsed time; <em>&gamma;<sub>j</sub></em> cancels that jump exactly, collapsing each term to a continuous ramp that kinks only after its changepoint. The "Piecewise linear, done correctly" section derives this.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Why does this page insist that baseline structure is an attribution control rather than a fit knob?</summary>
+                    <div class="quiz-answer">
+                        <p>The baseline is fit jointly with the media coefficients, so whatever time-shape the trend family cannot represent does not vanish — it is absorbed by whichever channel's spend happens to co-move with it. On the kinked truth a linear trend still correlates 0.961 with the truth, yet in Stress 02 the same misfit misattributed TV's contribution by about &minus;63% with green diagnostics. The "Why this is about attribution, not fit" section states the doctrine: the basis decides what is representable, the prior decides how much flexibility is used, and anything neither can express lands on media.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>

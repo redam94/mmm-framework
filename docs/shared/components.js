@@ -7,6 +7,34 @@
     'use strict';
 
     // =========================================================================
+    // Theme (light / dark) — resolved synchronously so the first paint uses
+    // the right palette. localStorage wins; otherwise the OS preference.
+    // =========================================================================
+    const THEME_KEY = 'mmm-docs-theme';
+
+    function storedTheme() {
+        try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; }
+    }
+
+    function systemTheme() {
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark' : 'light';
+    }
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+    }
+
+    applyTheme(storedTheme() || systemTheme());
+
+    // Follow OS changes while the user hasn't picked explicitly.
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!storedTheme()) applyTheme(e.matches ? 'dark' : 'light');
+        });
+    }
+
+    // =========================================================================
     // Configuration
     // =========================================================================
     // Grouped navigation: Learn / Methodology / Platform / Proof / Project.
@@ -80,6 +108,129 @@
         else acc.push(...g.items);
         return acc;
     }, []);
+
+    const GITHUB_REPO = 'https://github.com/redam94/mmm-framework';
+
+    // Ordered page series → automatic Previous/Next cards above the footer.
+    const SERIES = {
+        'Math series': [
+            ['math-00-overview.html', 'The Generative Model'],
+            ['math-01-adstock.html', 'The Mathematics of Adstock'],
+            ['math-02-saturation.html', 'The Mathematics of Saturation'],
+            ['math-03-seasonality-trend.html', 'Seasonality & Trend'],
+            ['math-04-bayesian-model.html', 'The Bayesian Model'],
+            ['math-05-calibration.html', 'Calibration'],
+            ['math-06-extensions.html', 'Extensions']
+        ],
+        'Workshop series': [
+            ['workshop-00-thinking-in-distributions.html', 'Thinking in Distributions'],
+            ['workshop-01-priors.html', 'Priors'],
+            ['workshop-02-sampling.html', 'Sampling'],
+            ['workshop-03-first-mmm.html', 'Your First MMM'],
+            ['workshop-04-reading-the-posterior.html', 'Reading the Posterior'],
+            ['workshop-05-from-draws-to-decisions.html', 'From Draws to Decisions']
+        ],
+        'Pressure-test series': [
+            ['stress-00-rosy-picture.html', 'The Rosy Picture'],
+            ['stress-01-carryover-shape.html', 'Carryover & Shape'],
+            ['stress-02-time-structure.html', 'Time Structure'],
+            ['stress-03-confounding-selection.html', 'Confounding & Selection'],
+            ['stress-04-extension-traps.html', 'Extension Traps'],
+            ['stress-05-gauntlet.html', 'The Gauntlet'],
+            ['stress-06-geo-hierarchy.html', 'Geo Hierarchy']
+        ],
+        'Aurora tour': [
+            ['aurora-00-overview.html', 'Overview'],
+            ['aurora-01-causality.html', 'Causality'],
+            ['aurora-02-base-mmm.html', 'The Base MMM'],
+            ['aurora-03-extended-mmm.html', 'Extended Models'],
+            ['aurora-04-reporting.html', 'Reporting'],
+            ['aurora-05-unified-workflow.html', 'The Unified Workflow']
+        ],
+        'Decision workflows': [
+            ['workflow-channel-effectiveness.html', 'Channel Effectiveness'],
+            ['workflow-budget-optimization.html', 'Budget Optimization'],
+            ['workflow-forecasting.html', 'Forecasting'],
+            ['workflow-calibration-decisions.html', 'Calibration Decisions']
+        ]
+    };
+
+    // Audience tier per page (three-tier editorial policy). Pages not listed
+    // get no tier chip. Reading time is computed for any page with a chip row.
+    const TIER_OVERVIEW = 'overview', TIER_ANALYST = 'analyst', TIER_TECHNICAL = 'technical';
+    const PAGE_TIERS = {
+        'getting-started.html': TIER_OVERVIEW,
+        'about.html': TIER_OVERVIEW,
+        'business-stakeholders.html': TIER_OVERVIEW,
+        'faq.html': TIER_OVERVIEW,
+        'glossary.html': TIER_OVERVIEW,
+        'demos.html': TIER_OVERVIEW,
+        'changelog.html': TIER_OVERVIEW,
+        'platform-overview.html': TIER_OVERVIEW,
+        'pricing.html': TIER_OVERVIEW,
+        'trust.html': TIER_OVERVIEW,
+        'data-connections.html': TIER_OVERVIEW,
+        'security.html': TIER_OVERVIEW,
+        'responsible-disclosure.html': TIER_OVERVIEW,
+
+        'modeling-guide.html': TIER_ANALYST,
+        'real-data-guide.html': TIER_ANALYST,
+        'interpreting-results.html': TIER_ANALYST,
+        'causal-inference.html': TIER_ANALYST,
+        'bayesian-workflow.html': TIER_ANALYST,
+        'variable-selection.html': TIER_ANALYST,
+        'scientific-modeling.html': TIER_ANALYST,
+        'measurement-calibration.html': TIER_ANALYST,
+        'continuous-learning.html': TIER_ANALYST,
+        'identification-assumptions.html': TIER_ANALYST,
+        'pressure-testing.html': TIER_ANALYST,
+        'data-requirements.html': TIER_ANALYST,
+        'evaluator.html': TIER_ANALYST,
+        'model-garden.html': TIER_ANALYST,
+        'mmm-walkthrough.html': TIER_ANALYST,
+        'causal-features-showcase.html': TIER_ANALYST,
+        'scientific-workflow-demo.html': TIER_ANALYST,
+        'scientific-workflow-simple.html': TIER_ANALYST,
+        'workflow-budget-optimization.html': TIER_ANALYST,
+        'workflow-channel-effectiveness.html': TIER_ANALYST,
+        'workflow-forecasting.html': TIER_ANALYST,
+        'workflow-calibration-decisions.html': TIER_ANALYST,
+        'workshop-00-thinking-in-distributions.html': TIER_ANALYST,
+        'workshop-01-priors.html': TIER_ANALYST,
+        'workshop-02-sampling.html': TIER_ANALYST,
+        'workshop-03-first-mmm.html': TIER_ANALYST,
+        'workshop-04-reading-the-posterior.html': TIER_ANALYST,
+        'workshop-05-from-draws-to-decisions.html': TIER_ANALYST,
+        'stress-00-rosy-picture.html': TIER_ANALYST,
+        'stress-01-carryover-shape.html': TIER_ANALYST,
+        'stress-02-time-structure.html': TIER_ANALYST,
+        'stress-03-confounding-selection.html': TIER_ANALYST,
+        'stress-04-extension-traps.html': TIER_ANALYST,
+        'stress-05-gauntlet.html': TIER_ANALYST,
+        'stress-06-geo-hierarchy.html': TIER_ANALYST,
+        'aurora-00-overview.html': TIER_ANALYST,
+        'aurora-01-causality.html': TIER_ANALYST,
+        'aurora-02-base-mmm.html': TIER_ANALYST,
+        'aurora-03-extended-mmm.html': TIER_ANALYST,
+        'aurora-04-reporting.html': TIER_ANALYST,
+        'aurora-05-unified-workflow.html': TIER_ANALYST,
+
+        'technical-guide.html': TIER_TECHNICAL,
+        'continuous-learning-math.html': TIER_TECHNICAL,
+        'math-00-overview.html': TIER_TECHNICAL,
+        'math-01-adstock.html': TIER_TECHNICAL,
+        'math-02-saturation.html': TIER_TECHNICAL,
+        'math-03-seasonality-trend.html': TIER_TECHNICAL,
+        'math-04-bayesian-model.html': TIER_TECHNICAL,
+        'math-05-calibration.html': TIER_TECHNICAL,
+        'math-06-extensions.html': TIER_TECHNICAL
+    };
+
+    const TIER_LABELS = {
+        overview: 'Overview · plain language',
+        analyst: 'Analyst level',
+        technical: 'Technical · math leads'
+    };
 
     // =========================================================================
     // Utility Functions
@@ -182,6 +333,7 @@
             </li>`;
         }).join('\n                ');
 
+        const isMac = /Mac|iPhone|iPad/.test(navigator.platform || '');
         nav.innerHTML = `
         <div class="nav-content">
             <a href="index.html" class="logo">MMM Framework</a>
@@ -193,8 +345,30 @@
             <ul class="nav-links">
                 ${linksHtml}
             </ul>
+            <div class="nav-tools">
+                <button class="nav-tool-btn search-trigger" aria-label="Search the documentation">
+                    ${SEARCH_ICON}
+                    <span class="search-kbd">${isMac ? '⌘' : 'Ctrl'} K</span>
+                </button>
+                <button class="nav-tool-btn theme-toggle" aria-label="Switch between light and dark theme">
+                    ${currentThemeIcon()}
+                </button>
+            </div>
         </div>
         `;
+
+        nav.querySelector('.search-trigger').addEventListener('click', () => {
+            openSearch();
+        });
+
+        const themeBtn = nav.querySelector('.theme-toggle');
+        themeBtn.addEventListener('click', () => {
+            const next = document.documentElement.getAttribute('data-theme') === 'dark'
+                ? 'light' : 'dark';
+            applyTheme(next);
+            try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* private mode */ }
+            themeBtn.innerHTML = currentThemeIcon();
+        });
 
         // Mobile menu toggle
         const menuBtn = nav.querySelector('.mobile-menu-btn');
@@ -268,10 +442,390 @@
             <a href="changelog.html">Changelog &amp; API stability</a>
             <a href="evaluator.html">For evaluators</a>
             <a href="https://github.com/redam94/mmm-framework" target="_blank" rel="noopener">Source on GitHub</a>
+            <span class="footer-page-actions">
+                <a href="${GITHUB_REPO}/edit/main/docs/${getCurrentPage()}" target="_blank" rel="noopener">Edit this page</a>
+                <a href="${GITHUB_REPO}/issues/new?title=${encodeURIComponent('Docs: ' + getCurrentPage())}" target="_blank" rel="noopener">Report an issue</a>
+            </span>
         </div>
         `;
 
         return footer;
+    }
+
+    // =========================================================================
+    // Icons & small helpers
+    // =========================================================================
+
+    const SEARCH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>';
+    const SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"></circle><line x1="12" y1="2" x2="12" y2="4.5"></line><line x1="12" y1="19.5" x2="12" y2="22"></line><line x1="2" y1="12" x2="4.5" y2="12"></line><line x1="19.5" y1="12" x2="22" y2="12"></line><line x1="4.9" y1="4.9" x2="6.7" y2="6.7"></line><line x1="17.3" y1="17.3" x2="19.1" y2="19.1"></line><line x1="4.9" y1="19.1" x2="6.7" y2="17.3"></line><line x1="17.3" y1="6.7" x2="19.1" y2="4.9"></line></svg>';
+    const MOON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>';
+    const COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>';
+
+    function currentThemeIcon() {
+        // Show the theme you would switch TO.
+        return document.documentElement.getAttribute('data-theme') === 'dark'
+            ? SUN_ICON : MOON_ICON;
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    // =========================================================================
+    // Search palette (Cmd/Ctrl-K) over shared/search-index.json
+    // =========================================================================
+
+    let searchOverlay = null;
+    let searchIndex = null;       // null = not loaded, [] = loading failed
+    let searchSelected = 0;
+    let searchResults = [];
+
+    function buildSearchOverlay() {
+        if (searchOverlay) return searchOverlay;
+
+        searchOverlay = document.createElement('div');
+        searchOverlay.className = 'search-overlay';
+        searchOverlay.setAttribute('role', 'dialog');
+        searchOverlay.setAttribute('aria-modal', 'true');
+        searchOverlay.setAttribute('aria-label', 'Search the documentation');
+        searchOverlay.innerHTML = `
+            <div class="search-modal">
+                <div class="search-input-row">
+                    ${SEARCH_ICON}
+                    <input type="text" class="search-input" placeholder="Search the docs…"
+                           aria-label="Search query" autocomplete="off" spellcheck="false">
+                </div>
+                <ul class="search-results" role="listbox"></ul>
+                <div class="search-hint">Type to search across every page — titles, sections and text.</div>
+                <div class="search-footer">
+                    <span><kbd>↑</kbd> <kbd>↓</kbd> navigate</span>
+                    <span><kbd>Enter</kbd> open</span>
+                    <span><kbd>Esc</kbd> close</span>
+                </div>
+            </div>`;
+
+        const input = searchOverlay.querySelector('.search-input');
+
+        searchOverlay.addEventListener('click', (e) => {
+            if (e.target === searchOverlay) closeSearch();
+        });
+
+        input.addEventListener('input', () => runSearch(input.value));
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!searchResults.length) return;
+                searchSelected = (searchSelected + (e.key === 'ArrowDown' ? 1 : -1)
+                    + searchResults.length) % searchResults.length;
+                paintSelection();
+            } else if (e.key === 'Enter') {
+                const current = searchResults[searchSelected];
+                if (current) window.location.href = current.href;
+            } else if (e.key === 'Escape') {
+                closeSearch();
+            }
+        });
+
+        document.body.appendChild(searchOverlay);
+        return searchOverlay;
+    }
+
+    function openSearch() {
+        const overlay = buildSearchOverlay();
+        overlay.classList.add('open');
+        const input = overlay.querySelector('.search-input');
+        input.value = '';
+        runSearch('');
+        input.focus();
+        ensureSearchIndex();
+    }
+
+    function closeSearch() {
+        if (searchOverlay) searchOverlay.classList.remove('open');
+    }
+
+    function ensureSearchIndex() {
+        if (searchIndex !== null) return Promise.resolve(searchIndex);
+        return fetch('shared/search-index.json')
+            .then(r => (r.ok ? r.json() : []))
+            .then(idx => { searchIndex = idx; return idx; })
+            .catch(() => { searchIndex = []; return searchIndex; });
+    }
+
+    function searchSnippet(body, term) {
+        const at = body.toLowerCase().indexOf(term);
+        if (at < 0) return escapeHtml(body.slice(0, 130));
+        const start = Math.max(0, at - 50);
+        const raw = (start > 0 ? '…' : '') + body.slice(start, at + term.length + 90);
+        const rel = at - start + (start > 0 ? 1 : 0);
+        return escapeHtml(raw.slice(0, rel)) + '<mark>'
+            + escapeHtml(raw.slice(rel, rel + term.length)) + '</mark>'
+            + escapeHtml(raw.slice(rel + term.length));
+    }
+
+    function runSearch(query) {
+        const overlay = buildSearchOverlay();
+        const list = overlay.querySelector('.search-results');
+        const hint = overlay.querySelector('.search-hint');
+        const q = query.trim().toLowerCase();
+
+        if (!q) {
+            list.innerHTML = '';
+            hint.style.display = '';
+            hint.textContent = 'Type to search across every page — titles, sections and text.';
+            searchResults = [];
+            return;
+        }
+
+        ensureSearchIndex().then(() => {
+            const scored = [];
+            (searchIndex || []).forEach(page => {
+                const title = page.t || '';
+                const body = page.b || '';
+                let best = null;
+
+                if (title.toLowerCase().includes(q)) {
+                    best = { score: 100 + (title.toLowerCase().startsWith(q) ? 20 : 0),
+                             href: page.p, title, section: '',
+                             snippet: escapeHtml(page.d || body.slice(0, 130)) };
+                }
+
+                (page.h || []).forEach(([id, heading]) => {
+                    if (heading.toLowerCase().includes(q)) {
+                        const cand = { score: 60, href: page.p + (id ? '#' + id : ''),
+                                       title, section: heading,
+                                       snippet: escapeHtml(page.d || '') };
+                        if (!best || cand.score > best.score) best = cand;
+                    }
+                });
+
+                if (!best && body.toLowerCase().includes(q)) {
+                    best = { score: 25, href: page.p, title, section: '',
+                             snippet: searchSnippet(body, q) };
+                }
+
+                if (best) scored.push(best);
+            });
+
+            scored.sort((a, b) => b.score - a.score);
+            searchResults = scored.slice(0, 12);
+            searchSelected = 0;
+
+            if (!searchResults.length) {
+                list.innerHTML = '';
+                hint.style.display = '';
+                hint.textContent = searchIndex && searchIndex.length
+                    ? 'No matches. Try a shorter term — e.g. "adstock", "priors", "ROI".'
+                    : 'The search index has not been built for this copy of the docs.';
+                return;
+            }
+
+            hint.style.display = 'none';
+            list.innerHTML = searchResults.map((r, i) => `
+                <li class="search-result${i === searchSelected ? ' selected' : ''}" role="option">
+                    <a href="${escapeHtml(r.href)}">
+                        <div class="result-title">${escapeHtml(r.title)}${r.section
+                            ? ` <span class="result-section">· ${escapeHtml(r.section)}</span>` : ''}</div>
+                        <div class="result-snippet">${r.snippet}</div>
+                    </a>
+                </li>`).join('');
+        });
+    }
+
+    function paintSelection() {
+        if (!searchOverlay) return;
+        searchOverlay.querySelectorAll('.search-result').forEach((li, i) => {
+            li.classList.toggle('selected', i === searchSelected);
+            if (i === searchSelected) li.scrollIntoView({ block: 'nearest' });
+        });
+    }
+
+    function initSearchShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            const inField = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || ''))
+                || e.target.isContentEditable;
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                if (searchOverlay && searchOverlay.classList.contains('open')) closeSearch();
+                else openSearch();
+            } else if (e.key === '/' && !inField
+                       && !(searchOverlay && searchOverlay.classList.contains('open'))) {
+                e.preventDefault();
+                openSearch();
+            } else if (e.key === 'Escape') {
+                closeSearch();
+            }
+        });
+    }
+
+    // =========================================================================
+    // Copy buttons on every <pre> block
+    // =========================================================================
+
+    function initCopyButtons() {
+        document.querySelectorAll('pre').forEach(pre => {
+            if (pre.closest('.code-block-wrap')) return;
+            if (pre.querySelector('.code-copy-btn')) return;
+
+            const wrap = document.createElement('div');
+            wrap.className = 'code-block-wrap';
+            pre.parentNode.insertBefore(wrap, pre);
+            wrap.appendChild(pre);
+
+            const btn = document.createElement('button');
+            btn.className = 'code-copy-btn';
+            btn.type = 'button';
+            btn.setAttribute('aria-label', 'Copy code to clipboard');
+            btn.innerHTML = COPY_ICON + '<span>Copy</span>';
+            btn.addEventListener('click', () => {
+                const text = pre.innerText.replace(/\n$/, '');
+                const done = () => {
+                    btn.classList.add('copied');
+                    btn.querySelector('span').textContent = 'Copied';
+                    setTimeout(() => {
+                        btn.classList.remove('copied');
+                        btn.querySelector('span').textContent = 'Copy';
+                    }, 1800);
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(done).catch(() => {});
+                }
+            });
+            wrap.appendChild(btn);
+        });
+    }
+
+    // =========================================================================
+    // Series navigation (Previous / Next cards above the footer)
+    // =========================================================================
+
+    function initSeriesNav(footer) {
+        const page = getCurrentPage();
+        for (const [seriesName, pages] of Object.entries(SERIES)) {
+            const idx = pages.findIndex(([href]) => href === page);
+            if (idx === -1) continue;
+
+            const nav = document.createElement('nav');
+            nav.className = 'series-nav';
+            nav.setAttribute('aria-label', seriesName + ' navigation');
+
+            const prev = pages[idx - 1];
+            const next = pages[idx + 1];
+
+            if (prev) {
+                nav.innerHTML += `
+                    <a class="series-nav-link prev" href="${prev[0]}">
+                        <span class="series-nav-label">← Previous · ${escapeHtml(seriesName)}</span>
+                        <span class="series-nav-title">${escapeHtml(prev[1])}</span>
+                    </a>`;
+            }
+            if (next) {
+                nav.innerHTML += `
+                    <a class="series-nav-link next" href="${next[0]}">
+                        <span class="series-nav-label">Next · ${escapeHtml(seriesName)} →</span>
+                        <span class="series-nav-title">${escapeHtml(next[1])}</span>
+                    </a>`;
+            }
+
+            if (nav.children.length) {
+                document.body.insertBefore(nav, footer);
+            }
+            return;
+        }
+    }
+
+    // =========================================================================
+    // Page meta chips: audience tier + estimated reading time
+    // =========================================================================
+
+    function initPageMetaChips() {
+        const page = getCurrentPage();
+        const tier = PAGE_TIERS[page];
+        if (!tier) return;
+        if (document.querySelector('.page-meta-chips')) return;
+
+        const h1 = document.querySelector('h1');
+        if (!h1) return;
+
+        const content = document.querySelector('.main-content, main') || document.body;
+        const words = (content.textContent || '').trim().split(/\s+/).length;
+        const minutes = Math.max(1, Math.round(words / 220));
+
+        const chips = document.createElement('div');
+        chips.className = 'page-meta-chips';
+        chips.innerHTML = `
+            <span class="meta-chip tier-${tier}">${TIER_LABELS[tier]}</span>
+            <span class="meta-chip">≈ ${minutes} min read</span>`;
+        h1.insertAdjacentElement('afterend', chips);
+    }
+
+    // =========================================================================
+    // Glossary tooltips — auto-link the first occurrence of glossary terms
+    // =========================================================================
+
+    function initGlossaryTerms() {
+        const page = getCurrentPage();
+        if (page === 'glossary.html' || page === 'index.html') return;
+
+        fetch('shared/glossary.json')
+            .then(r => (r.ok ? r.json() : []))
+            .then(terms => {
+                if (!Array.isArray(terms) || !terms.length) return;
+                // Longest terms first so "credible interval" wins over "interval".
+                terms.sort((a, b) => b.term.length - a.term.length);
+
+                const root = document.querySelector('.main-content, main') || document.body;
+                const paragraphs = Array.from(root.querySelectorAll('p')).slice(0, 80)
+                    .filter(p => !p.closest('pre, code, a, .no-gloss, nav, footer, .sidebar'));
+
+                const linked = new Set();
+                let total = 0;
+                const MAX_LINKS = 10;
+
+                for (const { id, term, def } of terms) {
+                    if (total >= MAX_LINKS) break;
+                    if (linked.has(term.toLowerCase())) continue;
+                    const re = new RegExp('\\b(' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')\\b', 'i');
+
+                    for (const p of paragraphs) {
+                        const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, {
+                            acceptNode(node) {
+                                if (node.parentElement.closest('a, code, pre, .gloss-term, .katex')) {
+                                    return NodeFilter.FILTER_REJECT;
+                                }
+                                return re.test(node.nodeValue)
+                                    ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+                            }
+                        });
+                        const node = walker.nextNode();
+                        if (!node) continue;
+
+                        const m = node.nodeValue.match(re);
+                        const before = node.nodeValue.slice(0, m.index);
+                        const after = node.nodeValue.slice(m.index + m[1].length);
+                        const link = document.createElement('a');
+                        link.className = 'gloss-term';
+                        link.href = 'glossary.html#' + id;
+                        link.setAttribute('data-tip', def);
+                        link.textContent = m[1];
+                        const frag = document.createDocumentFragment();
+                        if (before) frag.appendChild(document.createTextNode(before));
+                        frag.appendChild(link);
+                        if (after) frag.appendChild(document.createTextNode(after));
+                        node.parentNode.replaceChild(frag, node);
+
+                        linked.add(term.toLowerCase());
+                        total += 1;
+                        break;
+                    }
+                }
+            })
+            .catch(() => { /* glossary tooltips are progressive enhancement */ });
     }
 
     // =========================================================================
@@ -526,11 +1080,18 @@
         const footer = createFooter();
         document.body.appendChild(footer);
 
+        // Series prev/next cards sit directly above the footer
+        initSeriesNav(footer);
+
         // Initialize features
         initScrollAnimations();
         initSidebarActiveState();
         initCollapsibleSidebar();
         initPlotHeadroomGuard();
+        initSearchShortcuts();
+        initCopyButtons();
+        initPageMetaChips();
+        initGlossaryTerms();
     }
 
     // Run when DOM is ready

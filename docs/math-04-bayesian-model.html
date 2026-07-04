@@ -743,6 +743,29 @@
                 </ul>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>Why does the framework standardize the KPI before building the model?</summary>
+                    <div class="quiz-answer">
+                        <p>On a mean-0, sd-1 scale, one set of weakly informative priors is sensible for every dataset: the intercept prior Normal(0, 0.5) sits near the data mean, and the HalfNormal(0.5) prior on <em>&sigma;</em> expects residuals of a fraction of one KPI standard deviation. Every reported quantity is then mapped back to the original sales scale. The "Why standardize?" note under the joint model covers this.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Why does NUTS require the whole model — including the adstock and saturation transforms — to be differentiable?</summary>
+                    <div class="quiz-answer">
+                        <p>HMC treats the negative log-posterior as a potential-energy surface and proposes moves by leapfrog integration, which follows the gradient along high-probability ridges; NUTS adds the stopping rule, integrating until the trajectory turns back on itself. Without gradients the sampler degenerates to a diffusive random walk that cannot explore roughly twenty correlated dimensions in reasonable time. That is why the in-graph PyTensor transforms of math 01&ndash;02 exist — see "NUTS in plain math".</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>On Aurora, every convergence and fit check passes — yet TV's ROAS reads 0.33 against a true 2.14. What is the lesson?</summary>
+                    <div class="quiz-answer">
+                        <p>Convergence diagnostics validate the computation, not the claim: they confirm the sampler found the posterior of the model you wrote, not that the model identifies the causal quantity. TV and Display act through an unmodeled awareness mediator and Search chases latent demand, so the posterior converges cleanly to a biased answer. The fix is structure or experiment calibration (math 05), not more draws — the thread running through the posterior-intervals and posterior-predictive sections.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>

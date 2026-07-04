@@ -739,6 +739,29 @@
                 </ul>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>What is the equifinality trap, and why does collecting more of the same observational data not escape it?</summary>
+                    <div class="quiz-answer">
+                        <p>Different (adstock decay, saturation, <em>&beta;</em>) triples compose into nearly identical in-sample response shapes — the measured example correlates at 0.951 across a 0.20 gap in decay rate — so the likelihood is nearly flat along that ridge even though the regimes imply opposite budget advice. The flatness is structural, not a sample-size problem, so sampling longer or adding similar weeks sharpens the wrong posterior rather than resolving the ridge. Sections 1 and 7 state this.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>What can the likelihood route (<code>ExperimentMeasurement</code>) update that the prior route (<code>ExperimentCalibrator</code>) cannot?</summary>
+                    <div class="quiz-answer">
+                        <p>The prior route inverts a measured lift into a coefficient anchor through the design factor — contribution is linear in <em>&beta;<sub>c</sub></em> — with the saturation/adstock shape held fixed, so it re-centers only the <em>&beta;</em> marginal. The likelihood route adds the experiment as an in-graph term on a live estimand, so one fit updates <em>&beta;</em>, the saturation curve, and the adstock kernel jointly, and it supports ROAS and marginal-ROAS estimands that have no expression as a <em>&beta;</em> prior. Sections 3 and 4 give the two routes side by side.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>After the Search lift test, the untested channels' estimates also move slightly. Why is that not evidence they were corrected?</summary>
+                    <div class="quiz-answer">
+                        <p>Calibration is surgical, not contagious: the experiment anchors only the estimand it measured, on the channel it tested. TV, Social, and Display shift only because the variance Search was absorbing has to land somewhere; nothing about their own confounding has been tested, so they keep their bias. The doctrine section — experiments calibrate what structure cannot identify, and only what they tested — makes this precise.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>

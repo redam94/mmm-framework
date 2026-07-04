@@ -858,6 +858,29 @@
                 </ul>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>A directed cross-effect <em>&psi;</em> and a residual correlation <em>&rho;</em> both make two products' sales move together. Why can the data barely tell them apart?</summary>
+                    <div class="quiz-answer">
+                        <p><em>&psi;</em> lives in the mean structure (a causal arrow from one observed outcome into the other's expected level) while <em>&rho;</em> lives in the noise (a common shock lifting both), but the joint distribution of two outcomes offers only one contemporaneous cross-moment to pin down both parameters. Two parameters against one moment means the split is largely prior-determined — which is why stress 04 can flip <em>&psi;</em>'s sign by changing its prior. Sections 2 and 4 develop the counting argument.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>For a fully latent mediator, what does the sparse awareness survey buy?</summary>
+                    <div class="quiz-answer">
+                        <p>With no survey, only the sums of the mediated and direct coefficients enter the likelihood, so every split between the indirect and direct path fits the outcome identically — the decomposition would be decided by the priors alone. The monthly survey points are the only data that anchor the split: the implied awareness series matches them near the true mediated share and nowhere else. "The latent-split toy" section demonstrates this live.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>The fitted model reports P(<em>&psi;</em> &lt; 0) = 1.000. Why is that statement nearly vacuous, and what should be reported instead?</summary>
+                    <div class="quiz-answer">
+                        <p><em>&psi;</em> is constructed as a negated HalfNormal, so every prior draw is already negative — the sign statement is guaranteed before any data arrive. The honest replacement is the learning diagnostic (contraction, overlap, shift) read alongside the posterior location: here contraction is 1.000 but the data pinned <em>&psi;</em> at &minus;0.00028, about 0.012% of weekly sales — a confident statement that there is essentially no direct cannibalization. Section 2.3, "Informative &ne; important", is the reference.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>

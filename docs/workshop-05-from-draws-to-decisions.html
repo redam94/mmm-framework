@@ -723,6 +723,29 @@
                 </ul>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>What is wrong with averaging the parameters first and then computing TV's effect from the averages?</summary>
+                    <div class="quiz-answer">
+                        <p>Business quantities like ROAS and saturation curves are nonlinear functions of the parameters, so the answer at the averaged parameters is not the average of the per-draw answers — on this fit the plug-in shortcut overstated TV's mid-curve effect by +10.3%, tracing a curve no posterior draw believes in. It also collapses everything to a single number, hiding how sure you are. Section 1 states the rule that fixes both: compute per draw, summarize last.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Your CMO asks where the next million should go. Why is average ROAS the wrong yardstick for that question?</summary>
+                    <div class="quiz-answer">
+                        <p>Average ROAS grades the historical dollar; the CMO is asking about the next one, and under saturation the next dollar lands on a flatter part of the response curve than the average dollar did — the tangent's slope, not the secant's. The gap differs by channel, which is why the two rankings genuinely disagree on this world: Search drops from 3rd to 4th while TV rises from 4th to 3rd. Section 4 works the comparison, with the flip's own confidence attached.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>The average-ROAS-driven reallocation shows P(gain &gt; 0) = 0.18. What does that number tell a budget meeting?</summary>
+                    <div class="quiz-answer">
+                        <p>It is a decision probability, counted straight from the draws: in only 18% of the posterior's worlds does that move gain anything, so it is a coin flip tilted toward a loss. The same dollars moved by the marginal ranking clear zero with P = 0.98 — same budget, opposite verdicts, and the probability is what separates them. Section 6's lesson is that the interval and its probability are the deliverable, not a bare point estimate.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>

@@ -748,6 +748,29 @@
                 </p>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>The posterior is described as a table where each row is a "draw". What does one row represent?</summary>
+                    <div class="quiz-answer">
+                        <p>One complete, self-consistent setting of every parameter at once — a whole candidate version of the brand's reality that plausibly explains three years of sales. The rows agree with the data but disagree with each other, and the spread of that disagreement is your uncertainty. The opening "table of worlds" section shows five real rows from this fit.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>For a skewed marginal like <code>beta_Search</code>, why does this page report the HDI instead of the equal-tailed interval?</summary>
+                    <div class="quiz-answer">
+                        <p>The equal-tailed interval chops 5% off each end, so on a skewed marginal it can exclude values near the peak — among the most plausible in the whole posterior — while including thin tail. The HDI is the narrowest range holding 90% of the draws, so by construction everything inside is more plausible than everything outside. The summaries section measures both on this fit: HDI (0.991, 1.868) versus ETI (1.055, 2.018).</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Why is it against the rules to take each parameter's own point estimate and plug them into a business formula together?</summary>
+                    <div class="quiz-answer">
+                        <p>Because parameters are correlated across draws — for Social, &beta; and saturation &lambda; trade off at r = &minus;0.84 — a mix-and-match combination can be one the posterior assigns essentially zero probability, like the red &times; in the joint-structure section. The golden rule fixes this: compute any derived quantity per draw, inside whole rows of the table, and summarize last. That trade-off cancelling within rows is also why Social's contribution is tight (CV 0.09) even though its individual &beta; is wide.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>
