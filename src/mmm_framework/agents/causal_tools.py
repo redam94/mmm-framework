@@ -1229,6 +1229,14 @@ def build_model_from_dag(
         "instruments": [n.variable_name for n in instrument_nodes],
     }
     candidate["dag_model_type"] = model_type.value
+    # An extension-type DAG (mediators / multiple outcomes) is fit through
+    # DAGModelBuilder, which needs the full DAG kernel-side — the plain spec's
+    # media/control lists can't reconstruct mediator edges. Store it on the
+    # spec; drop a stale copy if the DAG was simplified back to a basic MMM.
+    if model_type.value != "bayesian_mmm":
+        candidate["dag_spec"] = _copy.deepcopy(spec_dict)
+    else:
+        candidate.pop("dag_spec", None)
 
     lines = [
         "### Model spec derived from the causal DAG",
@@ -1250,10 +1258,12 @@ def build_model_from_dag(
     lines.append(f"\n**Resolved model type:** {model_type.value} — {type_note}")
     if model_type.value != "bayesian_mmm":
         lines.append(
-            "\n⚠️ **Honest scope note:** `fit_mmm_model` fits the basic Bayesian "
-            "MMM only — mediators/multiple outcomes in the DAG are NOT modeled "
-            "by it. For a nested/multivariate/combined model, build it with "
-            "`DAGModelBuilder` via `execute_python` (see `library_reference`)."
+            f"\n`fit_mmm_model` will build **{model_type.value}** from this DAG "
+            "(mediators / multiple outcomes modeled in-graph via "
+            "DAGModelBuilder). Extension fits are NUTS-only (no approximate "
+            "methods), and ROI/predict-style post-fit ops are "
+            "BayesianMMM-specific — use the extended report and "
+            "`execute_python` for pathway analysis."
         )
 
     return _commit_spec(
