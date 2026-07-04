@@ -765,6 +765,29 @@
                 </ul>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>In what sense is the geometric recurrence <em>a<sub>t</sub></em> = <em>x<sub>t</sub></em> + <em>&alpha;</em> <em>a</em><sub><em>t</em>&minus;1</sub> secretly a convolution?</summary>
+                    <div class="quiz-answer">
+                        <p>Unrolling the recurrence gives a causal convolution whose kernel is the closed form <em>w<sub>k</sub></em> = <em>&alpha;</em><sup><em>k</em></sup>, so a unit impulse of spend produces exactly the sequence 1, <em>&alpha;</em>, <em>&alpha;</em><sup>2</sup>, &hellip; — the impulse response is the kernel. Summing that kernel is a geometric series, which is where the total-effect multiplier 1/(1 &minus; <em>&alpha;</em>) comes from, and why it explodes as <em>&alpha;</em> approaches 1. Section (a) derives both facts.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>On the legacy blend path, what does the model variable named <code>adstock_&lt;CHANNEL&gt;</code> actually represent — and what is it commonly misread as?</summary>
+                    <div class="quiz-answer">
+                        <p>It is a Beta(2,2) blend weight <em>m</em> that mixes two precomputed geometric adstock series at fixed decay rates (<em>&alpha;</em> = 0, no carryover, and <em>&alpha;</em> = 0.9, strong carryover) — it is not a decay rate, though it is often misread as one. Because the reachable family is a convex combination of a lag-0 spike and one fixed tail, no value of <em>m</em> can express a delayed peak. Section (d) covers this; the current parametric default estimates a real per-channel <em>&alpha;</em> in-graph instead.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>What does <code>l_max</code> truncation cut off, and when does it distort the kernel rather than merely shorten it?</summary>
+                    <div class="quiz-answer">
+                        <p>A finite FIR window drops a fraction <em>&alpha;</em><sup><em>L</em></sup> of the geometric kernel's mass — negligible for fast decay (0.08% at <em>&alpha;</em> = 0.7, <em>L</em> = 20) but severe for slow decay (about 43% at <em>&alpha;</em> = 0.9 with the default <code>l_max</code> of 8). With normalization on, the surviving weights are rescaled to sum to 1, so the shape inside the window is distorted too, not only shortened. See the "IIR vs FIR truncation" section.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>

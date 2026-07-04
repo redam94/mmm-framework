@@ -573,6 +573,9 @@
                 Together, they are <strong>complete</strong>: any identifiable causal effect can be computed using these rules.
             </p>
 
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>The formal statements and graph conditions of the three rules</summary>
+                <div class="deep-dive-body">
             <div class="rule-box">
                 <h4>Rule 1: Insertion/Deletion of Observations</h4>
                 <div class="rule-formula">
@@ -617,6 +620,8 @@
                     we can drop \(do(Z)\).
                 </p>
             </div>
+                </div>
+            </details>
 
             <!-- ================================================================== -->
             <h2 id="identification">Identification</h2>
@@ -775,6 +780,9 @@
                 </div>
             </div>
 
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>A worked counterfactual: abduction, action, prediction on a linear SCM</summary>
+                <div class="deep-dive-body">
             <h4>Example: Counterfactual Sales</h4>
 
             <p>Consider a simple linear SCM:</p>
@@ -797,6 +805,8 @@
             <p><strong>Step 3 (Prediction):</strong> Y_{X=0} = β(0) + U_Y = 500 - 100β.</p>
 
             <p>If β = 3 (each 1K USD in ad spend generates 3K USD in sales), then Y_{X=0} = 500 - 300 = 200K USD.</p>
+                </div>
+            </details>
 
             <div class="note">
                 <h4>The Role of the Structural Model</h4>

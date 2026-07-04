@@ -865,6 +865,29 @@ pp = idata.prior["y_obs_scaled"].values[0]      # (draws, weeks), original $k sc
                 </ul>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>A colleague sets a flat prior on TV's effect "to stay neutral". What opinion has that prior actually expressed?</summary>
+                    <div class="quiz-answer">
+                        <p>A flat prior over a huge range makes harm a coin flip: half of its belief says TV hurts sales, and TV destroying <span>$</span>8 of sales per dollar is treated as exactly as plausible as TV earning <span>$</span>2. Refusing to choose a prior is itself a choice — a strong opinion wearing a "no opinion" costume. Section 1 puts all three prior styles on one axis so you can read what each one literally says.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>The brand team has never heard of a Beta distribution. How do you discuss the adstock retention prior with them anyway?</summary>
+                    <div class="quiz-answer">
+                        <p>Translate retention into a half-life — the number of weeks until the carryover effect decays to half strength. A Beta prior on retention is a prior on half-lives: Beta(8, 2) implies a median half-life of 3.5 weeks, so you can ask "does a roughly 3-week TV echo sound right?" instead of "is Beta(8, 2) okay?". Section 2.2 makes the conversion, and Section 2.3 does the same for saturation via the half-saturation spend.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>What is the prior predictive check, and why does this page call it the cheapest, highest-value check in the workflow?</summary>
+                    <div class="quiz-answer">
+                        <p>Draw one value of every parameter from its priors, run the model forward, and repeat a few hundred times — the result is the spread of fake sales histories your model considers plausible before seeing any data. Comparing that spread with common sense catches the embarrassing failures (negative sales weeks, ten-times-revenue weeks) with no fitting and no waiting, at the moment they are cheapest to fix. One caution from Section 4: judge it against outside knowledge of what sales can be, never against the dataset you are about to fit.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>

@@ -857,6 +857,29 @@ x_saturated = 1 - pt.exp(exponent)                            # == 1 - exp(-sat_
                 </p>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>The core saturation is configured as <code>logistic</code> and an old docstring calls it "S-shaped". What is the actual curve, and what shape does it have?</summary>
+                    <div class="quiz-answer">
+                        <p>The default is exponential saturation, <em>f</em>(<em>x</em>) = 1 &minus; e<sup>&minus;&lambda;x</sup>, which is strictly concave: the second derivative is negative everywhere, so there is no inflection point and marginal returns fall from the very first dollar. A genuine S-curve exists only in the Hill family with <em>n</em> &gt; 1, whose inflection sits below the half-saturation point <em>&kappa;</em>. Sections 1 and 2 derive both facts.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Why is the choice between the concave default and Hill with <em>n</em> &gt; 1 a budgeting decision rather than a cosmetic one?</summary>
+                    <div class="quiz-answer">
+                        <p>The two families disagree about the value of the next dollar at low spend: the concave curve is steepest at zero, while Hill with <em>n</em> &gt; 1 has a marginal return near zero below the inflection — the "clear a threshold before the channel works" story, where small budgets can be worse than none and the optimal move is concentrate-or-exit. Fitting a true S-shaped world with the concave default over-credited total media by +38% while every diagnostic stayed green. Sections 2 and 3 work through this.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Why is each channel's adstocked spend normalized — divided by its own maximum — before the saturation curve is applied?</summary>
+                    <div class="quiz-answer">
+                        <p>Because <em>&lambda;</em> is a rate with units of one over spend, the same numeric <em>&lambda;</em> means completely different curvature for a channel spending in the thousands versus one spending in the millions, so a shared prior would be incoherent. Normalizing to [0, 1] makes <em>&lambda;</em> comparable across channels and places the Exponential(0.5) prior's elbow inside the observed range. The trade-off, covered in section 4, is that max-normalization is hostage to a single outlier week.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>

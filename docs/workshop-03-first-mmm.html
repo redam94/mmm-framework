@@ -798,6 +798,29 @@ mmm = BayesianMMM(panel, cfg, TrendConfig(type=TrendType.LINEAR))</code></pre>
                 </ul>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>In plain marketing terms, what do adstock and saturation each describe about a media channel?</summary>
+                    <div class="quiz-answer">
+                        <p>Adstock is carryover: part of this week's TV pulse keeps working in later weeks, fading at the retention rate &alpha; — it redistributes spend in time without inventing any. Saturation is diminishing returns: doubling spend does not double the effect, and the strength &lambda; controls how soon the response curve flattens, so heavy weeks waste money. Sections 1 and 3 let you drive both with sliders and see where each channel lives on its curve.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Why does this series fit your first MMM on a synthetic world instead of real brand data?</summary>
+                    <div class="quiz-answer">
+                        <p>Because the synthetic world ships with an answer key — the true causal contribution of every channel — so the fit can be graded rather than merely admired for converging. Real marketing data never labels how much of a sales rise was seasonality versus TV, so practicing where truth is checkable is the only way to learn what a trustworthy posterior looks like. On this world the model earned a median error of about 7% with the truth inside every 90% HDI (Section 7).</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>A channel's contribution is not a parameter of the model. What is it, and how does the model compute it?</summary>
+                    <div class="quiz-answer">
+                        <p>It is a derived quantity built from a counterfactual: for each posterior draw, predict sales with history as it happened, re-predict with that channel's spend forced to zero, and take the difference — the sales that channel <em>caused</em>. Repeating this across all 1,000 draws produces a distribution of contributions, which is why the estimate arrives with a 90% HDI instead of a bare number. Sections 7 and 8 walk through the computation and the grading.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>

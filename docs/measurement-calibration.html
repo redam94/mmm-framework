@@ -670,19 +670,24 @@
                 experimental noise.
             </p>
 
-            <p style="font-size:0.92rem;">
-                Where Eq. (4) comes from, and its limits: it is the variance of a two-arm DiD
-                mean contrast ($2 s^2_{\text{geo},k}/nT$ for independent geo-weeks), divided by
-                $\Delta^2_{\text{spend},k}$ to convert a KPI-scale lift into a per-dollar effect.
-                It assumes independent geo-week residuals — under serial correlation, multiply by
-                the AR(1) design effect $D(T,\rho_g)$ defined in the design section below. The
-                shipped designer (<code>planning/design.py</code>) handles the same problem
-                empirically rather than analytically: it calibrates its analytic DiD power curve
-                against a sliding-window placebo distribution from the pre-period, which absorbs
-                the realized autocorrelation. Treat Eq. (4) as a planning approximation; the
-                placebo calibration and the pre-experiment simulation in Step 5 are the checks
-                that catch what it misses.
-            </p>
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Where the experiment-noise formula in Eq. (4) comes from, and its limits</summary>
+                <div class="deep-dive-body">
+                    <p style="font-size:0.92rem;">
+                        Where Eq. (4) comes from, and its limits: it is the variance of a two-arm DiD
+                        mean contrast ($2 s^2_{\text{geo},k}/nT$ for independent geo-weeks), divided by
+                        $\Delta^2_{\text{spend},k}$ to convert a KPI-scale lift into a per-dollar effect.
+                        It assumes independent geo-week residuals — under serial correlation, multiply by
+                        the AR(1) design effect $D(T,\rho_g)$ defined in the design section below. The
+                        shipped designer (<code>planning/design.py</code>) handles the same problem
+                        empirically rather than analytically: it calibrates its analytic DiD power curve
+                        against a sliding-window placebo distribution from the pre-period, which absorbs
+                        the realized autocorrelation. Treat Eq. (4) as a planning approximation; the
+                        placebo calibration and the pre-experiment simulation in Step 5 are the checks
+                        that catch what it misses.
+                    </p>
+                </div>
+            </details>
 
             <!-- ================================================================== -->
             <h2 id="eig">Expected Information Gain (EIG)</h2>
@@ -772,19 +777,24 @@
                 <span class="equation-label">(8)</span>
             </div>
 
-            <p style="font-size:0.92rem;">
-                Status of Eq. (8): a <em>heuristic linearization</em>, not a derived bound. It
-                approximates the value integral by assuming (i) utility is locally linear in the
-                reallocated budget $B \cdot s_k$, (ii) reallocation only happens when the
-                posterior mean crosses the decision threshold, and (iii) the size of the
-                post-decision gain scales with the posterior-mean shift. Each assumption fails in
-                identifiable cases (strongly concave response near saturation; multi-channel
-                rebalancing where several thresholds interact), and the units are only
-                consistent when $\hat\theta$ is a per-dollar ROI applied to the dollars at stake.
-                The shipped implementation (<code>planning/evoi.py</code>) computes EVOI by
-                Monte&nbsp;Carlo over posterior draws and the explicit decision rule instead of
-                Eq. (8); use the formula for intuition and the simulation for numbers.
-            </p>
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>The status and limits of the EVOI linearization in Eq. (8)</summary>
+                <div class="deep-dive-body">
+                    <p style="font-size:0.92rem;">
+                        Status of Eq. (8): a <em>heuristic linearization</em>, not a derived bound. It
+                        approximates the value integral by assuming (i) utility is locally linear in the
+                        reallocated budget $B \cdot s_k$, (ii) reallocation only happens when the
+                        posterior mean crosses the decision threshold, and (iii) the size of the
+                        post-decision gain scales with the posterior-mean shift. Each assumption fails in
+                        identifiable cases (strongly concave response near saturation; multi-channel
+                        rebalancing where several thresholds interact), and the units are only
+                        consistent when $\hat\theta$ is a per-dollar ROI applied to the dollars at stake.
+                        The shipped implementation (<code>planning/evoi.py</code>) computes EVOI by
+                        Monte&nbsp;Carlo over posterior draws and the explicit decision rule instead of
+                        Eq. (8); use the formula for intuition and the simulation for numbers.
+                    </p>
+                </div>
+            </details>
 
             <div class="intuition">
                 <div class="intuition-label">Plain English</div>
@@ -897,6 +907,9 @@ while len(A) &lt; C_ops:
                 quarter's experimental budget should be spent on the top 2-3 priorities, not spread thin.
             </p>
 
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Proof that portfolio EIG is submodular</summary>
+                <div class="deep-dive-body">
             <div class="definition">
                 <h4>Proof of submodularity</h4>
                 <p>
@@ -971,6 +984,8 @@ while len(A) &lt; C_ops:
                     $(1-1/e) \approx 63\%$ of the optimal portfolio value.
                 </p>
             </div>
+                </div>
+            </details>
 
             <!-- ================================================================== -->
             <h2 id="test-design">Experimental Design: From Channel Selection to Experimental Spec</h2>

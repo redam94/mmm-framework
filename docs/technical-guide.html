@@ -839,6 +839,9 @@ model_config = (
                 <code>model/base.py</code> / <code>config/transforms.py</code>, 0.1.0) — on
                 standardized <code>y</code> and per-channel normalized media:
             </p>
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>The shipped default priors, parameter by parameter</summary>
+                <div class="deep-dive-body">
             <pre><code># Shipped default priors (standardized data)
 beta_media ~ Gamma(mu=1.5, sigma=1.0)    # Media coefficients (positive; replaced
                                           #   by roi_prior when experiment-calibrated)
@@ -856,6 +859,8 @@ gamma ~ Normal(mu=0, sigma=0.5)           # Control coefficients (declared
 sigma ~ HalfNormal(sigma=0.5)             # Noise
 delta ~ Normal(mu=0, sigma=0.5)           # Trend growth (TrendConfig default)
 season_coef ~ Normal(mu=0, sigma=0.3)     # Seasonality (per Fourier coefficient)</code></pre>
+                </div>
+            </details>
 
             <h4>Framework Usage: Prior Configuration</h4>
             <pre><code class="python">from mmm_framework import PriorConfigBuilder, MediaChannelConfigBuilder
@@ -918,17 +923,22 @@ distribution_control = (
             <div class="math-block">
                 $$\text{Proportion Mediated}_c = \frac{\beta^{(M)}_c \cdot \gamma}{\beta^{(D)}_c + \beta^{(M)}_c \cdot \gamma}$$
             </div>
-            <p style="font-size:0.92rem;">
-                Caveat: proportion mediated is only well-behaved when the direct and indirect
-                effects share a sign. With opposite-signed effects the denominator can shrink
-                toward zero, so the ratio can exceed 1 or go negative — report the direct and
-                indirect effects (with intervals) alongside it, and treat the ratio as
-                descriptive, not as a bounded percentage. The mediation decomposition also
-                inherits a <em>sequential ignorability</em> assumption (no unobserved
-                confounding of either the media→mediator or mediator→outcome path) that
-                observational data cannot verify; the pressure-testing series shows the splits
-                are prior-sensitive when the mediator is weakly observed.
-            </p>
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>When proportion mediated misbehaves, and the sequential-ignorability assumption</summary>
+                <div class="deep-dive-body">
+                    <p style="font-size:0.92rem;">
+                        Caveat: proportion mediated is only well-behaved when the direct and indirect
+                        effects share a sign. With opposite-signed effects the denominator can shrink
+                        toward zero, so the ratio can exceed 1 or go negative — report the direct and
+                        indirect effects (with intervals) alongside it, and treat the ratio as
+                        descriptive, not as a bounded percentage. The mediation decomposition also
+                        inherits a <em>sequential ignorability</em> assumption (no unobserved
+                        confounding of either the media→mediator or mediator→outcome path) that
+                        observational data cannot verify; the pressure-testing series shows the splits
+                        are prior-sensitive when the mediator is weakly observed.
+                    </p>
+                </div>
+            </details>
 
             <h3 id="nested-mediators">Mediator Types</h3>
             <table>
@@ -1385,6 +1395,9 @@ mff_config = (
                 seasonality) on 156 weeks &times; 7 channels, NumPyro, 4 chains &times; 500 draws:
                 <strong>~17&nbsp;s</strong>.
             </p>
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Measured runtime table and corrections to earlier scaling claims</summary>
+                <div class="deep-dive-body">
             <table>
                 <thead><tr><th>Configuration</th><th>Measured wall-clock</th><th>vs reference</th></tr></thead>
                 <tbody>
@@ -1404,6 +1417,8 @@ mff_config = (
                 is dominated by sampler choice and draws, not by model family. Absolute seconds are
                 machine-specific; treat the ratios as the transferable part.
             </p>
+                </div>
+            </details>
 
             <div class="note">
                 <h4>💡 Performance Tip</h4>

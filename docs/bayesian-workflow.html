@@ -422,6 +422,9 @@
                 range (e.g., 60&ndash;90% of maximum effect).
             </p>
 
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Worked example: calibrating the saturation prior to a target effect level</summary>
+                <div class="deep-dive-body">
             <pre><code class="python"># Prior on saturation parameter
 # If typical_spend = 1M and we want ~70% of max effect at typical spend:
 # solve: 0.7 = 1 - exp(-lambda * 1M)
@@ -440,6 +443,8 @@ with pm.Model():
 # Note: the shipped model applies saturation to adstocked spend normalized
 # to roughly [0, 1] per channel, so its default prior sat_lam ~ Exponential(0.5)
 # lives on that normalized scale, not on raw dollars.</code></pre>
+                </div>
+            </details>
 
             <!-- ================================================================== -->
             <h2 id="prior-predictive">2. Prior Predictive Checks</h2>
@@ -1050,6 +1055,9 @@ az.plot_compare(comparison)</code></pre>
                 For each major parameter class in the framework, here is guidance on setting informative priors:
             </p>
 
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Shipped default priors by parameter class</summary>
+                <div class="deep-dive-body">
             <table>
                 <thead>
                     <tr>
@@ -1122,6 +1130,8 @@ az.plot_compare(comparison)</code></pre>
                 (<code>model/base.py</code>, <code>config/transforms.py</code>) as of 0.1.0 —
                 if this table and the code ever disagree, the code wins and this page is stale.
             </p>
+                </div>
+            </details>
 
             <pre><code class="python"># Example: configure priors per channel with the shipped config objects
 from mmm_framework.config import (

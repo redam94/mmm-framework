@@ -587,27 +587,32 @@ tv_channel = (
 # of 1-3 weeks."</code></pre>
             </div>
 
-            <div class="note">
-                <h4>Shipped Defaults: Parametric Adstock (with a Legacy Blend Opt-Out)</h4>
-                <p style="margin-bottom: 0;">
-                    Out of the box (<code>use_parametric_adstock=True</code>, the default since June 2026)
-                    the model estimates a continuous decay rate in-graph per channel: geometric adstock
-                    defaults to <code>adstock_alpha_&lt;ch&gt; ~ Beta(1, 3)</code>, honoring each channel's
-                    <code>alpha_prior</code> and supporting delayed/Weibull kernels via
-                    <code>MediaChannelConfig.adstock</code>. The change was made because, on
-                    carryover-sensitive synthetic worlds, the <a href="pressure-testing.html">pressure-testing
-                    series</a> measured ~28% median contribution error for the previous default versus ~7% for
-                    the parametric kernel. That previous default — a blend weight
-                    <code>adstock_&lt;ch&gt; ~ Beta(2, 2)</code> over a fixed bank of geometric decays
-                    <code>[0.0, 0.3, 0.5, 0.7, 0.9]</code>, with no continuous decay parameter — remains
-                    available via <code>use_parametric_adstock=False</code> for reproducing older fits.
-                    Other shipped defaults:
-                    saturation <code>sat_lam_&lt;ch&gt; ~ Exponential(lam=0.5)</code>, media coefficients
-                    <code>beta_&lt;ch&gt; ~ Gamma(mu=1.5, sigma=1.0)</code> unless an <code>roi_prior</code> is set,
-                    and controls <code>Normal(0, 0.5)</code> with declared confounders given a wider
-                    <code>Normal(0, 2)</code>.
-                </p>
-            </div>
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Shipped prior defaults: parametric adstock and the legacy blend opt-out</summary>
+                <div class="deep-dive-body">
+                    <div class="note">
+                        <h4>Shipped Defaults: Parametric Adstock (with a Legacy Blend Opt-Out)</h4>
+                        <p style="margin-bottom: 0;">
+                            Out of the box (<code>use_parametric_adstock=True</code>, the default since June 2026)
+                            the model estimates a continuous decay rate in-graph per channel: geometric adstock
+                            defaults to <code>adstock_alpha_&lt;ch&gt; ~ Beta(1, 3)</code>, honoring each channel's
+                            <code>alpha_prior</code> and supporting delayed/Weibull kernels via
+                            <code>MediaChannelConfig.adstock</code>. The change was made because, on
+                            carryover-sensitive synthetic worlds, the <a href="pressure-testing.html">pressure-testing
+                            series</a> measured ~28% median contribution error for the previous default versus ~7% for
+                            the parametric kernel. That previous default — a blend weight
+                            <code>adstock_&lt;ch&gt; ~ Beta(2, 2)</code> over a fixed bank of geometric decays
+                            <code>[0.0, 0.3, 0.5, 0.7, 0.9]</code>, with no continuous decay parameter — remains
+                            available via <code>use_parametric_adstock=False</code> for reproducing older fits.
+                            Other shipped defaults:
+                            saturation <code>sat_lam_&lt;ch&gt; ~ Exponential(lam=0.5)</code>, media coefficients
+                            <code>beta_&lt;ch&gt; ~ Gamma(mu=1.5, sigma=1.0)</code> unless an <code>roi_prior</code> is set,
+                            and controls <code>Normal(0, 0.5)</code> with declared confounders given a wider
+                            <code>Normal(0, 2)</code>.
+                        </p>
+                    </div>
+                </div>
+            </details>
 
             <h2 id="prior-predictive">Prior Predictive Check</h2>
             <p>

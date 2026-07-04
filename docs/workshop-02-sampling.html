@@ -841,6 +841,29 @@
                 </ul>
             </div>
 
+            <div class="check-understanding">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>The grid trick computed a posterior in microseconds in workshop 00. Why can't it fit an MMM?</summary>
+                    <div class="quiz-answer">
+                        <p>A grid multiplies its cells with every new parameter — the curse of dimensionality. At 100 points per axis, a 40-parameter MMM (a coefficient, a carryover rate, and a saturation parameter per channel, plus structure) needs 10<sup>80</sup> evaluations, about the number of atoms in the observable universe. Sampling escapes because Monte Carlo error shrinks like 1/&radic;n no matter how many parameters the model has — Sections 1 and 2 count it out.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Your Metropolis walker is accepting 95% of its proposals. Is that a healthy sampler?</summary>
+                    <div class="quiz-answer">
+                        <p>No — near-100% acceptance usually means the steps are too timid: nearby points have nearly the same posterior height, so the walker accepts constantly while exploring only a sliver of the distribution. In the notebook's 1-D comparison the tiny-step chain kept an effective sample size of 19 out of 20,000 draws, while the moderately-rejected goldilocks chain kept 4,205. Moderate rejection is the price of real movement — Section 4's step-size slider lets you cause and observe both failures.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>A fit shows R-hat 1.00, zero divergences, and perfect fuzzy caterpillars. Does that mean the channel ROAS estimates are right?</summary>
+                    <div class="quiz-answer">
+                        <p>No. Those diagnostics answer one question — did the sampler faithfully explore the posterior of the model you wrote down — and say nothing about whether that model is right. An MMM where a hidden demand surge drives both ad spend and sales can converge beautifully to a confidently wrong attribution. Section 8 states the doctrine: green lights validate the computation, never the causal claim.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>
