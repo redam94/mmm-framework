@@ -34,8 +34,28 @@ auto-differentiates :func:`incremental` directly.
 
 from __future__ import annotations
 
+import os
+
 import jax
 import jax.numpy as jnp
+
+# JAX defaults to float32. That is fine for ML training but not for this
+# module's job: moment-matching a posterior, inverting Fisher-information
+# matrices, and running a non-concave multi-start SLSQP optimizer hundreds of
+# times per acquisition score (:mod:`.acquisition`). Under float32, a
+# genuinely close two-candidate decision-value comparison (the kind the
+# acquisition layer routinely makes) can flip sign depending on the host's
+# BLAS/vector-instruction set — reproduced as a platform-dependent CI failure
+# (passed reliably on macOS/ARM, failed reliably on Linux/x86) that vanished
+# once x64 was enabled. This module is imported (transitively) by every
+# numeric entry point in the package (:mod:`.model`, :mod:`.planner`,
+# :mod:`.acquisition`, :mod:`.dgp`), so setting it here — once, at import,
+# since Python only executes a module body once per process — covers them
+# all. ``jax_enable_x64`` is process-global like the platform guard in
+# :mod:`.model`, so it is opt-out-able (``MMM_CL_JAX_X64=0``) for a host
+# process that has deliberately chosen float32 elsewhere.
+if os.environ.get("MMM_CL_JAX_X64", "1").strip().lower() not in ("0", "false", "no"):
+    jax.config.update("jax_enable_x64", True)
 
 # Spend floor mirrors the framework's Hill guard (``pt.maximum(x, 1e-9)`` in
 # ``model/base.py::_apply_saturation_pt``): d/dx of x^alpha is unbounded at
