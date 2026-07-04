@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useCausalPanels } from '../../components/causal/CausalWidgets';
 import { API_BASE, authHeaders } from './constants';
@@ -27,6 +28,21 @@ export function AgentPage() {
   const [workspaceRefreshKey, setWorkspaceRefreshKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { apiKey, modelName } = useAuthStore();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Cross-page handoff: another page can navigate('/workspace', { state:
+  // { prefill } }) to stage a message in the composer — staged, NOT auto-sent,
+  // so the user reviews it before spending an agent turn. The state is cleared
+  // after staging so back/refresh doesn't re-stage it over newer typing.
+  useEffect(() => {
+    const prefill = (location.state as { prefill?: string } | null)?.prefill;
+    if (prefill) {
+      setInput(prefill);
+      navigate(location.pathname + location.search, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
   // Sessions are navigated from the app Sidebar's Workspace item
   // (/workspace?session=…); this hook resolves + auto-creates the thread.
   const { threadId, projectId } = useAgentSessions({ apiKey, modelName });
