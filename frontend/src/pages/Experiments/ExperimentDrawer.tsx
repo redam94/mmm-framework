@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Lock } from 'lucide-react';
 import { Button, Card, Drawer, StatusChip } from '../../components/ui';
@@ -123,6 +124,7 @@ function ReadoutForm({
 }
 
 function DrawerBody({ exp }: { exp: ExperimentRecord }) {
+  const navigate = useNavigate();
   const transition = useTransitionExperiment();
   const [error, setError] = useState<string | null>(null);
   const [showReadoutForm, setShowReadoutForm] = useState(false);
@@ -367,6 +369,24 @@ function DrawerBody({ exp }: { exp: ExperimentRecord }) {
           <p className="rounded-lg bg-cream-100 px-3 py-2 text-xs text-ink-600">
             Calibrate via the Workspace: ask the agent to apply_experiment_calibration and refit.
           </p>
+        )}
+        {exp.status === 'completed' && (
+          <Button
+            onClick={() =>
+              navigate('/workspace', {
+                state: {
+                  prefill:
+                    `Calibrate experiment ${exp.id} (${exp.channel}` +
+                    `${exp.subchannel ? ` / ${exp.subchannel}` : ''}) into the model: ` +
+                    `run apply_experiment_calibration with experiment id "${exp.id}", ` +
+                    `review the staged measurement, then refit with fit_mmm_model so ` +
+                    `the readout enters the likelihood.`,
+                },
+              })
+            }
+          >
+            Calibrate in Workspace
+          </Button>
         )}
 
         {exp.status === 'running' && showReadoutForm && (
