@@ -101,6 +101,40 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
       return { ...prev, media_channels: channels } as DraftSpec;
     });
 
+  // Measurement descriptor (impression-/click-measured media). Empty values are
+  // DELETED, not written as undefined — absent keys mean "measured in dollars"
+  // to the backend, and deleting keeps the lock-diff free of phantom leaves.
+  const MEASUREMENT_KEYS = ['measurement_unit', 'spend_column', 'cpm', 'cpc'] as const;
+  const patchChannelMeasurement = (idx: number, updates: Record<string, unknown>) =>
+    setDraft((prev) => {
+      const channels = prev.media_channels.map((ch, i) => {
+        if (i !== idx) return ch;
+        const next = { ...(ch as Record<string, unknown>), ...updates };
+        for (const k of MEASUREMENT_KEYS) {
+          if (next[k] === undefined || next[k] === null || next[k] === '') delete next[k];
+        }
+        return next;
+      });
+      return { ...prev, media_channels: channels } as DraftSpec;
+    });
+
+  const setChannelUnit = (idx: number, unit: string) => {
+    if (unit === 'spend') {
+      // dollars is the default — drop the whole descriptor
+      patchChannelMeasurement(idx, {
+        measurement_unit: undefined, spend_column: undefined, cpm: undefined, cpc: undefined,
+      });
+    } else {
+      const ch = draft.media_channels[idx] as Record<string, unknown>;
+      patchChannelMeasurement(idx, {
+        measurement_unit: unit,
+        // a cost-per rate only makes sense for its unit
+        cpm: unit === 'impressions' ? ch.cpm : undefined,
+        cpc: unit === 'clicks' ? ch.cpc : undefined,
+      });
+    }
+  };
+
   const addChannel = () => {
     const name = newChannel.trim();
     if (!name) return;
@@ -138,7 +172,10 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
   const handleApply = () => {
     // draft is the fully-defaulted working model; its leaves are typed `{}`
     // (from `unknown ?? default`) so we cast at the boundary to ModelSpec.
-    onApplySpec(draft as unknown as ModelSpec);
+    // Spread the live spec underneath: PATCH /spec replaces model_spec
+    // wholesale, so any key added by the agent while the editor was open
+    // must survive an Apply it didn't touch.
+    onApplySpec({ ...spec, ...(draft as unknown as ModelSpec) });
     setEditMode(false);
   };
 
@@ -187,6 +224,12 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
                 <Badge label={`${ch.adstock?.type ?? 'geometric'} adstock`} color="indigo" />
                 <Badge label={`l_max=${ch.adstock?.l_max ?? 8}`} color="gray" />
                 <Badge label={`${ch.saturation?.type ?? 'hill'} sat.`} color="blue" />
+                {ch.measurement_unit && ch.measurement_unit !== 'spend' && (
+                  <Badge label={`measured in ${ch.measurement_unit}`} color="amber" />
+                )}
+                {ch.spend_column && <Badge label={`spend col: ${ch.spend_column}`} color="gray" />}
+                {ch.cpm != null && <Badge label={`CPM $${ch.cpm}`} color="gray" />}
+                {ch.cpc != null && <Badge label={`CPC $${ch.cpc}`} color="gray" />}
               </div>
             </div>
           ))}
@@ -343,44 +386,99 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
       {/* Media Channels */}
       <EditSection title="Media Channels" icon={<Zap size={13} />}>
         <div className="space-y-2">
-          {draft.media_channels.map((ch, idx) => (
-            <div key={idx} className="flex gap-2 items-end bg-cream-50 rounded-lg p-2 border border-line-200">
-              <div className="flex-1">
-                <FLabel>Name</FLabel>
-                <input className={iCls} value={ch.name}
-                  onChange={e => setChannel(idx, 'name', null, e.target.value)} />
+          {draft.media_channels.map((ch, idx) => {
+            const unit = ch.measurement_unit ?? 'spend';
+            const hasSpendCol = !!ch.spend_column;
+            const hasRate = ch.cpm != null || ch.cpc != null;
+            return (
+            <div key={idx} className="space-y-2 bg-cream-50 rounded-lg p-2 border border-line-200">
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <FLabel>Name</FLabel>
+                  <input className={iCls} value={ch.name}
+                    onChange={e => setChannel(idx, 'name', null, e.target.value)} />
+                </div>
+                <div className="w-28">
+                  <FLabel>Adstock</FLabel>
+                  <select className={sCls} value={ch.adstock.type}
+                    onChange={e => setChannel(idx, 'adstock', 'type', e.target.value)}>
+                    <option value="geometric">Geometric</option>
+                    <option value="weibull">Weibull</option>
+                    <option value="delayed">Delayed</option>
+                  </select>
+                </div>
+                <div className="w-16">
+                  <FLabel>L-max</FLabel>
+                  <input className={iCls} type="number" min={1} max={52}
+                    value={ch.adstock.l_max}
+                    onChange={e => setChannel(idx, 'adstock', 'l_max', Number(e.target.value))} />
+                </div>
+                <div className="w-32">
+                  <FLabel>Saturation</FLabel>
+                  <select className={sCls} value={ch.saturation.type}
+                    onChange={e => setChannel(idx, 'saturation', 'type', e.target.value)}>
+                    <option value="hill">Hill</option>
+                    <option value="logistic">Logistic</option>
+                    <option value="michaelis_menten">Michaelis-Menten</option>
+                    <option value="tanh">Tanh</option>
+                  </select>
+                </div>
+                <button onClick={() => removeChannel(idx)}
+                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0" title="Remove channel">
+                  <Trash2 size={14} />
+                </button>
               </div>
-              <div className="w-28">
-                <FLabel>Adstock</FLabel>
-                <select className={sCls} value={ch.adstock.type}
-                  onChange={e => setChannel(idx, 'adstock', 'type', e.target.value)}>
-                  <option value="geometric">Geometric</option>
-                  <option value="weibull">Weibull</option>
-                  <option value="delayed">Delayed</option>
-                </select>
+              <div className="flex gap-2 items-end">
+                <div className="w-32">
+                  <FLabel>Measured in</FLabel>
+                  <select className={sCls} value={unit} onChange={e => setChannelUnit(idx, e.target.value)}>
+                    <option value="spend">Spend ($)</option>
+                    <option value="impressions">Impressions</option>
+                    <option value="clicks">Clicks</option>
+                    <option value="other">Other units</option>
+                  </select>
+                </div>
+                {unit !== 'spend' && (
+                  <>
+                    <div className="flex-1">
+                      <FLabel>Spend column (optional)</FLabel>
+                      <input className={iCls} value={ch.spend_column ?? ''} disabled={hasRate}
+                        placeholder="external $ series in the dataset"
+                        title={hasRate ? 'Clear the CPM/CPC first — one cost source per channel' : undefined}
+                        onChange={e => patchChannelMeasurement(idx, { spend_column: e.target.value })} />
+                    </div>
+                    {unit === 'impressions' && (
+                      <div className="w-24">
+                        <FLabel>CPM ($)</FLabel>
+                        <input className={iCls} type="number" min={0} step="any"
+                          value={ch.cpm ?? ''} disabled={hasSpendCol}
+                          title={hasSpendCol ? 'Clear the spend column first — one cost source per channel' : undefined}
+                          onChange={e => patchChannelMeasurement(idx, { cpm: e.target.value === '' ? undefined : Number(e.target.value) })} />
+                      </div>
+                    )}
+                    {unit === 'clicks' && (
+                      <div className="w-24">
+                        <FLabel>CPC ($)</FLabel>
+                        <input className={iCls} type="number" min={0} step="any"
+                          value={ch.cpc ?? ''} disabled={hasSpendCol}
+                          title={hasSpendCol ? 'Clear the spend column first — one cost source per channel' : undefined}
+                          onChange={e => patchChannelMeasurement(idx, { cpc: e.target.value === '' ? undefined : Number(e.target.value) })} />
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-              <div className="w-16">
-                <FLabel>L-max</FLabel>
-                <input className={iCls} type="number" min={1} max={52}
-                  value={ch.adstock.l_max}
-                  onChange={e => setChannel(idx, 'adstock', 'l_max', Number(e.target.value))} />
-              </div>
-              <div className="w-32">
-                <FLabel>Saturation</FLabel>
-                <select className={sCls} value={ch.saturation.type}
-                  onChange={e => setChannel(idx, 'saturation', 'type', e.target.value)}>
-                  <option value="hill">Hill</option>
-                  <option value="logistic">Logistic</option>
-                  <option value="michaelis_menten">Michaelis-Menten</option>
-                  <option value="tanh">Tanh</option>
-                </select>
-              </div>
-              <button onClick={() => removeChannel(idx)}
-                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0" title="Remove channel">
-                <Trash2 size={14} />
-              </button>
+              {unit !== 'spend' && !hasSpendCol && !hasRate && (
+                <p className="text-[11px] text-amber-700">
+                  No cost source — ROI will report as <em>efficiency</em> (per{' '}
+                  {unit === 'impressions' ? '1k impressions' : unit === 'clicks' ? 'click' : 'unit'},
+                  break-even 0) instead of dollars. Add a spend column or a{' '}
+                  {unit === 'clicks' ? 'CPC' : 'CPM'} to restore monetary ROI.
+                </p>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
         <div className="flex gap-2 mt-2">
           <input className={iCls + ' flex-1'} placeholder="New channel name…"
