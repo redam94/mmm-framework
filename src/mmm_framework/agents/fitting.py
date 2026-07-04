@@ -194,6 +194,208 @@ def unconsumed_prior_path(parts: list[str], value, spec: dict) -> str | None:
     return None
 
 
+# ── Consumed model_spec paths (beyond priors.*) ──────────────────────────────
+# Full-spec sibling of the priors registry above: every top-level path that
+# build_model / _mff_config_from_spec actually reads. update_model_setting
+# validates writes against this so a setting the builder would silently drop —
+# or an enum value that would silently fall back to a default (a typo'd
+# time_granularity becomes "weekly", a typo'd adstock type becomes geometric) —
+# is rejected up front instead of accept-then-no-op. Adding a new spec read in
+# this module MUST come with a registry entry here.
+
+_INFERENCE_KEYS = {
+    "chains", "draws", "tune", "target_accept", "random_seed", "method",
+    "metrics_draws",
+}
+_TREND_KEYS = {"type", "n_changepoints", "changepoint_range", "n_knots", "spline_degree"}
+_TREND_TYPES = {"linear", "piecewise", "spline", "gaussian_process", "none"}
+_SEASONALITY_KEYS = {"yearly", "monthly", "weekly"}
+_LIKELIHOOD_KEYS = {"family", "link", "params"}
+_ADSTOCK_KEYS = {"type", "l_max"}
+_ADSTOCK_TYPES = {"geometric", "weibull", "delayed"}
+_SATURATION_KEYS = {"type"}
+_SATURATION_TYPES = {"hill", "logistic", "michaelis_menten", "michaelis-menten", "tanh"}
+_MEASUREMENT_UNITS = {"spend", "impressions", "clicks", "other"}
+_CHANNEL_SCALAR_FIELDS = {"name", "measurement_unit", "spend_column", "cpm", "cpc"}
+_CONTROL_FIELDS = {"name", "role"}
+# Enum-valued top-level scalars whose reads fall back to a default on any
+# unrecognized value — a typo here is the most silent failure mode of all.
+_ENUM_TOP_VALUES = {
+    "kpi_level": {"national", "geo"},
+    "time_granularity": {"weekly", "daily", "monthly"},
+    "media_prior_mode": {"coefficient", "roi"},
+}
+# Consumed but free-form: validated downstream at build time (dataset loader,
+# garden manifest, CONFIG_SCHEMA, Estimand.from_dict, ExperimentMeasurement).
+_FREEFORM_TOP_KEYS = {
+    "dataset", "garden_ref", "model_params", "estimands", "experiments",
+    "experiment_ids",
+}
+_SIMPLE_TOP_KEYS = {"kpi", "skip_quality_gate"}
+
+
+def _spec_leaves(parts: list[str], value) -> list[tuple[list[str], object]]:
+    """Expand a (path, value) write into its leaf writes, so setting a whole
+    dict (e.g. the `trend` object) validates each contained key."""
+    if isinstance(value, dict) and value:
+        out: list[tuple[list[str], object]] = []
+        for k, sub in value.items():
+            out.extend(_spec_leaves(parts + [str(k)], sub))
+        return out
+    return [(parts, value)]
+
+
+def unconsumed_spec_path(parts: list[str], value, spec: dict) -> str | None:
+    """Return an error message when writing ``value`` at the model_spec path
+    ``parts`` would never be read by ``build_model`` (or would silently fall
+    back to a default), else None. The full-spec extension of
+    :func:`unconsumed_prior_path`, which it delegates to for ``priors.*``."""
+    top = parts[0]
+    if top == "priors":
+        return unconsumed_prior_path(parts, value, spec)
+    if top in _FREEFORM_TOP_KEYS or top in _SIMPLE_TOP_KEYS:
+        return None
+
+    def _bad(path: str, detail: str) -> str:
+        return f"`{path}` would have no effect — {detail}"
+
+    if top in _ENUM_TOP_VALUES:
+        path = ".".join(parts)
+        if len(parts) > 1:
+            return _bad(path, f"`{top}` is a scalar setting, not a dict.")
+        allowed = _ENUM_TOP_VALUES[top]
+        if str(value).strip().lower() not in allowed:
+            return (
+                f"`{top}` = {value!r} would silently fall back to the default — "
+                f"the builder only recognizes: {', '.join(sorted(allowed))}."
+            )
+        return None
+
+    _grouped = {
+        "inference": _INFERENCE_KEYS,
+        "trend": _TREND_KEYS,
+        "seasonality": _SEASONALITY_KEYS,
+        "likelihood": _LIKELIHOOD_KEYS,
+    }
+    if top in _grouped:
+        for leaf, leaf_val in _spec_leaves(list(parts), value):
+            path = ".".join(leaf)
+            if len(leaf) < 2:
+                continue  # replacing the whole (empty) dict is a no-op write
+            if leaf[1] not in _grouped[top]:
+                return _bad(
+                    path,
+                    f"the model builder never reads it. Valid `{top}.*` keys: "
+                    f"{', '.join(sorted(_grouped[top]))}.",
+                )
+            if top == "trend" and leaf[1] == "type":
+                if str(leaf_val).strip().lower().replace("-", "_") not in _TREND_TYPES:
+                    return (
+                        f"`trend.type` = {leaf_val!r} is not a trend the builder "
+                        f"recognizes: {', '.join(sorted(_TREND_TYPES))}."
+                    )
+            # likelihood.params is free-form (family-specific); the family/link
+            # values are validated by LikelihoodConfig at build time.
+        return None
+
+    if top == "media_channels":
+        channels = {m.get("name") for m in spec.get("media_channels", [])}
+        for leaf, leaf_val in _spec_leaves(list(parts), value):
+            path = ".".join(leaf)
+            if len(leaf) < 3:
+                return _bad(
+                    path,
+                    "address a channel field as "
+                    "`media_channels.<name>.<field>` (e.g. "
+                    "`media_channels.TV.adstock.type`).",
+                )
+            if channels and leaf[1] not in channels:
+                return (
+                    f"`{path}` names unknown media channel '{leaf[1]}'. "
+                    f"Channels in the spec: {', '.join(sorted(map(str, channels)))}."
+                )
+            field = leaf[2]
+            if field == "adstock":
+                if len(leaf) < 4 or leaf[3] not in _ADSTOCK_KEYS:
+                    return _bad(
+                        path,
+                        f"valid `adstock.*` keys: {', '.join(sorted(_ADSTOCK_KEYS))}.",
+                    )
+                if leaf[3] == "type" and str(leaf_val).strip().lower() not in _ADSTOCK_TYPES:
+                    return (
+                        f"`{path}` = {leaf_val!r} would silently fall back to "
+                        f"geometric — recognized adstock types: "
+                        f"{', '.join(sorted(_ADSTOCK_TYPES))}."
+                    )
+            elif field == "saturation":
+                if len(leaf) < 4 or leaf[3] not in _SATURATION_KEYS:
+                    return _bad(
+                        path,
+                        f"valid `saturation.*` keys: {', '.join(sorted(_SATURATION_KEYS))}.",
+                    )
+                if str(leaf_val).strip().lower() not in _SATURATION_TYPES:
+                    return (
+                        f"`{path}` = {leaf_val!r} would silently fall back to "
+                        f"hill — recognized saturation types: hill, logistic, "
+                        f"michaelis_menten, tanh."
+                    )
+            elif field == "measurement_unit":
+                if str(leaf_val).strip().lower() not in _MEASUREMENT_UNITS:
+                    return (
+                        f"`{path}` = {leaf_val!r} is not a measurement unit: "
+                        f"{', '.join(sorted(_MEASUREMENT_UNITS))}."
+                    )
+            elif field not in _CHANNEL_SCALAR_FIELDS:
+                return _bad(
+                    path,
+                    "the model builder never reads it. Valid per-channel "
+                    "fields: adstock.{type,l_max}, saturation.type, "
+                    "measurement_unit, spend_column, cpm, cpc. Channel priors "
+                    "live under `priors.media.<name>.*`.",
+                )
+        return None
+
+    if top == "control_variables":
+        controls = {c.get("name") for c in spec.get("control_variables", [])}
+        for leaf, _leaf_val in _spec_leaves(list(parts), value):
+            path = ".".join(leaf)
+            if len(leaf) < 3:
+                return _bad(
+                    path,
+                    "address a control field as `control_variables.<name>.<field>`.",
+                )
+            if controls and leaf[1] not in controls:
+                return (
+                    f"`{path}` names unknown control variable '{leaf[1]}'. "
+                    f"Controls in the spec: {', '.join(sorted(map(str, controls)))}."
+                )
+            if leaf[2] == "allow_negative":
+                return (
+                    f"`{path}` would have no effect — sign constraints live "
+                    f"under `priors.controls.{leaf[1]}.allow_negative`."
+                )
+            if leaf[2] not in _CONTROL_FIELDS:
+                return _bad(
+                    path,
+                    "the model builder never reads it. Valid per-control "
+                    "fields: role (confounder|precision). Control priors live "
+                    "under `priors.controls.<name>.*`.",
+                )
+        return None
+
+    known = sorted(
+        _FREEFORM_TOP_KEYS
+        | _SIMPLE_TOP_KEYS
+        | set(_ENUM_TOP_VALUES)
+        | set(_grouped)
+        | {"priors", "media_channels", "control_variables"}
+    )
+    return (
+        f"`{'.'.join(parts)}` would have no effect — the model builder never "
+        f"reads top-level `{top}`. Consumed spec settings: {', '.join(known)}."
+    )
+
+
 def _mff_config_from_spec(spec: dict):
     """Build an ``MFFConfig`` from a (normalized) model_spec dict — shared by fit
     and by ``load_fitted_model`` (the panel a saved model reloads against)."""
