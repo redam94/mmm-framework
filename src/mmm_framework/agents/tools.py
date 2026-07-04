@@ -1110,22 +1110,65 @@ def generate_slide_deck(
 @tool
 def get_estimands(
     state: Annotated[dict, InjectedState],
+    estimands: list[str] = None,
+    custom_estimands: str = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
     config: InjectedConfig = None,
 ) -> Command:
     """
     Compute the model's declarative estimands — the counterfactual causal lens.
 
-    Returns each estimand the model declares (or the capability defaults:
-    contribution_roi, marginal_roas, contribution — per channel) as a mean + 94%
-    HDI, plus any user-declared estimands (e.g. awareness_lift,
-    cost_per_conversion). Call this when the user asks for ROI/ROAS/contribution
-    "estimands", a named or custom causal contrast, or the full set of declared
-    measures. For the standard ROI table specifically, get_roi_metrics is fine.
+    With no arguments, returns each estimand the model declares (or the
+    capability defaults: contribution_roi, marginal_roas, contribution — per
+    channel) as a mean + 94% HDI. Call this when the user asks for
+    ROI/ROAS/contribution "estimands", a named or custom causal contrast, or
+    the full set of declared measures. For the standard ROI table specifically,
+    get_roi_metrics is fine.
+
+    `estimands` selects specific BUILT-IN estimands by name instead of the
+    declared/default set: contribution_roi, counterfactual_roi, marginal_roas,
+    contribution, awareness_lift, cost_per_conversion.
+
+    `custom_estimands` is a JSON estimand spec (an object or a list of
+    objects) for ad-hoc contrasts beyond the built-ins, in the serialized
+    Estimand schema (mmm_framework.estimands.spec.Estimand — the model's
+    declared_estimands are working examples). Both arguments combine; an
+    estimand the model can't support is reported as status="unsupported",
+    never dropped.
     """
     _activate_thread(config)
+    requested = None
+    if estimands or custom_estimands:
+        from mmm_framework.estimands.registry import BUILTINS
+
+        unknown = [n for n in (estimands or []) if n not in BUILTINS]
+        if unknown:
+            return _simple_msg(
+                f"Unknown estimand name(s): {', '.join(unknown)}. Built-ins: "
+                f"{', '.join(sorted(BUILTINS))}. For anything else, pass a "
+                "serialized spec via custom_estimands.",
+                tool_call_id,
+            )
+        requested = list(estimands or [])
+        if custom_estimands:
+            try:
+                parsed = json.loads(custom_estimands)
+            except json.JSONDecodeError as exc:
+                return _simple_msg(
+                    f"Could not parse custom_estimands JSON: {exc}", tool_call_id
+                )
+            if isinstance(parsed, dict):
+                parsed = [parsed]
+            if not isinstance(parsed, list):
+                return _simple_msg(
+                    "custom_estimands must be a JSON estimand object or a list "
+                    "of them.",
+                    tool_call_id,
+                )
+            requested.extend(parsed)
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
-        "compute_estimands", {}
+        "compute_estimands",
+        {"estimands": requested} if requested else {},
     )
     return _modelop_command(res, state, tool_call_id)
 
