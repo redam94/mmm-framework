@@ -894,6 +894,34 @@ def fit_mmm_model(
 # where the model lives — in-process today (MODEL_CACHE), in the subprocess kernel
 # once fits move there (PR-C). The no-model / unknown-op cases come back as the
 # result's `error`, rendered below.
+
+# Op dashboard keys NO platform surface reads back from checkpointed state.
+# The user sees these ops through the markdown content + published tables /
+# plots; the REST job endpoints (simulate / optimize / identify) transport the
+# payload straight off the op RESULT dict (`res["dashboard"][key]`), never
+# from state. Persisting them into dashboard_data only bloats every
+# checkpoint row (the msgpack/size ceiling the context-management work exists
+# for), so they are dropped at the state boundary here. To surface one in the
+# UI later, remove it from this set and add the FE reader deliberately.
+# Audited 2026-07-04; keys with real state readers stay OUT of this set:
+# sbc (prefit readout reuse), diagnostics/saturation/decomposition/roi_metrics/
+# model_run (project report + workflow inference), experiment_priorities (FE),
+# experiment_economics (design-studio state write).
+_STATE_DROPPED_DASHBOARD_KEYS = frozenset(
+    {
+        "adstock",
+        "estimands",
+        "sensitivity_loo",
+        "budget_optimization",
+        "budget_plan",
+        "budget_scenario",
+        "experiment_optimization",
+        "structural_identification",
+        "garden_compat",
+    }
+)
+
+
 def _modelop_command(
     res: dict, state: dict, tool_call_id, persist_check: str | None = None
 ) -> Command:
@@ -917,7 +945,11 @@ def _modelop_command(
         )
     content = res["content"]
     raw_content = content
-    dash = res.get("dashboard") or {}
+    dash = {
+        k: v
+        for k, v in (res.get("dashboard") or {}).items()
+        if k not in _STATE_DROPPED_DASHBOARD_KEYS
+    }
     tables = res.get("tables") or []
     plots = res.get("plots") or []
     update: dict = {}

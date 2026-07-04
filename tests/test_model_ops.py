@@ -553,3 +553,51 @@ def test_bayesian_workflow_reference_tool():
     filtered = bayesian_workflow_reference.func(topic="diagnostics")
     assert "R-hat < 1.01" in filtered and len(filtered) < len(full)
     assert bayesian_workflow_reference.func(topic="zzz") == full
+
+
+# ── dashboard_data state-boundary filter ─────────────────────────────────────
+
+
+def test_modelop_command_drops_stateless_dashboard_keys():
+    """Op dashboard payloads with no state readers must NOT be checkpointed —
+    they ride the op result (REST job transport) and the rendered content/
+    tables, not dashboard_data. Keys with real state readers pass through."""
+    from mmm_framework.agents.tools import (
+        _STATE_DROPPED_DASHBOARD_KEYS,
+        _modelop_command,
+    )
+
+    res = {
+        "content": "ok",
+        "error": None,
+        "dashboard": {
+            # dropped: no platform surface reads these from state
+            "structural_identification": {"big": "payload"},
+            "budget_optimization": {"rows": [1, 2, 3]},
+            "estimands": [{"estimand": "contribution_roi"}],
+            # kept: real state readers exist
+            "sbc": {"bin_counts": [1, 2]},
+            "roi_metrics": {"TV": 1.2},
+            "diagnostics": {"rhat": 1.0},
+        },
+    }
+    cmd = _modelop_command(res, {"dashboard_data": {"plots": []}}, "t1")
+    dd = cmd.update["dashboard_data"]
+    for k in ("structural_identification", "budget_optimization", "estimands"):
+        assert k not in dd, k
+    for k in ("sbc", "roi_metrics", "diagnostics", "plots"):
+        assert k in dd, k
+
+
+def test_state_dropped_keys_have_no_state_readers():
+    """Every dropped key must still be produced somewhere in model_ops (else
+    the entry is stale) — and must never gain a silent state reader without
+    revisiting the drop-list."""
+    import inspect
+
+    from mmm_framework.agents import model_ops as M2
+    from mmm_framework.agents.tools import _STATE_DROPPED_DASHBOARD_KEYS
+
+    src = inspect.getsource(M2)
+    for key in _STATE_DROPPED_DASHBOARD_KEYS:
+        assert f'"{key}"' in src, f"drop-list entry '{key}' no longer produced"
