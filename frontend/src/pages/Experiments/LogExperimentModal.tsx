@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../components/ui';
 import { useUpsertExperiment } from '../../api/hooks/usePortfolio';
 import { useProjectStore } from '../../stores/projectStore';
+import { OffPanelFields, emptyOffPanel, offPanelReadoutFields } from './OffPanelFields';
 import type { ExperimentStatus } from '../../api/services/portfolioService';
 
 /** Statuses the modal can log directly (calibration happens via the loop, not by hand). */
@@ -34,6 +35,8 @@ export function LogExperimentModal({ onClose }: { onClose: () => void }) {
   const [estimand, setEstimand] = useState('roas');
   const [value, setValue] = useState('');
   const [se, setSe] = useState('');
+  const [method, setMethod] = useState('');
+  const [offPanel, setOffPanel] = useState(emptyOffPanel);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -44,8 +47,22 @@ export function LogExperimentModal({ onClose }: { onClose: () => void }) {
     if (!channel.trim()) return;
     setError(null);
     try {
-      // NB: hypothesis is captured in the form but the upsert payload has no
-      // design field yet — it goes nowhere until the API grows one.
+      // A historical import often ran outside the fitted data window — the
+      // off-panel readout fields (spend Δ/period, treated units, adstock
+      // state) let the calibration evaluate the response curve at the test's
+      // spend level instead of requiring window overlap.
+      const offPanelFields = measured ? offPanelReadoutFields(offPanel) : {};
+      const readout = measured
+        ? {
+            ...(value !== '' ? { value: Number(value) } : {}),
+            ...(se !== '' ? { se: Number(se) } : {}),
+            estimand,
+            ...(startDate ? { start_date: startDate } : {}),
+            ...(endDate ? { end_date: endDate } : {}),
+            ...(method.trim() ? { method: method.trim() } : {}),
+            ...offPanelFields,
+          }
+        : null;
       await upsert.mutateAsync({
         project_id: projectId,
         channel: channel.trim(),
@@ -58,6 +75,8 @@ export function LogExperimentModal({ onClose }: { onClose: () => void }) {
         value: measured && value !== '' ? Number(value) : null,
         se: measured && se !== '' ? Number(se) : null,
         notes: notes.trim() || null,
+        design: hypothesis.trim() ? { hypothesis: hypothesis.trim() } : null,
+        readout,
       });
       onClose();
     } catch (err: unknown) {
@@ -155,38 +174,49 @@ export function LogExperimentModal({ onClose }: { onClose: () => void }) {
             </p>
           )}
           {measured && (
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="Estimand">
-                <select
-                  value={estimand}
-                  onChange={(e) => setEstimand(e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="roas">ROAS</option>
-                  <option value="mroas">mROAS</option>
-                  <option value="contribution">Contribution</option>
-                </select>
-              </Field>
-              <Field label="Value">
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Estimand">
+                  <select
+                    value={estimand}
+                    onChange={(e) => setEstimand(e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="roas">ROAS</option>
+                    <option value="mroas">mROAS</option>
+                    <option value="contribution">Contribution</option>
+                  </select>
+                </Field>
+                <Field label="Value">
+                  <input
+                    type="number"
+                    step="any"
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="SE">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={se}
+                    onChange={(e) => setSe(e.target.value)}
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
+              <Field label="Method (optional)">
                 <input
-                  type="number"
-                  step="any"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
+                  value={method}
+                  onChange={(e) => setMethod(e.target.value)}
+                  placeholder="e.g. geo holdout DiD, synthetic control"
                   className={inputCls}
                 />
               </Field>
-              <Field label="SE">
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={se}
-                  onChange={(e) => setSe(e.target.value)}
-                  className={inputCls}
-                />
-              </Field>
-            </div>
+              <OffPanelFields state={offPanel} onChange={setOffPanel} inputCls={inputCls} />
+            </>
           )}
           <Field label="Notes">
             <textarea
