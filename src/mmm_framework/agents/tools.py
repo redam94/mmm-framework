@@ -5590,6 +5590,7 @@ def identify_structural_parameters(
     return _modelop_command(res, state, tool_call_id)
 
 
+from mmm_framework.agents.data_studio_tools import DATA_STUDIO_TOOLS
 from mmm_framework.agents.eda_tools import EDA_TOOLS
 from mmm_framework.agents.learning_tools import LEARNING_TOOLS
 
@@ -6508,6 +6509,9 @@ TOOLS = [
     # Step 2 — Data quality (pre-fit): validate_data, run_eda, detect_outliers,
     # apply_outlier_treatment
     *EDA_TOOLS,
+    # Step 2 — Data Studio: staged upload → replayable clean pipeline → commit
+    # (shares the staging manifest with the UI's Data-tab studio)
+    *DATA_STUDIO_TOOLS,
     # Step 2 — Tell the story / DAG
     *[
         t
