@@ -27,7 +27,13 @@ uv run sphinx-build -b html docs/api/source docs/api/build/html
 
 # Static documentation site (hand-authored HTML in docs/*.html)
 # Edit pages directly; preview locally with `python3 -m http.server` from docs/.
-# Navigation/footer are injected by docs/shared/components.js — update NAV_LINKS there.
+# Navigation/footer are injected by docs/shared/components.js — update NAV_LINKS there
+# (also SERIES for prev/next cards and PAGE_TIERS for the audience chip).
+# After adding/editing pages: `python3 tools/build_search_index.py` from docs/
+# regenerates the Cmd-K search index + glossary tooltip data (shared/*.json);
+# `python3 tools/build_seo.py` refreshes JSON-LD, sitemap.xml and llms.txt.
+# Dark mode is a [data-theme="dark"] token swap in shared/styles.css — keep
+# page-local styles on var(--color-*) tokens, never hardcoded light colors.
 
 # Start the application
 

@@ -32,7 +32,7 @@ SITE_ID = f"{SITE}/#website"
 SENTINEL = "<!-- seo:augmented (structured data + social cards) -->"
 DEFAULT_IMG = f"{SITE}/assets/mmm-framework-social-preview.png"
 TODAY = "2026-06-24"
-EXCLUDE = {"TEMPLATE.html", "TEMPLATE-SIDEBAR.html"}
+EXCLUDE = {"TEMPLATE.html", "TEMPLATE-SIDEBAR.html", "404.html"}
 
 DEMO_PAGES = {
     "demos.html", "scientific-workflow-demo.html", "scientific-workflow-simple.html",

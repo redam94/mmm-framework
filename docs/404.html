@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Not Found | MMM Framework</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description" content="This page does not exist. Find your way back to the MMM Framework documentation.">
+    <!-- GitHub Pages serves 404.html for ANY missing path, at any depth —
+         pin relative URLs to the site root when hosted there. -->
+    <script>
+        if (location.hostname.endsWith('github.io')) {
+            document.write('<base href="/mmm-framework/">');
+        }
+    </script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        .notfound-hero {
+            padding-top: 9rem;
+            padding-bottom: 3rem;
+            text-align: center;
+            background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%);
+        }
+
+        .notfound-code {
+            font-family: 'DM Serif Display', serif;
+            font-size: clamp(5rem, 16vw, 9rem);
+            line-height: 1;
+            color: var(--color-primary);
+            letter-spacing: 0.02em;
+        }
+
+        .notfound-hero h1 {
+            font-size: clamp(1.5rem, 4vw, 2.2rem);
+            margin: 0.75rem 0 1rem;
+        }
+
+        .notfound-hero p {
+            max-width: 560px;
+            margin: 0 auto;
+            color: var(--color-text-muted);
+        }
+
+        .notfound-hero p kbd {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8em;
+            border: 1px solid var(--color-border);
+            border-bottom-width: 2px;
+            border-radius: 5px;
+            padding: 0.08em 0.4em;
+            background: var(--color-surface);
+        }
+
+        .notfound-paths {
+            padding: 3rem 0 5rem;
+        }
+
+        .notfound-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 1.25rem;
+            margin-top: 1rem;
+        }
+
+        .path-card {
+            display: block;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 14px;
+            padding: 1.5rem;
+            text-decoration: none;
+            transition: var(--transition-smooth);
+        }
+
+        .path-card:hover {
+            border-color: var(--border-hover);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        .path-card h3 {
+            color: var(--color-primary-dark);
+            margin-bottom: 0.4rem;
+            font-size: 1.1rem;
+        }
+
+        .path-card p {
+            color: var(--color-text-muted);
+            font-size: 0.9rem;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation and Footer are injected by components.js -->
+
+    <section class="notfound-hero">
+        <div class="container">
+            <div class="notfound-code">404</div>
+            <h1>This page went out of sample</h1>
+            <p>
+                The address you followed does not exist — it may have moved when the
+                docs were reorganized, or the link had a typo. Press <kbd>⌘&nbsp;K</kbd>
+                (or <kbd>Ctrl&nbsp;K</kbd>) to search every page, or pick a path below.
+            </p>
+        </div>
+    </section>
+
+    <section class="notfound-paths">
+        <div class="container">
+            <div class="notfound-grid">
+                <a class="path-card" href="index.html">
+                    <h3>Home</h3>
+                    <p>What the framework is and why causal measurement matters.</p>
+                </a>
+                <a class="path-card" href="getting-started.html">
+                    <h3>Getting started</h3>
+                    <p>Install, load data, and fit your first model.</p>
+                </a>
+                <a class="path-card" href="demos.html">
+                    <h3>Demos &amp; reports</h3>
+                    <p>Interactive walkthroughs, notebook guides, and example reports.</p>
+                </a>
+                <a class="path-card" href="glossary.html">
+                    <h3>Glossary</h3>
+                    <p>Every term — adstock, saturation, ROAS, posterior — in plain language.</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Shared Components (loads nav + footer) -->
+    <script src="shared/components.js"></script>
+</body>
+</html>
