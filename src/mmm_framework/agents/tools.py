@@ -31,7 +31,7 @@ from mmm_framework.agents import model_ops as _model_ops
 from mmm_framework.agents.fitting import (
     _mff_config_from_spec,
     build_and_fit,
-    unconsumed_prior_path,
+    unconsumed_spec_path,
 )
 from mmm_framework.agents.spec_locks import (
     get_at,
@@ -1142,22 +1142,65 @@ def generate_slide_deck(
 @tool
 def get_estimands(
     state: Annotated[dict, InjectedState],
+    estimands: list[str] = None,
+    custom_estimands: str = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
     config: InjectedConfig = None,
 ) -> Command:
     """
     Compute the model's declarative estimands — the counterfactual causal lens.
 
-    Returns each estimand the model declares (or the capability defaults:
-    contribution_roi, marginal_roas, contribution — per channel) as a mean + 94%
-    HDI, plus any user-declared estimands (e.g. awareness_lift,
-    cost_per_conversion). Call this when the user asks for ROI/ROAS/contribution
-    "estimands", a named or custom causal contrast, or the full set of declared
-    measures. For the standard ROI table specifically, get_roi_metrics is fine.
+    With no arguments, returns each estimand the model declares (or the
+    capability defaults: contribution_roi, marginal_roas, contribution — per
+    channel) as a mean + 94% HDI. Call this when the user asks for
+    ROI/ROAS/contribution "estimands", a named or custom causal contrast, or
+    the full set of declared measures. For the standard ROI table specifically,
+    get_roi_metrics is fine.
+
+    `estimands` selects specific BUILT-IN estimands by name instead of the
+    declared/default set: contribution_roi, counterfactual_roi, marginal_roas,
+    contribution, awareness_lift, cost_per_conversion.
+
+    `custom_estimands` is a JSON estimand spec (an object or a list of
+    objects) for ad-hoc contrasts beyond the built-ins, in the serialized
+    Estimand schema (mmm_framework.estimands.spec.Estimand — the model's
+    declared_estimands are working examples). Both arguments combine; an
+    estimand the model can't support is reported as status="unsupported",
+    never dropped.
     """
     _activate_thread(config)
+    requested = None
+    if estimands or custom_estimands:
+        from mmm_framework.estimands.registry import BUILTINS
+
+        unknown = [n for n in (estimands or []) if n not in BUILTINS]
+        if unknown:
+            return _simple_msg(
+                f"Unknown estimand name(s): {', '.join(unknown)}. Built-ins: "
+                f"{', '.join(sorted(BUILTINS))}. For anything else, pass a "
+                "serialized spec via custom_estimands.",
+                tool_call_id,
+            )
+        requested = list(estimands or [])
+        if custom_estimands:
+            try:
+                parsed = json.loads(custom_estimands)
+            except json.JSONDecodeError as exc:
+                return _simple_msg(
+                    f"Could not parse custom_estimands JSON: {exc}", tool_call_id
+                )
+            if isinstance(parsed, dict):
+                parsed = [parsed]
+            if not isinstance(parsed, list):
+                return _simple_msg(
+                    "custom_estimands must be a JSON estimand object or a list "
+                    "of them.",
+                    tool_call_id,
+                )
+            requested.extend(parsed)
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
-        "compute_estimands", {}
+        "compute_estimands",
+        {"estimands": requested} if requested else {},
     )
     return _modelop_command(res, state, tool_call_id)
 
@@ -2274,14 +2317,38 @@ def update_model_setting(
     Examples:
       setting_path="inference.draws",           value=2000
       setting_path="inference.chains",          value=4
+      setting_path="inference.method",          value="map"      (approximate fit: map|advi|fullrank_advi|pathfinder|nuts)
+      setting_path="inference.metrics_draws",   value=0          (0 disables per-run history metrics)
       setting_path="trend.type",                value="piecewise"
       setting_path="trend.n_changepoints",      value=10
       setting_path="seasonality.yearly",        value=4
       setting_path="kpi",                       value="Revenue"
-      setting_path="time_granularity",          value="daily"
+      setting_path="kpi_level",                 value="geo"      (national|geo)
+      setting_path="time_granularity",          value="daily"    (weekly|daily|monthly)
       setting_path="media_channels.TV.adstock.type",      value="delayed"
       setting_path="media_channels.TV.adstock.l_max",     value=13
       setting_path="media_channels.TV.saturation.type",   value="logistic"
+
+    Measurement descriptor (impression-/click-measured media — drives ROI vs
+    efficiency reporting; absent means the modeled variable is dollars):
+      setting_path="media_channels.Display.measurement_unit", value="impressions"  (spend|impressions|clicks|other)
+      setting_path="media_channels.Display.cpm",              value=5.5  ($ per 1k impressions)
+      setting_path="media_channels.Search.measurement_unit",  value="clicks"
+      setting_path="media_channels.Search.cpc",               value=0.8  ($ per click)
+      setting_path="media_channels.Display.spend_column",     value="Display_spend"  (external $ series; exclusive with cpm/cpc)
+
+    Observation model / global knobs:
+      setting_path="likelihood.family",   value="student_t"     (default "normal"; non-Gaussian needs a model that owns its likelihood)
+      setting_path="media_prior_mode",    value="coefficient"   (default "roi" for agent-built models)
+      setting_path="skip_quality_gate",   value=True            (bypass the pre-fit data-quality gate — use only when the user insists)
+      setting_path="control_variables.price.role", value="confounder"  (confounder|precision)
+
+    Also consumed at fit time (usually set by their dedicated tools, but
+    reachable here): `estimands` (declared estimand list), `experiments` /
+    `experiment_ids` (staged by apply_experiment_calibration), `garden_ref` +
+    `model_params` (set by load_garden_model / configure), `dataset` (native
+    role-tagged dataset). Any OTHER path is rejected — the model builder would
+    silently ignore it.
 
     Intercept prior (Normal on standardized y — mu is in KPI standard deviations
     from the mean, so values beyond ±2 put the baseline outside the observed KPI
@@ -2377,21 +2444,31 @@ def update_model_setting(
 
     parts = setting_path.split(".")
 
-    # Refuse priors the model builder would silently drop (writing an unread
-    # spec key looks like success but changes nothing — see agents/fitting.py).
-    if parts[0] == "priors":
-        err = unconsumed_prior_path(parts, value, new_spec)
-        if err:
-            return Command(
-                update={
-                    "messages": [
-                        ToolMessage(
-                            content=f"Rejected `{setting_path}`: {err}",
-                            tool_call_id=tool_call_id,
-                        )
-                    ]
-                }
-            )
+    # Store enum-valued spec strings canonically (lowercase): some builder
+    # reads compare exactly (kpi_level == "geo", MeasurementUnit(unit)), so a
+    # cased write like "Geo" would validate here yet silently no-op at build.
+    if isinstance(value, str) and (
+        setting_path in ("kpi_level", "time_granularity", "media_prior_mode")
+        or parts[-1] == "measurement_unit"
+        or (parts[0] == "media_channels" and parts[-1] == "type")
+    ):
+        value = value.strip().lower()
+
+    # Refuse writes the model builder would silently drop — or enum values
+    # that would silently fall back to a default (writing an unread spec key
+    # looks like success but changes nothing — see agents/fitting.py).
+    err = unconsumed_spec_path(parts, value, new_spec)
+    if err:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Rejected `{setting_path}`: {err}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
 
     try:
         _set(new_spec, parts, value)
@@ -5545,6 +5622,7 @@ def identify_structural_parameters(
     return _modelop_command(res, state, tool_call_id)
 
 
+from mmm_framework.agents.data_studio_tools import DATA_STUDIO_TOOLS
 from mmm_framework.agents.eda_tools import EDA_TOOLS
 from mmm_framework.agents.learning_tools import LEARNING_TOOLS
 
@@ -6463,6 +6541,9 @@ TOOLS = [
     # Step 2 — Data quality (pre-fit): validate_data, run_eda, detect_outliers,
     # apply_outlier_treatment
     *EDA_TOOLS,
+    # Step 2 — Data Studio: staged upload → replayable clean pipeline → commit
+    # (shares the staging manifest with the UI's Data-tab studio)
+    *DATA_STUDIO_TOOLS,
     # Step 2 — Tell the story / DAG
     *[
         t

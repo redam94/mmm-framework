@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Lock } from 'lucide-react';
 import { Button, Card, Drawer, StatusChip } from '../../components/ui';
 import { useExperimentRecord, useTransitionExperiment } from '../../api/hooks/useMeasurement';
 import { FlightingScheduleChart, flightingSchedule } from './FlightingSchedule';
 import { designMDE, designPower, powerBasisLabel, powerTextColor } from './designSummary';
+import { OffPanelFields, emptyOffPanel, offPanelReadoutFields } from './OffPanelFields';
 import type {
   ExperimentRecord,
   ExperimentTransition,
@@ -45,21 +47,60 @@ function ReadoutForm({
   onSubmit,
   pending,
   targetSe,
+  existingReadout,
 }: {
   onSubmit: (body: ExperimentTransition) => void;
   pending: boolean;
   /** the design's pre-registered precision target, when one was locked */
   targetSe?: number | null;
+  /** merged into (not replaced by) the submitted readout, like the agent tool */
+  existingReadout?: Record<string, unknown> | null;
 }) {
   const [value, setValue] = useState('');
   const [se, setSe] = useState('');
   const [estimand, setEstimand] = useState('roas');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [method, setMethod] = useState('');
+  const [offPanel, setOffPanel] = useState(emptyOffPanel);
 
   const seNum = se !== '' ? Number(se) : null;
   const underPowered =
     targetSe != null && seNum != null && Number.isFinite(seNum) && seNum > targetSe;
+
+  const submit = () => {
+    const offPanelFields = offPanelReadoutFields(offPanel);
+    const extras = {
+      ...(method.trim() ? { method: method.trim() } : {}),
+      ...offPanelFields,
+    };
+    // The transition endpoint replaces readout_json wholesale, so mirror the
+    // agent tool's merge semantics: carry any pre-existing readout fields
+    // forward and layer the new ones on top. Omit `readout` entirely when
+    // there's nothing beyond the scalar columns — the backend then keeps
+    // whatever was already stored.
+    const readout =
+      Object.keys(extras).length > 0
+        ? {
+            ...(existingReadout ?? {}),
+            value: Number(value),
+            ...(se !== '' ? { se: Number(se) } : {}),
+            estimand,
+            ...(startDate ? { start_date: startDate } : {}),
+            ...(endDate ? { end_date: endDate } : {}),
+            ...extras,
+          }
+        : undefined;
+    onSubmit({
+      status: 'completed',
+      value: Number(value),
+      se: se !== '' ? Number(se) : undefined,
+      estimand,
+      start_date: startDate || undefined,
+      end_date: endDate || undefined,
+      ...(readout ? { readout } : {}),
+    });
+  };
 
   return (
     <div className="space-y-2.5 rounded-lg border border-line-200 bg-cream-100 p-3">
@@ -91,6 +132,16 @@ function ReadoutForm({
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} />
         </div>
       </div>
+      <div>
+        <label className="mb-1 block text-xs text-ink-600">Method (optional)</label>
+        <input
+          value={method}
+          onChange={(e) => setMethod(e.target.value)}
+          placeholder="e.g. geo holdout DiD, synthetic control"
+          className={inputCls}
+        />
+      </div>
+      <OffPanelFields state={offPanel} onChange={setOffPanel} inputCls={inputCls} />
       {underPowered && (
         <p className="rounded-md bg-gold-100 px-2.5 py-1.5 text-xs text-gold-700">
           Measured SE <span className="num">{seNum!.toFixed(2)}</span> exceeds the design's
@@ -101,20 +152,7 @@ function ReadoutForm({
         </p>
       )}
       <div className="flex justify-end">
-        <Button
-          size="sm"
-          disabled={value === '' || pending}
-          onClick={() =>
-            onSubmit({
-              status: 'completed',
-              value: Number(value),
-              se: se !== '' ? Number(se) : undefined,
-              estimand,
-              start_date: startDate || undefined,
-              end_date: endDate || undefined,
-            })
-          }
-        >
+        <Button size="sm" disabled={value === '' || pending} onClick={submit}>
           {pending ? 'Saving…' : 'Save readout'}
         </Button>
       </div>
@@ -123,6 +161,7 @@ function ReadoutForm({
 }
 
 function DrawerBody({ exp }: { exp: ExperimentRecord }) {
+  const navigate = useNavigate();
   const transition = useTransitionExperiment();
   const [error, setError] = useState<string | null>(null);
   const [showReadoutForm, setShowReadoutForm] = useState(false);
@@ -315,6 +354,16 @@ function DrawerBody({ exp }: { exp: ExperimentRecord }) {
               </p>
             )}
             {readoutMethod && <p className="mt-1 text-xs text-ink-400">method: {readoutMethod}</p>}
+            {readout?.spend_per_period != null && (
+              <p className="mt-1 text-xs text-ink-400">
+                off-panel spend level:{' '}
+                <span className="num">
+                  {Number(readout.spend_per_period).toLocaleString()}
+                </span>
+                /period × <span className="num">{Number(readout.n_treated_units ?? 1)}</span>{' '}
+                unit(s), {String(readout.adstock_state ?? 'steady_state').replace('_', ' ')}
+              </p>
+            )}
           </Card>
         ) : (
           <p className="text-sm text-ink-400">No readout yet.</p>
@@ -366,7 +415,33 @@ function DrawerBody({ exp }: { exp: ExperimentRecord }) {
         {exp.status === 'completed' && (
           <p className="rounded-lg bg-cream-100 px-3 py-2 text-xs text-ink-600">
             Calibrate via the Workspace: ask the agent to apply_experiment_calibration and refit.
+            {readout?.spend_per_period == null && (
+              <>
+                {' '}
+                If the test window falls outside the model's fitted data, attach a spend level
+                first (spend Δ/period, treated units, adstock state) — the agent's
+                record_experiment_readout accepts them — so the readout can calibrate off-panel.
+              </>
+            )}
           </p>
+        )}
+        {exp.status === 'completed' && (
+          <Button
+            onClick={() =>
+              navigate('/workspace', {
+                state: {
+                  prefill:
+                    `Calibrate experiment ${exp.id} (${exp.channel}` +
+                    `${exp.subchannel ? ` / ${exp.subchannel}` : ''}) into the model: ` +
+                    `run apply_experiment_calibration with experiment id "${exp.id}", ` +
+                    `review the staged measurement, then refit with fit_mmm_model so ` +
+                    `the readout enters the likelihood.`,
+                },
+              })
+            }
+          >
+            Calibrate in Workspace
+          </Button>
         )}
 
         {exp.status === 'running' && showReadoutForm && (
@@ -374,6 +449,7 @@ function DrawerBody({ exp }: { exp: ExperimentRecord }) {
             onSubmit={doTransition}
             pending={transition.isPending}
             targetSe={design.target_se != null ? Number(design.target_se) : null}
+            existingReadout={readout}
           />
         )}
 

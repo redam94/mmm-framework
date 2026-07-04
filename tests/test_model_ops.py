@@ -601,3 +601,54 @@ def test_state_dropped_keys_have_no_state_readers():
     src = inspect.getsource(M2)
     for key in _STATE_DROPPED_DASHBOARD_KEYS:
         assert f'"{key}"' in src, f"drop-list entry '{key}' no longer produced"
+# ── get_estimands call-time estimand selection (pass-through) ────────────────
+
+
+class _CapturingEstimandMMM:
+    """Fake model recording what evaluate_estimands was asked for."""
+
+    def __init__(self, rows=None):
+        self.seen_estimands = "NOT CALLED"
+        self._rows = rows or {}
+
+    def evaluate_estimands(self, estimands=None, random_seed=None):
+        self.seen_estimands = estimands
+        return self._rows
+
+
+def test_compute_estimands_op_passes_requested_estimands_through():
+    mmm = _CapturingEstimandMMM()
+    res = M.compute_estimands(mmm, estimands=["marginal_roas", {"name": "x"}])
+    assert mmm.seen_estimands == ["marginal_roas", {"name": "x"}]
+    # no rows back -> error-as-data, never an exception
+    assert res["error"] is not None
+
+
+def test_compute_estimands_op_defaults_to_declared_set():
+    mmm = _CapturingEstimandMMM()
+    M.compute_estimands(mmm)
+    assert mmm.seen_estimands is None  # model decides (declared or defaults)
+
+
+def test_get_estimands_tool_rejects_unknown_builtin_names():
+    from mmm_framework.agents.tools import get_estimands
+
+    cmd = get_estimands.func(
+        state={}, estimands=["not_an_estimand"], tool_call_id="t1", config=None
+    )
+    msg = cmd.update["messages"][0].content
+    assert "Unknown estimand name" in msg and "contribution_roi" in msg
+
+
+def test_get_estimands_tool_rejects_bad_custom_json():
+    from mmm_framework.agents.tools import get_estimands
+
+    cmd = get_estimands.func(
+        state={}, custom_estimands="{not json", tool_call_id="t1", config=None
+    )
+    assert "Could not parse custom_estimands JSON" in cmd.update["messages"][0].content
+
+    cmd = get_estimands.func(
+        state={}, custom_estimands='"just a string"', tool_call_id="t1", config=None
+    )
+    assert "must be a JSON estimand object" in cmd.update["messages"][0].content

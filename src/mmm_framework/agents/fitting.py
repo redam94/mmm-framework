@@ -194,6 +194,208 @@ def unconsumed_prior_path(parts: list[str], value, spec: dict) -> str | None:
     return None
 
 
+# ── Consumed model_spec paths (beyond priors.*) ──────────────────────────────
+# Full-spec sibling of the priors registry above: every top-level path that
+# build_model / _mff_config_from_spec actually reads. update_model_setting
+# validates writes against this so a setting the builder would silently drop —
+# or an enum value that would silently fall back to a default (a typo'd
+# time_granularity becomes "weekly", a typo'd adstock type becomes geometric) —
+# is rejected up front instead of accept-then-no-op. Adding a new spec read in
+# this module MUST come with a registry entry here.
+
+_INFERENCE_KEYS = {
+    "chains", "draws", "tune", "target_accept", "random_seed", "method",
+    "metrics_draws",
+}
+_TREND_KEYS = {"type", "n_changepoints", "changepoint_range", "n_knots", "spline_degree"}
+_TREND_TYPES = {"linear", "piecewise", "spline", "gaussian_process", "none"}
+_SEASONALITY_KEYS = {"yearly", "monthly", "weekly"}
+_LIKELIHOOD_KEYS = {"family", "link", "params"}
+_ADSTOCK_KEYS = {"type", "l_max"}
+_ADSTOCK_TYPES = {"geometric", "weibull", "delayed"}
+_SATURATION_KEYS = {"type"}
+_SATURATION_TYPES = {"hill", "logistic", "michaelis_menten", "michaelis-menten", "tanh"}
+_MEASUREMENT_UNITS = {"spend", "impressions", "clicks", "other"}
+_CHANNEL_SCALAR_FIELDS = {"name", "measurement_unit", "spend_column", "cpm", "cpc"}
+_CONTROL_FIELDS = {"name", "role"}
+# Enum-valued top-level scalars whose reads fall back to a default on any
+# unrecognized value — a typo here is the most silent failure mode of all.
+_ENUM_TOP_VALUES = {
+    "kpi_level": {"national", "geo"},
+    "time_granularity": {"weekly", "daily", "monthly"},
+    "media_prior_mode": {"coefficient", "roi"},
+}
+# Consumed but free-form: validated downstream at build time (dataset loader,
+# garden manifest, CONFIG_SCHEMA, Estimand.from_dict, ExperimentMeasurement).
+_FREEFORM_TOP_KEYS = {
+    "dataset", "garden_ref", "model_params", "estimands", "experiments",
+    "experiment_ids",
+}
+_SIMPLE_TOP_KEYS = {"kpi", "skip_quality_gate"}
+
+
+def _spec_leaves(parts: list[str], value) -> list[tuple[list[str], object]]:
+    """Expand a (path, value) write into its leaf writes, so setting a whole
+    dict (e.g. the `trend` object) validates each contained key."""
+    if isinstance(value, dict) and value:
+        out: list[tuple[list[str], object]] = []
+        for k, sub in value.items():
+            out.extend(_spec_leaves(parts + [str(k)], sub))
+        return out
+    return [(parts, value)]
+
+
+def unconsumed_spec_path(parts: list[str], value, spec: dict) -> str | None:
+    """Return an error message when writing ``value`` at the model_spec path
+    ``parts`` would never be read by ``build_model`` (or would silently fall
+    back to a default), else None. The full-spec extension of
+    :func:`unconsumed_prior_path`, which it delegates to for ``priors.*``."""
+    top = parts[0]
+    if top == "priors":
+        return unconsumed_prior_path(parts, value, spec)
+    if top in _FREEFORM_TOP_KEYS or top in _SIMPLE_TOP_KEYS:
+        return None
+
+    def _bad(path: str, detail: str) -> str:
+        return f"`{path}` would have no effect — {detail}"
+
+    if top in _ENUM_TOP_VALUES:
+        path = ".".join(parts)
+        if len(parts) > 1:
+            return _bad(path, f"`{top}` is a scalar setting, not a dict.")
+        allowed = _ENUM_TOP_VALUES[top]
+        if str(value).strip().lower() not in allowed:
+            return (
+                f"`{top}` = {value!r} would silently fall back to the default — "
+                f"the builder only recognizes: {', '.join(sorted(allowed))}."
+            )
+        return None
+
+    _grouped = {
+        "inference": _INFERENCE_KEYS,
+        "trend": _TREND_KEYS,
+        "seasonality": _SEASONALITY_KEYS,
+        "likelihood": _LIKELIHOOD_KEYS,
+    }
+    if top in _grouped:
+        for leaf, leaf_val in _spec_leaves(list(parts), value):
+            path = ".".join(leaf)
+            if len(leaf) < 2:
+                continue  # replacing the whole (empty) dict is a no-op write
+            if leaf[1] not in _grouped[top]:
+                return _bad(
+                    path,
+                    f"the model builder never reads it. Valid `{top}.*` keys: "
+                    f"{', '.join(sorted(_grouped[top]))}.",
+                )
+            if top == "trend" and leaf[1] == "type":
+                if str(leaf_val).strip().lower().replace("-", "_") not in _TREND_TYPES:
+                    return (
+                        f"`trend.type` = {leaf_val!r} is not a trend the builder "
+                        f"recognizes: {', '.join(sorted(_TREND_TYPES))}."
+                    )
+            # likelihood.params is free-form (family-specific); the family/link
+            # values are validated by LikelihoodConfig at build time.
+        return None
+
+    if top == "media_channels":
+        channels = {m.get("name") for m in spec.get("media_channels", [])}
+        for leaf, leaf_val in _spec_leaves(list(parts), value):
+            path = ".".join(leaf)
+            if len(leaf) < 3:
+                return _bad(
+                    path,
+                    "address a channel field as "
+                    "`media_channels.<name>.<field>` (e.g. "
+                    "`media_channels.TV.adstock.type`).",
+                )
+            if channels and leaf[1] not in channels:
+                return (
+                    f"`{path}` names unknown media channel '{leaf[1]}'. "
+                    f"Channels in the spec: {', '.join(sorted(map(str, channels)))}."
+                )
+            field = leaf[2]
+            if field == "adstock":
+                if len(leaf) < 4 or leaf[3] not in _ADSTOCK_KEYS:
+                    return _bad(
+                        path,
+                        f"valid `adstock.*` keys: {', '.join(sorted(_ADSTOCK_KEYS))}.",
+                    )
+                if leaf[3] == "type" and str(leaf_val).strip().lower() not in _ADSTOCK_TYPES:
+                    return (
+                        f"`{path}` = {leaf_val!r} would silently fall back to "
+                        f"geometric — recognized adstock types: "
+                        f"{', '.join(sorted(_ADSTOCK_TYPES))}."
+                    )
+            elif field == "saturation":
+                if len(leaf) < 4 or leaf[3] not in _SATURATION_KEYS:
+                    return _bad(
+                        path,
+                        f"valid `saturation.*` keys: {', '.join(sorted(_SATURATION_KEYS))}.",
+                    )
+                if str(leaf_val).strip().lower() not in _SATURATION_TYPES:
+                    return (
+                        f"`{path}` = {leaf_val!r} would silently fall back to "
+                        f"hill — recognized saturation types: hill, logistic, "
+                        f"michaelis_menten, tanh."
+                    )
+            elif field == "measurement_unit":
+                if str(leaf_val).strip().lower() not in _MEASUREMENT_UNITS:
+                    return (
+                        f"`{path}` = {leaf_val!r} is not a measurement unit: "
+                        f"{', '.join(sorted(_MEASUREMENT_UNITS))}."
+                    )
+            elif field not in _CHANNEL_SCALAR_FIELDS:
+                return _bad(
+                    path,
+                    "the model builder never reads it. Valid per-channel "
+                    "fields: adstock.{type,l_max}, saturation.type, "
+                    "measurement_unit, spend_column, cpm, cpc. Channel priors "
+                    "live under `priors.media.<name>.*`.",
+                )
+        return None
+
+    if top == "control_variables":
+        controls = {c.get("name") for c in spec.get("control_variables", [])}
+        for leaf, _leaf_val in _spec_leaves(list(parts), value):
+            path = ".".join(leaf)
+            if len(leaf) < 3:
+                return _bad(
+                    path,
+                    "address a control field as `control_variables.<name>.<field>`.",
+                )
+            if controls and leaf[1] not in controls:
+                return (
+                    f"`{path}` names unknown control variable '{leaf[1]}'. "
+                    f"Controls in the spec: {', '.join(sorted(map(str, controls)))}."
+                )
+            if leaf[2] == "allow_negative":
+                return (
+                    f"`{path}` would have no effect — sign constraints live "
+                    f"under `priors.controls.{leaf[1]}.allow_negative`."
+                )
+            if leaf[2] not in _CONTROL_FIELDS:
+                return _bad(
+                    path,
+                    "the model builder never reads it. Valid per-control "
+                    "fields: role (confounder|precision). Control priors live "
+                    "under `priors.controls.<name>.*`.",
+                )
+        return None
+
+    known = sorted(
+        _FREEFORM_TOP_KEYS
+        | _SIMPLE_TOP_KEYS
+        | set(_ENUM_TOP_VALUES)
+        | set(_grouped)
+        | {"priors", "media_channels", "control_variables"}
+    )
+    return (
+        f"`{'.'.join(parts)}` would have no effect — the model builder never "
+        f"reads top-level `{top}`. Consumed spec settings: {', '.join(known)}."
+    )
+
+
 def _mff_config_from_spec(spec: dict):
     """Build an ``MFFConfig`` from a (normalized) model_spec dict — shared by fit
     and by ``load_fitted_model`` (the panel a saved model reloads against)."""
@@ -320,6 +522,109 @@ def _canonical_trend_type(trend_spec: dict) -> str:
     )
 
 
+def _trend_config_from_spec(spec: dict):
+    """Build the ``TrendConfig`` from the spec's trend + trend-prior settings.
+    Shared by the BayesianMMM path and the DAG-routed extension-model path."""
+    trend_spec = spec.get("trend", {})
+    trend_type = _canonical_trend_type(trend_spec)
+    trend_prior_cfg = spec.get("priors", {}).get("trend", {})
+
+    def _wire_growth_prior(tb_):
+        # The base slope (linear `growth`, piecewise `trend_k`) reads these.
+        if (
+            "growth_prior_mu" in trend_prior_cfg
+            or "growth_prior_sigma" in trend_prior_cfg
+        ):
+            tb_.with_growth_prior(
+                mu=float(trend_prior_cfg.get("growth_prior_mu", 0.0)),
+                sigma=float(trend_prior_cfg.get("growth_prior_sigma", 0.5)),
+            )
+
+    tb = TrendConfigBuilder()
+    if trend_type == "piecewise":
+        tb.piecewise()
+        if "n_changepoints" in trend_spec:
+            tb.with_n_changepoints(int(trend_spec["n_changepoints"]))
+        if "changepoint_range" in trend_spec:
+            tb.with_changepoint_range(float(trend_spec["changepoint_range"]))
+        if "changepoint_prior_scale" in trend_prior_cfg:
+            tb.with_changepoint_prior_scale(
+                float(trend_prior_cfg["changepoint_prior_scale"])
+            )
+        _wire_growth_prior(tb)
+    elif trend_type == "spline":
+        tb.spline()
+        if "n_knots" in trend_spec:
+            tb.with_n_knots(int(trend_spec["n_knots"]))
+        if "spline_degree" in trend_spec:
+            tb.with_spline_degree(int(trend_spec["spline_degree"]))
+        if "spline_prior_sigma" in trend_prior_cfg:
+            tb.with_spline_prior_sigma(float(trend_prior_cfg["spline_prior_sigma"]))
+    elif trend_type == "gaussian_process":
+        tb.gaussian_process()
+        if "gp_lengthscale_prior_mu" in trend_prior_cfg:
+            tb.with_gp_lengthscale(
+                mu=float(trend_prior_cfg["gp_lengthscale_prior_mu"]),
+                sigma=float(trend_prior_cfg.get("gp_lengthscale_prior_sigma", 0.2)),
+            )
+        if "gp_amplitude_prior_sigma" in trend_prior_cfg:
+            tb.with_gp_amplitude(
+                sigma=float(trend_prior_cfg["gp_amplitude_prior_sigma"])
+            )
+    elif trend_type == "none":
+        pass
+    elif trend_type == "linear":
+        tb.linear()
+        _wire_growth_prior(tb)
+    else:
+        # Refuse rather than silently fitting a linear trend the user didn't ask for
+        raise ValueError(
+            f"Unknown trend type '{trend_spec.get('type')}'. "
+            "Valid types: none, linear, piecewise, spline, gaussian_process."
+        )
+    return tb.build()
+
+
+# DAG-resolved model types that need an extension class instead of BayesianMMM.
+_EXTENSION_DAG_TYPES = {"nested_mmm", "multivariate_mmm", "combined_mmm"}
+
+
+def _build_extension_model(spec: dict, dataset_path: str):
+    """Build an UNFITTED extension model (NestedMMM / MultivariateMMM /
+    CombinedMMM) from the causal DAG the spec was derived from.
+
+    ``build_model_from_dag`` stamps ``spec["dag_model_type"]`` +
+    ``spec["dag_spec"]`` when the DAG's mediators / multiple outcomes resolve
+    beyond the basic MMM; this routes those through ``DAGModelBuilder``, which
+    auto-generates the MFF config FROM THE DAG (so mediator/outcome variables
+    are loaded — the plain spec's media/control lists don't carry them) and
+    derives the nested/multivariate/combined config from the edges.
+    """
+    from mmm_framework.dag_model_builder.builder import DAGModelBuilder
+    from mmm_framework.dag_model_builder.dag_spec import DAGSpec
+
+    dag_dict = spec.get("dag_spec")
+    if not dag_dict:
+        raise ValueError(
+            f"dag_model_type={spec.get('dag_model_type')!r} implies an extension "
+            "model, but the spec carries no dag_spec. Re-derive the spec from the "
+            "session's DAG with build_model_from_dag (after propose_dag)."
+        )
+    dag = DAGSpec.model_validate(dag_dict)
+
+    granularity = str(spec.get("time_granularity", "weekly")).lower()
+    frequency = {"daily": "D", "monthly": "M"}.get(granularity, "W")
+
+    builder = (
+        DAGModelBuilder()
+        .with_dag(dag)
+        .with_frequency(frequency)
+        .with_mff_data(dataset_path)
+        .with_trend_config(_trend_config_from_spec(spec))
+    )
+    return builder.build()
+
+
 def run_data_quality_gate(dataset_path: str, spec: dict) -> None:
     """Block a fit on ERROR-tier data-quality issues before any sampling.
 
@@ -380,6 +685,15 @@ def build_model(
     plain ``BayesianMMM``. The resolved ``garden_ref`` is stamped onto the
     instance (``mmm._garden_ref``) so serialization records the model's identity
     and a cold kernel can reload the right class."""
+    # 0. DAG-routed extension models: a spec derived from a causal DAG with
+    # mediators and/or multiple outcomes resolves to NestedMMM /
+    # MultivariateMMM / CombinedMMM (build_model_from_dag stamps
+    # dag_model_type + dag_spec). Route to the DAG builder — previously the
+    # fit path ignored dag_model_type and silently fit a plain BayesianMMM
+    # that dropped the mediation/multi-outcome structure.
+    if str(spec.get("dag_model_type") or "").lower() in _EXTENSION_DAG_TYPES:
+        return _build_extension_model(spec, dataset_path)
+
     # 1. Data: a native role-tagged dataset (spec["dataset"]) loads as a wide table
     # directly (the non-MMM path — CFA/LCA indicators, surveys); otherwise the MFF
     # loader builds the MMM panel. The native branch is resolved after the model
@@ -496,64 +810,7 @@ def build_model(
     model_config = model_config_builder.build()
 
     # 3. Trend config
-    trend_spec = spec.get("trend", {})
-    trend_type = _canonical_trend_type(trend_spec)
-    trend_prior_cfg = spec.get("priors", {}).get("trend", {})
-
-    def _wire_growth_prior(tb_):
-        # The base slope (linear `growth`, piecewise `trend_k`) reads these.
-        if (
-            "growth_prior_mu" in trend_prior_cfg
-            or "growth_prior_sigma" in trend_prior_cfg
-        ):
-            tb_.with_growth_prior(
-                mu=float(trend_prior_cfg.get("growth_prior_mu", 0.0)),
-                sigma=float(trend_prior_cfg.get("growth_prior_sigma", 0.5)),
-            )
-
-    tb = TrendConfigBuilder()
-    if trend_type == "piecewise":
-        tb.piecewise()
-        if "n_changepoints" in trend_spec:
-            tb.with_n_changepoints(int(trend_spec["n_changepoints"]))
-        if "changepoint_range" in trend_spec:
-            tb.with_changepoint_range(float(trend_spec["changepoint_range"]))
-        if "changepoint_prior_scale" in trend_prior_cfg:
-            tb.with_changepoint_prior_scale(
-                float(trend_prior_cfg["changepoint_prior_scale"])
-            )
-        _wire_growth_prior(tb)
-    elif trend_type == "spline":
-        tb.spline()
-        if "n_knots" in trend_spec:
-            tb.with_n_knots(int(trend_spec["n_knots"]))
-        if "spline_degree" in trend_spec:
-            tb.with_spline_degree(int(trend_spec["spline_degree"]))
-        if "spline_prior_sigma" in trend_prior_cfg:
-            tb.with_spline_prior_sigma(float(trend_prior_cfg["spline_prior_sigma"]))
-    elif trend_type == "gaussian_process":
-        tb.gaussian_process()
-        if "gp_lengthscale_prior_mu" in trend_prior_cfg:
-            tb.with_gp_lengthscale(
-                mu=float(trend_prior_cfg["gp_lengthscale_prior_mu"]),
-                sigma=float(trend_prior_cfg.get("gp_lengthscale_prior_sigma", 0.2)),
-            )
-        if "gp_amplitude_prior_sigma" in trend_prior_cfg:
-            tb.with_gp_amplitude(
-                sigma=float(trend_prior_cfg["gp_amplitude_prior_sigma"])
-            )
-    elif trend_type == "none":
-        pass
-    elif trend_type == "linear":
-        tb.linear()
-        _wire_growth_prior(tb)
-    else:
-        # Refuse rather than silently fitting a linear trend the user didn't ask for
-        raise ValueError(
-            f"Unknown trend type '{trend_spec.get('type')}'. "
-            "Valid types: none, linear, piecewise, spline, gaussian_process."
-        )
-    trend_config = tb.build()
+    trend_config = _trend_config_from_spec(spec)
 
     # Model Garden: resolve a bespoke subclass (explicit arg or spec.garden_ref),
     # falling back to the base BayesianMMM. The garden source is imported here —
@@ -691,8 +948,27 @@ def build_and_fit(spec: dict, dataset_path: str):
     weekly = int(season.get("weekly", 0))
     trend_type = _canonical_trend_type(spec.get("trend", {}))
 
-    # 4. Fit
-    results = mmm.fit(method=method, random_seed=random_seed)
+    # 4. Fit. Extension models (DAG-routed NestedMMM / MultivariateMMM /
+    # CombinedMMM) take explicit sampler args and have no approximate-fit
+    # dispatch — refuse loudly rather than passing an unknown kwarg into
+    # pm.sample.
+    is_extension = str(spec.get("dag_model_type") or "").lower() in _EXTENSION_DAG_TYPES
+    if is_extension:
+        if method != "nuts":
+            raise ValueError(
+                f"Approximate fit method '{method}' is not available for "
+                "DAG-routed extension models (nested/multivariate/combined) — "
+                "use method='nuts'."
+            )
+        results = mmm.fit(
+            draws=draws,
+            tune=tune,
+            chains=chains,
+            target_accept=target_accept,
+            random_seed=random_seed,
+        )
+    else:
+        results = mmm.fit(method=method, random_seed=random_seed)
 
     # 5. Summary
     if getattr(results, "approximate", False):
@@ -702,6 +978,16 @@ def build_and_fit(spec: dict, dataset_path: str):
             f"intervals/decisions). "
             f"Observations: {mmm.n_obs}, Channels: {mmm.n_channels}. "
             f"Trend: {trend_type}, Seasonality: yearly={yearly}/monthly={monthly}/weekly={weekly}."
+        )
+    elif is_extension:
+        summary = (
+            f"**{type(mmm).__name__}** fitted successfully (DAG-routed "
+            f"{str(spec.get('dag_model_type')).lower()} — mediators / multiple "
+            f"outcomes from the causal DAG are modeled in-graph). "
+            f"Observations: {mmm.n_obs}, Channels: {mmm.n_channels}. "
+            f"Trend: {trend_type}. Note: ROI/predict-style ops are "
+            f"BayesianMMM-specific and may not apply; use the extended report "
+            f"and execute_python for pathway analysis."
         )
     else:
         summary = (
@@ -773,6 +1059,12 @@ def build_and_fit(spec: dict, dataset_path: str):
         # reload this model from disk (PR-C.3 cold-reload).
         "spec": spec,
     }
+    if is_extension:
+        # Distinguish the model class on the run record (roi/predict-style ops
+        # degrade gracefully on extension models; reports route through the
+        # extended extractor).
+        model_run["dag_model_type"] = str(spec.get("dag_model_type")).lower()
+        model_run["model_class"] = type(mmm).__name__
     if spec.get("experiments"):
         model_run["calibration"] = {
             "experiments": spec.get("experiments"),

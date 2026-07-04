@@ -88,6 +88,10 @@ class DAGModelBuilder:
     def __init__(self) -> None:
         self._dag: DAGSpec | None = None
         self._panel: PanelDataset | None = None
+        # The raw MFF long table (kept when data arrives via with_mff_data):
+        # mediator / additional-outcome series live here, NOT in the panel —
+        # dag_to_mff_config only emits kpi/media/controls.
+        self._mff_raw: pd.DataFrame | None = None
         self._mff_config: MFFConfig | None = None
         self._model_config: ModelConfig | None = None
         self._trend_config: TrendConfig | None = None
@@ -258,6 +262,7 @@ class DAGModelBuilder:
         if isinstance(data, str):
             data = pd.read_csv(data)
 
+        self._mff_raw = data
         loader = MFFLoader(self._mff_config)
         self._panel = loader.load(data).build_panel()
 
@@ -731,32 +736,108 @@ class DAGModelBuilder:
                 trend_config=self._trend_config,
             )
 
-        elif model_type == ModelType.NESTED_MMM:
+        # Extension models take ARRAYS (X_media, y/outcome_data, mediator_data),
+        # not a panel: the MFF panel carries kpi/media/controls only, so
+        # mediator / additional-outcome series are pulled from the raw MFF
+        # table and aligned to the panel's period index.
+        y, X_media, _ = self._panel.to_numpy()
+        channel_names = list(self._panel.X_media.columns)
+        index = self._panel.X_media.index
+
+        if model_type == ModelType.NESTED_MMM:
             nested_config = dag_to_nested_config(dag)
+            mediator_data = self._national_series(
+                [n.variable_name for n in dag.mediator_nodes]
+            )
             return model_class(
-                panel=self._panel,
-                model_config=model_config,
-                nested_config=nested_config,
-                trend_config=self._trend_config,
+                X_media=X_media,
+                y=y,
+                channel_names=channel_names,
+                config=nested_config,
+                mediator_data=mediator_data,
+                index=index,
             )
 
-        elif model_type == ModelType.MULTIVARIATE_MMM:
+        # Multi-outcome: the FIRST outcome is the panel's KPI series; every
+        # additional outcome node's series comes from the raw MFF table.
+        outcome_nodes = dag.outcome_nodes
+        outcome_data: dict[str, Any] = {outcome_nodes[0].variable_name: y}
+        outcome_data.update(
+            self._national_series([n.variable_name for n in outcome_nodes[1:]])
+        )
+
+        if model_type == ModelType.MULTIVARIATE_MMM:
             multivariate_config = dag_to_multivariate_config(dag)
             return model_class(
-                panel=self._panel,
-                model_config=model_config,
-                multivariate_config=multivariate_config,
-                trend_config=self._trend_config,
+                X_media=X_media,
+                outcome_data=outcome_data,
+                channel_names=channel_names,
+                config=multivariate_config,
+                index=index,
             )
 
         elif model_type == ModelType.COMBINED_MMM:
             combined_config = dag_to_combined_config(dag)
+            mediator_data = self._national_series(
+                [n.variable_name for n in dag.mediator_nodes]
+            )
             return model_class(
-                panel=self._panel,
-                model_config=model_config,
-                combined_config=combined_config,
-                trend_config=self._trend_config,
+                X_media=X_media,
+                outcome_data=outcome_data,
+                channel_names=channel_names,
+                config=combined_config,
+                mediator_data=mediator_data,
+                index=index,
             )
 
         else:
             raise DAGBuildError(f"Unknown model type: {model_type}")
+
+    def _national_series(self, names: list[str]) -> dict[str, Any]:
+        """National per-period series for DAG variables that are NOT in the
+        MFF panel (mediators / additional outcomes), aligned to the panel's
+        period index. Values are summed across any geo/product rows — the
+        same national collapse the MFF loader applies."""
+        if not names:
+            return {}
+        if self._mff_raw is None:
+            raise DAGBuildError(
+                "Mediator/outcome variables need the raw MFF table — load data "
+                "with with_mff_data() (a with_panel() panel doesn't carry them)."
+            )
+        df = self._mff_raw
+        for col in ("VariableName", "VariableValue", "Period"):
+            if col not in df.columns:
+                raise DAGBuildError(
+                    f"MFF data is missing the '{col}' column needed to extract "
+                    "mediator/outcome series."
+                )
+        panel_index = self._panel.X_media.index
+        out: dict[str, Any] = {}
+        for name in names:
+            sub = df[df["VariableName"] == name]
+            if sub.empty:
+                raise DAGBuildError(
+                    f"DAG variable '{name}' is not in the MFF data "
+                    "(no VariableName rows) — mediators/outcomes must be "
+                    "observed columns of the dataset."
+                )
+            periods = pd.to_datetime(
+                sub["Period"], format=self._date_format, errors="coerce"
+            )
+            if periods.isna().any():
+                periods = pd.to_datetime(sub["Period"], errors="coerce")
+            series = (
+                pd.to_numeric(sub["VariableValue"], errors="coerce")
+                .groupby(periods.values)
+                .sum()
+            )
+            aligned = series.reindex(pd.to_datetime(panel_index))
+            if aligned.isna().any():
+                missing = int(aligned.isna().sum())
+                raise DAGBuildError(
+                    f"DAG variable '{name}' does not cover the panel's periods "
+                    f"({missing} of {len(aligned)} missing after alignment)."
+                )
+            out[name] = aligned.to_numpy(dtype=float)
+        return out

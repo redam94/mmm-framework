@@ -163,7 +163,14 @@ the model. If `detect_outliers` flags isolated media spend spikes, surface
 them to the user: a single ~15x data-entry spike corrupts that channel's
 max-normalization and flattens its saturation curve. Apply only
 user-confirmed fixes with `apply_outlier_treatment`, and `record_assumption`
-(category: data) for every treatment. Then call `propose_dag` to make causal
+(category: data) for every treatment. For messier raw files, drive the Data
+Studio's replayable cleaning pipeline instead of ad-hoc pandas:
+`data_studio_status` (see what the user staged/cleaned in the UI — shared
+state), `stage_data_studio_file` (stage a workspace upload),
+`set_data_studio_pipeline` (ordered rename/cast/parse_date/fill/filter/
+winsorize/... steps, full-replace), then `commit_data_studio` (with the
+user's OK) to promote the cleaned frame to the working dataset with roles
+set. Then call `propose_dag` to make causal
 structure explicit: KPI, media channels (treatments), controls, mediators,
 and named confounders. Then call `validate_causal_identification` to check
 via the backdoor criterion whether the effect of interest is identified under

@@ -102,7 +102,14 @@ export interface LearningProgramConfig {
   spend_ref?: Record<string, number>;
   mode?: 'fixed' | 'free';
   cap?: number | null;
+  /** response family: hill | logistic | monotone_spline | hill_mixture */
   activation?: string;
+  /** observation model: normal (default) | studentt (heavy-tailed) |
+   *  negbinomial (count KPI — y must be natural integer counts; CUPED off) */
+  likelihood?: 'normal' | 'studentt' | 'negbinomial';
+  /** national period effect τ_t: none (default) | national (needs a period
+   *  column on every ingested wave) */
+  time_effect?: 'none' | 'national';
   gamma_scale?: number;
   beta_scale?: number;
   pair_signs?: Record<string, string>;
@@ -139,6 +146,21 @@ export interface LearningProgram {
   updated_at: number;
 }
 
+/** Per-candidate Laplace knowledge-gradient score (optimize=true). */
+export interface KgScore {
+  delta: number;
+  probe_pairs: [number, number][];
+  score: number;
+}
+
+export interface KgInfo {
+  used: boolean;
+  chosen_delta: number;
+  chosen_probe_pairs: [number, number][];
+  scores: KgScore[];
+  sigma: number | null;
+}
+
 /** Result of POST …/design-wave (sync). */
 export interface DesignWavePayload {
   cells_scaled: number[][];
@@ -149,6 +171,8 @@ export interface DesignWavePayload {
   delta: number;
   probe_pairs: [number, number][];
   warnings: string[];
+  /** present when the Laplace-KG design optimization actually ran */
+  kg?: KgInfo;
 }
 
 /** A learning_waves row (JSON columns parsed server-side). */
@@ -185,6 +209,16 @@ export interface DesignWaveRequest {
   probe_pairs: [number, number][];
   n_geo?: number;
   n_holdout?: number;
+  seed?: number;
+  /** stratify the geo→cell assignment on accumulated per-geo KPI (default true) */
+  stratify?: boolean;
+  /** score candidate deltas with the Laplace knowledge gradient and design
+   *  the EVSI-best one (needs a fitted posterior; falls back to `delta`) */
+  optimize?: boolean;
+  /** candidates for optimize=true (server default 0.3/0.6/0.9; max 8) */
+  candidate_deltas?: number[];
+  /** fantasy outcomes per candidate for the KG (server default 32, 8–256) */
+  kg_n_outcomes?: number;
 }
 
 /** Exactly one of rows / experiment_ids / csv_text should be provided. */
