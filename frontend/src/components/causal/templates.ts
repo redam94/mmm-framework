@@ -16,7 +16,7 @@ export interface TemplateEdge {
 }
 
 export interface DagTemplate {
-  id: 'simple' | 'mediation' | 'multivariate';
+  id: 'simple' | 'mediation' | 'multivariate' | 'combined';
   name: string;
   description: string;
   nodes: TemplateNode[];
@@ -68,6 +68,27 @@ export const DAG_TEMPLATES: DagTemplate[] = [
       { id: 'e1', source: 'media_1', target: 'outcome_1' },
       { id: 'e2', source: 'media_1', target: 'outcome_2' },
       { id: 'e3', source: 'outcome_1', target: 'outcome_2' }, // Cross-effect
+    ],
+  },
+  {
+    id: 'combined',
+    name: 'Mediation + Multi-Outcome',
+    description:
+      'Media drives awareness (mediator) feeding two outcomes with a cross-effect — resolves to CombinedMMM.',
+    nodes: [
+      { id: 'media_1', position: { x: 100, y: 100 }, data: { label: 'TV Spend', variableName: 'tv_spend', type: 'media' } },
+      { id: 'media_2', position: { x: 300, y: 100 }, data: { label: 'Digital Spend', variableName: 'digital_spend', type: 'media' } },
+      { id: 'mediator_1', position: { x: 200, y: 250 }, data: { label: 'Brand Awareness', variableName: 'awareness', type: 'mediator' } },
+      { id: 'outcome_1', position: { x: 400, y: 400 }, data: { label: 'Revenue', variableName: 'revenue', type: 'outcome' } },
+      { id: 'outcome_2', position: { x: 620, y: 400 }, data: { label: 'Volume', variableName: 'volume', type: 'outcome' } },
+    ],
+    edges: [
+      { id: 'e1', source: 'media_1', target: 'mediator_1' },
+      { id: 'e2', source: 'mediator_1', target: 'outcome_1' },
+      { id: 'e3', source: 'mediator_1', target: 'outcome_2' },
+      { id: 'e4', source: 'media_1', target: 'outcome_1' }, // Direct effect
+      { id: 'e5', source: 'media_2', target: 'outcome_1' }, // Direct-only channel
+      { id: 'e6', source: 'outcome_1', target: 'outcome_2' }, // Cross-effect
     ],
   },
 ];
