@@ -1643,3 +1643,331 @@ def test_ingest_check_stationarity_warns_and_records():
     assert len(state.stationarity_reports) == 1
     assert state.stationarity_reports[0].flagged is True
     assert state.data is not None  # the wave is still ingested; caller decides
+
+
+# ── fast: information discount + P-spline shrinkage + drifting worlds ─────────
+
+
+def test_fit_discount_and_spline_prior_validation():
+    world = cl.make_world(seed=0)
+    data = cl.simulate_panel(
+        world, np.full(4, 0.7), n_geo=8, t_pre=2, t_test=3, noise=0.5, seed=0
+    )
+    with pytest.raises(ValueError, match="discount_half_life"):
+        cl.fit(data, channels=world.channels, discount_half_life=-2.0)
+    with pytest.raises(ValueError, match="discount_half_life"):
+        cl.fit(data, channels=world.channels, discount_half_life=0.0)
+    # a discounted panel fit needs ages (this wave dict has period_idx, so
+    # strip it and any row_age)
+    bare = {k: v for k, v in data.items() if k not in ("period_idx", "row_age")}
+    with pytest.raises(ValueError, match="row_age"):
+        cl.fit(bare, channels=world.channels, discount_half_life=8.0)
+    short = dict(data)
+    short["row_age"] = np.zeros(3)
+    with pytest.raises(ValueError, match="row_age has"):
+        cl.fit(short, channels=world.channels, discount_half_life=8.0)
+    with pytest.raises(ValueError, match="spline_prior"):
+        cl.fit(data, channels=world.channels, spline_prior="bogus")
+    with pytest.raises(ValueError, match="monotone_spline"):
+        cl.fit(data, channels=world.channels, activation="hill", spline_prior="pspline")
+
+
+def test_model_graph_discount_and_pspline_trace():
+    """No MCMC: trace the generative model directly and check the discounted
+    likelihood and the P-spline sites are wired correctly."""
+    import jax
+    import numpyro
+    from numpyro import handlers
+    from numpyro.infer.util import log_density
+
+    world = cl.make_world(seed=0)
+    data = cl.simulate_panel(
+        world, np.full(4, 0.7), n_geo=6, t_pre=2, t_test=3, noise=0.5, seed=0
+    )
+    kwargs = dict(
+        spend=np.asarray(data["spend"]),
+        geo_idx=np.asarray(data["geo_idx"]),
+        n_geo=int(data["n_geo"]),
+        y=np.asarray(data["y"]),
+        channels=world.channels,
+        pairs=world.pairs,
+        pair_signs={},
+    )
+    ages = np.asarray(data["period_idx"], dtype=float)
+    ages = ages.max() - ages
+    mult = np.exp(0.5 * (np.log(2.0) / 6.0) * ages)
+
+    with handlers.seed(rng_seed=0):
+        tr = handlers.trace(model.model).get_trace(
+            activation="monotone_spline",
+            spline_prior="pspline",
+            noise_mult=mult,
+            **kwargs,
+        )
+    assert {"w_level", "w_tau", "w_innov"} <= set(tr)
+    names = surface.ACTIVATIONS["monotone_spline"][0]
+    for nm in names:
+        assert tr[nm]["type"] == "deterministic"
+        assert np.all(np.asarray(tr[nm]["value"]) > 0)
+    # the discounted observation scale is sigma * mult (old rows noisier)
+    y_scale_used = np.asarray(tr["y"]["fn"].scale)
+    np.testing.assert_allclose(
+        y_scale_used, float(tr["sigma"]["value"]) * mult, rtol=1e-6
+    )
+    # the joint density is finite under substitution of the traced values
+    params = {
+        k: v["value"]
+        for k, v in tr.items()
+        if v["type"] in ("sample",) and not v.get("is_observed", False)
+    }
+    ld, _ = log_density(
+        model.model,
+        (),
+        {
+            **kwargs,
+            "activation": "monotone_spline",
+            "spline_prior": "pspline",
+            "noise_mult": mult,
+        },
+        params,
+    )
+    assert np.isfinite(float(ld))
+
+
+def test_ingest_accumulates_row_week_and_fit_threads_discount(monkeypatch):
+    world = cl.make_world(seed=0)
+    state = cl.LearningState(
+        channels=world.channels,
+        center=np.full(4, 0.7),
+        B=3.2,
+        value=5.0,
+        pairs=world.pairs,
+        discount_half_life=8.0,
+    )
+    w0 = cl.simulate_panel(
+        world, np.full(4, 0.7), n_geo=10, t_pre=2, t_test=4, noise=0.5, seed=0
+    )
+    state.ingest(w0)
+    assert state.data["row_week"].max() == 5  # t_pre + t_test - 1
+    w1 = cl.simulate_wave(
+        world,
+        cl.central_composite(np.full(4, 0.7), 0.6, world.pairs),
+        np.asarray(w0["a_geo"]),
+        t_test=3,
+        center=np.full(4, 0.7),
+        noise=0.5,
+        seed=1,
+    )
+    state.ingest(w1)
+    rw = state.data["row_week"]
+    assert rw.shape == state.data["y"].shape
+    assert rw.max() == 5 + 1 + 2  # offset past wave 0, then weeks 0..2
+    assert rw.min() == 0
+
+    captured = {}
+
+    def fake_fit(data, **kwargs):
+        captured["data"] = data
+        captured["kwargs"] = kwargs
+        return cl.Posterior(
+            samples={"beta": np.ones((4, 4))},
+            channels=world.channels,
+            pairs=world.pairs,
+        )
+
+    import mmm_framework.continuous_learning.loop as loop_mod
+
+    monkeypatch.setattr(loop_mod, "fit", fake_fit)
+    state.fit(num_warmup=10)
+    assert captured["kwargs"]["discount_half_life"] == 8.0
+    ages = captured["data"]["row_age"]
+    assert ages.min() == 0.0  # the newest rows
+    assert ages.max() == float(rw.max())
+    np.testing.assert_allclose(ages, rw.max() - rw)
+    # per-call override wins
+    state.fit(discount_half_life=None)
+    assert captured["kwargs"]["discount_half_life"] is None
+
+
+def test_state_npz_roundtrip_discount_and_pspline(tmp_path):
+    import json as _json
+
+    world = cl.make_world(seed=0)
+    state = cl.LearningState(
+        channels=world.channels,
+        center=np.full(4, 0.7),
+        B=3.2,
+        value=5.0,
+        pairs=world.pairs,
+        activation="monotone_spline",
+        spline_prior="pspline",
+        discount_half_life=12.0,
+    )
+    w0 = cl.simulate_panel(
+        world, np.full(4, 0.7), n_geo=8, t_pre=2, t_test=3, noise=0.5, seed=0
+    )
+    state.ingest(w0)
+    p = tmp_path / "state.npz"
+    cl.state_to_npz(state, p)
+    with np.load(p, allow_pickle=False) as z:
+        meta = _json.loads(str(z["meta"].item()))
+    assert meta["schema_version"] == 3  # discounted programs refuse old readers
+    back = cl.state_from_npz(p)
+    assert back.discount_half_life == 12.0
+    assert back.spline_prior == "pspline"
+    np.testing.assert_array_equal(back.data["row_week"], state.data["row_week"])
+    # a plain default program still stamps v1 (old readers keep loading it)
+    plain = cl.LearningState(
+        channels=world.channels,
+        center=np.full(4, 0.7),
+        B=3.2,
+        value=5.0,
+        pairs=world.pairs,
+    )
+    plain.ingest(w0)
+    p2 = tmp_path / "plain.npz"
+    cl.state_to_npz(plain, p2)
+    with np.load(p2, allow_pickle=False) as z:
+        meta2 = _json.loads(str(z["meta"].item()))
+    assert meta2["schema_version"] == 1
+
+
+def test_drift_world_geometric_jitter_and_bounds():
+    world = cl.make_world(seed=0)
+    same = cl.drift_world(world, rate=0.0, seed=3)
+    np.testing.assert_allclose(same.beta, world.beta)
+    np.testing.assert_allclose(same.kappa, world.kappa)
+    np.testing.assert_allclose(same.gamma_pairs, world.gamma_pairs)
+
+    moved = cl.drift_world(world, rate=0.5, seed=3)
+    assert not np.allclose(moved.beta, world.beta)
+    assert not np.allclose(moved.kappa, world.kappa)
+    assert np.all(moved.alpha >= 0.5) and np.all(moved.alpha <= 5.0)  # clipped
+    np.testing.assert_allclose(moved.gamma_pairs, world.gamma_pairs)  # default off
+    assert moved.channels == world.channels and moved.pairs == world.pairs
+    # the response surface actually moved
+    grid = np.tile(np.full(4, 0.7), (5, 1)) * np.linspace(0.4, 1.6, 5)[:, None]
+    assert not np.allclose(moved.response_mean(grid), world.response_mean(grid))
+    # repeated application = a random walk that keeps drifting
+    moved2 = cl.drift_world(moved, rate=0.5, seed=4)
+    assert not np.allclose(moved2.beta, moved.beta)
+    with pytest.raises(ValueError, match="rate"):
+        cl.drift_world(world, rate=-0.1)
+
+
+@pytest.mark.slow
+def test_discounted_fit_tracks_a_drifting_world():
+    """The point of the information discount: when the true response DRIFTS
+    between waves, the static fit converges to a stale average while the
+    discounted fit tracks the CURRENT world."""
+    world0 = cl.make_world(seed=0)
+    center = np.full(4, 0.7)
+    w0 = cl.simulate_panel(
+        world0, center, n_geo=48, t_pre=4, t_test=8, noise=0.4, seed=1
+    )
+    a_geo = np.asarray(w0["a_geo"])
+    # media behaviour changes: one big drift step between the two waves
+    world1 = cl.drift_world(world0, rate=0.35, seed=7)
+    design = cl.central_composite(center, 0.6, world0.pairs)
+    w1 = cl.simulate_wave(
+        world1, design, a_geo, t_test=8, center=center, noise=0.4, seed=2
+    )
+
+    def build(h):
+        st = cl.LearningState(
+            channels=world0.channels,
+            center=center.copy(),
+            B=3.2,
+            value=5.0,
+            pairs=world0.pairs,
+            pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+            discount_half_life=h,
+        )
+        st.ingest(w0)
+        st.ingest(w1)
+        st.fit(num_warmup=300, num_samples=300, num_chains=2, seed=0)
+        return st.posterior
+
+    static = build(None)
+    discounted = build(4.0)  # ~a wave: wave-0 rows carry ~6-25% weight
+    assert "discount" in discounted.diagnostics
+    d = discounted.diagnostics["discount"]
+    assert d["half_life"] == 4.0
+    assert d["effective_rows"] < d["n_rows"]  # ESS saturates
+
+    # mean absolute error of the posterior-mean response against the CURRENT
+    # world, over the probed spend range
+    grid = np.tile(center, (7, 1)) * np.linspace(0.4, 1.6, 7)[:, None]
+    truth_now = world1.response_mean(grid)
+
+    def mae(post):
+        idx = np.linspace(0, post.n_draws - 1, 150).astype(int)
+        vals = np.stack(
+            [
+                np.asarray(
+                    surface.surface_over_rows(
+                        grid,
+                        post.samples["beta"][d],
+                        post.gamma_matrix(d),
+                        surface.ACTIVATIONS[post.activation][1],
+                        tuple(post.samples[nm][d] for nm in post.shape_names),
+                    )
+                )
+                for d in idx
+            ]
+        )
+        return float(np.mean(np.abs(vals.mean(0) - truth_now)))
+
+    err_static, err_disc = mae(static), mae(discounted)
+    assert err_disc < err_static  # the discounted fit tracks the drift
+
+
+@pytest.mark.slow
+def test_pspline_prior_fits_the_mixture_world():
+    """The P-spline shrinkage prior: same public w1..wJ sites, learned
+    per-channel smoothness, and the planner still lands a near-optimal
+    allocation on the two-phase world."""
+    world = cl.make_world_hill_mixture(seed=0)
+    B, value = 3.2, 5.0
+    _, true_profit = cl.world_optimal_allocation(world, B, value, mode="fixed")
+    data = cl.simulate_panel(
+        world,
+        np.full(4, 0.7),
+        n_geo=60,
+        t_pre=6,
+        t_test=10,
+        delta=0.6,
+        noise=0.4,
+        seed=1,
+    )
+    post = cl.fit(
+        data,
+        channels=world.channels,
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        activation="monotone_spline",
+        spline_prior="pspline",
+        num_warmup=400,
+        num_samples=400,
+        num_chains=2,
+        seed=0,
+    )
+    assert post.diagnostics["spline_prior"] == "pspline"
+    assert "w_tau" in post.samples and "w1" in post.samples
+    assert np.all(post.samples["w1"] > 0)  # deterministic weights, positive
+    assert post.diagnostics["max_rhat"] is None or post.diagnostics["max_rhat"] < 1.3
+    rec = cl.recommend_allocation(post, B, value, q=200, mode="fixed")
+    assert rec.sum() == pytest.approx(B, abs=0.05)
+    achieved = value * float(world.response_mean(np.asarray(rec)[None, :])[0]) - B
+    assert achieved >= 0.93 * true_profit
+    # the acquisition layer reads the same public sites — no changes needed
+    kg = cl.laplace_knowledge_gradient(
+        post,
+        cl.central_composite(np.full(4, 0.7), 0.6, world.pairs),
+        B=B,
+        value=value,
+        n_geo=40,
+        t_test=8,
+        n_outcomes=8,
+        seed=0,
+    )
+    assert np.isfinite(kg)

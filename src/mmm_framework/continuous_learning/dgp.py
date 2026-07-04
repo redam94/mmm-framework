@@ -300,6 +300,74 @@ def _draw_outcome(
     )
 
 
+#: Known support bounds for bounded shape params, per activation family —
+#: drifted values are clipped back inside so a drifting world stays valid
+#: (matching the priors in :func:`model._sample_activation_shape`).
+_SHAPE_BOUNDS: dict[str, dict[str, tuple[float, float]]] = {
+    "hill": {"alpha": (0.5, 5.0)},
+    "hill_mixture": {
+        "alpha1": (0.5, 6.0),
+        "alpha2": (0.5, 5.0),
+        "w": (0.05, 0.95),
+    },
+}
+
+
+def drift_world(
+    world: TrueWorld,
+    *,
+    rate: float = 0.08,
+    drift_beta: bool = True,
+    drift_shape: bool = True,
+    drift_gamma: bool = False,
+    seed: int = 0,
+) -> TrueWorld:
+    """A slightly different :class:`TrueWorld` — media behaviour drifting.
+
+    Applies one step of multiplicative log-normal jitter,
+    ``x -> x * exp(Normal(0, rate))``, to the channel ceilings ``beta`` and
+    the activation shape params (bounded params are clipped back to their
+    family's support; ``drift_gamma=True`` also jitters the synergy
+    magnitudes, sign-preserving). Applying it once per wave makes the
+    response surface a **geometric random walk** — the changing-media-
+    behaviour regime the information discount
+    (``fit(discount_half_life=...)``) is built for. Channels, pairs and the
+    geo-intercept hypers are untouched, so pair it with
+    :func:`simulate_wave` over a fixed ``a_geo``: the baselines stay pinned
+    while the RESPONSE moves.
+    """
+    if not np.isfinite(rate) or rate < 0:
+        raise ValueError(f"rate must be a non-negative finite sd, got {rate!r}")
+    rng = np.random.default_rng(seed)
+    beta = world.beta.copy()
+    if drift_beta:
+        beta = beta * np.exp(rng.normal(0.0, rate, beta.shape))
+    bounds = _SHAPE_BOUNDS.get(world.activation, {})
+    shape: dict[str, np.ndarray] = {}
+    for nm, arr in world.shape.items():
+        new = np.asarray(arr, dtype=float).copy()
+        if drift_shape:
+            new = new * np.exp(rng.normal(0.0, rate, new.shape))
+            if nm in bounds:
+                new = np.clip(new, *bounds[nm])
+        shape[nm] = new
+    gamma_pairs = world.gamma_pairs.copy()
+    if drift_gamma:
+        gamma_pairs = gamma_pairs * np.exp(rng.normal(0.0, rate, gamma_pairs.shape))
+    return TrueWorld(
+        beta=beta,
+        gamma_pairs=gamma_pairs,
+        channels=list(world.channels),
+        activation=world.activation,
+        shape=shape,
+        pairs=list(world.pairs),
+        a_level=world.a_level,
+        sigma_a=world.sigma_a,
+        phi_true=world.phi_true,
+        nu_true=world.nu_true,
+    )
+
+
 def simulate_panel(
     world: TrueWorld,
     center: np.ndarray,

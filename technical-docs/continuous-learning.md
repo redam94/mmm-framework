@@ -347,6 +347,74 @@ hunting, with no family told to the model. Expressiveness is pinned by
 weights approximate the mixture activation with < 0.75× the best single Hill's
 RMSE).
 
+## Changing media behaviour — information discounting + P-spline shrinkage (opt-in, 2026-07-04)
+
+The static loop refits on ALL accumulated data with equal weight — correct for
+a frozen world, silently wrong under drift (audiences shift, creative
+fatigues): the posterior converges to a time-average of regimes with bands
+shrinking like `1/sqrt(rows)` while the truth moves — narrow-and-wrong, the
+temporal twin of misspecification. Two coordinated, default-off knobs:
+
+* **Information discounting** — `fit(discount_half_life=h)` /
+  `LearningState(discount_half_life=…)` / `run_closed_loop(discount_half_life=…)`.
+  Moves the Eq. 22 decay clock INTO the likelihood: each row's observation
+  scale is inflated by `exp(0.5·λ·age)` (`λ = ln2/h`; ages in weeks, newest
+  row = 0). Count rows (NegBinomial has no noise scale) power-scale their
+  log-likelihood by `exp(-λ·age)` via `numpyro.handlers.scale` — the same
+  down-weighting of the data term. Summaries decay too: an `age_weeks` key on
+  a summary inflates its SE on the same clock. Effective sample size
+  saturates at `Σ exp(-λ·age)` (reported in
+  `diagnostics["discount"]["effective_rows"]`), so the posterior keeps an
+  honest variance floor and TRACKS the current regime; under genuine drift
+  `E[regret]` stops shrinking to zero and ENBS correctly keeps scheduling
+  re-tests. **Ages:** `LearningState.ingest` now always accumulates a
+  `row_week` column (wave-local `period_idx` when present, else the wave as
+  one time point, offset past the previous max — the same offset logic as the
+  time-effect accumulation); `state.fit` derives `data["row_age"] = max −
+  row_week`. Direct `model.fit` callers pass `data["row_age"]` (or rely on
+  the `period_idx` fallback); a discounted panel fit with neither raises.
+  **Don't guess `h`** — `estimate_half_life(gaps, shifts, sigmas)` measures it
+  from realized wave-to-wave posterior drift (`E[(shift/σ)²] = e^{λt}−1`);
+  `λ̂ ≈ 0` recovers full pooling. `None` (default) is byte-identical static.
+* **P-spline shrinkage** — `fit(activation="monotone_spline",
+  spline_prior="pspline")` / the `LearningState.spline_prior` field. Replaces
+  the iid `LogNormal(0,1)` weight prior with a first-order random walk on the
+  log-weights, `log w_{j+1} = log w_j + τ_c·ε_j`, learned per-channel
+  smoothness `τ_c ~ HalfNormal(1)` (non-centered: sites `w_level`/`w_tau`/
+  `w_innov`; `w1..wJ` emitted as DETERMINISTICS so the acquisition layer's
+  `SHAPE_TRANSFORMS`, the planner and serialization are untouched). `τ → 0`
+  collapses to equal weights = the neutral near-linear ramp, so the EFFECTIVE
+  basis dimension is data-driven — the adaptive answer to the fixed-basis
+  bias floor (§ above) without discrete knot-count switching. Gate on R̂ as
+  with the iid spline; `"pspline"` with any other activation raises.
+  `diagnostics["spline_prior"]` records the choice.
+
+**Interplay** (the design intent): with discounting active, effective `n` is
+bounded, so the band floor can sit above the spline's approximation floor `b`
+and the coverage-collapse collision never arrives — fast drift ⇒ wide honest
+bands + smooth curve; stable world ⇒ discount vanishes and flexibility
+accumulates. Useful flexibility is bounded by DISTINCT probed spend levels
+(which grow as the trust region recentres), not raw row count.
+
+**Persistence/serialization:** `state_to_npz` stores `panel_row_week` + the
+two knobs; a program with a non-default knob stamps **schema v3** (old readers
+refuse loudly — refitting a discounted/pspline program under static/iid
+defaults would silently change the model); plain programs still stamp v1.
+**DGP:** `drift_world(world, rate=…, seed=…)` applies one multiplicative
+log-normal step to `beta` + shape params (bounded params clipped to the prior
+support; `drift_gamma` opt-in) — a geometric random walk when applied per
+wave; pair with `simulate_wave` over fixed `a_geo` so baselines stay pinned
+while the RESPONSE moves. **Demos:** notebook §16 (two-wave demo + the
+`build_discount_animation.py` GIF: drifting world, static-vs-discounted
+P-spline loops sharing one data stream — static coverage of TODAY's curve
+collapses, discounted holds). Tests: `test_fit_discount_and_spline_prior_validation`,
+`test_model_graph_discount_and_pspline_trace`,
+`test_ingest_accumulates_row_week_and_fit_threads_discount`,
+`test_state_npz_roundtrip_discount_and_pspline`,
+`test_drift_world_geometric_jitter_and_bounds`, slow
+`test_discounted_fit_tracks_a_drifting_world` +
+`test_pspline_prior_fits_the_mixture_world`.
+
 ## Count KPIs — the NegativeBinomial likelihood (opt-in)
 
 `fit(likelihood="negbinomial")` (default `"normal"`, byte-identical graph) swaps

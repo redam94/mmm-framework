@@ -122,6 +122,13 @@ class LearningState:
     beta_scale: float = 1.0
     gamma_scale: float = 0.8
     spend_ref: np.ndarray | None = None
+    # information discount: half-life (weeks) applied to every refit — old
+    # rows' likelihoods decay on the Eq. 22 clock so the posterior keeps an
+    # honest variance floor under drifting media behaviour (None = the
+    # historical static fit; measure with estimate_half_life).
+    discount_half_life: float | None = None
+    # monotone-spline weight prior threaded to every refit ("iid" | "pspline")
+    spline_prior: str = "iid"
 
     data: dict[str, Any] | None = None
     posterior: Posterior | None = None
@@ -217,6 +224,18 @@ class LearningState:
                 "the continuous-learning loop assumes a stable geo set"
             )
         self._check_geo_ids(wave_data, n_geo)
+        # Always-on per-row week index (cheap, one int per row): the global
+        # week each row was observed in, accumulated across waves exactly like
+        # the time-effect period offset. This is what gives every row an AGE
+        # at fit time, so information discounting (fit's discount_half_life)
+        # can be enabled at any point in a programme's life — including on
+        # waves ingested before anyone knew they would want it.
+        wave_weeks = np.zeros(y.shape[0], dtype=int)
+        raw_pi = wave_data.get("period_idx")
+        if raw_pi is not None:
+            pi_arr = np.asarray(raw_pi, dtype=int)
+            if pi_arr.shape == y.shape:
+                wave_weeks = pi_arr
         if check_stationarity:
             from .stationarity import wave_stationarity_check
 
@@ -234,14 +253,20 @@ class LearningState:
                 )
         if self.data is None:
             self.data = {"spend": spend, "geo_idx": geo_idx, "y": y, "n_geo": n_geo}
+            self.data["row_week"] = wave_weeks
             if period_idx is not None:
                 self.data["period_idx"] = period_idx
             return
+        prev_week = self.data.get("row_week")
+        if prev_week is None:  # state loaded from a pre-discount file
+            prev_week = np.zeros(self.data["y"].shape[0], dtype=int)
+        week_offset = int(prev_week.max()) + 1 if prev_week.size else 0
         new_data = {
             "spend": np.vstack([self.data["spend"], spend]),
             "geo_idx": np.concatenate([self.data["geo_idx"], geo_idx]),
             "y": np.concatenate([self.data["y"], y]),
             "n_geo": n_geo,
+            "row_week": np.concatenate([prev_week, week_offset + wave_weeks]),
         }
         if period_idx is not None:
             if "period_idx" not in self.data:
@@ -271,12 +296,32 @@ class LearningState:
     # -- inference + decisions -------------------------------------------------
 
     def fit(self, **fit_kwargs: Any) -> Posterior:
-        """Refit the surface on ALL accumulated evidence (carries the posterior)."""
+        """Refit the surface on ALL accumulated evidence (carries the posterior).
+
+        The state's ``discount_half_life`` / ``spline_prior`` are threaded to
+        every refit (both overridable per call via ``fit_kwargs``). When
+        discounting is active, per-row ages are derived from the accumulated
+        ``row_week`` column that :meth:`ingest` maintains (age = newest week −
+        row week, in weeks).
+        """
         if self.data is None and not self.summaries:
             raise RuntimeError(
                 "ingest at least one wave or some summaries before fitting"
             )
+        discount = fit_kwargs.pop("discount_half_life", self.discount_half_life)
+        spline_prior = fit_kwargs.pop("spline_prior", self.spline_prior)
         data = dict(self.data) if self.data is not None else {"n_geo": 0}
+        if discount is not None and self.data is not None:
+            row_week = self.data.get("row_week")
+            if row_week is None:
+                raise ValueError(
+                    "this program's accumulated panel has no 'row_week' column "
+                    "(ingested before information discounting existed) — "
+                    "re-ingest the waves, or pass data['row_age'] explicitly "
+                    "via model.fit"
+                )
+            row_week = np.asarray(row_week, dtype=float)
+            data["row_age"] = row_week.max() - row_week
         if self.summaries:
             data["summaries"] = list(self.summaries)
         self.posterior = fit(
@@ -290,6 +335,8 @@ class LearningState:
             beta_scale=self.beta_scale,
             gamma_scale=self.gamma_scale,
             spend_ref=self.spend_ref,
+            discount_half_life=discount,
+            spline_prior=spline_prior,
             **fit_kwargs,
         )
         return self.posterior
@@ -598,6 +645,8 @@ def run_closed_loop(
     kg_n_outcomes: int = 32,
     stratify_geos: bool = False,
     stop_patience: int = 1,
+    discount_half_life: float | None = None,
+    spline_prior: str = "iid",
     seed: int = 0,
 ) -> dict[str, Any]:
     """Run the full loop against a known world and return the decision trace.
@@ -642,6 +691,8 @@ def run_closed_loop(
         mode=mode,
         cap=cap,
         gamma_scale=gamma_scale,
+        discount_half_life=discount_half_life,
+        spline_prior=spline_prior,
     )
 
     # wave 0: the initial CCD panel with the pre-period that pins the baselines
