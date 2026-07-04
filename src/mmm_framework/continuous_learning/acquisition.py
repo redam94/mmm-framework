@@ -49,6 +49,26 @@ mirroring ``planning.identification``.
 
 Prefer the Laplace KG when the goal is the **decision**; use EIG only to shore up
 decision-pivotal interactions (guide §9.2).
+
+Two robustness layers guard the surrogate itself:
+
+* **Numerical PSD safeguards.** ``V = Sigma - Sigma_post`` is PSD in exact
+  arithmetic (``Lambda >= 0``) but finite-precision inversion/subtraction can
+  leave tiny negative eigenvalues in ``V`` or a log-det sub-block. ``V`` is
+  symmetrized and eigenvalue-clipped before fantasy sampling, and every
+  log-determinant goes through the same symmetrize-and-clip guard — the
+  nearest-PSD projection of Higham (1988; 2002).
+* **Surrogate validity** (:func:`surrogate_validity`). The Gaussian
+  moment-match is an approximation to the carried NUTS posterior; it degrades
+  when the posterior is skewed, heavy-tailed or ridge-shaped (negative-gamma
+  cannibalisation ridges are the expected failure mode — Kuss & Rasmussen
+  2005 for the intuition). The diagnostic scores the fit of ``N(mu, Sigma)``
+  to the draws in the unconstrained space — per-parameter skew/kurtosis flags
+  plus a generalized-Pareto tail-shape ``khat`` of the Mahalanobis
+  exceedances (the same Zhang & Stephens 2009 estimator and the same 0.7
+  alarm bar PSIS uses; Vehtari, Simpson, Gelman, Yao & Gabry 2024). When it
+  fires, prefer the NUTS-refit :func:`planner.knowledge_gradient` for that
+  wave; :func:`loop.select_next_design` records the report in its meta.
 """
 
 from __future__ import annotations
@@ -307,6 +327,118 @@ def theta_moments(
     return mu, sigma
 
 
+# ── surrogate validity (is the Gaussian moment-match good enough?) ───────────
+
+
+def _gpd_khat(exceedances: np.ndarray) -> float:
+    """Generalized-Pareto shape ``k`` of positive exceedances.
+
+    The Zhang & Stephens (2009) profile-posterior estimator — the same one
+    PSIS uses for its Pareto-:math:`\\hat k` (Vehtari, Simpson, Gelman, Yao &
+    Gabry 2024), including the weak prior regularization toward ``k = 0.5``.
+    ``k`` near 0 means an exponential-class tail; large positive ``k`` means
+    a heavy (polynomial) tail. Returns ``nan`` for fewer than 5 exceedances.
+    """
+    y = np.sort(np.asarray(exceedances, dtype=float))
+    y = y[y > 0]
+    n = y.size
+    if n < 5:
+        return float("nan")
+    prior_bs, prior_k = 3.0, 10.0
+    m_est = 30 + int(np.sqrt(n))
+    idx = np.arange(1, m_est + 1, dtype=float)
+    b = 1.0 - np.sqrt(m_est / (idx - 0.5))
+    b = b / (prior_bs * y[int(n / 4.0 + 0.5) - 1]) + 1.0 / y[-1]
+    k = np.mean(np.log1p(-b[:, None] * y), axis=1)
+    len_scale = n * (np.log(-(b / k)) - k - 1.0)
+    weights = 1.0 / np.exp(len_scale - len_scale[:, None]).sum(axis=1)
+    weights = weights / weights.sum()
+    b_post = float((b * weights).sum())
+    k_post = float(np.mean(np.log1p(-b_post * y)))
+    return float((n * k_post + prior_k * 0.5) / (n + prior_k))
+
+
+def surrogate_validity(
+    post: Posterior,
+    *,
+    tmap: ThetaMap | None = None,
+    tail_prob: float = 0.25,
+    khat_threshold: float = 0.7,
+    skew_threshold: float = 0.5,
+    kurt_threshold: float = 1.0,
+) -> dict[str, Any]:
+    """Diagnose whether ``N(mu, Sigma)`` is a valid stand-in for the posterior.
+
+    The Laplace acquisitions replace the carried NUTS posterior with its
+    Gaussian moment-match in the unconstrained ``eta`` space (Eq. 12 of the
+    math page). This runs entirely off the existing draws — no densities, no
+    refit — and checks the two ways that stand-in fails:
+
+    * **Shape**: per-parameter skewness and excess kurtosis of the
+      unconstrained draws (a Gaussian has both ~0; the transforms already
+      absorb the *generic* positivity skew, so what remains is real).
+    * **Tails / ridges**: the generalized-Pareto shape ``khat`` of the
+      Mahalanobis-distance exceedances above their ``1 - tail_prob``
+      quantile. Under a genuinely Gaussian posterior the squared distances
+      are chi-square (exponential-class tail, ``khat ~ 0``); a skewed,
+      heavy-tailed or ridge-shaped posterior (the negative-``gamma``
+      cannibalisation ridge is the expected offender) inflates ``khat``.
+      The alarm bar is the same **0.7** PSIS uses (Vehtari et al. 2024),
+      estimated with the same Zhang–Stephens fit.
+
+    Returns a JSON-safe dict: ``ok`` (False when ``khat`` clears the
+    threshold, any parameter is flagged, or there are too few draws to tell),
+    ``khat``, ``params_flagged``, ``max_abs_skew``, ``max_excess_kurtosis``,
+    and the ``per_param`` detail. When ``ok`` is False, spot-check or replace
+    the wave's Laplace scores with the NUTS-refit
+    :func:`~mmm_framework.continuous_learning.planner.knowledge_gradient`
+    (the correction path in the literature is a skewness-aware expansion —
+    Rue, Martino & Chopin 2009).
+    """
+    tmap = tmap if tmap is not None else theta_map(post)
+    m = tmap.unconstrain_draws(post.samples)  # (n_draws, dim)
+    n, dim = m.shape
+    labels = [
+        f"{nm}[{ch}]" for nm, _tr in tmap.site_transforms for ch in tmap.channels
+    ] + [pair_name(list(tmap.channels), p) for p in tmap.pairs]
+
+    mu = m.mean(0)
+    sd = np.maximum(m.std(0, ddof=1), 1e-12)
+    z = (m - mu) / sd
+    skew = np.mean(z**3, axis=0)
+    ex_kurt = np.mean(z**4, axis=0) - 3.0
+    flagged = [
+        labels[i]
+        for i in range(dim)
+        if abs(skew[i]) > skew_threshold or ex_kurt[i] > kurt_threshold
+    ]
+
+    cov = np.cov(m, rowvar=False) + 1e-10 * np.eye(dim)
+    dm = m - mu
+    d2 = np.einsum("ij,ij->i", dm, np.linalg.solve(cov, dm.T).T)
+    u = float(np.quantile(d2, 1.0 - tail_prob))
+    khat = _gpd_khat(d2[d2 > u] - u)
+
+    ok = bool(np.isfinite(khat)) and khat < khat_threshold and not flagged
+    return {
+        "ok": ok,
+        "khat": float(khat),
+        "khat_threshold": float(khat_threshold),
+        "params_flagged": flagged,
+        "max_abs_skew": float(np.max(np.abs(skew))),
+        "max_excess_kurtosis": float(np.max(ex_kurt)),
+        "n_draws": int(n),
+        "dim": int(dim),
+        "per_param": {
+            labels[i]: {
+                "skew": float(skew[i]),
+                "excess_kurtosis": float(ex_kurt[i]),
+            }
+            for i in range(dim)
+        },
+    }
+
+
 # ── observation-family unit information (the GLM weights) ────────────────────
 
 
@@ -448,21 +580,39 @@ def design_information(
 # ── pure EIG (D / D_s optimality) ─────────────────────────────────────────────
 
 
+def _logdet_psd(a: np.ndarray, *, rel_floor: float = 1e-12) -> float:
+    """log-determinant of a nominally-PSD symmetric matrix, with a guard.
+
+    Symmetrizes, then clips the eigenvalues at ``rel_floor * max_eig`` — the
+    eigenvalue-clipping nearest-PSD projection of Higham (1988; see also
+    Higham 2002) — so finite-precision inversion noise (a tiny negative
+    eigenvalue in a near-singular sub-block) degrades to a bounded
+    perturbation instead of a NaN/±inf log-det.
+    """
+    a = 0.5 * (a + a.T)
+    evals = np.linalg.eigvalsh(a)
+    floor = max(float(evals.max(initial=0.0)) * rel_floor, np.finfo(float).tiny)
+    return float(np.sum(np.log(np.clip(evals, floor, None))))
+
+
 def gaussian_eig(
     sigma0: np.ndarray, lam: np.ndarray, *, idx: list[int] | None = None
 ) -> float:
     """EIG (nats) of a parameter block under a Gaussian-linear update.
 
     ``0.5 * (logdet Sigma0_SS - logdet Sigma_post_SS)`` for the block ``idx``
-    (all parameters if ``None``) — the entropy the design removes.
+    (all parameters if ``None``) — the entropy the design removes. Both
+    log-dets run through the :func:`_logdet_psd` symmetrize-and-clip guard:
+    ``Sigma_post`` is PSD in exact arithmetic (``Lambda >= 0``) but the
+    finite-precision double inversion can leave a marginal sub-block —
+    equivalently the Schur complement ``Lambda_{S|rest}`` — with tiny
+    negative eigenvalues.
     """
     sigma_post = np.linalg.inv(np.linalg.inv(sigma0) + lam)
     if idx is None:
         idx = list(range(sigma0.shape[0]))
     sel = np.ix_(idx, idx)
-    _, ld0 = np.linalg.slogdet(sigma0[sel])
-    _, ldp = np.linalg.slogdet(sigma_post[sel])
-    return float(0.5 * (ld0 - ldp))
+    return float(0.5 * (_logdet_psd(sigma0[sel]) - _logdet_psd(sigma_post[sel])))
 
 
 def design_eig(
@@ -566,7 +716,10 @@ def laplace_knowledge_gradient(
     )
     sigma_post = np.linalg.inv(np.linalg.inv(sigma0) + lam)
     v = 0.5 * ((sigma0 - sigma_post) + (sigma0 - sigma_post).T)
-    # project V to PSD (numerical safety before sampling)
+    # Symmetrize + eigenvalue-clip V before sampling: V = Sigma - Sigma_post
+    # is PSD in exact arithmetic (Lambda >= 0) but finite-precision
+    # subtraction can leave tiny negative eigenvalues; clipping is the
+    # nearest-PSD projection in the Frobenius norm (Higham 1988).
     evals, evecs = np.linalg.eigh(v)
     v = (evecs * np.clip(evals, 0.0, None)) @ evecs.T
 

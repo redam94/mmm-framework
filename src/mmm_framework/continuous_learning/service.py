@@ -539,6 +539,10 @@ def design_wave(
                     "chosen_probe_pairs": [[int(i), int(j)] for i, j in pairs],
                     "scores": meta.get("kg_scores") or [],
                     "sigma": meta.get("sigma"),
+                    # Gaussian-surrogate validity report (ok/khat/flags) — when
+                    # ok is False the Laplace scores are suspect for this
+                    # posterior; see acquisition.surrogate_validity.
+                    "surrogate": meta.get("surrogate"),
                 }
             else:
                 warnings.append(
