@@ -10,7 +10,7 @@ _Last updated: 2026-06-12._
 ## Open — behavior bugs
 
 1. **`fit()` ignores `ModelConfig.target_accept`.**
-   `src/mmm_framework/model/base.py:1633` hardcodes `target_accept = target_accept or 0.9`
+   `src/mmm_framework/model/base.py:2252` hardcodes `target_accept = target_accept or 0.9`
    and never reads `self.model_config.target_accept`, so
    `ModelConfigBuilder().with_target_accept(0.95)` silently does nothing unless the value
    is also passed to `fit()`. Fix: default from the config

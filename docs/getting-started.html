@@ -1140,47 +1140,16 @@ hierarchical = (
 
             <h2 id="api-backend">Running the Web Application</h2>
             <p>
-                The web application pairs a shared backend (Redis, FastAPI, and an ARQ worker) with
-                your choice of two frontends: the modern React web app (recommended) or the legacy
-                Streamlit interface. Whichever frontend you choose, start the backend services first:
+                There are two frontend options. The modern React web app (recommended) uses the
+                agent API and requires no Redis or worker. The legacy Streamlit interface uses the
+                separate REST API with Redis and an ARQ worker.
             </p>
-
-            <div class="quick-start-grid">
-                <div class="quick-start-card">
-                    <h4><span class="step-number">1</span> Start Redis</h4>
-                    <p>The job queue requires Redis running locally.</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> redis-server
-                        </div>
-                    </div>
-                </div>
-                <div class="quick-start-card">
-                    <h4><span class="step-number">2</span> Start API Server</h4>
-                    <p>FastAPI backend with OpenAPI docs (port 8000).</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> cd api<br>
-                            <span class="prompt">$</span> uvicorn main:app --reload
-                        </div>
-                    </div>
-                </div>
-                <div class="quick-start-card">
-                    <h4><span class="step-number">3</span> Start Worker</h4>
-                    <p>ARQ worker processes model fitting jobs.</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> cd api<br>
-                            <span class="prompt">$</span> arq worker.WorkerSettings
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <h3>Option 1: React Web App (modern, recommended)</h3>
             <p>
                 The React frontend is where the full measurement loop lives—Program, Experiments,
-                Performance, and the AI agent workspace. Take the
+                Performance, and the AI agent workspace. The agent API runs fits in-kernel, so no
+                Redis or ARQ worker is required. Take the
                 <a href="platform-overview.html">platform tour</a> for a guided look around.
             </p>
             <div class="terminal-block">
@@ -1190,16 +1159,19 @@ hierarchical = (
                     <span class="terminal-dot green"></span>
                 </div>
                 <div class="terminal-content">
-                    <span class="comment"># Terminal 4: React UI (Vite dev server)</span><br>
+                    <span class="comment"># Terminal 1: Agent API (port 8000)</span><br>
+                    <span class="prompt">$</span> uv run uvicorn mmm_framework.api.main:app --host 0.0.0.0 --port 8000 --reload<br>
+                    <br>
+                    <span class="comment"># Terminal 2: React UI (Vite dev server, port 5173)</span><br>
                     <span class="prompt">$</span> cd frontend<br>
                     <span class="prompt">$</span> npm run dev
                 </div>
             </div>
 
-            <h3 id="streamlit-app">Option 2: Streamlit (legacy)</h3>
+            <h3 id="streamlit-app">Option 2: Streamlit (legacy, deprecated)</h3>
             <p>
-                The original Streamlit interface remains available as a secondary surface. It uses
-                the same backend services.
+                The original Streamlit interface remains available. It targets the separate legacy
+                REST API and requires Redis and an ARQ worker.
             </p>
             <div class="terminal-block">
                 <div class="terminal-header">
@@ -1208,6 +1180,17 @@ hierarchical = (
                     <span class="terminal-dot green"></span>
                 </div>
                 <div class="terminal-content">
+                    <span class="comment"># Terminal 1: Redis</span><br>
+                    <span class="prompt">$</span> redis-server<br>
+                    <br>
+                    <span class="comment"># Terminal 2: Legacy REST API (port 8000)</span><br>
+                    <span class="prompt">$</span> cd api<br>
+                    <span class="prompt">$</span> uvicorn main:app --reload<br>
+                    <br>
+                    <span class="comment"># Terminal 3: ARQ worker</span><br>
+                    <span class="prompt">$</span> cd api<br>
+                    <span class="prompt">$</span> arq worker.WorkerSettings<br>
+                    <br>
                     <span class="comment"># Terminal 4: Streamlit UI (port 8501)</span><br>
                     <span class="prompt">$</span> cd app<br>
                     <span class="prompt">$</span> streamlit run Home.py
