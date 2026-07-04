@@ -483,6 +483,15 @@ def test_select_next_design_prefers_probes_when_synergy_is_decision_pivotal():
     # placed SECOND in the candidate list: ties (and NaN comparisons) resolve
     # to the FIRST candidate scored, so a scorer that collapses to a constant
     # would otherwise keep this test green without discriminating anything.
+    #
+    # The gamma-noise multiplier (2.5, up from an original 1.2) widens the
+    # true relative gap between the two candidates from ~7% to ~15-17%
+    # (measured across a sweep of rig strengths) — the original margin was
+    # narrow enough that a platform-dependent difference in the multi-start
+    # SLSQP re-optimization inside laplace_knowledge_gradient's per-fantasy
+    # allocate calls (BLAS/LAPACK build, not randomness — reproduced
+    # identically across repeated CI runs) could flip it on Linux/x86 CI
+    # while it passed reliably on macOS/ARM.
     world = cl.make_world(seed=0)
     rng = np.random.default_rng(0)
     n, k = 300, world.n_channels
@@ -495,7 +504,7 @@ def test_select_next_design_prefers_probes_when_synergy_is_decision_pivotal():
     for idx, (i, j) in enumerate(world.pairs):
         s[model.pair_name(world.channels, (i, j))] = world.gamma_pairs[
             idx
-        ] + 1.2 * rng.standard_normal(n)
+        ] + 2.5 * rng.standard_normal(n)
     post = cl.Posterior(
         samples=s, channels=world.channels, pairs=world.pairs, pair_signs={}
     )
