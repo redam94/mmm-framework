@@ -5,29 +5,47 @@ refits the model with full NUTS once *per fantasy* — too slow to score many
 candidate designs. This module replaces that with a **Gaussian-linear**
 treatment that needs no MCMC:
 
-1. Moment-match the current posterior over the surface parameters
-   ``theta = [beta, kappa, alpha, gamma_pairs]`` to a Gaussian ``N(mu, Sigma)``.
-2. Linearize ``incremental`` in ``theta`` around ``mu`` (the Laplace step). A
+1. Moment-match the current posterior over the surface parameters to a Gaussian
+   ``N(mu, Sigma)`` — in an **unconstrained reparameterization** ``eta``
+   (:class:`ThetaMap`): positive parameters (``beta``, ``kappa``, ``lam``, …)
+   are matched in log space, bounded ones (``alpha``, the mixture weight ``w``)
+   through a scaled logit, and sign-constrained synergies through a sign-aware
+   log. Skewed posteriors of positive parameters are far closer to Gaussian on
+   the log scale, and every fantasy sample maps back to a VALID parameter
+   vector by construction (no clipping).
+2. Linearize the surface in ``eta`` around ``mu`` (the Laplace step). A
    candidate design's Fisher information is then
-   ``Lambda = sigma^-2 * sum_cells w_c * g_c g_c^T``  with  ``g_c = d incremental / d theta``,
-   and the posterior covariance after running it is
+   ``Lambda = sum_cells w_c * u_c * g_c g_c^T`` with ``g_c = d incremental / d eta``
+   and ``u_c`` the observation family's **unit Fisher information** at cell
+   ``c`` (``1/sigma^2`` for the Gaussian; ``(nu+1)/((nu+3) sigma^2)`` for the
+   Student-t; ``sigmoid(eta)^2 / (m + m^2/phi)`` with ``m = softplus(eta)``
+   for the NegBinomial count family — the GLM weight through the softplus
+   link). The posterior covariance after running the design is
    ``Sigma_post = (Sigma^-1 + Lambda)^-1``.
 
 From this one linear-algebra object two acquisitions fall out cheaply:
 
 * **Laplace knowledge-gradient** (decision value, EVSI): the pre-posterior
   spread of the updated mean is ``V = Sigma - Sigma_post``; sample fantasy means
-  ``theta_m ~ N(mu, V)``, re-optimize the allocation for each, and average the
-  uplift over ``max_a profit(a | mu)``. Milliseconds instead of minutes.
+  ``eta_m ~ N(mu, V)``, map them back to valid surface parameters, re-optimize
+  the allocation for each, and average the uplift over ``max_a profit(a | mu)``.
+  Milliseconds instead of minutes.
 * **Pure EIG** (information, D-/D_s-optimality): the entropy reduction of a
   parameter block ``S`` is ``0.5 * (logdet Sigma_SS - logdet Sigma_post_SS)``.
   Use the full block for D-optimality, or the ``gamma`` sub-block (``target=
   "gamma"``) for **D_s-optimality** — synergy-targeted waves the exploit-heavy
-  Thompson waves under-probe.
+  Thompson waves under-probe. (EIG differences are invariant to the fixed
+  reparameterization — the transform's log-Jacobian cancels between the prior
+  and posterior terms — so the D/D_s orderings match the constrained-space
+  treatment.)
 
-The geo intercept is profiled out by centering the cell gradients across cells
-(the per-geo baselines are randomized, so the identifying variation is
-between-cell), mirroring ``planning.identification``.
+Any activation registered in :data:`surface.ACTIVATIONS` with a transform spec
+in :data:`SHAPE_TRANSFORMS` is supported (Hill, logistic, hill_mixture,
+monotone_spline), as is
+any observation family in :data:`model.VALID_LIKELIHOODS`. The geo intercept is
+profiled out by centering the cell gradients across cells (the per-geo
+baselines are randomized, so the identifying variation is between-cell),
+mirroring ``planning.identification``.
 
 Prefer the Laplace KG when the goal is the **decision**; use EIG only to shore up
 decision-pivotal interactions (guide §9.2).
@@ -35,57 +53,235 @@ decision-pivotal interactions (guide §9.2).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any, Callable, NamedTuple
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 from . import planner as _planner
 from .model import Pair, Posterior, pair_name
-from .surface import incremental
+from .surface import ACTIVATIONS, surface_value
 
-# ── parameter packing ────────────────────────────────────────────────────────
+# ── parameter transforms ─────────────────────────────────────────────────────
+# Each transform is a bijection between the parameter's support and the real
+# line. ``unconstrain`` runs on numpy posterior draws (moment matching);
+# ``constrain`` must be JAX-traceable (it sits inside the jax.grad of the
+# surface and inside the fantasy re-mapping).
+
+_FRAC_EPS = 1e-6  # boundary guard for logit (draws pinned at a truncation bound)
+_POS_FLOOR = 1e-12  # log-transform floor (HalfNormal draws are a.s. positive)
 
 
-def pack_theta(beta, kappa, alpha, gamma_pairs) -> np.ndarray:
-    """Stack ``[beta, kappa, alpha, gamma_pairs]`` into one vector of length P."""
-    return np.concatenate(
-        [
-            np.asarray(beta, float),
-            np.asarray(kappa, float),
-            np.asarray(alpha, float),
-            np.asarray(gamma_pairs, float),
+class Transform(NamedTuple):
+    """A support <-> R bijection: numpy ``unconstrain``, JAX ``constrain``."""
+
+    label: str
+    unconstrain: Callable[[np.ndarray], np.ndarray]
+    constrain: Callable[[Any], Any]
+
+
+_LOG = Transform(
+    "log",
+    lambda x: np.log(np.maximum(np.asarray(x, dtype=float), _POS_FLOOR)),
+    jnp.exp,
+)
+
+_IDENTITY = Transform("identity", lambda x: np.asarray(x, dtype=float), lambda z: z)
+
+# Sign-constrained synergies: a "pos" pair lives on (0, inf), a "neg" pair on
+# (-inf, 0) — matched in log |gamma| space so fantasies keep the prior's sign.
+_POS_LOG = _LOG
+_NEG_LOG = Transform(
+    "neg-log",
+    lambda x: np.log(np.maximum(-np.asarray(x, dtype=float), _POS_FLOOR)),
+    lambda z: -jnp.exp(z),
+)
+
+
+def _interval(lo: float, hi: float) -> Transform:
+    """Scaled-logit transform for a parameter supported on ``[lo, hi]``."""
+    span = float(hi) - float(lo)
+
+    def unconstrain(x: np.ndarray) -> np.ndarray:
+        f = np.clip(
+            (np.asarray(x, dtype=float) - lo) / span, _FRAC_EPS, 1.0 - _FRAC_EPS
+        )
+        return np.log(f) - np.log1p(-f)
+
+    def constrain(z):
+        return lo + span * jax.nn.sigmoid(z)
+
+    return Transform(f"logit[{lo:g},{hi:g}]", unconstrain, constrain)
+
+
+#: Per-activation transform spec for the shape parameters, matching the prior
+#: supports in :func:`model._sample_activation_shape`. Register a new
+#: activation family here (plus in :data:`surface.ACTIVATIONS` and the model's
+#: shape sampler) and the whole acquisition layer picks it up.
+SHAPE_TRANSFORMS: dict[str, dict[str, Transform]] = {
+    "hill": {"kappa": _LOG, "alpha": _interval(0.5, 5.0)},
+    "logistic": {"lam": _LOG},
+    "hill_mixture": {
+        "kappa1": _LOG,
+        "alpha1": _interval(0.5, 6.0),
+        "kappa2": _LOG,
+        "alpha2": _interval(0.5, 5.0),
+        "w": _interval(0.0, 1.0),
+    },
+    # positive normalized I-spline weights (LogNormal prior) -> log space
+    "monotone_spline": {nm: _LOG for nm in ACTIVATIONS["monotone_spline"][0]},
+}
+
+
+# ── the packed-parameter map ─────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class ThetaMap:
+    """Layout + bijection between posterior sites and the packed ``eta`` vector.
+
+    The flat layout is ``[beta (K), *shape sites (K each), gamma_pairs (P)]``
+    — the Hill case reproduces the historical ``[beta, kappa, alpha, gamma]``
+    packing order. All moment matching, linearization and fantasy sampling
+    happen in the unconstrained ``eta`` space; :meth:`constrain_params` maps
+    any ``eta`` back to a VALID planner params dict.
+    """
+
+    channels: tuple[str, ...]
+    pairs: tuple[Pair, ...]
+    activation: str
+    site_transforms: tuple[tuple[str, Transform], ...]  # beta + shape sites
+    gamma_transforms: tuple[Transform, ...]  # one per pair
+
+    @property
+    def k(self) -> int:
+        return len(self.channels)
+
+    @property
+    def dim(self) -> int:
+        return self.k * len(self.site_transforms) + len(self.pairs)
+
+    @property
+    def gamma_idx(self) -> list[int]:
+        """Positions of the synergy parameters within the packed vector."""
+        start = self.k * len(self.site_transforms)
+        return list(range(start, start + len(self.pairs)))
+
+    def unconstrain_draws(self, samples: dict[str, np.ndarray]) -> np.ndarray:
+        """Posterior draws -> the unconstrained ``(n_draws, dim)`` matrix."""
+        cols = [
+            tr.unconstrain(np.asarray(samples[nm], dtype=float))
+            for nm, tr in self.site_transforms
         ]
+        gcols = [
+            self.gamma_transforms[idx].unconstrain(
+                np.asarray(samples[pair_name(list(self.channels), p)], dtype=float)
+            )[:, None]
+            for idx, p in enumerate(self.pairs)
+        ]
+        return np.concatenate(cols + gcols, axis=1)
+
+    def constrain_jax(self, eta):
+        """``eta`` -> ``(beta, shape_tuple, gamma_matrix)`` in JAX ops."""
+        k = self.k
+        blocks = [
+            tr.constrain(eta[i * k : (i + 1) * k])
+            for i, (_nm, tr) in enumerate(self.site_transforms)
+        ]
+        beta, shape = blocks[0], tuple(blocks[1:])
+        start = k * len(self.site_transforms)
+        g = jnp.zeros((k, k))
+        for idx, (i, j) in enumerate(self.pairs):
+            g = g.at[i, j].set(self.gamma_transforms[idx].constrain(eta[start + idx]))
+        return beta, shape, g
+
+    def constrain_params(self, eta: np.ndarray) -> dict[str, Any]:
+        """``eta`` -> a planner params dict (``allocate_under_sample`` format).
+
+        The transforms enforce every support constraint, so the result is
+        always a valid surface parameterization — no clipping needed.
+        """
+        beta, shape, g = self.constrain_jax(jnp.asarray(eta, dtype=float))
+        return {
+            "beta": np.asarray(beta, dtype=float),
+            "gamma": np.asarray(g, dtype=float),
+            "shape": tuple(np.asarray(s, dtype=float) for s in shape),
+            "act_fn": ACTIVATIONS[self.activation][1],
+            "activation": self.activation,
+        }
+
+    def surface_from_eta(self, eta, spend):
+        """Incremental response at ``spend`` under packed ``eta`` (JAX)."""
+        beta, shape, g = self.constrain_jax(eta)
+        return surface_value(spend, beta, g, ACTIVATIONS[self.activation][1], shape)
+
+
+def theta_map(post: Posterior) -> ThetaMap:
+    """Build the :class:`ThetaMap` for a posterior's activation + pair signs."""
+    activation = getattr(post, "activation", "hill")
+    if activation not in SHAPE_TRANSFORMS or activation not in ACTIVATIONS:
+        raise NotImplementedError(
+            f"the fast Laplace-KG / pure-EIG acquisition has no transform spec "
+            f"for activation {activation!r}; known: {tuple(SHAPE_TRANSFORMS)}. "
+            "Add an entry to acquisition.SHAPE_TRANSFORMS (matching the prior "
+            "supports in model._sample_activation_shape), or use the planner's "
+            "activation-agnostic decision readouts (thompson_wave / "
+            "marginal_roas / expected_regret)."
+        )
+    signs = getattr(post, "pair_signs", None) or {}
+    gamma_transforms = tuple(
+        (
+            _NEG_LOG
+            if signs.get(p) == "neg"
+            else _POS_LOG if signs.get(p) == "pos" else _IDENTITY
+        )
+        for p in post.pairs
+    )
+    return ThetaMap(
+        channels=tuple(post.channels),
+        pairs=tuple(post.pairs),
+        activation=activation,
+        site_transforms=(("beta", _LOG),)
+        + tuple(
+            (nm, SHAPE_TRANSFORMS[activation][nm]) for nm in ACTIVATIONS[activation][0]
+        ),
+        gamma_transforms=gamma_transforms,
     )
 
 
-def unpack_theta(theta, k: int):
-    """Inverse of :func:`pack_theta` -> ``(beta, kappa, alpha, gamma_pairs)``."""
-    return theta[:k], theta[k : 2 * k], theta[2 * k : 3 * k], theta[3 * k :]
+def _hill_theta_map(k: int, pairs: list[Pair]) -> ThetaMap:
+    """Default Hill map for low-level callers that pass only ``(k, pairs)``.
+
+    Uses placeholder channel names and all-"weak" (identity) gamma transforms
+    — the layout the historical constrained-Hill packing used. High-level
+    entry points (:func:`design_eig`, :func:`laplace_knowledge_gradient`)
+    always build the true map from the posterior instead.
+    """
+    return ThetaMap(
+        channels=tuple(f"ch{i}" for i in range(k)),
+        pairs=tuple(pairs),
+        activation="hill",
+        site_transforms=(
+            ("beta", _LOG),
+            ("kappa", _LOG),
+            ("alpha", _interval(0.5, 5.0)),
+        ),
+        gamma_transforms=tuple(_IDENTITY for _ in pairs),
+    )
 
 
-def gamma_indices(k: int, pairs: list[Pair]) -> list[int]:
-    """Positions of the gamma parameters within the packed vector."""
-    return list(range(3 * k, 3 * k + len(pairs)))
+def eta_grad(eta_bar: np.ndarray, spend_rows: np.ndarray, tmap: ThetaMap) -> np.ndarray:
+    """``d incremental / d eta`` at ``eta_bar`` for each spend row -> (n, dim).
 
-
-def _gamma_matrix(gp, k: int, pairs: list[Pair]):
-    g = jnp.zeros((k, k))
-    for idx, (i, j) in enumerate(pairs):
-        g = g.at[i, j].set(gp[idx])
-    return g
-
-
-def _incremental_theta(theta, spend, k: int, pairs: list[Pair]):
-    beta, kappa, alpha, gp = unpack_theta(theta, k)
-    return incremental(spend, beta, kappa, alpha, _gamma_matrix(gp, k, pairs))
-
-
-def param_grad(theta_bar, spend_rows, k: int, pairs: list[Pair]) -> np.ndarray:
-    """``d incremental / d theta`` at ``theta_bar`` for each spend row -> (n, P)."""
-    g_one = jax.grad(lambda th, s: _incremental_theta(th, s, k, pairs), argnums=0)
-    theta_bar = jnp.asarray(theta_bar, dtype=float)
+    The chain rule through the constraining bijection is automatic — JAX
+    differentiates ``surface(constrain(eta))`` directly.
+    """
+    g_one = jax.grad(tmap.surface_from_eta, argnums=0)
+    eta_bar = jnp.asarray(eta_bar, dtype=float)
     rows = jnp.asarray(spend_rows, dtype=float)
-    grads = jax.vmap(lambda s: g_one(theta_bar, s))(rows)
+    grads = jax.vmap(lambda s: g_one(eta_bar, s))(rows)
     return np.asarray(grads, dtype=float)
 
 
@@ -93,34 +289,108 @@ def param_grad(theta_bar, spend_rows, k: int, pairs: list[Pair]) -> np.ndarray:
 
 
 def theta_moments(
-    post: Posterior, *, ridge: float = 1e-6
+    post: Posterior, *, ridge: float = 1e-6, tmap: ThetaMap | None = None
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Gaussian ``(mu, Sigma)`` matched to the posterior over ``theta``."""
-    if getattr(post, "activation", "hill") != "hill":
-        raise NotImplementedError(
-            "the fast Laplace-KG / pure-EIG acquisition currently packs the Hill "
-            f"parameters (beta, kappa, alpha, gamma); posterior activation is "
-            f"{post.activation!r}. Use the planner's decision readouts "
-            "(thompson_wave / marginal_roas / expected_regret), which are "
-            "activation-agnostic."
-        )
-    if getattr(post, "likelihood", "normal") != "normal":
-        raise NotImplementedError(
-            "the fast Laplace-KG / pure-EIG acquisition assumes a homoskedastic "
-            "Gaussian observation model (design_information's Fisher weights "
-            f"are w_c / sigma^2); posterior likelihood is {post.likelihood!r}. "
-            "Use the planner's decision readouts (thompson_wave / marginal_roas "
-            "/ expected_regret), which read only the surface parameters."
-        )
-    gp = np.stack(
-        [post.samples[pair_name(post.channels, p)] for p in post.pairs], axis=1
-    )
-    m = np.concatenate(
-        [post.samples["beta"], post.samples["kappa"], post.samples["alpha"], gp], axis=1
-    )
+    """Gaussian ``(mu, Sigma)`` matched to the posterior — in ``eta`` space.
+
+    The match happens in the unconstrained reparameterization of
+    :func:`theta_map`: positive parameters in log space, bounded ones through a
+    scaled logit, sign-constrained synergies through a sign-aware log. Any
+    activation with a :data:`SHAPE_TRANSFORMS` entry is supported; an unknown
+    family raises ``NotImplementedError`` (the planner's decision readouts stay
+    activation-agnostic).
+    """
+    tmap = tmap if tmap is not None else theta_map(post)
+    m = tmap.unconstrain_draws(post.samples)
     mu = m.mean(0)
     sigma = np.cov(m, rowvar=False) + ridge * np.eye(m.shape[1])
     return mu, sigma
+
+
+# ── observation-family unit information (the GLM weights) ────────────────────
+
+
+def observation_unit_info(
+    post: Posterior,
+    design_cells: np.ndarray,
+    tmap: ThetaMap,
+    mu_eta: np.ndarray,
+    *,
+    sigma: float | None = None,
+) -> np.ndarray:
+    """Per-cell Fisher information of ONE observation, for the fitted family.
+
+    * ``"normal"``: ``1 / sigma^2`` (homoskedastic — constant across cells).
+    * ``"studentt"``: ``(nu + 1) / ((nu + 3) sigma^2)`` with the posterior-mean
+      tail df — the classic heavy-tail efficiency discount (< the Gaussian
+      info at any finite ``nu``, recovering it as ``nu -> inf``).
+    * ``"negbinomial"``: the GLM weight through the model's softplus link,
+      ``sigmoid(eta_c)^2 / (m_c + m_c^2 / phi)`` with
+      ``eta_c = baseline + R(s_c; mu)``, ``m_c = softplus(eta_c)`` and the
+      posterior-mean ``phi``. The baseline is the posterior-mean ``A`` (or the
+      grand mean of ``a_geo`` when the hyper is absent). ``sigma`` is ignored
+      — a count family has no Gaussian noise scale.
+
+    ``sigma=None`` reads the posterior-mean ``sigma`` site for the Gaussian
+    families; a missing required site raises ``ValueError`` (summaries-only
+    fits never sample the observation sites, and no fixed guess is meaningful
+    across KPI scales).
+    """
+    n_cells = int(np.shape(design_cells)[0])
+    likelihood = getattr(post, "likelihood", "normal")
+
+    def _mean_site(name: str, why: str) -> float:
+        s = post.samples.get(name)
+        if s is None:
+            raise ValueError(
+                f"likelihood={likelihood!r} posterior has no {name!r} site "
+                f"({why}) — a summaries-only fit never samples the panel "
+                "observation sites, and no fixed guess is meaningful across "
+                "KPI scales"
+            )
+        return float(np.mean(s))
+
+    if likelihood == "normal":
+        s = (
+            float(sigma)
+            if sigma is not None
+            else _mean_site("sigma", "the observation-noise scale")
+        )
+        return np.full(n_cells, 1.0 / s**2)
+    if likelihood == "studentt":
+        s = (
+            float(sigma)
+            if sigma is not None
+            else _mean_site("sigma", "the observation-noise scale")
+        )
+        nu = _mean_site("nu", "the Student-t tail df")
+        return np.full(n_cells, (nu + 1.0) / ((nu + 3.0) * s**2))
+    if likelihood == "negbinomial":
+        phi = _mean_site("phi", "the NB concentration")
+        if "A" in post.samples:
+            baseline = float(np.mean(post.samples["A"]))
+        elif "a_geo" in post.samples:
+            baseline = float(np.mean(post.samples["a_geo"]))
+        else:
+            raise ValueError(
+                "likelihood='negbinomial' posterior has no 'A'/'a_geo' site — "
+                "the softplus-link GLM weight needs the baseline level to "
+                "evaluate the count mean at each design cell"
+            )
+        r_cells = np.array(
+            [
+                float(tmap.surface_from_eta(jnp.asarray(mu_eta, dtype=float), s_c))
+                for s_c in np.asarray(design_cells, dtype=float)
+            ]
+        )
+        eta = baseline + r_cells
+        m = np.logaddexp(0.0, eta)  # softplus
+        link = 1.0 / (1.0 + np.exp(-eta))  # sigmoid = dm/deta
+        return link**2 / (m + m**2 / phi)
+    raise NotImplementedError(
+        f"observation_unit_info does not know likelihood {likelihood!r}; "
+        "known: ('normal', 'studentt', 'negbinomial')"
+    )
 
 
 def _cell_weights(n_cells: int, n_geo: int, t_test: int) -> np.ndarray:
@@ -132,26 +402,44 @@ def design_information(
     design_cells: np.ndarray,
     theta_bar: np.ndarray,
     *,
-    sigma: float,
-    k: int,
-    pairs: list[Pair],
+    sigma: float | None = None,
+    k: int | None = None,
+    pairs: list[Pair] | None = None,
+    tmap: ThetaMap | None = None,
+    unit_info: np.ndarray | None = None,
     cell_weights: np.ndarray | None = None,
     n_geo: int = 80,
     t_test: int = 10,
     residualize: bool = True,
 ) -> np.ndarray:
-    """Fisher information ``Lambda`` (P×P) a design carries about ``theta``.
+    """Fisher information ``Lambda`` (dim×dim) a design carries about ``eta``.
 
-    ``Lambda = sigma^-2 sum_c w_c (g_c - g_bar)(g_c - g_bar)^T`` where ``g_c`` is
-    the parameter gradient at cell ``c`` and ``g_bar`` the weighted mean across
-    cells (profiling the geo intercept). ``residualize=False`` skips the
-    centering (treats the baseline as known).
+    ``Lambda = sum_c w_c u_c (g_c - g_bar)(g_c - g_bar)^T`` where ``g_c`` is
+    the unconstrained-space parameter gradient at cell ``c``, ``u_c`` the
+    observation family's per-cell unit information (``unit_info``; defaults to
+    the homoskedastic Gaussian ``1/sigma^2``), and ``g_bar`` the weighted mean
+    across cells (profiling the geo intercept). ``residualize=False`` skips
+    the centering (treats the baseline as known).
+
+    ``theta_bar`` is the unconstrained ``eta`` vector from
+    :func:`theta_moments`. Pass the matching ``tmap``; when omitted, a default
+    Hill map with identity gamma transforms is built from ``(k, pairs)`` —
+    only correct for a Hill posterior with default ("weak"/"zero") pair signs.
     """
-    g = param_grad(theta_bar, design_cells, k, pairs)  # (n_cells, P)
+    if tmap is None:
+        if k is None or pairs is None:
+            raise ValueError("design_information needs either tmap or (k, pairs)")
+        tmap = _hill_theta_map(k, pairs)
+    g = eta_grad(theta_bar, design_cells, tmap)  # (n_cells, dim)
+    n_cells = g.shape[0]
+    if unit_info is None:
+        if sigma is None:
+            raise ValueError("design_information needs either unit_info or sigma")
+        unit_info = np.full(n_cells, 1.0 / float(sigma) ** 2)
     w = cell_weights
     if w is None:
-        w = _cell_weights(design_cells.shape[0], n_geo, t_test)
-    w = np.asarray(w, dtype=float) / float(sigma) ** 2
+        w = _cell_weights(n_cells, n_geo, t_test)
+    w = np.asarray(w, dtype=float) * np.asarray(unit_info, dtype=float)
     if residualize:
         g = g - (w[:, None] * g).sum(0) / w.sum()
     return (g * w[:, None]).T @ g
@@ -181,59 +469,45 @@ def design_eig(
     post: Posterior,
     design_cells: np.ndarray,
     *,
-    sigma: float,
+    sigma: float | None = None,
     target: str = "all",
     n_geo: int = 80,
     t_test: int = 10,
     cell_weights: np.ndarray | None = None,
 ) -> float:
     """Pure information gain of a design (D-optimal ``target="all"`` or
-    D_s-optimal ``target="gamma"`` over the synergy sub-block)."""
-    k, pairs = post.n_channels, post.pairs
-    mu, sigma0 = theta_moments(post)
+    D_s-optimal ``target="gamma"`` over the synergy sub-block).
+
+    Works for any registered activation and any fitted observation family;
+    ``sigma=None`` derives the noise scale (Gaussian families) from the
+    posterior. ``sigma`` is ignored for a count posterior — the GLM weights
+    come from ``phi`` and the baseline instead.
+    """
+    if target not in ("all", "gamma"):
+        raise ValueError(f"target must be 'all' or 'gamma', got {target!r}")
+    tmap = theta_map(post)
+    mu, sigma0 = theta_moments(post, tmap=tmap)
+    unit_info = observation_unit_info(post, design_cells, tmap, mu, sigma=sigma)
     lam = design_information(
         design_cells,
         mu,
-        sigma=sigma,
-        k=k,
-        pairs=pairs,
+        tmap=tmap,
+        unit_info=unit_info,
         cell_weights=cell_weights,
         n_geo=n_geo,
         t_test=t_test,
     )
-    idx = None if target == "all" else gamma_indices(k, pairs)
-    if target not in ("all", "gamma"):
-        raise ValueError(f"target must be 'all' or 'gamma', got {target!r}")
+    idx = None if target == "all" else tmap.gamma_idx
     return gaussian_eig(sigma0, lam, idx=idx)
 
 
 # ── Laplace knowledge-gradient ────────────────────────────────────────────────
 
 
-def _clip_valid(theta: np.ndarray, k: int) -> dict[str, np.ndarray]:
-    """Map a (possibly Gaussian-sampled) theta to valid surface params."""
-    beta, kappa, alpha, gp = unpack_theta(theta, k)
-    return {
-        "beta": np.clip(beta, 0.0, None),
-        "kappa": np.clip(kappa, 1e-3, None),
-        "alpha": np.clip(alpha, 0.5, 5.0),
-        "gp": gp,
-    }
-
-
-def _allocate_theta(theta, post, B, value, *, mode, cap, n_starts, seed):
-    p = _clip_valid(np.asarray(theta, float), post.n_channels)
-    gamma = np.zeros((post.n_channels, post.n_channels))
-    for idx, (i, j) in enumerate(post.pairs):
-        gamma[i, j] = p["gp"][idx]
-    params = {
-        "beta": p["beta"],
-        "kappa": p["kappa"],
-        "alpha": p["alpha"],
-        "gamma": gamma,
-    }
+def _allocate_eta(eta, tmap, B, value, *, mode, cap, n_starts, seed, x0=None):
+    params = tmap.constrain_params(np.asarray(eta, dtype=float))
     return _planner.allocate_under_sample(
-        params, B, value, mode=mode, cap=cap, n_starts=n_starts, seed=seed
+        params, B, value, mode=mode, cap=cap, n_starts=n_starts, seed=seed, x0=x0
     )
 
 
@@ -243,7 +517,7 @@ def laplace_knowledge_gradient(
     B: float,
     value: float,
     *,
-    sigma: float,
+    sigma: float | None = None,
     n_geo: int = 80,
     t_test: int = 10,
     n_outcomes: int = 64,
@@ -258,18 +532,34 @@ def laplace_knowledge_gradient(
     Gaussian-linear surrogate for
     :func:`mmm_framework.continuous_learning.planner.knowledge_gradient`: the
     pre-posterior spread of the updated mean is ``V = Sigma - Sigma_post``;
-    fantasy means ``theta_m ~ N(mu, V)`` are re-optimized and averaged against the
-    current best. Orders designs the same way as the NUTS KG at a fraction of the
-    cost.
+    fantasy means ``eta_m ~ N(mu, V)`` are mapped back to valid surface
+    parameters, re-optimized and averaged against the current best. Orders
+    designs the same way as the NUTS KG at a fraction of the cost.
+
+    Works for any registered activation and fitted observation family (the
+    Fisher weights come from :func:`observation_unit_info`); ``sigma=None``
+    derives the Gaussian-family noise scale from the posterior.
+
+    Each fantasy's re-optimization is warm-started at the base (``mu``)
+    allocation, in addition to the usual uniform/random multi-starts. Fantasy
+    means are draws local to ``mu`` (``V`` is a *reduction* in spread from the
+    prior), so the true optimum is almost always near the base one; without
+    the anchor, a non-concave surface (``gamma`` can be negative) evaluated
+    with only a handful of random restarts can converge to a different local
+    optimum depending on the platform's BLAS/LAPACK build (SLSQP's floating-
+    point path through the same starting point is not bitwise-portable),
+    occasionally flipping a close two-candidate comparison. Anchoring removes
+    that basin-hopping risk at no extra cost (it replaces one of the existing
+    random starts, per :func:`~mmm_framework.continuous_learning.planner._starts`).
     """
-    k, pairs = post.n_channels, post.pairs
-    mu, sigma0 = theta_moments(post)
+    tmap = theta_map(post)
+    mu, sigma0 = theta_moments(post, tmap=tmap)
+    unit_info = observation_unit_info(post, design_cells, tmap, mu, sigma=sigma)
     lam = design_information(
         design_cells,
         mu,
-        sigma=sigma,
-        k=k,
-        pairs=pairs,
+        tmap=tmap,
+        unit_info=unit_info,
         cell_weights=cell_weights,
         n_geo=n_geo,
         t_test=t_test,
@@ -280,15 +570,23 @@ def laplace_knowledge_gradient(
     evals, evecs = np.linalg.eigh(v)
     v = (evecs * np.clip(evals, 0.0, None)) @ evecs.T
 
-    _, base_value = _allocate_theta(
-        mu, post, B, value, mode=mode, cap=cap, n_starts=n_starts + 1, seed=seed
+    base_alloc, base_value = _allocate_eta(
+        mu, tmap, B, value, mode=mode, cap=cap, n_starts=n_starts + 1, seed=seed
     )
     rng = np.random.default_rng(seed)
-    thetas = rng.multivariate_normal(mu, v, size=n_outcomes)
+    etas = rng.multivariate_normal(mu, v, size=n_outcomes)
     vals = [
-        _allocate_theta(
-            th, post, B, value, mode=mode, cap=cap, n_starts=n_starts, seed=seed + i
+        _allocate_eta(
+            eta,
+            tmap,
+            B,
+            value,
+            mode=mode,
+            cap=cap,
+            n_starts=n_starts,
+            seed=seed + i,
+            x0=base_alloc,
         )[1]
-        for i, th in enumerate(thetas)
+        for i, eta in enumerate(etas)
     ]
     return float(np.mean(vals) - base_value)

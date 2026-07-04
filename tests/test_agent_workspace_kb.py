@@ -565,6 +565,30 @@ def test_report_endpoints_serve_and_missing(client, monkeypatch, tmp_path):
     assert r3.content == b"<html>hi</html>"
 
 
+def test_report_endpoints_are_session_scoped(client, monkeypatch, tmp_path):
+    """Reports are stored per session: a report generated in thread A serves for
+    thread A only — thread B (and the legacy no-thread path) sees a 404."""
+    from mmm_framework.agents import workspace as W
+
+    monkeypatch.chdir(tmp_path)  # no legacy CWD report to fall back to
+    (W.report_path("agent_prefit_readout.html", "sessA")).write_text(
+        "<html>design A</html>"
+    )
+    ok = client.get("/prefit-report?thread_id=sessA")
+    assert ok.status_code == 200 and ok.content == b"<html>design A</html>"
+    assert client.get("/prefit-report?thread_id=sessB").status_code == 404
+    assert client.get("/prefit-report").status_code == 404
+    # download variant scopes the same way
+    dl = client.get("/prefit-report/download?thread_id=sessA")
+    assert dl.status_code == 200
+    assert "attachment" in dl.headers.get("content-disposition", "")
+    # every report family resolves per-session (spot-check model defense)
+    (W.report_path("agent_model_defense.html", "sessA")).write_text("<html>d</html>")
+    assert client.get("/model-defense?thread_id=sessA").status_code == 200
+    assert client.get("/model-defense/download?thread_id=sessA").status_code == 200
+    assert client.get("/model-defense?thread_id=sessB").status_code == 404
+
+
 def test_upload_filename_traversal_is_flattened(client, store):
     """A crafted upload filename can't escape the session dir — it's flattened to
     a basename and safe_join'd (PR-E.2)."""
@@ -1188,15 +1212,45 @@ def test_report_path_and_allowed_roots_drop_cwd_when_hosted(monkeypatch, tmp_pat
 
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
     monkeypatch.delenv("MMM_AGENT_HOSTED", raising=False)
-    # dev: legacy CWD report path; CWD is an allowed root
-    assert W.report_path("r.html").parent == Path.cwd()
+    # Reports are ALWAYS session-scoped (dev and hosted alike) — a session's
+    # deliverables live in its thread dir, never a shared CWD file.
+    rp_dev = W.report_path("r.html", "sessA")
+    assert rp_dev == W.thread_dir("sessA") / "r.html"
+    # dev: CWD stays an allowed root and legacy_report_path serves pre-change
+    # reports written to CWD
     assert Path.cwd().resolve() in W.allowed_roots()
+    assert W.legacy_report_path("r.html") == Path.cwd() / "r.html"
     # hosted: per-session under the workspace; CWD dropped from the allow-roots
+    # and the legacy CWD fallback is disabled
     monkeypatch.setenv("MMM_AGENT_HOSTED", "1")
     rp = W.report_path("r.html", "sessA")
     assert str(W.thread_dir("sessA")) in str(rp)
+    assert W.legacy_report_path("r.html") is None
     assert Path.cwd().resolve() not in W.allowed_roots()
     assert W.workspace_root() in W.allowed_roots()
+
+
+def test_session_artifact_path_host_and_kernel_side(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    from mmm_framework.agents import runtime as R
+    from mmm_framework.agents import workspace as W
+
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
+    # host-side: the thread ContextVar is set -> the session dir
+    tok = R.set_current_thread("sessB")
+    try:
+        assert W.session_artifact_path("d.pptx") == W.thread_dir("sessB") / "d.pptx"
+    finally:
+        R.current_thread_id.reset(tok)
+    # kernel-side: no ContextVar -> cwd-relative (the kernel's cwd IS the
+    # session work_dir). Clear the var explicitly — earlier tests in the module
+    # may have left a thread active on this context.
+    tok = R.set_current_thread(None)
+    try:
+        assert W.session_artifact_path("d.pptx") == Path.cwd() / "d.pptx"
+    finally:
+        R.current_thread_id.reset(tok)
 
 
 def test_chat_rejects_guessable_thread_when_hosted(client, store, monkeypatch):

@@ -651,7 +651,8 @@ def design_learning_wave(
     status-quo center as a counterfactual). `optimize=true` scores
     `candidate_deltas` (default 0.3/0.6/0.9) with the Laplace
     knowledge-gradient (decision-aware EVSI, no refit) and designs the best
-    one — needs a fitted posterior (Hill activation, Gaussian likelihood);
+    one — needs a fitted panel posterior with its observation sites (any
+    registered activation/likelihood family);
     otherwise it falls back to `delta` with a warning. Stores the design on
     the program's wave timeline; after the wave runs, record results with
     record_learning_wave.

@@ -110,6 +110,28 @@ class ModelConfig(BaseModel):
     intercept_prior_mu: float = 0.0
     intercept_prior_sigma: float = Field(default=0.5, gt=0)
 
+    # DEFAULT media-effect prior parameterization (applies only to channels with
+    # no experiment-calibrated ``roi_prior`` and no explicit
+    # ``coefficient_prior``):
+    #
+    # * ``"coefficient"`` (default) — the historical ``beta_<ch> ~
+    #   Gamma(mu=1.5, sigma=1)`` on the standardized-coefficient scale. Its
+    #   *implied* prior ROI depends on each channel's spend and the KPI scale,
+    #   so two channels get very different (and arbitrary) prior ROIs.
+    # * ``"roi"`` — sample the channel's prior ROI directly
+    #   (``roi_<ch> ~ LogNormal(media_roi_prior_mu, media_roi_prior_sigma)``,
+    #   default median 1.0 = break-even) and derive ``beta_<ch>`` in-graph as
+    #   ``roi * spend_total / (y_std * Σ saturation)`` — the prior lives on the
+    #   decision scale and is comparable across channels regardless of
+    #   spend/KPI units. Channels whose ROI divisor is non-monetary
+    #   (efficiency basis) or zero-spend fall back to the coefficient default.
+    #   The agent's spec-built models default to this mode (agents/fitting).
+    media_prior_mode: Literal["coefficient", "roi"] = "coefficient"
+    # LogNormal hyper-params of the ROI-mode prior (mu is log-scale: 0 → median
+    # ROI 1.0; sigma 1.0 → 90% prior interval ≈ [0.19, 5.2]).
+    media_roi_prior_mu: float = 0.0
+    media_roi_prior_sigma: float = Field(default=1.0, gt=0)
+
     # Inference settings
     inference_method: InferenceMethod = InferenceMethod.BAYESIAN_NUMPYRO
 

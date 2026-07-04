@@ -51,6 +51,7 @@ def create_residual_panel(
             "ACF",
             "Residuals Over Time",
         ),
+        vertical_spacing=0.18,
     )
 
     # Convert to lists for JSON serialization
@@ -83,7 +84,9 @@ def create_residual_panel(
     # 2. Q-Q Plot
     sorted_residuals = np.sort(results.residuals)
     n = len(results.residuals)
-    theoretical_quantiles = stats.norm.ppf(np.linspace(0.01, 0.99, n))
+    # Filliben plotting positions (matches create_qq_plot)
+    p = (np.arange(1, n + 1) - 0.3175) / (n + 0.365)
+    theoretical_quantiles = stats.norm.ppf(p)
 
     # Convert to lists for JSON serialization
     theoretical_list = theoretical_quantiles.tolist()
@@ -100,13 +103,17 @@ def create_residual_panel(
         row=1,
         col=2,
     )
-    # Add reference line
-    min_val = float(min(theoretical_quantiles.min(), sorted_residuals.min()))
-    max_val = float(max(theoretical_quantiles.max(), sorted_residuals.max()))
+    # Reference line: the normal fit y = mean + std * x, so the residuals'
+    # scale stays on the y-axis while x stays on the standard-normal scale.
+    res_mean = float(np.mean(results.residuals))
+    res_std = float(np.std(results.residuals, ddof=1))
+    if res_std < 1e-10:
+        res_std = 1.0
+    x_ref = [float(theoretical_quantiles.min()), float(theoretical_quantiles.max())]
     fig.add_trace(
         go.Scatter(
-            x=[min_val, max_val],
-            y=[min_val, max_val],
+            x=x_ref,
+            y=[res_mean + res_std * x for x in x_ref],
             mode="lines",
             line=dict(color="red", dash="dash"),
             name="Reference",

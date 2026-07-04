@@ -1,13 +1,23 @@
 import { Download, ExternalLink, FileText } from 'lucide-react';
 import { API_BASE_URL } from '../../api/client';
 
-export type ReportKind = 'mmm' | 'project' | 'client' | 'project-slides';
+export type ReportKind =
+  | 'mmm'
+  | 'project'
+  | 'client'
+  | 'project-slides'
+  | 'prefit'
+  | 'defense'
+  | 'client-slides';
 
 const REPORTS: Record<ReportKind, { path: string; label: string; file: string }> = {
   mmm: { path: '/report', label: 'MMM report', file: 'mmm_report.html' },
   project: { path: '/project-report', label: 'Project report', file: 'project_report.html' },
   client: { path: '/client-report', label: 'Client report', file: 'client_report.html' },
   'project-slides': { path: '/project-slides', label: 'Slides', file: 'project_slides.html' },
+  prefit: { path: '/prefit-report', label: 'Model design readout', file: 'model_design_readout.html' },
+  defense: { path: '/model-defense', label: 'Model defense', file: 'model_defense.html' },
+  'client-slides': { path: '/client-slides', label: 'Client slides', file: 'client_slides.html' },
 };
 
 /**

@@ -95,6 +95,8 @@ from .acquisition import (
     design_information,
     gaussian_eig,
     laplace_knowledge_gradient,
+    observation_unit_info,
+    theta_map,
     theta_moments,
 )
 from .scaling import to_dollars, to_scaled
@@ -106,10 +108,14 @@ from .serialize import (
 )
 from .surface import (
     ACTIVATIONS,
+    MSPLINE_J,
+    MSPLINE_S_MAX,
     activation,
     hill_mixture,
     incremental,
     logistic,
+    monotone_spline,
+    monotone_spline_basis,
     response_curve,
     surface_over_rows,
     surface_value,
@@ -120,6 +126,10 @@ __all__ = [
     "activation",
     "logistic",
     "hill_mixture",
+    "monotone_spline",
+    "monotone_spline_basis",
+    "MSPLINE_J",
+    "MSPLINE_S_MAX",
     "incremental",
     "response_curve",
     "surface_value",
@@ -167,6 +177,8 @@ __all__ = [
     "design_eig",
     "design_information",
     "gaussian_eig",
+    "observation_unit_info",
+    "theta_map",
     "theta_moments",
     # scaling (dollars <-> scaled units)
     "to_scaled",

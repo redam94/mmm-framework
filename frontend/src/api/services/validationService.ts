@@ -29,6 +29,17 @@ export interface ValidationJob {
   error: string | null;
 }
 
+/** One row of the project's persistent validation history — UI-started jobs
+ * AND chat-run checks (the agent's validate_model / run_* / SBC tools). */
+export interface ValidationHistoryItem {
+  job_id: string;
+  check: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  source: 'job' | 'chat' | string;
+  error: string | null;
+  created_at: number;
+}
+
 export const validationService = {
   async start(
     projectId: string,
@@ -42,5 +53,11 @@ export const validationService = {
       `/projects/${projectId}/validate/${jobId}`,
     );
     return data;
+  },
+  async history(projectId: string): Promise<ValidationHistoryItem[]> {
+    const { data } = await apiClient.get<{ validations: ValidationHistoryItem[] }>(
+      `/projects/${projectId}/validations`,
+    );
+    return data.validations ?? [];
   },
 };

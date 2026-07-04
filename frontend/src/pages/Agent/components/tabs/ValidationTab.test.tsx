@@ -20,6 +20,8 @@ function mockHook(over: Record<string, unknown> = {}) {
   useValidation.mockReturnValue({
     start: { mutate, isPending: false, reset: vi.fn() },
     job: { data: undefined },
+    history: { data: [] },
+    load: vi.fn(),
     check: null,
     reset: vi.fn(),
     jobId: null,

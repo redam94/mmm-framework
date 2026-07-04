@@ -211,13 +211,42 @@ def table_path(table_id: str) -> Path | None:
 
 
 def report_path(name: str, thread_id: str | None = None) -> Path:
-    """Where an agent report HTML file lives (PR-F.6). Hosted: per-session under
-    the workspace (an allowed root, so it survives dropping ``Path.cwd()`` and is
-    tenant-scoped). Dev: the legacy CWD location, unchanged."""
+    """Where an agent report/deck deliverable lives — ALWAYS per-session under
+    the workspace (``<root>/threads/<tid>/<name>``), in dev and hosted alike.
+
+    Every generated deliverable is stored in (and served from) the oracle
+    session, so two sessions can never clobber each other's fixed-name reports
+    (which the old dev behavior — a shared ``<cwd>/<name>`` — allowed).
+    :func:`legacy_report_path` keeps pre-change dev reports readable."""
+    leaf = Path(name).name
+    return thread_dir(thread_id) / leaf
+
+
+def legacy_report_path(name: str) -> Path | None:
+    """The pre-session-scoping dev location (``<cwd>/<name>``) — a READ-side
+    fallback only, so reports generated before the storage change still serve.
+    ``None`` when hosted (CWD is not an allowed root there)."""
     from mmm_framework.agents.profile import is_hosted
 
-    leaf = Path(name).name
-    return (thread_dir(thread_id) / leaf) if is_hosted() else (Path.cwd() / leaf)
+    if is_hosted():
+        return None
+    return Path.cwd() / Path(name).name
+
+
+def session_artifact_path(name: str) -> Path:
+    """Kernel-safe write path for a session deliverable (report / deck).
+
+    Host-side (a tool or op running in the server process) the thread
+    ContextVar is set → the session dir via :func:`report_path`. Inside a
+    subprocess/container kernel the ContextVar is NOT set, but the kernel's
+    cwd *is* the session ``work_dir`` — so a cwd-relative write lands in the
+    same place :func:`report_path` resolves to server-side."""
+    from mmm_framework.agents.runtime import current_thread_id
+
+    tid = current_thread_id.get()
+    if tid:
+        return report_path(name, tid)
+    return Path.cwd() / Path(name).name
 
 
 def allowed_roots() -> list[Path]:

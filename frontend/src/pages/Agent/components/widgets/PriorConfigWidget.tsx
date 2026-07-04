@@ -5,9 +5,11 @@ import { DashWidget } from '../common/DashWidget';
 import { FLabel, iCls } from '../common/form';
 import {
   ANY_DISTS, DIST_DEFS, POSITIVE_DISTS, PRIOR_DEFAULTS, UNIT_DISTS,
-  asVarArray, computeDensity, initPriors,
+  asVarArray, computeDensity, initPriors, roiPriorStats, serializeMediaPriors,
 } from '../../utils/priors';
-import type { DistKey, InitializedPriors, PriorValue } from '../../utils/priors';
+import type {
+  DistKey, InitializedPriors, MediaPriorMode, PriorValue, RoiPriorValue,
+} from '../../utils/priors';
 import { normalizeTrendType } from '../../utils/spec';
 import type { SpecVar } from '../../utils/spec';
 import type { ModelSpec } from '../../types';
@@ -108,6 +110,58 @@ function PriorEditor({ label, hint, value, onChange, disabled, allowed = ANY_DIS
   );
 }
 
+// --- RoiPriorEditor ---
+
+const fmtRoi = (v: number) => (v >= 10 ? v.toFixed(0) : v >= 1 ? v.toFixed(1) : v.toFixed(2));
+
+// State the channel's effect prior directly on the ROI scale, with instant
+// closed-form feedback on what it implies (LogNormal — no sampling needed).
+function RoiPriorEditor({ value, onChange, disabled }: {
+  value: RoiPriorValue; onChange: (v: RoiPriorValue) => void; disabled?: boolean;
+}) {
+  const median = value.median > 0 ? value.median : PRIOR_DEFAULTS.media_roi.median;
+  const sigma = value.sigma > 0 ? value.sigma : PRIOR_DEFAULTS.media_roi.sigma;
+  const stats = roiPriorStats(median, sigma);
+  const density = useMemo(
+    () => computeDensity('log_normal', { mu: Math.log(median), sigma }),
+    [median, sigma],
+  );
+  return (
+    <div className="bg-white rounded-xl border border-line-200 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-ink-900 truncate">Prior ROI</p>
+        <span className="text-[10px] text-ink-300">LogNormal on raw ROI</span>
+      </div>
+      <p className="text-[10px] text-ink-300 leading-snug">
+        Your belief about this channel's return before seeing the data. Median 1.0 = break-even; σ is the spread on the log scale.
+      </p>
+      <div className="flex gap-2 flex-wrap">
+        <div className="flex-1 min-w-[70px]">
+          <FLabel>Median ROI (×)</FLabel>
+          <input className={iCls} type="number" min={0.01} max={50} step={0.1}
+            value={value.median}
+            disabled={disabled}
+            onChange={e => onChange({ ...value, median: Number(e.target.value) })} />
+        </div>
+        <div className="flex-1 min-w-[70px]">
+          <FLabel>σ (log scale)</FLabel>
+          <input className={iCls} type="number" min={0.05} max={3} step={0.05}
+            value={value.sigma}
+            disabled={disabled}
+            onChange={e => onChange({ ...value, sigma: Number(e.target.value) })} />
+        </div>
+      </div>
+      {/* Implied-ROI readout: the point of the ROI scale — the prior's business
+          meaning is visible as it is set, not only after a prior predictive run. */}
+      <div className="flex items-center gap-3 bg-cream-50 rounded-lg px-2.5 py-1.5 text-[10px] text-ink-600">
+        <span>90% within <b className="text-ink-900">{fmtRoi(stats.lower)}×–{fmtRoi(stats.upper)}×</b></span>
+        <span>P(ROI &gt; 1) = <b className="text-ink-900">{Math.round(stats.pAbove1 * 100)}%</b></span>
+      </div>
+      <DensitySparkline x={density.x} y={density.y} color="#6366f1" />
+    </div>
+  );
+}
+
 // ─── PriorConfigWidget ────────────────────────────────────────────────────────
 
 interface PriorConfigWidgetProps { spec: ModelSpec; editable: boolean; onApplySpec: (s: ModelSpec) => void }
@@ -138,7 +192,7 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { setPriors(initPriors(spec)); }, [specView?.media_channels?.length, specView?.control_variables?.length, specView?.trend?.type, specView?.seasonality?.yearly, specView?.seasonality?.monthly, specView?.seasonality?.weekly]);
 
-  const setMediaPrior = (channel: string, key: string, val: PriorValue) =>
+  const setMediaPrior = (channel: string, key: string, val: PriorValue | RoiPriorValue | MediaPriorMode) =>
     setPriors((p: InitializedPriors) => ({ ...p, media: { ...p.media, [channel]: { ...p.media[channel], [key]: val } } } as InitializedPriors));
 
   const setControlPrior = (control: string, key: string, val: unknown) =>
@@ -159,7 +213,7 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
     const seasPriors = Object.fromEntries(
       Object.entries(priors.seasonality).filter(([, v]) => v !== null)
     );
-    onApplySpec({ ...spec, priors: { media: priors.media, controls: priors.controls, trend: trendPriors, seasonality: seasPriors } });
+    onApplySpec({ ...spec, priors: { media: serializeMediaPriors(priors.media), controls: priors.controls, trend: trendPriors, seasonality: seasPriors } });
   };
 
   // Normalize to arrays: the spec may carry these as a dict keyed by name, an
@@ -226,12 +280,36 @@ export function PriorConfigWidget({ spec, editable, onApplySpec }: PriorConfigWi
                 </button>
                 {isOpen && (
                   <div className="px-4 py-3 space-y-3 bg-white">
-                    <PriorEditor
-                      label="Channel Coefficient" hint="Scale of this channel's contribution to the KPI. Use Half-Normal to enforce positivity."
-                      value={chPriors.coefficient ?? PRIOR_DEFAULTS.media_coefficient}
-                      onChange={v => setMediaPrior(ch.name, 'coefficient', v)}
-                      disabled={!editable} allowed={POSITIVE_DISTS} color="#6366f1"
-                    />
+                    {/* Effect-prior scale toggle: ROI (decision scale, default) vs coefficient (advanced) */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-ink-400 font-semibold mr-1">Effect prior on</span>
+                      {(['roi', 'coefficient'] as const).map(m => (
+                        <button key={m}
+                          onClick={() => editable && setMediaPrior(ch.name, 'mode', m)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-colors ${(chPriors.mode ?? 'roi') === m ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-ink-500 border-line-200 hover:bg-cream-100'} ${!editable ? 'cursor-default opacity-60' : 'cursor-pointer'}`}>
+                          {m === 'roi' ? 'ROI scale' : 'Coefficient'}
+                        </button>
+                      ))}
+                    </div>
+                    {(chPriors.mode ?? 'roi') === 'roi' ? (
+                      <RoiPriorEditor
+                        value={chPriors.roi ?? PRIOR_DEFAULTS.media_roi}
+                        onChange={v => setMediaPrior(ch.name, 'roi', v)}
+                        disabled={!editable}
+                      />
+                    ) : (
+                      <>
+                        <PriorEditor
+                          label="Channel Coefficient" hint="Scale of this channel's contribution to the KPI (standardized scale). Use Half-Normal to enforce positivity."
+                          value={chPriors.coefficient ?? PRIOR_DEFAULTS.media_coefficient}
+                          onChange={v => setMediaPrior(ch.name, 'coefficient', v)}
+                          disabled={!editable} allowed={POSITIVE_DISTS} color="#6366f1"
+                        />
+                        <p className="text-[10px] text-amber-600 leading-snug">
+                          A coefficient prior's implied ROI depends on the data (spend scale, saturation) — after applying, ask the agent for a prior predictive check to see the prior ROI it implies for this channel.
+                        </p>
+                      </>
+                    )}
                     {aAds !== 'none' && (
                       <PriorEditor
                         label="Adstock Decay (α)" hint="Decay rate of advertising carryover. Beta(1,3) favours fast decay; Beta(3,1) favours slow decay."

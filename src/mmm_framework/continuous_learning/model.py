@@ -37,6 +37,13 @@ of guide §3.2.
 Two **opt-in** extensions (the defaults reproduce the graph above
 byte-identically — no new sample sites, same rng stream):
 
+* ``likelihood="studentt"`` — heavy-tailed robust observation for continuous
+  KPIs with occasional wild geo-weeks (data glitches, local shocks). Same
+  location/scale structure as the Gaussian plus a learned tail
+  ``nu ~ Gamma(2, 0.1)`` (the Juárez–Steel robustness prior);
+  ``y ~ StudentT(nu, mu, sigma)``. Everything downstream that reads only the
+  surface parameters is unchanged; the ``sigma`` site persists (it is the t
+  SCALE — the sd is ``sigma * sqrt(nu/(nu-2))``).
 * ``likelihood="negbinomial"`` — count KPIs. The panel observation becomes
   ``y ~ NegativeBinomial2(softplus(mu), phi)`` with concentration
   ``phi ~ LogNormal(log 30, 2)`` replacing the ``sigma`` site; ``y`` must be
@@ -123,7 +130,7 @@ VALID_SIGNS = ("neg", "pos", "zero", "weak")
 
 #: Observation families for the panel likelihood ("normal" is the default and
 #: reproduces the original graph byte-identically).
-VALID_LIKELIHOODS = ("normal", "negbinomial")
+VALID_LIKELIHOODS = ("normal", "negbinomial", "studentt")
 
 #: National per-period time-effect modes ("none" default = no tau sites).
 VALID_TIME_EFFECTS = ("none", "national")
@@ -220,7 +227,8 @@ def _sample_activation_shape(activation: str, k: int, numpyro, dist) -> tuple:
     """Sample the shape parameters for the chosen activation (in param order).
 
     Hill: half-saturation ``kappa`` and shape ``alpha``. Logistic: a single
-    saturation rate ``lam``. Add a case here (plus an entry in
+    saturation rate ``lam``. Monotone spline: positive I-spline basis weights
+    ``w1..wJ`` (shape-agnostic). Add a case here (plus an entry in
     :data:`surface.ACTIVATIONS`) to plug in another smooth, saturating family.
     """
     if activation == "hill":
@@ -259,6 +267,21 @@ def _sample_activation_shape(activation: str, k: int, numpyro, dist) -> tuple:
         )
         w = numpyro.sample("w", dist.Beta(2.0, 2.0).expand([k]).to_event(1))
         return (kappa1, alpha1, kappa2, alpha2, w)
+    if activation == "monotone_spline":
+        # Shape-agnostic monotone I-spline: positive basis weights w1..wJ,
+        # normalized inside the activation, so only the RATIOS matter and the
+        # O(1) LogNormal prior is scale-free by construction. Equal weights
+        # (the prior median) give a near-linear ramp that saturates at
+        # surface.MSPLINE_S_MAX — a neutral starting shape the designed cells
+        # then bend into whatever the data supports (concave, S, two-phase, …).
+        # sd=1.0 (vs a tighter 0.75) measurably improves BOTH mixing (R̂ 1.03
+        # -> 1.01, min ESS 30 -> 72 on the reference mixture world) and
+        # one-wave curve calibration — a tight weight prior makes the prior
+        # ramp shape linger where the design has not probed.
+        return tuple(
+            numpyro.sample(nm, dist.LogNormal(0.0, 1.0).expand([k]).to_event(1))
+            for nm in ACTIVATIONS["monotone_spline"][0]
+        )
     raise ValueError(f"unknown activation {activation!r}; known: {tuple(ACTIVATIONS)}")
 
 
@@ -296,7 +319,9 @@ def model(
     ``"logistic"`` for exponential saturation).
 
     ``likelihood`` selects the panel observation family: ``"normal"`` (default —
-    the original graph, byte-identical) or ``"negbinomial"`` for count KPIs
+    the original graph, byte-identical), ``"studentt"`` for heavy-tailed robust
+    continuous KPIs (adds a tail df ``nu ~ Gamma(2, 0.1)`` next to ``sigma``;
+    ``y ~ StudentT(nu, mu, sigma)``), or ``"negbinomial"`` for count KPIs
     (``phi ~ LogNormal(log 30, 2)`` replaces the ``sigma`` site and
     ``y ~ NegativeBinomial2(softplus(mu), phi)``; the identity-link ``mu``
     composition ``a_geo[geo_idx] + surface (+ tau)`` is unchanged, with a
@@ -373,6 +398,15 @@ def model(
             a_geo = numpyro.sample("a_geo", dist.Normal(a, sigma_a))
         if likelihood == "normal":
             sigma = numpyro.sample("sigma", dist.HalfNormal(y_scale))
+        elif likelihood == "studentt":
+            # Heavy-tailed robust observation: same location/scale structure as
+            # the Gaussian, plus a learned tail df. Gamma(2, 0.1) is the
+            # Juárez–Steel robustness prior (mean 20, mode 10): near-Gaussian a
+            # priori, but with real mass below nu ~ 5 so a few wild geo-weeks
+            # buy heavy tails instead of dragging beta/gamma. sigma is the
+            # t SCALE, not the sd (sd = sigma * sqrt(nu/(nu-2)) for nu > 2).
+            sigma = numpyro.sample("sigma", dist.HalfNormal(y_scale))
+            nu = numpyro.sample("nu", dist.Gamma(2.0, 0.1))
         elif likelihood == "negbinomial":
             # Dispersion prior: NB2 variance is m + m^2/phi, so near-Poisson
             # behavior at row mean m needs phi >~ m — and m scales with the
@@ -400,6 +434,8 @@ def model(
             mu = mu + tau[period_idx]
         if likelihood == "normal":
             numpyro.sample("y", dist.Normal(mu, sigma), obs=y)
+        elif likelihood == "studentt":
+            numpyro.sample("y", dist.StudentT(nu, mu, sigma), obs=y)
         else:
             import jax
 
@@ -428,7 +464,8 @@ class Posterior:
     ``alpha``, ``A``, ``sigma_a``, ``a_geo``, ``sigma``, and one
     ``gamma_<ci>_<cj>`` per pair; the intercept/noise sites are absent for a
     summaries-only fit). A ``likelihood="negbinomial"`` fit carries ``phi``
-    (the NB concentration) instead of ``sigma``; a ``time_effect="national"``
+    (the NB concentration) instead of ``sigma``; a ``likelihood="studentt"``
+    fit carries ``nu`` (the tail df) alongside ``sigma``; a ``time_effect="national"``
     fit adds ``sigma_tau`` and ``tau`` (``(draws, n_period)``). ``spend_ref``
     is the per-channel reference constant used to scale spend — convert with
     :func:`~mmm_framework.continuous_learning.scaling.to_dollars` /
@@ -739,7 +776,10 @@ def fit(
             Keys are normalized to ``(min, max)`` orientation; conflicting
             duplicate entries raise.
         likelihood: panel observation family — ``"normal"`` (default,
-            byte-identical to the original graph) or ``"negbinomial"`` for
+            byte-identical to the original graph), ``"studentt"`` for
+            heavy-tailed robust continuous KPIs (a learned tail df ``nu``
+            joins ``sigma``; outlier geo-weeks stop dragging the surface), or
+            ``"negbinomial"`` for
             count KPIs (``y`` must be non-negative integer counts; the summary
             block stays Gaussian either way). Link caveat for the planner:
             with ``"negbinomial"`` the marginal readouts (``marginal_roas``,
@@ -916,9 +956,9 @@ def _diagnostics(mcmc: Any, activation: str = "hill") -> dict[str, Any]:
     ``sigma`` sites, so R̂ covers whatever family was fit — a hard-coded list
     would leave e.g. ``hill_mixture``'s five shape sites (the very place a
     misspecified fit shows R̂≈1.5) outside the convergence gate. ``phi`` (the
-    NegBinomial concentration) and ``tau`` (the national time effect) are
-    included for the same reason; absent sites are skipped, so Normal /
-    no-time-effect fits are unaffected.
+    NegBinomial concentration), ``nu`` (the Student-t tail df) and ``tau``
+    (the national time effect) are included for the same reason; absent sites
+    are skipped, so Normal / no-time-effect fits are unaffected.
     """
     try:
         import numpyro
@@ -927,7 +967,7 @@ def _diagnostics(mcmc: Any, activation: str = "hill") -> dict[str, Any]:
         grouped = mcmc.get_samples(group_by_chain=True)
         rhats: list[float] = []
         ess: list[float] = []
-        for key in ("beta", "sigma", "phi", "tau", *shape_sites):
+        for key in ("beta", "sigma", "phi", "nu", "tau", *shape_sites):
             if key not in grouped:
                 continue
             arr = grouped[key]
@@ -952,6 +992,7 @@ def refit_fn_from_data(
     pairs: list[Pair] | None = None,
     pair_signs: dict[Pair, PairSign] | None = None,
     activation: str = "hill",
+    likelihood: str = "normal",
     beta_scale: float = 1.0,
     gamma_scale: float = 0.8,
     num_warmup: int = 200,
@@ -971,6 +1012,11 @@ def refit_fn_from_data(
     Requires a panel base dataset: fantasy observations are geo-week rows, so a
     summaries-only data dict has nothing to append them to.
 
+    ``likelihood`` must match the posterior the knowledge gradient is scoring:
+    the fantasy ``y`` values are drawn from that same observation family
+    (Gaussian, Student-t, or NB counts), so refitting them under a different
+    family would score the design against a model nobody will run.
+
     ``time_effect`` other than ``"none"`` raises ``NotImplementedError``: the
     knowledge-gradient fantasy rows carry no period identity, so a national
     ``tau_t`` cannot be refit on the augmented panel. A ``period_idx`` present
@@ -986,7 +1032,7 @@ def refit_fn_from_data(
             "closure with time_effect='none'"
         )
     spend0, geo0, y0, n_geo, _period0, _n_period0 = _validate_panel(
-        base_data, len(channels)
+        base_data, len(channels), likelihood=likelihood
     )
     if spend0.shape[0] == 0:
         raise ValueError(
@@ -1011,6 +1057,7 @@ def refit_fn_from_data(
             pairs=pairs,
             pair_signs=pair_signs,
             activation=activation,
+            likelihood=likelihood,
             beta_scale=beta_scale,
             gamma_scale=gamma_scale,
             num_warmup=num_warmup,

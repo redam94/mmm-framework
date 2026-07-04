@@ -77,7 +77,10 @@ DELTA = _f("ACQ_DELTA", 0.6)
 # keeps hunting (more movement, less of a settled/converged state).
 #   "slice" = probe only the slice pair (15 cells); "none" = 13; "all" = 25.
 PROBE = os.environ.get("ACQ_PROBE", "slice")
-WORLD = os.environ.get("ACQ_WORLD", "easy")  # "easy" | "hard"
+WORLD = os.environ.get("ACQ_WORLD", "easy")  # "easy" | "hard" | "logistic" | "mixture"
+# Fit a DIFFERENT activation than the world's own (e.g. ACQ_FIT=monotone_spline
+# on ACQ_WORLD=mixture: learn a two-phase truth with the shape-agnostic spline).
+FIT = os.environ.get("ACQ_FIT", "")
 TAG = os.environ.get("ACQ_TAG", "")
 
 _SUF = f"_{TAG}" if TAG else ""
@@ -118,6 +121,10 @@ def _make_world():
         return _hard_world()
     if WORLD == "logistic":
         return cl.make_world_logistic(seed=0)  # exponential-saturation activation
+    if WORLD == "mixture":
+        # every channel's truth is a weighted sum of two Hills (two-phase) —
+        # the §14 misspecification world, here as a 2-D acquisition demo
+        return cl.make_world_hill_mixture(seed=0)
     return cl.make_world(seed=0)
 
 
@@ -167,7 +174,7 @@ def compute() -> dict:
         value=VALUE,
         pairs=world.pairs,
         pair_signs=cl.PAIR_SIGNS_EXAMPLE,
-        activation=world.activation,  # fit the same family the world uses
+        activation=FIT or world.activation,  # ACQ_FIT overrides (default: world's own)
         mode="free",
         cap=CAP,
     )
@@ -415,11 +422,18 @@ def frame_figure(d: dict, w: int, ranges: dict) -> go.Figure:
             text="<b>Acquisition, uncertainty &amp; experiment history — updating with each test"
             + (" · HARD problem" if WORLD == "hard" else "")
             + (" · logistic saturation" if WORLD == "logistic" else "")
+            + (" · two-phase (two-Hill) truth" if WORLD == "mixture" else "")
+            + (f" · fit: {FIT}" if FIT else "")
             + "</b>"
             f"<br><sup>Wave {w} · {int(d['rows'][w])} geo-weeks · "
             f"acquisition→truth distance {dist:.2f}"
             + (" · strong Pulse×Orbit cannibalization" if WORLD == "hard" else "")
             + (" · f(s)=1−exp(−λs), not Hill" if WORLD == "logistic" else "")
+            + (
+                " · both slice channels are weighted Hill sums"
+                if WORLD == "mixture"
+                else ""
+            )
             + "</sup>",
             x=0.5,
             xanchor="center",

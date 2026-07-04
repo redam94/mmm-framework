@@ -23,6 +23,7 @@ import { KnowledgeTab } from '../widgets/KnowledgeTab';
 import { ModelSpecWidget } from '../widgets/ModelSpecWidget';
 import { PriorConfigWidget } from '../widgets/PriorConfigWidget';
 import { SeasonalityTrendWidget } from '../widgets/SeasonalityTrendWidget';
+import { SessionReportsWidget } from '../widgets/SessionReportsWidget';
 import { SlideDeckWidget } from '../widgets/SlideDeckWidget';
 import { WorkspaceFilesWidget } from '../widgets/WorkspaceFilesWidget';
 import { ExperimentsTab } from '../widgets/ExperimentsTab';
@@ -473,6 +474,14 @@ export function WorkspaceTabs({
                 projectId={projectId}
                 threadId={threadId}
                 chatDeckPath={dashboardData.slide_deck_path}
+              />
+
+              {/* Every deliverable the agent generated for THIS session —
+                  stored in the session workspace, viewable + downloadable. */}
+              <SessionReportsWidget
+                dashboardData={dashboardData}
+                artifacts={artifacts}
+                threadId={threadId}
               />
             </>
           )}

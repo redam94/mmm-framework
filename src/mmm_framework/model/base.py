@@ -96,10 +96,12 @@ _ADSTOCK_KIND = {
 # shrinking a confounder biases the media coefficient by (1 - s)*gamma*Cov/Var,
 # so confounders get a wide, weakly-informative prior. Every other control --
 # including any left unmarked -- keeps the model's historical Normal(0, 0.5),
-# which is mildly regularizing (a precision-control choice). These are fixed
-# widths by role, not the per-control ``coefficient_prior`` (which the core
-# model has never honored for controls; honoring it now would silently change
-# existing fits).
+# which is mildly regularizing (a precision-control choice). These role-based
+# widths are the DEFAULT; a control whose ``coefficient_prior`` was *explicitly
+# set* (pydantic ``model_fields_set`` — the agent's ``priors.controls.*`` path,
+# a builder ``with_coefficient_prior``, ``positive_only()``) is honored instead
+# (see ``_explicit_prior``). Configs that never set one keep the historical
+# graph byte-identical.
 _CONFOUNDER_PRIOR_SIGMA = 2.0
 _PRECISION_CONTROL_PRIOR_SIGMA = 0.5
 
@@ -121,6 +123,29 @@ def _hdi_finite(samples: "NDArray", hdi_prob: float) -> tuple[float, float]:
         return float("nan"), float("nan")
     low, high = compute_hdi_bounds(finite, hdi_prob=hdi_prob, axis=0)
     return float(low), float(high)
+
+
+def _explicit_prior(cfg: Any, field: str) -> "PriorConfig | None":
+    """The config's ``field`` prior ONLY when it was explicitly provided.
+
+    ``MediaChannelConfig.coefficient_prior`` / ``ControlVariableConfig.
+    coefficient_prior`` carry pydantic *factory defaults*, which the core model
+    has never honored — its built-in beta/control priors define the historical
+    graph. Honoring factory defaults now would silently change every existing
+    fit, so only a prior present in ``model_fields_set`` (an agent
+    ``priors.media.<ch>.coefficient`` write, a builder
+    ``with_coefficient_prior``, a direct constructor kwarg) is returned.
+    Duck-typed/mocked configs without ``model_fields_set`` yield ``None``
+    (legacy default path).
+    """
+    if cfg is None:
+        return None
+    try:
+        if field in cfg.model_fields_set:
+            return getattr(cfg, field, None)
+    except (AttributeError, TypeError):
+        return None
+    return None
 
 
 def _sample_from_prior_config(
@@ -656,14 +681,67 @@ class BayesianMMM:
         horseshoe / spike-slab / LASSO prior so the model *selects* among them.
         ``beta_controls`` is preserved (name, shape, ``control`` dim) so reporting
         and validation are unaffected.
+
+        A control whose ``coefficient_prior`` was *explicitly set* (the agent's
+        ``priors.controls.<cv>.coefficient`` / ``allow_negative`` paths, a
+        builder ``with_coefficient_prior``) gets that prior as its own
+        ``beta_control_<name>`` RV, folded back into the ``beta_controls``
+        Deterministic. Controls with no explicit prior keep the role-based
+        width, and a model with none stays byte-identical to the historical
+        single-RV graph.
         """
+        explicit: dict[int, "PriorConfig"] = {}
         if not self._selection_active():
+            for i, name in enumerate(self.control_names):
+                cfg = (
+                    self.mff_config.get_control_config(name)
+                    if self.mff_config is not None
+                    else None
+                )
+                prior = _explicit_prior(cfg, "coefficient_prior")
+                if prior is not None:
+                    if self._control_causal_roles[i] == CausalControlRole.CONFOUNDER:
+                        warnings.warn(
+                            f"Control '{name}' is marked CONFOUNDER but has an "
+                            "explicit coefficient_prior — honoring it. A prior "
+                            "much narrower than the wide confounder default can "
+                            "re-open back-door bias on the media effects."
+                        )
+                    explicit[i] = prior
+        if not self._selection_active() and not explicit:
             return pm.Normal(
                 "beta_controls",
                 mu=0,
                 sigma=self._control_prior_sigmas(),
                 shape=self.n_controls,
             )
+        if not self._selection_active():
+            # Composite: explicit-prior controls get their own named RVs; the
+            # rest keep the historical role-width Normal. Exposed under the
+            # same ``beta_controls`` name/shape/dim as always.
+            sigmas = self._control_prior_sigmas()
+            beta = pt.zeros(self.n_controls)
+            default_idx = [i for i in range(self.n_controls) if i not in explicit]
+            if default_idx:
+                beta_default = pm.Normal(
+                    "beta_controls_default",
+                    mu=0,
+                    sigma=sigmas[default_idx],
+                    shape=len(default_idx),
+                )
+                beta = pt.set_subtensor(beta[np.array(default_idx)], beta_default)
+            for i, prior in explicit.items():
+                name = self.control_names[i]
+                sigma_i = float(sigmas[i])
+                rv = _sample_from_prior_config(
+                    f"beta_control_{name}",
+                    prior,
+                    lambda name=name, s=sigma_i: pm.Normal(
+                        f"beta_control_{name}", mu=0, sigma=s
+                    ),
+                )
+                beta = pt.set_subtensor(beta[i], rv)
+            return pm.Deterministic("beta_controls", beta, dims="control")
 
         conf_mask = np.array(
             [r == CausalControlRole.CONFOUNDER for r in self._control_causal_roles],
@@ -1101,6 +1179,27 @@ class BayesianMMM:
         """
         return X_media_raw_data[:, c]
 
+    def _roi_mode_divisor(self, channel_name: str, c: int) -> float | None:
+        """The ROI denominator for the ``media_prior_mode="roi"`` default.
+
+        Only plain SPEND-measured channels qualify (the ROI-parameterized
+        default needs a monetary divisor; impression/click channels have an
+        efficiency basis with reference 0, and re-deriving their cost here
+        would duplicate ``reporting.helpers.measurement`` — they fall back to
+        the coefficient default). Returns the channel's total raw spend, or
+        ``None`` when the channel doesn't qualify (non-spend unit, zero/absent
+        spend).
+        """
+        media_cfg = self.mff_config.get_media_config(channel_name)
+        unit = getattr(media_cfg, "measurement_unit", None)
+        unit_val = getattr(unit, "value", unit)
+        if unit_val not in (None, "spend"):
+            return None
+        total = float(self.X_media_raw[:, c].sum())
+        if not np.isfinite(total) or total <= 0:
+            return None
+        return total
+
     def _get_adstock_config(self, channel_name: str) -> AdstockConfig:
         """Resolve the AdstockConfig for a channel, defaulting to geometric."""
         media_cfg = self.mff_config.get_media_config(channel_name)
@@ -1499,32 +1598,130 @@ class BayesianMMM:
                 sat_kind, sat_params = self._build_channel_saturation(channel_name)
                 x_saturated = _apply_saturation_pt(x_adstocked, sat_kind, sat_params)
 
-                # Coefficient (effect size). When an experiment-calibrated
-                # ``roi_prior`` is configured for this channel (e.g. derived from
-                # a geo-lift test by ``mmm_framework.calibration``), honor it --
-                # this is how randomized incrementality evidence enters the
-                # likelihood. Otherwise use a Gamma prior placing more mass > 1.0
-                # (encouraging ROI > 1x).
+                # Coefficient (effect size). Prior precedence:
+                #   1. an experiment-calibrated ``roi_prior`` (e.g. derived from
+                #      a geo-lift test by ``mmm_framework.calibration``) — how
+                #      randomized incrementality evidence enters the likelihood;
+                #   2. an EXPLICITLY configured ``coefficient_prior`` (the
+                #      agent's ``priors.media.<ch>.coefficient``, a builder
+                #      ``with_coefficient_prior``, the DAG builder) — factory
+                #      defaults are NOT honored (``_explicit_prior``), so
+                #      untouched configs keep the historical graph;
+                #   3. a per-channel ROI-SCALE prior (``roi_prior_mu`` /
+                #      ``roi_prior_sigma`` — the agent's
+                #      ``priors.media.<ch>.roi``): the channel samples its ROI
+                #      directly, ``roi_<ch> ~ LogNormal``, even under
+                #      ``media_prior_mode="coefficient"``;
+                #   4. the DEFAULT per ``ModelConfig.media_prior_mode``:
+                #      ``"roi"`` samples the channel's prior ROI directly and
+                #      derives beta in-graph (the prior lives on the decision
+                #      scale, comparable across channels); ``"coefficient"``
+                #      keeps the historical Gamma placing more mass > 1.0.
                 media_cfg = self.mff_config.get_media_config(channel_name)
                 roi_prior = getattr(media_cfg, "roi_prior", None)
+                coef_prior = _explicit_prior(media_cfg, "coefficient_prior")
+                beta_prior = roi_prior if roi_prior is not None else coef_prior
+                # Per-channel ROI-scale prior (a LogNormal on raw ROI): when
+                # either hyper-param is set the channel opts into the ROI
+                # parameterization regardless of the global media_prior_mode.
+                ch_roi_mu = getattr(media_cfg, "roi_prior_mu", None)
+                ch_roi_sigma = getattr(media_cfg, "roi_prior_sigma", None)
+                per_channel_roi = ch_roi_mu is not None or ch_roi_sigma is not None
+                if per_channel_roi and beta_prior is not None:
+                    warnings.warn(
+                        f"Channel '{channel_name}': both an ROI-scale prior "
+                        f"(roi_prior_mu/sigma) and a "
+                        f"{'calibrated roi_prior' if roi_prior is not None else 'coefficient_prior'} "
+                        "are set — the coefficient-scale prior wins; the "
+                        "ROI-scale hyper-params are ignored."
+                    )
+                    per_channel_roi = False
                 # V3: per-geo (partial-pooled) effectiveness when enabled + geo data
-                # and no experiment-calibrated prior. `beta_eff` is per-obs (so
+                # and no explicit per-channel prior (an explicit prior — calibrated
+                # or user-set — pins the coefficient's scale, which the per-geo
+                # hierarchy would re-parameterize away). `beta_eff` is per-obs (so
                 # contributions/marginals are geo-correct); `beta_pop` is a scalar
                 # population summary for the off-panel (national) estimand.
                 if (
                     self.has_geo
                     and getattr(self.hierarchical_config, "vary_media_by_geo", False)
-                    and roi_prior is None
+                    and beta_prior is None
+                    and not per_channel_roi
                 ):
                     beta_geo = self._build_channel_betas_geo(channel_name)
                     beta_eff = beta_geo[geo_idx_data]
                     beta_pop = pt.mean(beta_geo)
                 else:
-                    beta_eff = _sample_from_prior_config(
-                        f"beta_{channel_name}",
-                        roi_prior,
-                        lambda: pm.Gamma(f"beta_{channel_name}", mu=1.5, sigma=1.0),
+                    roi_requested = beta_prior is None and (
+                        per_channel_roi
+                        or getattr(self.model_config, "media_prior_mode", "coefficient")
+                        == "roi"
                     )
+                    roi_divisor = (
+                        self._roi_mode_divisor(channel_name, c)
+                        if roi_requested
+                        and self.use_parametric_adstock
+                        and adstock_apply is not None
+                        else None
+                    )
+                    if per_channel_roi and roi_divisor is None:
+                        warnings.warn(
+                            f"Channel '{channel_name}': an ROI-scale prior is "
+                            "set but the channel cannot take the ROI "
+                            "parameterization (non-spend measurement, "
+                            "zero/absent spend, or legacy non-parametric "
+                            "adstock) — falling back to the coefficient "
+                            "default; the ROI-scale prior is ignored."
+                        )
+                    if roi_divisor is not None:
+                        # ROI-parameterized default: the free RV is the
+                        # channel's ROI itself; beta is derived so that on the
+                        # OBSERVED media, sum(contribution) * y_std / spend ==
+                        # roi exactly. The denominator is re-derived from a
+                        # FROZEN constant copy of the observed media (same
+                        # adstock/saturation RVs via the shared closure) — a
+                        # counterfactual ``set_data`` swap of ``X_media_raw``
+                        # must perturb contributions through the media, never
+                        # by silently rescaling beta. The eps guards the
+                        # (measure-zero) all-zero-saturation corner.
+                        x_ref = self._channel_media_input(
+                            c, channel_name, pt.constant(X_media_raw_norm)
+                        )
+                        x_sat_ref = _apply_saturation_pt(
+                            adstock_apply(x_ref), sat_kind, sat_params
+                        )
+                        roi_rv = pm.LogNormal(
+                            f"roi_{channel_name}",
+                            # Per-channel ROI hyper-params override the global
+                            # defaults field-by-field (set only sigma to keep
+                            # the break-even median but tighten the spread).
+                            mu=(
+                                ch_roi_mu
+                                if ch_roi_mu is not None
+                                else getattr(
+                                    self.model_config, "media_roi_prior_mu", 0.0
+                                )
+                            ),
+                            sigma=(
+                                ch_roi_sigma
+                                if ch_roi_sigma is not None
+                                else getattr(
+                                    self.model_config, "media_roi_prior_sigma", 1.0
+                                )
+                            ),
+                        )
+                        beta_eff = pm.Deterministic(
+                            f"beta_{channel_name}",
+                            roi_rv
+                            * roi_divisor
+                            / (self.y_std * pt.sum(x_sat_ref) + 1e-9),
+                        )
+                    else:
+                        beta_eff = _sample_from_prior_config(
+                            f"beta_{channel_name}",
+                            beta_prior,
+                            lambda: pm.Gamma(f"beta_{channel_name}", mu=1.5, sigma=1.0),
+                        )
                     beta_pop = beta_eff
                 channel_contrib = beta_eff * x_saturated
                 channel_contribs.append(channel_contrib)

@@ -39,7 +39,8 @@ class TrueWorld:
     default and back-compatible path), or set ``activation`` + ``shape`` for
     another family (e.g. ``activation="logistic"``, ``shape={"lam": …}``).
     ``phi_true`` is the NegativeBinomial concentration used when a simulation
-    asks for ``noise_family="negbinomial"`` (ignored otherwise).
+    asks for ``noise_family="negbinomial"``; ``nu_true`` is the Student-t tail
+    df used by ``noise_family="studentt"`` (each ignored otherwise).
     """
 
     beta: np.ndarray  # (K,)
@@ -53,6 +54,7 @@ class TrueWorld:
     a_level: float = 4.0
     sigma_a: float = 1.0
     phi_true: float = 10.0  # NB concentration for noise_family="negbinomial"
+    nu_true: float = 4.0  # Student-t tail df for noise_family="studentt"
 
     def __post_init__(self) -> None:
         self.beta = np.asarray(self.beta, dtype=float)
@@ -272,6 +274,7 @@ def _draw_outcome(
     noise: float,
     noise_family: str,
     phi_true: float,
+    nu_true: float = 4.0,
 ) -> np.ndarray:
     """Draw ``y`` around ``mu`` for the chosen observation family.
 
@@ -279,7 +282,9 @@ def _draw_outcome(
     draw byte-identically (same rng stream). ``"negbinomial"`` draws counts
     from the gamma–Poisson mixture with mean ``softplus(mu)`` and concentration
     ``phi_true`` — matching the model's ``NegativeBinomial2(softplus(mu), phi)``
-    observation (``noise`` is ignored).
+    observation (``noise`` is ignored). ``"studentt"`` draws heavy-tailed
+    residuals ``noise * t(nu_true)`` — matching ``StudentT(nu, mu, sigma)``
+    with ``noise`` as the t scale.
     """
     if noise_family == "normal":
         return mu + rng.normal(0.0, noise, size=mu.shape[0])
@@ -287,8 +292,11 @@ def _draw_outcome(
         mean = np.logaddexp(0.0, mu)  # softplus, the model's positivity link
         phi = float(phi_true)
         return rng.poisson(rng.gamma(phi, mean / phi)).astype(float)
+    if noise_family == "studentt":
+        return mu + float(noise) * rng.standard_t(float(nu_true), size=mu.shape[0])
     raise ValueError(
-        f"unknown noise_family {noise_family!r}; known: ('normal', 'negbinomial')"
+        f"unknown noise_family {noise_family!r}; known: "
+        "('normal', 'negbinomial', 'studentt')"
     )
 
 
@@ -386,7 +394,12 @@ def simulate_panel(
         tau_true = rng.normal(0.0, float(tau_scale), size=n_weeks)
         mu = mu + tau_true[period_idx]
     y = _draw_outcome(
-        mu, rng, noise=noise, noise_family=noise_family, phi_true=world.phi_true
+        mu,
+        rng,
+        noise=noise,
+        noise_family=noise_family,
+        phi_true=world.phi_true,
+        nu_true=world.nu_true,
     )
 
     return {
@@ -448,7 +461,12 @@ def simulate_wave(
         tau_true = rng.normal(0.0, float(tau_scale), size=t_test)
         mu = mu + tau_true[period_idx]
     y = _draw_outcome(
-        mu, rng, noise=noise, noise_family=noise_family, phi_true=world.phi_true
+        mu,
+        rng,
+        noise=noise,
+        noise_family=noise_family,
+        phi_true=world.phi_true,
+        nu_true=world.nu_true,
     )
     return {
         "spend": test_spend,

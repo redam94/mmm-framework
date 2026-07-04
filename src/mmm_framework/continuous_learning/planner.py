@@ -742,32 +742,66 @@ def should_stop(
 
 
 def _default_noise(post: Posterior) -> float:
-    """Fantasy observation noise: the posterior mean of ``sigma`` (fix F7).
+    """Fantasy observation noise scale: the posterior mean of ``sigma`` (fix F7).
 
     Falls back to ``0.6`` (the legacy DGP value) only when the posterior has no
     ``sigma`` site (e.g. a summaries-only fit, which never samples the panel
-    noise scale).
-
-    Raises for a non-Gaussian posterior: the knowledge-gradient fantasies are
-    generated as ``y = mu + Normal(0, noise)``, which is silently wrong for a
-    count likelihood (a NegBinomial posterior has ``phi``, no ``sigma`` — the
-    0.6 fallback would fire and produce plausible-looking nonsense).
+    noise scale). Serves the ``"normal"`` and ``"studentt"`` families (both
+    carry a ``sigma`` scale site); a count posterior has no noise SCALE at all
+    (NB dispersion is ``phi``), so :func:`_fantasy_outcomes` never calls this
+    for ``"negbinomial"``.
     """
     likelihood = getattr(post, "likelihood", "normal")
-    if likelihood != "normal":
+    if likelihood not in ("normal", "studentt"):
         raise NotImplementedError(
-            "knowledge_gradient fantasy generation is Gaussian (y = mu + "
-            f"Normal(0, noise)); this posterior was fit with likelihood="
-            f"{likelihood!r}. Use the activation-agnostic decision readouts "
-            "(thompson_wave / recommend_allocation / marginal_roas / "
-            "expected_regret), which read only the surface parameters — note "
-            "that for a count likelihood the marginal readouts are on the "
-            "LATENT surface scale (the observable count mean is softplus(mu), "
-            "derivative sigmoid(mu) ≈ 1 for mu >> 1 but < 1 at low counts; "
-            "see model.fit's likelihood note)."
+            "no Gaussian-style noise scale exists for likelihood="
+            f"{likelihood!r} (fantasy outcomes for it are drawn from the "
+            "family itself; see _fantasy_outcomes)."
         )
     s = post.samples.get("sigma")
     return float(np.mean(s)) if s is not None else 0.6
+
+
+def _fantasy_outcomes(
+    post: Posterior,
+    mu: np.ndarray,
+    rng: np.random.Generator,
+    noise: float | None,
+) -> np.ndarray:
+    """Draw fantasy ``y`` around ``mu`` from the posterior's observation family.
+
+    ``"normal"`` reproduces the legacy ``mu + Normal(0, noise)`` draw;
+    ``"studentt"`` draws ``mu + noise * t(nu)`` with ``nu`` the posterior-mean
+    tail df (``noise`` is the t scale, matching the model's ``sigma`` site);
+    ``"negbinomial"`` draws integer counts from the gamma–Poisson mixture with
+    mean ``softplus(mu)`` and the posterior-mean concentration ``phi``
+    (``noise`` is ignored — a count family has no Gaussian noise scale).
+    Mirrors ``dgp._draw_outcome`` so the fantasies come from the same family
+    the refit will assume.
+    """
+    likelihood = getattr(post, "likelihood", "normal")
+    if likelihood == "normal":
+        return mu + rng.normal(0.0, float(noise), mu.shape[0])
+    if likelihood == "studentt":
+        nu_s = post.samples.get("nu")
+        nu = float(np.mean(nu_s)) if nu_s is not None else 10.0
+        return mu + float(noise) * rng.standard_t(nu, mu.shape[0])
+    if likelihood == "negbinomial":
+        phi_s = post.samples.get("phi")
+        if phi_s is None:
+            raise ValueError(
+                "knowledge_gradient: likelihood='negbinomial' posterior has "
+                "no 'phi' site to fantasize count outcomes from"
+            )
+        phi = float(np.mean(phi_s))
+        mean = np.logaddexp(0.0, mu)  # softplus, the model's positivity link
+        return rng.poisson(rng.gamma(phi, mean / phi)).astype(float)
+    raise NotImplementedError(
+        f"knowledge_gradient fantasy generation does not know likelihood="
+        f"{likelihood!r}. Use the activation-agnostic decision readouts "
+        "(thompson_wave / recommend_allocation / marginal_roas / "
+        "expected_regret), which read only the surface parameters."
+    )
 
 
 def knowledge_gradient(
@@ -797,7 +831,12 @@ def knowledge_gradient(
     fantasy; in production swap it for a Laplace/conjugate update (guide §9.1).
 
     ``noise=None`` (default) fantasizes with the posterior mean of ``sigma`` —
-    the fitted observation noise — rather than a hard-coded constant.
+    the fitted observation noise — rather than a hard-coded constant. Fantasy
+    outcomes are drawn from the posterior's own observation family
+    (:func:`_fantasy_outcomes`): Gaussian, Student-t (posterior-mean ``nu``),
+    or NB counts (posterior-mean ``phi``; ``noise`` ignored). ``refit_fn``
+    must refit under that same family — build it with
+    :func:`model.refit_fn_from_data`'s matching ``likelihood``.
 
     Requires a panel-fitted posterior: fantasies simulate geo-week outcomes off
     the geo intercepts (``a_geo`` or the ``A``/``sigma_a`` hypers), which a
@@ -813,7 +852,7 @@ def knowledge_gradient(
             "this posterior has no 'a_geo'/'A'/'sigma_a' sites (a "
             "summaries-only fit skips the geo-intercept plate entirely)"
         )
-    if noise is None:
+    if noise is None and getattr(post, "likelihood", "normal") != "negbinomial":
         noise = _default_noise(post)
     _, base_value = posterior_optimal_allocation(
         post, B, value, q=q, mode=mode, cap=cap, seed=seed
@@ -851,7 +890,7 @@ def knowledge_gradient(
             surface_over_rows(spend, params["beta"], params["gamma"], act_fn, shape),
             dtype=float,
         )
-        y = mu + rng.normal(0.0, noise, mu.shape[0])
+        y = _fantasy_outcomes(post, mu, rng, noise)
         post2 = refit_fn(spend, geo, y)
         _, v2 = posterior_optimal_allocation(
             post2, B, value, q=q, mode=mode, cap=cap, seed=seed + int(d)

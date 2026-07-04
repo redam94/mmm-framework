@@ -14,6 +14,12 @@ Features:
 
 from .generator import MMMReportGenerator, ReportBuilder
 from .config import ReportConfig, SectionConfig, ColorScheme, ColorPalette
+from .prefit import (
+    PrefitReadoutGenerator,
+    build_prefit_insights,
+    prefit_facts,
+    PREFIT_INSIGHT_SLOTS,
+)
 from .consultant_artifacts import ARTIFACTS, ArtifactSpec, render_artifact, write_all
 from .data_extractors import (
     MMMDataBundle,
@@ -86,6 +92,11 @@ __all__ = [
     # Main generator
     "MMMReportGenerator",
     "ReportBuilder",
+    # Pre-fit Model Design Readout
+    "PrefitReadoutGenerator",
+    "build_prefit_insights",
+    "prefit_facts",
+    "PREFIT_INSIGHT_SLOTS",
     # Model-defense (causal-rigor) report
     "build_model_defense",
     "render_model_defense_html",

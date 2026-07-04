@@ -128,7 +128,7 @@ def main() -> None:
         pair_signs=cl.PAIR_SIGNS_EXAMPLE,
         margin=1.0,
         population=2.0,
-        wave_cost=0.45,
+        wave_cost=0.5,
         max_waves=4,
         planner_q=200,
         fit_kwargs=dict(num_warmup=400, num_samples=400, num_chains=2, seed=rng_seed),
@@ -150,6 +150,39 @@ def main() -> None:
     )
     print("final recommendation:", np.round(out["final_recommendation"], 2))
     print("truth-optimal split :", np.round(out["true_allocation"], 2))
+
+    # ── Shape-agnostic activation: the monotone spline ────────────────────────
+    section("5. No family assumption — the monotone-spline activation")
+    # The true response here is a two-Hill mixture (a two-phase shape no single
+    # parametric family in the registry matches). activation="monotone_spline"
+    # fits a normalized monotone I-spline instead of guessing a family: the
+    # only assumptions are monotone + saturating.
+    world_mix = cl.make_world_hill_mixture(seed=rng_seed)
+    data_mix = cl.simulate_panel(
+        world_mix, center, n_geo=72, t_pre=6, t_test=10, delta=0.6, noise=0.4, seed=1
+    )
+    post_spl = cl.fit(
+        data_mix,
+        channels=world_mix.channels,
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        activation="monotone_spline",  # positive I-spline weights w1..w6
+        num_warmup=400,
+        num_samples=400,
+        num_chains=2,
+        seed=rng_seed,
+    )
+    print(
+        f"activation: {post_spl.activation}  shape sites: {post_spl.shape_names}  "
+        f"(max R-hat {post_spl.diagnostics.get('max_rhat')})"
+    )
+    rec_spl = cl.recommend_allocation(post_spl, B, value, q=200, mode="fixed")
+    achieved = value * float(world_mix.response_mean(rec_spl[None, :])[0]) - B
+    _, mix_profit = cl.world_optimal_allocation(world_mix, B, value, mode="fixed")
+    print(
+        f"recommended split {np.round(rec_spl, 2)} captures "
+        f"{100 * achieved / mix_profit:.1f}% of the truth-optimal profit —\n"
+        "the true curve is a two-Hill mixture the spline never had to know."
+    )
 
 
 if __name__ == "__main__":

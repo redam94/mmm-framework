@@ -1,5 +1,5 @@
 import ReactMarkdown from 'react-markdown';
-import { ShieldCheck, Loader2, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Loader2, AlertTriangle, History, MessageSquare } from 'lucide-react';
 import { mdComponents } from '../common/markdown';
 import { remarkPlugins, rehypePlugins, normalizeMath } from '../../../../lib/markdownMath';
 import { PlotCard } from '../plots/PlotCard';
@@ -21,8 +21,16 @@ const CHECKS: { id: ValidationCheck; label: string; hint: string; slow?: boolean
   { id: 'cross_validation', label: 'Cross-validation', hint: 'Out-of-time (slow, refits)', slow: true },
 ];
 
+// Labels for history rows — includes chat-only checks (SBC, prior predictive)
+// that the button strip doesn't offer.
+const CHECK_LABELS: Record<string, string> = {
+  ...Object.fromEntries(CHECKS.map((c) => [c.id, c.label])),
+  sbc: 'Calibration (SBC)',
+  prior_predictive: 'Prior predictive',
+};
+
 export function ValidationTab({ projectId }: { projectId: string | null }) {
-  const { start, job, check } = useValidation(projectId);
+  const { start, job, history, load, jobId, check } = useValidation(projectId);
   const data = job.data;
   const running =
     start.isPending || data?.status === 'pending' || data?.status === 'running';
@@ -116,6 +124,59 @@ export function ValidationTab({ projectId }: { projectId: string | null }) {
           Pick a check above. <strong>Validate model</strong> runs the full
           battery (convergence, posterior-predictive, residuals, channel
           identifiability, confounding robustness).
+        </div>
+      )}
+
+      {(history.data?.length ?? 0) > 0 && (
+        <div className="pt-2">
+          <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink-700">
+            <History size={14} className="text-ink-400" />
+            Validation history
+          </h3>
+          <div className="overflow-hidden rounded-lg border border-line-200 bg-white">
+            {history.data!.map((h) => {
+              const selected = h.job_id === jobId;
+              return (
+                <button
+                  key={h.job_id}
+                  type="button"
+                  onClick={() => load(h)}
+                  className={`flex w-full items-center gap-3 border-b border-line-200 px-3 py-2 text-left text-sm last:border-b-0 transition-colors hover:bg-cream-100 ${
+                    selected ? 'bg-cream-100' : 'bg-white'
+                  }`}
+                  title="Open this run's result"
+                >
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${
+                      h.status === 'done'
+                        ? 'bg-emerald-500'
+                        : h.status === 'error'
+                          ? 'bg-rust-600'
+                          : 'bg-gold-600 animate-pulse'
+                    }`}
+                  />
+                  <span className="min-w-0 flex-1 truncate font-medium text-ink-800">
+                    {CHECK_LABELS[h.check] ?? h.check}
+                  </span>
+                  {h.source === 'chat' && (
+                    <span
+                      className="flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600"
+                      title="Run by the chat agent"
+                    >
+                      <MessageSquare size={10} /> chat
+                    </span>
+                  )}
+                  <span className="shrink-0 text-xs text-ink-300">
+                    {h.created_at ? new Date(h.created_at * 1000).toLocaleString() : ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-xs text-ink-300">
+            Every run is kept — UI checks and the ones the chat agent ran. Click a
+            row to re-open its result.
+          </p>
         </div>
       )}
     </div>

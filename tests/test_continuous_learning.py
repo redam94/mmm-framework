@@ -348,16 +348,47 @@ def _fake_posterior(world, n_geo=40, n=300, seed=0):
     )
 
 
-def test_theta_pack_unpack_roundtrip():
-    beta = np.array([1.0, 2.0])
-    kappa = np.array([0.5, 0.7])
-    alpha = np.array([1.5, 2.5])
-    gp = np.array([0.3])
-    th = acquisition.pack_theta(beta, kappa, alpha, gp)
-    b, kp, a, g = acquisition.unpack_theta(th, 2)
-    np.testing.assert_allclose(b, beta)
-    np.testing.assert_allclose(g, gp)
-    assert acquisition.gamma_indices(2, [(0, 1)]) == [6]
+def test_theta_map_layout_and_roundtrip():
+    """The unconstrained packing keeps the historical [beta, kappa, alpha,
+    gamma] Hill layout, and constrain(unconstrain(draw)) round-trips."""
+    world = cl.make_world(seed=0)
+    post = _fake_posterior(world)
+    tmap = acquisition.theta_map(post)
+    k, p = world.n_channels, len(world.pairs)
+    assert tmap.dim == 3 * k + p
+    assert tmap.gamma_idx == list(range(3 * k, 3 * k + p))
+    m = tmap.unconstrain_draws(post.samples)
+    assert m.shape == (300, tmap.dim)
+    assert np.all(np.isfinite(m))
+    params = tmap.constrain_params(m[0])
+    # jnp is float32 by default -> ~1e-6 relative round-trip error
+    np.testing.assert_allclose(params["beta"], post.samples["beta"][0], rtol=1e-4)
+    np.testing.assert_allclose(params["shape"][0], post.samples["kappa"][0], rtol=1e-4)
+    np.testing.assert_allclose(params["shape"][1], post.samples["alpha"][0], rtol=1e-3)
+    np.testing.assert_allclose(params["gamma"], post.gamma_matrix(0), atol=1e-5)
+
+
+def test_theta_map_sign_constrained_gammas_stay_signed():
+    """neg/pos pair signs get sign-aware log transforms, so EVERY fantasy
+    sample maps back to a gamma with the prior's sign — no clipping."""
+    world = cl.make_world(seed=0)
+    post = _fake_posterior(world)
+    rng = np.random.default_rng(3)
+    nm_neg = model.pair_name(world.channels, (0, 1))
+    nm_pos = model.pair_name(world.channels, (1, 2))
+    post.samples[nm_neg] = -np.abs(post.samples[nm_neg]) - 1e-3
+    post.samples[nm_pos] = np.abs(post.samples[nm_pos]) + 1e-3
+    post.pair_signs = {(0, 1): "neg", (1, 2): "pos"}
+    tmap = acquisition.theta_map(post)
+    mu, sigma0 = acquisition.theta_moments(post, tmap=tmap)
+    etas = rng.multivariate_normal(mu, sigma0, size=50)
+    for eta in etas:
+        params = tmap.constrain_params(eta)
+        assert params["gamma"][0, 1] < 0  # "neg" pair keeps its sign
+        assert params["gamma"][1, 2] > 0  # "pos" pair keeps its sign
+        assert np.all(params["beta"] > 0)  # log space -> positive
+        assert np.all(params["shape"][0] > 0)  # kappa positive
+        assert np.all((params["shape"][1] >= 0.5) & (params["shape"][1] <= 5.0))
 
 
 def test_design_information_is_psd():
@@ -452,6 +483,15 @@ def test_select_next_design_prefers_probes_when_synergy_is_decision_pivotal():
     # placed SECOND in the candidate list: ties (and NaN comparisons) resolve
     # to the FIRST candidate scored, so a scorer that collapses to a constant
     # would otherwise keep this test green without discriminating anything.
+    #
+    # The gamma-noise multiplier (2.5, up from an original 1.2) widens the
+    # true relative gap between the two candidates from ~7% to ~15-17%
+    # (measured across a sweep of rig strengths) — the original margin was
+    # narrow enough that a platform-dependent difference in the multi-start
+    # SLSQP re-optimization inside laplace_knowledge_gradient's per-fantasy
+    # allocate calls (BLAS/LAPACK build, not randomness — reproduced
+    # identically across repeated CI runs) could flip it on Linux/x86 CI
+    # while it passed reliably on macOS/ARM.
     world = cl.make_world(seed=0)
     rng = np.random.default_rng(0)
     n, k = 300, world.n_channels
@@ -464,7 +504,7 @@ def test_select_next_design_prefers_probes_when_synergy_is_decision_pivotal():
     for idx, (i, j) in enumerate(world.pairs):
         s[model.pair_name(world.channels, (i, j))] = world.gamma_pairs[
             idx
-        ] + 1.2 * rng.standard_normal(n)
+        ] + 2.5 * rng.standard_normal(n)
     post = cl.Posterior(
         samples=s, channels=world.channels, pairs=world.pairs, pair_signs={}
     )
@@ -523,27 +563,17 @@ def test_select_next_design_falls_back_on_nan_scores(monkeypatch):
 
 def test_select_next_design_falls_back_on_unsupported_posteriors():
     center = np.full(4, 0.7)
-    # (a) logistic activation: theta_moments is Hill-only -> clean fallback
-    world = cl.make_world_logistic(seed=0)
-    rng = np.random.default_rng(0)
-    n, k = 100, world.n_channels
-    s = {
-        "beta": np.abs(world.beta + 0.1 * rng.standard_normal((n, k))),
-        "lam": np.abs(world.shape["lam"] + 0.1 * rng.standard_normal((n, k))),
-        "sigma": np.abs(rng.normal(0.5, 0.05, n)),
-    }
-    for idx, (i, j) in enumerate(world.pairs):
-        s[model.pair_name(world.channels, (i, j))] = 0.1 * rng.standard_normal(n)
-    post = cl.Posterior(
-        samples=s, channels=world.channels, pairs=world.pairs, activation="logistic"
-    )
+    # (a) an activation with no transform spec -> clean fallback
+    world = cl.make_world(seed=0)
+    post = _fake_posterior(world)
+    post.activation = "not_registered"
     cells, meta = cl.select_next_design(
         post, center, world.pairs, B=3.2, value=5.0, fallback_delta=0.6
     )
-    assert meta["kg_used"] is False and meta["reason"]
+    assert meta["kg_used"] is False and "transform spec" in meta["reason"]
     np.testing.assert_allclose(cells, cl.central_composite(center, 0.6, world.pairs))
 
-    # (b) a non-Gaussian posterior (NB carries 'phi', no 'sigma') -> fallback
+    # (b) a count posterior MISSING its observation sites (no 'phi') -> fallback
     hill_world = cl.make_world(seed=0)
     post_nb = _fake_posterior(hill_world)
     del post_nb.samples["sigma"]
@@ -555,6 +585,14 @@ def test_select_next_design_falls_back_on_unsupported_posteriors():
     np.testing.assert_allclose(
         cells2, cl.central_composite(center, 0.4, hill_world.pairs)
     )
+
+    # (b2) an unknown observation family -> fallback
+    post_uk = _fake_posterior(hill_world)
+    post_uk.likelihood = "poisson"
+    _, meta_uk = cl.select_next_design(
+        post_uk, center, hill_world.pairs, B=3.2, value=5.0, fallback_delta=0.4
+    )
+    assert meta_uk["kg_used"] is False and "poisson" in meta_uk["reason"]
 
     # (c) a Gaussian summaries-only posterior (no 'sigma' site) -> fallback,
     # NEVER a hard-coded noise guess: under prior_scaling="auto" its theta
@@ -652,26 +690,231 @@ def test_true_world_hill_mixture_response_matches_surface():
     np.testing.assert_allclose(got, want, atol=1e-6)
 
 
-def test_acquisition_is_hill_only():
-    # the fast Laplace-KG / pure-EIG packs the Hill params; a logistic posterior
-    # must be rejected with a clear error (the planner readouts still work).
-    world = cl.make_world_logistic(seed=0)
-    rng = np.random.default_rng(0)
-    n, k = 100, world.n_channels
+def test_monotone_spline_activation_properties():
+    """The shape-agnostic monotone I-spline family is registered and
+    well-behaved: monotone basis, f(0)=0, values in [0, 1), finite gradients
+    everywhere (incl. zero spend and past full saturation), and weight
+    placement steers where the curve rises."""
+    import jax
+    import jax.numpy as jnp
+
+    assert "monotone_spline" in cl.ACTIVATIONS
+    names, fn = cl.ACTIVATIONS["monotone_spline"]
+    assert names == tuple(f"w{j + 1}" for j in range(surface.MSPLINE_J))
+    s = np.linspace(0.0, 1.2 * surface.MSPLINE_S_MAX, 300)
+    # each I-spline basis column rises monotonically 0 -> 1; earlier columns
+    # rise earlier (tolerances are float32-appropriate — JAX default dtype)
+    basis = np.asarray(surface.monotone_spline_basis(s))
+    assert basis.shape == (s.size, surface.MSPLINE_J)
+    assert np.allclose(basis[0], 0.0, atol=1e-6)
+    assert np.all(basis[-1] > 1 - 1e-4)
+    assert np.all(np.diff(basis, axis=0) >= -1e-6)
+    mid = int(np.searchsorted(s, 1.5))
+    assert basis[mid, 0] > basis[mid, -1]
+    # the normalized activation: f(0)=0, monotone, saturating below 1
+    w = [1.0] * surface.MSPLINE_J
+    f = np.asarray(fn(s, *w))
+    assert abs(float(f[0])) < 1e-6
+    assert np.all(np.diff(f) >= -1e-6) and np.all(f < 1.0)
+    # early-heavy weights buy an early rise; late-heavy weights a late one
+    f_early = np.asarray(fn(s, 5.0, 3.0, 2.0, 1.0, *([0.1] * (surface.MSPLINE_J - 4))))
+    f_late = np.asarray(fn(s, *([0.05] * (surface.MSPLINE_J - 3)), 0.2, 1.0, 5.0))
+    assert f_early[mid] > 0.8 and f_late[mid] < 0.4
+    # finite, non-negative spend-gradient everywhere; flat past MSPLINE_S_MAX
+    g = np.asarray(jax.grad(lambda x: jnp.sum(fn(x, *w)))(jnp.asarray(s)))
+    assert np.all(np.isfinite(g)) and np.all(g >= -1e-6)
+    assert np.allclose(g[s > surface.MSPLINE_S_MAX * 1.02], 0.0, atol=1e-7)
+
+
+def test_monotone_spline_beats_single_hill_on_two_phase_shape():
+    """Expressiveness: positive spline weights approximate a two-Hill-mixture
+    activation substantially better than the BEST single Hill — the reason to
+    reach for the shape-agnostic family when the response family is unknown."""
+    from scipy.optimize import nnls
+
+    world = cl.make_world_hill_mixture(seed=0)
+    p = world.shape
+    grid = np.linspace(0.0, 1.8, 150)
+    c = 1  # Pulse — the strongly two-phase channel
+    target = np.asarray(
+        surface.hill_mixture(
+            grid,
+            p["kappa1"][c],
+            p["alpha1"][c],
+            p["kappa2"][c],
+            p["alpha2"][c],
+            p["w"][c],
+        )
+    )
+    basis = np.asarray(surface.monotone_spline_basis(grid))
+    coef, _ = nnls(basis, target)
+    spline_rmse = float(np.sqrt(np.mean((basis @ coef - target) ** 2)))
+    # best single Hill by grid search over (kappa, alpha)
+    hill_rmse = np.inf
+    for kappa in np.linspace(0.2, 2.0, 40):
+        for alpha in np.linspace(0.6, 5.0, 40):
+            f = np.asarray(surface.activation(grid, kappa, alpha))
+            hill_rmse = min(hill_rmse, float(np.sqrt(np.mean((f - target) ** 2))))
+    assert spline_rmse < 0.75 * hill_rmse
+
+
+def test_true_world_monotone_spline_response_matches_surface():
+    """A TrueWorld can carry the spline family generically (activation +
+    shape dict) — the DGP evaluates the same registered surface function."""
+    weights = np.linspace(1.0, 0.2, surface.MSPLINE_J)
+    world = cl.TrueWorld(
+        beta=np.array([2.0, 1.5, 1.0, 0.8]),
+        gamma_pairs=np.zeros(6),
+        channels=["Chatter", "Pulse", "Orbit", "Vibe"],
+        activation="monotone_spline",
+        shape={f"w{j + 1}": np.full(4, v) for j, v in enumerate(weights)},
+    )
+    assert world.activation == "monotone_spline"
+    spend = np.array([[0.5, 0.6, 0.7, 0.4], [1.0, 0.2, 0.8, 0.9]])
+    got = world.response_mean(spend)
+    want = np.asarray(
+        cl.surface_over_rows(
+            spend, world.beta, world.gamma_matrix(), world.act_fn(), world.shape_tuple()
+        )
+    )
+    np.testing.assert_allclose(got, want, atol=1e-6)
+    assert np.all(got > 0)
+
+
+def _fake_logistic_posterior(world, n=100, seed=0, with_sigma=True):
+    rng = np.random.default_rng(seed)
+    k = world.n_channels
     s = {
         "beta": np.abs(world.beta + 0.1 * rng.standard_normal((n, k))),
         "lam": np.abs(world.shape["lam"] + 0.1 * rng.standard_normal((n, k))),
         "a_geo": rng.normal(4, 1, (n, 30)),
     }
+    if with_sigma:
+        s["sigma"] = np.abs(rng.normal(0.5, 0.05, n))
+    for idx, (i, j) in enumerate(world.pairs):
+        s[model.pair_name(world.channels, (i, j))] = world.gamma_pairs[
+            idx
+        ] + 0.1 * rng.standard_normal(n)
+    return cl.Posterior(
+        samples=s, channels=world.channels, pairs=world.pairs, activation="logistic"
+    )
+
+
+def test_acquisition_supports_registered_non_hill_activations():
+    # the registry-driven ThetaMap packs ANY activation with a transform spec:
+    # a logistic posterior gets real moments, EIG and Laplace-KG scores.
+    world = cl.make_world_logistic(seed=0)
+    post = _fake_logistic_posterior(world)
+    tmap = acquisition.theta_map(post)
+    assert tmap.dim == 2 * world.n_channels + len(world.pairs)  # beta + lam + gammas
+    mu, sigma0 = acquisition.theta_moments(post, tmap=tmap)
+    assert np.all(np.isfinite(mu)) and np.all(np.isfinite(sigma0))
+    dsg = cl.central_composite(np.full(world.n_channels, 0.7), 0.6, world.pairs)
+    eig = cl.design_eig(post, dsg, sigma=0.5, n_geo=40, t_test=8)
+    assert np.isfinite(eig) and eig > 0
+    kg = cl.laplace_knowledge_gradient(
+        post, dsg, B=3.2, value=5.0, n_geo=40, t_test=8, n_outcomes=8, seed=0
+    )
+    assert np.isfinite(kg)
+    # an activation with NO transform spec still fails loudly
+    post.activation = "not_registered"
+    with pytest.raises(NotImplementedError, match="transform spec"):
+        acquisition.theta_map(post)
+
+
+def test_acquisition_supports_monotone_spline():
+    """The monotone-spline family has a full transform spec: log-space weight
+    moments, positive EIG, and a finite Laplace KG — so design scoring works
+    for the shape-agnostic activation too."""
+    world = cl.make_world(seed=0)
+    rng = np.random.default_rng(3)
+    k = world.n_channels
+    n = 100
+    s = {
+        "beta": np.abs(world.beta + 0.1 * rng.standard_normal((n, k))),
+        "a_geo": rng.normal(4, 1, (n, 30)),
+        "sigma": np.abs(rng.normal(0.5, 0.05, n)),
+    }
+    for nm in cl.ACTIVATIONS["monotone_spline"][0]:
+        s[nm] = np.abs(1.0 + 0.2 * rng.standard_normal((n, k)))
     for idx, (i, j) in enumerate(world.pairs):
         s[model.pair_name(world.channels, (i, j))] = world.gamma_pairs[
             idx
         ] + 0.1 * rng.standard_normal(n)
     post = cl.Posterior(
-        samples=s, channels=world.channels, pairs=world.pairs, activation="logistic"
+        samples=s,
+        channels=world.channels,
+        pairs=world.pairs,
+        activation="monotone_spline",
     )
-    with pytest.raises(NotImplementedError, match="Hill"):
-        acquisition.theta_moments(post)
+    tmap = acquisition.theta_map(post)
+    assert tmap.dim == (1 + surface.MSPLINE_J) * k + len(world.pairs)
+    mu, sigma0 = acquisition.theta_moments(post, tmap=tmap)
+    assert np.all(np.isfinite(mu)) and np.all(np.isfinite(sigma0))
+    dsg = cl.central_composite(np.full(k, 0.7), 0.6, world.pairs)
+    eig = cl.design_eig(post, dsg, sigma=0.5, n_geo=40, t_test=8)
+    assert np.isfinite(eig) and eig > 0
+    kg = cl.laplace_knowledge_gradient(
+        post, dsg, B=3.2, value=5.0, n_geo=40, t_test=8, n_outcomes=8, seed=0
+    )
+    assert np.isfinite(kg)
+
+
+def test_acquisition_negbinomial_glm_weights():
+    """A count posterior scores via the softplus-link GLM Fisher weights."""
+    world = cl.make_world(seed=0)
+    rng = np.random.default_rng(5)
+    post = _fake_posterior(world)
+    del post.samples["sigma"]
+    post.samples["phi"] = np.abs(rng.normal(30.0, 3.0, 300))
+    post.likelihood = "negbinomial"
+    center = np.full(4, 0.7)
+    dsg = cl.central_composite(center, 0.6, world.pairs)
+    tmap = acquisition.theta_map(post)
+    mu, _ = acquisition.theta_moments(post, tmap=tmap)
+    ui = acquisition.observation_unit_info(post, dsg, tmap, mu)
+    assert ui.shape == (dsg.shape[0],)
+    assert np.all(np.isfinite(ui)) and np.all(ui > 0)
+    # counts carry per-cell information that varies with the cell mean
+    assert len(np.unique(np.round(ui, 12))) > 1
+    eig = cl.design_eig(post, dsg, n_geo=40, t_test=8)
+    assert np.isfinite(eig) and eig > 0
+    cells, meta = cl.select_next_design(
+        post,
+        center,
+        world.pairs,
+        B=3.2,
+        value=5.0,
+        candidate_deltas=(0.4, 0.7),
+        n_geo=40,
+        t_test=8,
+        n_outcomes=8,
+        seed=0,
+    )
+    assert meta["kg_used"] is True
+    assert meta["sigma"] is None  # a count family has no Gaussian noise scale
+    np.testing.assert_allclose(
+        cells, cl.central_composite(center, meta["chosen_delta"], world.pairs)
+    )
+
+
+def test_acquisition_studentt_discounts_the_gaussian_information():
+    """Student-t unit info is the Gaussian's times (nu+1)/(nu+3) < 1, so the
+    same design buys strictly less EIG under heavy tails."""
+    world = cl.make_world(seed=0)
+    post_n = _fake_posterior(world)
+    post_t = _fake_posterior(world)
+    post_t.samples["nu"] = np.full(300, 5.0)
+    post_t.likelihood = "studentt"
+    dsg = cl.central_composite(np.full(4, 0.7), 0.6, world.pairs)
+    tmap = acquisition.theta_map(post_n)
+    mu, _ = acquisition.theta_moments(post_n, tmap=tmap)
+    ui_n = acquisition.observation_unit_info(post_n, dsg, tmap, mu)
+    ui_t = acquisition.observation_unit_info(post_t, dsg, tmap, mu)
+    np.testing.assert_allclose(ui_t, ui_n * (5.0 + 1.0) / (5.0 + 3.0), rtol=1e-9)
+    eig_n = cl.design_eig(post_n, dsg, n_geo=40, t_test=8)
+    eig_t = cl.design_eig(post_t, dsg, n_geo=40, t_test=8)
+    assert 0 < eig_t < eig_n
 
 
 # ── slow: the three feasibility gates ─────────────────────────────────────────
@@ -940,6 +1183,49 @@ def test_misspecified_single_hill_still_makes_a_near_optimal_decision():
 
 
 @pytest.mark.slow
+def test_monotone_spline_recovers_and_plans_on_mixture_world():
+    """Shape-agnostic gate: fit the monotone I-spline on the two-Hill-mixture
+    world WITHOUT telling it the family. The chains mix, the spline's own
+    weight sites are sampled (no Hill params), and the activation-agnostic
+    planner still lands a near-optimal allocation — the whole loop runs on a
+    family nobody hand-picked."""
+    world = cl.make_world_hill_mixture(seed=0)
+    B, value = 3.2, 5.0
+    _, true_profit = cl.world_optimal_allocation(world, B, value, mode="fixed")
+    data = cl.simulate_panel(
+        world,
+        np.full(4, 0.7),
+        n_geo=72,
+        t_pre=6,
+        t_test=10,
+        delta=0.6,
+        noise=0.4,
+        seed=1,
+    )
+    post = cl.fit(
+        data,
+        channels=world.channels,
+        pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+        activation="monotone_spline",
+        num_warmup=400,
+        num_samples=400,
+        num_chains=2,
+        seed=0,
+    )
+    assert post.activation == "monotone_spline"
+    assert "w1" in post.samples and f"w{surface.MSPLINE_J}" in post.samples
+    assert "kappa" not in post.samples and "lam" not in post.samples
+    # the weights are only identified up to normalization, so ESS runs low —
+    # gate on R-hat (measured ~1.03 on this seed)
+    assert post.diagnostics["max_rhat"] is None or post.diagnostics["max_rhat"] < 1.2
+    rec = cl.recommend_allocation(post, B, value, q=200, mode="fixed")
+    assert rec.sum() == pytest.approx(B, abs=0.05)
+    achieved = value * float(world.response_mean(np.asarray(rec)[None, :])[0]) - B
+    # measured gap ~1.1% on this seed; 95% is the shared misspec-gate bar
+    assert achieved >= 0.95 * true_profit
+
+
+@pytest.mark.slow
 def test_negbinomial_recovery_counts_world():
     """NB feasibility gate: designed count data (gamma-Poisson DGP, counts in
     the hundreds) fit with ``likelihood='negbinomial'`` — the beta ordering is
@@ -991,6 +1277,50 @@ def test_negbinomial_recovery_counts_world():
 
     rho = spearmanr(beta_hat, world.beta).correlation
     assert rho >= 0.8
+    assert post.diagnostics["max_rhat"] is None or post.diagnostics["max_rhat"] < 1.2
+
+
+@pytest.mark.slow
+def test_studentt_recovery_heavy_tailed_world():
+    """Student-t feasibility gate: a heavy-tailed world (t(3) residuals, so a
+    few geo-weeks land far off the surface) fit with ``likelihood='studentt'``
+    — beta ordering recovered, the tail df concentrates well below Gaussian,
+    and the chains mix. Mirrors the NB count gate."""
+    world = cl.make_world(seed=0)
+    world.nu_true = 3.0
+    center = np.array([0.8, 0.8, 0.8, 0.8])
+    data = cl.simulate_panel(
+        world,
+        center,
+        n_geo=60,
+        t_pre=4,
+        t_test=6,
+        delta=0.6,
+        noise=0.5,
+        noise_family="studentt",
+        seed=1,
+    )
+    post = cl.fit(
+        data,
+        channels=world.channels,
+        pairs=[],  # main effects only: keep the gate small
+        likelihood="studentt",
+        num_warmup=500,
+        num_samples=500,
+        num_chains=2,
+        seed=0,
+    )
+    assert post.likelihood == "studentt"
+    assert "nu" in post.samples and "sigma" in post.samples
+    beta_hat = post.samples["beta"].mean(0)
+    assert int(np.argmax(beta_hat)) == int(np.argmax(world.beta))
+    from scipy.stats import spearmanr
+
+    rho = spearmanr(beta_hat, world.beta).correlation
+    assert rho >= 0.8
+    # planted t(3) residuals: the posterior tail df should sit well below the
+    # near-Gaussian prior mass (Gamma(2, 0.1) has mean 20)
+    assert float(np.median(post.samples["nu"])) < 10.0
     assert post.diagnostics["max_rhat"] is None or post.diagnostics["max_rhat"] < 1.2
 
 

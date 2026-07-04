@@ -841,7 +841,9 @@ def prior_predictive_check(
     tid = _thread_id_from(config)
     if _assumption and tid and not res.get("error"):
         sessions_store.record_assumption(thread_id=tid, **_assumption)
-    return _modelop_command(res, state or {}, tool_call_id)
+    return _modelop_command(
+        res, state or {}, tool_call_id, persist_check="prior_predictive"
+    )
 
 
 @tool
@@ -891,7 +893,7 @@ def run_calibration_check(
     tid = _thread_id_from(config)
     if _assumption and tid and not res.get("error"):
         sessions_store.record_assumption(thread_id=tid, **_assumption)
-    return _modelop_command(res, state or {}, tool_call_id)
+    return _modelop_command(res, state or {}, tool_call_id, persist_check="sbc")
 
 
 # ── 7. Leave-one-out decomposition (Step 8, sensitivity) ─────────────────────

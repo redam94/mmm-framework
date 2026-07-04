@@ -90,4 +90,15 @@ examples/mmm_report_*.html
 tests/synth/results/*.log
 
 # Local-only planning doc (kept on disk, never committed)
-/technical-docs/production-readiness-action-plan.mdassets/*.pptx
+/technical-docs/production-readiness-action-plan.md
+assets/*.pptx
+
+# Root-level / assets generated slide decks & reports (agent output, never committed)
+/agent_prefit_readout.html
+/agent_slide_deck.pptx
+/assets/Media Performance Readout.html
+/.claude/scheduled_tasks.lock
+frontend/tsconfig.tsbuildinfo
+
+# Intermediate per-frame animation directories (final .gif outputs stay tracked)
+nbs/artifacts/_*/
