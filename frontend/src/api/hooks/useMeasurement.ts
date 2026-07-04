@@ -5,6 +5,7 @@ import type {
   DeckRequest,
   DesignRequest,
   ExperimentTransition,
+  IdentifyRequest,
   OptimizeRequest,
   SimulateRequest,
 } from '../services/measurementService';
@@ -23,6 +24,8 @@ export const measurementKeys = {
     [...measurementKeys.all, 'simulation', projectId, jobId] as const,
   optimization: (projectId: string | null, jobId: string | null) =>
     [...measurementKeys.all, 'optimization', projectId, jobId] as const,
+  identification: (projectId: string | null, jobId: string | null) =>
+    [...measurementKeys.all, 'identification', projectId, jobId] as const,
   deck: (projectId: string | null, jobId: string | null) =>
     [...measurementKeys.all, 'deck', projectId, jobId] as const,
 };
@@ -147,6 +150,37 @@ export function useExperimentOptimization(projectId: string | null) {
   const job = useQuery({
     queryKey: measurementKeys.optimization(projectId, jobId),
     queryFn: () => measurementService.pollOptimization(projectId!, jobId!),
+    enabled: !!projectId && !!jobId,
+    refetchInterval: (q) =>
+      ['done', 'error'].includes(q.state.data?.status ?? '') ? false : 2500,
+  });
+
+  const reset = () => {
+    setJobId(null);
+    start.reset();
+  };
+
+  return { start, job, reset, jobId };
+}
+
+/**
+ * Structural-parameter identification for a candidate flighting design.
+ * `start` POSTs the channel (+ optional levels/block/duration) and stores the
+ * returned job_id; `job` polls until done/error. `reset` clears the in-flight
+ * job (e.g. when studio inputs change).
+ */
+export function useStructuralIdentification(projectId: string | null) {
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const start = useMutation({
+    mutationFn: (body: IdentifyRequest) =>
+      measurementService.startIdentification(projectId!, body),
+    onSuccess: (data) => setJobId(data.job_id),
+  });
+
+  const job = useQuery({
+    queryKey: measurementKeys.identification(projectId, jobId),
+    queryFn: () => measurementService.pollIdentification(projectId!, jobId!),
     enabled: !!projectId && !!jobId,
     refetchInterval: (q) =>
       ['done', 'error'].includes(q.state.data?.status ?? '') ? false : 2500,

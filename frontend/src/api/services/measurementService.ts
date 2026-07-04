@@ -579,6 +579,73 @@ export interface OptimizationJob {
   error: string | null;
 }
 
+// ── Structural identification (multi-level flighting → parameter recovery) ────
+
+/** One structural parameter's identification readout (β / α / ψ). */
+export interface StructuralParamIdent {
+  claimed: boolean;
+  /** posterior-sd contraction vs the prior (the honest identification axis) */
+  contraction: number | null;
+  mde: number | null;
+  mde_relative?: number | null;
+  /** power to resolve the parameter from 0 (prior-heavy; UI-consistent) */
+  power: number | null;
+}
+
+export interface StructuralIdentification {
+  params: {
+    beta: StructuralParamIdent;
+    alpha: StructuralParamIdent;
+    lam: StructuralParamIdent;
+  };
+  identifies_anything: boolean;
+  binding_power: number | null;
+  binding_contraction: number | null;
+  power_target: number;
+  n_clamped?: number;
+}
+
+/** Full result of POST …/identify → poll …/identify/{jobId}. An OPTIMISTIC
+ *  Laplace upper bound on what the next refit identifies — never a guarantee. */
+export interface StructuralIdentificationPayload {
+  channel: string;
+  kpi: string;
+  design_key: string;
+  block_weeks: number;
+  duration: number;
+  n_levels: number;
+  schedule: { multiplier: number; [k: string]: unknown }[];
+  cooldown_weeks: number | null;
+  block_ge_cooldown: boolean;
+  reduced_form: Record<string, unknown> | null;
+  extrapolation_warning: boolean;
+  structural: StructuralIdentification | null;
+  /** false ⇒ reduced-form only (needs a parametric geometric+logistic national fit) */
+  structural_gated: boolean;
+  structural_gate_reason: string | null;
+  note?: string;
+}
+
+export interface IdentifyRequest {
+  channel: string;
+  /** spend multipliers; ≥3 in-support levels trace the saturation curve */
+  levels?: number[];
+  /** default: the channel's adstock cool-down sets the block length */
+  block_weeks?: number;
+  duration?: number;
+  max_draws?: number;
+  seed?: number;
+}
+
+/** The polled job record from GET …/identify/{jobId}. */
+export interface IdentificationJob {
+  status: 'pending' | 'running' | 'done' | 'error';
+  project_id: string;
+  channel: string;
+  result: StructuralIdentificationPayload | null;
+  error: string | null;
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 export const measurementService = {
@@ -683,6 +750,26 @@ export const measurementService = {
   async pollOptimization(projectId: string, jobId: string): Promise<OptimizationJob> {
     const { data } = await apiClient.get<OptimizationJob>(
       `/projects/${projectId}/experiment-design/optimize/${jobId}`,
+    );
+    return data;
+  },
+
+  /** Kick off the non-blocking structural-identification analysis (HTTP 202). */
+  async startIdentification(
+    projectId: string,
+    body: IdentifyRequest,
+  ): Promise<{ job_id: string; status: string }> {
+    const { data } = await apiClient.post<{ job_id: string; status: string }>(
+      `/projects/${projectId}/experiment-design/identify`,
+      body,
+    );
+    return data;
+  },
+
+  /** Poll an identification job; resolves to {status, result|null, error|null}. */
+  async pollIdentification(projectId: string, jobId: string): Promise<IdentificationJob> {
+    const { data } = await apiClient.get<IdentificationJob>(
+      `/projects/${projectId}/experiment-design/identify/${jobId}`,
     );
     return data;
   },
