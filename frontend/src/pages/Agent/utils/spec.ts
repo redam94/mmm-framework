@@ -59,6 +59,21 @@ interface RawSpec {
   seasonality?: { yearly?: number; monthly?: number; weekly?: number };
   media_channels?: unknown;
   control_variables?: unknown;
+  // The spec is a superset (priors, dataset, garden_ref, estimands, …). The
+  // editor must round-trip keys it doesn't own — see specWithDefaults.
+  [key: string]: unknown;
+}
+
+/** Per-channel measurement descriptor keys (impression-/click-measured media). */
+export interface ChannelMeasurement {
+  /** absent/'spend' ⇒ the modeled variable is dollars (plain ROI) */
+  measurement_unit?: string;
+  /** external $ series for a non-spend-measured channel */
+  spend_column?: string;
+  /** $ per 1k impressions (measurement_unit 'impressions') */
+  cpm?: number | null;
+  /** $ per click (measurement_unit 'clicks') */
+  cpc?: number | null;
 }
 
 // Normalize an incoming (possibly minimal) spec into a full editable form
@@ -67,6 +82,11 @@ export function specWithDefaults(rawSpec: unknown) {
   // to a loose record once at the boundary and read leaves defensively.
   const raw = (rawSpec ?? {}) as RawSpec;
   return {
+    // Carry every key the editor doesn't own (priors, dataset, garden_ref,
+    // likelihood, estimands, …) through the edit → Apply round-trip. The
+    // PATCH /spec endpoint replaces model_spec wholesale, so dropping them
+    // here would silently strip agent-set configuration on every manual edit.
+    ...raw,
     kpi: raw?.kpi ?? '',
     kpi_level: raw?.kpi_level ?? 'national',
     time_granularity: raw?.time_granularity ?? 'weekly',
@@ -93,6 +113,9 @@ export function specWithDefaults(rawSpec: unknown) {
       const adstock = (ch.adstock ?? {}) as { type?: string; l_max?: number };
       const saturation = (ch.saturation ?? {}) as { type?: string };
       return {
+        // Same round-trip rule per channel: preserve keys the editor doesn't
+        // own (measurement descriptor, agent-set extras).
+        ...(ch as ChannelMeasurement & SpecVar),
         name: ch.name,
         adstock: { type: adstock.type ?? 'geometric', l_max: adstock.l_max ?? 8 },
         saturation: { type: saturation.type ?? 'hill' },
