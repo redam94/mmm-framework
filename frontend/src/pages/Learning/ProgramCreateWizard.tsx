@@ -62,7 +62,11 @@ export function ProgramCreateWizard({
   const [valuePerUnit, setValuePerUnit] = useState('');
   const [center, setCenter] = useState<Record<string, string>>({});
   const [kpi, setKpi] = useState('');
-  const [activation, setActivation] = useState<'hill' | 'logistic'>('hill');
+  const [activation, setActivation] = useState<
+    'hill' | 'logistic' | 'monotone_spline' | 'hill_mixture'
+  >('hill');
+  const [likelihood, setLikelihood] = useState<'normal' | 'studentt' | 'negbinomial'>('normal');
+  const [timeEffect, setTimeEffect] = useState<'none' | 'national'>('none');
   const [margin, setMargin] = useState('1.0');
   const [horizonPeriods, setHorizonPeriods] = useState('13');
   const [waveCost, setWaveCost] = useState('25000');
@@ -120,6 +124,8 @@ export function ProgramCreateWizard({
         value_per_unit: valueNum,
         mode: 'fixed',
         activation,
+        ...(likelihood !== 'normal' ? { likelihood } : {}),
+        ...(timeEffect !== 'none' ? { time_effect: timeEffect } : {}),
         ...(kpi.trim() ? { kpi: kpi.trim() } : {}),
         margin: Number(margin) > 0 ? Number(margin) : 1.0,
         // horizon only — the backend computes population = n_geos × horizon
@@ -336,11 +342,36 @@ export function ProgramCreateWizard({
                 <Field label="Response family">
                   <select
                     value={activation}
-                    onChange={(e) => setActivation(e.target.value as 'hill' | 'logistic')}
+                    onChange={(e) => setActivation(e.target.value as typeof activation)}
                     className={INPUT_CLS}
                   >
                     <option value="hill">Hill (default)</option>
                     <option value="logistic">Logistic (concave)</option>
+                    <option value="monotone_spline">Monotone spline (shape-agnostic)</option>
+                    <option value="hill_mixture">Hill mixture (two-phase)</option>
+                  </select>
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Observation model">
+                  <select
+                    value={likelihood}
+                    onChange={(e) => setLikelihood(e.target.value as typeof likelihood)}
+                    className={INPUT_CLS}
+                  >
+                    <option value="normal">Normal (default)</option>
+                    <option value="studentt">Student-t (heavy-tailed KPI)</option>
+                    <option value="negbinomial">Neg. binomial (count KPI)</option>
+                  </select>
+                </Field>
+                <Field label="Period effect τ_t">
+                  <select
+                    value={timeEffect}
+                    onChange={(e) => setTimeEffect(e.target.value as typeof timeEffect)}
+                    className={INPUT_CLS}
+                  >
+                    <option value="none">None (default)</option>
+                    <option value="national">National (shared shocks)</option>
                   </select>
                 </Field>
               </div>
