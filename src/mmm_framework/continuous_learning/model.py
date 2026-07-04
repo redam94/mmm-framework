@@ -223,13 +223,18 @@ def probe_pairs_excluding(
 # ── The generative model ──────────────────────────────────────────────────────
 
 
-def _sample_activation_shape(activation: str, k: int, numpyro, dist) -> tuple:
+def _sample_activation_shape(
+    activation: str, k: int, numpyro, dist, spline_prior: str = "iid"
+) -> tuple:
     """Sample the shape parameters for the chosen activation (in param order).
 
     Hill: half-saturation ``kappa`` and shape ``alpha``. Logistic: a single
     saturation rate ``lam``. Monotone spline: positive I-spline basis weights
-    ``w1..wJ`` (shape-agnostic). Add a case here (plus an entry in
-    :data:`surface.ACTIVATIONS`) to plug in another smooth, saturating family.
+    ``w1..wJ`` (shape-agnostic), under either the iid LogNormal prior
+    (``spline_prior="iid"``, the historical default) or the P-spline
+    shrinkage prior (``"pspline"`` — see :func:`fit`). Add a case here (plus
+    an entry in :data:`surface.ACTIVATIONS`) to plug in another smooth,
+    saturating family.
     """
     if activation == "hill":
         kappa = numpyro.sample(
@@ -278,9 +283,44 @@ def _sample_activation_shape(activation: str, k: int, numpyro, dist) -> tuple:
         # -> 1.01, min ESS 30 -> 72 on the reference mixture world) and
         # one-wave curve calibration — a tight weight prior makes the prior
         # ramp shape linger where the design has not probed.
+        names = ACTIVATIONS["monotone_spline"][0]
+        if spline_prior == "pspline":
+            # P-spline shrinkage: a first-order random walk on the LOG-weights
+            # with a learned per-channel smoothness tau (non-centered).
+            #   log w_1     = u_1 ~ Normal(0, 1)
+            #   log w_{j+1} = log w_j + tau * eps_j,   eps ~ Normal(0, 1)
+            #   tau_c ~ HalfNormal(1)
+            # tau -> 0 collapses to EQUAL weights — exactly the neutral
+            # near-linear ramp that is the iid prior's median — so the
+            # EFFECTIVE basis dimension is data-driven: few probed spend
+            # levels keep the curve smooth, accumulated waves buy the
+            # flexibility as they earn it (the adaptive-smoothing answer to
+            # the Eq. 24 fixed-basis bias floor on the math page). Adjacent
+            # weights are correlated a priori (smoothness), unlike the iid
+            # prior's independent wiggle. The public sites stay ``w1..wJ``
+            # (deterministic), so the acquisition layer's SHAPE_TRANSFORMS,
+            # the planner and serialization are untouched.
+            import jax.numpy as jnp
+
+            j_total = len(names)
+            u1 = numpyro.sample(
+                "w_level", dist.Normal(0.0, 1.0).expand([k]).to_event(1)
+            )
+            tau = numpyro.sample("w_tau", dist.HalfNormal(1.0).expand([k]).to_event(1))
+            eps = numpyro.sample(
+                "w_innov",
+                dist.Normal(0.0, 1.0).expand([j_total - 1, k]).to_event(2),
+            )
+            u = jnp.concatenate(
+                [u1[None, :], u1[None, :] + tau[None, :] * jnp.cumsum(eps, axis=0)],
+                axis=0,
+            )  # (J, k) log-weights
+            return tuple(
+                numpyro.deterministic(nm, jnp.exp(u[j])) for j, nm in enumerate(names)
+            )
         return tuple(
             numpyro.sample(nm, dist.LogNormal(0.0, 1.0).expand([k]).to_event(1))
-            for nm in ACTIVATIONS["monotone_spline"][0]
+            for nm in names
         )
     raise ValueError(f"unknown activation {activation!r}; known: {tuple(ACTIVATIONS)}")
 
@@ -303,6 +343,8 @@ def model(
     n_period: int = 0,
     y_loc: float = 0.0,
     y_scale: float = 1.0,
+    noise_mult=None,
+    spline_prior: str = "iid",
     summary_test=None,
     summary_base=None,
     summary_scale=None,
@@ -310,6 +352,17 @@ def model(
     summary_se=None,
 ):
     """NumPyro generative model (guide §4.2/4.3), for any pluggable activation.
+
+    ``noise_mult`` (optional, ``(N,)``, all ``>= 1``) is the per-row
+    information-discount multiplier ``exp(0.5 * lambda * age)`` computed by
+    :func:`fit`: for the Gaussian families the observation scale becomes
+    ``sigma * noise_mult`` (old rows are noisier — exactly the Eq. 22
+    ``sigma_eff`` semantics moved into the likelihood), and for the count
+    family (which has no noise scale) the same discount is applied as a power
+    likelihood, ``log p`` scaled by ``1 / noise_mult^2 = exp(-lambda * age)``
+    (the two coincide in how they down-weight the data term). ``None`` is the
+    historical, byte-identical graph. ``spline_prior`` selects the
+    monotone-spline weight prior (see :func:`_sample_activation_shape`).
 
     ``y=None`` draws from the prior predictive (prior checks). ``pair_signs``
     maps each pair to a prior family; pairs absent from the map default to
@@ -371,7 +424,9 @@ def model(
     beta = numpyro.sample(
         "beta", dist.HalfNormal(beta_prior_scale).expand([k]).to_event(1)
     )
-    shape = _sample_activation_shape(activation, k, numpyro, dist)
+    shape = _sample_activation_shape(
+        activation, k, numpyro, dist, spline_prior=spline_prior
+    )
 
     gamma = jnp.zeros((k, k))
     for i, j in pairs:
@@ -432,14 +487,26 @@ def model(
             with numpyro.plate("periods", int(n_period)):
                 tau = numpyro.sample("tau", dist.Normal(0.0, sigma_tau))
             mu = mu + tau[period_idx]
+        mult = None if noise_mult is None else jnp.asarray(noise_mult, dtype=float)
         if likelihood == "normal":
-            numpyro.sample("y", dist.Normal(mu, sigma), obs=y)
+            scale = sigma if mult is None else sigma * mult
+            numpyro.sample("y", dist.Normal(mu, scale), obs=y)
         elif likelihood == "studentt":
-            numpyro.sample("y", dist.StudentT(nu, mu, sigma), obs=y)
+            scale = sigma if mult is None else sigma * mult
+            numpyro.sample("y", dist.StudentT(nu, mu, scale), obs=y)
         else:
             import jax
 
-            numpyro.sample("y", dist.NegativeBinomial2(jax.nn.softplus(mu), phi), obs=y)
+            nb = dist.NegativeBinomial2(jax.nn.softplus(mu), phi)
+            if mult is None:
+                numpyro.sample("y", nb, obs=y)
+            else:
+                # A count family has no noise SCALE to inflate; the discount
+                # is a power likelihood instead (old rows count as fractional
+                # observations) — the same exp(-lambda*age) down-weighting of
+                # the data term as the Gaussian variance inflation.
+                with numpyro.handlers.scale(scale=1.0 / mult**2):
+                    numpyro.sample("y", nb, obs=y)
 
     if summary_lift is not None and int(np.shape(summary_lift)[0]) > 0:
         pred = jnp.asarray(summary_scale, dtype=float) * (
@@ -759,6 +826,8 @@ def fit(
     progress_bar: bool = False,
     spend_ref: np.ndarray | None = None,
     prior_scaling: str = "auto",
+    discount_half_life: float | None = None,
+    spline_prior: str = "iid",
 ) -> Posterior:
     """Fit the response surface to a geo-week panel and/or summary readouts.
 
@@ -809,6 +878,38 @@ def fit(
             prior scales from the evidence so natural-unit KPIs at any
             magnitude fit sanely; ``"unit"`` reproduces the original O(1)
             priors exactly (see :func:`_resolve_prior_scaling`).
+        discount_half_life: information-decay half-life ``h`` in WEEKS
+            (``None`` — the default — is the historical static fit, every row
+            weighing the same forever). When set, each panel row's likelihood
+            is discounted by its age: the observation scale is inflated to
+            ``sigma * exp(0.5 * lambda * age)`` with ``lambda = ln2 / h`` —
+            the math page's Eq. 22 decay clock moved INTO the likelihood
+            (West–Harrison discounting; the count family power-scales the
+            log-likelihood by ``exp(-lambda * age)`` instead, since it has no
+            noise scale). Row ages come from ``data["row_age"]`` (``(N,)``
+            weeks, ``0`` = newest — :class:`~mmm_framework.continuous_learning.loop.LearningState`
+            maintains this automatically) or, failing that, are derived from
+            ``data["period_idx"]`` as ``max - period``; a discounted panel
+            fit with neither raises. Summaries may carry an ``"age_weeks"``
+            key — their SE is inflated by the same clock. The effect:
+            effective sample size SATURATES instead of growing without bound,
+            so the posterior keeps an honest variance floor when media
+            behaviour drifts (a static fit's bands shrink like 1/sqrt(rows)
+            while the truth moves — narrow and wrong). Use
+            :func:`~mmm_framework.continuous_learning.loop.estimate_half_life`
+            to measure ``h`` from the programme's own wave-to-wave drift; a
+            measured ``lambda ~ 0`` recovers full pooling.
+        spline_prior: monotone-spline weight prior — ``"iid"`` (default, the
+            historical independent ``LogNormal(0, 1)`` weights, byte-identical)
+            or ``"pspline"``: a first-order random walk on the log-weights
+            with a learned per-channel smoothness ``w_tau`` (P-spline /
+            adaptive-smoothing construction). ``tau -> 0`` collapses to the
+            neutral near-linear ramp, so the EFFECTIVE basis dimension grows
+            only as the designed cells earn it — the adaptive answer to the
+            fixed-basis approximation-bias floor (math page Eq. 24) without
+            hand-tuning the knot count. Only valid with
+            ``activation="monotone_spline"``; the public ``w1..wJ`` sites are
+            unchanged (the acquisition layer and planner need no changes).
 
     Returns:
         A :class:`Posterior` with merged-chain numpy samples, R-hat/ESS
@@ -837,6 +938,23 @@ def fit(
     if time_effect not in VALID_TIME_EFFECTS:
         raise ValueError(
             f"time_effect must be one of {VALID_TIME_EFFECTS}, got {time_effect!r}"
+        )
+    if spline_prior not in ("iid", "pspline"):
+        raise ValueError(
+            f"spline_prior must be 'iid' or 'pspline', got {spline_prior!r}"
+        )
+    if spline_prior != "iid" and activation != "monotone_spline":
+        raise ValueError(
+            f"spline_prior={spline_prior!r} only applies to "
+            f"activation='monotone_spline' (got activation={activation!r}) — "
+            "the parametric families have no basis weights to smooth"
+        )
+    if discount_half_life is not None and not (
+        np.isfinite(discount_half_life) and discount_half_life > 0
+    ):
+        raise ValueError(
+            f"discount_half_life must be a positive finite number of weeks, "
+            f"got {discount_half_life!r} (None disables discounting)"
         )
 
     spend, geo_idx, y, n_geo, period_idx, n_period = _validate_panel(
@@ -880,12 +998,62 @@ def fit(
     y_loc, y_scale = _resolve_prior_scaling(
         prior_scaling, y if n_rows > 0 else None, summaries
     )
+
+    # ── information discount: per-row noise multipliers from row ages ────────
+    noise_mult = None
+    discount_diag: dict[str, Any] | None = None
+    if discount_half_life is not None:
+        lam = float(np.log(2.0) / discount_half_life)
+        ages = None
+        if n_rows > 0:
+            if data.get("row_age") is not None:
+                ages = np.asarray(data["row_age"], dtype=float).ravel()
+            elif period_idx is not None:
+                ages = (period_idx.max() - period_idx).astype(float)
+            else:
+                raise ValueError(
+                    "discount_half_life needs per-row ages: provide "
+                    "data['row_age'] ((N,) weeks, 0 = newest; LearningState "
+                    "maintains this automatically) or data['period_idx'] to "
+                    "derive them from"
+                )
+            if ages.shape[0] != n_rows:
+                raise ValueError(
+                    f"row_age has {ages.shape[0]} entries but the panel has "
+                    f"{n_rows} rows"
+                )
+            if not np.all(np.isfinite(ages)) or np.any(ages < 0):
+                raise ValueError("row_age must be finite and non-negative")
+            noise_mult = np.exp(0.5 * lam * ages)
+        discount_diag = {
+            "half_life": float(discount_half_life),
+            "lambda": lam,
+            "max_row_age": float(ages.max()) if ages is not None else None,
+            "effective_rows": (
+                float(np.sum(np.exp(-lam * ages))) if ages is not None else None
+            ),
+            "n_rows": n_rows,
+        }
+
     if summaries:
+        summary_se = np.array([s["se"] for s in summaries], dtype=float)
+        if discount_half_life is not None:
+            # A historical readout decays on the same clock: SE inflated by
+            # exp(0.5 * lambda * age) — consistent with the off-panel
+            # structural-stationarity assumption this relaxes.
+            s_ages = np.array(
+                [float(s.get("age_weeks", 0.0)) for s in summaries], dtype=float
+            )
+            if not np.all(np.isfinite(s_ages)) or np.any(s_ages < 0):
+                raise ValueError("summary age_weeks must be finite and non-negative")
+            summary_se = summary_se * np.exp(
+                0.5 * (np.log(2.0) / discount_half_life) * s_ages
+            )
         summary_kwargs = {
             "summary_test": np.stack([s["spend_test"] for s in summaries]),
             "summary_base": np.stack([s["spend_base"] for s in summaries]),
             "summary_lift": np.array([s["lift"] for s in summaries], dtype=float),
-            "summary_se": np.array([s["se"] for s in summaries], dtype=float),
+            "summary_se": summary_se,
             "summary_scale": np.array([s["scale"] for s in summaries], dtype=float),
         }
     else:
@@ -903,6 +1071,7 @@ def fit(
         time_effect=time_effect,
         y_loc=y_loc,
         y_scale=y_scale,
+        spline_prior=spline_prior,
     )
     mcmc = MCMC(
         NUTS(bound),
@@ -920,6 +1089,7 @@ def fit(
         y=y,
         period_idx=period_idx,
         n_period=n_period,
+        noise_mult=noise_mult,
         **summary_kwargs,
     )
 
@@ -935,6 +1105,10 @@ def fit(
         "y_loc": float(y_loc),
         "y_scale": float(y_scale),
     }
+    if discount_diag is not None:
+        diagnostics["discount"] = discount_diag
+    if activation == "monotone_spline":
+        diagnostics["spline_prior"] = spline_prior
     return Posterior(
         samples=samples,
         channels=list(channels),
@@ -967,7 +1141,7 @@ def _diagnostics(mcmc: Any, activation: str = "hill") -> dict[str, Any]:
         grouped = mcmc.get_samples(group_by_chain=True)
         rhats: list[float] = []
         ess: list[float] = []
-        for key in ("beta", "sigma", "phi", "nu", "tau", *shape_sites):
+        for key in ("beta", "sigma", "phi", "nu", "tau", "w_tau", *shape_sites):
             if key not in grouped:
                 continue
             arr = grouped[key]

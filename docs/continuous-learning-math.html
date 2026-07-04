@@ -122,7 +122,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-03",
+          "dateModified": "2026-07-04",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/continuous-learning-math.html#breadcrumb"
           },
@@ -966,6 +966,23 @@ meta["surrogate"]                      # {"ok": ..., "khat": ..., ...}</code></p
                 half-life at a multiple of the carryover one.</li>
             </ul>
 
+            <p><strong>The clock now also runs inside the likelihood.</strong> Scheduling re-tests is the passive use
+            of Eq. (22); <code>fit(discount_half_life=h)</code> (or the <code>LearningState</code> field of the same
+            name) is the active one: every panel row's observation scale is inflated by its age,
+            \( \sigma_{\text{row}} = \sigma\, e^{\lambda\,\text{age}/2} \) — exactly Eq. (22) moved into the
+            likelihood, the West–Harrison discount construction (a count-family row power-scales its log-likelihood by
+            \( e^{-\lambda\,\text{age}} \) instead, and an imported lift test's SE inflates on the same clock via its
+            <code>age_weeks</code>). The consequence that matters for a <em>drifting</em> world: effective sample size
+            saturates at \( \sum_k e^{-\lambda\,\text{age}_k} \) instead of growing without bound, so the posterior
+            keeps an honest variance floor rather than shrinking onto a stale average of old and new regimes — the
+            temporal twin of the misspecification failure below, and the same narrow-and-wrong logic. Under genuine
+            drift the floor also keeps \( \mathbb{E}[\text{regret}] \) above zero, so ENBS correctly keeps scheduling
+            re-tests: the fit and the re-test cadence now agree about <em>why</em> evidence goes stale. Measure
+            \( h \) with <code>estimate_half_life</code> before turning it on — \( \hat\lambda \approx 0 \) recovers
+            the full-pooling default (<code>None</code>, the historical static fit, byte-identical). The notebook's
+            §16 animates the contrast on a drifting world (<code>drift_world</code>): the static fit's band shrinks
+            past the moving truth while the discounted fit tracks it.</p>
+
             <p>Seasonality enters the same way: nothing in Eq. (22) requires \( \lambda \) constant over the calendar
             — a category whose response curve reshapes into a peak season should carry a larger \( \lambda \)
             approaching it (equivalently, a shorter \( h \) for findings measured in the off-season), which the
@@ -1139,6 +1156,21 @@ state.ingest(wave, check_stationarity=True)    # or let ingest run the guard + w
             profit gap and mixing intact (\( \hat R \approx 1.02 \)). Effective sample size runs lower than the
             parametric families' — the weight <em>scale</em> is a soft non-identifiability pinned only by the prior —
             so gate spline fits on \( \hat R \), not ESS.</p>
+
+            <p><strong>Adaptive flexibility — the P-spline prior.</strong> The sieve logic of that arithmetic says the
+            basis should grow with information; <code>fit(spline_prior="pspline")</code> implements the Bayesian
+            version without discrete knot-count switching: a first-order random walk on the log-weights,
+            \( \log w_{j+1} = \log w_j + \tau_c\,\varepsilon_j \), with a <em>learned</em> per-channel smoothness
+            \( \tau_c \sim \mathrm{HalfNormal}(1) \) (non-centred). \( \tau \to 0 \) collapses to equal weights — the
+            neutral near-linear ramp that is the iid prior's median — so the <em>effective</em> basis dimension is
+            data-driven: few probed spend levels keep the curve smooth, and accumulated waves buy the wiggle only as
+            the designed cells earn it. The public \( w_1..w_J \) sites are unchanged (emitted as deterministics), so
+            the acquisition layer, the planner and serialization need no changes. Two coordination notes: the binding
+            constraint on <em>useful</em> flexibility is the number of distinct probed spend levels — which grows as
+            the trust region recentres, not with raw row count; and with the information discount active
+            (§<a href="#decay">decay</a>), effective \( n \) is bounded, so the band floor can sit above \( b \) and
+            the Eq. (24) collision never arrives — fast drift ⇒ wide honest bands and a smooth curve, a stable world
+            ⇒ the flexibility accumulates.</p>
 
             <figure class="screenshot-figure">
                 <img src="assets/animations/continuous-learning-spline.gif" loading="lazy"

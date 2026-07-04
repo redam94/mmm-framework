@@ -1444,7 +1444,152 @@ assert os.path.exists(_spl2d_gif)
 _IPImage2D(filename=_spl2d_gif)
 """),
     # ====================================================================
-    # 16. Recap
+    # 16. Changing media behaviour — discounting + adaptive spline smoothing
+    # ====================================================================
+    md(r"""
+## 16 · Changing media behaviour — discount old information, let the spline earn its flexibility
+
+Everything so far assumed a **frozen world**: the sequential-Bayes loop refits
+on ALL accumulated data with equal weight, which is exactly right when the
+response surface is static — and quietly wrong when it *drifts* (audiences
+shift, creative fatigues, competitors move). Under drift the static fit
+converges to a **time-average of old and new regimes** with bands shrinking
+like $1/\sqrt{\text{rows}}$ while the truth walks away — narrow **and** wrong,
+the temporal twin of the misspecification failure in §14. Two knobs address it,
+and they are designed to work together:
+
+* **Information discounting** — `fit(discount_half_life=h)` (or the
+  `LearningState(discount_half_life=…)` field) moves the information-decay
+  clock $\sigma^2_{\text{eff}}(t) = \sigma^2 e^{\lambda t}$, $\lambda = \ln 2/h$
+  **into the likelihood**: each row's observation noise is inflated by
+  $e^{\lambda\,\text{age}/2}$, so a row one half-life old carries half the
+  information and effective sample size **saturates** instead of growing
+  without bound. That saturation is what keeps the posterior honest for a
+  moving target — and it is the West–Harrison discount-factor construction,
+  the cheap surrogate for a full random-walk state-space model. Old imported
+  lift tests decay on the same clock (a summary's `age_weeks` inflates its SE).
+  Don't guess $h$: `estimate_half_life(gaps, shifts, sigmas)` measures it from
+  the programme's own wave-to-wave posterior drift, and $\hat\lambda \approx 0$
+  recovers full pooling automatically.
+* **Adaptive spline flexibility** — `fit(activation="monotone_spline",
+  spline_prior="pspline")` replaces the iid weight prior with a **P-spline
+  shrinkage prior**: a first-order random walk on the log-weights with a
+  *learned* per-channel smoothness $\tau$. $\tau \to 0$ collapses to the
+  neutral near-linear ramp, so the **effective basis dimension grows only as
+  the designed cells earn it** — the adaptive answer to §15's fixed-basis
+  bias-floor arithmetic, with no knot-count hand-tuning. The public `w1..wJ`
+  sites are unchanged, so the planner and the Laplace acquisition need no
+  changes.
+
+The interplay matters: with discounting active, effective $n$ is bounded, so
+the band keeps a floor above the spline's approximation error and the two
+knobs coordinate — fast drift ⇒ wide honest bands and a smooth curve; a stable
+world ⇒ the discount vanishes and the accumulated waves buy the flexibility.
+
+First the two-wave demonstration: the truth drifts once (hard), and only the
+discounted fit believes today's curve.
+"""),
+    code(r"""
+# Media behaviour CHANGES between two waves: drift the two-Hill world once, hard.
+world_now = cl.drift_world(world_mix, rate=0.30, seed=11)   # ~±30% jitter on beta/shape
+
+w0 = cl.simulate_panel(world_mix, CENTER, n_geo=48, t_pre=4, t_test=8,
+                       delta=0.6, noise=0.4, seed=21)                  # old regime
+w1 = cl.simulate_wave(world_now, cl.central_composite(CENTER, 0.6, world_mix.pairs),
+                      np.asarray(w0["a_geo"]), t_test=8, center=CENTER,
+                      noise=0.4, seed=22)                              # today's regime
+
+def fit_both_waves(half_life):
+    st = cl.LearningState(channels=world_mix.channels, center=CENTER.copy(),
+                          B=B, value=VALUE, pairs=world_mix.pairs,
+                          pair_signs=cl.PAIR_SIGNS_EXAMPLE,
+                          activation="monotone_spline", spline_prior="pspline",
+                          discount_half_life=half_life)
+    st.ingest(w0); st.ingest(w1)          # ingest tracks each row's age (row_week)
+    st.fit(num_warmup=300, num_samples=300, num_chains=2, seed=0)
+    return st.posterior
+
+static_post = fit_both_waves(None)        # every row weighs the same forever
+disc_post   = fit_both_waves(8.0)         # ~one test-window of memory
+
+# error of each posterior-mean curve against TODAY's truth (probed spend range)
+grid_rows = np.tile(CENTER, (7, 1)) * np.linspace(0.4, 1.6, 7)[:, None]
+truth_now = world_now.response_mean(grid_rows)
+
+def mae(post):
+    idx = np.linspace(0, post.n_draws - 1, 150).astype(int)
+    vals = np.stack([np.asarray(surface.surface_over_rows(
+        grid_rows, post.samples["beta"][d], post.gamma_matrix(d),
+        ACTIVATIONS[post.activation][1],
+        tuple(post.samples[nm][d] for nm in post.shape_names))) for d in idx])
+    return float(np.mean(np.abs(vals.mean(0) - truth_now)))
+
+dd = disc_post.diagnostics["discount"]
+print(f"MAE vs TODAY's curve — static {mae(static_post):.3f}  |  "
+      f"discounted {mae(disc_post):.3f}")
+print(f"effective rows under the discount: {dd['effective_rows']:.0f} of "
+      f"{dd['n_rows']} (half-life {dd['half_life']:.0f} wk)")
+assert mae(disc_post) < mae(static_post)   # discounting tracks the drift
+"""),
+    md(r"""
+### Watching the two policies diverge
+
+The full moving picture: the truth now takes a **geometric-random-walk step
+every wave** (`drift_world`, ~9%/wave) while two accumulating trust-region
+loops — both fitting the P-spline, sharing one data stream — differ in exactly
+one knob: `discount_half_life`. Watch the black "true curve TODAY" walk away
+from where behaviour started (dashed grey):
+
+* **Left (discounted).** Old waves fade on the half-life clock, so the band
+  keeps an honest floor and *re-centres on today's curve* — the effective-rows
+  badge shows the saturating memory doing the work.
+* **Right (static).** Every wave weighs the same forever: the band keeps
+  shrinking while the truth moves, and the red segments — today's curve
+  outside the band — grow. Confidently stale. Watch its R̂ badge too: as
+  irreconcilable regimes pile up, the static fit's mixing degrades — the same
+  sampler complaint §14 flagged for a too-rigid family, now caused by a
+  too-long memory.
+* **Bottom row.** Both decision gaps stay low — with a gentle drift and a
+  local trust region the *allocation* is robust, exactly as in §14. What
+  separates the two policies is the **honesty tracker**: the coverage of
+  *today's* curve, judged over the probed spend range, which the static fit's
+  false certainty steadily loses and the discount buys back.
+"""),
+    code(r"""
+import os
+import subprocess
+import sys
+sys.path.insert(0, ".")
+from IPython.display import Image as _IPImageD
+import build_discount_animation as _animD
+
+_dis_gif = os.path.join(_animD.OUTDIR, "continuous_learning_discount.gif")
+if not os.path.exists(_dis_gif):     # build on demand (12 P-spline fits) if missing
+    subprocess.run(
+        [sys.executable, "build_discount_animation.py"],
+        cwd=os.path.dirname(_animD.__file__), check=True,
+    )
+assert os.path.exists(_dis_gif)
+_IPImageD(filename=_dis_gif)
+"""),
+    md(r"""
+**Operating guidance.** Measure before you discount: feed the realized
+wave-to-wave posterior shifts into `estimate_half_life(gaps, shifts, sigmas)` —
+under the decay model $\mathbb{E}[(\text{shift}/\sigma)^2] = e^{\lambda t}-1$,
+so the loop's own history identifies $\lambda$ (and the West–Harrison discount
+$\delta = e^{-\lambda}$) with no extra experiments. A measured
+$\hat\lambda \approx 0$ says the world is stable — leave discounting off and
+let the static fit pool everything. And note what discounting does to the
+*economics*: with a variance floor, expected regret stops shrinking to zero, so
+the ENBS stopping rule keeps scheduling re-tests — under genuine drift,
+"keep testing forever, at the drift rate" is the *correct* answer, and the
+re-test cadence (`due_for_retest`) now agrees with the fit about why.
+
+(Rendered by `build_discount_animation.py`; cadence env-tunable via
+`DIS_N_WAVES` / `DIS_DRIFT` / `DIS_HALF_LIFE` / …)
+"""),
+    # ====================================================================
+    # 17. Recap
     # ====================================================================
     md(r"""
 ## Recap
@@ -1491,6 +1636,13 @@ _IPImage2D(filename=_spl2d_gif)
   profit gap, very different curve coverage (§15's animation). The §11/§12-style
   2-D acquisition loop also runs unchanged with the spline fitting a world where
   both slice channels are weighted Hill sums.
+* **Or assume no *frozen world* either.** When media behaviour drifts,
+  `discount_half_life` moves the information-decay clock into the likelihood —
+  old waves fade, effective sample size saturates, and the posterior tracks
+  *today's* curve instead of a stale average — while the P-spline shrinkage
+  prior (`spline_prior="pspline"`) lets the spline's effective flexibility be
+  data-driven. Measure the half-life from the loop's own drift with
+  `estimate_half_life` rather than guessing it (§16's animation).
 
 This is the model-free half of the framework's measurement story. The
 model-anchored half lives in `mmm_framework.planning` (it sits on top of a

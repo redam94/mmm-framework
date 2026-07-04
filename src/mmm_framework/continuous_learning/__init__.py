@@ -50,6 +50,7 @@ from .arms import (
 from .design import assign_geos, central_composite
 from .dgp import (
     TrueWorld,
+    drift_world,
     make_world,
     make_world_hill_mixture,
     make_world_logistic,
@@ -164,6 +165,7 @@ __all__ = [
     "make_world_hill_mixture",
     "simulate_panel",
     "simulate_wave",
+    "drift_world",
     # planner
     "allocate_under_sample",
     "thompson_wave",
