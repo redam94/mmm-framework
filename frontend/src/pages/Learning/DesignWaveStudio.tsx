@@ -33,17 +33,25 @@ export function DesignWaveStudio({
   const [delta, setDelta] = useState(0.6);
   const [nHoldout, setNHoldout] = useState(0);
   const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set());
+  const [stratify, setStratify] = useState(true);
+  const [optimize, setOptimize] = useState(false);
+  const [candidateDeltasText, setCandidateDeltasText] = useState('0.3, 0.6, 0.9');
   const [csvText, setCsvText] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const design = useDesignWave(projectId, program.id);
   const ingest = useIngestWave(projectId, program.id);
 
+  const fitted = program.summary != null; // KG needs a fitted posterior
+
   useEffect(() => {
     if (open) {
       setDelta(0.6);
       setNHoldout(0);
       setSelectedPairs(new Set());
+      setStratify(true);
+      setOptimize(false);
+      setCandidateDeltasText('0.3, 0.6, 0.9');
       setCsvText('');
       setError(null);
       design.reset();
@@ -51,6 +59,16 @@ export function DesignWaveStudio({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, program.id]);
+
+  const candidateDeltas = useMemo(
+    () =>
+      candidateDeltasText
+        .split(/[,\s]+/)
+        .map(Number)
+        .filter((d) => Number.isFinite(d) && d > 0 && d <= 1)
+        .slice(0, 8),
+    [candidateDeltasText],
+  );
 
   const allPairs = useMemo(() => {
     const out: [number, number][] = [];
@@ -78,6 +96,13 @@ export function DesignWaveStudio({
         // would make the backend probe ALL program pairs
         probe_pairs: probe,
         ...(nHoldout > 0 ? { n_holdout: nHoldout } : {}),
+        stratify,
+        ...(optimize
+          ? {
+              optimize: true,
+              ...(candidateDeltas.length > 0 ? { candidate_deltas: candidateDeltas } : {}),
+            }
+          : {}),
       });
     } catch (e) {
       setError(errorDetail(e));
@@ -189,8 +214,66 @@ export function DesignWaveStudio({
           />
         </label>
 
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={stratify}
+            onChange={(e) => setStratify(e.target.checked)}
+            className="mt-0.5 accent-sage-700"
+          />
+          <span>
+            <span className="font-medium text-ink-700">Stratified geo assignment</span>
+            <span className="mt-0.5 block text-xs text-ink-400">
+              Block-randomize geos into cells on their accumulated KPI (once the program has
+              ingested data) so no cell is dominated by big markets. Off = shuffled round-robin.
+            </span>
+          </span>
+        </label>
+
+        <div className="space-y-2">
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={optimize}
+              onChange={(e) => setOptimize(e.target.checked)}
+              disabled={!fitted}
+              className="mt-0.5 accent-sage-700"
+            />
+            <span>
+              <span className={clsx('font-medium', fitted ? 'text-ink-700' : 'text-ink-400')}>
+                Let the model pick δ (knowledge gradient)
+              </span>
+              <span className="mt-0.5 block text-xs text-ink-400">
+                {fitted
+                  ? 'Scores each candidate δ by the expected value of the information it buys ' +
+                    '(Laplace-KG) and designs the best one; the slider above becomes the fallback.'
+                  : 'Needs a fitted posterior — record a wave or import experiments and fit first.'}
+              </span>
+            </span>
+          </label>
+          {optimize && fitted && (
+            <label className="block pl-6 text-sm">
+              <span className="mb-1 block text-xs font-medium text-ink-600">
+                Candidate δ values (comma-separated, ≤ 8)
+              </span>
+              <input
+                value={candidateDeltasText}
+                onChange={(e) => setCandidateDeltasText(e.target.value)}
+                placeholder="0.3, 0.6, 0.9"
+                className="num w-48 rounded-md border border-line-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+              />
+            </label>
+          )}
+        </div>
+
         <Button onClick={runDesign} disabled={design.isPending || !projectId}>
-          {design.isPending ? 'Designing…' : result ? 'Redesign wave' : 'Design wave'}
+          {design.isPending
+            ? optimize
+              ? 'Scoring candidates…'
+              : 'Designing…'
+            : result
+              ? 'Redesign wave'
+              : 'Design wave'}
         </Button>
 
         {error && <p className="text-sm text-rust-600">{error}</p>}
@@ -198,6 +281,19 @@ export function DesignWaveStudio({
         {/* ── Design result ── */}
         {result && (
           <div className="space-y-3 border-t border-line-200 pt-4">
+            {result.kg?.used && (
+              <div className="rounded-md border border-sage-300 bg-sage-100/60 px-3 py-2.5 text-xs text-sage-800">
+                <p className="font-medium">
+                  Knowledge gradient chose δ ={' '}
+                  <span className="num">{result.kg.chosen_delta.toFixed(2)}</span>
+                </p>
+                <p className="mt-1 text-sage-700">
+                  {result.kg.scores
+                    .map((s) => `δ ${s.delta.toFixed(2)} → EVSI ${s.score.toFixed(3)}`)
+                    .join(' · ')}
+                </p>
+              </div>
+            )}
             <h4 className="text-sm font-semibold text-ink-900">
               Wave cells{' '}
               <span className="font-normal text-ink-400">
