@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 import mmm_framework.continuous_learning as cl
-from mmm_framework.continuous_learning import model, planner, surface
+from mmm_framework.continuous_learning import model, planner, serialize, surface
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -1503,12 +1503,12 @@ class TestSerializeLikelihoodTimeEffect:
             channels=["A", "B"], center=np.full(2, 0.8), B=2.0, value=5.0
         )
         state.ingest(_tiny_panel())
-        p = tmp_path / "v3.npz"
+        p = tmp_path / "newer.npz"
         cl.state_to_npz(state, p)
         with np.load(p, allow_pickle=False) as z:
             meta = json.loads(str(z["meta"].item()))
             arrays = {k: z[k] for k in z.files if k != "meta"}
-        meta["schema_version"] = 3
+        meta["schema_version"] = serialize.SCHEMA_VERSION + 1
         np.savez_compressed(p, meta=json.dumps(meta), **arrays)
         with pytest.raises(ValueError, match="newer"):
             cl.state_from_npz(p)

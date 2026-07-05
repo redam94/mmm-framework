@@ -95,7 +95,11 @@ def test_endpoint_validation(db):
     assert ei.value.status_code == 404
 
 
-def test_sync_tool_registered_and_needs_project():
+def test_sync_tool_registered_and_needs_project(db):
+    # The db fixture matters even though no session is created: with no config
+    # the tool still resolves the "__default__" thread bucket and queries the
+    # sessions store, so an uninitialized default DB (fresh CI checkout) would
+    # raise OperationalError depending on which tests ran first in the worker.
     from mmm_framework.agents.tools import TOOLS, sync_data_connection
 
     assert any(t.name == "sync_data_connection" for t in TOOLS)
