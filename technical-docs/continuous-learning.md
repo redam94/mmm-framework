@@ -415,6 +415,63 @@ collapses, discounted holds). Tests: `test_fit_discount_and_spline_prior_validat
 `test_discounted_fit_tracks_a_drifting_world` +
 `test_pspline_prior_fits_the_mixture_world`.
 
+### Roadmap — explicit time-varying effectiveness (conditionally-linear DLM; NOT implemented)
+
+The principled successor to `discount_half_life` when a programme graduates
+from "discount old data" to "explicitly track β_t". Full math + rationale +
+sources live in `docs/continuous-learning-math.html#dlm` (Eqs. 22b–22d); this
+block is the dev-facing summary so the upgrade is specified, not improvised.
+
+* **What.** Given the activation shapes φ, the surface is *linear* in (β, γ)
+  — so promote that block to a state: `y_t = a + τ_t·1 + F_t(φ)·θ_t + v_t`,
+  `θ_t = θ_{t-1} + w_t`, `w_t ~ N(0, W_t)` — a West–Harrison DLM
+  `{F_t, I, σ²I, W_t}` with random-walk evolution. Set `W_t` by the
+  **discount construction**, not free estimation:
+  `W_t = ((1−δ)/δ)·C_{t-1}` with `δ = e^{−λ} = 2^{−1/h}` — the SAME
+  per-period information-retention schedule as the Eq. 22 clock, applied to
+  the state instead of the likelihood rows. `estimate_half_life` already
+  returns this West–Harrison δ, so calibration transfers verbatim.
+* **Why it's the successor, not a rival.** Likelihood discounting on a static
+  β is forgetting-factor RLS in Bayesian dress — the classical *approximation*
+  to exactly this Kalman filter (Ljung & Söderström 1983). Same clock, same δ;
+  the drift budget moves the state instead of fogging the data. What the DLM
+  adds that discounting structurally cannot: (1) a reportable trajectory
+  `β_{t|T}` with time-resolved bands (discounting's estimand is a
+  recency-weighted time-average — honest bands, late centre); (2) forecast
+  semantics — `β_{T+h|T}` variance `C_{T|T} + Σ W` IS Eq. 22's σ_eff², so the
+  decay clock/re-test trigger/ENBS unify with the fit and the allocator can
+  optimise *forecast* effectiveness at decision time; (3) learnable per-channel
+  drift — δ_c estimated by maximising the marginal likelihood, replacing the
+  moment-matched clock; a level-break component is the model-based version of
+  the BOCD censor.
+* **Inference cost is NOT a new NUTS problem.** Conditional on φ/σ the model
+  is linear-Gaussian: the Kalman filter gives exact conditional posteriors and
+  the prediction-error decomposition gives `p(y_{1:T}|φ,σ)` in closed form
+  with θ_{1:T} integrated out — NUTS keeps sampling only the same handful of
+  nonlinear shape params it samples today (Rao-Blackwellisation; sampled-space
+  dimension does not grow with T). Smoothed path via RTS per draw, FFBS for
+  full path draws. NumPyro-side the filter is a `scan`; JAX differentiates
+  through it — the module's one-differentiable-surface principle holds.
+* **Identification caution.** A random-walk β_t is identified within-period
+  only by designed cross-sectional variation: each wave's CCD contrasts
+  identify β *at that wave*; the walk interpolates between waves. Without
+  per-period designed variation β_t soaks up the outcome trend (collinear
+  with `a_g`/τ_t). Start RW-β + STATIC γ (weakest-identified block, drifts
+  slower); demote channels with measured λ̂≈0 to W=0 — which collapses to the
+  static model exactly (the degeneracy is the graduation path).
+* **Graduation criteria (build when all three hold):** persistent material λ̂
+  from `estimate_half_life` across waves; the discount ESS floor binds
+  (`effective_rows` plateaus while decisions hinge on the enforced width);
+  the deliverable needs the trajectory itself. Precedent: Uber Orbit's BTVC
+  (Ng, Wang & Dai 2021, arXiv:2106.03322) is a time-varying-coefficient
+  Bayesian MMM of exactly this conditionally-linear form.
+* **Sources.** West & Harrison (1997) §6.3; Ameen & Harrison (1985) normal
+  discount Bayesian models; Harvey (1989) / Durbin & Koopman (2012)
+  prediction-error decomposition + smoothing; Carter & Kohn (1994),
+  Frühwirth-Schnatter (1994) FFBS; Chen & Liu (2000), Doucet et al. (2000)
+  Rao-Blackwellised conditionally-linear inference; Ljung & Söderström (1983)
+  forgetting factors; Ng, Wang & Dai (2021) BTVC.
+
 ## Count KPIs — the NegativeBinomial likelihood (opt-in)
 
 `fit(likelihood="negbinomial")` (default `"normal"`, byte-identical graph) swaps

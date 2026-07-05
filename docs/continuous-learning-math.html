@@ -192,6 +192,7 @@
                 <li><a href="#arms">Arms &amp; grouped budgets</a></li>
                 <li><a href="#stopping">Regret &amp; ENBS</a></li>
                 <li><a href="#decay">Information decay</a></li>
+                <li><a href="#dlm">Dynamic β — the DLM roadmap</a></li>
                 <li><a href="#stationarity">Within-wave stationarity</a></li>
             </ul>
 
@@ -988,6 +989,137 @@ meta["surrogate"]                      # {"ok": ..., "khat": ..., ...}</code></p
             approaching it (equivalently, a shorter \( h \) for findings measured in the off-season), which the
             override mechanism expresses directly.</p>
 
+            <h2 id="dlm">Time-varying effectiveness — the DLM successor to discounting</h2>
+
+            <div class="info">
+                <h4>Design note — future development</h4>
+                <p>Nothing in this section is implemented. <code>discount_half_life</code> is the shipped drift
+                mechanism, and a static-world programme should stay on the plain NUTS fit of Eq. (9). This section
+                records the mathematics, the rationale and the sources for the principled next step, so that when a
+                programme graduates from "discount old data" to "explicitly track \( \beta_t \)" the upgrade is
+                specified rather than improvised.</p>
+            </div>
+
+            <p><strong>Why discounting has a ceiling.</strong> Information discounting answers one question — <em>how
+            much should old evidence count toward a static \( \beta \)?</em> — and answers it honestly: the variance
+            floor of §<a href="#decay">decay</a> stops the posterior from narrowing onto a stale average. But three
+            things are outside its vocabulary. First, the <em>location</em> is still a compromise: the estimand under
+            likelihood discounting is a discount-weighted time-average of the drifting effectiveness path, so the
+            point estimate lags the current regime by construction — the bands are honest, the centre is late.
+            Second, it has no forecast semantics: Eq. (22) grows uncertainty with age but says nothing about where
+            \( \beta \) is <em>heading</em>, so the allocator optimises yesterday's average at tomorrow's decision
+            time. Third, drift is treated as pure information loss, when it is a process with learnable per-channel
+            dynamics. The moment the business question changes from "how much should old data count?" to "where is
+            effectiveness <em>now</em>, and where will it be at decision time?", the parameter should move — not the
+            row weights.</p>
+
+            <p><strong>The model.</strong> The key structural fact is one the framework already exploits everywhere:
+            once the activation shapes \( \varphi \) are fixed (Hill's \( \kappa,\alpha \); the logistic's
+            \( \lambda \); the spline's weights), the surface of Eq. (6) is <em>linear</em> in \( \beta \) and
+            \( \gamma \) (§<a href="#surface">surface</a> — the same conditional linearity behind the Fisher-information
+            machinery of §<a href="#laplace">the surrogate</a>). Promote that linear block to a slowly-moving state.
+            With \( y_t \) the period-\( t \) cross-section (geos in their design cells), \( F_t(\varphi) \) the design
+            matrix of activations \( f_{\varphi_c}(s) \) and their pairwise products, and
+            \( \theta_t = (\beta_{1,t},\dots,\beta_{C,t},\,\gamma_t) \):</p>
+
+            <div class="math-block">
+                \[ y_t \;=\; a \;+\; \tau_t \mathbf{1} \;+\; F_t(\varphi)\,\theta_t \;+\; v_t,
+                \qquad v_t \sim \mathcal{N}(0,\,\sigma^2 I),
+                \qquad
+                \theta_t \;=\; \theta_{t-1} + w_t,
+                \qquad w_t \sim \mathcal{N}(0,\,W_t), \]
+                <span class="equation-label">(22b)</span>
+            </div>
+
+            <p>a <strong>dynamic linear model</strong> \( \{F_t, I, \sigma^2 I, W_t\} \) in West–Harrison notation,
+            with a random-walk evolution (\( G = I \)) because effectiveness drift has no known mean-reversion to
+            encode. The evolution covariance is not estimated freely; it comes from the <strong>discount
+            construction</strong> (Ameen &amp; Harrison 1985; West &amp; Harrison 1997, §6.3): with \( C_{t-1} \) the
+            filtered state covariance, deflate the accumulated precision by a retention fraction \( \delta \) per
+            period,</p>
+
+            <div class="math-block">
+                \[ R_t \;=\; \frac{C_{t-1}}{\delta}
+                \quad\Longleftrightarrow\quad
+                W_t \;=\; \frac{1-\delta}{\delta}\, C_{t-1},
+                \qquad
+                \delta \;=\; e^{-\lambda} \;=\; 2^{-1/h}. \]
+                <span class="equation-label">(22c)</span>
+            </div>
+
+            <p>This is <em>the same per-period information-retention schedule as Eq. (22)</em>, applied to the state
+            instead of to the likelihood rows — and <code>estimate_half_life</code> already returns exactly this
+            West–Harrison \( \delta \) from measured wave-to-wave drift, so the calibration transfers verbatim.
+            The equivalence runs deeper than analogy: exponential forgetting on a static parameter (recursive least
+            squares with a forgetting factor — which is what likelihood discounting is, in Bayesian dress) is the
+            classical approximation to precisely this filter, a Kalman filter whose \( W \) is proportional to the
+            current covariance (Ljung &amp; Söderström 1983). That is the exact sense in which the DLM is the
+            <em>successor</em> to <code>discount_half_life</code> rather than a rival: same clock, same \( \delta \),
+            but the drift budget is spent moving the state instead of fogging the data.</p>
+
+            <p><strong>Exact conditional inference — why this costs less than it looks.</strong> Given
+            \( \varphi \), \( \sigma \) and the baseline block, Eq. (22b) is linear-Gaussian, so the Kalman filter
+            delivers the conditional posteriors \( p(\theta_t \mid \varphi, y_{1:t}) \) <em>exactly</em>, and the
+            prediction-error decomposition (Harvey 1989) gives the marginal likelihood with the whole state path
+            integrated out in closed form:</p>
+
+            <div class="math-block">
+                \[ p(y_{1:T} \mid \varphi, \sigma)
+                \;=\; \prod_{t=1}^{T}
+                \mathcal{N}\!\Big( y_t;\;\; F_t\, m_{t-1},\;\; F_t R_t F_t^{\top} + \sigma^2 I \Big),
+                \qquad R_t = C_{t-1} + W_t, \]
+                <span class="equation-label">(22d)</span>
+            </div>
+
+            <p>with \( m_t, C_t \) the filtered moments. NUTS therefore samples only the same handful of nonlinear
+            parameters per channel it samples today — \( \theta_{1:T} \) never enters the sampled space
+            (Rao-Blackwellisation: the marginalised sampler mixes over a space whose dimension does not grow with
+            \( T \); Chen &amp; Liu 2000, Doucet et al. 2000). The smoothed trajectory \( \theta_{t\mid T} \) comes
+            from the Rauch–Tung–Striebel smoother per posterior draw, or forward-filtering backward-sampling when
+            full path draws are wanted (Carter &amp; Kohn 1994; Frühwirth-Schnatter 1994). In the NumPyro/JAX
+            implementation Eq. (22d) is a <code>scan</code>, and the gradient flows through the filter for free —
+            the same one-differentiable-surface principle the module is built on.</p>
+
+            <p><strong>What it buys.</strong> Three things discounting structurally cannot:</p>
+            <ul>
+                <li><strong>A trajectory, not a blend.</strong> \( \beta_{t\mid T} \) with time-resolved credible
+                bands is a reportable "effectiveness over time" curve — the answer to the question clients actually
+                ask under drift, where the discounted fit can only offer a recency-weighted average.</li>
+                <li><strong>Forecast semantics.</strong> The \( h \)-step forecast is
+                \( \beta_{T+h\mid T} = \beta_{T\mid T} \) with variance \( C_{T\mid T} + \sum_{j\le h} W_{T+j} \) —
+                Eq. (22)'s \( \sigma^2_{\text{eff}}(t) \) <em>is</em> the Kalman prediction variance, so the decay
+                clock, the re-test trigger and ENBS unify with the fit instead of riding alongside it, and the
+                allocator can optimise forecast effectiveness at decision time.</li>
+                <li><strong>Learnable drift.</strong> Per-channel \( \delta_c \) (equivalently \( W_c \)) can be
+                estimated by maximising Eq. (22d) — drift becomes a parameter with a likelihood, replacing the
+                method-of-moments clock of <code>estimate_half_life</code>; and a level-break component added to
+                Eq. (22b) is the model-based version of the BOCD censor below.</li>
+            </ul>
+
+            <p><strong>Identification caution.</strong> A random-walk \( \beta_t \) is identified within a period
+            only by designed cross-sectional variation: each wave's central-composite contrasts identify \( \beta \)
+            <em>at that wave</em>, and the random walk interpolates between waves. Without per-period designed
+            variation, \( \beta_t \) simply soaks up the outcome trend — collinear with \( a_g \) and \( \tau_t \) —
+            so the identification requirement of §<a href="#design">the design</a> is unchanged and, if anything,
+            sharper. Start with a random-walk \( \beta_t \) and a <em>static</em> \( \gamma \): the synergies are the
+            weakest-identified block and drift slower; a channel whose measured \( \hat\lambda \approx 0 \) should be
+            demoted to \( W = 0 \), which collapses Eq. (22b) to the static model exactly. That degeneracy is the
+            point: this is a graduation path, not a replacement — a stable programme on plain NUTS is already fitting
+            the \( W = 0 \) special case, at lower cost.</p>
+
+            <div class="info">
+                <h4>Graduation criteria</h4>
+                <p>Build this when a programme shows all three: (i) <code>estimate_half_life</code> returns a
+                material \( \hat\lambda \) persistently across waves (not once — the moment estimator is noisy);
+                (ii) the discount's effective-sample-size floor binds
+                (<code>diagnostics["discount"]["effective_rows"]</code> plateaus while decisions still hinge on the
+                width it enforces); (iii) the deliverable needs the trajectory itself, not just an honest band around
+                a current estimate. Until then, discounting is the right cost–benefit: in a static world the DLM's
+                extra machinery buys nothing measurable, and the precedent for the upgrade is well trodden — Uber's
+                Orbit BTVC is exactly a time-varying-coefficient Bayesian MMM of this conditionally-linear form
+                (Ng, Wang &amp; Dai 2021).</p>
+            </div>
+
             <h2 id="stationarity">Within-wave stationarity — the changepoint guard</h2>
             <p>Eq. (22) models drift <em>between</em> waves; nothing above guards against a regime change
             <em>during</em> one — a competitor launch, an unplanned promo, a platform outage landing mid-window. The
@@ -1279,6 +1411,28 @@ state.ingest(wave, check_stationarity=True)    # or let ingest run the guard + w
                 Half-life and the Data Interval Bias.</em> J. Targeting, Measurement &amp; Analysis for Marketing 8,
                 314–334. <span style="color:var(--color-text-muted);">— per-component discount factors and
                 category-specific half-lives (the decay clock's \( h \)).</span></li>
+                <li>Ameen, J. R. M., &amp; Harrison, P. J. (1985). <em>Normal Discount Bayesian Models.</em> In
+                Bernardo et al. (eds.), Bayesian Statistics 2, North-Holland, 271–298; and Ljung, L., &amp;
+                Söderström, T. (1983). <em>Theory and Practice of Recursive Identification.</em> MIT Press.
+                <span style="color:var(--color-text-muted);">— the discount construction \( W_t = \tfrac{1-\delta}{\delta}C_{t-1} \)
+                (Eq. 22c), and forgetting-factor RLS as the static-parameter approximation to that filter (the
+                discounting-is-the-approximation argument of §dynamic β).</span></li>
+                <li>Harvey, A. C. (1989). <em>Forecasting, Structural Time Series Models and the Kalman Filter.</em>
+                Cambridge University Press; and Durbin, J., &amp; Koopman, S. J. (2012). <em>Time Series Analysis by
+                State Space Methods</em>, 2nd ed., Oxford University Press.
+                <span style="color:var(--color-text-muted);">— Kalman filtering/smoothing and the prediction-error
+                decomposition of the marginal likelihood (Eq. 22d).</span></li>
+                <li>Carter, C. K., &amp; Kohn, R. (1994). <em>On Gibbs Sampling for State Space Models.</em>
+                Biometrika 81(3), 541–553; Frühwirth-Schnatter, S. (1994). <em>Data Augmentation and Dynamic Linear
+                Models.</em> J. Time Series Analysis 15(2), 183–202; Chen, R., &amp; Liu, J. S. (2000). <em>Mixture
+                Kalman Filters.</em> JRSS-B 62(3), 493–508; and Doucet, A., de Freitas, N., Murphy, K., &amp;
+                Russell, S. (2000). <em>Rao-Blackwellised Particle Filtering for Dynamic Bayesian Networks.</em> UAI.
+                <span style="color:var(--color-text-muted);">— FFBS path draws and the marginalise-the-conditionally-linear-states
+                principle behind sampling only \( \varphi \) in Eq. (22d).</span></li>
+                <li>Ng, E., Wang, Z., &amp; Dai, A. (2021). <em>Bayesian Time Varying Coefficient Model with
+                Applications to Marketing Mix Modeling.</em> arXiv:2106.03322.
+                <span style="color:var(--color-text-muted);">— the MMM precedent for random-walk effectiveness
+                (Uber Orbit's BTVC); the graduation target of §dynamic β.</span></li>
                 <li>Morris, T. P., White, I. R., &amp; Crowther, M. J. (2019). <em>Using Simulation Studies to
                 Evaluate Statistical Methods.</em> Statistics in Medicine 38(11), 2074–2102.
                 <span style="color:var(--color-text-muted);">— the ADEMP framework and the Monte Carlo standard errors
@@ -1312,7 +1466,9 @@ state.ingest(wave, check_stationarity=True)    # or let ingest run the guard + w
             guard), <code>loop.py</code> (Eqs. 9, 22, <code>estimate_half_life</code> / <code>adstock_half_life</code>,
             <code>stop_patience</code>), with <code>serialize.py</code> persisting the carried state and
             <code>service.py</code> orchestrating the app-facing learning programs; the mathematical specification is
-            in <code>technical-docs/continuous-learning.md</code>.</p>
+            in <code>technical-docs/continuous-learning.md</code>. Eqs. (22b)–(22d) are the
+            §<a href="#dlm">dynamic-β</a> design note — deliberately unimplemented; <code>discount_half_life</code>
+            is the shipped drift mechanism.</p>
         </main>
     </div>
 
