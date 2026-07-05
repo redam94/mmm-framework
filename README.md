@@ -470,7 +470,7 @@ model = MultivariateMMM(
 results = model.fit()
 
 # Analyze cross-effects
-cross_effects = model.get_cross_effect_summary()
+cross_effects = model.get_cross_effects_summary()
 print(cross_effects)
 
 # Get correlation matrix
@@ -567,7 +567,7 @@ for e in effects:
     print(e.to_dict())
 
 # Cross-effect summary with HDI
-cross_df = model.get_cross_effect_summary()
+cross_df = model.get_cross_effects_summary()
 # Returns: source, target, effect_type, mean, sd, hdi_3%, hdi_97%
 
 # Correlation matrix for multivariate outcomes

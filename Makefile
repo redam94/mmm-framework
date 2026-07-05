@@ -14,7 +14,7 @@ slow_tests:
 	uv run pytest tests/ --cov=mmm_framework -n logical -m slow
 
 run-api:
-	uv run uvicorn src.mmm_framework.api.main:app --host 0.0.0.0 --port 8000 --reload
+	uv run uvicorn mmm_framework.api.main:app --host 0.0.0.0 --port 8000 --reload
 
 run-ui:
 	cd frontend && npm run dev
