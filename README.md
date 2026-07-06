@@ -186,7 +186,7 @@ from mmm_framework import (
 
 # Load data in MFF format
 loader = MFFLoader(config=mff_config)
-panel_data = loader.load("data.csv")
+panel_data = loader.load("data.csv").build_panel()
 
 # Build model configuration
 config = (
@@ -205,12 +205,7 @@ config = (
 )
 
 # Fit the model
-model = BayesianMMM(
-    X_media=panel_data.media,
-    y=panel_data.kpi,
-    channel_names=panel_data.channel_names,
-    config=config,
-)
+model = BayesianMMM(panel_data, config)
 
 results = model.fit(
     draws=2000,
@@ -220,9 +215,10 @@ results = model.fit(
 )
 
 # Get contributions with uncertainty
-contributions = model.compute_contributions()
-print(contributions.mean_contributions)
-print(contributions.hdi_contributions)  # 94% credible intervals
+contributions = model.compute_counterfactual_contributions()
+print(contributions.total_contributions)
+print(contributions.contribution_hdi_low)   # lower bound of 94% credible interval
+print(contributions.contribution_hdi_high)  # upper bound of 94% credible interval
 ```
 
 ### Fluent Configuration API
@@ -236,6 +232,7 @@ from mmm_framework import (
     AdstockConfigBuilder,
     SaturationConfigBuilder,
     HierarchicalConfigBuilder,
+    PriorConfigBuilder,
 )
 
 # Build a hierarchical model configuration
@@ -244,8 +241,7 @@ config = (
     .with_kpi("transactions")
     .with_hierarchical(
         HierarchicalConfigBuilder()
-        .with_geo_dimension("dma")
-        .with_partial_pooling(True)
+        .pool_across_geo(True)
         .build()
     )
     .with_media_channel(
@@ -253,15 +249,15 @@ config = (
         .with_name("digital")
         .with_adstock(
             AdstockConfigBuilder()
-            .with_type("geometric")
-            .with_alpha_prior("Beta", alpha=1, beta=3)
-            .with_l_max(4)
+            .geometric()
+            .with_alpha_prior(PriorConfigBuilder().beta(1, 3).build())
+            .with_max_lag(4)
             .build()
         )
         .with_saturation(
             SaturationConfigBuilder()
-            .with_type("logistic")
-            .with_lam_prior("Gamma", alpha=2, beta=1)
+            .logistic()
+            .with_kappa_prior(PriorConfigBuilder().gamma(alpha=2, beta=1).build())
             .build()
         )
         .build()
@@ -285,10 +281,10 @@ from mmm_framework.mmm_extensions import (
 # Build a model with awareness mediation and product cannibalization
 config = (
     CombinedModelConfigBuilder()
-    .with_mediator(awareness_mediator(decay=0.9))
+    .add_mediator(awareness_mediator())
     .with_outcomes("single_pack", "multipack")
-    .with_cross_effect(
-        cannibalization_effect("multipack", "single_pack", promo_col="multi_promo")
+    .add_cross_effect(
+        cannibalization_effect("multipack", "single_pack", promotion_column="multi_promo")
     )
     .build()
 )
@@ -378,13 +374,13 @@ model = NestedMMM(
 
 results = model.fit(draws=2000, tune=1000)
 
-# Decompose effects
+# Decompose effects (returns a DataFrame)
 mediation_effects = model.get_mediation_effects()
-for channel_effect in mediation_effects:
-    print(f"{channel_effect.channel}:")
-    print(f"  Direct: {channel_effect.direct_effect:.3f}")
-    print(f"  Indirect via awareness: {channel_effect.indirect_effects['brand_awareness']:.3f}")
-    print(f"  Proportion mediated: {channel_effect.proportion_mediated:.1%}")
+for row in mediation_effects.itertuples(index=False):
+    print(f"{row.channel}:")
+    print(f"  Direct: {row.direct_effect:.3f}")
+    print(f"  Indirect via awareness: {row.indirect_via_brand_awareness:.3f}")
+    print(f"  Proportion mediated: {row.proportion_mediated:.1%}")
 ```
 
 #### Mediator Types
@@ -470,7 +466,7 @@ model = MultivariateMMM(
 results = model.fit()
 
 # Analyze cross-effects
-cross_effects = model.get_cross_effect_summary()
+cross_effects = model.get_cross_effects_summary()
 print(cross_effects)
 
 # Get correlation matrix
@@ -561,13 +557,12 @@ halo = halo_effect("premium", "value")  # Premium brand lifts value brand
 All extended models provide structured result containers:
 
 ```python
-# Mediation decomposition
+# Mediation decomposition (returns a DataFrame)
 effects = model.get_mediation_effects()
-for e in effects:
-    print(e.to_dict())
+print(effects)
 
 # Cross-effect summary with HDI
-cross_df = model.get_cross_effect_summary()
+cross_df = model.get_cross_effects_summary()
 # Returns: source, target, effect_type, mean, sd, hdi_3%, hdi_97%
 
 # Correlation matrix for multivariate outcomes

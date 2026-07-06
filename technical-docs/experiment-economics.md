@@ -66,7 +66,7 @@
 
 - `planning/opportunity_cost.py`: `OpportunityCostResult` dataclass + `compute_opportunity_cost(mmm, design, *, margin_per_kpi, kpi_kind, price, preferences, branding, loss_threshold, evoi_kpi_units, response_horizon_weeks, max_draws, random_seed)`; internal `_resolve_treated_rows`, `build_experiment_media`, `_resolve_margin`.
 - `planning/design_anchor.py`: `model_anchored_effect(mmm, design, ...)`, `powered_to_detect(effect, power_curve, duration, se_roas, ...)`, `realized_sigma_exp_for_anchor(incremental_roas_draws, se_roas, ...)`.
-- `planning/simulation.py`: `Window`, `Assignment`, `SimPanel`, `EstimatorResult`, `AAResult`, `ABResult`; estimators `pooled_did_estimator`/`per_pair_did_estimator`/`regadj_geo_estimator`/`national_onoff_estimator`; `build_sim_panel`, `run_aa_simulation`, `run_ab_simulation`, `model_anchored_injector`/`fixed_lift_injector`, `methodology_leaderboard`, `simulate_methodologies` (model-op).
+- `planning/simulation.py`: `Window`, `Assignment`, `SimPanel`, `EstimatorResult`, `AAResult`, `ABResult`; estimators `pooled_did_estimator`/`per_pair_did_estimator`/`regadj_geo_estimator`/`national_onoff_estimator`; `build_sim_panel`, `run_aa_simulation`, `run_ab_simulation`, `fixed_lift_injector` (model-anchored injection is an internal path of `run_ab_simulation`), `methodology_leaderboard`.
 - `planning/priority.py`: add `roi_draws_overrides: dict[str,np.ndarray] | None = None`.
 - `agents/model_ops.py`: `experiment_economics(mmm, results, *, design_params, run_simulation, margin, kpi_kind, max_draws, random_seed)` (`allow_unfitted=True`).
 
