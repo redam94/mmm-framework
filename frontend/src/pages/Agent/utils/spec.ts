@@ -51,6 +51,7 @@ interface RawSpec {
   inference?: {
     chains?: number; draws?: number; tune?: number;
     target_accept?: number; random_seed?: number;
+    method?: string; metrics_draws?: number;
   };
   trend?: {
     type?: unknown; n_changepoints?: number; changepoint_range?: number;
@@ -90,14 +91,20 @@ export function specWithDefaults(rawSpec: unknown) {
     kpi: raw?.kpi ?? '',
     kpi_level: raw?.kpi_level ?? 'national',
     time_granularity: raw?.time_granularity ?? 'weekly',
+    // Sub-objects spread their raw form first so keys the editor doesn't
+    // materialize (e.g. inference.metrics_draws) survive the edit → Apply
+    // round-trip instead of being silently wiped.
     inference: {
+      ...(raw?.inference ?? {}),
       chains: raw?.inference?.chains ?? 4,
       draws: raw?.inference?.draws ?? 1000,
       tune: raw?.inference?.tune ?? 1000,
       target_accept: raw?.inference?.target_accept ?? 0.85,
       random_seed: raw?.inference?.random_seed ?? 42,
+      method: raw?.inference?.method ?? 'nuts',
     },
     trend: {
+      ...(raw?.trend ?? {}),
       type: normalizeTrendType(raw?.trend?.type),
       n_changepoints: raw?.trend?.n_changepoints ?? 5,
       changepoint_range: raw?.trend?.changepoint_range ?? 0.8,
@@ -105,6 +112,7 @@ export function specWithDefaults(rawSpec: unknown) {
       spline_degree: raw?.trend?.spline_degree ?? 3,
     },
     seasonality: {
+      ...(raw?.seasonality ?? {}),
       yearly: raw?.seasonality?.yearly ?? 0,
       monthly: raw?.seasonality?.monthly ?? 0,
       weekly: raw?.seasonality?.weekly ?? 0,

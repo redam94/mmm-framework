@@ -35,6 +35,10 @@ ACCEPTED = [
     ("skip_quality_gate", True),
     ("inference.draws", 2000),
     ("inference.method", "map"),
+    ("inference.method", "advi"),
+    ("inference.method", "fullrank_advi"),
+    ("inference.method", "pathfinder"),
+    ("inference.method", "NUTS"),  # canonicalized case-insensitively
     ("inference.metrics_draws", 0),
     ("trend.type", "piecewise"),
     ("trend.n_changepoints", 10),
@@ -81,6 +85,9 @@ REJECTED = [
     ("kpi_level", "regional", "silently fall back"),
     ("media_prior_mode", "rio", "silently fall back"),
     ("trend.type", "quadratic", "trend"),
+    # a typo'd fit method would only fail at fit time — reject up front
+    ("inference.method", "pathfnder", "fit method"),
+    ("inference.method", "vi", "fit method"),
     ("media_channels.TV.adstock.type", "weibul", "geometric"),
     ("media_channels.TV.saturation.type", "hilll", "hill"),
     ("media_channels.TV.measurement_unit", "views", "measurement unit"),

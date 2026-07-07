@@ -204,10 +204,24 @@ def unconsumed_prior_path(parts: list[str], value, spec: dict) -> str | None:
 # this module MUST come with a registry entry here.
 
 _INFERENCE_KEYS = {
-    "chains", "draws", "tune", "target_accept", "random_seed", "method",
+    "chains",
+    "draws",
+    "tune",
+    "target_accept",
+    "random_seed",
+    "method",
     "metrics_draws",
 }
-_TREND_KEYS = {"type", "n_changepoints", "changepoint_range", "n_knots", "spline_degree"}
+# Mirrors config.enums.FitMethod — "nuts" is full MCMC; the rest are the
+# approximate methods BayesianMMM.fit dispatches to (_fit_approx).
+_INFERENCE_METHODS = {"nuts", "map", "advi", "fullrank_advi", "pathfinder"}
+_TREND_KEYS = {
+    "type",
+    "n_changepoints",
+    "changepoint_range",
+    "n_knots",
+    "spline_degree",
+}
 _TREND_TYPES = {"linear", "piecewise", "spline", "gaussian_process", "none"}
 _SEASONALITY_KEYS = {"yearly", "monthly", "weekly"}
 _LIKELIHOOD_KEYS = {"family", "link", "params"}
@@ -228,7 +242,11 @@ _ENUM_TOP_VALUES = {
 # Consumed but free-form: validated downstream at build time (dataset loader,
 # garden manifest, CONFIG_SCHEMA, Estimand.from_dict, ExperimentMeasurement).
 _FREEFORM_TOP_KEYS = {
-    "dataset", "garden_ref", "model_params", "estimands", "experiments",
+    "dataset",
+    "garden_ref",
+    "model_params",
+    "estimands",
+    "experiments",
     "experiment_ids",
 }
 _SIMPLE_TOP_KEYS = {"kpi", "skip_quality_gate"}
@@ -294,6 +312,15 @@ def unconsumed_spec_path(parts: list[str], value, spec: dict) -> str | None:
                         f"`trend.type` = {leaf_val!r} is not a trend the builder "
                         f"recognizes: {', '.join(sorted(_TREND_TYPES))}."
                     )
+            if top == "inference" and leaf[1] == "method":
+                if str(leaf_val).strip().lower() not in _INFERENCE_METHODS:
+                    return (
+                        f"`inference.method` = {leaf_val!r} is not a fit method — "
+                        f"the fit would fail. Recognized methods: "
+                        f"{', '.join(sorted(_INFERENCE_METHODS))} (nuts = full "
+                        "MCMC; the rest are fast approximate fits with "
+                        "uncalibrated uncertainty)."
+                    )
             # likelihood.params is free-form (family-specific); the family/link
             # values are validated by LikelihoodConfig at build time.
         return None
@@ -321,7 +348,10 @@ def unconsumed_spec_path(parts: list[str], value, spec: dict) -> str | None:
                         path,
                         f"valid `adstock.*` keys: {', '.join(sorted(_ADSTOCK_KEYS))}.",
                     )
-                if leaf[3] == "type" and str(leaf_val).strip().lower() not in _ADSTOCK_TYPES:
+                if (
+                    leaf[3] == "type"
+                    and str(leaf_val).strip().lower() not in _ADSTOCK_TYPES
+                ):
                     return (
                         f"`{path}` = {leaf_val!r} would silently fall back to "
                         f"geometric — recognized adstock types: "
@@ -520,6 +550,162 @@ def _canonical_trend_type(trend_spec: dict) -> str:
     return {"piecewise_linear": "piecewise", "gp": "gaussian_process"}.get(
         trend_type, trend_type
     )
+
+
+# ── Saved-model settings (single source of truth for load/list surfaces) ─────
+
+
+def saved_model_settings(save_dir: str) -> dict:
+    """Read the complete settings of a saved model directory.
+
+    Returns ``{"spec": <saved model_spec or None>, "settings": {...}}``.
+    ``settings`` is a JSON-safe normalized summary (trend, seasonality Fourier
+    orders, inference incl. the fit method, likelihood, channels) used by the
+    load/list surfaces so what the user sees always matches what was fit.
+
+    Sources, in order:
+
+    * ``run_metadata.json`` (written by the ``build_and_fit`` auto-save) — the
+      full normalized spec, so the session's editable model configuration can
+      be restored exactly;
+    * ``configs.json`` (always written by ``MMMSerializer.save``) — the model's
+      OWN ``ModelConfig``/``TrendConfig``/``MFFConfig``, for models saved
+      without a run record (manual ``save_model``). This is ground truth for
+      the graph that was actually built.
+    """
+    import json as _json
+    import os as _os
+
+    spec = None
+    settings: dict = {"source": None}
+
+    run_meta_path = _os.path.join(save_dir, "run_metadata.json")
+    if _os.path.exists(run_meta_path):
+        try:
+            with open(run_meta_path) as f:
+                meta = _json.load(f)
+            spec = meta.get("spec") or None
+            settings = {
+                "source": "run_record",
+                "kpi": meta.get("kpi"),
+                "trend": meta.get("trend"),
+                "seasonality": meta.get("seasonality") or {},
+                "inference": meta.get("inference") or {},
+                "channels": [],
+                "controls": meta.get("controls") or [],
+            }
+            if spec:
+                settings["likelihood"] = spec.get("likelihood")
+                settings["media_prior_mode"] = spec.get("media_prior_mode")
+                for m in spec.get("media_channels", []):
+                    adstock = m.get("adstock") or {}
+                    sat = m.get("saturation") or {}
+                    settings["channels"].append(
+                        {
+                            "name": m.get("name"),
+                            "adstock": adstock.get("type", "geometric"),
+                            "l_max": adstock.get("l_max", 8),
+                            "saturation": sat.get("type", "hill"),
+                        }
+                    )
+            else:
+                settings["channels"] = [{"name": c} for c in meta.get("channels") or []]
+            return {"spec": spec, "settings": settings}
+        except Exception:  # noqa: BLE001 — fall through to configs.json
+            pass
+
+    configs_path = _os.path.join(save_dir, "configs.json")
+    if _os.path.exists(configs_path):
+        try:
+            with open(configs_path) as f:
+                configs = _json.load(f)
+            mc = configs.get("model_config") or {}
+            tc = configs.get("trend_config") or {}
+            mff = configs.get("mff_config") or {}
+            seas = mc.get("seasonality") or {}
+            lik = mc.get("likelihood") or {}
+            settings = {
+                "source": "serialized_config",
+                "kpi": (mff.get("kpi") or {}).get("name"),
+                "trend": tc.get("type"),
+                "seasonality": {
+                    "yearly": seas.get("yearly") or 0,
+                    "monthly": seas.get("monthly") or 0,
+                    "weekly": seas.get("weekly") or 0,
+                },
+                "inference": {
+                    "method": mc.get("fit_method", "nuts"),
+                    "chains": mc.get("n_chains"),
+                    "draws": mc.get("n_draws"),
+                    "tune": mc.get("n_tune"),
+                    "target_accept": mc.get("target_accept"),
+                },
+                "likelihood": lik or None,
+                "media_prior_mode": mc.get("media_prior_mode"),
+                "channels": [
+                    {
+                        "name": m.get("name"),
+                        "adstock": (m.get("adstock") or {}).get("type"),
+                        "l_max": (m.get("adstock") or {}).get("l_max"),
+                        "saturation": (m.get("saturation") or {}).get("type"),
+                    }
+                    for m in mff.get("media_channels") or []
+                ],
+                "controls": [c.get("name") for c in mff.get("controls") or []],
+            }
+        except Exception:  # noqa: BLE001 — settings stay minimal
+            pass
+
+    return {"spec": spec, "settings": settings}
+
+
+def settings_digest_markdown(settings: dict) -> str:
+    """Render a ``saved_model_settings`` settings dict as compact markdown
+    bullet lines — the load/list message the user actually reads."""
+    lines: list[str] = []
+    if settings.get("kpi"):
+        lines.append(f"- KPI: **{settings['kpi']}**")
+    if settings.get("trend"):
+        lines.append(f"- Trend: {settings['trend']}")
+    seas = settings.get("seasonality") or {}
+    seas_parts = [
+        f"{k} order {seas[k]}" for k in ("yearly", "monthly", "weekly") if seas.get(k)
+    ]
+    lines.append(
+        "- Seasonality (Fourier): " + (", ".join(seas_parts) if seas_parts else "off")
+    )
+    inf = settings.get("inference") or {}
+    method = str(inf.get("method") or "nuts")
+    inf_line = f"- Inference: **{method}**"
+    if method == "nuts":
+        if inf.get("chains") and inf.get("draws"):
+            inf_line += f", {inf['chains']} chains × {inf['draws']} draws"
+            if inf.get("tune"):
+                inf_line += f" ({inf['tune']} tune)"
+    else:
+        inf_line += " (approximate — uncertainty not calibrated)"
+    lines.append(inf_line)
+    lik = settings.get("likelihood") or {}
+    if isinstance(lik, dict) and lik.get("family") not in (None, "normal"):
+        lines.append(f"- Likelihood: {lik.get('family')}")
+    if settings.get("media_prior_mode"):
+        lines.append(f"- Media prior mode: {settings['media_prior_mode']}")
+    channels = settings.get("channels") or []
+    if channels:
+        ch_parts = []
+        for ch in channels:
+            if ch.get("adstock") or ch.get("saturation"):
+                ch_parts.append(
+                    f"{ch.get('name')} ({ch.get('adstock') or 'geometric'}"
+                    f"/{ch.get('saturation') or 'hill'})"
+                )
+            else:
+                ch_parts.append(str(ch.get("name")))
+        lines.append(f"- Channels: {', '.join(ch_parts)}")
+    controls = settings.get("controls") or []
+    if controls:
+        lines.append(f"- Controls: {', '.join(map(str, controls))}")
+    return "\n".join(lines)
 
 
 def _trend_config_from_spec(spec: dict):

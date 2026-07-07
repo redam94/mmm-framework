@@ -2491,14 +2491,46 @@ async def load_model_endpoint(thread_id: str, body: LoadModelRequest):
     dashboard = dict(values.get("dashboard_data") or {})
     dashboard["model_status"] = "completed"
     dashboard["summary"] = res["message"]
+    update: dict = {"model_status": "completed", "dashboard_data": dashboard}
+
+    # Restore the SAVED run's spec so the Model Configuration panel shows the
+    # settings the loaded model was actually fit with (trend, seasonality
+    # Fourier terms, inference method, …). Lock-aware: conflicting user-locked
+    # fields surface as pending changes instead of being silently overwritten.
+    restored = res.get("spec")
+    if isinstance(restored, dict) and restored.get("kpi"):
+        from mmm_framework.agents.spec_locks import (
+            merge_pending,
+            reconcile_with_locks,
+        )
+
+        locked = list(values.get("locked_fields") or [])
+        merged, new_pending = reconcile_with_locks(
+            restored,
+            values.get("model_spec") or {},
+            locked,
+            reason=f"Restored settings from loaded model {body.name}",
+        )
+        pending = merge_pending(values.get("pending_spec_changes"), new_pending)
+        update["model_spec"] = merged
+        update["pending_spec_changes"] = pending
+        dashboard["model_spec"] = merged
+        dashboard["locked_fields"] = locked
+        dashboard["pending_spec_changes"] = pending
+
     # Attributed to the agent node (terminal write, same as the /spec endpoints);
     # the next agent turn sees model_status=completed in CURRENT STATE.
-    await g.aupdate_state(
-        cfg,
-        {"model_status": "completed", "dashboard_data": dashboard},
-        as_node="agent",
+    await g.aupdate_state(cfg, update, as_node="agent")
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            {
+                "status": "ok",
+                "message": res["message"],
+                "model_spec": update.get("model_spec"),
+                "settings": res.get("settings"),
+            }
+        )
     )
-    return JSONResponse(content={"status": "ok", "message": res["message"]})
 
 
 # ── Run lineage (MLflow-style tracking) ───────────────────────────────────────

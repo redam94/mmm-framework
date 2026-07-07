@@ -12,6 +12,18 @@ import type { ModelSpec } from '../../types';
 // leaves are concrete (numbers/strings/arrays), unlike the loose incoming spec.
 type DraftSpec = ReturnType<typeof specWithDefaults>;
 
+// Fit methods the backend dispatches on (config.enums.FitMethod). Everything
+// except NUTS is a fast approximate fit with uncalibrated uncertainty.
+const FIT_METHODS: ReadonlyArray<readonly [string, string]> = [
+  ['nuts', 'NUTS (full MCMC)'],
+  ['map', 'MAP (point estimate)'],
+  ['advi', 'ADVI (variational)'],
+  ['fullrank_advi', 'Full-rank ADVI (variational)'],
+  ['pathfinder', 'Pathfinder'],
+];
+const fitMethodLabel = (m: string) =>
+  FIT_METHODS.find(([v]) => v === m)?.[1] ?? m;
+
 function SpecRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between items-center py-1.5 border-b border-line-200 last:border-0">
@@ -199,11 +211,26 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
         <SpecRow label="Granularity" value={displaySpec.time_granularity || 'weekly'} />
       </SpecSection>
       <SpecSection title="Inference" icon={<Activity size={13} />}>
+        <SpecRow label="Method" value={
+          <span className="flex items-center gap-1.5 justify-end">
+            {fitMethodLabel(inference?.method ?? 'nuts')}
+            {(inference?.method ?? 'nuts') !== 'nuts' && (
+              <Badge label="approximate" color="amber" />
+            )}
+          </span>
+        } />
         <SpecRow label="Chains" value={inference?.chains ?? 4} />
         <SpecRow label="Draws" value={inference?.draws ?? 1000} />
         <SpecRow label="Tune" value={inference?.tune ?? 1000} />
         <SpecRow label="Target Accept" value={inference?.target_accept ?? 0.85} />
         <SpecRow label="Seed" value={inference?.random_seed ?? 42} />
+        {(inference?.method ?? 'nuts') !== 'nuts' && (
+          <p className="text-[11px] text-amber-700 py-1">
+            Approximate fits run in seconds for model checking, but their
+            uncertainty is <em>not</em> calibrated — re-fit with NUTS before
+            trusting intervals or making spend decisions.
+          </p>
+        )}
       </SpecSection>
       <SpecSection title="Trend" icon={<TrendingUp size={13} />}>
         <SpecRow label="Type" value={trendLabel} />
@@ -296,6 +323,21 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
 
       {/* Inference */}
       <EditSection title="Inference" icon={<Activity size={13} />}>
+        <div>
+          <FLabel>Fit Method</FLabel>
+          <select className={sCls} value={draft.inference.method}
+            onChange={e => setDraftField(['inference', 'method'], e.target.value)}>
+            {FIT_METHODS.map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          {draft.inference.method !== 'nuts' && (
+            <p className="text-[11px] text-amber-700 mt-1">
+              Approximate fit — seconds instead of minutes, but uncertainty is
+              not calibrated. Use NUTS for final inference.
+            </p>
+          )}
+        </div>
         <div className="grid grid-cols-3 gap-2">
           {([['Chains', 'chains', 1, 8], ['Draws', 'draws', 100, 10000], ['Tune', 'tune', 100, 5000]] as const).map(([label, key, min, max]) => (
             <div key={key}>

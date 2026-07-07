@@ -335,6 +335,9 @@ export function AgentPage() {
         ...prev,
         model_status: 'completed',
         summary: body?.message ?? `Model ${runName} loaded.`,
+        // The endpoint restores the SAVED run's spec (lock-reconciled) so the
+        // Model Configuration panel shows the settings the model was fit with.
+        ...(body?.model_spec ? { model_spec: body.model_spec } : {}),
         error: undefined,
       }));
     } catch (e) {

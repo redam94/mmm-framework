@@ -46,6 +46,25 @@ describe('specWithDefaults round-trip', () => {
     expect(tv.adstock).toEqual({ type: 'geometric', l_max: 8 });
   });
 
+  it('preserves inference.method and metrics_draws through the round-trip', () => {
+    // Regression: the editor rebuilds `inference` from its own field list, so
+    // an agent-set approximate fit method (advi/pathfinder) used to be wiped
+    // by any unrelated Apply.
+    const spec = {
+      ...RICH_SPEC,
+      inference: { draws: 500, method: 'pathfinder', metrics_draws: 0 },
+    };
+    const d = specWithDefaults(spec);
+    expect(d.inference.method).toBe('pathfinder');
+    expect((d.inference as Record<string, unknown>).metrics_draws).toBe(0);
+    expect(d.inference.draws).toBe(500);
+    expect(d.inference.chains).toBe(4); // defaults still materialize
+  });
+
+  it('defaults inference.method to nuts when absent', () => {
+    expect(specWithDefaults(RICH_SPEC).inference.method).toBe('nuts');
+  });
+
   it('an untouched round-trip produces no leaf diff (no phantom locks)', () => {
     const baseline = specWithDefaults(RICH_SPEC);
     const again = specWithDefaults(RICH_SPEC);

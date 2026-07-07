@@ -29,8 +29,11 @@ from mmm_framework.agents.runtime import (
 from mmm_framework.agents import workspace as _ws
 from mmm_framework.agents import model_ops as _model_ops
 from mmm_framework.agents.fitting import (
+    _INFERENCE_METHODS,
     _mff_config_from_spec,
     build_and_fit,
+    saved_model_settings,
+    settings_digest_markdown,
     unconsumed_spec_path,
 )
 from mmm_framework.agents.spec_locks import (
@@ -737,10 +740,10 @@ def fit_mmm_model(
             you just want to check whether a model is sensible (catch bad priors,
             divergent geometry, broken saturation/adstock) before paying for a
             full sample: ``"map"`` (fastest, point estimate), ``"advi"`` /
-            ``"fullrank_advi"`` (variational), or ``"pathfinder"`` (needs the
-            optional ``pymc_extras`` package). Approximate fits have UNCALIBRATED
-            uncertainty — always re-fit with NUTS before reporting intervals or
-            making spend decisions.
+            ``"fullrank_advi"`` (variational), or ``"pathfinder"``. All work out
+            of the box. Approximate fits have UNCALIBRATED uncertainty — always
+            re-fit with NUTS before reporting intervals or making spend
+            decisions.
 
     Returns:
         A Command that updates the model_status and fit_results_summary in the state.
@@ -766,7 +769,15 @@ def fit_mmm_model(
         spec = copy.deepcopy(dict(spec))
         _normalize_spec_vars(spec)  # accept bare-string channel/control lists
         if method is not None:
-            spec.setdefault("inference", {})["method"] = str(method).lower()
+            method_norm = str(method).strip().lower()
+            if method_norm not in _INFERENCE_METHODS:
+                raise ValueError(
+                    f"Unknown fit method {method!r}. Recognized methods: "
+                    f"{', '.join(sorted(_INFERENCE_METHODS))} (nuts = full MCMC; "
+                    "map/advi/fullrank_advi/pathfinder are fast approximate fits "
+                    "with uncalibrated uncertainty)."
+                )
+            spec.setdefault("inference", {})["method"] = method_norm
         info = _KERNELS.get_or_spawn(get_current_thread()).fit(spec, path)
     except Exception as e:
         info = {"error": f"Error fitting model: {str(e)}"}
@@ -2690,7 +2701,11 @@ def load_model_core(
 
     Shared by the ``load_fitted_model`` tool AND the direct
     ``POST /sessions/{tid}/load-model`` endpoint (UI buttons load directly —
-    no LLM round-trip). Returns ``{"ok": bool, "message": str}``.
+    no LLM round-trip). Returns ``{"ok": bool, "message": str, "spec": dict |
+    None, "settings": dict}`` — ``spec`` is the SAVED run's model_spec (from
+    ``run_metadata.json``) so callers can restore the session configuration to
+    match the loaded model, and ``settings`` is the normalized settings digest
+    (trend, seasonality Fourier orders, inference method, channels).
     """
     if thread_id:
         set_current_thread(thread_id)
@@ -2710,11 +2725,22 @@ def load_model_core(
             "message": f"Model **{name}** not found. Available: {available or 'none'}",
         }
 
+    # The model's own settings, straight from disk (run record, else the
+    # serialized configs). The saved spec — when present — is preferred over
+    # the session spec for the panel rebuild below: the session spec may have
+    # been edited since the fit, and the serializer validates the panel against
+    # what the model was actually trained on.
+    saved = saved_model_settings(save_dir)
+    saved_spec = saved.get("spec")
+    settings = saved.get("settings") or {}
+
+    panel_spec = saved_spec if (saved_spec and saved_spec.get("kpi")) else spec
+
     # The serializer rebuilds the live PyMC model against a COMPATIBLE panel, so
-    # loading needs this session's dataset + model spec (it returns a single
-    # model, not a (model, results) tuple — the prior `load(save_dir)` omitted the
-    # required `panel` and mis-unpacked, so load ALWAYS failed).
-    if not spec or not spec.get("kpi") or not dataset_path:
+    # loading needs a dataset + model spec (it returns a single model, not a
+    # (model, results) tuple — the prior `load(save_dir)` omitted the required
+    # `panel` and mis-unpacked, so load ALWAYS failed).
+    if not panel_spec or not panel_spec.get("kpi") or not dataset_path:
         return {
             "ok": False,
             "message": (
@@ -2722,21 +2748,41 @@ def load_model_core(
                 "model configuration (the saved model is rebuilt against a compatible "
                 "panel). Restore the dataset + model spec, then load again."
             ),
+            "spec": saved_spec,
+            "settings": settings,
         }
 
     try:
         from mmm_framework.serialization import MMMSerializer
 
-        panel = load_mff(dataset_path, _mff_config_from_spec(_normalized_spec(spec)))
+        panel = load_mff(
+            dataset_path, _mff_config_from_spec(_normalized_spec(panel_spec))
+        )
         mmm = MMMSerializer.load(save_dir, panel)
         _MODEL_CACHE["fitted_model"] = mmm
         _MODEL_CACHE["fit_results"] = None
+        message = f"Model **{name}** loaded. You can now run analysis tools."
+        digest = settings_digest_markdown(settings)
+        if digest:
+            message += "\n\n**Model settings (as fitted):**\n" + digest
+        if saved_spec and saved_spec.get("kpi"):
+            message += (
+                "\n\nThe session's model configuration has been restored to "
+                "match this saved model."
+            )
         return {
             "ok": True,
-            "message": f"Model **{name}** loaded. You can now run analysis tools.",
+            "message": message,
+            "spec": _normalized_spec(saved_spec) if saved_spec else None,
+            "settings": settings,
         }
     except Exception as exc:
-        return {"ok": False, "message": f"Load failed: {exc}"}
+        return {
+            "ok": False,
+            "message": f"Load failed: {exc}",
+            "spec": None,
+            "settings": settings,
+        }
 
 
 @tool
@@ -2746,7 +2792,12 @@ def load_fitted_model(
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
     config: InjectedConfig = None,
 ) -> Command:
-    """Load a previously saved fitted model from disk by name, making it available for analysis tools."""
+    """Load a previously saved fitted model from disk by name, making it available for analysis tools.
+
+    Also restores the session's model configuration (spec) to the settings the
+    saved model was actually fit with — trend, seasonality Fourier terms,
+    inference method, channel transforms — so what the user sees in the Model
+    Configuration panel matches the loaded model."""
     tid = _activate_thread(config)
     res = load_model_core(
         tid,
@@ -2754,6 +2805,23 @@ def load_fitted_model(
         state.get("model_spec") if isinstance(state, dict) else None,
         state.get("dataset_path") if isinstance(state, dict) else None,
     )
+    if res["ok"] and isinstance(res.get("spec"), dict) and isinstance(state, dict):
+        # Lock-aware spec restore: conflicting user-locked fields surface as
+        # pending changes instead of being silently overwritten.
+        cmd = _commit_spec(
+            state,
+            res["spec"],
+            tool_call_id,
+            success_msg=res["message"],
+            reason=f"Restored settings from loaded model {name}",
+            set_status="completed",
+        )
+        dd = cmd.update.get("dashboard_data")
+        if isinstance(dd, dict):
+            dd["model_status"] = "completed"
+            dd["summary"] = res["message"]
+        return cmd
+
     update: dict[str, Any] = {
         "messages": [ToolMessage(content=res["message"], tool_call_id=tool_call_id)]
     }
@@ -2799,18 +2867,42 @@ def list_saved_models(
 
     rows = []
     for m in models:
+        row = f"- **{m}**"
         meta_path = os.path.join(_MODELS_DIR, m, "metadata.json")
         if os.path.exists(meta_path):
             try:
                 with open(meta_path) as f:
                     meta = json.load(f)
-                rows.append(
-                    f"- **{m}**: saved {meta.get('saved_at','?')}, channels={meta.get('channel_names','?')}"
+                row += (
+                    f": saved {meta.get('saved_at', '?')}, "
+                    f"channels={meta.get('channel_names', '?')}"
                 )
             except Exception:
-                rows.append(f"- **{m}**")
-        else:
-            rows.append(f"- **{m}**")
+                pass
+        # Settings digest (trend / seasonality Fourier orders / fit method) so
+        # the saved-model list shows what each model actually is.
+        try:
+            s = saved_model_settings(os.path.join(_MODELS_DIR, m)).get("settings") or {}
+            seas = s.get("seasonality") or {}
+            seas_txt = (
+                ", ".join(
+                    f"{k}={seas[k]}"
+                    for k in ("yearly", "monthly", "weekly")
+                    if seas.get(k)
+                )
+                or "off"
+            )
+            bits = []
+            if s.get("trend"):
+                bits.append(f"trend={s['trend']}")
+            bits.append(f"seasonality {seas_txt}")
+            method = (s.get("inference") or {}).get("method")
+            if method:
+                bits.append(f"method={method}")
+            row += f" — {'; '.join(bits)}"
+        except Exception:
+            pass
+        rows.append(row)
 
     return Command(
         update={

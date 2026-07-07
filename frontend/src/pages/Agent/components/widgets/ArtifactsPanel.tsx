@@ -202,13 +202,29 @@ function ModelRunsWidget({
                           <div>
                             <p className="text-[10px] uppercase tracking-wider text-ink-300 mb-1">Inference</p>
                             <p className="text-ink-700 font-mono">
-                              {r.inference?.chains ?? '?'} chains × {r.inference?.draws ?? '?'} draws
-                              {r.inference?.tune ? ` (${r.inference.tune} tune)` : ''}
+                              {(() => {
+                                const method = r.inference?.method ?? 'nuts';
+                                const sampler = `${r.inference?.chains ?? '?'} chains × ${r.inference?.draws ?? '?'} draws${r.inference?.tune ? ` (${r.inference.tune} tune)` : ''}`;
+                                return method === 'nuts'
+                                  ? `nuts · ${sampler}`
+                                  : `${method} (approximate)`;
+                              })()}
                             </p>
                           </div>
                           <div>
                             <p className="text-[10px] uppercase tracking-wider text-ink-300 mb-1">Trend / Seasonality</p>
-                            <p className="text-ink-700">{r.trend ?? '—'}</p>
+                            <p className="text-ink-700">
+                              {r.trend ?? '—'}
+                              {(() => {
+                                const s = r.seasonality ?? {};
+                                const parts = (['yearly', 'monthly', 'weekly'] as const)
+                                  .filter(k => s[k])
+                                  .map(k => `${k} ${s[k]}`);
+                                return parts.length > 0
+                                  ? ` · Fourier: ${parts.join(', ')}`
+                                  : ' · no seasonality';
+                              })()}
+                            </p>
                           </div>
                           {r.model_path && (
                             <div className="col-span-2">
