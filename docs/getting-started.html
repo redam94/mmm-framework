@@ -1002,19 +1002,18 @@ decay_prior = (
 adstock = (
     AdstockConfigBuilder()
     .geometric()
-    .with_l_max(8)
+    .with_max_lag(8)
     .with_alpha_prior(decay_prior)
     .build()
 )
 
 # Build complete media channel config
 tv_channel = (
-    MediaChannelConfigBuilder()
-    .with_name("TV")
+    MediaChannelConfigBuilder("TV")
     .national()
     .with_adstock(adstock)
     .with_hill_saturation()
-    .positive_effect()  # Constrain to positive
+    .with_positive_prior(sigma=2.0)  # Constrain to positive
     .build()
 )
 
@@ -1158,42 +1157,10 @@ hierarchical = (
 
             <h2 id="api-backend">Running the Web Application</h2>
             <p>
-                The web application pairs a shared backend (Redis, FastAPI, and an ARQ worker) with
-                your choice of two frontends: the modern React web app (recommended) or the legacy
-                Streamlit interface. Whichever frontend you choose, start the backend services first:
+                The supported application is the <strong>React UI</strong> talking to the
+                <strong>MMM Agent API</strong>. The agent API runs model fits in-process (in its
+                session kernel), so this path needs <strong>no Redis and no separate worker</strong>.
             </p>
-
-            <div class="quick-start-grid">
-                <div class="quick-start-card">
-                    <h4><span class="step-number">1</span> Start Redis</h4>
-                    <p>The job queue requires Redis running locally.</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> redis-server
-                        </div>
-                    </div>
-                </div>
-                <div class="quick-start-card">
-                    <h4><span class="step-number">2</span> Start API Server</h4>
-                    <p>FastAPI backend with OpenAPI docs (port 8000).</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> cd api<br>
-                            <span class="prompt">$</span> uvicorn main:app --reload
-                        </div>
-                    </div>
-                </div>
-                <div class="quick-start-card">
-                    <h4><span class="step-number">3</span> Start Worker</h4>
-                    <p>ARQ worker processes model fitting jobs.</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> cd api<br>
-                            <span class="prompt">$</span> arq worker.WorkerSettings
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <h3>Option 1: React Web App (modern, recommended)</h3>
             <p>
@@ -1208,16 +1175,20 @@ hierarchical = (
                     <span class="terminal-dot green"></span>
                 </div>
                 <div class="terminal-content">
-                    <span class="comment"># Terminal 4: React UI (Vite dev server)</span><br>
+                    <span class="comment"># Terminal 1: Agent API (port 8000)</span><br>
+                    <span class="prompt">$</span> uv run uvicorn mmm_framework.api.main:app --host 0.0.0.0 --port 8000 --reload<br>
+                    <br>
+                    <span class="comment"># Terminal 2: React UI (Vite dev server, port 5173)</span><br>
                     <span class="prompt">$</span> cd frontend<br>
                     <span class="prompt">$</span> npm run dev
                 </div>
             </div>
 
-            <h3 id="streamlit-app">Option 2: Streamlit (legacy)</h3>
+            <h3 id="streamlit-app">Option 2: Streamlit (legacy, deprecated)</h3>
             <p>
-                The original Streamlit interface remains available as a secondary surface. It uses
-                the same backend services.
+                The original Streamlit interface in <code>app/</code> is deprecated. It targets a
+                separate legacy REST API (<code>api/main.py</code>) that requires Redis and an ARQ
+                worker, and lags the current feature set. New work should use the React UI above.
             </p>
             <div class="terminal-block">
                 <div class="terminal-header">
@@ -1226,9 +1197,14 @@ hierarchical = (
                     <span class="terminal-dot green"></span>
                 </div>
                 <div class="terminal-content">
+                    <span class="comment"># Terminal 1: Redis</span><br>
+                    <span class="prompt">$</span> redis-server<br>
+                    <span class="comment"># Terminal 2: legacy REST API (port 8000)</span><br>
+                    <span class="prompt">$</span> cd api &amp;&amp; uvicorn main:app --reload<br>
+                    <span class="comment"># Terminal 3: ARQ worker</span><br>
+                    <span class="prompt">$</span> cd api &amp;&amp; arq worker.WorkerSettings<br>
                     <span class="comment"># Terminal 4: Streamlit UI (port 8501)</span><br>
-                    <span class="prompt">$</span> cd app<br>
-                    <span class="prompt">$</span> streamlit run Home.py
+                    <span class="prompt">$</span> cd app &amp;&amp; streamlit run Home.py
                 </div>
             </div>
 

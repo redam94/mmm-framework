@@ -639,8 +639,8 @@
 
                     <dt id="term-arq">ARQ</dt>
                     <dd>
-                        Async job queue used by the API service for long-running model fits. Workers run via
-                        <code>arq worker.WorkerSettings</code> against a Redis backend.
+                        Async job queue used by the legacy REST API (<code>api/main.py</code>) for long-running model fits. Workers run via
+                        <code>arq worker.WorkerSettings</code> against a Redis backend. The current agent API runs fits in-kernel and does not require ARQ or Redis.
                     </dd>
 
                     <dt id="term-agent-workspace">Agent workspace</dt>
