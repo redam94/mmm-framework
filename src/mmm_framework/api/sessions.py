@@ -14,6 +14,7 @@ rerun the artifact (e.g. {"code": "..."} for code_snippet).
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import time
 import uuid
@@ -21,7 +22,23 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-DB_PATH = Path(__file__).parent / "sessions.db"
+
+def resolve_db_path() -> Path:
+    """Resolve the sessions DB location.
+
+    ``MMM_SESSIONS_DB`` overrides the package-local default so deployments can
+    keep state on a persistent disk without symlinking into the install tree
+    (see deploy/gcp/vm/vm_setup.sh). ``api/main.py`` (the async checkpointer)
+    and ``auth/store.py`` honor the same variable — all three must point at the
+    same file.
+    """
+    env = os.environ.get("MMM_SESSIONS_DB", "").strip()
+    if env:
+        return Path(env).expanduser()
+    return Path(__file__).parent / "sessions.db"
+
+
+DB_PATH = resolve_db_path()
 
 
 def _now() -> float:
@@ -37,6 +54,7 @@ def _conn() -> Iterator[sqlite3.Connection]:
     # "database is locked"; ``timeout`` makes a contending writer wait for the
     # lock instead of failing immediately. WAL is a persistent DB-level property,
     # so setting it here also covers the async checkpointer connection.
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=30000")

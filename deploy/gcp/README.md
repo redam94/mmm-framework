@@ -152,9 +152,11 @@ both to the release bucket, marks the version `CURRENT`, and runs
 
 1. unpacks the source under `/opt/mmm/releases/<version>` and runs
    `uv sync --frozen --no-dev` (uv-managed Python 3.12),
-2. symlinks the packaged tree's `src/mmm_framework/api/sessions.db` to
-   `/data/state/sessions.db` (the DB path is fixed inside the package — this is
-   what makes auth/org/session state survive releases),
+2. points the API at `/data/state/sessions.db` via `MMM_SESSIONS_DB` in
+   `/etc/mmm/mmm.env` (this is what makes auth/org/session state survive
+   releases; a symlink from the packaged tree's
+   `src/mmm_framework/api/sessions.db` is kept as belt-and-braces for tools
+   run without the unit's env),
 3. unpacks the frontend under `/opt/mmm/frontends/<version>`,
 4. pulls the kernel image and re-verifies it under the sandbox flags,
 5. atomically flips the `/opt/mmm/app` + `/opt/mmm/frontend` symlinks, restarts

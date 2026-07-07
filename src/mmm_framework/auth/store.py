@@ -1,14 +1,15 @@
 """Org/user persistence — same SQLite DB the session store already uses.
 
 This module is intentionally self-contained (stdlib ``sqlite3`` only): it points
-at ``src/mmm_framework/api/sessions.db`` by default but accepts a ``db_path``
-override so it can be unit-tested against a throwaway file without importing the
-(heavier) agent app. It *augments* the existing ``users`` / ``projects`` tables
+at ``src/mmm_framework/api/sessions.db`` by default (``MMM_SESSIONS_DB`` env var
+overrides the location) but accepts a ``db_path`` override so it can be
+unit-tested against a throwaway file without importing the (heavier) agent app. It *augments* the existing ``users`` / ``projects`` tables
 and adds ``organizations`` / ``org_members`` — it never drops anything.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 import time
@@ -17,8 +18,18 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
+
+def _resolve_default_db_path() -> Path:
+    # Same MMM_SESSIONS_DB override as api/sessions.py:resolve_db_path —
+    # duplicated (not imported) to keep this module stdlib-self-contained.
+    env = os.environ.get("MMM_SESSIONS_DB", "").strip()
+    if env:
+        return Path(env).expanduser()
+    return Path(__file__).resolve().parents[1] / "api" / "sessions.db"
+
+
 # Default to the same DB file the session/measurement-loop store owns.
-DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "api" / "sessions.db"
+DEFAULT_DB_PATH = _resolve_default_db_path()
 
 
 def _now() -> float:
@@ -60,8 +71,7 @@ def _add_column(c: sqlite3.Connection, table: str, col: str, decl: str) -> None:
 def init_auth_schema(db_path: Path | str | None = None) -> None:
     """Create org tables and add auth columns. Idempotent."""
     with _conn(db_path) as c:
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS organizations (
                 org_id     TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
@@ -72,10 +82,8 @@ def init_auth_schema(db_path: Path | str | None = None) -> None:
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             )
-            """
-        )
-        c.execute(
-            """
+            """)
+        c.execute("""
             CREATE TABLE IF NOT EXISTS org_members (
                 org_id     TEXT NOT NULL,
                 user_id    TEXT NOT NULL,
@@ -83,8 +91,7 @@ def init_auth_schema(db_path: Path | str | None = None) -> None:
                 created_at REAL NOT NULL,
                 PRIMARY KEY (org_id, user_id)
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_org_members_user ON org_members(user_id)"
         )
@@ -92,8 +99,7 @@ def init_auth_schema(db_path: Path | str | None = None) -> None:
         # The roster tables predate auth; ensure they exist before we ALTER them
         # (the agent app's init_db also creates these — CREATE IF NOT EXISTS keeps
         # us safe whether or not it ran first).
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id    TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
@@ -102,10 +108,8 @@ def init_auth_schema(db_path: Path | str | None = None) -> None:
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             )
-            """
-        )
-        c.execute(
-            """
+            """)
+        c.execute("""
             CREATE TABLE IF NOT EXISTS projects (
                 project_id  TEXT PRIMARY KEY,
                 name        TEXT NOT NULL,
@@ -114,8 +118,7 @@ def init_auth_schema(db_path: Path | str | None = None) -> None:
                 created_at  REAL NOT NULL,
                 updated_at  REAL NOT NULL
             )
-            """
-        )
+            """)
 
         _add_column(c, "users", "password_hash", "TEXT")
         _add_column(c, "users", "org_id", "TEXT")
@@ -127,18 +130,15 @@ def init_auth_schema(db_path: Path | str | None = None) -> None:
 
         # Phase 1.4 lifecycle: refresh-token revocation blocklist (logout /
         # rotation / compromise), org invites, and password-reset tokens.
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS revoked_tokens (
                 jti        TEXT PRIMARY KEY,
                 user_id    TEXT,
                 expires_at REAL NOT NULL,
                 revoked_at REAL NOT NULL
             )
-            """
-        )
-        c.execute(
-            """
+            """)
+        c.execute("""
             CREATE TABLE IF NOT EXISTS invites (
                 token       TEXT PRIMARY KEY,
                 org_id      TEXT NOT NULL,
@@ -149,13 +149,11 @@ def init_auth_schema(db_path: Path | str | None = None) -> None:
                 accepted_at REAL,
                 created_at  REAL NOT NULL
             )
-            """
-        )
+            """)
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_invites_org ON invites(org_id, email)"
         )
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS password_resets (
                 token      TEXT PRIMARY KEY,
                 user_id    TEXT NOT NULL,
@@ -163,8 +161,7 @@ def init_auth_schema(db_path: Path | str | None = None) -> None:
                 used_at    REAL,
                 created_at REAL NOT NULL
             )
-            """
-        )
+            """)
 
 
 # ----- organizations ----------------------------------------------------------

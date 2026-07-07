@@ -149,7 +149,9 @@ def _fold_dashboard_update(combined: dict, dd: dict, live_spec: dict) -> dict:
 
 
 # ── Persistent checkpointer ───────────────────────────────────────────────────
-DB_PATH = Path(__file__).parent / "sessions.db"
+# Shared with the synchronous sessions_store; MMM_SESSIONS_DB overrides the
+# package-local default (resolved once in sessions.resolve_db_path).
+DB_PATH = sessions_store.DB_PATH
 memory: AsyncSqliteSaver | None = None
 _aiosqlite_conn: aiosqlite.Connection | None = None
 _ship_task: "asyncio.Task | None" = None
@@ -206,6 +208,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("audit sink install failed")
 
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     _aiosqlite_conn = await aiosqlite.connect(str(DB_PATH))
     # sessions.db is shared with the synchronous sessions_store (see
     # api/sessions.py:_conn). WAL + a busy timeout let the checkpointer and the

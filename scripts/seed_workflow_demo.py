@@ -15,8 +15,9 @@ channel sets (Lean vs Full), so each is its own model identity and BOTH show by
 default in the tab.
 
 Real fits by default. Replaces any prior "Demo: Bayesian Workflow" project (the
-sessions DB is the fixed api/sessions.db; plots/tables — none here — would need a
-matching MMM_AGENT_WORKSPACE).
+sessions DB defaults to api/sessions.db — run with the same MMM_SESSIONS_DB as
+the server if it overrides the location; plots/tables — none here — would need
+a matching MMM_AGENT_WORKSPACE).
 
 Usage:
     uv run python scripts/seed_workflow_demo.py

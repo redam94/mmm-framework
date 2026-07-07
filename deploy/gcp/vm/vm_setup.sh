@@ -116,6 +116,7 @@ MMM_KERNEL_CPUS="${KERNEL_CPUS}"
 MMM_KERNEL_PIDS="${KERNEL_PIDS}"
 MMM_MAX_KERNELS="${MAX_KERNELS}"
 MMM_AGENT_WORKSPACE=/data/workspace
+MMM_SESSIONS_DB=/data/state/sessions.db
 MMM_AUDIT_LOG=/data/audit/audit.jsonl
 MMM_AUTH_ENABLED=1
 MMM_AUTH_PROVIDER=local
@@ -262,10 +263,10 @@ if [ ! -d "${REL}" ]; then
   log "installing python dependencies (uv sync --frozen --no-dev)"
   as_mmm env UV_PYTHON_PREFERENCE=only-managed \
     sh -c "cd '${REL}' && /usr/local/bin/uv python install 3.12 && /usr/local/bin/uv sync --frozen --no-dev"
-  # sessions.db is a fixed path inside the package (src/mmm_framework/api/
-  # sessions.py) — point it at the persistent disk so auth/org/session state
-  # survives releases. SQLite resolves the symlink; WAL sidecars land in
-  # /data/state next to the real file.
+  # sessions.db lives on the persistent disk via MMM_SESSIONS_DB (set in
+  # /etc/mmm/mmm.env) so auth/org/session state survives releases. The
+  # symlink is kept as belt-and-braces for tools run outside the unit's env
+  # (e.g. an interactive shell without mmm.env loaded).
   ln -sfn /data/state/sessions.db "${REL}/src/mmm_framework/api/sessions.db"
 fi
 
