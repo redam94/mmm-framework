@@ -1,0 +1,7 @@
+# Terraform local state + secrets-bearing var files.
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/terraform.tfvars
+terraform/*.auto.tfvars
+terraform/crash.log

@@ -1,0 +1,34 @@
+# Copy to terraform.tfvars and edit. Minimum viable config:
+
+project_id      = "my-gcp-project"
+region          = "us-central1"
+zone            = "us-central1-a"
+bootstrap_email = "admin@example.com" # first org owner (password → Secret Manager)
+
+# Production exposure: HTTPS load balancer + managed certificate.
+# Point your DNS A record at the `lb_ip` output (or set dns_managed_zone).
+domain = "augur.example.com"
+# dns_managed_zone = "example-com" # Cloud DNS zone name, if DNS lives in this project
+
+# Evaluation-only alternative: leave domain = "" and open plain HTTP to yourself.
+# domain                = ""
+# allowed_ingress_cidrs = ["203.0.113.7/32"]
+
+# Agent LLM — Vertex AI via the VM service account (no API key needed).
+llm_provider = "vertex_anthropic"
+llm_model    = "claude-sonnet-4-5@20250929" # exact Model Garden ID
+llm_location = "us-east5"                   # a region that serves Claude
+
+# Direct-provider alternative (key goes to Secret Manager, never to kernels):
+# llm_provider = "anthropic"
+# llm_model    = "claude-sonnet-4-5"
+# llm_api_key  = "sk-ant-..."
+
+# Sizing: max_kernels * kernel_mem must fit in the VM with ~4 GB to spare.
+machine_type = "n2-standard-8" # 8 vCPU / 32 GB
+max_kernels  = 6
+kernel_mem   = "2g"
+
+# After the first `scripts/build_kernel_image.sh` run, pin the kernel image by
+# digest (printed by the script) — supply-chain pinning for the sandbox:
+# kernel_image = "us-central1-docker.pkg.dev/my-gcp-project/mmm/mmm-kernel@sha256:..."
