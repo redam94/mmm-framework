@@ -105,8 +105,9 @@ def _compute_hdi(
 
     if az is not None:
         try:
-            hdi = az.hdi(samples, hdi_prob=prob)
-            return float(hdi[0]), float(hdi[1])
+            from mmm_framework.utils.arviz_compat import hdi_bounds
+
+            return hdi_bounds(samples, prob)
         except Exception:
             pass
 

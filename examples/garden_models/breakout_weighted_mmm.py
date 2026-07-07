@@ -512,7 +512,8 @@ class BreakoutWeightedMMM(CustomMMM):
         flagged as indistinguishable from equal-weighting when the interval
         covers 1).
         """
-        import arviz as az
+        import arviz as az  # noqa: F401 - kept for other az uses
+        from mmm_framework.utils.arviz_compat import hdi_dataset
         import pandas as pd
 
         if self._trace is None:
@@ -523,13 +524,13 @@ class BreakoutWeightedMMM(CustomMMM):
             S = self._breakout_totals[C]
             S_sum = float(S.sum())
             tau_mean = float(post[f"breakout_logtau_{C}"].mean())
-            tau_hdi = az.hdi(
-                self._trace, var_names=[f"breakout_logtau_{C}"], hdi_prob=hdi_prob
+            tau_hdi = hdi_dataset(
+                self._trace, hdi_prob, var_names=[f"breakout_logtau_{C}"]
             )[f"breakout_logtau_{C}"].values
             for i, bk in enumerate(subs):
                 v = f"breakout_weight_{C}_{bk}"
                 mean = float(post[v].mean())
-                hdi = az.hdi(self._trace, var_names=[v], hdi_prob=hdi_prob)[v].values
+                hdi = hdi_dataset(self._trace, hdi_prob, var_names=[v])[v].values
                 rows.append(
                     {
                         "channel": C,

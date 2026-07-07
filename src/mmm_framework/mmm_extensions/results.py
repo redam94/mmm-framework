@@ -101,9 +101,9 @@ class ModelResults:
 
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary statistics."""
-        import arviz as az
+        from mmm_framework.utils.arviz_compat import summary as az_summary
 
-        return az.summary(self.trace, var_names=var_names)
+        return az_summary(self.trace, var_names=var_names)
 
     def plot_trace(self, var_names: list[str] | None = None, **kwargs):
         """Plot trace diagnostics."""
@@ -112,10 +112,11 @@ class ModelResults:
         return az.plot_trace(self.trace, var_names=var_names, **kwargs)
 
     def plot_posterior(self, var_names: list[str] | None = None, **kwargs):
-        """Plot posterior distributions."""
-        import arviz as az
+        """Plot posterior distributions (``az.plot_posterior`` is gone on
+        arviz >=1.x — the compat shim routes to ``arviz_plots.plot_dist``)."""
+        from mmm_framework.utils import arviz_compat
 
-        return az.plot_posterior(self.trace, var_names=var_names, **kwargs)
+        return arviz_compat.plot_posterior(self.trace, var_names=var_names, **kwargs)
 
 
 @dataclass

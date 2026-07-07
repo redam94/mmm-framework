@@ -1588,7 +1588,11 @@ class TestMMMResultsMethods:
             mock_summary.return_value = pd.DataFrame({"mean": [1.0], "sd": [0.1]})
             summary = results.summary(var_names=["intercept"])
 
-            mock_summary.assert_called_once_with(mock_trace, var_names=["intercept"])
+            # round_to="none" comes from the arviz_compat.summary shim (arviz
+            # 1.x returns formatted strings otherwise).
+            mock_summary.assert_called_once_with(
+                mock_trace, var_names=["intercept"], round_to="none"
+            )
 
 
 # =============================================================================

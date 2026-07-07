@@ -23,7 +23,21 @@ dependencies = [
     "plotly>=6.5.0",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",
-    "pymc>=5.26.1",
+    # Core Bayesian stack (2026-07-06 baseline): pymc 6 / pytensor 3 / arviz 1.x
+    # move in LOCKSTEP — pymc 6 pins pytensor>=3.0.2,<3.1 and arviz>=1.1,<2.0.
+    # arviz 1.x replaced InferenceData with xarray DataTree; drift is absorbed
+    # by utils/arviz_compat.py — route arviz container calls through it.
+    "pymc>=6.0.1",
+    # netcdf engine for trace persistence (MMMSerializer to_netcdf/from_netcdf).
+    # arviz <1.0 pulled this transitively; arviz 1.x made engines optional
+    # extras, and without one every model save silently degrades (xarray
+    # DataTree groups need netCDF4 or h5netcdf — scipy's netcdf3 can't do it).
+    "h5netcdf>=1.6.4",
+    "h5py>=3.12",  # h5netcdf >=1.8 no longer hard-depends on it
+    # Pathfinder VI out of the box (fit(method="pathfinder")). Keep the minor
+    # cap: pymc-extras 0.11+ tracks pymc 6; raise the cap only after checking
+    # its pymc/pytensor/arviz floors against the locked stack.
+    "pymc-extras>=0.12,<0.13",
     "pytest-xdist>=3.8.0",
     "python-multipart>=0.0.20",
     "redis>=7.1.0",
@@ -61,12 +75,9 @@ gcp = [
 s3 = [
     "boto3>=1.34.0",
 ]
-# NOTE: Pathfinder VI (fit(method="pathfinder")) needs `pymc-extras` + `blackjax`.
-# It is intentionally NOT declared as an extra here: the current `pymc-extras`
-# requires pymc>=6, so locking it would force-upgrade the whole core stack
-# (pymc/pytensor/arviz) for every install. Pathfinder is lazy-imported with a
-# clear install hint; install it manually if you want it (and accept the pymc
-# upgrade in that environment). MAP + ADVI need no extra deps.
+# NOTE: Pathfinder VI (fit(method="pathfinder")) is served by the core
+# `pymc-extras>=0.12,<0.13` dependency above (native pytensor backend — no
+# blackjax needed). See the pin comment there before raising the cap.
 
 [project.urls]
 Homepage = "https://redam94.github.io/mmm-framework/"

@@ -445,10 +445,11 @@ class BaseExtendedMMM:
 
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary statistics."""
-        import arviz as az
 
         self._check_fitted()
-        return az.summary(self._trace, var_names=var_names)
+        from mmm_framework.utils.arviz_compat import summary as az_summary
+
+        return az_summary(self._trace, var_names=var_names)
 
     def sample_prior_predictive(
         self, samples: int = 500, random_seed: int | None = None

@@ -235,6 +235,39 @@ def _apply_saturation_pt(
     return x
 
 
+def _anchored_det(
+    expr: "pt.TensorVariable",
+    anchor: "pt.TensorVariable",
+    model: "pm.Model",
+) -> "pt.TensorVariable":
+    """Anchor a would-be CONSTANT Deterministic expression on a free RV.
+
+    A registered Deterministic whose value depends on no free RV — the zero
+    geo/product/seasonality/controls component of a model without that
+    structure, or ``y_obs_scaled`` (pure observed data) — breaks the
+    Pathfinder trace conversion in ``pymc_extras``: ``vectorize_graph`` gives
+    a parameter-independent output no chain/draw batch dims, and
+    ``az.from_dict`` then rejects the shape. Adding a zero-weight ``anchor``
+    term keeps the expression graph-connected to the sampled parameters
+    (numerically a no-op); parameter-dependent expressions pass through
+    UNTOUCHED so existing graphs stay byte-identical.
+
+    Observed RVs are traversal *blockers*: the conversion graph replaces them
+    with their constant data, so a free RV reachable only through an observed
+    RV (e.g. ``y_obs``'s ``mu``) does not count as a dependency.
+    """
+    try:  # pytensor moved `ancestors` out of graph.basic
+        from pytensor.graph.traversal import ancestors
+    except ImportError:  # pragma: no cover - older pytensor
+        from pytensor.graph.basic import ancestors
+
+    free = set(model.free_RVs)
+    blockers = list(model.observed_RVs)
+    if free and any(a in free for a in ancestors([expr], blockers=blockers)):
+        return expr
+    return expr + 0.0 * anchor
+
+
 class BayesianMMM:
     """
     Bayesian Marketing Mix Model - Robust Implementation with Prediction Support.
@@ -1513,8 +1546,14 @@ class BayesianMMM:
             )
 
             # TREND
+            # Component Deterministics are anchored (_anchored_det) so a
+            # structure-free component (trend "none", seasonality off, national
+            # geo/product, no controls) never registers a parameter-independent
+            # constant — which Pathfinder's trace conversion cannot batch.
+            # Anchoring wraps ONLY the registered Deterministic; `mu` below
+            # keeps the raw expressions, so the likelihood graph is untouched.
             trend = self._build_trend_component(model, time_idx_data)
-            pm.Deterministic("trend_component", trend)
+            pm.Deterministic("trend_component", _anchored_det(trend, intercept, model))
 
             # SEASONALITY
             n_periods = self.n_periods
@@ -1534,8 +1573,14 @@ class BayesianMMM:
                 seasonality_at_periods = seasonality_at_periods + season_effect
 
             seasonality = seasonality_at_periods[time_idx_data]
-            pm.Deterministic("seasonality_component", seasonality)
-            pm.Deterministic("seasonality_by_period", seasonality_at_periods)
+            pm.Deterministic(
+                "seasonality_component",
+                _anchored_det(seasonality, intercept, model),
+            )
+            pm.Deterministic(
+                "seasonality_by_period",
+                _anchored_det(seasonality_at_periods, intercept, model),
+            )
 
             # GEO EFFECTS
             if self.has_geo and self.hierarchical_config.pool_across_geo:
@@ -1545,7 +1590,11 @@ class BayesianMMM:
                 geo_contribution = geo_effect[geo_idx_data]
             else:
                 geo_contribution = pt.zeros(n_obs_data)
-            pm.Deterministic("geo_component", geo_contribution, dims="obs")
+            pm.Deterministic(
+                "geo_component",
+                _anchored_det(geo_contribution, intercept, model),
+                dims="obs",
+            )
 
             # PRODUCT EFFECTS
             if self.has_product and self.hierarchical_config.pool_across_product:
@@ -1557,7 +1606,11 @@ class BayesianMMM:
                 product_contribution = product_effect[product_idx_data]
             else:
                 product_contribution = pt.zeros(n_obs_data)
-            pm.Deterministic("product_component", product_contribution, dims="obs")
+            pm.Deterministic(
+                "product_component",
+                _anchored_det(product_contribution, intercept, model),
+                dims="obs",
+            )
 
             # MEDIA EFFECTS
             channel_contribs = []
@@ -1786,7 +1839,11 @@ class BayesianMMM:
                 )
             else:
                 control_contribution = pt.zeros(n_obs_data)
-            pm.Deterministic("controls_total", control_contribution, dims="obs")
+            pm.Deterministic(
+                "controls_total",
+                _anchored_det(control_contribution, intercept, model),
+                dims="obs",
+            )
 
             # COMBINE AND LIKELIHOOD
             mu = (
@@ -1804,8 +1861,13 @@ class BayesianMMM:
             if sigma is None:
                 sigma = pm.HalfNormal("sigma", sigma=0.5)
             y_obs = self._build_likelihood(mu, sigma)
+            # y_obs is OBSERVED, so this deterministic is pure data once the
+            # trace conversion substitutes observed values — anchor it like the
+            # structural components above.
             pm.Deterministic(
-                "y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs"
+                "y_obs_scaled",
+                _anchored_det(y_obs * self.y_std + self.y_mean, intercept, model),
+                dims="obs",
             )
 
         return model
@@ -2229,8 +2291,8 @@ class BayesianMMM:
             random_seed: Random seed for reproducibility.
             method: Fit method — ``"nuts"`` (default, full MCMC), ``"map"``
                 (maximum a posteriori point), ``"advi"`` / ``"fullrank_advi"``
-                (variational inference), or ``"pathfinder"`` (requires the
-                optional ``pymc_extras`` package). Defaults to
+                (variational inference), or ``"pathfinder"`` (via the declared
+                ``pymc-extras`` dependency — works out of the box). Defaults to
                 ``model_config.fit_method``.
             **kwargs: Additional arguments passed to the underlying sampler
                 (``pm.sample`` for NUTS).
@@ -2409,15 +2471,13 @@ class BayesianMMM:
         if method is FitMethod.PATHFINDER:
             try:
                 import pymc_extras as pmx
-            except ImportError as exc:  # pragma: no cover - optional dep
+            except ImportError as exc:  # pragma: no cover - broken env only
                 raise ImportError(
-                    "Pathfinder requires the optional 'pymc_extras' package "
-                    "(and 'blackjax' for the fast path), which is not a declared "
-                    "dependency because it currently pins pymc>=6 and would "
-                    "force-upgrade the core stack. Install it manually with "
-                    "`pip install pymc-extras blackjax` (note: this upgrades "
-                    "pymc/pytensor/arviz in that environment). MAP and ADVI "
-                    "need no extra dependencies."
+                    "Pathfinder needs the 'pymc_extras' package, which IS a "
+                    "declared dependency of mmm-framework (pymc-extras>=0.12,<0.13) "
+                    "— this environment is missing it. Re-sync the environment "
+                    "(`uv sync`) or `pip install 'pymc-extras>=0.12,<0.13'`. "
+                    "MAP and ADVI need no extra dependencies."
                 ) from exc
             with self.model:
                 idata = pmx.fit(
@@ -3210,7 +3270,7 @@ class BayesianMMM:
         """Get posterior summary."""
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
-        return az.summary(self._trace, var_names=var_names)
+        return arviz_compat.summary(self._trace, var_names=var_names)
 
     def save(
         self,

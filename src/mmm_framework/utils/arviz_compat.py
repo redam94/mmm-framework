@@ -12,6 +12,9 @@ Covered drift:
   ``.extend`` is gone, and ``Dataset.to_array`` became ``to_dataarray``.
 - ``az.from_dict`` flipped its calling convention across that migration AND the
   wrong form fails silently (wraps everything as one var ``"posterior"``).
+- ``az.hdi`` renamed ``hdi_prob`` -> ``prob`` (arviz >=1.x) AND changed 2-d
+  ndarray semantics from pooled ``(chain, draw)`` to a batch of independent
+  rows — use :func:`hdi_bounds` for the historical pooled interval.
 """
 
 from __future__ import annotations
@@ -54,6 +57,25 @@ def dataset_extremum(ds, kind: str) -> float:
     if not values:
         return float("nan")
     return float(reduce(values))
+
+
+def hdi_bounds(samples, prob: float) -> tuple[float, float]:
+    """``(lo, hi)`` highest-density interval of the POOLED ``samples``.
+
+    Absorbs two arviz 1.x changes at once: ``hdi_prob`` was renamed ``prob``,
+    and a 2-d ndarray input is now treated as a BATCH of independent rows (one
+    interval per row) instead of pooled ``(chain, draw)`` draws. Inputs are
+    flattened here so every call site keeps the historical pooled semantics.
+    """
+    import arviz as az
+
+    flat = np.asarray(samples, dtype=float).ravel()
+    try:
+        res = az.hdi(flat, prob=prob)
+    except TypeError:  # pragma: no cover - legacy arviz (<1.x) fallback
+        res = az.hdi(flat, hdi_prob=prob)
+    arr = np.asarray(res).ravel()
+    return float(arr[0]), float(arr[1])
 
 
 def group_names(idata) -> list[str]:
@@ -102,26 +124,19 @@ def attach_prior(trace, prior):
         return trace
 
 
-def point_to_idata(point: dict):
-    """Wrap a ``find_MAP`` point dict into a (chain=1, draw=1) InferenceData.
+def posterior_from_dict(posterior: dict):
+    """Build an arviz container whose ``posterior`` group holds ``posterior``.
 
-    Drops PyTensor's transformed duplicates (``*_log__`` / ``*_interval__``) and
-    keeps the constrained values plus deterministics, matching the variable names
-    produced by NUTS.
-
-    arviz flipped ``from_dict``'s calling convention between the legacy
-    ``InferenceData`` and the ``DataTree`` era — and the *wrong* form does not
-    raise: it silently wraps everything as one variable named ``"posterior"``. So
-    we try both conventions and keep whichever actually materialized the
-    variables; if neither does, build the dataset by hand.
+    Values must already be shaped ``(chain, draw, *shape)``. arviz flipped
+    ``from_dict``'s calling convention between the legacy ``InferenceData`` and
+    the ``DataTree`` era — and the *wrong* form does not raise: it silently
+    wraps everything as one variable named ``"posterior"``. So we try both
+    conventions and keep whichever actually materialized the variables; if
+    neither does, build the dataset by hand.
     """
     import arviz as az
 
-    posterior = {
-        name: np.asarray(value)[np.newaxis, np.newaxis, ...]
-        for name, value in point.items()
-        if not name.endswith("__")
-    }
+    posterior = {name: np.asarray(value) for name, value in posterior.items()}
     expected = set(posterior)
 
     for build in (
@@ -145,10 +160,93 @@ def point_to_idata(point: dict):
     for name, arr in posterior.items():
         extra = [f"{name}_dim_{i}" for i in range(arr.ndim - 2)]
         data_vars[name] = (["chain", "draw", *extra], arr)
-    ds = xr.Dataset(data_vars, coords={"chain": [0], "draw": [0]})
+    n_chains = next(iter(posterior.values())).shape[0] if posterior else 1
+    n_draws = next(iter(posterior.values())).shape[1] if posterior else 1
+    ds = xr.Dataset(
+        data_vars,
+        coords={"chain": list(range(n_chains)), "draw": list(range(n_draws))},
+    )
+    return dataset_to_idata(ds)
+
+
+def summary(data, var_names=None, **kwargs):
+    """``az.summary`` with NUMERIC values across the arviz 1.x formatting change.
+
+    arviz 1.x defaults ``round_to="auto"``, which returns formatted STRINGS
+    (object dtype) — silent poison for numeric consumers: ``max()`` on the
+    ``r_hat`` column becomes a LEXICOGRAPHIC string max ("9.99" > "10.01").
+    ``round_to="none"`` restores raw floats on both arviz lines. Note the
+    interval columns also drifted (``hdi_3%``/``hdi_97%`` → ``eti89_lb``/
+    ``eti89_ub``, an 89% equal-tailed default) — pass ``ci_prob``/``ci_kind``
+    explicitly if you consume them.
+    """
+    import arviz as az
+
+    kwargs.setdefault("round_to", "none")
+    return az.summary(data, var_names=var_names, **kwargs)
+
+
+def hdi_dataset(data, prob: float, var_names=None):
+    """Trace-level HDI across the ``hdi_prob`` → ``prob`` rename.
+
+    ``result[var].values`` keeps the legacy contract on both arviz lines:
+    shape ``(*var_shape, 2)`` with the last axis = (lower, upper).
+    """
+    import arviz as az
+
     try:
-        return az.InferenceData(posterior=ds)
+        return az.hdi(data, prob=prob, var_names=var_names)
+    except TypeError:  # pragma: no cover - legacy arviz (<1.x) fallback
+        return az.hdi(data, hdi_prob=prob, var_names=var_names)
+
+
+def plot_posterior(data, var_names=None, **kwargs):
+    """Posterior-distribution plot across the arviz-plots split.
+
+    Legacy arviz exposed ``az.plot_posterior``; arviz 1.x moved plotting into
+    ``arviz_plots`` where the equivalent is ``plot_dist`` (defaults to the
+    posterior group). ``az.plot_trace`` survived the split (re-exported), so
+    only this one needs a shim.
+    """
+    import arviz as az
+
+    if hasattr(az, "plot_posterior"):  # legacy arviz (<1.x)
+        return az.plot_posterior(data, var_names=var_names, **kwargs)
+    import arviz_plots as azp
+
+    return azp.plot_dist(data, var_names=var_names, **kwargs)
+
+
+def dataset_to_idata(ds, group: str = "posterior"):
+    """Wrap a ready xarray ``Dataset`` as one group of an arviz container.
+
+    ``az.InferenceData(posterior=ds)`` stopped working on the DataTree
+    migration (``DataTree.__init__`` takes no group kwargs); the DataTree era
+    assigns groups by key instead. Works on both.
+    """
+    import arviz as az
+    import xarray as xr
+
+    try:
+        return az.InferenceData(**{group: ds})
     except Exception:  # noqa: BLE001 - DataTree-era arviz
         dt = xr.DataTree()
-        dt["posterior"] = ds
+        dt[group] = ds
         return dt
+
+
+def point_to_idata(point: dict):
+    """Wrap a ``find_MAP`` point dict into a (chain=1, draw=1) InferenceData.
+
+    Drops PyTensor's transformed duplicates (``*_log__`` / ``*_interval__``) and
+    keeps the constrained values plus deterministics, matching the variable names
+    produced by NUTS. Container construction (and the ``from_dict`` convention
+    flip) is handled by :func:`posterior_from_dict`.
+    """
+    return posterior_from_dict(
+        {
+            name: np.asarray(value)[np.newaxis, np.newaxis, ...]
+            for name, value in point.items()
+            if not name.endswith("__")
+        }
+    )

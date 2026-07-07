@@ -356,7 +356,7 @@ class TestModelResults:
             mock_summary.return_value = pd.DataFrame()
             _ = results.summary(var_names=["alpha", "beta"])
             mock_summary.assert_called_once_with(
-                mock_trace, var_names=["alpha", "beta"]
+                mock_trace, var_names=["alpha", "beta"], round_to="none"
             )
 
 

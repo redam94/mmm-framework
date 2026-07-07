@@ -257,7 +257,6 @@ class MultivariateMMM(BaseExtendedMMM):
 
     def get_cross_effects_summary(self) -> pd.DataFrame:
         """Extract cross-effect estimates."""
-        import arviz as az
 
         self._check_fitted()
 
@@ -269,7 +268,9 @@ class MultivariateMMM(BaseExtendedMMM):
 
         for spec in self._cross_effect_specs:
             vals = psi[:, :, spec.source_idx, spec.target_idx].values.flatten()
-            hdi = az.hdi(vals, hdi_prob=0.94)
+            from mmm_framework.utils.arviz_compat import hdi_bounds
+
+            hdi = hdi_bounds(vals, 0.94)
 
             results.append(
                 CrossEffectSummary(

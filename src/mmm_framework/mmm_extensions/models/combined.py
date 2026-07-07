@@ -380,7 +380,6 @@ class CombinedMMM(BaseExtendedMMM):
         ``psi_matrix[source_idx, target_idx]`` (cannibalization rows carry the
         imposed negative sign).
         """
-        import arviz as az
 
         self._check_fitted()
 
@@ -392,7 +391,9 @@ class CombinedMMM(BaseExtendedMMM):
 
         for spec in self._cross_effect_specs:
             vals = psi[:, :, spec.source_idx, spec.target_idx].values.flatten()
-            hdi = az.hdi(vals, hdi_prob=0.94)
+            from mmm_framework.utils.arviz_compat import hdi_bounds
+
+            hdi = hdi_bounds(vals, 0.94)
 
             results.append(
                 CrossEffectSummary(

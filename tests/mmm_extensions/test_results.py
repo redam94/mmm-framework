@@ -304,7 +304,7 @@ class TestModelResults:
             mock_summary.return_value = pd.DataFrame({"mean": [0.5], "sd": [0.1]})
             summary = results.summary(var_names=["alpha", "beta"])
             mock_summary.assert_called_once_with(
-                mock_trace, var_names=["alpha", "beta"]
+                mock_trace, var_names=["alpha", "beta"], round_to="none"
             )
 
     def test_summary_without_var_names(self):
@@ -320,7 +320,9 @@ class TestModelResults:
         with patch("arviz.summary") as mock_summary:
             mock_summary.return_value = pd.DataFrame()
             _ = results.summary()
-            mock_summary.assert_called_once_with(mock_trace, var_names=None)
+            mock_summary.assert_called_once_with(
+                mock_trace, var_names=None, round_to="none"
+            )
 
     def test_plot_trace_calls_arviz(self):
         """Test that plot_trace delegates to ArviZ."""
@@ -362,7 +364,9 @@ class TestModelResults:
             config=MagicMock(),
         )
 
-        with patch("arviz.plot_posterior") as mock_plot:
+        # arviz 1.x removed az.plot_posterior; the method delegates to the
+        # compat shim (legacy az.plot_posterior OR arviz_plots.plot_dist).
+        with patch("mmm_framework.utils.arviz_compat.plot_posterior") as mock_plot:
             _ = results.plot_posterior(var_names=["beta"])
             mock_plot.assert_called_once_with(mock_trace, var_names=["beta"])
 
@@ -376,7 +380,7 @@ class TestModelResults:
             config=MagicMock(),
         )
 
-        with patch("arviz.plot_posterior") as mock_plot:
+        with patch("mmm_framework.utils.arviz_compat.plot_posterior") as mock_plot:
             _ = results.plot_posterior(var_names=["beta"], ref_val=0)
             mock_plot.assert_called_once_with(mock_trace, var_names=["beta"], ref_val=0)
 

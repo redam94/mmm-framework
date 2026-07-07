@@ -605,6 +605,15 @@ class BacktestResult:
     def n_origins(self) -> int:
         return int(self.records["origin"].nunique())
 
+    @property
+    def mape(self) -> float:
+        """Headline out-of-time MAPE of the MMM over all records (the number
+        the docs quote). Convenience for ``summary().loc["mmm", "mape"]``."""
+        m = _point_metrics(
+            self.records["y_true"].to_numpy(), self.records["y_pred"].to_numpy()
+        )
+        return float(m["mape"])
+
     def _mase(self, sub: pd.DataFrame, pred_col: str) -> float:
         """MASE with per-origin in-sample seasonal-naive scaling."""
         ratios = []

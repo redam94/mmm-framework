@@ -155,7 +155,9 @@ def _get_diagnostics(model: Any) -> dict[str, Any]:
 
     try:
         if az is not None:
-            summary = az.summary(trace)
+            from mmm_framework.utils.arviz_compat import summary as az_summary
+
+            summary = az_summary(trace)
             diagnostics["rhat_max"] = float(summary["r_hat"].max())
             diagnostics["ess_bulk_min"] = float(summary["ess_bulk"].min())
             diagnostics["ess_tail_min"] = float(summary["ess_tail"].min())

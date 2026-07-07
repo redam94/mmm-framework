@@ -431,7 +431,8 @@ def test_share_calibration_restores_identification():
     built from the TRUE shares pins the weight posterior — the share-calibrated
     fit is materially closer to truth AND materially tighter than the
     uncalibrated fit."""
-    import arviz as az
+    import arviz as az  # noqa: F401 - kept for other az uses
+    from mmm_framework.utils.arviz_compat import hdi_dataset
 
     fit_kwargs = dict(
         progressbar=False,
@@ -475,7 +476,7 @@ def test_share_calibration_restores_identification():
     def _share_stats(mmm):
         da = mmm._trace.posterior["breakout_share_TV"]
         mean = da.mean(dim=("chain", "draw")).values
-        hdi = az.hdi(mmm._trace, var_names=["breakout_share_TV"], hdi_prob=0.9)[
+        hdi = hdi_dataset(mmm._trace, 0.9, var_names=["breakout_share_TV"])[
             "breakout_share_TV"
         ].values
         width = hdi[:, 1] - hdi[:, 0]

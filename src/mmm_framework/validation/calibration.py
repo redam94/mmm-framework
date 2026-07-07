@@ -67,7 +67,6 @@ def loo_pit_check(
         Significance level for the KS uniformity test. ``calibrated`` is
         ``ks_pvalue > alpha``.
     """
-    import arviz as az
     from scipy import stats
 
     y = np.asarray(y, dtype=float).ravel()
@@ -97,7 +96,14 @@ def loo_pit_check(
         if lw.shape != yh.shape:
             raise ValueError("log_weights shape does not match y_hat")
 
-    pit = np.asarray(az.loo_pit(y=y, y_hat=yh, log_weights=lw), dtype=float)
+    # arviz 1.x removed the array-based ``loo_pit(y=, y_hat=)`` API (the new
+    # one wants a full posterior-predictive DataTree). The weighted PIT is
+    # direct numpy — the same formula legacy arviz used: PIT_i =
+    # Σ_s w_is · 1[y_hat_is <= y_i], with per-observation weights normalized
+    # from the PSIS log-weights (softmax; uniform lw reduces to ordinary PIT).
+    w = np.exp(lw - lw.max(axis=1, keepdims=True))
+    w /= w.sum(axis=1, keepdims=True)
+    pit = np.asarray((w * (yh <= y[:, None])).sum(axis=1), dtype=float)
     pit = pit[np.isfinite(pit)]
     if pit.size == 0:
         raise ValueError("No finite LOO-PIT values computed")
@@ -130,7 +136,9 @@ class SBCResult:
         lines = [f"SBC over {self.n_sims} simulations:"]
         for k in self.param_names:
             verdict = "ok" if self.calibrated.get(k) else "MISCALIBRATED"
-            lines.append(f"  - {k}: KS p={self.ks_pvalue.get(k, float('nan')):.3f} [{verdict}]")
+            lines.append(
+                f"  - {k}: KS p={self.ks_pvalue.get(k, float('nan')):.3f} [{verdict}]"
+            )
         return "\n".join(lines)
 
 

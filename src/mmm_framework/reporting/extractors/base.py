@@ -84,8 +84,9 @@ class DataExtractor(ABC):
             prob = self.ci_prob
 
         if az is not None:
-            hdi = az.hdi(samples, hdi_prob=prob)
-            return float(hdi[0]), float(hdi[1])
+            from mmm_framework.utils.arviz_compat import hdi_bounds
+
+            return hdi_bounds(samples, prob)
         else:
             # Fallback to percentile-based interval
             alpha = (1 - prob) / 2
@@ -184,7 +185,9 @@ class DataExtractor(ABC):
 
         try:
             # Get summary stats
-            summary = az.summary(trace)
+            from mmm_framework.utils.arviz_compat import summary as az_summary
+
+            summary = az_summary(trace)
 
             diagnostics = {
                 "rhat_max": float(summary["r_hat"].max()),

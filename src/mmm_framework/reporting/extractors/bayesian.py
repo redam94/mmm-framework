@@ -2362,7 +2362,9 @@ class BayesianMMMExtractor(
                                 samples = samples[idx]
                             prior_samples[param] = samples
                         except Exception as e:
-                            logger.debug(f"prior sample extraction failed for {param}: {e}")
+                            logger.debug(
+                                f"prior sample extraction failed for {param}: {e}"
+                            )
 
             logger.debug(f"Generated {len(prior_samples)} prior sample sets")
 

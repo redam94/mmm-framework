@@ -175,13 +175,14 @@ class ChannelConvergenceChecker:
         dict[str, ChannelConvergenceResult]
             Convergence result for each channel.
         """
-        import arviz as az
 
         results = {}
 
         # Get summary for all parameters
         try:
-            summary = az.summary(trace)
+            from mmm_framework.utils.arviz_compat import summary as az_summary
+
+            summary = az_summary(trace)
         except Exception:
             # Return default results if summary fails
             for channel in channel_names:

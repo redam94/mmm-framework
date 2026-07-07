@@ -403,16 +403,21 @@ def _replace_observed_rvs_with_icdf(
 
     Returns
     -------
-    tuple[dict, np.ndarray]
+    tuple[dict, dict]
         - replacements: Mapping from observed RVs to replacement expressions
-        - uniform_samples: 2D array (n_samples, n_observed_rvs) of frozen quantiles
+        - uniform_placeholder_samples: Mapping from the scalar quantile
+          placeholder injected per input-dependent RV to its frozen
+          ``(n_samples,)`` uniform draws. The caller must feed these into the
+          same ``vectorize_graph`` replacement pass as the free-RV
+          placeholders, which is what gives each posterior sample its own
+          quantile.
     """
     import pymc as pm
     import pytensor.tensor as pt
     from pytensor.graph.traversal import ancestors
 
     replacements = {}
-    uniform_samples_list = []
+    uniform_placeholder_samples: dict[Any, np.ndarray] = {}
     data_vars = set(data_nodes.values())
 
     rng = np.random.default_rng(seed)
@@ -437,20 +442,23 @@ def _replace_observed_rvs_with_icdf(
                 "Using ICDF with frozen uniform quantiles."
             )
 
-            # Sample uniform quantiles (one per posterior sample)
-            uniform_vals = rng.uniform(0, 1, size=n_samples)
-            uniform_samples_list.append(uniform_vals)
-
-            # Create a constant tensor of uniform values
-            uniform_tensor = pt.constant(
-                uniform_vals.astype(rv.dtype), name=f"{rv.name}_uniform"
+            # One SCALAR quantile placeholder per RV, vectorized later with the
+            # frozen (n_samples,) uniforms exactly like the free-RV
+            # placeholders. A direct (n_samples,) constant in the unvectorized
+            # graph broke on pymc 6/pytensor 3 — pm.icdf resizes its result to
+            # the RV's (n_obs,) shape and Alloc statically rejects the
+            # mismatch (the old stack only deferred that error to runtime).
+            uniform_vals = rng.uniform(0, 1, size=n_samples).astype(rv.dtype)
+            u_placeholder = pt.tensor(
+                name=f"{rv.name}_uniform", shape=(), dtype=rv.dtype
             )
 
             try:
                 # Use ICDF to convert uniform to the target distribution
                 # Note: pm.icdf returns the inverse CDF evaluated at the quantile
-                icdf_expr = pm.icdf(rv, uniform_tensor, warn_rvs=False)
+                icdf_expr = pm.icdf(rv, u_placeholder, warn_rvs=False)
                 replacements[rv] = icdf_expr
+                uniform_placeholder_samples[u_placeholder] = uniform_vals
             except NotImplementedError as e:
                 raise FrozenPredictorError(
                     f"ICDF not available for observed RV '{rv.name}' "
@@ -458,11 +466,14 @@ def _replace_observed_rvs_with_icdf(
                     f"This distribution doesn't support inverse CDF. "
                     f"Consider using sample_posterior_predictive instead."
                 ) from e
+            except (ValueError, TypeError) as e:
+                raise FrozenPredictorError(
+                    f"Could not build an ICDF replacement for observed RV "
+                    f"'{rv.name}' (distribution: {rv.owner.op}): {e}. "
+                    f"Consider using sample_posterior_predictive instead."
+                ) from e
 
-    uniform_samples = (
-        np.column_stack(uniform_samples_list) if uniform_samples_list else np.array([])
-    )
-    return replacements, uniform_samples
+    return replacements, uniform_placeholder_samples
 
 
 def create_frozen_predictor(
@@ -595,10 +606,27 @@ def create_frozen_predictor(
         if name in data_nodes
     }
 
-    # Step 3: Handle observed RVs (with ICDF for input-dependent ones)
-    # Note: Pass rv_placeholders to ensure ICDF expressions use placeholders
-    observed_rv_replacements, _ = _replace_observed_rvs_with_icdf(
-        model, needed_observed_rvs, data_nodes, all_ancestors, n_samples, config.seed
+    # The OUTPUT observed RV is never icdf-replaced: the predictor's contract
+    # is a deterministic mean output (FrozenPredictorOutput.mu) with
+    # observation noise added separately by predict(), and pm.icdf's resize
+    # would additionally pin the obs length to the training data (breaking
+    # dynamic-length prediction). Its deterministic stand-in is the
+    # distribution's location parameter, resolved below.
+    output = model.named_vars[config.output_var]
+    icdf_observed_rvs = [rv for rv in needed_observed_rvs if rv is not output]
+
+    # Step 3: Handle INTERMEDIATE observed RVs (mediators) with ICDF. The
+    # returned scalar quantile placeholders join the vectorize pass below so
+    # each posterior sample gets its own frozen quantile.
+    observed_rv_replacements, uniform_placeholder_samples = (
+        _replace_observed_rvs_with_icdf(
+            model,
+            icdf_observed_rvs,
+            data_nodes,
+            all_ancestors,
+            n_samples,
+            config.seed,
+        )
     )
 
     # Step 4: Clone graph with placeholders and symbolic inputs (not samples yet)
@@ -608,12 +636,25 @@ def create_frozen_predictor(
         **observed_rv_replacements,
     }
 
-    # Get the output variable
-    output = model.named_vars[config.output_var]
+    # Resolve the deterministic output expression. An observed-RV output (the
+    # default "y_obs") predicts through its LOCATION parameter — the raw
+    # parameter graph keeps a dynamic obs length, unlike support_point/icdf
+    # which broadcast to the training size.
+    output_expr = output
+    if output in set(model.observed_RVs):
+        op = output.owner.op if output.owner is not None else None
+        if op is None or not hasattr(op, "dist_params"):
+            raise FrozenPredictorError(
+                f"Output variable '{config.output_var}' is an observed RV whose "
+                "distribution exposes no dist_params — cannot derive a "
+                "deterministic mean output. Point output_var at a Deterministic "
+                "(e.g. the model's mu) instead."
+            )
+        output_expr = op.dist_params(output.owner)[0]
 
     # Clone the graph with placeholders
     try:
-        cloned_outputs = clone_replace([output], replace=base_replacements)
+        cloned_outputs = clone_replace([output_expr], replace=base_replacements)
     except Exception as e:
         raise FrozenPredictorError(
             f"Failed to clone graph: {e}. "
@@ -630,6 +671,12 @@ def create_frozen_predictor(
         for placeholder in rv_placeholders.values()
         if placeholder.name in posterior_samples
     }
+    # Frozen ICDF quantiles ride the same vectorization: scalar placeholder ->
+    # (n_samples,) constant, batched alongside the free-RV placeholders.
+    for u_placeholder, uniform_vals in uniform_placeholder_samples.items():
+        sample_replacements[u_placeholder] = pt.constant(
+            uniform_vals, name=u_placeholder.name
+        )
 
     try:
         vectorized_outputs = vectorize_graph(

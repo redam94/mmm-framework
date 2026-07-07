@@ -148,11 +148,46 @@ def test_config_fit_method_default(simple_panel, trend_config):
 
 
 def test_pathfinder_fit(simple_panel, model_config, trend_config):
-    pytest.importorskip("pymc_extras")
+    # pymc-extras is a declared dependency (pyproject: pymc-extras>=0.6,<0.7),
+    # so pathfinder works out of the box — no importorskip.
     mmm = BayesianMMM(simple_panel, model_config, trend_config)
     results = mmm.fit(method="pathfinder", draws=50, random_seed=42)
     assert results.diagnostics["fit_method"] == "pathfinder"
     _assert_usable_posterior(results, mmm, expected_draws=50)
+
+
+def test_no_parameter_independent_deterministics(simple_panel):
+    """Pathfinder's trace conversion (pymc_extras) cannot batch a Deterministic
+    that depends on no free RV — vectorize_graph gives it no chain/draw dims
+    and az.from_dict rejects the shape. The graph anchors would-be constants
+    (absent structure components, observed-data y_obs_scaled) on a free RV
+    with a zero-weight term (`_anchored_det`). Pin the invariant on the
+    maximal-constants config: national panel, trend none, seasonality off.
+    Observed RVs are blockers — the conversion substitutes their data."""
+    try:
+        from pytensor.graph.traversal import ancestors
+    except ImportError:  # older pytensor
+        from pytensor.graph.basic import ancestors
+
+    from mmm_framework.config import SeasonalityConfig
+
+    cfg = ModelConfig(
+        inference_method=InferenceMethod.BAYESIAN_PYMC,
+        n_chains=1,
+        n_draws=10,
+        n_tune=10,
+        seasonality=SeasonalityConfig(yearly=None, monthly=None, weekly=None),
+    )
+    mmm = BayesianMMM(simple_panel, cfg, TrendConfig(type=TrendType.NONE))
+    model = mmm.model
+    free = set(model.free_RVs)
+    observed = list(model.observed_RVs)
+    constant = [
+        d.name
+        for d in model.deterministics
+        if not any(a in free for a in ancestors([d], blockers=observed))
+    ]
+    assert constant == [], f"parameter-independent deterministics: {constant}"
 
 
 def test_pathfinder_missing_dep_message(

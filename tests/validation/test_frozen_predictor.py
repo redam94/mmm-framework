@@ -200,7 +200,11 @@ class TestFrozenPredictorCreation:
         }
 
         posterior = xr.Dataset(posterior_data)
-        return az.InferenceData(posterior=posterior)
+        # az.InferenceData(posterior=...) broke on the DataTree migration;
+        # the compat wrapper builds the container on either arviz line.
+        from mmm_framework.utils.arviz_compat import dataset_to_idata
+
+        return dataset_to_idata(posterior)
 
     def test_create_frozen_predictor_simple(self, simple_pymc_model, mock_simple_trace):
         """Test creating a frozen predictor from a simple model."""

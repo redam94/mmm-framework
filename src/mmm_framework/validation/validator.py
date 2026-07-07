@@ -306,12 +306,13 @@ class ModelValidator:
 
     def _check_convergence(self) -> ConvergenceSummary:
         """Check MCMC convergence diagnostics."""
-        import arviz as az
 
         trace = self._get_trace()
 
         try:
-            summary = az.summary(trace)
+            from mmm_framework.utils.arviz_compat import summary as az_summary
+
+            summary = az_summary(trace)
             rhat_max = float(summary["r_hat"].max())
             ess_bulk_min = float(summary["ess_bulk"].min())
             ess_tail_min = float(summary["ess_tail"].min())

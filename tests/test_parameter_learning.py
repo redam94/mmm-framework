@@ -175,9 +175,13 @@ class TestParameterLearningCore:
         assert np.isnan(row["post_ess_bulk"])
 
     def test_ess_populated_from_inference_data(self):
-        az = pytest.importorskip("arviz")
+        pytest.importorskip("arviz")
+        # posterior_from_dict absorbs az.from_dict's convention flip (the raw
+        # legacy `posterior=` kwarg call broke on arviz 1.x).
+        from mmm_framework.utils.arviz_compat import posterior_from_dict
+
         rng = np.random.default_rng(16)
-        post = az.from_dict(posterior={"b": rng.normal(1.0, 0.5, (2, 500))})
+        post = posterior_from_dict({"b": rng.normal(1.0, 0.5, (2, 500))})
         prior = {"b": _normal(rng, 0.0, 1.0)}
         df = parameter_learning(prior, post).set_index("parameter")
         assert df.loc["b", "post_ess_bulk"] > 100

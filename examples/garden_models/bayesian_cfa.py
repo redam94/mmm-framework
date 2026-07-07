@@ -183,14 +183,15 @@ class BayesianCFA(CustomMMM):
     def factor_loadings_summary(self, hdi_prob: float = 0.94):
         """Posterior loadings table (mean + HDI) per (indicator, factor) — the
         matrix-valued counterpart the scalar estimands don't cover."""
-        import arviz as az
+        import arviz as az  # noqa: F401 - kept for other az uses
+        from mmm_framework.utils.arviz_compat import hdi_dataset
         import pandas as pd
 
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
         da = self._trace.posterior["factor_loadings"]
         mean = da.mean(("chain", "draw")).values
-        hdi = az.hdi(self._trace, var_names=["factor_loadings"], hdi_prob=hdi_prob)[
+        hdi = hdi_dataset(self._trace, hdi_prob, var_names=["factor_loadings"])[
             "factor_loadings"
         ].values  # (indicator, factor, 2)
         rows = []

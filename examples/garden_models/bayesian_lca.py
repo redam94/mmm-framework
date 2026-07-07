@@ -175,14 +175,15 @@ class BayesianLCA(CustomMMM):
         """Per-(class, item) endorsement probability P(item=1 | class) — mean +
         HDI. The interpretable LCA output (the non-MMM analogue of the CFA's
         loadings table); also feeds the report's latent-structure section."""
-        import arviz as az
+        import arviz as az  # noqa: F401 - kept for other az uses
+        from mmm_framework.utils.arviz_compat import hdi_dataset
         import pandas as pd
 
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
         prof = self._trace.posterior["class_profile"]
         mean = prof.mean(("chain", "draw")).values  # (K, J)
-        hdi = az.hdi(self._trace, var_names=["class_profile"], hdi_prob=hdi_prob)[
+        hdi = hdi_dataset(self._trace, hdi_prob, var_names=["class_profile"])[
             "class_profile"
         ].values  # (K, J, 2)
         sizes = self._trace.posterior["class_sizes"].mean(("chain", "draw")).values

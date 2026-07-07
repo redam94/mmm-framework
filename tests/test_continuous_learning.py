@@ -951,7 +951,10 @@ def test_recovery_main_effects_and_synergy_signs(recovered):
     from scipy.stats import spearmanr
 
     rho = spearmanr(beta_hat, world.beta).correlation
-    assert rho >= 0.8
+    # Spearman over K channels is quantized (one swapped adjacent pair lands
+    # exactly on 0.8) and the float computation can sit an epsilon under the
+    # boundary — compare with fp tolerance, not exact >=.
+    assert rho >= 0.8 - 1e-9
     # sign-informed synergies: cannibalization negative, complementarities positive
     gs = post.gamma_summary()
     assert gs["gamma_Chatter_Pulse"]["mean"] < 0.0  # neg pair
@@ -1277,7 +1280,10 @@ def test_negbinomial_recovery_counts_world():
     from scipy.stats import spearmanr
 
     rho = spearmanr(beta_hat, world.beta).correlation
-    assert rho >= 0.8
+    # Spearman over K channels is quantized (one swapped adjacent pair lands
+    # exactly on 0.8) and the float computation can sit an epsilon under the
+    # boundary — compare with fp tolerance, not exact >=.
+    assert rho >= 0.8 - 1e-9
     assert post.diagnostics["max_rhat"] is None or post.diagnostics["max_rhat"] < 1.2
 
 
@@ -1318,7 +1324,10 @@ def test_studentt_recovery_heavy_tailed_world():
     from scipy.stats import spearmanr
 
     rho = spearmanr(beta_hat, world.beta).correlation
-    assert rho >= 0.8
+    # Spearman over K channels is quantized (one swapped adjacent pair lands
+    # exactly on 0.8) and the float computation can sit an epsilon under the
+    # boundary — compare with fp tolerance, not exact >=.
+    assert rho >= 0.8 - 1e-9
     # planted t(3) residuals: the posterior tail df should sit well below the
     # near-Gaussian prior mass (Gamma(2, 0.1) has mean 20)
     assert float(np.median(post.samples["nu"])) < 10.0
