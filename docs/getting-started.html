@@ -554,11 +554,29 @@
             <h2 id="installation">Installation</h2>
 
             <p>
-                The package is not yet published to PyPI &mdash; installation is from source:
-                clone the repository, then install with <code>uv sync</code> or <code>pip install -e .</code>
+                The modeling library is published on
+                <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>.
+                For anything production-facing, pin an exact version &mdash; the project is pre-1.0
+                and minor releases may include breaking changes (see the
+                <a href="changelog.html">changelog</a>).
             </p>
 
-            <h3>Clone the Repository</h3>
+            <h3>Install from PyPI</h3>
+            <div class="terminal-block">
+                <div class="terminal-header">
+                    <span class="terminal-dot red"></span>
+                    <span class="terminal-dot yellow"></span>
+                    <span class="terminal-dot green"></span>
+                </div>
+                <div class="terminal-content">
+                    <span class="comment"># Install the modeling library</span><br>
+                    <span class="prompt">$</span> pip install mmm-framework<br><br>
+                    <span class="comment"># Production: pin the exact release</span><br>
+                    <span class="prompt">$</span> pip install mmm-framework==0.2.0
+                </div>
+            </div>
+
+            <h3>Or Install from Source (development)</h3>
             <div class="terminal-block">
                 <div class="terminal-header">
                     <span class="terminal-dot red"></span>

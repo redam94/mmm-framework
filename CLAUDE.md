@@ -4,7 +4,7 @@
 
 **MMM Framework** is a production-ready Bayesian Marketing Mix Modeling framework extending PyMC-Marketing with advanced capabilities for modeling marketing effectiveness. Emphasizes methodological rigor, genuine uncertainty quantification, and pre-specified analyses to reduce researcher degrees of freedom.
 
-**Version**: 0.1.0
+**Version**: 0.2.0
 **Author**: Matthew Reda
 **Python**: 3.12+
 

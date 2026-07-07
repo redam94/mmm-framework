@@ -363,7 +363,7 @@
               "name": "How do I install it?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "From source—the framework is not yet published to PyPI. Clone the repository and run uv sync, or pin a specific commit for production use: pip install git+https://github.com/redam94/mmm-framework@<commit> Python 3.12+ is required. The getting started guide walks through setup, and the changelog page explains the pre-1.0 versioning policy and which modules are safe to depend on."
+                "text": "From PyPI. Pin an exact version for production use: pip install mmm-framework==0.2.0 Source installs (git clone + uv sync) remain the development path. Python 3.12+ is required. The getting started guide walks through setup, and the changelog page explains the pre-1.0 versioning policy and which modules are safe to depend on."
               }
             },
             {
@@ -1456,10 +1456,13 @@ az.plot_ppc(pred.posterior_predictive)</code></pre>
                 <div class="faq-question">How do I install it?</div>
                 <div class="faq-answer">
                     <p>
-                        From source—the framework is <strong>not yet published to PyPI</strong>. Clone the
-                        repository and run <code>uv sync</code>, or pin a specific commit for production use:
+                        From <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>.
+                        Pin an exact version for production use:
                     </p>
-                    <pre><code>pip install git+https://github.com/redam94/mmm-framework@&lt;commit&gt;</code></pre>
+                    <pre><code>pip install mmm-framework==0.2.0</code></pre>
+                    <p>
+                        Source installs (<code>git clone</code> + <code>uv sync</code>) remain the development path.
+                    </p>
                     <p>
                         Python 3.12+ is required. The <a href="getting-started.html">getting started guide</a>
                         walks through setup, and the <a href="changelog.html">changelog page</a> explains the

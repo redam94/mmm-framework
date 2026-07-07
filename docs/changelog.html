@@ -186,7 +186,9 @@
         <main class="main-content">
             <h1 id="status">Versioning &amp; Changelog</h1>
             <p class="lead">
-                The MMM Framework is at <strong>version 0.1.0</strong> &mdash; a pre-1.0 release.
+                The MMM Framework is at <strong>version 0.2.0</strong> &mdash; a pre-1.0 release,
+                published on <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>
+                (<code>pip install mmm-framework</code>).
                 The mathematical foundations and core API are intentionally stable, but the surface
                 area is still evolving. This page tracks where we are and what to expect.
             </p>
@@ -195,10 +197,10 @@
                 <h4>Pre-1.0: read before depending</h4>
                 <p style="margin-bottom: 0;">
                     Public API may have backwards-incompatible changes between minor versions until 1.0.
-                    The package is not yet published to PyPI &mdash; install from source and pin a specific
-                    git commit or tag for production use
-                    (<code>pip install git+https://github.com/redam94/mmm-framework@&lt;commit&gt;</code>),
-                    and review the release notes before upgrading. PyPI publication is planned.
+                    Pin an exact version for production use
+                    (<code>pip install mmm-framework==0.2.0</code>)
+                    and review the release notes before upgrading &mdash; 0.2.0 itself moved the
+                    core dependency stack to PyMC&nbsp;6 / PyTensor&nbsp;3 / ArviZ&nbsp;1.x.
                     Once 1.0 ships, the framework will follow semantic versioning strictly.
                 </p>
             </div>
@@ -266,15 +268,50 @@
 
             <h2 id="releases">Release Notes</h2>
 
-            <p>For ongoing release tracking, see the <a href="https://github.com/redam94/mmm-framework/releases" target="_blank" rel="noopener">GitHub Releases page</a>. The history below summarises the current version.</p>
+            <p>For ongoing release tracking, see the <a href="https://github.com/redam94/mmm-framework/releases" target="_blank" rel="noopener">GitHub Releases page</a>. The history below summarises each version.</p>
+
+            <div class="release">
+                <div class="release-header">
+                    <span class="release-version">0.2.0 (Beta)</span>
+                    <span class="release-date">2026-07-06</span>
+                    <span class="release-tag">Current</span>
+                </div>
+                <p style="margin: 0.5rem 0 0.5rem 0;">
+                    Everything shipped since the 0.1.0 PyPI release (June 24), headlined by a core-stack
+                    upgrade. Full test suite green at release: 3,587 fast + 164 slow tests.
+                </p>
+                <div class="callout warning" style="margin: 0.75rem 0; padding: 0.9rem 1.1rem; border-left: 4px solid var(--color-warning); background: rgba(212,168,106,0.08); border-radius: 8px;">
+                    <strong>Breaking (dependencies):</strong> the core Bayesian stack moved to
+                    <strong>PyMC&nbsp;6 / PyTensor&nbsp;3 / ArviZ&nbsp;1.x</strong> (they move in lockstep).
+                    ArviZ containers are now xarray <code>DataTree</code>s; models saved under 0.1.0
+                    (PyMC&nbsp;5) reload cleanly. Pathfinder variational inference now works out of the box
+                    (<code>pymc-extras</code> is a declared dependency), and the netcdf engines
+                    (<code>h5netcdf</code>/<code>h5py</code>) trace persistence needs are declared explicitly.
+                    If you extend the framework with raw <code>arviz</code> calls, route them through
+                    <code>mmm_framework.utils.arviz_compat</code> &mdash; several arviz&nbsp;1.x changes fail
+                    <em>silently</em> (notably <code>az.summary</code> returning formatted strings).
+                </div>
+                <ul>
+                    <li><strong>Continuous sequential learning</strong> (<code>continuous_learning</code>, experimental): a model-free geo response-surface engine that learns spend&rarr;outcome directly from designed experiments &mdash; central-composite designs, Thompson sampling, funding-line and ENBS stopping rules, Laplace knowledge-gradient design scoring, information discounting and P-spline shrinkage for drifting media behaviour, and the Sextant UI to run the loop.</li>
+                    <li><strong>Approximate fits from the Oracle</strong>: MAP / ADVI / full-rank ADVI / Pathfinder selectable end-to-end (spec registry, agent tool, spec-editor UI), for seconds-fast model checking before paying for NUTS. Loading a saved model now restores the exact settings it was fit with.</li>
+                    <li><strong>Impression-/click-measured media</strong>: per-channel measurement descriptors drive honest ROI vs efficiency-per-unit metrics across reports, estimands, and the UI.</li>
+                    <li><strong>Simulation-Based Calibration</strong> in <code>diagnostics</code>, plus SBC + LOO-PIT machine-verification of interval calibration in <code>validation</code>; out-of-time backtests extended to spline/GP/piecewise trends and geo panels.</li>
+                    <li><strong>Augur client deliverables</strong>: the Media Performance Readout is the default client report, with posterior-predictive fit sections, AI insights, slide-deck deep-dives, and marginal-ROI break-even spend zones; the Almanac budget planner returned with an allocation section.</li>
+                    <li><strong>Data Studio</strong>: upload &rarr; interactive EDA &rarr; replayable cleaning pipeline &rarr; commit as the working dataset, with no LLM round-trip; also exposed as agent tools.</li>
+                    <li><strong>Experiments</strong>: structural-identification design panel, off-panel calibration (experiments from windows the model was not fit on), one-click calibration handoff, and a CombinedMMM starter template in the DAG planner.</li>
+                    <li><strong>Estimands on the Performance page</strong> (grouped by estimand &times; KPI across fitted models), per-geo channel effectiveness (<code>vary_media_by_geo</code>), call-time estimand selection, and full spec-path validation on every agent setting write.</li>
+                    <li><strong>Model validation surface</strong>: a first-class validation battery (PPC, residuals, channel diagnostics, causal refutation, cross-validation) as agent tools, a one-click Validation tab, and a persona review panel.</li>
+                    <li><strong>Platform</strong>: real IV/2SLS and front-door estimators, S3 object store, content-addressed dataset lineage, run-comparison deltas, SaaS security and governance foundation, CI with lint + fast tests + coverage + dependency audit, and a React test harness.</li>
+                    <li><strong>Docs</strong>: site-wide modern refresh (dark mode, Cmd-K search, quizzes, deep-dives), mobile-safe rendering, and analyst-focused continuous-learning guides with recorded animations.</li>
+                </ul>
+            </div>
 
             <div class="release">
                 <div class="release-header">
                     <span class="release-version">0.1.0 (Beta)</span>
-                    <span class="release-date">in development since December 2025; unreleased</span>
-                    <span class="release-tag">Current</span>
+                    <span class="release-date">2026-06-24 &mdash; first PyPI release; in development since December 2025</span>
                 </div>
-                <p style="margin: 0.5rem 0 0.5rem 0;">The first release line of the MMM Framework, still in development. Includes:</p>
+                <p style="margin: 0.5rem 0 0.5rem 0;">The first published release of the MMM Framework. Includes:</p>
                 <div class="callout warning" style="margin: 0.75rem 0; padding: 0.9rem 1.1rem; border-left: 4px solid var(--color-warning); background: rgba(212,168,106,0.08); border-radius: 8px;">
                     <strong>Behavioral change (June 2026, within the 0.1.0 development line):</strong>
                     <code>ModelConfig.use_parametric_adstock</code> now defaults to

@@ -146,7 +146,7 @@ from .dag_model_builder import (
     create_mediation_dag,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     # Enums

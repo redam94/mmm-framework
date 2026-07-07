@@ -1,6 +1,6 @@
 [project]
 name = "mmm-framework"
-version = "0.1.0"
+version = "0.2.0"
 description = "Bayesian Marketing Mix Modeling framework with causal calibration, pressure testing, and an adaptive measurement loop"
 readme = "README.md"
 license = "Apache-2.0"

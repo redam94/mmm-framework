@@ -71,7 +71,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-04",
+          "dateModified": "2026-07-06",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/evaluator.html#breadcrumb"
           },
@@ -126,11 +126,11 @@
                     </tr>
                     <tr>
                         <td>Version</td>
-                        <td>0.1.0 (Beta) &mdash; in development since December 2025, unreleased. Pre-1.0: expect API changes on non-stable modules. See the <a href="changelog.html">versioning &amp; changelog page</a>.</td>
+                        <td>0.2.0 (Beta) &mdash; in development since December 2025; first published to PyPI as 0.1.0 in June 2026. Pre-1.0: expect API changes on non-stable modules. See the <a href="changelog.html">versioning &amp; changelog page</a>.</td>
                     </tr>
                     <tr>
                         <td>Packaging</td>
-                        <td>Not on PyPI. Install from source: <code>git clone</code> + <code>uv sync</code>, or pin a commit with <code>pip install git+https://github.com/redam94/mmm-framework@&lt;commit&gt;</code>.</td>
+                        <td>On <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>: <code>pip install mmm-framework</code>. Pin an exact version for production use (<code>mmm-framework==0.2.0</code>). Source install (<code>git clone</code> + <code>uv sync</code>) remains the development path.</td>
                     </tr>
                     <tr>
                         <td>Maintainer</td>
@@ -146,7 +146,7 @@
                     </tr>
                     <tr>
                         <td>Test suite</td>
-                        <td>2,098 passing tests (fast suite, measured 2026-06-12).</td>
+                        <td>3,751 passing tests (3,587 fast + 164 slow incl. real MCMC fits, measured 2026-07-06 on the PyMC 6 stack).</td>
                     </tr>
                     <tr>
                         <td>Governance</td>
@@ -175,7 +175,7 @@
             <div class="note">
                 <h4>Roadmap to 1.0 &mdash; criteria, not dates</h4>
                 <p style="margin-bottom: 0;">
-                    There is no promised ship date. 1.0 happens when specific criteria are met: stabilizing the Beta-tier APIs, and publishing to PyPI. Until then, pin a git commit for production use.
+                    There is no promised ship date. 1.0 happens when a specific criterion is met: stabilizing the Beta-tier APIs. (PyPI publication, the other original criterion, happened at 0.1.0.) Until then, pin an exact release for production use: <code>pip install mmm-framework==0.2.0</code>.
                 </p>
             </div>
         </div>
@@ -265,7 +265,7 @@
             <div class="highlight-box">
                 <h4>120 minutes &mdash; hands on</h4>
                 <p style="margin-bottom: 0;">
-                    Do the 30-minute pass, then clone the repository and follow the <a href="getting-started.html">quickstart</a>: install from source, fit a first model on synthetic data with known ground truth, and check the estimates against the answer key yourself. If you want to stress the evidence, re-run <code>nbs/runtime_benchmark.ipynb</code> on your own hardware and compare.
+                    Do the 30-minute pass, then <code>pip install mmm-framework</code> and follow the <a href="getting-started.html">quickstart</a>: fit a first model on synthetic data with known ground truth, and check the estimates against the answer key yourself. If you want to stress the evidence, clone the repository and re-run <code>nbs/runtime_benchmark.ipynb</code> on your own hardware and compare.
                 </p>
             </div>
             <div class="note">
@@ -286,7 +286,7 @@
             <div class="warning-box">
                 <h4>⚠️ Read before depending</h4>
                 <ul style="margin-bottom: 0;">
-                    <li><strong>Not on PyPI.</strong> Source installs only; pin a git commit for anything production-facing.</li>
+                    <li><strong>Pre-1.0 on PyPI.</strong> Released, but pin an exact version (<code>mmm-framework==0.2.0</code>) for anything production-facing and read the release notes before upgrading &mdash; 0.2.0 itself moved the core stack to PyMC&nbsp;6.</li>
                     <li><strong>Solo maintainer.</strong> No SLA, no commercial support, real bus-factor risk (mitigations <a href="#team">above</a>).</li>
                     <li><strong>Pre-1.0 API churn.</strong> Beta and Experimental modules may change between minor versions; only the core modeling tier is treated as stable.</li>
                     <li><strong>No SaaS offering.</strong> You operate the stack (FastAPI, Redis, worker, frontend) yourself.</li>
