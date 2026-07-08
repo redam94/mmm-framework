@@ -2,7 +2,7 @@
 
 This document is the frozen interface contract for the "agent superpowers" upgrade.
 It is the single source of truth shared by the backend (`src/mmm_framework/api`,
-`src/mmm_framework/agents`) and the React frontend (`frontend/src/pages/AgentPage.tsx`).
+`src/mmm_framework/agents`) and the React frontend (`frontend/src/pages/Agent/index.tsx`).
 
 The upgrade delivers seven capabilities:
 
@@ -220,7 +220,7 @@ on session load (instead of resetting to []).
 
 ---
 
-## 10. Frontend  (`frontend/src/pages/AgentPage.tsx`, `CausalWidgets.tsx`, `package.json`)
+## 10. Frontend  (`frontend/src/pages/Agent/index.tsx`, `frontend/src/components/causal/CausalWidgets.tsx`, `package.json`)
 
 * **Project picker** in `SessionSidebar`: a dropdown above the session list to select / create
   a project; sessions list filters by the selected project; new sessions inherit it. Persist
