@@ -282,7 +282,7 @@
   <div class="grid c3">
     <div class="card pillar">
       <h4>1 · Causal Bayesian engine</h4>
-      <p class="small">A production Bayesian MMM extending PyMC-Marketing: per-channel adstock (geometric, delayed, Weibull) and saturation (logistic, Hill, Michaelis-Menten, tanh), hierarchical geo &amp; geo×product panels, and extended models for funnel mediation, multi-outcome, and combined effects. Fast NUTS via NumPyro/NutPie.</p>
+      <p class="small">A production Bayesian MMM built directly on PyMC 6 — a standalone engine, interoperable with (not a subclass of) PyMC-Marketing: per-channel adstock (geometric, delayed, Weibull) and saturation (logistic, Hill, Michaelis-Menten, tanh), hierarchical geo &amp; geo×product panels, and extended models for funnel mediation, multi-outcome, and combined effects. Fast NUTS via NumPyro/NutPie.</p>
     </div>
     <div class="card pillar b">
       <h4>2 · The measurement loop (T₀–T₅)</h4>
@@ -357,7 +357,7 @@
       </tr>
       <tr>
         <td><b>Speed</b></td>
-        <td>NumPyro NUTS measured <b>6.0× faster</b> than stock PyMC at equal draws; a national fit completes in ~17 s.</td>
+        <td>NumPyro NUTS measured <b>~3× faster</b> than stock PyMC at equal draws (PyMC 6; down from ~6× under PyMC 5, whose native sampler was slower); a national fit completes in ~15 s.</td>
         <td><span class="chip shipped">Measured</span> Comparable convergence (R-hat 1.010 vs 1.008).</td>
       </tr>
       <tr>
@@ -432,7 +432,7 @@
   <p class="small muted">Open-core model: a free, self-hosted OSS core; paid managed tiers whose differentiators are exactly the multi-tenancy / SSO / hosted-sandbox capabilities already built — so the security investment <em>is</em> the monetization.</p>
   <ul class="tight">
     <li><b>Enforceable entitlements, not just a doc:</b> four tiers (Free / Team / Business / Enterprise) with seat/project/monthly-fit limits and a feature-gating map; per-org usage metering (<code>GET /auth/usage</code>); limits enforced (seats at invite-accept, projects at create, premium features → 402). Tested.</li>
-    <li><b>Collateral:</b> a <a href="pricing.html">pricing page</a> (tiers match the code exactly), a per-fit <b>cost model</b> grounded in the measured ~17 s national fit (≈$0.011 COGS/fit → 80%-margin price floors), and a packaging one-pager.</li>
+    <li><b>Collateral:</b> a <a href="pricing.html">pricing page</a> (tiers match the code exactly), a per-fit <b>cost model</b> grounded in the measured ~15 s national fit (≈$0.010 COGS/fit → 80%-margin price floors), and a packaging one-pager.</li>
     <li><b>Remaining (Track 3):</b> billing integration (Stripe/webhook → plan changes) and hard fit-quota enforcement — today fits are metered, not blocked.</li>
   </ul>
 </section>

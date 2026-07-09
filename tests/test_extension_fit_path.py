@@ -91,11 +91,94 @@ def test_basic_dag_type_keeps_the_plain_path(mediated_mff):
     assert type(mmm).__name__ == "BayesianMMM"
 
 
-def test_approximate_methods_refused_for_extensions(mediated_mff):
+def test_map_fit_supported_for_extensions(mediated_mff):
+    """Extension models now share the base model's approximate engine — a MAP
+    fit returns a drop-in approximate result instead of raising."""
+    mmm = build_model(_nested_spec(), mediated_mff)
+    assert type(mmm).__name__ == "NestedMMM"
+    results = mmm.fit(method="map", random_seed=0)
+    assert results.approximate is True
+    assert results.diagnostics["fit_method"] == "map"
+    # R-hat / ESS are undefined for a single-path approximation.
+    assert results.diagnostics["rhat_max"] is None
+    assert results.converged is None  # "not assessable", not False
+    # The trace is a drop-in for a NUTS trace: (chain, draw) posterior present,
+    # with the model's deterministics, and az summary works off it.
+    assert results.trace.posterior.sizes["draw"] >= 1
+    assert not results.summary().empty
+
+
+@pytest.mark.slow
+def test_advi_fit_supported_for_extensions(mediated_mff):
+    """ADVI (variational) also works for an extension model."""
+    mmm = build_model(_nested_spec(), mediated_mff)
+    results = mmm.fit(method="advi", draws=50, random_seed=0, n=2000)
+    assert results.approximate is True
+    assert results.diagnostics["fit_method"] == "advi"
+    assert results.trace.posterior.sizes["draw"] == 50
+
+
+def test_approximate_method_flows_through_the_agent_fit_path(mediated_mff):
+    """The agent build_model → fit path passes method='map' to the extension
+    model instead of raising (the old behavior)."""
     spec = _nested_spec()
     spec["inference"]["method"] = "map"
-    with pytest.raises(ValueError, match="not available"):
-        build_and_fit(spec, mediated_mff)
+    mmm = build_model(spec, mediated_mff)
+    results = mmm.fit(method=spec["inference"]["method"], random_seed=0)
+    assert results.approximate is True
+
+
+def test_spec_trend_seasonality_likelihood_and_priors_reach_nested_graph(mediated_mff):
+    """End-to-end: a spec's trend + seasonality + outcome-likelihood family +
+    mediator prior overrides all reach the DAG-routed NestedMMM graph."""
+    spec = _nested_spec()
+    spec["trend"] = {"type": "linear"}
+    spec["seasonality"] = {"yearly": 2}
+    spec["likelihood"] = {"family": "student_t"}
+    spec["priors"] = {
+        "mediator": {
+            "Awareness": {"media_effect_sigma": 2.5, "direct_effect_sigma": 1.5}
+        }
+    }
+    mmm = build_model(spec, mediated_mff)
+    rvs = set(mmm.model.named_vars.keys())
+    assert "trend_slope" in rvs  # spec trend
+    assert "seasonality_coefs" in rvs  # spec seasonality
+    assert "nu_y" in rvs  # student-t outcome likelihood
+    # the mediator prior override reached the model's config
+    med = mmm.config.mediators[0]
+    assert med.media_effect.sigma == 2.5
+    assert med.direct_effect.sigma == 1.5
+
+
+@pytest.mark.slow
+def test_spline_trend_extension_fits_end_to_end(mediated_mff):
+    """A DAG-routed NestedMMM with a spec spline trend builds + fits (MAP)."""
+    spec = _nested_spec()
+    spec["trend"] = {"type": "spline"}
+    mmm = build_model(spec, mediated_mff)
+    assert "spline_coef_raw" in set(mmm.model.named_vars.keys())
+    results = mmm.fit(method="map", random_seed=0)
+    assert results.approximate is True
+    assert "trend_component" in results.trace.posterior
+
+
+@pytest.mark.slow
+def test_map_fit_artifact_marks_model_and_method(mediated_mff, tmp_path, monkeypatch):
+    """A MAP fit of a DAG-routed NestedMMM records WHICH model + HOW it was fit,
+    so the artifact is self-describing (reports/settings read these)."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
+    spec = _nested_spec()
+    spec["inference"]["method"] = "map"
+    spec["inference"]["metrics_draws"] = 0
+    mmm, results, info = build_and_fit(spec, mediated_mff)
+    run = info["model_run"]
+    assert run["model_class"] == "NestedMMM"
+    assert run["dag_model_type"] == "nested_mmm"
+    assert run["approximate"] is True  # first-class, not just method != nuts
+    assert run["inference"]["method"] == "map"
+    assert results.approximate is True
 
 
 @pytest.mark.slow

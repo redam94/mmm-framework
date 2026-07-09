@@ -116,6 +116,57 @@ _SCALAR_PRIOR_KEYS = {
     },
 }
 
+# ── Extension-model prior paths (priors.mediator.* / .outcome.* / .cross_effect.*)
+# For DAG-routed NestedMMM / MultivariateMMM / CombinedMMM the priors come from
+# the causal DAG node configs, not from the plain-model priors.media/controls.
+# These keys map 1:1 onto MediatorNodeConfig / OutcomeNodeConfig / CrossEffect
+# fields; `_inject_extension_priors` writes them into the DAG node configs before
+# translation, so a spec write actually reaches the graph. The registry validates
+# writes against these sets (see `unconsumed_prior_path`).
+_MEDIATOR_PRIOR_KEYS = {
+    "media_effect_sigma",
+    "media_effect_constraint",  # none | positive | negative
+    "outcome_effect_sigma",
+    "direct_effect_sigma",
+    "observation_noise_sigma",
+    "allow_direct_effect",
+}
+_OUTCOME_PRIOR_KEYS = {
+    "intercept_prior_sigma",
+    "media_effect_sigma",
+    "include_trend",
+    "include_seasonality",
+}
+_CROSS_EFFECT_PRIOR_KEYS = {"effect_type", "prior_sigma"}
+_EXTENSION_PRIOR_GROUPS = {
+    "mediator": _MEDIATOR_PRIOR_KEYS,
+    "outcome": _OUTCOME_PRIOR_KEYS,
+    "cross_effect": _CROSS_EFFECT_PRIOR_KEYS,
+}
+
+
+def _extension_prior_names(spec: dict) -> dict:
+    """Valid mediator / outcome / cross-effect names from the spec's DAG, for
+    typo detection in the extension-prior registry. Empty dict when no dag_spec
+    (best-effort — name validation is skipped rather than wrongly rejecting)."""
+    dag = spec.get("dag_spec")
+    if not dag:
+        return {}
+    id_to: dict = {}
+    for n in dag.get("nodes", []):
+        nt = str(getattr(n.get("node_type"), "value", n.get("node_type"))).lower()
+        id_to[n.get("id")] = (nt, n.get("variable_name"))
+    med = {v for (t, v) in id_to.values() if t == "mediator"}
+    out = {v for (t, v) in id_to.values() if t == "outcome"}
+    ce: set = set()
+    for e in dag.get("edges", []):
+        et = str(getattr(e.get("edge_type"), "value", e.get("edge_type"))).lower()
+        if et == "cross_effect":
+            s = id_to.get(e.get("source"), (None, None))[1]
+            t = id_to.get(e.get("target"), (None, None))[1]
+            ce.add(f"{s}__{t}")
+    return {"mediator": med, "outcome": out, "cross_effect": ce}
+
 
 def unconsumed_prior_path(parts: list[str], value, spec: dict) -> str | None:
     """Return an error message when writing ``value`` at the ``priors.*`` path
@@ -123,6 +174,70 @@ def unconsumed_prior_path(parts: list[str], value, spec: dict) -> str | None:
     else None. Dict values are expanded so e.g. setting the whole
     ``priors.intercept`` dict validates its keys too. ``spec`` supplies the
     known channel/control names for typo detection."""
+
+    # DAG-routed extension models (NestedMMM / MultivariateMMM / CombinedMMM)
+    # take their MEDIA/CONTROL priors from the causal DAG node configs, but their
+    # mediator / outcome / cross-effect priors ARE settable through the spec —
+    # `priors.mediator|outcome|cross_effect.<name>.<key>` (folded into the DAG
+    # node configs by `_inject_extension_priors`), plus `priors.seasonality.*`
+    # (which reaches the extension via model_config). Validate those; reject the
+    # plain-model groups (media / controls / media_default / intercept / trend)
+    # that an extension graph never reads, so the user is TOLD instead of a false
+    # success.
+    ext = str(spec.get("dag_model_type") or "").lower()
+    if ext in _EXTENSION_DAG_TYPES:
+        if len(parts) < 2:
+            return (
+                "`priors` needs a group — for this DAG-routed extension model set "
+                "priors.mediator/outcome/cross_effect.<name>.<key> (or "
+                "priors.seasonality.*)."
+            )
+        group = parts[1]
+        if group in _EXTENSION_PRIOR_GROUPS:
+            allowed = _EXTENSION_PRIOR_GROUPS[group]
+            # Typo-check the <name> against the DAG (like the plain path's
+            # channel/control check) — an unknown name is accept-then-no-op.
+            valid_names = _extension_prior_names(spec).get(group)
+            if (
+                valid_names is not None
+                and len(parts) >= 3
+                and parts[2] not in valid_names
+            ):
+                listing = ", ".join(sorted(valid_names)) or "(none in the DAG)"
+                return (
+                    f"`priors.{group}.{parts[2]}` names an unknown {group} — the "
+                    f"DAG's {group}s are: {listing}."
+                )
+
+            def _ext_leaves(p: list[str], v) -> list[list[str]]:
+                if isinstance(v, dict) and v:
+                    out: list[list[str]] = []
+                    for k, sub in v.items():
+                        out.extend(_ext_leaves(p + [str(k)], sub))
+                    return out
+                return [p]
+
+            for leaf in _ext_leaves(list(parts), value):
+                path = ".".join(leaf)
+                if len(leaf) < 4:
+                    return (
+                        f"`{path}` is incomplete — set priors.{group}.<name>.<key> "
+                        f"where <key> is one of: {', '.join(sorted(allowed))}."
+                    )
+                if leaf[3] not in allowed:
+                    return (
+                        f"`{path}` — unknown {group} prior key '{leaf[3]}'. Valid "
+                        f"`priors.{group}.<name>.*` keys: {', '.join(sorted(allowed))}."
+                    )
+            return None
+        if group != "seasonality":  # seasonality falls through to normal validation
+            return (
+                f"`priors.{group}.*` won't apply to this DAG-routed **{ext}** "
+                "model — its media/control priors come from the causal DAG, not "
+                "the spec. Set priors.mediator/outcome/cross_effect.<name>.<key> "
+                "(or priors.seasonality.*), or fit a plain MMM. Inspect the "
+                "model's actual priors with `prior_predictive_check`."
+            )
 
     def _leaves(p: list[str], v) -> list[list[str]]:
         if isinstance(v, dict) and v:
@@ -271,6 +386,18 @@ def unconsumed_spec_path(parts: list[str], value, spec: dict) -> str | None:
     top = parts[0]
     if top == "priors":
         return unconsumed_prior_path(parts, value, spec)
+    # A DAG-routed extension model's media prior parameterization comes from the
+    # causal DAG node configs, not the spec's roi/coefficient mode — reject the
+    # write so the user isn't misled (priors.* is already guarded above).
+    if (
+        top == "media_prior_mode"
+        and str(spec.get("dag_model_type") or "").lower() in _EXTENSION_DAG_TYPES
+    ):
+        return (
+            "`media_prior_mode` won't apply to this DAG-routed extension model — "
+            "its media priors come from the causal DAG node configs, not the "
+            "spec's roi/coefficient mode. Fit a plain MMM to use spec media priors."
+        )
     if top in _FREEFORM_TOP_KEYS or top in _SIMPLE_TOP_KEYS:
         return None
 
@@ -585,12 +712,22 @@ def saved_model_settings(save_dir: str) -> dict:
             with open(run_meta_path) as f:
                 meta = _json.load(f)
             spec = meta.get("spec") or None
+            _inf = dict(meta.get("inference") or {})
+            if meta.get("approximate") is not None:
+                _inf["approximate"] = bool(meta.get("approximate"))
             settings = {
                 "source": "run_record",
                 "kpi": meta.get("kpi"),
                 "trend": meta.get("trend"),
                 "seasonality": meta.get("seasonality") or {},
-                "inference": meta.get("inference") or {},
+                "inference": _inf,
+                # WHICH model was fit (BayesianMMM vs NestedMMM/MV/Combined vs a
+                # garden subclass) — surfaced so load/list shows the model class.
+                "model": {
+                    "class": meta.get("model_class"),
+                    "kind": meta.get("model_kind"),
+                    "dag_model_type": meta.get("dag_model_type"),
+                },
                 "channels": [],
                 "controls": meta.get("controls") or [],
             }
@@ -653,6 +790,21 @@ def saved_model_settings(save_dir: str) -> dict:
                 ],
                 "controls": [c.get("name") for c in mff.get("controls") or []],
             }
+            # Model class + fit provenance from metadata.json (MMMSerializer).
+            meta_path = _os.path.join(save_dir, "metadata.json")
+            if _os.path.exists(meta_path):
+                with open(meta_path) as f:
+                    md = _json.load(f)
+                qn = md.get("model_class_qualname")
+                settings["model"] = {
+                    "class": qn.rsplit(".", 1)[-1] if qn else "BayesianMMM",
+                    "kind": md.get("model_kind"),
+                    "dag_model_type": None,
+                }
+                if md.get("fit_method"):
+                    settings["inference"]["method"] = md["fit_method"]
+                if md.get("approximate") is not None:
+                    settings["inference"]["approximate"] = bool(md["approximate"])
         except Exception:  # noqa: BLE001 — settings stay minimal
             pass
 
@@ -663,6 +815,11 @@ def settings_digest_markdown(settings: dict) -> str:
     """Render a ``saved_model_settings`` settings dict as compact markdown
     bullet lines — the load/list message the user actually reads."""
     lines: list[str] = []
+    model = settings.get("model") or {}
+    _cls = model.get("class")
+    if _cls and _cls != "BayesianMMM":
+        _dag = model.get("dag_model_type")
+        lines.append(f"- Model: **{_cls}**" + (f" (DAG-routed {_dag})" if _dag else ""))
     if settings.get("kpi"):
         lines.append(f"- KPI: **{settings['kpi']}**")
     if settings.get("trend"):
@@ -775,6 +932,160 @@ def _trend_config_from_spec(spec: dict):
 _EXTENSION_DAG_TYPES = {"nested_mmm", "multivariate_mmm", "combined_mmm"}
 
 
+def _model_config_from_spec(spec: dict):
+    """Build the core ``ModelConfig`` from a normalized spec.
+
+    Carries the inference method, ROI/coefficient media-prior mode, intercept +
+    seasonality priors, and the outcome likelihood family. Shared by
+    ``build_model`` (plain path) and ``_build_extension_model`` so the extension
+    models honor the SAME seasonality + likelihood the plain path does — the
+    parts that don't apply to extensions (``media_prior_mode``) are simply not
+    read by them.
+    """
+    inf = spec.get("inference", {})
+    chains = int(inf.get("chains", 4))
+    draws = int(inf.get("draws", 1000))
+    tune = int(inf.get("tune", 1000))
+    target_accept = float(inf.get("target_accept", 0.85))
+
+    model_config_builder = (
+        ModelConfigBuilder()
+        .bayesian_numpyro()
+        .with_chains(chains)
+        .with_draws(draws)
+        .with_tune(tune)
+        .with_target_accept(target_accept)
+        # Carry the planned inference method onto the config so an UNFITTED model
+        # (prefit readout, prior predictive check) reflects what the fit will use
+        # — map/advi/pathfinder vs full NUTS — instead of always reading "nuts".
+        .with_fit_method(str(inf.get("method", "nuts")).lower())
+    )
+    # Agent-built models default to ROI-BASED media priors: the default prior
+    # is placed on each channel's ROI (LogNormal, median 1.0 = break-even) and
+    # beta is derived in-graph, so the prior predictive ROI the oracle reports
+    # is the prior that was actually set — comparable across channels and
+    # independent of spend/KPI units. Opt out with spec["media_prior_mode"] =
+    # "coefficient" (the library's historical standardized-coefficient Gamma).
+    # Per-channel `priors.media.<ch>.coefficient` and experiment-calibrated
+    # priors still take precedence per channel.
+    media_mode = str(spec.get("media_prior_mode", "roi")).strip().lower()
+    if media_mode not in ("coefficient", "roi"):
+        raise ValueError(
+            f"spec.media_prior_mode must be 'coefficient' or 'roi', got {media_mode!r}"
+        )
+    roi_default = spec.get("priors", {}).get("media_default", {})
+    model_config_builder.with_media_prior_mode(
+        media_mode,
+        roi_mu=(float(roi_default["roi_mu"]) if "roi_mu" in roi_default else None),
+        roi_sigma=(
+            float(roi_default["roi_sigma"]) if "roi_sigma" in roi_default else None
+        ),
+    )
+    intercept_prior = spec.get("priors", {}).get("intercept", {})
+    if "mu" in intercept_prior or "sigma" in intercept_prior:
+        model_config_builder.with_intercept_prior(
+            mu=float(intercept_prior.get("mu", 0.0)),
+            sigma=float(intercept_prior.get("sigma", 0.5)),
+        )
+    season = spec.get("seasonality", {})
+    yearly = int(season.get("yearly", 0))
+    monthly = int(season.get("monthly", 0))
+    weekly = int(season.get("weekly", 0))
+    if yearly > 0 or monthly > 0 or weekly > 0:
+        seas_prior = spec.get("priors", {}).get("seasonality", {})
+
+        def _seas_sigma(component: str) -> float | None:
+            v = seas_prior.get(f"{component}_prior_sigma")
+            return None if v is None else float(v)
+
+        sb = SeasonalityConfigBuilder()
+        sb.no_seasonality()  # builder defaults yearly=2; only the spec decides
+        if "prior_sigma" in seas_prior:
+            sb.with_prior_sigma(float(seas_prior["prior_sigma"]))
+        if yearly > 0:
+            sb.with_yearly(order=yearly, prior_sigma=_seas_sigma("yearly"))
+        if monthly > 0:
+            sb.with_monthly(order=monthly, prior_sigma=_seas_sigma("monthly"))
+        if weekly > 0:
+            sb.with_weekly(order=weekly, prior_sigma=_seas_sigma("weekly"))
+        model_config_builder.with_seasonality_builder(sb)
+    # Observation model: the spec may declare a non-default likelihood family
+    # (e.g. binomial for an awareness model). Default is normal/identity.
+    lik_spec = spec.get("likelihood")
+    if lik_spec:
+        from mmm_framework.config import LikelihoodConfig
+
+        try:
+            model_config_builder.with_likelihood(
+                LikelihoodConfig.model_validate(lik_spec)
+            )
+        except Exception as e:  # noqa: BLE001
+            raise ValueError(
+                f"Invalid spec.likelihood: {e}. Expected {{family, link?, params?}} "
+                "— e.g. {'family': 'binomial', 'params': {'n_trials': 1000}}."
+            ) from e
+    return model_config_builder.build()
+
+
+def _inject_extension_priors(dag_dict: dict, spec: dict) -> dict:
+    """Fold spec-level extension prior overrides into the DAG node configs.
+
+    ``spec["priors"]["mediator"|"outcome"|"cross_effect"]`` maps by variable name
+    onto the corresponding DAG node's ``config`` dict (the ``MediatorNodeConfig``
+    / ``OutcomeNodeConfig`` override surface), so ``dag_to_*_config`` translates
+    them into the graph-consumed extension config. Only keys in the validated
+    registry sets are written (a stray key would crash the ``extra='forbid'``
+    node config at build). Returns a copy; the input DAG dict is untouched. A
+    no-op (returns the input) when there are no extension prior overrides.
+    """
+    priors = spec.get("priors", {}) or {}
+    med = priors.get("mediator", {}) or {}
+    out = priors.get("outcome", {}) or {}
+    ce = priors.get("cross_effect", {}) or {}
+    if not (med or out or ce):
+        return dag_dict
+
+    import copy as _copy
+
+    dag_dict = _copy.deepcopy(dag_dict)
+
+    def _apply(node: dict, override: dict, allowed: set) -> None:
+        cfg = dict(node.get("config") or {})
+        cfg.update({k: v for k, v in (override or {}).items() if k in allowed})
+        node["config"] = cfg
+
+    for node in dag_dict.get("nodes", []):
+        nt = str(getattr(node.get("node_type"), "value", node.get("node_type"))).lower()
+        name = node.get("variable_name")
+        if nt == "mediator" and name in med:
+            _apply(node, med[name], _MEDIATOR_PRIOR_KEYS)
+        elif nt == "outcome" and name in out:
+            _apply(node, out[name], _OUTCOME_PRIOR_KEYS)
+
+    # Cross-effect overrides are keyed "<sourceVar>__<targetVar>" (variable
+    # names). DAG edges reference node IDS, so map ids→variable_name and only
+    # touch CROSS_EFFECT edges. Written into edge.metadata (a real DAGEdge field)
+    # and consumed by dag_to_multivariate_config.
+    if ce:
+        id_to_var = {
+            n.get("id"): n.get("variable_name") for n in dag_dict.get("nodes", [])
+        }
+        for edge in dag_dict.get("edges", []):
+            et = str(
+                getattr(edge.get("edge_type"), "value", edge.get("edge_type"))
+            ).lower()
+            if et != "cross_effect":
+                continue
+            key = f"{id_to_var.get(edge.get('source'))}__{id_to_var.get(edge.get('target'))}"
+            if key in ce:
+                meta = dict(edge.get("metadata") or {})
+                meta.update(
+                    {k: v for k, v in ce[key].items() if k in _CROSS_EFFECT_PRIOR_KEYS}
+                )
+                edge["metadata"] = meta
+    return dag_dict
+
+
 def _build_extension_model(spec: dict, dataset_path: str):
     """Build an UNFITTED extension model (NestedMMM / MultivariateMMM /
     CombinedMMM) from the causal DAG the spec was derived from.
@@ -796,6 +1107,9 @@ def _build_extension_model(spec: dict, dataset_path: str):
             "model, but the spec carries no dag_spec. Re-derive the spec from the "
             "session's DAG with build_model_from_dag (after propose_dag)."
         )
+    # Fold any spec-level extension prior overrides into the DAG node configs so
+    # a user-set mediator/outcome/cross-effect prior actually reaches the graph.
+    dag_dict = _inject_extension_priors(dag_dict, spec)
     dag = DAGSpec.model_validate(dag_dict)
 
     granularity = str(spec.get("time_granularity", "weekly")).lower()
@@ -807,6 +1121,11 @@ def _build_extension_model(spec: dict, dataset_path: str):
         .with_frequency(frequency)
         .with_mff_data(dataset_path)
         .with_trend_config(_trend_config_from_spec(spec))
+        # The extension models now consume the core config's seasonality +
+        # outcome-likelihood settings (previously discarded); build the SAME
+        # config the plain path does so a nested model's seasonality/likelihood
+        # match a plain MMM's.
+        .with_model_config(_model_config_from_spec(spec))
     )
     return builder.build()
 
@@ -914,86 +1233,9 @@ def build_model(
                 ) from e
             raise
 
-    # 2. Inference + model config
-    inf = spec.get("inference", {})
-    chains = int(inf.get("chains", 4))
-    draws = int(inf.get("draws", 1000))
-    tune = int(inf.get("tune", 1000))
-    target_accept = float(inf.get("target_accept", 0.85))
-
-    model_config_builder = (
-        ModelConfigBuilder()
-        .bayesian_numpyro()
-        .with_chains(chains)
-        .with_draws(draws)
-        .with_tune(tune)
-        .with_target_accept(target_accept)
-    )
-    # Agent-built models default to ROI-BASED media priors: the default prior
-    # is placed on each channel's ROI (LogNormal, median 1.0 = break-even) and
-    # beta is derived in-graph, so the prior predictive ROI the oracle reports
-    # is the prior that was actually set — comparable across channels and
-    # independent of spend/KPI units. Opt out with spec["media_prior_mode"] =
-    # "coefficient" (the library's historical standardized-coefficient Gamma).
-    # Per-channel `priors.media.<ch>.coefficient` and experiment-calibrated
-    # priors still take precedence per channel.
-    media_mode = str(spec.get("media_prior_mode", "roi")).strip().lower()
-    if media_mode not in ("coefficient", "roi"):
-        raise ValueError(
-            f"spec.media_prior_mode must be 'coefficient' or 'roi', got {media_mode!r}"
-        )
-    roi_default = spec.get("priors", {}).get("media_default", {})
-    model_config_builder.with_media_prior_mode(
-        media_mode,
-        roi_mu=(float(roi_default["roi_mu"]) if "roi_mu" in roi_default else None),
-        roi_sigma=(
-            float(roi_default["roi_sigma"]) if "roi_sigma" in roi_default else None
-        ),
-    )
-    intercept_prior = spec.get("priors", {}).get("intercept", {})
-    if "mu" in intercept_prior or "sigma" in intercept_prior:
-        model_config_builder.with_intercept_prior(
-            mu=float(intercept_prior.get("mu", 0.0)),
-            sigma=float(intercept_prior.get("sigma", 0.5)),
-        )
-    season = spec.get("seasonality", {})
-    yearly = int(season.get("yearly", 0))
-    monthly = int(season.get("monthly", 0))
-    weekly = int(season.get("weekly", 0))
-    if yearly > 0 or monthly > 0 or weekly > 0:
-        seas_prior = spec.get("priors", {}).get("seasonality", {})
-
-        def _seas_sigma(component: str) -> float | None:
-            v = seas_prior.get(f"{component}_prior_sigma")
-            return None if v is None else float(v)
-
-        sb = SeasonalityConfigBuilder()
-        sb.no_seasonality()  # builder defaults yearly=2; only the spec decides
-        if "prior_sigma" in seas_prior:
-            sb.with_prior_sigma(float(seas_prior["prior_sigma"]))
-        if yearly > 0:
-            sb.with_yearly(order=yearly, prior_sigma=_seas_sigma("yearly"))
-        if monthly > 0:
-            sb.with_monthly(order=monthly, prior_sigma=_seas_sigma("monthly"))
-        if weekly > 0:
-            sb.with_weekly(order=weekly, prior_sigma=_seas_sigma("weekly"))
-        model_config_builder.with_seasonality_builder(sb)
-    # Observation model: the spec may declare a non-default likelihood family
-    # (e.g. binomial for an awareness model). Default is normal/identity.
-    lik_spec = spec.get("likelihood")
-    if lik_spec:
-        from mmm_framework.config import LikelihoodConfig
-
-        try:
-            model_config_builder.with_likelihood(
-                LikelihoodConfig.model_validate(lik_spec)
-            )
-        except Exception as e:  # noqa: BLE001
-            raise ValueError(
-                f"Invalid spec.likelihood: {e}. Expected {{family, link?, params?}} "
-                "— e.g. {'family': 'binomial', 'params': {'n_trials': 1000}}."
-            ) from e
-    model_config = model_config_builder.build()
+    # 2. Inference + model config (shared with the extension path so seasonality
+    # + likelihood mean the same thing across plain and DAG-routed models).
+    model_config = _model_config_from_spec(spec)
 
     # 3. Trend config
     trend_config = _trend_config_from_spec(spec)
@@ -1135,33 +1377,36 @@ def build_and_fit(spec: dict, dataset_path: str):
     trend_type = _canonical_trend_type(spec.get("trend", {}))
 
     # 4. Fit. Extension models (DAG-routed NestedMMM / MultivariateMMM /
-    # CombinedMMM) take explicit sampler args and have no approximate-fit
-    # dispatch — refuse loudly rather than passing an unknown kwarg into
-    # pm.sample.
+    # CombinedMMM) take explicit NUTS sampler args; for an approximate method
+    # they share the base model's approximate engine (map/advi/pathfinder fit
+    # in seconds — see BaseExtendedMMM.fit / model.base.run_approximate_fit).
     is_extension = str(spec.get("dag_model_type") or "").lower() in _EXTENSION_DAG_TYPES
     if is_extension:
-        if method != "nuts":
-            raise ValueError(
-                f"Approximate fit method '{method}' is not available for "
-                "DAG-routed extension models (nested/multivariate/combined) — "
-                "use method='nuts'."
+        if method == "nuts":
+            results = mmm.fit(
+                draws=draws,
+                tune=tune,
+                chains=chains,
+                target_accept=target_accept,
+                random_seed=random_seed,
             )
-        results = mmm.fit(
-            draws=draws,
-            tune=tune,
-            chains=chains,
-            target_accept=target_accept,
-            random_seed=random_seed,
-        )
+        else:
+            results = mmm.fit(method=method, draws=draws, random_seed=random_seed)
     else:
         results = mmm.fit(method=method, random_seed=random_seed)
 
     # 5. Summary
     if getattr(results, "approximate", False):
+        _model_label = (
+            f"**{type(mmm).__name__}** (DAG-routed "
+            f"{str(spec.get('dag_model_type')).lower()})"
+            if is_extension
+            else "Model"
+        )
         summary = (
-            f"Model fitted with the **{method}** approximate method (fast check — "
-            f"uncertainty is NOT calibrated; re-fit with NUTS before trusting "
-            f"intervals/decisions). "
+            f"{_model_label} fitted with the **{method}** approximate method "
+            f"(fast check — uncertainty is NOT calibrated; re-fit with NUTS "
+            f"before trusting intervals/decisions). "
             f"Observations: {mmm.n_obs}, Channels: {mmm.n_channels}. "
             f"Trend: {trend_type}, Seasonality: yearly={yearly}/monthly={monthly}/weekly={weekly}."
         )
@@ -1236,6 +1481,14 @@ def build_and_fit(spec: dict, dataset_path: str):
             "tune": tune,
             "target_accept": target_accept,
         },
+        # WHICH model + HOW it was fit — first-class on every run so the artifact
+        # is self-describing (the reports, saved-settings digest, and run
+        # timeline all read these instead of guessing from the class name).
+        "model_class": type(mmm).__name__,
+        "model_kind": getattr(mmm, "__garden_model_kind__", "mmm"),
+        # `approximate` is authoritative from the fit results (map/advi/pathfinder
+        # → True); its ROI/CI are uncalibrated, so downstream must flag it.
+        "approximate": bool(getattr(results, "approximate", False)),
         "model_path": model_path if model_saved else None,
         "report_path": report_path,
         "summary": summary,
@@ -1246,11 +1499,10 @@ def build_and_fit(spec: dict, dataset_path: str):
         "spec": spec,
     }
     if is_extension:
-        # Distinguish the model class on the run record (roi/predict-style ops
+        # Distinguish the DAG routing on the run record (roi/predict-style ops
         # degrade gracefully on extension models; reports route through the
         # extended extractor).
         model_run["dag_model_type"] = str(spec.get("dag_model_type")).lower()
-        model_run["model_class"] = type(mmm).__name__
     if spec.get("experiments"):
         model_run["calibration"] = {
             "experiments": spec.get("experiments"),

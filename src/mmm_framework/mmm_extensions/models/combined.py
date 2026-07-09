@@ -61,9 +61,18 @@ class CombinedMMM(BaseExtendedMMM):
         mediator_masks: dict[str, np.ndarray] | None = None,
         promotion_data: dict[str, np.ndarray] | None = None,
         index: pd.Index | None = None,
+        model_config=None,
+        trend_config=None,
     ):
         first_outcome = list(outcome_data.values())[0]
-        super().__init__(X_media, first_outcome, channel_names, index)
+        super().__init__(
+            X_media,
+            first_outcome,
+            channel_names,
+            index,
+            model_config=model_config,
+            trend_config=trend_config,
+        )
 
         self.outcome_data = outcome_data
         self.config = config
@@ -147,6 +156,13 @@ class CombinedMMM(BaseExtendedMMM):
         if mediator_name in mapping:
             return list(mapping[mediator_name])
         return self.outcome_names
+
+    def _baseline_dynamics_terms(self) -> tuple[dict, dict]:
+        """Per-outcome trend + seasonality from the multivariate config's flags."""
+        mv = self.config.multivariate
+        return self._build_baseline_dynamics(
+            mv.outcomes, mv.share_trend, mv.share_seasonality
+        )
 
     def _build_model(self) -> pm.Model:
         """Build the combined model."""
@@ -234,14 +250,37 @@ class CombinedMMM(BaseExtendedMMM):
                 mediator_values[med_name] = mediator_latent
                 pm.Deterministic(f"{med_name}_latent", mediator_latent, dims="obs")
 
-            # Outcome parameters
-            alpha_y = pm.Normal("alpha_y", mu=0, sigma=2, dims="outcome")
+            # Outcome parameters. Per-outcome intercept/media prior scales come
+            # from each OutcomeConfig (defaults 2.0 / 0.5 reproduce the historical
+            # shared-scalar priors); gamma's per-mediator scale comes from each
+            # mediator's outcome_effect (matching NestedMMM — previously a fixed
+            # 0.5). A spec/DAG prior override now reaches these RVs.
+            outcomes = self.config.multivariate.outcomes
+            mediators = self.config.nested.mediators
+            intercept_sigma = np.array(
+                [oc.intercept_prior_sigma for oc in outcomes], dtype=float
+            )
+            media_sigma = np.array(
+                [oc.media_effect.sigma for oc in outcomes], dtype=float
+            )
+            alpha_y = pm.Normal("alpha_y", mu=0, sigma=intercept_sigma, dims="outcome")
             beta_direct = pm.Normal(
-                "beta_direct", mu=0, sigma=0.5, dims=("outcome", "channel")
+                "beta_direct",
+                mu=0,
+                sigma=media_sigma[:, None],
+                dims=("outcome", "channel"),
             )
 
             # Mediator → Outcome effects
-            gamma = pm.Normal("gamma", mu=0, sigma=0.5, dims=("outcome", "mediator"))
+            gamma_sigma = np.array(
+                [m.outcome_effect.sigma for m in mediators], dtype=float
+            )
+            gamma = pm.Normal(
+                "gamma", mu=0, sigma=gamma_sigma[None, :], dims=("outcome", "mediator")
+            )
+
+            # Baseline dynamics (trend + seasonality) per outcome, or None.
+            trend_terms, seasonality_terms = self._baseline_dynamics_terms()
 
             # Cross-effects: only configured (source, target) directions get a
             # free RV (sign-constrained where requested); all other entries —
@@ -287,6 +326,12 @@ class CombinedMMM(BaseExtendedMMM):
                     affected = self._get_affected_outcomes(med_name)
                     if outcome_name in affected:
                         mu_k = mu_k + gamma[k, m] * mediator_values[med_name]
+
+                # Baseline dynamics (standardized scale)
+                if trend_terms.get(k) is not None:
+                    mu_k = mu_k + trend_terms[k]
+                if seasonality_terms.get(k) is not None:
+                    mu_k = mu_k + seasonality_terms[k]
 
                 # Cross-effects: psi_matrix[source, target] * Y[:, source],
                 # added to target k (same orientation as MultivariateMMM). The

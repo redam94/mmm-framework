@@ -88,8 +88,8 @@ class BayesianMMMExtractor(
             bundle.fit_statistics = self._compute_fit_statistics(
                 bundle.actual, bundle.predicted
             )
-            bundle.diagnostics = self._extract_diagnostics(
-                getattr(self.mmm, "_trace", None)
+            bundle.diagnostics = self._merge_fit_provenance(
+                self._extract_diagnostics(getattr(self.mmm, "_trace", None))
             )
 
             # ROI and contributions

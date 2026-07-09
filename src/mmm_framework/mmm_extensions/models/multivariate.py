@@ -56,10 +56,19 @@ class MultivariateMMM(BaseExtendedMMM):
         config: "MultivariateModelConfig",
         promotion_data: dict[str, np.ndarray] | None = None,
         index: pd.Index | None = None,
+        model_config=None,
+        trend_config=None,
     ):
         # Use first outcome for y (placeholder)
         first_outcome = list(outcome_data.values())[0]
-        super().__init__(X_media, first_outcome, channel_names, index)
+        super().__init__(
+            X_media,
+            first_outcome,
+            channel_names,
+            index,
+            model_config=model_config,
+            trend_config=trend_config,
+        )
 
         self.outcome_data = outcome_data
         self.config = config
@@ -121,6 +130,14 @@ class MultivariateMMM(BaseExtendedMMM):
 
         return specs
 
+    def _baseline_dynamics_terms(self) -> tuple[dict, dict]:
+        """Per-outcome trend + seasonality terms from the config's share flags."""
+        return self._build_baseline_dynamics(
+            self.config.outcomes,
+            self.config.share_trend,
+            self.config.share_seasonality,
+        )
+
     def _build_model(self) -> pm.Model:
         """Build the multivariate model."""
         from ..components.cross_effects import (
@@ -168,11 +185,30 @@ class MultivariateMMM(BaseExtendedMMM):
 
             media_transformed = pt.stack(media_transformed, axis=1)
 
-            # Outcome-level parameters
-            alpha = pm.Normal("alpha", mu=0, sigma=2, dims="outcome")
-            beta_media = pm.Normal(
-                "beta_media", mu=0, sigma=0.5, dims=("outcome", "channel")
+            # Outcome-level parameters. Per-outcome prior scales are read from
+            # each OutcomeConfig (intercept_prior_sigma / media_effect.sigma) so
+            # a spec/DAG outcome-prior override actually takes effect; the
+            # defaults (2.0 / 0.5) reproduce the historical shared-scalar priors.
+            intercept_sigma = np.array(
+                [oc.intercept_prior_sigma for oc in self.config.outcomes], dtype=float
             )
+            media_sigma = np.array(
+                [oc.media_effect.sigma for oc in self.config.outcomes], dtype=float
+            )
+            alpha = pm.Normal("alpha", mu=0, sigma=intercept_sigma, dims="outcome")
+            beta_media = pm.Normal(
+                "beta_media",
+                mu=0,
+                sigma=media_sigma[:, None],
+                dims=("outcome", "channel"),
+            )
+
+            # Baseline dynamics per outcome: a trend and/or Fourier seasonality
+            # (shared across outcomes or per-outcome per the config flags), gated
+            # on each outcome's include_trend / include_seasonality. None when
+            # unconfigured, so a model built without trend/seasonality is
+            # byte-identical.
+            trend_terms, seasonality_terms = self._baseline_dynamics_terms()
 
             # Cross-effects
             if self._cross_effect_specs:
@@ -194,6 +230,12 @@ class MultivariateMMM(BaseExtendedMMM):
 
                 # Media effects
                 mu_k = mu_k + pt.dot(media_transformed, beta_media[k, :])
+
+                # Baseline dynamics (standardized scale)
+                if trend_terms.get(k) is not None:
+                    mu_k = mu_k + trend_terms[k]
+                if seasonality_terms.get(k) is not None:
+                    mu_k = mu_k + seasonality_terms[k]
 
                 # Cross-effects
                 if psi_matrix is not None:

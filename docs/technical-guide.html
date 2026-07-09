@@ -836,7 +836,7 @@ model_config = (
             <h3 id="standard-priors">Prior Specification</h3>
             <p style="font-size:0.92rem;">
                 These are the priors the model actually builds (read from
-                <code>model/base.py</code> / <code>config/transforms.py</code>, 0.1.0) — on
+                <code>model/base.py</code> / <code>config/transforms.py</code>) — on
                 standardized <code>y</code> and per-channel normalized media:
             </p>
             <details class="deep-dive">
@@ -1103,6 +1103,22 @@ results = multivariate_model.fit()</code></pre>
             <div class="math-block">
                 <span class="equation-label">(14)</span>
                 $$y_{k,t} = \alpha_k + \underbrace{\sum_{c=1}^{C} \beta^{(D)}_{kc} \cdot f_c(x_{c,t})}_{\text{Direct}} + \underbrace{\sum_{m \in \mathcal{M}_k} \gamma_{km} \cdot M_{m,t}}_{\text{Mediator}} + \underbrace{\sum_{j \neq k} \psi_{jk} \cdot y_{j,t}}_{\text{Cross-effects}} + \epsilon_{k,t}$$
+            </div>
+
+            <div class="note">
+                <h4>Trend &amp; seasonality are optional and configurable</h4>
+                <p style="font-size:0.92rem;">
+                The extension equations above (Nested, Multivariate, Combined) omit the
+                trend \(\tau(t)\) and seasonality \(s(t)\) terms of the standard model
+                (Eq&nbsp;1) for readability, but since 2026-07-08 all three extension models honor a
+                spec-declared trend (linear / piecewise / spline / Gaussian-process) and Fourier
+                seasonality — threaded in through <code>model_config</code>/<code>trend_config</code>
+                (engine: <code>mmm_extensions/components/temporal.py</code>), per outcome and gated on
+                <code>include_trend</code>/<code>include_seasonality</code>. Both default off (the graph is
+                byte-identical when unset). <code>NestedMMM</code> additionally supports a pluggable
+                Normal / Student-<em>t</em> outcome likelihood; <code>MultivariateMMM</code> and
+                <code>CombinedMMM</code> keep the joint MvNormal–LKJ error structure.
+                </p>
             </div>
 
             <h3>DAG Representation</h3>
@@ -1393,7 +1409,7 @@ mff_config = (
                 <code>fit()</code> call including compilation. The reference fit is the standard
                 national model (parametric adstock, logistic saturation, linear trend, yearly
                 seasonality) on 156 weeks &times; 7 channels, NumPyro, 4 chains &times; 500 draws:
-                <strong>~17&nbsp;s</strong>.
+                <strong>~15&nbsp;s</strong>.
             </p>
             <details class="deep-dive">
                 <summary><span class="deep-dive-tag">Deep dive</span>Measured runtime table and corrections to earlier scaling claims</summary>
@@ -1401,33 +1417,37 @@ mff_config = (
             <table>
                 <thead><tr><th>Configuration</th><th>Measured wall-clock</th><th>vs reference</th></tr></thead>
                 <tbody>
-                    <tr><td>Reference national fit (156w &times; 7ch, NumPyro 4&times;500)</td><td>~17&nbsp;s</td><td>1&times;</td></tr>
-                    <tr><td>Smaller national fits (104&ndash;156w, 3&ndash;7ch)</td><td>8&ndash;17&nbsp;s</td><td>&le;1&times; (compile/warm-up dominates at this size)</td></tr>
-                    <tr><td>Doubling draws (500 &rarr; 1000)</td><td>21&nbsp;s</td><td>~1.3&times; (fixed compile + tune costs dilute it)</td></tr>
-                    <tr><td>Geo panel, 4 geos &times; 130w &times; 4ch (520 rows, partial pooling)</td><td>22&nbsp;s</td><td>~3.1&times; its 130-row national twin — still sub-linear per row (~0.8&times;)</td></tr>
-                    <tr><td>NestedMMM, +1 partially observed mediator (Aurora 104w &times; 4ch, PyMC 2&times;500)</td><td>17&nbsp;s</td><td>~0.6&times; the core model on the same data/budget</td></tr>
-                    <tr><td>MultivariateMMM, 2 outcomes + cross-effect (same data/budget)</td><td>13&nbsp;s</td><td>~0.4&times; the core model</td></tr>
+                    <tr><td>Reference national fit (156w &times; 7ch, NumPyro 4&times;500)</td><td>~15&nbsp;s</td><td>1&times;</td></tr>
+                    <tr><td>Smaller national fits (104&ndash;156w, 3&ndash;7ch)</td><td>~9&ndash;15&nbsp;s</td><td>&le;1&times; (compile/warm-up dominates at this size)</td></tr>
+                    <tr><td>Doubling draws (500 &rarr; 1000)</td><td>~19&nbsp;s</td><td>~1.3&times; (fixed compile + tune costs dilute it)</td></tr>
+                    <tr><td>Geo panel, 4 geos &times; 130w &times; 4ch (520 rows, partial pooling)</td><td>~20&nbsp;s</td><td>~2.9&times; its 130-row national twin — still sub-linear per row (~0.7&times;)</td></tr>
+                    <tr><td>NestedMMM, +1 partially observed mediator (Aurora 104w &times; 4ch, PyMC 2&times;500)</td><td>~11&nbsp;s</td><td>~0.9&times; the core model on the same data/budget</td></tr>
+                    <tr><td>MultivariateMMM, 2 outcomes + cross-effect (same data/budget)</td><td>~20&nbsp;s</td><td>~1.7&times; the core model</td></tr>
                 </tbody>
             </table>
             <p>
-                Two corrections to earlier versions of this table, now on the record: the extension
-                models are <em>not</em> meaningfully more expensive than the core model at this
-                scale (previous unsourced multipliers claimed 1.3&ndash;1.5&times;; measured, they run
-                <em>faster</em> than the parametric-adstock core model on the same data), and cost
-                is dominated by sampler choice and draws, not by model family. Absolute seconds are
-                machine-specific; treat the ratios as the transferable part.
+                At this scale the extension models are in the same ballpark as the core model:
+                NestedMMM runs at roughly parity (~0.9&times;), while MultivariateMMM is modestly more
+                expensive (~1.7&times;) because its two-outcome joint MvNormal&ndash;LKJ likelihood does more
+                work per draw. Cost is still dominated by sampler choice and draws, not by model
+                family. (These relative multipliers shifted with the 2026-07-06 PyMC&nbsp;6 upgrade &mdash;
+                PyMC&nbsp;6's faster native sampler changed the timings; the earlier PyMC&nbsp;5 numbers put
+                both extensions below 1&times;.) Absolute seconds are machine-specific; treat the ratios
+                as the transferable part.
             </p>
                 </div>
             </details>
 
             <div class="note">
                 <h4>💡 Performance Tip</h4>
-                <p>For complex models, use <code>nuts_sampler="numpyro"</code>.
-                <strong>Measured:</strong> 6.0&times; faster wall-clock than the PyMC sampler at
+                <p>For complex models, use the NumPyro backend &mdash; <code>ModelConfigBuilder().bayesian_numpyro()</code> (the default); the framework then passes <code>nuts_sampler="numpyro"</code> to <code>pm.sample</code> internally.
+                <strong>Measured:</strong> ~3&times; faster wall-clock than the PyMC sampler at
                 equal draws (104 weeks &times; 7 channels, 4 chains &times; 500 draws, sequential
                 PyMC chains vs NumPyro's vectorized chains — the end-to-end gap a notebook user
-                experiences; <code>nbs/runtime_benchmark.ipynb</code>). With parallel PyMC chains
-                the gap narrows to roughly 2&times; (the walkthrough's robustness study).</p>
+                experiences; measured 2.6&ndash;3.3&times; across two PyMC&nbsp;6 runs in
+                <code>nbs/runtime_benchmark.ipynb</code>). PyMC&nbsp;6's faster native sampler narrowed
+                this gap from the ~6&times; measured under PyMC&nbsp;5; with parallel PyMC chains it
+                narrows further.</p>
             </div>
 
             <!-- Prior Explorer Section -->

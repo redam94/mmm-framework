@@ -106,3 +106,7 @@ frontend/tsconfig.tsbuildinfo
 
 # Intermediate per-frame animation directories (final .gif outputs stay tracked)
 nbs/artifacts/_*/
+.env
+
+# Local screen-recording scratch (large video files; never committed)
+recordings/

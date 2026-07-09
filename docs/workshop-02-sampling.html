@@ -665,8 +665,9 @@
                 huge ESS per draw. <strong>NUTS (the No-U-Turn Sampler)</strong> is HMC with the last knob
                 automated: it lets the puck glide until the path starts to <strong>U-turn</strong> back
                 toward where it began, then stops. NUTS is the default in PyMC and in
-                <code>mmm_framework</code> (which typically runs it on the fast NumPyro backend —
-                <code>fit(nuts_sampler="numpyro")</code>).
+                <code>mmm_framework</code> (which typically runs it on the fast NumPyro backend — the
+                default, selected on the model config via <code>ModelConfigBuilder().bayesian_numpyro()</code>,
+                not a <code>fit()</code> argument).
             </p>
 
             <div class="chart-container tall" id="nutsChart"></div>

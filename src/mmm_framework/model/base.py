@@ -268,6 +268,76 @@ def _anchored_det(
     return expr + 0.0 * anchor
 
 
+def run_approximate_fit(
+    model: "pm.Model",
+    method: FitMethod,
+    draws: int,
+    random_seed: int | None,
+    **kwargs,
+) -> tuple[az.InferenceData, dict]:
+    """Run an approximate fit (MAP / ADVI / full-rank ADVI / Pathfinder) on ANY
+    PyMC ``model`` and return ``(idata, extra_diagnostics)``.
+
+    The returned ``InferenceData`` always carries a ``posterior`` group with
+    ``chain``/``draw`` dims and the model's deterministics (``find_MAP`` reports
+    them; ``point_to_idata`` keeps them), so it is a drop-in for a NUTS trace
+    everywhere downstream (summaries, ArviZ, ``predict``, reporting).
+
+    Shared by :class:`BayesianMMM` (via ``_fit_approx``) and the extended models
+    (``mmm_extensions.models.base.BaseExtendedMMM.fit``) so both approximate
+    paths are byte-identical. NB Pathfinder's ``pymc_extras`` trace conversion
+    rejects parameter-independent (constant) Deterministics — the base model
+    anchors those at build time (:func:`_anchored_det`); a bespoke graph that
+    registers constant Deterministics may need the same treatment for Pathfinder
+    (MAP/ADVI are unaffected).
+    """
+    if method is FitMethod.MAP:
+        with model:
+            point = pm.find_MAP(seed=random_seed, **kwargs)
+        return arviz_compat.point_to_idata(point), {"map": True}
+
+    if method in (FitMethod.ADVI, FitMethod.FULLRANK_ADVI):
+        advi_method = "advi" if method is FitMethod.ADVI else "fullrank_advi"
+        # n = number of optimization iterations; allow override via kwargs.
+        n_iter = int(kwargs.pop("n", 30000))
+        with model:
+            approx = pm.fit(
+                n=n_iter,
+                method=advi_method,
+                random_seed=random_seed,
+                progressbar=kwargs.pop("progressbar", False),
+                **kwargs,
+            )
+            idata = approx.sample(draws)
+        final_elbo = None
+        try:
+            final_elbo = float(-approx.hist[-1])
+        except Exception:  # noqa: BLE001
+            pass
+        return idata, {"vi_iterations": n_iter, "elbo": final_elbo}
+
+    if method is FitMethod.PATHFINDER:
+        try:
+            import pymc_extras as pmx
+        except ImportError as exc:  # pragma: no cover - broken env only
+            raise ImportError(
+                "Pathfinder needs the 'pymc_extras' package, which IS a declared "
+                "dependency of mmm-framework (pymc-extras>=0.12,<0.13) — this "
+                "environment is missing it. Re-sync (`uv sync`) or `pip install "
+                "'pymc-extras>=0.12,<0.13'`. MAP and ADVI need no extra deps."
+            ) from exc
+        with model:
+            idata = pmx.fit(
+                method="pathfinder",
+                num_draws=draws,
+                random_seed=random_seed,
+                **kwargs,
+            )
+        return idata, {"pathfinder": True}
+
+    raise ValueError(f"Unsupported approximate fit method: {method}")
+
+
 class BayesianMMM:
     """
     Bayesian Marketing Mix Model - Robust Implementation with Prediction Support.
@@ -2304,6 +2374,10 @@ class BayesianMMM:
         method = (
             FitMethod(method) if method is not None else self.model_config.fit_method
         )
+        # Record the method actually used back on the config so a serialized
+        # model's configs.json is truthful (previously it kept the default
+        # "nuts" even for a MAP/ADVI fit, so saved-model settings misreported it).
+        self.model_config.fit_method = method
 
         random_seed = random_seed or self.model_config.optim_seed
 
@@ -2438,57 +2512,10 @@ class BayesianMMM:
     ) -> tuple[az.InferenceData, dict]:
         """Run an approximate fit and return ``(idata, extra_diagnostics)``.
 
-        The returned ``InferenceData`` always carries a ``posterior`` group with
-        ``chain``/``draw`` dims and the model's deterministics, so it is a
-        drop-in for the NUTS trace everywhere downstream (summaries, ArviZ,
-        ``predict``, reporting).
+        Thin wrapper over the shared :func:`run_approximate_fit` (also used by
+        the extended models) so both approximate paths stay identical.
         """
-        if method is FitMethod.MAP:
-            with self.model:
-                point = pm.find_MAP(seed=random_seed, **kwargs)
-            return arviz_compat.point_to_idata(point), {"map": True}
-
-        if method in (FitMethod.ADVI, FitMethod.FULLRANK_ADVI):
-            advi_method = "advi" if method is FitMethod.ADVI else "fullrank_advi"
-            # n = number of optimization iterations; allow override via kwargs.
-            n_iter = int(kwargs.pop("n", 30000))
-            with self.model:
-                approx = pm.fit(
-                    n=n_iter,
-                    method=advi_method,
-                    random_seed=random_seed,
-                    progressbar=kwargs.pop("progressbar", False),
-                    **kwargs,
-                )
-                idata = approx.sample(draws)
-            final_elbo = None
-            try:
-                final_elbo = float(-approx.hist[-1])
-            except Exception:  # noqa: BLE001
-                pass
-            return idata, {"vi_iterations": n_iter, "elbo": final_elbo}
-
-        if method is FitMethod.PATHFINDER:
-            try:
-                import pymc_extras as pmx
-            except ImportError as exc:  # pragma: no cover - broken env only
-                raise ImportError(
-                    "Pathfinder needs the 'pymc_extras' package, which IS a "
-                    "declared dependency of mmm-framework (pymc-extras>=0.12,<0.13) "
-                    "— this environment is missing it. Re-sync the environment "
-                    "(`uv sync`) or `pip install 'pymc-extras>=0.12,<0.13'`. "
-                    "MAP and ADVI need no extra dependencies."
-                ) from exc
-            with self.model:
-                idata = pmx.fit(
-                    method="pathfinder",
-                    num_draws=draws,
-                    random_seed=random_seed,
-                    **kwargs,
-                )
-            return idata, {"pathfinder": True}
-
-        raise ValueError(f"Unsupported approximate fit method: {method}")
+        return run_approximate_fit(self.model, method, draws, random_seed, **kwargs)
 
     @contextmanager
     def _swapped_media_data(

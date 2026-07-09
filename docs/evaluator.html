@@ -195,7 +195,7 @@
                     <strong>Forecast accuracy backtest.</strong> Rolling-origin out-of-sample accuracy is measured, not asserted: <a href="workflow-forecasting.html#backtesting">forecasting workflow &mdash; backtesting</a>.
                 </li>
                 <li>
-                    <strong>Runtime benchmark.</strong> A production-size national fit (156 weeks &times; 7 channels, NumPyro, 4 chains &times; 500 draws) measures <strong>~17&nbsp;s</strong> wall-clock on an Apple M3 laptop, including compilation. Source: <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/runtime_benchmark.ipynb" target="_blank" rel="noopener"><code>nbs/runtime_benchmark.ipynb</code></a>; full scaling table in the <a href="technical-guide.html#diagnostics">technical guide's Computational Scaling section</a>. Absolute seconds are machine-specific; treat the ratios as the transferable part.
+                    <strong>Runtime benchmark.</strong> A production-size national fit (156 weeks &times; 7 channels, NumPyro, 4 chains &times; 500 draws) measures <strong>~15&nbsp;s</strong> wall-clock on an Apple M3 laptop (PyMC 6), including compilation. Source: <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/runtime_benchmark.ipynb" target="_blank" rel="noopener"><code>nbs/runtime_benchmark.ipynb</code></a>; full scaling table in the <a href="technical-guide.html#diagnostics">technical guide's Computational Scaling section</a>. Absolute seconds are machine-specific; treat the ratios as the transferable part.
                 </li>
                 <li>
                     <strong>Real-data test.</strong> The framework is run on the Lydia Pinkham advertising series (1907&ndash;1960), the most-studied real dataset in advertising econometrics, and graded against decades of published estimates: <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/pinkham_real_data.ipynb" target="_blank" rel="noopener"><code>nbs/pinkham_real_data.ipynb</code></a>.
@@ -233,7 +233,7 @@
         <div class="container">
             <h2>Security &amp; Deployment</h2>
             <p>
-                The framework is self-hosted: a Python library, a FastAPI backend with a Redis-backed job queue, and a React frontend that you run on your own infrastructure. There is no hosted SaaS offering, which means no client data leaves your environment by default.
+                The framework is self-hosted: a Python library, a FastAPI agent backend that runs model fits in-process (no Redis or worker required), and a React frontend that you run on your own infrastructure. (Redis and an ARQ worker are needed only by the deprecated legacy Streamlit REST API; Redis is otherwise an optional shared rate-limit backend that defaults to in-memory.) There is no hosted SaaS offering, which means no client data leaves your environment by default.
             </p>
             <p>
                 The AI agent workspace introduces an LLM data flow that deserves separate scrutiny&mdash;which provider sees what, sandboxing of agent-executed code, and the configuration options (including fully local models via LM Studio). That is covered on the dedicated <a href="security.html">security page</a> rather than duplicated here.
@@ -248,7 +248,7 @@
                 Input data uses the MFF (Master Flat File) long format, loaded and validated by <code>MFFLoader</code>. The practical floor and the recommended shape of the data&mdash;granularity, history length, channel coverage&mdash;are documented on the <a href="data-requirements.html">data requirements page</a>. Short version: 104+ weeks of weekly data is the comfortable starting point.
             </p>
             <p>
-                Runtime is measured, not estimated: the reference production-size national fit completes in ~17&nbsp;s on a laptop (see <a href="technical-guide.html#diagnostics">Computational Scaling</a>), and geo-panel and extension models scale sub-linearly per row at that size. Model iteration speed is not a procurement risk here.
+                Runtime is measured, not estimated: the reference production-size national fit completes in ~15&nbsp;s on a laptop (see <a href="technical-guide.html#diagnostics">Computational Scaling</a>), geo panels scale sub-linearly per row, and the extension models stay in the same runtime ballpark as the core model. Model iteration speed is not a procurement risk here.
             </p>
         </div>
     </section>
@@ -289,8 +289,8 @@
                     <li><strong>Pre-1.0 on PyPI.</strong> Released, but pin an exact version (<code>mmm-framework==0.2.0</code>) for anything production-facing and read the release notes before upgrading &mdash; 0.2.0 itself moved the core stack to PyMC&nbsp;6.</li>
                     <li><strong>Solo maintainer.</strong> No SLA, no commercial support, real bus-factor risk (mitigations <a href="#team">above</a>).</li>
                     <li><strong>Pre-1.0 API churn.</strong> Beta and Experimental modules may change between minor versions; only the core modeling tier is treated as stable.</li>
-                    <li><strong>No SaaS offering.</strong> You operate the stack (FastAPI, Redis, worker, frontend) yourself.</li>
-                    <li><strong>Open methodological findings.</strong> The pressure-testing page records unresolved issues openly&mdash;e.g. a holdout-validation fallback bug for Hill-fit models. (The former headline finding&mdash;the legacy blend adstock underperforming the parametric path&mdash;was resolved in June 2026 by making parametric adstock the default.) See <a href="pressure-testing.html#strengths-weaknesses">known strengths &amp; weaknesses</a>.</li>
+                    <li><strong>No SaaS offering.</strong> You operate the stack (FastAPI agent API + React frontend) yourself.</li>
+                    <li><strong>Open methodological findings.</strong> The pressure-testing page records methodological limits openly&mdash;e.g. regional ROI inversion under performance-chased budgets when media effectiveness is pooled across geos (mitigated by the opt-in per-geo <code>vary_media_by_geo</code> hierarchy or a per-geography refit). (Two former headline findings were since resolved: the legacy blend adstock underperforming the parametric path&mdash;fixed by making parametric adstock the default&mdash;and the holdout-validation saturation fallback for Hill-fit models.) See <a href="pressure-testing.html#strengths-weaknesses">known strengths &amp; weaknesses</a>.</li>
                 </ul>
             </div>
             <p>

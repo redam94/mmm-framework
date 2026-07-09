@@ -565,10 +565,13 @@
                 spend and response heterogeneity are coupled by construction.
             </p>
             <p>
-                The model's hierarchy is an <em>intercept</em> per geo and <strong>one global beta
-                per channel</strong>. Per-geo effectiveness is structurally outside its hypothesis
-                space — the pooled beta lands near a spend-weighted average, and <em>every geo's
-                readout inherits it</em>.
+                In the <em>default</em> pooled fit the hierarchy is an <em>intercept</em> per geo and
+                <strong>one global beta per channel</strong>, so per-geo effectiveness falls outside
+                <em>that fit's</em> hypothesis space — the pooled beta lands near a spend-weighted
+                average, and <em>every geo's readout inherits it</em>. It is not structurally
+                impossible: the opt-in <code>HierarchicalConfig.vary_media_by_geo=True</code>
+                partial-pools each channel's beta across geos (<code>_build_channel_betas_geo</code>),
+                the in-model version of the per-geo-betas-with-shrinkage fix this act motivates.
             </p>
 
             <div class="diag-strip">
@@ -627,10 +630,12 @@
                 Two moves, both measured. First, <strong>grade at the decision level</strong>: the
                 national table is an average over the readouts people actually use. If regional
                 tables drive money, the per-geo grade is the grade. Second, the structural pivot
-                available today: the framework has no per-geo response coefficients
-                (<code>beta_&lt;ch&gt;</code> is global; the hierarchy pools intercepts only), so
-                the fix is to <strong>refit per geography</strong> — four small models, each free
-                to find its own beta, at the price of 4× fewer observations per fit.
+                available today: by default the framework pools intercepts only
+                (<code>beta_&lt;ch&gt;</code> is shared per channel), but enabling
+                <code>vary_media_by_geo</code> (off by default) gives each channel a partial-pooled
+                per-geo coefficient with shrinkage in a single fit. The other option — the one this
+                notebook demonstrates — is to <strong>refit per geography</strong>: four small models,
+                each free to find its own beta, at the price of 4× fewer observations per fit.
             </p>
 
             <div class="chart-container" id="splitChart"></div>
@@ -653,8 +658,13 @@
                     exactly as above. (3) <strong>Per-geo lift tests</strong> where the money
                     justifies them (see <a href="stress-05-gauntlet.html">stress&nbsp;05</a> on
                     calibration). The durable fix is hierarchical <em>response</em> pooling —
-                    per-geo betas with shrinkage — which the framework's intercept-only hierarchy
-                    does not yet offer; this act is the design case for it. The per-geo uncertainty
+                    per-geo betas with shrinkage — which the framework offers as an opt-in setting:
+                    <code>HierarchicalConfig.vary_media_by_geo=True</code> (with geo data) replaces the
+                    single shared channel beta with a non-centered partial-pooled per-geo effectiveness
+                    hierarchy that shrinks toward the population mean (<code>media_geo_sigma</code>
+                    controls between-geo spread). It is off by default and bypassed when a channel has
+                    an explicit/calibrated prior; this act is the design case that motivates turning it
+                    on. The per-geo uncertainty
                     lenses (fit bands, contribution-path bands vs truth) are what made the failure
                     visible at a glance.
                 </p>
@@ -745,11 +755,14 @@
                         model was excellent nationally (5% median error, full coverage) and
                         inverted regionally (+330% worst cell, \(\rho = -1\) on TV's ROI ranking)
                         — same posterior, same green diagnostics.</li>
-                    <li><strong>Know what your hierarchy pools.</strong> This framework pools
-                        geo/product <em>intercepts</em>; response parameters are global. That is
-                        right for level-shift heterogeneity and structurally wrong for
-                        effectiveness heterogeneity — and performance-chased budgets make the
-                        wrong case the <em>expected</em> case.</li>
+                    <li><strong>Know what your hierarchy pools.</strong> By default this framework
+                        pools geo/product <em>intercepts</em> and shares one response parameter per
+                        channel across geos — right for level-shift heterogeneity and wrong for
+                        effectiveness heterogeneity (and performance-chased budgets make the wrong case
+                        the <em>expected</em> case). When regional effectiveness varies, enable
+                        <code>vary_media_by_geo</code>, which partial-pools each channel's beta across
+                        geos (log-scale non-centered hierarchy, controlled by <code>media_geo_sigma</code>),
+                        so per-geo ROI is estimable instead of collapsing to a spend-weighted average.</li>
                     <li><strong>The heterogeneity bias points the worst possible way.</strong> The
                         pooled beta over-credits channels exactly where they are weakest. If
                         regional tables drive money, run the split-fit check (25% → 13% median

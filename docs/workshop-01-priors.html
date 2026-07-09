@@ -506,7 +506,9 @@
                 <em>either way</em>. For sign-free coefficients the plain <strong>Normal(&mu;, &sigma;)</strong>
                 is right: centered at zero ("no effect until the data says otherwise"), symmetric, with
                 &sigma; setting how big an effect you'd entertain. The framework's default for controls is
-                Normal(0, 1) on standardized data — the same idea powers seasonal (Fourier) coefficients.
+                Normal(0, 0.5) on standardized data — widened to Normal(0, 2.0) for confounder-role
+                controls (an explicitly-set coefficient prior overrides these role-based widths). The same
+                idea powers seasonal (Fourier) coefficients.
             </p>
             <table>
                 <thead><tr><th>parameter</th><th>lives in</th><th>family</th><th>marketing translation of the prior</th></tr></thead>
@@ -710,7 +712,8 @@ search_channel = (MediaChannelConfigBuilder("Search")
                     <code>None</code>, the core model's default is <strong>Gamma(mu=1.5, sigma=1.0)</strong>,
                     which gently favors paying channels. And remember the rest of the defaults:
                     &lambda; gets Exponential(mean 2) — the prior whose belief you inspected in §2.3 — and
-                    controls get Normal(0, 1) on standardized data.
+                    controls get Normal(0, 0.5) on standardized data (Normal(0, 2.0) for confounder-role
+                    controls).
                 </p>
             </div>
 

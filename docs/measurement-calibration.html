@@ -1669,7 +1669,7 @@ while len(A) &lt; C_ops:
                 <li><strong>Per-channel media spend</strong> at the same geo grain or with a documented allocation rule from national to geo.</li>
                 <li><strong>Pre-period MAPE benchmarks</strong> from the existing MMM, by channel and aggregate. Needed to credibly compare the new pipeline.</li>
                 <li><strong>Past geo-lift readouts</strong> with point estimates and standard errors. These are the calibration inputs for the first cycle. Verdicts ("CTV worked") are not enough - we need the underlying numbers.</li>
-                <li><strong>Tooling</strong>: PyMC &ge; 5 or NumPyro for the Bayesian MMM and hierarchical experiment models; ArviZ for diagnostics; pyfixest or fixest (R) for the frequentist DiD baseline; JAX optional but recommended for speed.</li>
+                <li><strong>Tooling</strong>: PyMC &ge; 6 (with NumPyro for fast NUTS) for the Bayesian MMM and hierarchical experiment models; ArviZ for diagnostics; pyfixest or fixest (R) for the frequentist DiD baseline; JAX optional but recommended for speed.</li>
             </ul>
 
             <h3 id="metrics">Success Metrics</h3>

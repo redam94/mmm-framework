@@ -89,7 +89,9 @@ class ExtendedMMMExtractor(DataExtractor, EstimandPPCMixin):
 
         posterior = self._posterior
         if posterior is not None:
-            bundle.diagnostics = self._extract_diagnostics(self.model._trace)
+            bundle.diagnostics = self._merge_fit_provenance(
+                self._extract_diagnostics(self.model._trace)
+            )
 
             if is_multi:
                 self._extract_multioutcome_fit(bundle)

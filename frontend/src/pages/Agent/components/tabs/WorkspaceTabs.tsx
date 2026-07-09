@@ -20,6 +20,7 @@ import { ArtifactsPanel } from '../widgets/ArtifactsPanel';
 import { DatasetPanel } from '../widgets/DatasetPanel';
 import { DecompositionWidget } from '../widgets/DecompositionWidget';
 import { KnowledgeTab } from '../widgets/KnowledgeTab';
+import { ExtensionPriorConfigWidget } from '../widgets/ExtensionPriorConfigWidget';
 import { ModelSpecWidget } from '../widgets/ModelSpecWidget';
 import { PriorConfigWidget } from '../widgets/PriorConfigWidget';
 import { SeasonalityTrendWidget } from '../widgets/SeasonalityTrendWidget';
@@ -114,6 +115,11 @@ export function WorkspaceTabs({
   const { data: gardenModel } = useGardenModel(gardenRef?.name ?? null, gardenRef?.version ?? null);
   const modelKind = (gardenModel?.manifest?.model_kind as string) ?? 'mmm';
   const showMmmConfig = modelKind === 'mmm';
+  // DAG-routed extension models (NestedMMM / MultivariateMMM / CombinedMMM) are
+  // mmm-kind but take their priors from the causal DAG node configs, not the
+  // plain media/control priors — swap in the extension-prior editor for them.
+  const dagModelType = String((modelSpec?.dag_model_type as string | undefined) ?? '').toLowerCase();
+  const isExtensionModel = ['nested_mmm', 'multivariate_mmm', 'combined_mmm'].includes(dagModelType);
 
   // Structured tables, bucketed by group (unknown groups fall into "repl").
   const edaTables = selectTables(dashboardData.tables, 'eda');
@@ -352,11 +358,19 @@ export function WorkspaceTabs({
                         onQuickAction={onQuickAction}
                         modelCompleted={modelCompleted}
                       />
-                      <PriorConfigWidget
-                        spec={dashboardData.model_spec}
-                        editable={!modelCompleted}
-                        onApplySpec={onApplySpec}
-                      />
+                      {isExtensionModel ? (
+                        <ExtensionPriorConfigWidget
+                          spec={dashboardData.model_spec}
+                          editable={!modelCompleted}
+                          onApplySpec={onApplySpec}
+                        />
+                      ) : (
+                        <PriorConfigWidget
+                          spec={dashboardData.model_spec}
+                          editable={!modelCompleted}
+                          onApplySpec={onApplySpec}
+                        />
+                      )}
                     </>
                   )}
                   {modelCompleted && (

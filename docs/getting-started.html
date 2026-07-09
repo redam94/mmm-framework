@@ -379,14 +379,14 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-04",
+          "dateModified": "2026-07-06",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/getting-started.html#breadcrumb"
           },
           "@id": "https://redam94.github.io/mmm-framework/getting-started.html#webpage",
           "@type": "TechArticle",
           "headline": "Getting Started",
-          "datePublished": "2026-07-04",
+          "datePublished": "2026-07-06",
           "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
           "author": {
             "@type": "Person",
@@ -747,7 +747,7 @@ print(f"  Controls: {panel.n_controls}")
 # Step 2c: Configure model inference
 model_config = (
     ModelConfigBuilder()
-    .bayesian_numpyro()       # JAX sampler (measured 7.9x faster than PyMC at equal draws)
+    .bayesian_numpyro()       # JAX sampler (measured ~3x faster than PyMC at equal draws on PyMC 6)
     .with_chains(4)           # 4 parallel chains for convergence diagnostics
     .with_draws(2000)         # 2000 posterior draws
     .with_tune(1000)          # 1000 warmup iterations
@@ -789,12 +789,12 @@ trend_config = TrendConfig(
                 <strong>How long should this take?</strong> Measured on an Apple M3 laptop
                 (16&nbsp;GB, NumPyro, baked in <code>nbs/runtime_benchmark.ipynb</code>): a
                 104-week, 2&ndash;3-channel quickstart model like this one fits in
-                <strong>roughly 10<strong>roughly 10&ndash;14 seconds</strong> at 4&nbsp;&times;&nbsp;500 drawsndash;14 seconds</strong> at 4<strong>roughly 10&ndash;14 seconds</strong> at 4&nbsp;&times;&nbsp;500 drawsnbsp;&times;&nbsp;500 draws, and a
-                production-size 156-week &times; 7-channel model in ~17&nbsp;s; doubling the draws
+                <strong>roughly 9&ndash;13 seconds</strong> at 4&nbsp;&times;&nbsp;500 draws, and a
+                production-size 156-week &times; 7-channel model in ~15&nbsp;s; doubling the draws
                 costs ~1.3&times; (extrapolating that measured rate, the 2000-draw configuration
                 above lands around half a minute).
                 If a national fit takes minutes instead, check that the NumPyro sampler is
-                actually selected (the PyMC sampler measured 6.0&times; slower at equal draws).
+                actually selected (the PyMC sampler measured ~3&times; slower at equal draws).
             </p>
 
             <div class="code-wrapper">
@@ -835,7 +835,9 @@ if results.diagnostics['ess_bulk_min'] < 400:
 # Posterior summary with uncertainty
 print("\n=== Posterior Summary ===")
 summary = results.summary(["beta_TV", "beta_Digital", "sigma"])
-print(summary[["mean", "sd", "hdi_3%", "hdi_97%", "r_hat"]])</code></pre>
+# ArviZ 1.x reports an 89% equal-tailed interval as eti89_lb / eti89_ub
+# (the older hdi_3% / hdi_97% column names were removed).
+print(summary[["mean", "sd", "eti89_lb", "eti89_ub", "r_hat"]])</code></pre>
             </div>
 
             <div class="warning">
@@ -860,11 +862,13 @@ if results.channel_contributions is not None:
     print(f"Total TV contribution: {contrib['TV']:.0f}")
     print(f"Total Digital contribution: {contrib['Digital']:.0f}")
 
-# Access the full InferenceData object for ArviZ plots
+# Access the full posterior trace (an ArviZ DataTree under arviz 1.x) for plots
 import arviz as az
+from mmm_framework.utils.arviz_compat import plot_posterior
 
-# Posterior distributions
-az.plot_posterior(results.trace, var_names=["beta_TV", "beta_Digital"])
+# Posterior distributions — az.plot_posterior was removed in arviz 1.x, so route
+# through the framework's version-robust shim (it calls arviz_plots.plot_dist)
+plot_posterior(results.trace, var_names=["beta_TV", "beta_Digital"])
 
 # Trace plots for convergence
 az.plot_trace(results.trace, var_names=["beta_TV", "beta_Digital"])
@@ -1002,19 +1006,18 @@ decay_prior = (
 adstock = (
     AdstockConfigBuilder()
     .geometric()
-    .with_l_max(8)
+    .with_max_lag(8)
     .with_alpha_prior(decay_prior)
     .build()
 )
 
 # Build complete media channel config
 tv_channel = (
-    MediaChannelConfigBuilder()
-    .with_name("TV")
+    MediaChannelConfigBuilder("TV")  # name is a required constructor argument
     .national()
     .with_adstock(adstock)
     .with_hill_saturation()
-    .positive_effect()  # Constrain to positive
+    .with_positive_prior()  # Constrain the coefficient to be positive (HalfNormal)
     .build()
 )
 

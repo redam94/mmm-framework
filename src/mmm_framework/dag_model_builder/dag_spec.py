@@ -100,6 +100,10 @@ class DAGEdge(BaseModel):
     source: str
     target: str
     edge_type: EdgeType = EdgeType.DIRECT
+    # Optional per-edge overrides — e.g. a cross-effect edge carries
+    # {effect_type, prior_sigma} folded in from spec.priors.cross_effect so a
+    # user can pick halo vs cannibalization + the prior scale.
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"extra": "forbid"}
 
