@@ -92,7 +92,7 @@ Every limit is a contextual upgrade prompt. All "limit hit" paths surface as
 | Trigger | Enforced at | Mechanism |
 |---|---|---|
 | **Seat cap** | `POST /auth/accept-invite` | `service.accept_invite` → `plans.assert_within_seat_limit` raises `PlanLimitError`. You can *invite* freely; the wall is at **accept** (so you don't burn a seat on a bounce). |
-| **Project cap** | `POST` create-project (`api/main.py` ~L1302) | `plans.assert_within_project_limit` before insert. |
+| **Project cap** | `POST` create-project (`src/mmm_framework/api/main.py` ~L1302) | `plans.assert_within_project_limit` before insert. |
 | **Fit-quota overage** | fit submission | Compare `run_metrics` count-this-month vs `monthly_fit_quota`; over → 402 / upsell (today the count is exposed via `/auth/usage`; the hard gate at submit is the §6 TODO). |
 | **Feature gate** (SSO, audit export, …) | any gated route | `require_plan_feature("sso")` dep (`auth/deps.py`) → **402** unless the org's plan `has()` the flag. Dev principal no-ops. |
 

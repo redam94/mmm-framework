@@ -72,7 +72,7 @@ list queries are org-scoped with a per-record `assert_org_owns` 404 on mismatch
 database FK/ACL — the store is single-file SQLite (WAL); `org_id` lives in plaintext JSON
 sidecars. In the **hosted profile**, the server-minted `thread_id` is treated as a bearer
 capability and the API refuses guessable/client-invented/unknown thread_ids
-(`api/main.py:450-473`).
+(`src/mmm_framework/api/main.py:450-473`).
 
 **A8. How are accounts provisioned and de-provisioned?**
 **Implemented (auth-enabled).** Owners/admins invite users with **single-use, expiring**
@@ -146,7 +146,7 @@ per-tenant ACL on those endpoints.
 **Implemented.** File serving is TOCTOU-safe and traversal-guarded: the resolved path must be
 inside an allowlisted root; the realpath is opened `O_NOFOLLOW|O_CLOEXEC` (rejecting a symlinked
 final component); the fd is confirmed a regular file; the response streams from that exact
-validated fd (`api/main.py:2723-2792`; `workspace.py:202-226`). *Caveat:* a narrow
+validated fd (`src/mmm_framework/api/main.py:2723-2792`; `src/mmm_framework/agents/workspace.py:202-226`). *Caveat:* a narrow
 parent-directory-swap race is acknowledged as not fully closed without a read-only mount
 namespace — defense-in-depth.
 

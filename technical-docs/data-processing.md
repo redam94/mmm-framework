@@ -179,7 +179,7 @@ These are referenced for completeness; full detail and file/line evidence is in
   is **not** in the sandboxed set. The hosted profile force-upgrades to
   `container` and **refuses to start** if the sandbox is incomplete. Evidence:
   `src/mmm_framework/agents/container_kernel.py:202-244,373-403`,
-  `agents/profile.py:29-65`, `api/main.py:156-158`.
+  `agents/profile.py:29-65`, `src/mmm_framework/api/main.py:156-158`.
 - **SSRF guard on website brand-extraction — implemented.** http/https +
   ports 80/443 only, no embedded credentials, every resolved address must be
   globally routable (rejects loopback/RFC1918/link-local 169.254 metadata/ULA/

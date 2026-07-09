@@ -41,6 +41,7 @@ uv run python examples/ex_vertex_agent.py
 | `anthropic`        | Anthropic API (direct)               | `api_key` / `ANTHROPIC_API_KEY`   |
 | `openai`           | OpenAI API (direct)                  | `api_key` / `OPENAI_API_KEY`      |
 | `google_genai`     | Gemini Developer API (direct)        | `api_key` / `GOOGLE_API_KEY`      |
+| `lmstudio`         | LM Studio OpenAI-compatible local server | `base_url` / `MMM_LLM_BASE_URL`; no API key needed |
 
 > Vertex Gemini uses the non-deprecated `ChatGoogleGenerativeAI(vertexai=True)`
 > path; Vertex Claude uses `ChatAnthropicVertex` from `langchain-google-vertexai`.

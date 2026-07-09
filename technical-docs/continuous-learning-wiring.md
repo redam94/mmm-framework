@@ -44,7 +44,7 @@ Chronicle, Almanac, Atelier.
   `src/mmm_framework/continuous_learning/service.py` (precedent:
   `data_studio/service.py`). Tools run it host-side in the tool body (precedent:
   `design_experiment_plan`, `agents/tools.py:4609`); endpoints run it inside a
-  bespoke job worker (precedent: `_run_validation_job`, `api/main.py:3335` —
+  bespoke job worker (precedent: `_run_validation_job`, `src/mmm_framework/api/main.py:3335` —
   NOT `_run_model_op_job`, which hard-requires a saved MMM run).
 * **First-class tables, not artifacts.** A learning program is a statused,
   project-scoped, longitudinal entity feeding a UI page and re-test triggers —
@@ -388,7 +388,7 @@ Guidance: a “Continuous learning (no model required)” subsection in
 entry in `_LIBRARY_MENU`. Tool-name lists: all six are **spine** tools (work
 without media-channel spec), none heavy.
 
-### 3.5 REST endpoints (`api/main.py`; all `dependencies=[_proj_read]` reads / `[_proj_write]` writes; 404-check project; `safe_json_dumps_load` responses)
+### 3.5 REST endpoints (`src/mmm_framework/api/main.py`; all `dependencies=[_proj_read]` reads / `[_proj_write]` writes; 404-check project; `safe_json_dumps_load` responses)
 
 ```
 GET    /projects/{pid}/learning-programs                     → {programs: [{...row, summary}]}
