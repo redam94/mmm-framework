@@ -662,7 +662,8 @@ results = mmm.fit(draws=600, tune=600, chains=2, cores=1, random_seed=0)
         const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
         const CKEY = { TV: 'tv', Search: 'search', Social: 'social', Display: 'display' };
 
-        // results.summary(): posterior mean / hdi_3% / hdi_97% of beta_c (94% HDI).
+        // results.summary(): posterior mean + 94% HDI of beta_c (baked fixture from an earlier run;
+        // arviz 1.x now labels the summary interval columns eti89_lb / eti89_ub, an 89% ETI).
         const BETA = {
             TV:      { mean: 1.112, lo: 0.058, hi: 2.712 },
             Search:  { mean: 1.736, lo: 0.120, hi: 3.598 },

@@ -425,7 +425,13 @@ print(panel.summary())</code></pre>
                 way. <strong>Prefer spend</strong> when you want ROI and budget-allocation readouts directly:
                 contributions-per-dollar require dollars in the denominator. Use impressions (or GRPs) when CPMs
                 shifted materially over the window and you want the response curve in exposure units&mdash;then
-                convert to ROI with your own cost data.
+                convert to ROI with your own cost data. The framework applies that conversion for you: set the
+                per-channel <code>measurement_unit</code> to <code>"impressions"</code> (or <code>"clicks"</code>)
+                on <code>MediaChannelConfig</code> and give it a cost source&mdash;a <code>cpm</code>/<code>cpc</code>
+                constant or a <code>spend_column</code> pointing at a separate dollar series&mdash;and it reports
+                ROI/marginal-ROAS internally (cpm &rarr; (impressions/1000)&times;cpm; cpc &rarr; clicks&times;cpc).
+                With no cost declared it instead reports an efficiency metric (contribution per 1,000 impressions /
+                per click, break-even reference 0). See <code>technical-docs/impression-level-roi.md</code>.
                 <span class="evidence-tag guidance">guidance</span>
             </p>
 
@@ -465,8 +471,9 @@ print(panel.summary())</code></pre>
             <p class="lead">
                 These are <strong>measured</strong> numbers, not vendor estimates&mdash;every row below comes
                 from <code>nbs/runtime_benchmark.ipynb</code>, run on an Apple&nbsp;M3 laptop (8 cores,
-                16&nbsp;GB RAM; Python 3.12, PyMC 5.26, NumPyro 0.19). The honest caveat: the
-                <em>ratios</em> transfer to other hardware; the <em>absolute seconds</em> don't.
+                16&nbsp;GB RAM; Python 3.12, PyMC 6.0.1, PyTensor 3.0, ArviZ 1.2, NumPyro 0.19, JAX 0.8).
+                The honest caveat: the <em>ratios</em> transfer to other hardware; the
+                <em>absolute seconds</em> don't (and run-to-run variance is ~15%).
             </p>
 
             <table>
@@ -494,22 +501,24 @@ print(panel.summary())</code></pre>
                     </tr>
                     <tr>
                         <td><strong>Default PyMC sampler</strong> (same model, 104w &times; 7ch)</td>
-                        <td>86 s vs. 14 s</td>
-                        <td>Sequential PyMC NUTS is 6.0&times; slower than NumPyro at equal draws. Use
-                            <code>nuts_sampler="numpyro"</code>.</td>
+                        <td>~32 s vs. ~12 s</td>
+                        <td>Sequential PyMC NUTS is ~3&times; slower than NumPyro at equal draws (PyMC&nbsp;6's
+                            native sampler narrowed this from ~6&times; under PyMC&nbsp;5). Select the
+                            NumPyro backend on the model config (<code>ModelConfigBuilder().bayesian_numpyro()</code>,
+                            the default).</td>
                         <td><span class="evidence-tag measured">measured</span></td>
                     </tr>
                     <tr>
                         <td><strong>Doubling draws</strong> (500 &rarr; 1000, 156w &times; 7ch)</td>
-                        <td>16.7 s &rarr; 21.1 s</td>
-                        <td>1.26&times;, not 2&times;&mdash;compilation and warmup amortize.</td>
+                        <td>14.5 s &rarr; 19.2 s</td>
+                        <td>1.32&times;, not 2&times;&mdash;compilation and warmup amortize.</td>
                         <td><span class="evidence-tag measured">measured</span></td>
                     </tr>
                     <tr>
                         <td><strong>Hierarchical geo panel</strong><br>4 geos &times; 130 weeks &times; 4 channels</td>
-                        <td>&asymp; 22 s</td>
-                        <td>3.1&times; its national twin (7.0 s) in raw time&mdash;but 4&times; the rows, so
-                            0.78&times; per observation. Pooling is cheap.</td>
+                        <td>&asymp; 20 s</td>
+                        <td>2.9&times; its national twin (6.9 s) in raw time&mdash;but 4&times; the rows, so
+                            0.72&times; per observation. Pooling is cheap.</td>
                         <td><span class="evidence-tag measured">measured</span></td>
                     </tr>
                     <tr>
@@ -553,12 +562,22 @@ print(panel.summary())</code></pre>
             </table>
             <p>
                 The production figure is extrapolated from the measured draws-scaling line (500 &rarr; 1000
-                draws cost 1.26&times;; per-draw cost &asymp; 9&nbsp;ms on this hardware), not measured
+                draws cost 1.32&times;; per-draw cost &asymp; 9&nbsp;ms on this hardware), not measured
                 directly&mdash;treat it as an order of magnitude, not a quote. The practical point survives
                 any hardware change: <strong>a full Bayesian MMM refit is a coffee break, not an overnight
                 job</strong>, which is what makes the
                 <a href="measurement-calibration.html">closed measurement loop</a> (refit after every
                 experiment) economically viable.
+            </p>
+            <p>
+                <strong>Even faster during exploration:</strong> for model-checking &mdash; catching bad priors,
+                broken geometry, or pathological saturation/adstock before paying for a full sample &mdash;
+                <code>fit(method="map"|"advi"|"fullrank_advi"|"pathfinder")</code>
+                (builder <code>.with_fit_method(&hellip;)</code> / agent <code>fit_mmm_model(method=&hellip;)</code>)
+                returns an <em>approximate</em> posterior in seconds, faster than the &asymp;&nbsp;10&ndash;15&nbsp;s
+                NUTS fit, and works on the extension models too (shared <code>run_approximate_fit</code> engine).
+                The catch: R-hat/ESS are unavailable and the uncertainty is <strong>not calibrated</strong>, so
+                re-fit with NUTS before reporting numbers or making decisions.
             </p>
 
             <!-- ===============================================================

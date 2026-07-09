@@ -584,8 +584,9 @@ exec_report.to_html("artifacts/aurora_exec_summary.html")</code></pre>
             <h2 id="theming">Theming &amp; design tokens</h2>
             <p>
                 Reports are branded with a <code>ColorScheme</code> built from named palettes or custom
-                tokens. The notebook's measured output lists the four built-ins:
-                <code>['SAGE', 'CORPORATE', 'WARM', 'MONOCHROME']</code>. Every color in the report —
+                tokens. The notebook's measured output lists the five built-ins:
+                <code>['SAGE', 'CORPORATE', 'WARM', 'MONOCHROME', 'AUGUR']</code> (<code>AUGUR</code> is the
+                editorial "Media Performance Readout" theme). Every color in the report —
                 header band, stat callouts, chart traces, borders — flows from one token set, so a rebrand
                 is one argument, not a CSS hunt. Click a palette to restyle the preview:
             </p>
@@ -702,8 +703,8 @@ exec_report.to_html("artifacts/aurora_exec_summary.html")</code></pre>
                     <li><strong>Uncertainty is load-bearing:</strong> every headline ships an 80% CI; the
                         demo report's own blended ROI, 0.62 [0.07 – 1.43], straddles break-even — and says so.</li>
                     <li><strong>Sections toggle, palettes brand:</strong> <code>ReportBuilder</code> one-liners
-                        produce an exec cut; four built-in palettes (<code>SAGE</code>, <code>CORPORATE</code>,
-                        <code>WARM</code>, <code>MONOCHROME</code>) restyle everything via design tokens.</li>
+                        produce an exec cut; five built-in palettes (<code>SAGE</code>, <code>CORPORATE</code>,
+                        <code>WARM</code>, <code>MONOCHROME</code>, <code>AUGUR</code>) restyle everything via design tokens.</li>
                     <li><strong>The report is honest about its limits:</strong> it prints its diagnostics and
                         ships a causal-assumptions section — because TV's "Underperforming" (0.33) vs
                         truth (2.14) is a bias no generator can detect from the fit alone.</li>

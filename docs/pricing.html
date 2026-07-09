@@ -279,7 +279,7 @@
             <div class="info-box">
                 <h4>What a "fit" is, and why fits cost money</h4>
                 <p style="margin-bottom:0;">
-                    A <em>fit</em> is one Bayesian model run. A national NUTS fit completes in <strong>~17&nbsp;seconds</strong>, and the NumPyro sampler runs <strong>6.0×&nbsp;faster</strong> than stock PyMC at equal draws — so a single national model is cheap. But extension models (nested mediation, multivariate, combined) and larger geo / geo×product panels do more work per fit and cost more, which is why fits are metered rather than flat-rated. The monthly fit quota on each tier is the metered envelope; Enterprise removes the cap.
+                    A <em>fit</em> is one Bayesian model run. A national NUTS fit completes in <strong>~15&nbsp;seconds</strong>, and the NumPyro sampler runs <strong>~3×&nbsp;faster</strong> than stock PyMC at equal draws — so a single national model is cheap. But extension models (nested mediation, multivariate, combined) and larger geo / geo×product panels do more work per fit and cost more, which is why fits are metered rather than flat-rated. The monthly fit quota on each tier is the metered envelope; Enterprise removes the cap.
                 </p>
             </div>
         </div>
@@ -298,12 +298,12 @@
                 <tbody>
                     <tr>
                         <td>National NUTS fit (wall-clock)</td>
-                        <td>~17&nbsp;seconds</td>
+                        <td>~15&nbsp;seconds</td>
                         <td>Measured</td>
                     </tr>
                     <tr>
                         <td>NumPyro vs. stock PyMC, equal draws</td>
-                        <td>6.0× faster</td>
+                        <td>~3× faster</td>
                         <td>Measured</td>
                     </tr>
                     <tr>
@@ -332,7 +332,7 @@
                     <li><strong>Dollar prices are proposed / illustrative.</strong> The <code>$50</code> / <code>$200</code> per-seat figures and the "$0 Free" are a starting sketch; the founder sets the finals. The enforceable contract is the limits and feature gates in <code>auth/plans.py</code>, which this page mirrors exactly.</li>
                     <li><strong>Self-hosting is free and unlimited.</strong> The OSS core under Apache&nbsp;2.0 has no seat, project, or fit limits when you run it yourself with auth off. The billed Free plan is the managed-platform entry point, a different thing.</li>
                     <li><strong>SOC&nbsp;2: readiness, not certified.</strong> The control set is built toward SOC&nbsp;2-style expectations (access control, audit, isolation), but the platform is <strong>not SOC&nbsp;2 certified</strong> and no audit has been performed — see the <a href="trust.html#main-content">Trust &amp; Security</a> page. Treat it as readiness evidence, not an attestation.</li>
-                    <li><strong>Compute rates are assumptions.</strong> The runtime numbers (~17&nbsp;s fit, 6.0× NumPyro) are measured; the per-vCPU-hour dollar band is a representative assumption that depends on your instance and region.</li>
+                    <li><strong>Compute rates are assumptions.</strong> The runtime numbers (~15&nbsp;s fit, ~3× NumPyro) are measured; the per-vCPU-hour dollar band is a representative assumption that depends on your instance and region.</li>
                 </ul>
             </div>
         </div>

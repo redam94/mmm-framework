@@ -687,7 +687,9 @@ if diag['rhat_max'] > 1.01:
 # 3. ESS: should be > 400 for all parameters
 # (tail ESS is not pre-computed; pull it from the trace with ArviZ)
 import arviz as az
-ess_tail_min = float(az.ess(results.trace, method="tail").min().to_array().min())
+# arviz 1.x returns a DataTree (no .to_array()); dataset_extremum reduces it to a float
+from mmm_framework.utils.arviz_compat import dataset_extremum
+ess_tail_min = dataset_extremum(az.ess(results.trace, method="tail"), "min")
 print(f"ESS bulk min: {diag['ess_bulk_min']:.0f}")
 print(f"ESS tail min: {ess_tail_min:.0f}")
 if diag['ess_bulk_min'] < 400:
@@ -696,7 +698,8 @@ if diag['ess_bulk_min'] < 400:
 # 4. Summary of key parameters
 summary = results.summary()
 print("\n=== Parameter Summary ===")
-print(summary[["mean", "sd", "hdi_3%", "hdi_97%", "r_hat"]].to_string())</code></pre>
+# arviz 1.x exposes an 89% equal-tailed interval as eti89_lb / eti89_ub
+print(summary[["mean", "sd", "eti89_lb", "eti89_ub", "r_hat"]].to_string())</code></pre>
             </div>
 
             <table>

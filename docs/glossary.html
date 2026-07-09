@@ -618,9 +618,11 @@
                     <dt id="term-numpyro">NumPyro</dt>
                     <dd>
                         A JAX-backed probabilistic programming library used by the framework as a fast alternative
-                        sampler to native PyMC. Pass <code>nuts_sampler="numpyro"</code> to <code>BayesianMMM.fit()</code>.
-                        Measured speedup: 6.0x wall-clock vs sequential PyMC chains at equal draws on a
-                        7-channel national model (~2x vs parallel PyMC chains); see
+                        sampler to native PyMC. Select it on the model config —
+                        <code>ModelConfigBuilder().bayesian_numpyro()</code> (in fact the default) — not via a
+                        <code>fit()</code> argument; the framework then passes <code>nuts_sampler="numpyro"</code> to
+                        <code>pm.sample</code> internally. Measured speedup: ~3x wall-clock vs sequential PyMC chains at equal draws on a
+                        7-channel national model (down from ~6x under PyMC 5, whose native sampler was slower; narrower still against parallel PyMC chains); see
                         <code>nbs/runtime_benchmark.ipynb</code>.
                     </dd>
 

@@ -183,7 +183,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-04",
+          "dateModified": "2026-07-06",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/faq.html#breadcrumb"
           },
@@ -315,7 +315,7 @@
               "name": "How is this different from Meridian, Robyn, or PyMC-Marketing?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "All three are serious tools, and the honest answer differs by tool. Robyn (Meta) searches thousands of model candidates with an evolutionary optimizer and asks the analyst to pick from a Pareto front of finalists—a workflow where the selection step itself can quietly become specification shopping. This framework fits one pre-registered Bayesian model and reports its full posterior, so uncertainty reflects the data rather than which finalist was chosen. Meridian (Google) is a capable Bayesian geo-MMM with genuine lift-test calibration. The difference is the operating loop around the model: this framework also prices which experiment to run next (expected information gain and expected value of information, in dollars), pre-registers the design, tracks the experiment lifecycle, and folds readouts back into the next fit automatically. It additionally supports mediation structures (TV driving search driving sales) and jointly modeled KPIs. PyMC-Marketing is not a competitor—this framework builds on it, adding causal guardrails (declared variable roles, refutation checks), the experiment planning loop, the Augur web platform with its Oracle analyst workspace, and a Model Garden of versioned, shareable model families (including non-MMM ones) on top of its Bayesian foundations. Two claims you can verify rather than take on faith: model designs are locked before results are seen, and the methodology is pressure-tested in public against synthetic markets with known ground truth—including the scenarios where it struggles."
+                "text": "All three are serious tools, and the honest answer differs by tool. Robyn (Meta) searches thousands of model candidates with an evolutionary optimizer and asks the analyst to pick from a Pareto front of finalists—a workflow where the selection step itself can quietly become specification shopping. This framework fits one pre-registered Bayesian model and reports its full posterior, so uncertainty reflects the data rather than which finalist was chosen. Meridian (Google) is a capable Bayesian geo-MMM with genuine lift-test calibration. The difference is the operating loop around the model: this framework also prices which experiment to run next (expected information gain and expected value of information, in dollars), pre-registers the design, tracks the experiment lifecycle, and folds readouts back into the next fit automatically. It additionally supports mediation structures (TV driving search driving sales) and jointly modeled KPIs. PyMC-Marketing is not a competitor—it targets the same Bayesian-MMM space, and this framework can interoperate with a PyMC-Marketing model (through a reporting extractor) while its own core is a standalone PyMC 6 engine. On top of that engine it adds causal guardrails (declared variable roles, refutation checks), the experiment planning loop, the Augur web platform with its Oracle analyst workspace, and a Model Garden of versioned, shareable model families (including non-MMM ones). Two claims you can verify rather than take on faith: model designs are locked before results are seen, and the methodology is pressure-tested in public against synthetic markets with known ground truth—including the scenarios where it struggles."
               }
             },
             {
@@ -371,7 +371,7 @@
               "name": "What does a model fit cost in time?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Measured, not estimated: a production-size national fit (156 weeks × 7 channels, NumPyro, 4 chains × 500 draws) completes in ~14 seconds on an Apple M3 laptop, including compilation. Geo panels and extension models scale sub-linearly per row at that size. The full benchmark table—with the caveat that absolute seconds are machine-specific and the ratios are the transferable part—is in the technical guide's Computational Scaling section."
+                "text": "Measured, not estimated: a production-size national fit (156 weeks × 7 channels, NumPyro, 4 chains × 500 draws) completes in ~15 seconds on an Apple M3 laptop (PyMC 6), including compilation. Geo panels scale sub-linearly per row, and the extension models stay in the same runtime ballpark as the core model. The full benchmark table—with the caveat that absolute seconds are machine-specific and the ratios are the transferable part—is in the technical guide's Computational Scaling section."
               }
             },
             {
@@ -1238,12 +1238,14 @@
                         driving sales) and jointly modeled KPIs.
                     </p>
                     <p>
-                        <strong>PyMC-Marketing</strong> is not a competitor—this framework builds on it,
-                        adding causal guardrails (declared variable roles, refutation checks), the
-                        experiment planning loop, the <strong>Augur</strong> web platform with its
-                        <strong>Oracle</strong> analyst workspace, and a <strong>Model Garden</strong> of
-                        versioned, shareable model families (including non-MMM ones) on top of its
-                        Bayesian foundations.
+                        <strong>PyMC-Marketing</strong> is not a competitor—it targets the same
+                        Bayesian-MMM space, and this framework can interoperate with a PyMC-Marketing
+                        model (through a reporting extractor) while its own core is a standalone PyMC 6
+                        engine. On top of that engine it adds causal guardrails (declared variable roles,
+                        refutation checks), the experiment planning loop, the <strong>Augur</strong> web
+                        platform with its <strong>Oracle</strong> analyst workspace, and a
+                        <strong>Model Garden</strong> of versioned, shareable model families (including
+                        non-MMM ones).
                     </p>
                     <p>
                         Two claims you can verify rather than take on faith: model designs are locked
@@ -1476,9 +1478,10 @@ az.plot_ppc(pred.posterior_predictive)</code></pre>
                 <div class="faq-answer">
                     <p>
                         Measured, not estimated: a production-size national fit (156 weeks &times; 7 channels,
-                        NumPyro, 4 chains &times; 500 draws) completes in <strong>~14 seconds</strong> on an
-                        Apple M3 laptop, including compilation. Geo panels and extension models scale
-                        sub-linearly per row at that size. The full benchmark table—with the caveat that
+                        NumPyro, 4 chains &times; 500 draws) completes in <strong>~15 seconds</strong> on an
+                        Apple M3 laptop (PyMC 6), including compilation. Geo panels scale sub-linearly per
+                        row, and the extension models stay in the same runtime ballpark as the core model.
+                        The full benchmark table—with the caveat that
                         absolute seconds are machine-specific and the ratios are the transferable part—is in
                         the <a href="technical-guide.html#diagnostics">technical guide's Computational
                         Scaling section</a>.

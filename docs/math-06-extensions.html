@@ -624,13 +624,20 @@
             <div class="warning">
                 <h4>⚠️ Never chart the multivariate μ as a prediction</h4>
                 <p>
-                    The extension models carry <strong>no trend or seasonality</strong>, so the
-                    multivariate \(\boldsymbol\mu_t\) is not a usable predicted-vs-observed trajectory —
-                    it is near-flat. This is the notebook's hard-won lesson: <code>MultivariateMMM</code>
-                    estimates <strong>cross-effects, not trajectories</strong>. Its value is the two
-                    estimands charted above — \(\psi\) and the residual correlation — and that is all this
-                    page charts. (Practical footnote: the MvNormal model requires <code>cores=1</code> on
-                    macOS; <code>chains=2, cores=1</code> is fine.)
+                    In this notebook the multivariate model is fit with <strong>no trend or seasonality
+                    configured</strong> (the default — <code>model_config</code>/<code>trend_config</code>
+                    left <code>None</code>, so the graph is byte-identical to the historical baseline), so
+                    its \(\boldsymbol\mu_t\) carries only the intercept, media, and cross-effects and is
+                    near-flat — not a usable predicted-vs-observed trajectory. This is the notebook's
+                    hard-won lesson: as configured here, <code>MultivariateMMM</code> estimates
+                    <strong>cross-effects, not trajectories</strong>, and its value is the two estimands
+                    charted above — \(\psi\) and the residual correlation. (Since 2026-07-08 the extension
+                    models <em>can</em> carry trend — linear/piecewise/spline/GP — and Fourier seasonality
+                    when a <code>model_config</code>/<code>trend_config</code> is supplied, per outcome and
+                    gated on <code>include_trend</code>/<code>include_seasonality</code>; with those on,
+                    \(\boldsymbol\mu_t\) becomes a meaningful trajectory. This page simply doesn't
+                    configure them.) (Practical footnote: the MvNormal model requires <code>cores=1</code>
+                    on macOS; <code>chains=2, cores=1</code> is fine.)
                 </p>
             </div>
 

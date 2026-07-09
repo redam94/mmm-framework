@@ -543,7 +543,7 @@
                         <li><strong>Trend breaks &amp; evolving seasonality:</strong> structural time misfit flows into whichever channel's spend co-moves with it — direction unpredictable, totals often still right.</li>
                         <li><strong>Mediation:</strong> the base model structurally loses mediated channels (TV ROAS 0.22 vs true 2.14); extensions recover them but add prior-determined splits the data cannot identify.</li>
                         <li><strong>Resolved (June 2026) — legacy adstock default:</strong> the old default two-point blend recovers the <em>clean</em> world at ~28% median error vs 7% parametric. That finding drove a change: <code>use_parametric_adstock=True</code> is now the shipped default; the blend remains an explicit opt-out for reproducing older fits.</li>
-                        <li><strong>Open issue — holdout validation:</strong> the holdout path falls back to a logistic curve for non-logistic channels, so holdout predictions are wrong (no crash) for Hill-fit models.</li>
+                        <li><strong>Resolved (June 2026) — holdout validation:</strong> the out-of-time forecaster (<code>PosteriorForecaster._saturate</code>, <code>validation/backtest.py</code>) now reconstructs each channel's actual saturation form (Hill, Michaelis–Menten, tanh, logistic, or none), so Hill-fit models get correct holdout predictions — the earlier logistic-fallback bug is gone.</li>
                     </ul>
                 </div>
             </div>
