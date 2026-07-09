@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 import numpy as np
 import pandas as pd
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     import pytensor.tensor as pt
 
     from ...calibration.likelihood import ExperimentMeasurement
+    from ...config.enums import FitMethod
 
 from ..results import ModelResults
 
@@ -46,6 +47,8 @@ class BaseExtendedMMM:
         y: np.ndarray,
         channel_names: list[str],
         index: pd.Index | None = None,
+        model_config: Any | None = None,
+        trend_config: Any | None = None,
     ):
         """
         Initialize the base model.
@@ -60,11 +63,24 @@ class BaseExtendedMMM:
             Names of media channels
         index : pd.Index | None
             Optional time index for the data
+        model_config : ModelConfig | None
+            Optional core model configuration carrying the seasonality settings
+            and the outcome likelihood family. When ``None`` the extension keeps
+            its historical hard-coded baseline (no seasonality, Normal outcome) —
+            so a directly-constructed model is byte-identical to before.
+        trend_config : TrendConfig | None
+            Optional trend configuration. ``None`` or type ``none`` → no trend
+            term (historical behavior); ``linear`` adds a standardized-scale
+            trend so a real drift does not contaminate the media coefficients.
         """
         self.X_media = X_media
         self.y = y
         self.channel_names = channel_names
         self.index = index if index is not None else pd.RangeIndex(len(y))
+        # Optional core config — carries seasonality + outcome likelihood; None
+        # keeps the historical hard-coded baseline (see docstring).
+        self.model_config = model_config
+        self.trend_config = trend_config
 
         self.n_obs = len(y)
         self.n_channels = len(channel_names)
@@ -161,6 +177,62 @@ class BaseExtendedMMM:
             return logistic_saturation_pt(x_adstocked, lam)
 
         return apply
+
+    def _build_baseline_dynamics(
+        self,
+        outcomes: Sequence,
+        share_trend: bool,
+        share_seasonality: bool,
+    ) -> tuple[dict, dict]:
+        """Build per-outcome trend + seasonality terms (standardized scale) for
+        the multi-outcome models.
+
+        Returns ``(trend_terms, seasonality_terms)`` — dicts keyed by outcome
+        index, value None when that component is off for the outcome. A trend
+        (resp. seasonality) is added for outcome ``k`` only when a trend_config
+        (resp. a seasonality config) is present AND the outcome's
+        ``include_trend`` (resp. ``include_seasonality``) is True. When the
+        corresponding ``share_*`` flag is set, one RV is shared across outcomes;
+        otherwise each outcome gets its own (name-prefixed) RV. Must be called
+        inside the model context (it creates RVs).
+        """
+        from ..components.temporal import (
+            build_seasonality_contribution,
+            build_trend_contribution,
+        )
+
+        trend_terms: dict = {}
+        seasonality_terms: dict = {}
+        season_cfg = getattr(self.model_config, "seasonality", None)
+
+        shared_trend = (
+            build_trend_contribution("", self.n_obs, self.trend_config)
+            if (self.trend_config is not None and share_trend)
+            else None
+        )
+        shared_season = (
+            build_seasonality_contribution("", self.index, self.n_obs, season_cfg)
+            if (season_cfg is not None and share_seasonality)
+            else None
+        )
+        for k, oc in enumerate(outcomes):
+            if self.trend_config is not None and getattr(oc, "include_trend", True):
+                trend_terms[k] = (
+                    shared_trend
+                    if share_trend
+                    else build_trend_contribution(
+                        f"{oc.name}_", self.n_obs, self.trend_config
+                    )
+                )
+            if season_cfg is not None and getattr(oc, "include_seasonality", True):
+                seasonality_terms[k] = (
+                    shared_season
+                    if share_seasonality
+                    else build_seasonality_contribution(
+                        f"{oc.name}_", self.index, self.n_obs, season_cfg
+                    )
+                )
+        return trend_terms, seasonality_terms
 
     # =====================================================================
     # Serialization (save/load the model + trace + experiments)
@@ -383,46 +455,101 @@ class BaseExtendedMMM:
         target_accept: float = 0.9,
         random_seed: int | None = None,
         nuts_sampler: str = "pymc",
+        method: "FitMethod | str" = "nuts",
         **kwargs,
     ) -> ModelResults:
-        """
-        Fit the model using MCMC.
+        """Fit the model with NUTS (default) or a fast **approximate** method.
+
+        ``method`` ∈ {``nuts``, ``map``, ``advi``, ``fullrank_advi``,
+        ``pathfinder``}. NUTS is full MCMC for real inference. The approximate
+        methods fit in **seconds** for quick model checks — the returned
+        ``ModelResults.approximate`` is ``True``, R-hat/ESS are ``None`` and the
+        uncertainty is **not calibrated** (re-fit with NUTS before trusting
+        intervals/decisions). The approximate posterior is a drop-in for the
+        NUTS trace (deterministics included), so the extended reports and
+        pathway analysis work off it. Extension models share the base model's
+        approximate engine (:func:`~mmm_framework.model.base.run_approximate_fit`).
 
         Args:
-            draws: Number of posterior draws per chain.
-            tune: Number of tuning iterations.
-            chains: Number of MCMC chains.
-            target_accept: Target acceptance rate for NUTS.
+            draws: Posterior draws per chain (NUTS) or number of approximate
+                draws (ADVI/Pathfinder; MAP is a single point and ignores it).
+            tune / chains / target_accept / nuts_sampler: NUTS controls (unused
+                by the approximate methods).
             random_seed: Random seed for reproducibility.
-            nuts_sampler: NUTS sampler to use ("pymc", "numpyro", "nutpie").
-            **kwargs: Additional arguments passed to pm.sample.
+            method: Inference method (see above).
+            **kwargs: forwarded to ``pm.sample`` (NUTS) or the approximate fitter.
 
         Returns:
-            Container with trace and model.
+            Container with trace, model and diagnostics.
         """
-        with self.model:
-            self._trace = pm.sample(
-                draws=draws,
-                tune=tune,
-                chains=chains,
-                target_accept=target_accept,
-                random_seed=random_seed,
-                nuts_sampler=nuts_sampler,
-                **kwargs,
+        from ...config.enums import FitMethod
+
+        fit_method = (
+            method if isinstance(method, FitMethod) else FitMethod(str(method).lower())
+        )
+
+        if fit_method is FitMethod.NUTS:
+            with self.model:
+                self._trace = pm.sample(
+                    draws=draws,
+                    tune=tune,
+                    chains=chains,
+                    target_accept=target_accept,
+                    random_seed=random_seed,
+                    nuts_sampler=nuts_sampler,
+                    **kwargs,
+                )
+
+            # Compute + stamp convergence diagnostics and WARN on non-convergence.
+            # Extended models (Nested/Multivariate/Combined) previously recorded
+            # NO diagnostics -- the most divergence-prone geometries shipped with
+            # no convergence signal. Best-effort: never let diagnostics fail a fit.
+            diagnostics: dict = {"approximate": False, "fit_method": "nuts"}
+            try:
+                from ...diagnostics import convergence as _conv
+
+                diagnostics.update(_conv.compute_convergence(self._trace))
+                _conv.annotate(diagnostics)
+                _conv.warn_if_not_converged(diagnostics, label=type(self).__name__)
+            except Exception:  # noqa: BLE001 - diagnostics are best-effort
+                pass
+
+            return ModelResults(
+                trace=self._trace,
+                model=self.model,
+                config=getattr(self, "config", None),
+                diagnostics=diagnostics,
             )
 
-        # Compute + stamp convergence diagnostics and WARN on non-convergence.
-        # Extended models (Nested/Multivariate/Combined) previously recorded NO
-        # diagnostics at all -- the most divergence-prone geometries shipped with
-        # no convergence signal. Best-effort: never let diagnostics fail a fit.
-        diagnostics: dict = {"approximate": False}
+        # ---- Approximate inference (MAP / ADVI / full-rank ADVI / Pathfinder) --
+        from ...model.base import run_approximate_fit
+        from ...utils import arviz_compat
+
+        trace, extra = run_approximate_fit(
+            self.model, fit_method, draws, random_seed, **kwargs
+        )
+        # Attach the prior so prior-vs-posterior tooling still works (best-effort).
+        try:
+            prior = self.sample_prior_predictive(samples=1000, random_seed=random_seed)
+            trace = arviz_compat.attach_prior(trace, prior)
+        except Exception:  # noqa: BLE001 - prior is best-effort for approx fits
+            pass
+        self._trace = trace
+
+        diagnostics = {
+            "fit_method": fit_method.value,
+            "approximate": True,
+            # R-hat / ESS are undefined for a single-path approximation.
+            "rhat_max": None,
+            "ess_bulk_min": None,
+        }
+        diagnostics.update(extra)
         try:
             from ...diagnostics import convergence as _conv
 
-            diagnostics.update(_conv.compute_convergence(self._trace))
+            # converged -> None ("not assessable"); never warns for approx fits.
             _conv.annotate(diagnostics)
-            _conv.warn_if_not_converged(diagnostics, label=type(self).__name__)
-        except Exception:  # noqa: BLE001 - diagnostics are best-effort
+        except Exception:  # noqa: BLE001
             pass
 
         return ModelResults(

@@ -756,6 +756,11 @@ class DAGModelBuilder:
                 config=nested_config,
                 mediator_data=mediator_data,
                 index=index,
+                # Extensions now honor the spec's baseline dynamics + outcome
+                # likelihood (seasonality via model_config, trend via
+                # trend_config) — previously discarded on this branch.
+                model_config=model_config,
+                trend_config=self._trend_config,
             )
 
         # Multi-outcome: the FIRST outcome is the panel's KPI series; every
@@ -774,6 +779,8 @@ class DAGModelBuilder:
                 channel_names=channel_names,
                 config=multivariate_config,
                 index=index,
+                model_config=model_config,
+                trend_config=self._trend_config,
             )
 
         elif model_type == ModelType.COMBINED_MMM:
@@ -788,6 +795,8 @@ class DAGModelBuilder:
                 config=combined_config,
                 mediator_data=mediator_data,
                 index=index,
+                model_config=model_config,
+                trend_config=self._trend_config,
             )
 
         else:

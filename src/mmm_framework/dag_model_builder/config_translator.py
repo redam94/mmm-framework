@@ -505,12 +505,24 @@ def dag_to_multivariate_config(dag: DAGSpec):
             target_node = dag.get_node(edge.target)
 
             if source_node and target_node:
-                cross_config = CrossEffectConfig(
-                    source_outcome=source_node.variable_name,
-                    target_outcome=target_node.variable_name,
-                    effect_type=CrossEffectType.CANNIBALIZATION,  # Default
-                )
-                cross_effect_configs.append(cross_config)
+                # Per-edge overrides from spec.priors.cross_effect (folded into
+                # edge.metadata upstream): effect_type (halo/cannibalization/…)
+                # and prior_sigma. Default stays CANNIBALIZATION.
+                meta = edge.metadata or {}
+                try:
+                    effect_type = CrossEffectType(
+                        str(meta.get("effect_type", "cannibalization")).lower()
+                    )
+                except ValueError:
+                    effect_type = CrossEffectType.CANNIBALIZATION
+                kwargs = {
+                    "source_outcome": source_node.variable_name,
+                    "target_outcome": target_node.variable_name,
+                    "effect_type": effect_type,
+                }
+                if meta.get("prior_sigma") is not None:
+                    kwargs["prior_sigma"] = float(meta["prior_sigma"])
+                cross_effect_configs.append(CrossEffectConfig(**kwargs))
 
     return MultivariateModelConfig(
         outcomes=tuple(outcome_configs),

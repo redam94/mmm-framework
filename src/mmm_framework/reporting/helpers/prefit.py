@@ -417,23 +417,34 @@ def model_assumptions(model: Any) -> list[AssumptionRow]:
             )
         )
 
-    # Fit plan
-    if mc is not None:
-        rows.append(
-            AssumptionRow(
-                topic="Inference plan",
-                setting=(
-                    f"{getattr(mc, 'n_chains', '?')} chains × "
-                    f"{getattr(mc, 'n_draws', '?')} draws "
-                    f"(tune {getattr(mc, 'n_tune', '?')}, "
-                    f"target_accept {getattr(mc, 'target_accept', '?')})"
-                ),
-                detail=(
-                    "The sampling plan the final fit will use. Convergence "
-                    "(R-hat, ESS, divergences) will be reported post-fit."
-                ),
+    # Fit plan — reflect the PLANNED inference method (NUTS vs an approximate
+    # method), so the readout does not promise calibrated uncertainty / post-fit
+    # diagnostics for a MAP/ADVI/Pathfinder fit. Emitted even when there is no
+    # ModelConfig (extended models) so the plan is never silently omitted.
+    _fm = getattr(mc, "fit_method", None) if mc is not None else None
+    method = str(getattr(_fm, "value", _fm) or "nuts").lower()
+    if method == "nuts":
+        if mc is not None:
+            setting = (
+                f"NUTS — {getattr(mc, 'n_chains', '?')} chains × "
+                f"{getattr(mc, 'n_draws', '?')} draws "
+                f"(tune {getattr(mc, 'n_tune', '?')}, "
+                f"target_accept {getattr(mc, 'target_accept', '?')})"
             )
+        else:
+            setting = "NUTS — full MCMC"
+        detail = (
+            "The sampling plan the final fit will use. Convergence "
+            "(R-hat, ESS, divergences) will be reported post-fit."
         )
+    else:
+        setting = f"{method.upper()} — approximate (fast check)"
+        detail = (
+            "An APPROXIMATE fit (not full MCMC): fast to run for a plausibility "
+            "check, but its uncertainty is NOT calibrated — R-hat/ESS are not "
+            "assessable. Re-fit with NUTS before trusting intervals or decisions."
+        )
+    rows.append(AssumptionRow(topic="Inference plan", setting=setting, detail=detail))
 
     return rows
 

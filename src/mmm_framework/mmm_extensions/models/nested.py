@@ -61,8 +61,17 @@ class NestedMMM(BaseExtendedMMM):
         mediator_data: dict[str, np.ndarray] | None = None,
         mediator_masks: dict[str, np.ndarray] | None = None,
         index: pd.Index | None = None,
+        model_config=None,
+        trend_config=None,
     ):
-        super().__init__(X_media, y, channel_names, index)
+        super().__init__(
+            X_media,
+            y,
+            channel_names,
+            index,
+            model_config=model_config,
+            trend_config=trend_config,
+        )
         self.config = config
         self.mediator_data = mediator_data or {}
         self.mediator_masks = mediator_masks or {}
@@ -266,7 +275,29 @@ class NestedMMM(BaseExtendedMMM):
                 )
 
                 if has_direct:
-                    delta = pm.Normal(f"delta_direct_{channel}", mu=0, sigma=0.5)
+                    # Honor the granting mediator's direct-effect prior (sigma +
+                    # optional sign constraint). The default reproduces the
+                    # historical Normal(0, 0.5) — same distribution + logp (the
+                    # mu=0 constant is float32 0.0 here vs the old int8 0, an inert
+                    # dtype difference).
+                    direct_cfg = next(
+                        (
+                            m.direct_effect
+                            for m in self.config.mediators
+                            if m.allow_direct_effect
+                            and channel in self._get_affecting_channels(m.name)
+                        ),
+                        None,
+                    )
+                    if direct_cfg is not None:
+                        delta = create_effect_prior(
+                            f"delta_direct_{channel}",
+                            constrained=direct_cfg.constraint.value,
+                            mu=direct_cfg.mu,
+                            sigma=direct_cfg.sigma,
+                        )
+                    else:  # pragma: no cover - has_direct guarantees a match
+                        delta = pm.Normal(f"delta_direct_{channel}", mu=0, sigma=0.5)
                     deltas[channel] = delta
                     direct_contrib = direct_contrib + delta * media_transformed[:, i]
                     # Original-unit deviation contribution
@@ -276,16 +307,53 @@ class NestedMMM(BaseExtendedMMM):
                         dims="obs",
                     )
 
+            # Baseline dynamics (standardized scale): a trend and/or Fourier
+            # seasonality when the spec provides them, so a real drift or
+            # seasonal pattern is not absorbed into the media coefficients.
+            # Both terms are None (no RVs added) when unconfigured — so a model
+            # built without a model_config/trend_config is byte-identical.
+            from ..components.temporal import (
+                build_seasonality_contribution,
+                build_trend_contribution,
+            )
+            from ..components.outcome import build_outcome_likelihood
+
+            trend_contrib = build_trend_contribution("", self.n_obs, self.trend_config)
+            seasonality_contrib = build_seasonality_contribution(
+                "",
+                self.index,
+                self.n_obs,
+                getattr(self.model_config, "seasonality", None),
+            )
+
             # Combine (standardized scale for the likelihood; ``mu`` is
             # registered in original units for reporting/oracles)
             mu_standardized = alpha_y + mediator_contrib + direct_contrib
+            if trend_contrib is not None:
+                mu_standardized = mu_standardized + trend_contrib
+                pm.Deterministic(
+                    "trend_component", trend_contrib * self.y_std, dims="obs"
+                )
+            if seasonality_contrib is not None:
+                mu_standardized = mu_standardized + seasonality_contrib
+                pm.Deterministic(
+                    "seasonality_component",
+                    seasonality_contrib * self.y_std,
+                    dims="obs",
+                )
             pm.Deterministic(
                 "mu", mu_standardized * self.y_std + self.y_mean, dims="obs"
             )
 
-            # Likelihood
-            sigma = pm.HalfNormal("sigma_y", sigma=0.5)
-            pm.Normal("y_obs", mu=mu_standardized, sigma=sigma, observed=y, dims="obs")
+            # Likelihood — Normal by default (byte-identical), or the spec's
+            # outcome family (e.g. Student-t) on the standardized scale.
+            build_outcome_likelihood(
+                "y_obs",
+                mu_standardized,
+                y,
+                getattr(self.model_config, "likelihood", None),
+                dims="obs",
+            )
 
             # Derived: indirect effects
             self._add_indirect_effect_deterministics(model, media_transformed)

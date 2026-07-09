@@ -443,6 +443,52 @@ def _js(div_id: str, fig: dict, config: dict | None = None) -> str:
     )
 
 
+def _hydrate_plots(plots: list | None) -> list[dict]:
+    """Resolve content-addressed plot refs to inline Plotly figures.
+
+    Session charts live in ``dashboard_data['plots']`` as thin
+    ``{"id", "title"}`` refs — the heavy figure JSON is held in the
+    content-addressed plot store (:mod:`agents.workspace`) and streamed to the
+    UI once via ``GET /plots/{id}``. A self-contained HTML report/slideshow
+    cannot fetch by id, so each ref must be inlined back into a
+    ``{"data", "layout"}`` figure here; otherwise the "Additional Charts"
+    section renders empty ``<div>`` placeholders (``p.get("data", [])`` → ``[]``).
+
+    Inline figures (the store-write-failure back-compat fallback, which already
+    carry a ``data`` list) pass through unchanged. A ref whose stored payload is
+    missing or unreadable is dropped so it never renders as an empty graph.
+    """
+    from mmm_framework.agents import workspace as _ws
+
+    out: list[dict] = []
+    for p in plots or []:
+        if not isinstance(p, dict):
+            continue
+        if isinstance(p.get("data"), list):
+            out.append(p)  # already an inline figure
+            continue
+        pid = p.get("id")
+        if not pid:
+            continue
+        path = _ws.plot_path(str(pid))
+        if path is None:
+            continue
+        try:
+            fig = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - unreadable/corrupt payload: drop it
+            continue
+        if not (isinstance(fig, dict) and isinstance(fig.get("data"), list)):
+            continue
+        # Keep the ref's (often nicer, human-authored) title when the stored
+        # figure layout has none, so headings/slide titles stay meaningful.
+        ref_title = p.get("title")
+        layout = fig.setdefault("layout", {})
+        if ref_title and not layout.get("title"):
+            layout["title"] = {"text": ref_title}
+        out.append(fig)
+    return out
+
+
 def _fmt_num(v: float | None, decimals: int = 2) -> str:
     if v is None:
         return "—"
@@ -811,7 +857,7 @@ def generate_html_report(
     decomp = dashboard.get("decomposition") or []
     roi = dashboard.get("roi_metrics") or []
     diag = dashboard.get("diagnostics") or {}
-    plots = dashboard.get("plots") or []
+    plots = _hydrate_plots(dashboard.get("plots"))
     model_run = dashboard.get("model_run") or {}
 
     _rq_raw = next(
@@ -1370,7 +1416,7 @@ def generate_html_slides(
     decomp = dashboard.get("decomposition") or []
     roi = dashboard.get("roi_metrics") or []
     diag = dashboard.get("diagnostics") or {}
-    plots = dashboard.get("plots") or []
+    plots = _hydrate_plots(dashboard.get("plots"))
     model_run = dashboard.get("model_run") or {}
     curves_data: dict = dashboard.get("saturation_curves") or {}
     mroi_data: dict = dashboard.get("marginal_roi") or {}

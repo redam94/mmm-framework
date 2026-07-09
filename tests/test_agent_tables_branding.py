@@ -357,6 +357,101 @@ def test_apply_branding_html_swaps_palette_logo_footer():
     assert apply_branding_html(html, None) == html
 
 
+def _extract_json_array(s: str, start: int) -> str:
+    """Bracket-balanced JSON array starting at ``s[start] == '['``."""
+    depth = 0
+    for i in range(start, len(s)):
+        if s[i] == "[":
+            depth += 1
+        elif s[i] == "]":
+            depth -= 1
+            if depth == 0:
+                return s[start : i + 1]
+    return s[start:]
+
+
+def _extra_chart_datapoints(html: str, id_prefix: str) -> dict[str, int]:
+    """Map each ``Plotly.newPlot("<id_prefix>...")`` div to its total x/y points."""
+    import re
+
+    out: dict[str, int] = {}
+    for m in re.finditer(r'Plotly\.newPlot\(\s*"([^"]+)"\s*,\s*(?=\[)', html):
+        div_id = m.group(1)
+        if not div_id.startswith(id_prefix):
+            continue
+        arr = _extract_json_array(html, m.end())
+        cleaned = (
+            arr.replace("NaN", "null")
+            .replace("-Infinity", "null")
+            .replace("Infinity", "null")
+        )
+        traces = json.loads(cleaned)
+        out[div_id] = sum(
+            len(t.get(k, []))
+            for t in traces
+            for k in ("x", "y", "z", "values")
+            if isinstance(t.get(k), list)
+        )
+    return out
+
+
+def test_report_builder_hydrates_plot_refs_into_additional_charts(store):
+    """Regression: ``dashboard_data['plots']`` holds thin ``{id, title}`` refs
+    (the heavy figure lives in the content-addressed plot store). The project
+    report + internal slides must inline those figures into the "Additional
+    Charts" section — otherwise every extra chart renders as an empty graph.
+    Unresolvable refs are dropped, never emitted as an empty ``<div>``."""
+    from mmm_framework.agents import workspace as W
+    from mmm_framework.agents.report_builder import (
+        _hydrate_plots,
+        generate_html_report,
+        generate_html_slides,
+    )
+
+    tid = "threadR"
+    fig_a = {
+        "data": [{"type": "scatter", "x": [1, 2, 3], "y": [4, 5, 6]}],
+        "layout": {"title": {"text": "Spend vs Response"}},
+    }
+    fig_b = {  # figure carries no title -> the ref title must be adopted
+        "data": [{"type": "bar", "x": ["TV", "Search"], "y": [10, 20]}],
+        "layout": {},
+    }
+    refs = [
+        {"id": W.store_plot(fig_a, tid), "title": "Spend vs Response"},
+        {"id": W.store_plot(fig_b, tid), "title": "Channel Contribution"},
+        {"id": "deadbeefmissing000000000", "title": "Broken"},  # unresolvable
+    ]
+
+    # _hydrate_plots: 2 resolved (missing dropped), ref title backfilled.
+    hydrated = _hydrate_plots(refs)
+    assert len(hydrated) == 2
+    assert all(isinstance(f["data"], list) and f["data"] for f in hydrated)
+    assert hydrated[1]["layout"]["title"]["text"] == "Channel Contribution"
+    # An already-inline figure (store-write-failure fallback) passes through.
+    inline = {"data": [{"x": [1], "y": [2]}], "layout": {}}
+    assert _hydrate_plots([inline]) == [inline]
+    assert _hydrate_plots(None) == []
+
+    dashboard = {
+        "dataset": {"rows": 52},
+        "model_spec": {"kpi": "Sales", "media_channels": [{"name": "TV"}]},
+        "roi_metrics": [{"channel": "TV", "roi_mean": 2.0}],
+        "diagnostics": {"converged": True, "rhat_max": 1.0, "divergences": 0},
+        "plots": refs,
+    }
+
+    report = generate_html_report("R", "07 July 2026", dashboard, [])
+    pts = _extra_chart_datapoints(report, "chart-extra-")
+    assert len(pts) == 2, "the missing ref must be dropped, not rendered empty"
+    assert all(v > 0 for v in pts.values()), f"empty additional charts: {pts}"
+    assert "Additional Charts" in report
+
+    slides = generate_html_slides("R", "07 July 2026", dashboard, [], client_mode=False)
+    spts = _extra_chart_datapoints(slides, "slide-extra-")
+    assert spts and all(v > 0 for v in spts.values()), f"empty slide charts: {spts}"
+
+
 # ── brand extraction ─────────────────────────────────────────────────────────
 
 

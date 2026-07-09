@@ -206,6 +206,44 @@ class DataExtractor(ABC):
         except Exception:
             return {}
 
+    def _merge_fit_provenance(self, diagnostics: dict[str, Any]) -> dict[str, Any]:
+        """Fold the model's own fit provenance (``approximate`` + ``fit_method``)
+        from the results diagnostics into the report-recomputed diagnostics, and
+        re-derive the convergence verdict.
+
+        The report recomputes R-hat/ESS from the raw trace and would otherwise
+        DISCARD the method the model was actually fit with — so a MAP point
+        trace, or an ADVI/Pathfinder variational draw, would read as a
+        calibrated NUTS posterior (real ESS, no divergences → "converged"). We
+        copy ``approximate``/``fit_method`` from ``self.results.diagnostics``
+        (set by ``fit()`` / the extended ``fit()``); for an approximate fit the
+        recomputed R-hat/ESS are meaningless, so they are nulled and the
+        convergence verdict becomes "not assessable" (never a green "converged"
+        for an uncalibrated fit). NUTS fits are unaffected.
+        """
+        diagnostics = dict(diagnostics or {})
+        res = getattr(self, "results", None)
+        src = getattr(res, "diagnostics", None) if res is not None else None
+        if isinstance(src, dict):
+            fit_method = src.get("fit_method")
+            if fit_method is not None:
+                diagnostics.setdefault("fit_method", fit_method)
+            if src.get("approximate"):
+                diagnostics["approximate"] = True
+                # R-hat / ESS are undefined for a single-path approximation —
+                # the recomputed values (NaN or a spurious VI number) must not
+                # read as convergence.
+                for k in ("rhat_max", "ess_bulk_min", "ess_tail_min"):
+                    diagnostics[k] = None
+                diagnostics.setdefault("divergences", None)
+        try:
+            from ...diagnostics import convergence as _conv
+
+            _conv.annotate(diagnostics)  # re-derive converged/flags
+        except Exception:
+            pass
+        return diagnostics
+
 
 __all__ = [
     "HasTrace",

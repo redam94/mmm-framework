@@ -82,6 +82,13 @@ class ModelResults:
     diagnostics: dict = field(default_factory=dict)
 
     @property
+    def approximate(self) -> bool:
+        """``True`` when this came from an approximate fit (MAP / ADVI /
+        Pathfinder) rather than NUTS — its uncertainty is NOT calibrated.
+        Mirrors :attr:`MMMResults.approximate` so callers can branch uniformly."""
+        return bool(self.diagnostics.get("approximate", False))
+
+    @property
     def converged(self) -> bool | None:
         """MCMC convergence verdict (R-hat / ESS / divergences).
 

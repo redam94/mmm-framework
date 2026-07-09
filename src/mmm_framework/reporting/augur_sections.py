@@ -147,15 +147,55 @@ class AugurHeadlineSection(AugurSection):
         # The headline insight replaces the generic section title when present.
         title = html.escape(headline) if headline else html.escape(self.title)
         eyebrow = f'<div class="section-eyebrow">{html.escape(self.eyebrow)}</div>'
+        caveat = self._caveat_banner()
         return f"""
         <section class="section" id="{self.section_id}">
             {eyebrow}
             <h2>{title}</h2>
+            {caveat}
             {lede}
             {kpis}
             {recs}
         </section>
         """
+
+    def _caveat_banner(self) -> str:
+        """A client-facing stop sign when the model was fit APPROXIMATELY (MAP /
+        ADVI / Pathfinder — uncertainty not calibrated) or did NOT converge.
+
+        The Augur deck is otherwise a confident client readout with no
+        diagnostics section, so without this a MAP/non-converged model reads as
+        trustworthy. Kept short and plain-language for a non-technical audience.
+        """
+        diag = getattr(self.data, "diagnostics", None) or {}
+        try:
+            from ..diagnostics.convergence import is_converged
+        except Exception:  # noqa: BLE001
+            is_converged = None  # type: ignore
+        approx = bool(diag.get("approximate"))
+        not_conv = is_converged is not None and is_converged(diag) is False
+        if not (approx or not_conv):
+            return ""
+        if approx:
+            method = html.escape(str(diag.get("fit_method") or "approximate")).upper()
+            msg = (
+                f"These figures come from a fast <strong>approximate</strong> fit "
+                f"({method}), not full modelling — the ranges shown are indicative and "
+                f"<strong>not calibrated</strong>. Re-run the full fit before committing "
+                f"budget."
+            )
+        else:
+            msg = (
+                "This model did not pass its statistical convergence checks, so the "
+                "ranges shown are <strong>not reliable</strong>. Treat the numbers as "
+                "provisional and re-fit before acting."
+            )
+        return (
+            '<div class="callout" style="border-left:4px solid #b45309;'
+            "background:#fbf3e4;color:#5c3d00;padding:12px 16px;border-radius:8px;"
+            'margin:8px 0 4px;font-size:0.92em;">'
+            f"⚠️ {msg}</div>"
+        )
 
     def _kpi_strip(self) -> str:
         ci = int((self.section_config.credible_interval or 0.8) * 100)

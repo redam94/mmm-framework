@@ -426,6 +426,20 @@ class MMMSerializer:
 
         metadata["model_kind"] = _model_kind(model)
 
+        # HOW the model was fit — recorded so the artifact is self-describing and
+        # a reloaded model's saved-settings digest / reports know whether its
+        # uncertainty is calibrated (NUTS) or approximate (map/advi/pathfinder).
+        # `fit()` writes the method used back onto model_config, so this is the
+        # method of the LAST fit (default "nuts" for an unfitted model).
+        try:
+            fm = getattr(model.model_config, "fit_method", None)
+            fit_method = getattr(fm, "value", fm)
+            if fit_method is not None:
+                metadata["fit_method"] = str(fit_method)
+                metadata["approximate"] = str(fit_method).lower() != "nuts"
+        except Exception:  # noqa: BLE001
+            pass
+
         # Experiment calibration likelihoods (so a reloaded model can be re-fit
         # with the same incrementality anchoring it was originally built with).
         if getattr(model, "experiments", None):

@@ -114,9 +114,13 @@ class ExecutiveSummarySection(Section):
         # posterior makes every headline number unreliable, so it must not be
         # buried in the diagnostics section.
         convergence_banner = self._render_convergence_banner()
+        # Approximate-fit banner: a MAP/ADVI/Pathfinder fit gives uncalibrated
+        # uncertainty, so its credible intervals must carry a stop sign too.
+        approximate_banner = self._render_approximate_banner()
 
         content = f"""
             {convergence_banner}
+            {approximate_banner}
             {metrics_html}
             {key_finding}
             {uncertainty_callout}
@@ -157,6 +161,33 @@ class ExecutiveSummarySection(Section):
                     The estimates below come from a sampler that failed convergence checks; their
                     credible intervals are not trustworthy. Re-fit with more tuning/draws/chains
                     (or a reparameterization) before using these numbers for decisions.
+                </p>
+            </div>
+        """
+
+    def _render_approximate_banner(self) -> str:
+        """Prominent notice when the model was fit with an APPROXIMATE method
+        (MAP / ADVI / full-rank ADVI / Pathfinder) rather than full NUTS.
+
+        Approximate fits are fast checks whose uncertainty is **not calibrated**
+        — R-hat/ESS are undefined and the credible intervals are unreliable — so
+        the headline numbers must carry a stop sign even though the fit did not
+        "fail" convergence (there is no convergence to assess).
+        """
+        diag = getattr(self.data, "diagnostics", None) or {}
+        if not diag.get("approximate"):
+            return ""
+        import html as _html
+
+        method = _html.escape(str(diag.get("fit_method") or "approximate")).upper()
+        return f"""
+            <div class="callout warning" style="border-left:6px solid #b45309;background:#fef6e7;color:#663c00;">
+                <h4>⚠️ Approximate fit ({method}) — uncertainty is not calibrated</h4>
+                <p>
+                    This model was fit with an approximate method for a fast check, not full
+                    MCMC (NUTS). R-hat/ESS are not assessable and the credible intervals below
+                    are <strong>not trustworthy</strong>. Re-fit with NUTS before using these
+                    numbers for budget or experiment decisions.
                 </p>
             </div>
         """
