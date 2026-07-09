@@ -619,7 +619,9 @@ def group_mean_abs(s):
 shrink = pd.DataFrame({k: group_mean_abs(s) for k, s in cm.items()}).round(3)
 display(shrink)
 
-hdi_b = az.hdi(f3b.trace.posterior["beta_controls"], hdi_prob=0.9)["beta_controls"]
+from mmm_framework.utils import arviz_compat
+# arviz 1.x: az.hdi on a bare DataArray is not var-name indexable; use the trace-level shim
+hdi_b = arviz_compat.hdi_dataset(f3b.trace, 0.9, var_names=["beta_controls"])["beta_controls"].values
 survivors = [n for i, n in enumerate(m3b.control_names)
              if not (float(hdi_b[i, 0]) <= 0 <= float(hdi_b[i, 1]))]
 print("horseshoe survivors (90% HDI excludes 0):",

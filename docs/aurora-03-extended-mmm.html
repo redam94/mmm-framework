@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aurora 03: Extended Models | MMM Framework</title>
-    <meta name="description" content="What is TV really doing? NestedMMM finds TV and Display are ~100% mediated through brand awareness (true ROAS ~2.1); MultivariateMMM puts the Cold Brew cannibalization claim through an honesty test — and the prior-vs-data verdict flips it.">
+    <meta name="description" content="What is TV really doing? NestedMMM shows TV and Display work through brand awareness, but on PyMC 6 only partially recovers the mediated share (proportion mediated ~0.69 TV / ~0.40 Display vs a true ~0.99/0.97); MultivariateMMM puts the Cold Brew cannibalization claim through an honesty test — and finds the cross-effect weakly identified.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/aurora-03-extended-mmm.html">
     <meta property="og:title" content="Aurora 03: Extended Models | MMM Framework">
-    <meta property="og:description" content="The base model called TV weak (ROAS 0.35 vs a true 2.14). The NestedMMM shows why: its effect flows ~100% through awareness. Then a cannibalization posterior sits entirely below zero — and the honest diagnostic flips the verdict.">
+    <meta property="og:description" content="The base model called TV weak (ROAS 0.35 vs a true 2.14). The NestedMMM shows why: much of its effect flows through awareness — though on PyMC 6 the mediated share is only partially recovered. Then a cannibalization posterior sits below zero, and the honest diagnostic shows the cross-effect is weakly identified: trust the sign, not the magnitude.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/aurora-03-extended-mmm.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
@@ -128,7 +128,7 @@
     <meta property="og:locale" content="en_US">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Aurora 03: Extended Models | MMM Framework">
-    <meta name="twitter:description" content="The base model called TV weak (ROAS 0.35 vs a true 2.14). The NestedMMM shows why: its effect flows ~100% through awareness. Then a cannibalization posterior sits entirely below zero — and the honest diagnostic flips the verdict.">
+    <meta name="twitter:description" content="The base model called TV weak (ROAS 0.35 vs a true 2.14). The NestedMMM shows why: much of its effect flows through awareness — though on PyMC 6 the mediated share is only partially recovered. Then a cannibalization posterior sits below zero, and the honest diagnostic shows the cross-effect is weakly identified: trust the sign, not the magnitude.">
     <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta name="author" content="Matthew Reda">
     <script type="application/ld+json">
@@ -163,7 +163,7 @@
         {
           "url": "https://redam94.github.io/mmm-framework/aurora-03-extended-mmm.html",
           "name": "Aurora 03: Extended Models | MMM Framework",
-          "description": "What is TV really doing? NestedMMM finds TV and Display are ~100% mediated through brand awareness (true ROAS ~2.1); MultivariateMMM puts the Cold Brew cannibalization claim through an honesty test — and the prior-vs-data verdict flips it.",
+          "description": "What is TV really doing? NestedMMM shows TV and Display work through brand awareness, but on PyMC 6 only partially recovers the mediated share (proportion mediated ~0.69 TV / ~0.40 Display vs a true ~0.99/0.97); MultivariateMMM puts the Cold Brew cannibalization claim through an honesty test — and finds the cross-effect weakly identified.",
           "inLanguage": "en-US",
           "isPartOf": {
             "@id": "https://redam94.github.io/mmm-framework/#website"
@@ -256,7 +256,7 @@
                 <strong>MultivariateMMM</strong> that models both products at once with a cross-effect
                 between them. Because Aurora's world is synthetic with known ground truth, every claim on
                 this page is graded against the real answer — including one claim that <em>looks</em>
-                confirmed and turns out to be the prior talking.
+                confirmed and turns out to be only weakly identified.
             </p>
 
             <div class="note">
@@ -267,7 +267,7 @@
                 </p>
                 <p><strong>You will learn:</strong></p>
                 <ul>
-                    <li>Why the base model structurally undervalues Aurora's brand channels (TV read 0.35 vs a true 2.14) — and how NestedMMM recovers the TV → awareness → sales pathway from 26 monthly survey points.</li>
+                    <li>Why the base model structurally undervalues Aurora's brand channels (TV read 0.35 vs a true 2.14) — and how NestedMMM surfaces the TV → awareness → sales pathway (recovering its direction but, on PyMC 6, only partially its size) from 26 monthly survey points.</li>
                     <li>How MultivariateMMM models Original and Cold Brew together with a cross-effect, and why the honest cannibalization test is contraction and overlap, not the sign of a one-sided prior.</li>
                     <li>How a claim that looks confirmed against the answer key can turn out to be the prior talking — and where the extension traps live.</li>
                 </ul>
@@ -333,29 +333,31 @@ nested.fit(draws=500, tune=500, chains=2, cores=1, random_seed=0)
 med = nested.get_mediation_effects()</code></pre>
 
             <p>
-                The decomposition is the reveal. Virtually <em>none</em> of TV's or Display's effect reaches
-                sales directly — it all flows through the awareness pathway the base model couldn't see:
+                The decomposition is the reveal. Most of TV's and Display's effect flows through the awareness pathway the base model couldn't see rather than reaching
+                sales directly — though on PyMC 6 the model only <em>partially</em> recovers how large that mediated share is:
             </p>
 
             <div class="chart-container" id="mediationStackChart"></div>
             <p class="chart-note">
-                <strong>Measured</strong> — <code>get_mediation_effects()</code> from the baked notebook:
+                <strong>Measured (PyMC 5)</strong> — <code>get_mediation_effects()</code> from the baked notebook:
                 TV direct 0.05 vs indirect 151.48 (total 151.53); Display direct 0.11 vs indirect 186.28
-                (total 186.39). The direct slices are so small they are invisible at this scale — that
-                <em>is</em> the finding. <code>proportion_mediated</code> = 1.00 for both channels.
+                (total 186.39), a near-total <code>proportion_mediated</code> = 1.00 for both channels. <strong>On
+                PyMC 6</strong> the mediated share only partially recovers — <code>proportion_mediated</code>
+                ≈ 0.69 (TV) and ≈ 0.40 (Display) — so the direct slice is no longer negligible; the awareness
+                pathway is still the dominant route for TV, and the wide intervals are the honest signal.
                 Search and Social were not mapped to the mediator (they are pure direct-response channels
                 in Aurora's world), so the decomposition applies only to the brand channels.
             </p>
 
             <p>
                 Is that reveal real, or an artifact of bolting on a mediator? Because this world is
-                synthetic, we know the <strong>true</strong> mediated share — and the model lands on it:
+                synthetic, we know the <strong>true</strong> mediated share — and on PyMC 6 the model only <strong>partially</strong> recovers it:
             </p>
 
             <div class="chart-container" id="mediationTruthChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — the model's <code>proportion_mediated</code> vs the generator's
-                <code>true_mediated_share</code>: TV 1.00 vs a truth of 0.99; Display 1.00 vs 0.97. Search
+                <code>true_mediated_share</code>. On PyMC 5 the model read 1.00 for both (vs a truth of 0.99 TV / 0.97 Display); on PyMC 6 it only partially recovers — ≈ 0.69 (TV) and ≈ 0.40 (Display) — beating the base model's blind spot but leaving the mediated channel under-recovered with wide intervals. Search
                 and Social are truly unmediated (0.00) and were not routed through awareness in the model.
             </p>
 
@@ -378,10 +380,13 @@ med = nested.get_mediation_effects()</code></pre>
                 <h4>The number that flips Aurora's budget logic</h4>
                 <p>
                     TV and Display aren't weak — they're <strong>brand engines</strong> whose value lives
-                    entirely in the awareness pathway (true ROAS ≈ 2.1 for both). The base model saw only
-                    the direct slice and read them at 0.35 and 0.67. This is the single finding that turns
-                    chapter 5's <a href="aurora-05-unified-workflow.html">budget reallocation</a> from
-                    "cut the brand channels" to "feed them."
+                    largely in the awareness pathway (true ROAS ≈ 2.1 for both). The base model saw only
+                    the direct slice and read them at 0.35 and 0.67. On PyMC 6 the NestedMMM recovers the
+                    pathway's <em>direction</em> but only partially its size (total-effect ROAS ≈ 0.23 for TV,
+                    with a 90% interval that still spans zero), so this is the finding that reframes
+                    chapter 5's <a href="aurora-05-unified-workflow.html">budget reallocation</a> from a
+                    confident "cut the brand channels" into "don't cut on the base model's read — validate the
+                    brand channels with an experiment, then feed them."
                 </p>
             </div>
 
@@ -447,8 +452,9 @@ mv.fit(draws=500, tune=500, chains=2, cores=1, random_seed=0)
 ce = mv.get_cross_effects_summary()</code></pre>
 
             <p>
-                The cross-effect summary comes back looking decisive: posterior mean −0.0003, 94% HDI
-                [−0.0008, −0.0000] — the interval sits <strong>entirely below zero</strong>. The naive read
+                The cross-effect summary comes back looking decisive: on PyMC 6 the posterior mean is ≈ −1.13,
+                sitting <strong>entirely below zero</strong> (on PyMC 5 the same fit returned a near-zero
+                −0.0003, 94% HDI [−0.0008, −0.0000]). The naive read
                 writes itself: <em>"confirmed: Cold Brew cannibalizes Original."</em> Hold that thought.
             </p>
 
@@ -459,13 +465,14 @@ ce = mv.get_cross_effects_summary()</code></pre>
             </div>
             <div class="chart-container" id="psiChart"></div>
             <p class="chart-note">
-                <strong>Illustrative recreation (seeded) of measured values</strong> — the curves are
-                seeded recreations shaped to the baked notebook's measured summaries: the prior is the
+                <strong>Illustrative recreation (seeded) of PyMC&nbsp;5 measured values</strong> — the curves are
+                seeded recreations shaped to the baked notebook's PyMC-5 summaries: the prior is the
                 model's actual \( \psi = -\,\mathrm{HalfNormal}(0.3) \) density (prior mean magnitude
-                0.236, sd 0.176); the posterior matches the measured mean −0.0003 and 94% HDI
-                [−0.0008, −0.0000]. On the prior's scale the posterior is a needle at zero — toggle the
-                view to see both facts at once: the mass <em>is</em> entirely below zero, <em>and</em> it
-                is pinned a thousandfold tighter than the prior, essentially at no effect.
+                0.236, sd 0.176); the plotted posterior matches the PyMC-5 mean −0.0003 and 94% HDI
+                [−0.0008, −0.0000], a needle at zero. <strong>On PyMC 6 this reverses:</strong> the posterior
+                does <em>not</em> pin at zero — it relocates to a sizeable negative value (mean ≈ −1.13, shifted
+                ≈ 5 prior-sds) and comes back <em>wider</em> than the prior. The mass is still entirely below
+                zero, but ψ is now <em>weakly identified</em>: trust the sign, not the magnitude.
             </p>
 
             <h2 id="prior-or-data">Is this real, or did the prior decide it for us?</h2>
@@ -482,16 +489,16 @@ ce = mv.get_cross_effects_summary()</code></pre>
 
             <div class="stat-row">
                 <div class="stat-callout">
-                    <div class="stat-value">1.000</div>
-                    <div class="stat-label">contraction on ψ — the data, not the prior, pinned it</div>
+                    <div class="stat-value">−0.39</div>
+                    <div class="stat-label">contraction on ψ (PyMC 6) — negative: the posterior is <em>wider</em> than the prior (weak identification)</div>
                 </div>
                 <div class="stat-callout">
-                    <div class="stat-value">0.052</div>
-                    <div class="stat-label">prior↔posterior overlap — the densities barely touch</div>
+                    <div class="stat-value">0.03</div>
+                    <div class="stat-label">prior↔posterior overlap (PyMC 6) — the densities barely touch, but because ψ <em>shifted</em>, not contracted</div>
                 </div>
                 <div class="stat-callout danger">
-                    <div class="stat-value">0.013%</div>
-                    <div class="stat-label">of Original's weekly sales — the size of the "confirmed" cross-effect</div>
+                    <div class="stat-value">≈5 sd</div>
+                    <div class="stat-label">how far ψ shifted from its prior on PyMC 6 — a sizeable but weakly identified negative effect, not a pin at zero</div>
                 </div>
                 <div class="stat-callout">
                     <div class="stat-value">+0.41</div>
@@ -500,27 +507,29 @@ ce = mv.get_cross_effects_summary()</code></pre>
             </div>
 
             <div class="warning">
-                <h4>⚠️ The honest verdict — and it flips the naive one</h4>
+                <h4>⚠️ The honest verdict — weak identification, not a clean confirmation</h4>
                 <p>
-                    The diagnostic clears the first hurdle: contraction = 1.000 and overlap = 0.052
-                    (measured), so the posterior is <em>not</em> a prior artifact — the data genuinely
-                    spoke. But "the data spoke" is not "the effect is real" — read <em>what</em> it said.
-                    The data pinned ψ to <strong>essentially zero</strong>: a posterior mean of −0.00030,
-                    worth 0.013% of Original's weekly sales. Within this model there is <strong>little
-                    direct cannibalization</strong>. \( P(\psi &lt; 0) \approx 1 \) was the near-vacuous
-                    part — under a one-sided prior, the sign is automatic. Contraction told us the data
-                    was informative; the posterior <em>mean</em> told us it found a negligible effect.
+                    Run the diagnostic on PyMC 6 and it tells a different story than the PyMC-5 fit did:
+                    contraction is <strong>negative (≈ −0.39)</strong> and overlap ≈ 0.03, so the posterior is
+                    <em>not</em> a prior artifact — the data genuinely spoke — but it did <em>not</em> pin ψ.
+                    It <strong>relocated</strong> ψ far from the prior (a sizeable negative mean ≈ −1.13,
+                    shifted ≈ 5 prior-sds) while coming back <em>wider</em> than the prior. That is the
+                    signature of a <strong>weakly identified</strong> parameter: the data can say which way ψ
+                    points but not how big it is. \( P(\psi &lt; 0) \approx 1 \) is still the near-vacuous
+                    part — under a one-sided prior, the sign is automatic — so read the verdict as "there is a
+                    cannibalization <em>signal</em>, but trust its sign, not its magnitude," and corroborate it
+                    with a real experiment rather than this two-outcome fit alone.
                 </p>
             </div>
 
             <h2 id="residuals">Where the co-movement actually lives: the shared demand wave</h2>
             <p>
-                The two products genuinely do move together — but through the model's <em>other</em>
-                channel for linkage. After media is accounted for, the outcome residuals remain positively
+                The two products genuinely do move together — and the model registers it through <em>two</em>
+                channels for linkage. After media is accounted for, the outcome residuals remain positively
                 correlated at <strong>+0.41</strong> (measured): Aurora's shared demand wave lifts Original
-                and Cold Brew at the same time. The substitution baked into Aurora's generator is not
-                recovered as a direct cross-effect by this weakly-identified two-outcome model; it
-                surfaces as shared-demand co-movement instead.
+                and Cold Brew at the same time. The substitution baked into Aurora's generator is only <em>weakly</em>
+                identified as a direct cross-effect by this two-outcome model — its sign, not its magnitude
+                (see above) — and it <em>also</em> surfaces as this shared-demand co-movement.
             </p>
 
             <div class="chart-container" id="residualChart"></div>
@@ -544,8 +553,8 @@ ce = mv.get_cross_effects_summary()</code></pre>
                     <a href="stress-04-extension-traps.html"><strong>Stress 04 · Extension Traps</strong></a>
                     shows a NestedMMM <strong>over-crediting a sibling channel 2.6×</strong> when two
                     channels share one mediator (the data cannot split the credit; the prior does), a
-                    cross-effect whose <strong>sign flips with the prior</strong> (the prior-determined ψ
-                    split you just watched this chapter defuse with the contraction diagnostic), and a
+                    cross-effect whose <strong>sign flips with the prior</strong> (the weakly-identified ψ
+                    you just watched this chapter diagnose with the contraction/overlap check), and a
                     <em>wrong</em> mediator that fits the data perfectly. If this chapter is the showcase,
                     stress-04 is the safety briefing — read it before deploying either model on real data.
                 </p>
@@ -576,16 +585,19 @@ ce = mv.get_cross_effects_summary()</code></pre>
                         0.35 and Display 0.67 against true ROAS of 2.14 and 2.11 — a three- to six-fold miss
                         no amount of
                         sampling can fix, because the model had no awareness pathway to route credit through.</li>
-                    <li><strong>NestedMMM recovers the pathway and grades out.</strong> Measured
-                        <code>proportion_mediated</code> = 1.00 for TV and Display vs true mediated shares of
-                        0.99 and 0.97; the latent awareness path is reconstructed from 26 monthly survey points.</li>
+                    <li><strong>NestedMMM recovers the pathway's direction, but only partially its size.</strong>
+                        On PyMC 6 <code>proportion_mediated</code> ≈ 0.69 (TV) and ≈ 0.40 (Display) vs true mediated
+                        shares of 0.99 and 0.97 (PyMC 5 read a near-full 1.00 for both); it beats the base model's
+                        structural blind spot but under-recovers the mediated channel, and the wide intervals are
+                        the honest signal.</li>
                     <li><strong>A one-sided prior makes sign statements near-vacuous.</strong> The
-                        Cold Brew → Original ψ posterior sat entirely below zero (94% HDI [−0.0008, −0.0000])
-                        — but ψ ≤ 0 was true before any data. The honest test is contraction and overlap.</li>
-                    <li><strong>The honest verdict flipped the naive one.</strong> Contraction = 1.000,
-                        overlap = 0.052: the data pinned ψ — to essentially zero (0.013% of weekly sales).
-                        Little direct cannibalization; the products co-move via a shared demand wave
-                        (residual correlation +0.41) and should be planned together for that reason.</li>
+                        Cold Brew → Original ψ posterior sat entirely below zero — but ψ ≤ 0 was true before
+                        any data, so the sign alone proves nothing. The honest test is contraction and overlap.</li>
+                    <li><strong>The honest verdict is weak identification.</strong> On PyMC 6 contraction ≈ −0.39
+                        and overlap ≈ 0.03: the data <em>relocated</em> ψ to a sizeable negative value (mean ≈ −1.13,
+                        ≈ 5 prior-sds from the prior) but came back <em>wider</em> than the prior — a cannibalization
+                        signal whose sign you can trust and whose magnitude you cannot. Either way the products
+                        co-move via a shared demand wave (residual correlation +0.41) and should be planned together.</li>
                     <li><strong>Extensions are cure and disease.</strong> Shared-mediator over-crediting and
                         prior-determined cross-effect splits are demonstrated failure modes — see
                         <a href="stress-04-extension-traps.html">Stress 04 · Extension Traps</a>.</li>
