@@ -181,7 +181,7 @@ Two chains × 500 draws = 1,000 rows. Let's actually look at it.
     code(r"""
 idata = mmm._trace          # the arviz InferenceData (same object as fit.trace)
 post = idata.posterior
-print("groups in the InferenceData:", list(idata.groups()))
+print("groups in the InferenceData:", [g.strip("/") for g in idata.groups])
 print("posterior dimensions:", dict(post.sizes))
 scalar_params = sorted(v for v in post.data_vars
                        if set(post[v].dims) == {"chain", "draw"})
@@ -198,7 +198,7 @@ print("✓ posterior = 2 chains × 500 draws, one named parameter set per channe
     code(r"""
 # The literal table: a few named columns, first rows. Each ROW is one world.
 peek_cols = ["beta_TV", "adstock_alpha_TV", "sat_lam_TV", "beta_Search", "trend_slope"]
-worlds = post[peek_cols].to_dataframe().reset_index()
+worlds = post.to_dataset()[peek_cols].to_dataframe().reset_index()
 display(worlds.head(8).round(3))
 print(f"... and {len(worlds) - 8:,} more rows like these")
 
@@ -270,7 +270,7 @@ print(f"most-skewed marginal: {skew_param}  (skewness {skews[skew_param]:+.2f})"
 print(skews.sort_values(ascending=False).round(2).to_string())
 
 mean_, med_ = float(s.mean()), float(np.median(s))
-hdi = az.hdi(s, hdi_prob=0.90)
+hdi = az.hdi(s, prob=0.90)
 eti = np.percentile(s, [5, 95])
 print(f"mean={mean_:.3f}  median={med_:.3f}")
 print(f"90% HDI=({hdi[0]:.3f}, {hdi[1]:.3f})  width {hdi[1]-hdi[0]:.3f}")
@@ -329,7 +329,7 @@ certainty — and notice there's nothing magic about 90%.
 from ipywidgets import interact, FloatSlider
 
 def show_interval(hdi_prob=0.90):
-    hdi_w = az.hdi(s, hdi_prob=hdi_prob)
+    hdi_w = az.hdi(s, prob=hdi_prob)
     lo_p, hi_p = (1 - hdi_prob) / 2 * 100, (1 + hdi_prob) / 2 * 100
     eti_w = np.percentile(s, [lo_p, hi_p])
     fig, ax = plt.subplots(figsize=(8, 3.4))
@@ -349,21 +349,27 @@ interact(show_interval,
                               description="probability", continuous_update=False))
 
 # CLAIM: intervals are nested — asking for more probability can only widen them.
-w = {p: float(np.diff(az.hdi(s, hdi_prob=p))[0]) for p in (0.5, 0.8, 0.9, 0.95)}
+w = {p: float(np.diff(az.hdi(s, prob=p))[0]) for p in (0.5, 0.8, 0.9, 0.95)}
 assert w[0.5] < w[0.8] < w[0.9] < w[0.95], w
 print("✓ HDI widths grow monotonically with the probability you request:",
       {k: round(v, 2) for k, v in w.items()})
 """),
     code(r"""
-# The standard one-line-per-parameter summary: az.summary.
+# The standard one-line-per-parameter summary. Route through the framework's
+# version shim (arviz 1.x's az.summary defaults to formatted strings + renamed the
+# interval columns hdi_5%/hdi_95% -> eti* bounds).
+from mmm_framework.utils import arviz_compat
 beta_names = [f"beta_{c}" for c in sc.channels]
-summ = az.summary(idata, var_names=beta_names, hdi_prob=0.90)
+summ = arviz_compat.summary(idata, var_names=beta_names)  # arviz 1.x summary: default 89% ETI interval
 display(summ.round(3))
 
-# CLAIM: the table carries center, spread, interval, AND the workshop_02 health
+# CLAIM: the table carries center, spread, an interval, AND the workshop_02 health
 # checks for every parameter — and all betas are healthy here.
-for col in ("mean", "sd", "hdi_5%", "hdi_95%", "ess_bulk", "ess_tail", "r_hat"):
+for col in ("mean", "sd", "ess_bulk", "ess_tail", "r_hat"):
     assert col in summ.columns, f"missing column {col}"
+# arviz 1.x labels the interval columns eti89_lb/eti89_ub (an equal-tailed interval);
+# just assert an interval pair is present rather than pin the exact 1.x/2.x names.
+assert any(c.endswith(("_lb", "%")) for c in summ.columns), "no interval columns in summary"
 assert (summ["r_hat"] < 1.05).all() and (summ["ess_bulk"] > 100).all()
 assert (summ["mean"] > 0).all()  # effects are positive by construction here
 print("✓ az.summary: one honest row per parameter, diagnostics included")
@@ -408,7 +414,7 @@ section 5.)
 rows = []
 for c in sc.channels:
     d = post[f"beta_{c}"].values.ravel()
-    h50, h90 = az.hdi(d, hdi_prob=0.50), az.hdi(d, hdi_prob=0.90)
+    h50, h90 = az.hdi(d, prob=0.50), az.hdi(d, prob=0.90)
     rows.append({"channel": c, "median": float(np.median(d)),
                  "lo50": h50[0], "hi50": h50[1], "lo90": h90[0], "hi90": h90[1]})
 fr = pd.DataFrame(rows).set_index("channel")
@@ -877,7 +883,7 @@ def channel_view(channel="TV"):
     xx = np.linspace(bb.min(), bb.max(), 300)
     ax1.fill_between(xx, kk(xx), color=PAL[channel], alpha=0.4)
     ax1.plot(xx, kk(xx), color=PAL[channel], lw=1.8)
-    h90 = az.hdi(bb, hdi_prob=0.90)
+    h90 = az.hdi(bb, prob=0.90)
     ax1.axvspan(h90[0], h90[1], color=PAL[channel], alpha=0.15)
     ax1.set_title(f"beta_{channel} marginal (90% HDI shaded)", fontsize=10)
     ax1.set_xlabel("beta (scaled units)")

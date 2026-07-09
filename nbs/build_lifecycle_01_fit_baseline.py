@@ -118,7 +118,8 @@ print(f"window   : {first} -> {last}   ({n_weeks} weekly observations)")
 # 1.0 means the independent chains explored the same posterior; ESS is the
 # effective number of independent draws behind each number.
 import arviz as az
-diag = az.summary(model._trace, var_names=[f"beta_{c}" for c in L.CHANNELS], kind="diagnostics")
+from mmm_framework.utils import arviz_compat
+diag = arviz_compat.summary(model._trace, var_names=[f"beta_{c}" for c in L.CHANNELS], kind="diagnostics")
 diag.index = [ix.replace("beta_", "") for ix in diag.index]
 print("\nper-channel effect (beta) convergence:")
 print(diag[["r_hat", "ess_bulk"]].round(3).to_string())
