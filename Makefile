@@ -1,8 +1,16 @@
-.PHONY: tests fast_tests slow_tests format run-api run-ui run-app \
+.PHONY: tests fast_tests slow_tests format lint hooks run-api run-ui run-app \
         kernel-lock kernel-image kernel-verify kernel-push
 
 format:
 	uvx black src tests examples api app
+
+lint:                            ## the same ruff gate CI runs
+	uv run ruff check src api
+
+hooks:                           ## install the git pre-commit hook (runs `make lint`)
+	git config core.hooksPath .githooks
+	chmod +x .githooks/pre-commit
+	@echo "✓ pre-commit hook installed (ruff check src api)"
 
 tests:
 	uv run pytest tests/ --cov=mmm_framework -n logical

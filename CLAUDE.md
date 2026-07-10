@@ -19,8 +19,10 @@ make tests              # All tests with coverage (parallel)
 make fast_tests         # Skip slow tests (parallel)
 make slow_tests         # Slow tests only (parallel)
 
-# Format code
+# Format / lint code
 make format             # Black formatting (src, tests, examples, api, app)
+make lint               # Ruff check on src + api (the exact gate CI runs)
+make hooks              # Install the git pre-commit hook (.githooks/) that runs the ruff gate
 
 # Build API reference (Sphinx)
 uv run sphinx-build -b html docs/api/source docs/api/build/html
