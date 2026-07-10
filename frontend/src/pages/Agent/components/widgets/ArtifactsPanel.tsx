@@ -10,6 +10,32 @@ import { API_BASE } from '../../constants';
 import { truncate } from '../../utils/text';
 import type { Artifact } from '../../types';
 
+// Newest first — the API returns artifacts created_at ASC (oldest first).
+const byNewest = (a: Artifact, b: Artifact) => b.created_at - a.created_at;
+
+// Optional label set by the backend: the user question that produced the
+// artifact (payload.question, ≤200 chars). Absent on older artifacts;
+// whitespace-only values are treated as absent so labels never render blank.
+const questionOf = (a: Artifact): string =>
+  typeof a.payload?.question === 'string' ? a.payload.question.trim() : '';
+
+// Question-as-label header: truncated question (full text in the tooltip) with
+// the timestamp demoted to secondary text; renders `fallback` (today's label)
+// when the artifact carries no question.
+function QuestionLabel({ question, createdAt, primaryClass, fallback }: {
+  question: string; createdAt: number; primaryClass: string; fallback: React.ReactNode;
+}) {
+  if (!question) return <>{fallback}</>;
+  return (
+    <span className="flex-1 min-w-0" title={question}>
+      <span className={`block truncate ${primaryClass}`}>{truncate(question, 80)}</span>
+      <span className="block text-[10px] text-ink-300 truncate">
+        {new Date(createdAt * 1000).toLocaleString()}
+      </span>
+    </span>
+  );
+}
+
 // ─── ProjectDocsWidget ───────────────────────────────────────────────────────
 
 function DocCard({ art, icon, label, viewUrl, downloadUrl, onDelete }: {
@@ -61,7 +87,7 @@ function ProjectDocsWidget({ artifacts, onDelete }: {
   const slides  = artifacts.filter(a => a.kind === 'project_slides');
   if (reports.length === 0 && slides.length === 0) return null;
 
-  const latest = (arr: Artifact[]) => arr.sort((a, b) => b.created_at - a.created_at)[0];
+  const latest = (arr: Artifact[]) => arr.sort(byNewest)[0];
   const reportArt = latest(reports);
   const slidesArt = latest(slides);
 
@@ -144,6 +170,8 @@ function ModelRunsWidget({
                 : new Date(a.created_at * 1000).toLocaleString();
               const channels: string[] = r.channels ?? [];
               const draws = r.inference?.draws ?? r.draws ?? '—';
+              const question = questionOf(a);
+              const runName = r.run_name ?? a.id.slice(0, 8);
               return (
                 <React.Fragment key={a.id}>
                   <tr
@@ -151,9 +179,18 @@ function ModelRunsWidget({
                     onClick={() => setExpanded(isExp ? null : a.id)}
                   >
                     <td className="px-3 py-2 text-ink-700 border-b border-line-200 font-mono font-semibold">
-                      <span className="flex items-center gap-1.5">
-                        {isExp ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                        {r.run_name ?? a.id.slice(0, 8)}
+                      <span className="flex items-center gap-1.5" title={question || undefined}>
+                        {isExp ? <ChevronDown size={11} className="shrink-0" /> : <ChevronRight size={11} className="shrink-0" />}
+                        {question ? (
+                          <span className="min-w-0">
+                            <span className="block font-sans font-medium truncate max-w-[22rem]">
+                              {truncate(question, 80)}
+                            </span>
+                            <span className="block text-[10px] text-ink-300 font-normal truncate max-w-[22rem]">{runName}</span>
+                          </span>
+                        ) : (
+                          runName
+                        )}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-ink-400 border-b border-line-200">{ts}</td>
@@ -255,9 +292,10 @@ export function ArtifactsPanel({ artifacts, onRerun, onDelete, onLoadRun }: {
   onLoadRun: (runName: string) => void;
 }) {
   if (artifacts.length === 0) return null;
-  const codeArtifacts = artifacts.filter(a => a.kind === 'code_snippet');
-  const reportArtifacts = artifacts.filter(a => a.kind === 'report');
-  const modelRunArtifacts = artifacts.filter(a => a.kind === 'model_run');
+  // filter() returns fresh arrays, so the in-place sort never mutates the prop.
+  const codeArtifacts = artifacts.filter(a => a.kind === 'code_snippet').sort(byNewest);
+  const reportArtifacts = artifacts.filter(a => a.kind === 'report').sort(byNewest);
+  const modelRunArtifacts = artifacts.filter(a => a.kind === 'model_run').sort(byNewest);
   const projectDocArtifacts = artifacts.filter(a => a.kind === 'project_report' || a.kind === 'project_slides');
 
   return (
@@ -277,9 +315,16 @@ export function ArtifactsPanel({ artifacts, onRerun, onDelete, onLoadRun }: {
                       <div key={a.id} className="rounded-lg border border-line-200 bg-cream-50 overflow-hidden">
                         <div className="flex items-center gap-2 px-3 py-1.5 border-b border-line-200 bg-white">
                           <FileCode size={12} className="text-amber-600 shrink-0" />
-                          <span className="text-[11px] text-ink-400 flex-1 truncate">
-                            {new Date(a.created_at * 1000).toLocaleString()}
-                          </span>
+                          <QuestionLabel
+                            question={questionOf(a)}
+                            createdAt={a.created_at}
+                            primaryClass="text-[11px] text-ink-700 font-medium"
+                            fallback={
+                              <span className="text-[11px] text-ink-400 flex-1 truncate">
+                                {new Date(a.created_at * 1000).toLocaleString()}
+                              </span>
+                            }
+                          />
                           <button
                             onClick={() => navigator.clipboard.writeText(code)}
                             className="p-1 rounded hover:bg-cream-100 text-ink-400 hover:text-ink-900"
@@ -326,7 +371,14 @@ export function ArtifactsPanel({ artifacts, onRerun, onDelete, onLoadRun }: {
                   {reportArtifacts.map(a => (
                     <div key={a.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line-200 bg-white">
                       <ExternalLink size={12} className="text-violet-600 shrink-0" />
-                      <span className="text-xs text-ink-700 flex-1 truncate font-mono">{a.payload?.path ?? a.id}</span>
+                      <QuestionLabel
+                        question={questionOf(a)}
+                        createdAt={a.created_at}
+                        primaryClass="text-xs text-ink-700"
+                        fallback={
+                          <span className="text-xs text-ink-700 flex-1 truncate font-mono">{a.payload?.path ?? a.id}</span>
+                        }
+                      />
                       <a
                         href={`${API_BASE}/artifacts/${a.id}/download`}
                         download
