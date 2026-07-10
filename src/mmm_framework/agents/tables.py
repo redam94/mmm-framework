@@ -16,6 +16,7 @@ kernel; only ``publish_tables`` (host-side) touches the workspace store.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from mmm_framework.agents.kernels import _json_safe
@@ -154,15 +155,54 @@ def df_to_table_json(
     return table
 
 
+def stamp_provenance(
+    ref: dict,
+    *,
+    call_id: str | None = None,
+    source: str | None = None,
+) -> dict:
+    """Stamp artifact-ref provenance onto ``ref`` in place and return it.
+
+    ``ts`` (epoch float, publish time) is always set; ``call_id`` (the
+    producing LangChain ``tool_call_id``) and ``source`` (producing tool name)
+    are set only when truthy. The single source of truth for the provenance
+    contract shared by every plot/table publisher — the fields are optional
+    and additive, so old refs without them remain valid.
+
+    Args:
+        ref: The artifact ref dict to stamp (mutated in place).
+        call_id: The producing tool call's id, when known.
+        source: The producing tool's name, when known.
+
+    Returns:
+        The same ``ref``, for append-style chaining.
+    """
+    ref["ts"] = time.time()
+    if call_id:
+        ref["call_id"] = call_id
+    if source:
+        ref["source"] = source
+    return ref
+
+
 def publish_tables(
     tables: list[dict],
     dashboard_data: dict,
     thread_id: str | None,
+    *,
+    call_id: str | None = None,
 ) -> tuple[list[dict], int]:
     """Store table payloads content-addressed; append ``{id,title,source,group}``
     refs to ``dashboard_data['tables']``. Host-side only (mirrors
     ``eda_tools._publish_figures``): oversize/invalid payloads are dropped and
-    counted, never inlined."""
+    counted, never inlined.
+
+    Each ref also carries provenance: ``ts`` (epoch float, publish time) and —
+    when ``call_id`` is truthy — ``call_id`` (the LangChain ``tool_call_id`` of
+    the producing tool call), so the UI can group artifacts by the question
+    (tool call) that produced them. Both fields are optional and additive; old
+    refs without them remain valid.
+    """
     from mmm_framework.agents import workspace as _ws
 
     existing = dashboard_data.get("tables") or []
@@ -181,12 +221,15 @@ def publish_tables(
             dropped += 1
             continue
         refs.append(
-            {
-                "id": tid,
-                "title": table.get("title") or "Table",
-                "source": table.get("source") or "",
-                "group": table.get("group") or "results",
-            }
+            stamp_provenance(
+                {
+                    "id": tid,
+                    "title": table.get("title") or "Table",
+                    "source": table.get("source") or "",
+                    "group": table.get("group") or "results",
+                },
+                call_id=call_id,
+            )
         )
     dashboard_data["tables"] = list(existing) + refs
     return refs, dropped

@@ -106,7 +106,7 @@ def test_publish_tables_refs_and_drops(store):
     dd = {}
     refs, dropped = publish_tables([_table(), {"bad": True}], dd, "threadA")
     assert len(refs) == 1 and dropped == 1
-    assert set(refs[0]) == {"id", "title", "source", "group"}
+    assert set(refs[0]) == {"id", "title", "source", "group", "ts"}
     assert dd["tables"] == refs  # appended as refs, never rows
 
 

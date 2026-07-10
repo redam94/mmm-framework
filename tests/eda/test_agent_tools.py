@@ -91,7 +91,13 @@ class TestValidateData:
         dd = cmd.update["dashboard_data"]
         assert dd["data_quality"]["validation"]["issues"] is not None
         plots = dd["plots"]
-        assert plots and all(set(p) == {"id", "title"} for p in plots)
+        # Lightweight refs (never inline figures) + provenance stamps.
+        assert plots and all(
+            set(p) == {"id", "title", "ts", "call_id", "source"} for p in plots
+        )
+        assert all(
+            p["call_id"] == "c" and p["source"] == "validate_data" for p in plots
+        )
 
     def test_negative_spend_is_error(self, store, session):
         from mmm_framework.agents import eda_tools as T

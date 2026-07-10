@@ -66,10 +66,18 @@ def _publish_figures(
     figs: list[tuple[str, Any]],
     dashboard_data: dict,
     thread_id: str | None,
+    *,
+    call_id: str | None = None,
+    source: str | None = None,
 ) -> tuple[list[dict], int]:
     """Normalize -> serialize -> content-address figures; append {'id','title'}
     refs to ``dashboard_data['plots']``. Mirrors the ``execute_python`` flow
     (tools.py): oversize/invalid figures are dropped and counted, never inlined.
+
+    Each ref also carries provenance: ``ts`` (epoch float, publish time) plus —
+    when truthy — ``call_id`` (the producing LangChain ``tool_call_id``) and
+    ``source`` (producing tool name, e.g. ``"run_eda"``), so the UI can group
+    artifacts by the question that produced them. All optional and additive.
     """
     from mmm_framework.agents import workspace as _ws
     from mmm_framework.agents.branding import (
@@ -77,6 +85,7 @@ def _publish_figures(
         is_active as _brand_active,
         resolve_branding,
     )
+    from mmm_framework.agents.tables import stamp_provenance
     from mmm_framework.agents.tools import _normalize_figure
 
     existing = dashboard_data.get("plots", [])
@@ -98,7 +107,11 @@ def _publish_figures(
         except Exception:
             dropped += 1
             continue
-        refs.append({"id": pid, "title": title})
+        refs.append(
+            stamp_provenance(
+                {"id": pid, "title": title}, call_id=call_id, source=source
+            )
+        )
     dashboard_data["plots"] = existing + refs
     return refs, dropped
 
@@ -249,7 +262,9 @@ def validate_data(
     _update_eda_envelope(dashboard_data, issues=issue_records)
 
     figs = [("Data availability", fig_missingness(missingness_matrix(panel)))]
-    refs, dropped = _publish_figures(figs, dashboard_data, tid)
+    refs, dropped = _publish_figures(
+        figs, dashboard_data, tid, call_id=tool_call_id, source="validate_data"
+    )
     note = _plots_note(refs, dropped)
     if issue_records:
         from mmm_framework.agents.tables import (
@@ -269,6 +284,7 @@ def validate_data(
             ],
             dashboard_data,
             tid,
+            call_id=tool_call_id,
         )
         note += tables_note(trefs, tdropped)
 
@@ -503,12 +519,16 @@ def run_eda(
 
     dq["eda"] = _json_safe(sections)
     dashboard_data["data_quality"] = dq
-    refs, dropped = _publish_figures(figs, dashboard_data, tid)
+    refs, dropped = _publish_figures(
+        figs, dashboard_data, tid, call_id=tool_call_id, source="run_eda"
+    )
     note = _plots_note(refs, dropped)
     if tables:
         from mmm_framework.agents.tables import publish_tables, tables_note
 
-        trefs, tdropped = publish_tables(tables, dashboard_data, tid)
+        trefs, tdropped = publish_tables(
+            tables, dashboard_data, tid, call_id=tool_call_id
+        )
         note += tables_note(trefs, tdropped)
 
     return Command(
@@ -643,7 +663,9 @@ def detect_outliers(
         for a in report.actions
     ]
     _update_eda_envelope(dashboard_data, actions=action_records, damaged=damaged)
-    refs, dropped = _publish_figures(figs, dashboard_data, tid)
+    refs, dropped = _publish_figures(
+        figs, dashboard_data, tid, call_id=tool_call_id, source="detect_outliers"
+    )
     note = _plots_note(refs, dropped)
     if report.flags:
         from mmm_framework.agents.tables import (
@@ -680,7 +702,9 @@ def detect_outliers(
                     group="eda",
                 )
             )
-        trefs, tdropped = publish_tables(tables, dashboard_data, tid)
+        trefs, tdropped = publish_tables(
+            tables, dashboard_data, tid, call_id=tool_call_id
+        )
         note += tables_note(trefs, tdropped)
 
     return Command(
@@ -701,9 +725,15 @@ def _apply_outlier_treatment_core(
     tid: str,
     action_ids: list[str],
     reason: str | None,
+    *,
+    call_id: str | None = None,
 ) -> tuple[str | None, str | None, dict]:
     """Shared implementation behind the ``apply_outlier_treatment`` tool and the
     ``POST /outliers/{thread_id}/apply`` endpoint (UI confirm buttons).
+
+    ``call_id`` (optional) is the producing tool call's ``tool_call_id``; the
+    tool wrapper passes it so published plot refs carry provenance, while the
+    endpoint caller leaves it ``None``.
 
     Returns ``(error, summary_markdown, state_update)`` where ``state_update``
     contains NO messages (the tool wrapper adds the ToolMessage; the endpoint
@@ -890,7 +920,9 @@ def _apply_outlier_treatment_core(
         dashboard_data = dict(state.get("dashboard_data") or {})
 
     _update_eda_envelope(dashboard_data, applied_ids=[a.action_id for a in selected])
-    refs, dropped = _publish_figures(figs, dashboard_data, tid)
+    refs, dropped = _publish_figures(
+        figs, dashboard_data, tid, call_id=call_id, source="apply_outlier_treatment"
+    )
     if refs or dropped:
         summary.append(_plots_note(refs, dropped))
     update["dashboard_data"] = dashboard_data
@@ -924,7 +956,7 @@ def apply_outlier_treatment(
 
     tid = _activate_thread(config)
     error, summary, update = _apply_outlier_treatment_core(
-        state, tid, action_ids, reason
+        state, tid, action_ids, reason, call_id=tool_call_id
     )
     if error:
         return Command(
