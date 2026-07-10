@@ -973,13 +973,13 @@ def _modelop_command(
             from mmm_framework.agents.tables import publish_tables, tables_note
 
             table_refs, dropped = publish_tables(
-                tables, dashboard_data, get_current_thread()
+                tables, dashboard_data, get_current_thread(), call_id=tool_call_id
             )
             content += tables_note(table_refs, dropped)
         if plots:
             plots_before = len(dashboard_data.get("plots") or [])
             content += _publish_modelop_plots(
-                plots, dashboard_data, get_current_thread()
+                plots, dashboard_data, get_current_thread(), call_id=tool_call_id
             )
             new_plot_refs = list((dashboard_data.get("plots") or [])[plots_before:])
         update["dashboard_data"] = dashboard_data
@@ -1027,17 +1027,30 @@ def _persist_chat_validation(
         pass
 
 
-def _publish_modelop_plots(plots: list, dashboard_data: dict, thread_id) -> str:
+def _publish_modelop_plots(
+    plots: list,
+    dashboard_data: dict,
+    thread_id: str | None,
+    *,
+    call_id: str | None = None,
+    source: str | None = None,
+) -> str:
     """Store model-op plot dicts (``[{title, figure}]``) as content-addressed refs
     in ``dashboard_data['plots']`` (branding applied), mirroring the
     ``execute_python`` plot path so a model-op can return themed figures across
-    the kernel boundary. Returns a short note for the tool message."""
+    the kernel boundary. Returns a short note for the tool message.
+
+    Each ref carries provenance: ``ts`` (epoch float, publish time) plus — when
+    truthy — ``call_id`` (the producing LangChain ``tool_call_id``) and
+    ``source`` (producing tool name). Optional and additive: old refs without
+    these fields remain valid."""
     from mmm_framework.agents import workspace as _ws
     from mmm_framework.agents.branding import (
         apply_brand_colors,
         is_active as _brand_active,
         resolve_branding,
     )
+    from mmm_framework.agents.tables import stamp_provenance
 
     existing = dashboard_data.get("plots", [])
     refs: list[dict] = []
@@ -1058,7 +1071,11 @@ def _publish_modelop_plots(plots: list, dashboard_data: dict, thread_id) -> str:
         ):  # noqa: BLE001 - oversize/invalid/store fail: drop, don't inline
             dropped += 1
             continue
-        refs.append({"id": pid, "title": title})
+        refs.append(
+            stamp_provenance(
+                {"id": pid, "title": title}, call_id=call_id, source=source
+            )
+        )
     dashboard_data["plots"] = existing + refs
     note = ""
     if refs:
@@ -1939,6 +1956,7 @@ def execute_python(
             is_active as _brand_active,
             resolve_branding,
         )
+        from mmm_framework.agents.tables import stamp_provenance
 
         _branding = resolve_branding(thread_id)
         for fig in captured_plots:
@@ -1964,7 +1982,13 @@ def execute_python(
                 if isinstance(t, dict)
                 else (t if isinstance(t, str) else "")
             )
-            plot_refs.append({"id": pid, "title": title or ""})
+            plot_refs.append(
+                stamp_provenance(
+                    {"id": pid, "title": title or ""},
+                    call_id=tool_call_id,
+                    source="execute_python",
+                )
+            )
         dashboard_data["plots"] = existing_plots + plot_refs
 
     # Structured tables captured via show_table(df) — content-addressed refs,
@@ -1974,7 +1998,7 @@ def execute_python(
         from mmm_framework.agents.tables import publish_tables
 
         table_refs, dropped_tables = publish_tables(
-            result.tables, dashboard_data, thread_id
+            result.tables, dashboard_data, thread_id, call_id=tool_call_id
         )
 
     # Register any files the code wrote to the workspace so they become listable

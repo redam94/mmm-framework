@@ -356,8 +356,15 @@ def _publish_snapshot(
     state_dict: dict,
     tid: str | None,
     md: str,
+    *,
+    call_id: str | None = None,
+    source: str | None = None,
 ) -> tuple[str, dict]:
-    """Publish tables + figures + the learning_program dashboard payload."""
+    """Publish tables + figures + the learning_program dashboard payload.
+
+    ``call_id``/``source`` (optional) stamp provenance onto the published
+    plot/table refs — the producing tool call id and tool name — so the UI
+    can group artifacts by the question that produced them."""
     from mmm_framework.agents.eda_tools import _plots_note, _publish_figures
     from mmm_framework.agents.tables import (
         publish_tables,
@@ -378,9 +385,9 @@ def _publish_snapshot(
             source="learning_program",
         ),
     ]
-    t_refs, t_dropped = publish_tables(tables, dashboard_data, tid)
+    t_refs, t_dropped = publish_tables(tables, dashboard_data, tid, call_id=call_id)
     p_refs, p_dropped = _publish_figures(
-        _snapshot_figures(snapshot), dashboard_data, tid
+        _snapshot_figures(snapshot), dashboard_data, tid, call_id=call_id, source=source
     )
     dashboard_data["learning_program"] = _dashboard_payload(prog, snapshot)
     md += tables_note(t_refs, t_dropped) + _plots_note(p_refs, p_dropped)
@@ -614,7 +621,15 @@ def import_past_experiments(
         + skipped_md
         + _HONESTY_NOTE
     )
-    md, dashboard_data = _publish_snapshot(prog, snapshot, state, tid, md)
+    md, dashboard_data = _publish_snapshot(
+        prog,
+        snapshot,
+        state,
+        tid,
+        md,
+        call_id=tool_call_id,
+        source="import_past_experiments",
+    )
     return Command(
         update={
             "messages": [ToolMessage(content=md, tool_call_id=tool_call_id)],
@@ -743,6 +758,7 @@ def design_learning_wave(
         ],
         dashboard_data,
         tid,
+        call_id=tool_call_id,
     )
     md = (
         f"Wave designed for **{prog.get('name') or prog['id'][:8]}** "
@@ -871,7 +887,15 @@ def record_learning_wave(
     for w in ing.get("warnings") or []:
         md += f"⚠️ {w}\n\n"
     md += _snapshot_markdown(prog, snapshot) + _HONESTY_NOTE
-    md, dashboard_data = _publish_snapshot(prog, snapshot, state, tid, md)
+    md, dashboard_data = _publish_snapshot(
+        prog,
+        snapshot,
+        state,
+        tid,
+        md,
+        call_id=tool_call_id,
+        source="record_learning_wave",
+    )
     return Command(
         update={
             "messages": [ToolMessage(content=md, tool_call_id=tool_call_id)],
@@ -932,7 +956,15 @@ def get_learning_program_status(
             for g in gamma
         )
     md += f"\n\nWave timeline: {len(waves)} recorded wave row(s)." + _HONESTY_NOTE
-    md, dashboard_data2 = _publish_snapshot(prog, snapshot, state, tid, md)
+    md, dashboard_data2 = _publish_snapshot(
+        prog,
+        snapshot,
+        state,
+        tid,
+        md,
+        call_id=tool_call_id,
+        source="get_learning_program_status",
+    )
     dashboard_data.update(dashboard_data2)
     return Command(
         update={
