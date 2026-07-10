@@ -272,3 +272,26 @@ class TestFoldDashboardUpdate:
         assert combined == {"existing": 1, "eda": {"issues": []}}
         assert live == {"kpi": "Sales"}
         assert dd == {"eda": {"issues": []}}  # caller's dict untouched
+
+    def test_ref_lists_union_across_tool_updates(self):
+        """plots/tables union like the state reducer instead of last-tool-wins:
+        concurrent tools in one ToolNode step each copy-append from the SAME
+        pre-step list (and delegate_to_expert folds back a list built from an
+        empty seed) — a plain dict.update would stream a subset and streamed
+        results would vanish from the UI until reload."""
+        M = self._M()
+        combined: dict = {}
+        M._fold_dashboard_update(combined, {"plots": [{"id": "a"}, {"id": "x"}]}, {})
+        M._fold_dashboard_update(
+            combined,
+            {"plots": [{"id": "a"}, {"id": "y"}], "tables": [{"id": "t1"}]},
+            {},
+        )
+        assert [p["id"] for p in combined["plots"]] == ["a", "x", "y"]
+        assert [t["id"] for t in combined["tables"]] == ["t1"]
+
+    def test_ref_list_explicit_none_still_clears(self):
+        M = self._M()
+        combined: dict = {"plots": [{"id": "a"}]}
+        M._fold_dashboard_update(combined, {"plots": None}, {})
+        assert combined["plots"] is None

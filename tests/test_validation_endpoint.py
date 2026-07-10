@@ -198,6 +198,60 @@ async def test_validations_history_lists_jobs_and_chat_runs(store):
     assert full["result"]["content"] == "# ok"
 
 
+@pytest.mark.asyncio
+async def test_validations_history_scoped_by_thread_id(store):
+    """`?thread_id=` scopes the history to the session that launched each run —
+    the Validation tab shows only the CURRENT session's validations. UI jobs
+    stamp the launching session from the request body; unstamped legacy rows
+    are excluded from a scoped listing."""
+    from mmm_framework.api import main as M
+
+    pid = store.create_project("P")["project_id"]
+
+    # UI job launched from session t1 (thread_id stamped from the body)
+    resp = await M.start_model_validation(
+        pid, M.ValidationRunRequest(check="ppc", thread_id="t1")
+    )
+    t1_job = _body(resp)["job_id"]
+
+    # chat-persisted run from another session t2
+    store.add_artifact(
+        f"__valjobs__{pid}",
+        "model_validation",
+        {
+            "status": "done",
+            "project_id": pid,
+            "check": "sbc",
+            "source": "chat",
+            "thread_id": "t2",
+            "result": {"content": "# ok", "tables": [], "plots": []},
+            "error": None,
+        },
+    )
+    # legacy row with no thread_id (pre-stamping)
+    store.add_artifact(
+        f"__valjobs__{pid}",
+        "model_validation",
+        {"status": "done", "project_id": pid, "check": "residuals"},
+    )
+
+    # unscoped: everything, and rows expose their thread_id
+    body = _body(await M.list_model_validations(pid))
+    assert body["total"] == 3
+    by_check = {r["check"]: r for r in body["validations"]}
+    assert by_check["ppc"]["thread_id"] == "t1"
+    assert by_check["sbc"]["thread_id"] == "t2"
+    assert by_check["residuals"]["thread_id"] is None
+
+    # scoped to t1: only t1's run (legacy unstamped rows excluded too)
+    body = _body(await M.list_model_validations(pid, thread_id="t1"))
+    assert body["total"] == 1
+    assert body["validations"][0]["job_id"] == t1_job
+
+    # scoped to an unknown session: empty
+    assert _body(await M.list_model_validations(pid, thread_id="t3"))["total"] == 0
+
+
 def test_persist_chat_validation_writes_project_history(store, monkeypatch):
     """The chat validation tools' persistence helper lands in the SAME
     `__valjobs__<project>` thread the UI jobs use (and silently no-ops for a

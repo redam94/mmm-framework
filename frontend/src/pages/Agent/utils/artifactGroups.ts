@@ -117,8 +117,9 @@ export function buildArtifactGroups(
     });
   });
   (pythonOutputs ?? []).forEach((po) => {
-    // A python output's id IS the producing tool call_id.
-    push({ kind: 'code', id: po.id, callId: po.id, python: po });
+    // A python output's id IS the producing tool call_id; expert-run cells
+    // resolve through the delegation's call_id instead (po.callId).
+    push({ kind: 'code', id: po.id, callId: po.callId ?? po.id, python: po });
   });
 
   // Bucket by resolved question index (-1 = unresolved → legacy).

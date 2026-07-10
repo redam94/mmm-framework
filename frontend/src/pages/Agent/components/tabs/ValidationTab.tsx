@@ -29,8 +29,14 @@ const CHECK_LABELS: Record<string, string> = {
   prior_predictive: 'Prior predictive',
 };
 
-export function ValidationTab({ projectId }: { projectId: string | null }) {
-  const { start, job, history, load, jobId, check } = useValidation(projectId);
+export function ValidationTab({
+  projectId,
+  threadId = null,
+}: {
+  projectId: string | null;
+  threadId?: string | null;
+}) {
+  const { start, job, history, load, jobId, check } = useValidation(projectId, threadId);
   const data = job.data;
   const running =
     start.isPending || data?.status === 'pending' || data?.status === 'running';
@@ -174,8 +180,8 @@ export function ValidationTab({ projectId }: { projectId: string | null }) {
             })}
           </div>
           <p className="mt-1.5 text-xs text-ink-300">
-            Every run is kept — UI checks and the ones the chat agent ran. Click a
-            row to re-open its result.
+            Runs from this session — UI checks and the ones the chat agent ran.
+            Click a row to re-open its result.
           </p>
         </div>
       )}

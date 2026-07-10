@@ -36,6 +36,7 @@ export interface ValidationHistoryItem {
   check: string;
   status: 'pending' | 'running' | 'done' | 'error';
   source: 'job' | 'chat' | string;
+  thread_id: string | null;
   error: string | null;
   created_at: number;
 }
@@ -44,8 +45,12 @@ export const validationService = {
   async start(
     projectId: string,
     check: ValidationCheck,
+    threadId?: string | null,
   ): Promise<{ job_id: string; status: string }> {
-    const { data } = await apiClient.post(`/projects/${projectId}/validate`, { check });
+    const { data } = await apiClient.post(`/projects/${projectId}/validate`, {
+      check,
+      thread_id: threadId ?? null,
+    });
     return data;
   },
   async poll(projectId: string, jobId: string): Promise<ValidationJob> {
@@ -54,9 +59,13 @@ export const validationService = {
     );
     return data;
   },
-  async history(projectId: string): Promise<ValidationHistoryItem[]> {
+  async history(
+    projectId: string,
+    threadId?: string | null,
+  ): Promise<ValidationHistoryItem[]> {
+    const q = threadId ? `?thread_id=${encodeURIComponent(threadId)}` : '';
     const { data } = await apiClient.get<{ validations: ValidationHistoryItem[] }>(
-      `/projects/${projectId}/validations`,
+      `/projects/${projectId}/validations${q}`,
     );
     return data.validations ?? [];
   },
