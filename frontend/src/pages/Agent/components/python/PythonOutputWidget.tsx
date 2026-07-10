@@ -38,15 +38,21 @@ export function PythonOutputWidget({ outputs, onClear, onExport }: { outputs: Py
         </div>
       </div>
       <div className="space-y-4">
-        {outputs.map((out, idx) => (
-          <PythonCell
-            key={out.id}
-            out={out}
-            index={idx}
-            isCollapsed={collapsed.has(out.id)}
-            onToggle={toggle}
-          />
-        ))}
+        {/* Newest run first. Carry the ORIGINAL execution index so the
+            "In [n]" numbering stays stable; ids (keys/collapse) unchanged.
+            map() builds a fresh array, so reverse() never mutates the prop. */}
+        {outputs
+          .map((out, idx) => [out, idx] as const)
+          .reverse()
+          .map(([out, idx]) => (
+            <PythonCell
+              key={out.id}
+              out={out}
+              index={idx}
+              isCollapsed={collapsed.has(out.id)}
+              onToggle={toggle}
+            />
+          ))}
       </div>
     </DashWidget>
   );
