@@ -562,6 +562,66 @@ class ChatRequest(BaseModel):
     page_context: str | None = None
 
 
+# Keys _provenanced stamps onto artifact payloads. The writer (_provenanced)
+# and the eraser (_strip_provenance) MUST stay in lockstep — adding a stamp key
+# to one without the other silently breaks the content-hash dedup for plan
+# artifacts (experiment_design / budget_optimization).
+_PROVENANCE_KEYS = ("question", "ts")
+
+
+def _provenanced(payload: Any, question: str | None) -> Any:
+    """Stamp the triggering user question + wall clock onto an artifact payload.
+
+    Additive provenance for the Library/Artifacts panel: ``ts`` (epoch seconds)
+    and ``question`` (the user message that triggered the artifact, truncated)
+    let the UI label and group session artifacts by the question they answer.
+    Purely additive — nothing may assume the keys exist (older artifacts
+    predate them, and ``created_at`` stays the fallback ordering key).
+
+    Args:
+        payload: The artifact payload to copy and stamp. Non-dict payloads
+            pass through untouched (defensive — the pre-stamp code persisted
+            any JSON type verbatim).
+        question: The triggering user message, or None/empty to skip the
+            question stamp.
+
+    Returns:
+        A shallow copy of ``payload`` with ``ts`` (and, when a question is
+        given, ``question`` truncated to 200 chars) added. The input payload
+        is not mutated.
+    """
+    import time
+
+    if not isinstance(payload, dict):
+        return payload
+    out = dict(payload)
+    out["ts"] = time.time()
+    if question:
+        out["question"] = str(question)[:200]
+    return out
+
+
+def _strip_provenance(payload: Any) -> Any:
+    """Return ``payload`` without the ``_provenanced`` stamp keys.
+
+    Used when recomputing content hashes for artifact dedup: stored payloads
+    carry ``question``/``ts`` while freshly streamed ones do not, so the stamp
+    must be excluded for the hashes to line up across chat turns.
+
+    Args:
+        payload: A stored artifact payload. Non-dict payloads (corrupted or
+            hand-edited rows) pass through untouched — this runs over every
+            stored artifact on every /chat request, before the stream's
+            error handling, so it must never raise.
+
+    Returns:
+        A shallow copy of ``payload`` without ``question``/``ts``.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    return {k: v for k, v in payload.items() if k not in _PROVENANCE_KEYS}
+
+
 @app.post("/chat", dependencies=[_rl_chat])
 async def chat_endpoint(
     request: ChatRequest,
@@ -716,7 +776,12 @@ async def chat_endpoint(
             elif _k == "code_snippet":
                 captured_artifact_keys.add(f"code::{_p.get('call_id', '')}")
             elif _k in ("experiment_design", "budget_optimization"):
-                captured_artifact_keys.add(f"{_k}::{_payload_hash(_p)}")
+                # Stored payloads carry the _provenanced stamp (question/ts);
+                # freshly streamed plans do not — strip before hashing so the
+                # dedup keys line up across turns.
+                captured_artifact_keys.add(
+                    f"{_k}::{_payload_hash(_strip_provenance(_p))}"
+                )
             elif _k == "text_output":
                 captured_artifact_keys.add(f"text_output::{_p.get('call_id', '')}")
 
@@ -798,7 +863,13 @@ async def chat_endpoint(
                                         sessions_store.add_artifact(
                                             request.thread_id,
                                             "code_snippet",
-                                            {"call_id": tc.get("id"), "code": code},
+                                            _provenanced(
+                                                {
+                                                    "call_id": tc.get("id"),
+                                                    "code": code,
+                                                },
+                                                request.message,
+                                            ),
                                         )
 
                         # Persist the python TEXT OUTPUT (stdout/tables/errors) so it
@@ -818,12 +889,16 @@ async def chat_endpoint(
                                 sessions_store.add_artifact(
                                     request.thread_id,
                                     "text_output",
-                                    {
-                                        "call_id": tool_call_id,
-                                        "stdout": out_text,
-                                        "plot_count": int(_m.group(1)) if _m else 0,
-                                        "is_error": "Error executing code" in out_text,
-                                    },
+                                    _provenanced(
+                                        {
+                                            "call_id": tool_call_id,
+                                            "stdout": out_text,
+                                            "plot_count": int(_m.group(1)) if _m else 0,
+                                            "is_error": "Error executing code"
+                                            in out_text,
+                                        },
+                                        request.message,
+                                    ),
                                 )
 
                         msg_dashboard = _message_dashboard(combined_dashboard)
@@ -887,7 +962,11 @@ async def chat_endpoint(
                         if key not in captured_artifact_keys:
                             captured_artifact_keys.add(key)
                             sessions_store.add_artifact(
-                                request.thread_id, "report", {"path": str(report_path)}
+                                request.thread_id,
+                                "report",
+                                _provenanced(
+                                    {"path": str(report_path)}, request.message
+                                ),
                             )
 
                     # Persist project report / client report artifacts
@@ -906,7 +985,11 @@ async def chat_endpoint(
                             if key not in captured_artifact_keys:
                                 captured_artifact_keys.add(key)
                                 sessions_store.add_artifact(
-                                    request.thread_id, art_kind, {"path": str(art_path)}
+                                    request.thread_id,
+                                    art_kind,
+                                    _provenanced(
+                                        {"path": str(art_path)}, request.message
+                                    ),
                                 )
 
                     # Persist model_run artifact when fit_mmm_model completes
@@ -917,7 +1000,9 @@ async def chat_endpoint(
                         if key not in captured_artifact_keys:
                             captured_artifact_keys.add(key)
                             sessions_store.add_artifact(
-                                request.thread_id, "model_run", model_run
+                                request.thread_id,
+                                "model_run",
+                                _provenanced(model_run, request.message),
                             )
 
                     # Persist decision-layer payloads (budget optimizer /
@@ -927,11 +1012,20 @@ async def chat_endpoint(
                     for _plan_kind in ("experiment_design", "budget_optimization"):
                         _plan = combined_dashboard.get(_plan_kind)
                         if _plan:
-                            _pkey = f"{_plan_kind}::{_payload_hash(_plan)}"
+                            # Strip on BOTH hash sites (here and the hydrate
+                            # loop) so the dedup key is provenance-agnostic
+                            # even if a plan ever natively carries a
+                            # question/ts key.
+                            _pkey = (
+                                f"{_plan_kind}::"
+                                f"{_payload_hash(_strip_provenance(_plan))}"
+                            )
                             if _pkey not in captured_artifact_keys:
                                 captured_artifact_keys.add(_pkey)
                                 sessions_store.add_artifact(
-                                    request.thread_id, _plan_kind, _plan
+                                    request.thread_id,
+                                    _plan_kind,
+                                    _provenanced(_plan, request.message),
                                 )
 
         except asyncio.CancelledError:
