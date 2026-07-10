@@ -606,14 +606,12 @@ print("✓ gate passed: chains agree, zero divergences, healthy ESS — "
     code(r"""
 import arviz as az
 
-axes = az.plot_trace(fit.trace, var_names=["beta_TV"], figsize=(10, 3))
-axes[0, 0].figure.suptitle(
-    "beta_TV — two chains, fuzzy-caterpillar trace (workshop 02's healthy look)",
-    fontsize=10)
-plt.tight_layout(); plt.show()
+# arviz 1.x plot_trace returns a PlotCollection (not an axes grid) and manages its own
+# layout/figsize, so we just render it; the structural checks below assert on the trace itself.
+az.plot_trace(fit.trace, var_names=["beta_TV"])
+plt.show()
 
 # CLAIM: the trace view exists for the TV effect size and shows 2 chains.
-assert axes.shape == (1, 2)
 assert fit.trace.posterior["beta_TV"].shape[0] == 2  # chains
 assert fit.trace.posterior["beta_TV"].shape[1] == 500  # kept draws
 print("✓ beta_TV trace: overlapping chains, no trends, no stuck regions")

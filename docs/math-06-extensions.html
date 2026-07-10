@@ -177,14 +177,14 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-08",
+          "dateModified": "2026-07-10",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/math-06-extensions.html#breadcrumb"
           },
           "@id": "https://redam94.github.io/mmm-framework/math-06-extensions.html#webpage",
           "@type": "TechArticle",
           "headline": "Math 06: Extensions",
-          "datePublished": "2026-07-08",
+          "datePublished": "2026-07-10",
           "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
           "author": {
             "@type": "Person",
@@ -307,8 +307,8 @@
                     <div class="stat-label">weeks of Aurora data: 4 channels, 2 products, known truth</div>
                 </div>
                 <div class="stat-callout">
-                    <div class="stat-value">≈ 1.0</div>
-                    <div class="stat-label">proportion mediated recovered for TV &amp; Display (truth 0.988 / 0.967)</div>
+                    <div class="stat-value">0.69 / 0.40</div>
+                    <div class="stat-label">proportion mediated for TV / Display under PyMC 6 — partial recovery (truth 0.988 / 0.967)</div>
                 </div>
                 <div class="stat-callout">
                     <div class="stat-value">+0.41</div>
@@ -482,20 +482,27 @@
 
             <div class="chart-container" id="mediationSplitChart"></div>
             <p class="chart-note">
-                <strong>Measured</strong> — the baked notebook's <code>get_mediation_effects()</code>
-                table (500 draws, seed 0). The direct slice is <em>literally invisible</em> at this scale:
+                <strong>Measured on PyMC 5</strong> — the baked notebook's <code>get_mediation_effects()</code>
+                table (500 draws, seed 0). On that run the direct slice was <em>nearly invisible</em> at this scale:
                 TV's effect is 0.053 direct vs <strong>151.08</strong> indirect; Display's is 0.117 vs
-                <strong>185.99</strong>. That invisibility is the finding — these channels are brand
-                engines, not closers. Hover for exact values.
+                <strong>185.99</strong>. <strong>Under PyMC 6 the split is far less lopsided</strong> — proportion
+                mediated drops to ~0.69 (TV) and ~0.40 (Display), so the direct slice is a substantial share,
+                not invisible. Mediation still beats the base model's bad-control trap, but read it as
+                <em>partial</em> recovery, not "brand engines, not closers." Hover for exact values.
             </p>
 
             <div class="chart-container" id="propMediatedChart"></div>
             <p class="chart-note">
-                <strong>Measured</strong> — proportion mediated, model vs Aurora's generative truth:
-                TV <strong>1.000</strong> vs true 0.988; Display <strong>0.999</strong> vs true 0.967.
-                Both clear the notebook's 0.7 assert threshold by a mile — the model recovers near-full
-                mediation, matching the known truth. The latent awareness series itself is reconstructed
-                from the sparse monthly survey with corr(recovered, true hidden series) = 0.492.
+                <strong>Measured</strong> — proportion mediated, model vs Aurora's generative truth. The
+                chart shows the <strong>PyMC 5</strong> baked run: TV <strong>1.000</strong> vs true 0.988;
+                Display <strong>0.999</strong> vs true 0.967. <strong>Under PyMC 6 this is a genuine posterior
+                shift for these weakly-identified models</strong> (clean convergence — R-hat ~1.0, ESS 2000+,
+                0 divergences — not a bug): proportion mediated falls to <strong>~0.69</strong> (TV) and
+                <strong>~0.40</strong> (Display), so TV only grazes the notebook's 0.7 assert line and Display
+                sits below it. The correctly-specified NestedMMM still beats the bad-control trap, but it
+                <em>partially</em> recovers the mediated channels — the wide intervals are the honest signal.
+                The latent awareness series itself is reconstructed from the sparse monthly survey with
+                corr(recovered, true hidden series) = 0.492 (PyMC 5).
             </p>
 
             <div class="note">
@@ -605,11 +612,13 @@
             <p class="chart-note">
                 <strong>Measured summaries, curves recreated from them</strong> — the baked run's
                 \(\psi_{\text{Cold Brew}\to\text{Original}}\): posterior mean <strong>−0.00028</strong>,
-                sd 0.00027, 94% HDI <strong>(−0.00094, −0.00001)</strong>, \(P(\psi&lt;0) = 1.000\) — the
-                entire posterior sits below zero. The prior (negated half-Normal, sd 0.1764) smears over
-                the whole negative half-line; the posterior is a spike <strong>646× narrower</strong>.
-                Curves are drawn from those measured parameters (unit-peak scaling so both are visible).
-                Zoom in to see that the spike sits essentially <em>at zero</em> — hold that thought for §2.3.
+                sd 0.00027, 94% HDI <strong>(−0.00094, −0.00001)</strong>, \(P(\psi&lt;0) = 1.000\) — on that
+                run the entire posterior sat below zero as a spike near zero (the curves above are that
+                PyMC 5 run, unit-peak scaled). <strong>Under PyMC 6 the story inverts</strong>: ψ is weakly
+                identified and <em>relocates</em> to a sizeable negative mean (<strong>≈ −1.13</strong>) with
+                the posterior <em>wider</em> than the prior (contraction ≈ −0.39, overlap ≈ 0.03, shift ≈ 5
+                prior-sds) — not a pinned spike at zero. The honest read becomes "trust the <em>sign</em>
+                (cannibalization), not the magnitude" — hold that thought for §2.3.
             </p>
 
             <div class="chart-container short" id="residCorrChart"></div>
@@ -671,27 +680,33 @@
 
             <div class="chart-container tall" id="contractionChart"></div>
             <p class="chart-note">
-                <strong>Measured</strong> — per-parameter contraction from the baked
-                <code>compute_parameter_learning(prior_samples=2000, random_seed=0)</code> run.
-                ψ is the outlier: contraction <strong>1.000</strong>, overlap 0.052, the data did the
-                work. But <strong>13 of the model's 19 free parameters sit below the 0.1 line</strong>
-                (the five not shown in the notebook's tail table fall in between), and 6 of those are
-                <em>negative</em> — posterior wider than prior, i.e. prior–data tension, not mere
-                prior-domination (worst: <code>Y_obs_chol_cov[1]</code> at −0.713 with shift 56 prior
-                sds — verdict <em>relocated</em>: the evidence moved it without narrowing it). The
-                diagnostic discriminates: the data spoke about ψ; about most of the
-                multivariate machinery it did not.
+                <strong>Measured on PyMC 5</strong> — per-parameter contraction from the baked
+                <code>compute_parameter_learning(prior_samples=2000, random_seed=0)</code> run (the bars
+                above are that run). On PyMC 5, ψ was the outlier: contraction <strong>1.000</strong>,
+                overlap 0.052. <strong>Under PyMC 6 even ψ is no longer pinned</strong> — its contraction
+                goes <em>negative</em> (≈ −0.39, posterior wider than the prior, shift ≈ 5 prior-sds), so ψ
+                joins the <em>relocated</em> tail rather than leading it. And <strong>13 of the model's 19
+                free parameters already sat below the 0.1 line</strong> (the five not shown in the notebook's
+                tail table fall in between), 6 of them <em>negative</em> — posterior wider than prior, i.e.
+                prior–data tension, not mere prior-domination (worst: <code>Y_obs_chol_cov[1]</code> at −0.713
+                with shift 56 prior sds — verdict <em>relocated</em>: the evidence moved it without narrowing
+                it). The honest read under PyMC 6 is not "the data nailed ψ" but "nearly the whole
+                multivariate machinery, ψ included, is weakly identified."
             </p>
 
             <p>
-                And here is the punchline the sign test hid. Contraction ≈ 1 means the data was
-                <em>informative</em> about \(\psi\) — but informative about <em>what</em>? Read the
-                posterior location: the data pinned \(\psi\) to <strong>−0.00028</strong>, an effect worth
-                <strong>0.072 ($000s)/week — 0.012% of Original's weekly sales</strong>. The data is
-                confident there is <em>essentially no direct cannibalization</em>. The products do move
-                together — through the <em>positive</em> residual correlation (+0.41, the demand wave),
-                not a causal arrow. The sign-only verdict ("cannibalization confirmed, \(P(\psi&lt;0)=1\)!")
-                dressed up a structurally-guaranteed sign on a negligible magnitude. How far that
+                And here is the punchline the sign test hid. On the PyMC 5 run, contraction ≈ 1 meant the
+                data was <em>informative</em> about \(\psi\) — but informative about <em>what</em>? That run
+                read the posterior location as pinned near <strong>−0.00028</strong> (≈ 0.012% of Original's
+                weekly sales) and concluded "essentially no direct cannibalization." <strong>Under PyMC 6 the
+                diagnostic tells the opposite tale</strong>: ψ's contraction is <em>negative</em> (≈ −0.39) —
+                the posterior is <em>wider</em> than the prior yet <em>relocated</em> ≈ 5 prior-sds to a
+                sizeable negative mean (≈ −1.13). That is the signature of a <em>weakly identified</em>
+                parameter, not a pinned one: the sign is real (cannibalization) but the magnitude is not
+                trustworthy. The products <em>also</em> move together through the <em>positive</em> residual
+                correlation (+0.41, the demand wave), a separate link. Either way the sign-only verdict
+                ("cannibalization confirmed, \(P(\psi&lt;0)=1\)!") is nearly vacuous — a structurally-guaranteed
+                sign says nothing about magnitude <em>or</em> identifiability. How far that
                 one-sided prior alone can steer the ψ-sign verdict is measured directly in
                 <a href="stress-04-extension-traps.html">stress&nbsp;04 · extension traps</a>.
             </p>
@@ -699,9 +714,11 @@
             <div class="definition">
                 <h4>Guardrail: contraction measures informativeness, not importance</h4>
                 <p>
-                    High contraction means the data <em>spoke</em> — including when what it said is "this
-                    effect is zero". Always read the posterior mean and interval next to the learning
-                    diagnostic: contraction says the data spoke; the posterior location says what it said.
+                    Contraction tells you <em>whether</em> the data spoke, not <em>what</em> it said — and a
+                    <em>negative</em> contraction (posterior wider than prior, as PyMC 6 gives for ψ) means the
+                    parameter is weakly identified, so trust its <em>sign</em>, not its magnitude. Always read
+                    the posterior mean and interval next to the learning diagnostic: the diagnostic flags
+                    informativeness; the posterior location and its width say what to believe.
                     Whether a true substitution exists in the data-generating process is a question this
                     weakly-identified cross-effect parameterization cannot settle on its own (§4).
                 </p>
@@ -762,17 +779,21 @@
                     draws), max r-hat 2.91 → 1.02, free parameters 31 → 28. The full before/after is
                     measured in <a href="stress-04-extension-traps.html">Stress 04 · Extension Traps</a>.
                     And the sequel matters just as much: on the <em>repaired</em> model, the same
-                    cannibalization arrow on the same data landed at ψ = −1.25 (contraction 0.97) where
-                    the multivariate fit pinned it ≈ 0 — adding the mediator block changed the mean
-                    structure, and the unidentified ψ/ρ split simply landed somewhere else, each model
-                    "confident". <strong>A bugfix is not identification.</strong>
+                    cannibalization arrow on the same data landed at ψ = −1.25 (contraction 0.97) — where
+                    the <em>PyMC 5</em> multivariate fit pinned ψ ≈ 0 (under PyMC 6 the multivariate fit no
+                    longer pins it near zero: it too relocates far negative, ≈ −1.1, but weakly identified).
+                    Either way the unidentified ψ/ρ split lands wherever the structure and priors push it,
+                    each model "confident". <strong>A bugfix is not identification.</strong>
                 </p>
             </div>
 
             <h2 id="identification">4 · The identification warning: count the parameters</h2>
             <p>
-                Everything above worked — proportion mediated matched truth, ψ and ρ separated cleanly.
-                So end on the warning the math has been whispering throughout:
+                Under PyMC 5 everything above looked like it "worked" — proportion mediated ≈ truth, ψ
+                apparently pinned near zero. Under PyMC 6 that gloss breaks: proportion mediated only
+                <em>partially</em> recovers (~0.69 / ~0.40) and ψ <em>relocates</em> to a sizeable negative
+                value while its posterior stays wider than the prior — weak identification laid bare. Which
+                only sharpens the warning the math has been whispering throughout:
                 <strong>extension structure adds parameters faster than data adds moments.</strong>
                 Count them for Aurora's 104 weeks:
             </p>
@@ -802,11 +823,14 @@
 
             <p>
                 The measured fits confirm the count. The multivariate model's learning audit left
-                <strong>13 of 19 free parameters at contraction &lt; 0.1</strong> — the data could not
-                narrow most of the machinery it bought. The ψ/ρ split resolved the way the priors said it
-                should (sign-constrained arrow → boundary spike at 0; LKJ correlation → +0.41); the
-                shared-mediator allocation resolved because the survey anchored it. Change those priors or
-                drop the survey and the <em>same data</em> tells a different story with the same
+                <strong>13 of 19 free parameters at contraction &lt; 0.1</strong> on the PyMC 5 run — and
+                under PyMC 6 ψ joins them (its contraction goes negative), so the data narrowed even less of
+                the machinery it bought. The ψ/ρ split resolves however the priors and weak identification
+                allow — under PyMC 5 the sign-constrained arrow looked pinned near 0, under PyMC 6 it
+                relocates far negative (≈ −1.1) with the posterior wider than the prior; the LKJ correlation
+                gives +0.41 either way; the shared-mediator allocation resolves only because the survey
+                anchors it (and only <em>partially</em> under PyMC 6). Change those priors, change the PyMC
+                version, or drop the survey and the <em>same data</em> tells a different story with the same
                 confidence — that is precisely what
                 <a href="stress-04-extension-traps.html"><strong>Stress 04 · Extension Traps</strong></a>
                 pressure-tests: the ψ that flips sign with its prior, the sibling channel over-credited
@@ -841,19 +865,25 @@
                         (\(\text{coef}_{k,c} = \beta^{\text{direct}}_{k,c} + \sum_{m: k\in O(m)} \beta_{c\to m}\gamma_{k,m}\)).
                     </li>
                     <li>
-                        Mediation recovers what the base model is blind to: Aurora's TV and Display come
-                        out ~fully mediated (proportion mediated 1.000 / 0.999 vs truth 0.988 / 0.967),
-                        with the latent awareness reconstructed from a sparse monthly survey.
+                        Mediation recovers what the base model is blind to — but only partly under PyMC 6:
+                        Aurora's TV and Display come out <em>partially</em> mediated (proportion mediated
+                        ~0.69 / ~0.40 vs truth 0.988 / 0.967; the PyMC 5 run read ~1.0), with the latent
+                        awareness reconstructed from a sparse monthly survey. The correctly-specified
+                        NestedMMM still beats the bad-control trap; the wide intervals are the honest signal.
                     </li>
                     <li>
                         A directed cross-effect (mean) and shared demand (residual correlation) are
-                        different links: Aurora's fit pins the direct ψ at −0.00028 (≈ 0, 0.012% of weekly
-                        sales) while the residuals share a +0.41 demand wave.
+                        different links: under PyMC 6 the direct ψ is weakly identified and <em>relocates</em>
+                        to a sizeable negative mean (≈ −1.13, posterior wider than the prior — trust the sign,
+                        not the magnitude; the PyMC 5 run read it pinned ≈ 0) while the residuals share a
+                        +0.41 demand wave.
                     </li>
                     <li>
                         Under a one-sided prior, \(P(\psi&lt;0)\approx 1\) restates the prior. Report
-                        contraction/overlap instead — and read contraction as <em>informativeness, not
-                        importance</em>: the data confidently said "no direct cannibalization".
+                        contraction/overlap/shift instead — and read them for identifiability: under PyMC 6
+                        ψ's contraction is <em>negative</em> (posterior wider than prior) and it relocates far
+                        negative, so the honest verdict is "cannibalization by sign, but weakly identified —
+                        distrust the magnitude," not the PyMC 5 read of "essentially no cannibalization".
                     </li>
                     <li>
                         Count parameters against moments before trusting an extension: ψ and ρ split one
@@ -883,7 +913,7 @@
                 <details class="quiz-item">
                     <summary>The fitted model reports P(<em>&psi;</em> &lt; 0) = 1.000. Why is that statement nearly vacuous, and what should be reported instead?</summary>
                     <div class="quiz-answer">
-                        <p><em>&psi;</em> is constructed as a negated HalfNormal, so every prior draw is already negative — the sign statement is guaranteed before any data arrive. The honest replacement is the learning diagnostic (contraction, overlap, shift) read alongside the posterior location: here contraction is 1.000 but the data pinned <em>&psi;</em> at &minus;0.00028, about 0.012% of weekly sales — a confident statement that there is essentially no direct cannibalization. Section 2.3, "Informative &ne; important", is the reference.</p>
+                        <p><em>&psi;</em> is constructed as a negated HalfNormal, so every prior draw is already negative — the sign statement is guaranteed before any data arrive. The honest replacement is the learning diagnostic (contraction, overlap, shift) read alongside the posterior location. The PyMC 5 run read contraction 1.000 and a posterior pinned near zero; under PyMC 6 the same fit gives a <em>negative</em> contraction (posterior wider than the prior) with <em>&psi;</em> relocated far negative (&asymp; &minus;1.13) — the mark of a weakly identified parameter, so the verdict is "cannibalization by sign, magnitude untrustworthy," not "no cannibalization." Section 2.3, "Informative &ne; important", is the reference.</p>
                     </div>
                 </details>
             </div>

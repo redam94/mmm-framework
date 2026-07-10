@@ -478,7 +478,7 @@ leave-one-out predictive comparison: both fits above stored pointwise log-likeli
     code(r"""
 import arviz as az
 with quiet():
-    cmp = az.compare({"geometric_l8": r1a.trace, "weibull_l26": r1c.trace}, ic="loo")
+    cmp = az.compare({"geometric_l8": r1a.trace, "weibull_l26": r1c.trace})  # arviz 1.x dropped ic=; LOO is the default
 print(cmp[["rank", "elpd_loo", "elpd_diff", "dse", "weight"]].round(2).to_string())
 diff = float(cmp.loc["geometric_l8", "elpd_diff"]); dse = float(cmp.loc["geometric_l8", "dse"])
 assert cmp.index[0] == "weibull_l26"      # LOO picks the right kernel...

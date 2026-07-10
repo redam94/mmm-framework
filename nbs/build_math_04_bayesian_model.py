@@ -458,7 +458,8 @@ ad_vars   = [f"adstock_alpha_{ch}" for ch in mmm.channel_names]
 key_vars  = beta_vars + satl_vars + ad_vars + ["intercept", "sigma"]
 
 summ = mmm.summary(var_names=key_vars)
-cols = [col for col in ["mean", "sd", "hdi_3%", "hdi_97%", "r_hat", "ess_bulk"] if col in summ.columns]
+# ArviZ 1.x renamed the summary interval columns hdi_3%/hdi_97% -> eti89_lb/eti89_ub (89% ETI)
+cols = [col for col in ["mean", "sd", "eti89_lb", "eti89_ub", "r_hat", "ess_bulk"] if col in summ.columns]
 summ_show = summ[cols].round(3)
 summ_show
 """))
@@ -498,14 +499,15 @@ at `mmm._trace`.
 """))
     c.append(code(r"""
 import arviz as az
-idata = mmm._trace          # the posterior InferenceData produced by fit()
-assert "posterior" in idata.groups(), "expected a posterior group on mmm._trace"
+from mmm_framework.utils import arviz_compat
+idata = mmm._trace          # the posterior trace (an ArviZ DataTree) produced by fit()
+assert arviz_compat.has_group(idata, "posterior"), "expected a posterior group on mmm._trace"
 
-az.plot_trace(idata, var_names=["beta_TV", "sigma"], compact=False,
-              figsize=(11, 5))
+# arviz 1.x plot_trace dropped the figsize/compact kwargs (arviz_plots backend)
+az.plot_trace(idata, var_names=["beta_TV", "sigma"])
 plt.suptitle("Trace: chains overlap (left) and mix well (right)", y=1.02, fontweight="bold")
 plt.tight_layout(); plt.show()
-print("trace InferenceData located at mmm._trace; posterior groups:", list(idata.groups()))
+print("trace located at mmm._trace; posterior groups:", arviz_compat.group_names(idata))
 """))
 
     # =====================================================================
@@ -520,8 +522,17 @@ ArviZ default). For the channel coefficients $\beta_c$ — the media effect size
 big* each effect is and *how sure* we are.
 """))
     c.append(code(r"""
+# arviz 1.x plot_forest dropped ax=/hdi_prob= (new arviz_plots backend); draw the
+# forest directly from the posterior so it composes into our matplotlib axis.
+from mmm_framework.utils import arviz_compat
 fig, ax = plt.subplots(figsize=(9.5, 3.6))
-az.plot_forest(idata, var_names=beta_vars, combined=True, hdi_prob=0.94, ax=ax)
+_post = idata.posterior
+for _yi, _v in enumerate(beta_vars):
+    _s = _post[_v].values.ravel()
+    _lo, _hi = arviz_compat.hdi_bounds(_s, 0.94)
+    ax.plot([_lo, _hi], [_yi, _yi], color="#555", lw=2)
+    ax.plot([float(_s.mean())], [_yi], "o", color="#c0392b")
+ax.set_yticks(range(len(beta_vars))); ax.set_yticklabels(beta_vars)
 ax.set_title(r"Posterior of channel coefficients $\beta_c$ (94% HDI)")
 plt.tight_layout(); plt.show()
 """))
@@ -545,7 +556,13 @@ observational data alone weakly identifies the saturation speed.
 """))
     c.append(code(r"""
 fig, ax = plt.subplots(figsize=(9.5, 3.6))
-az.plot_forest(idata, var_names=satl_vars, combined=True, hdi_prob=0.94, ax=ax)
+_post = idata.posterior
+for _yi, _v in enumerate(satl_vars):
+    _s = _post[_v].values.ravel()
+    _lo, _hi = arviz_compat.hdi_bounds(_s, 0.94)
+    ax.plot([_lo, _hi], [_yi, _yi], color="#555", lw=2)
+    ax.plot([float(_s.mean())], [_yi], "o", color="#c0392b")
+ax.set_yticks(range(len(satl_vars))); ax.set_yticklabels(satl_vars)
 ax.set_title(r"Posterior of saturation rates $\lambda_c = \mathtt{sat\_lam}_c$ (94% HDI)")
 plt.tight_layout(); plt.show()
 """))

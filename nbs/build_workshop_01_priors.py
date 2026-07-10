@@ -900,7 +900,7 @@ style(fig, "mmm_framework's prior predictive: simulated sales from YOUR PriorCon
 
 # CLAIMS (robust invariants only — the samples= API ignores random_seed):
 # 1. y_obs_scaled is a prior-group Deterministic with shape (chain, draw, week).
-assert "y_obs_scaled" in idata.prior and "prior_predictive" in idata.groups()
+assert "y_obs_scaled" in idata.prior and "prior_predictive" in [g.strip("/") for g in idata.groups]
 assert pp.shape == (300, N_WEEKS) and np.isfinite(pp).all()
 # 2. the configured priors were honored: TV effect draws are HalfNormal(1)
 #    (never negative), retention draws live in (0,1) with a Beta(3,3)-ish mean.

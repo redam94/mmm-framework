@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stress Test 04: Extension Traps | MMM Framework</title>
-    <meta name="description" content="When 'more model' cures and when it just adds knobs: the base MMM loses a mediated channel, NestedMMM recovers it but over-credits its sibling 2.6×, a cross-effect flips sign with the prior, and a wrong mediator fits perfectly.">
+    <meta name="description" content="When 'more model' cures and when it just adds knobs: the base MMM loses a mediated channel, NestedMMM surfaces the hidden mediation but only partially recovers it (the mediated channels stay weakly identified, TV's total-effect interval spanning zero), a cross-effect relocates to a sizeable negative and flips sign with the prior, and a wrong mediator fits perfectly.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/stress-04-extension-traps.html">
     <meta property="og:title" content="Stress Test 04: Extension Traps | MMM Framework">
-    <meta property="og:description" content="Extensions are cure and disease: NestedMMM recovers a lost channel but invents a prior-determined split; MultivariateMMM's cross-effect flips sign with the prior; a wrong mediator fits perfectly.">
+    <meta property="og:description" content="Extensions are cure and disease: NestedMMM surfaces the hidden mediation but only partially recovers it, leaving the mediated channels weakly identified; MultivariateMMM's cross-effect relocates to a sizeable negative and flips sign with the prior; a wrong mediator fits perfectly.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/stress-04-extension-traps.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
@@ -164,7 +164,7 @@
     <meta property="og:locale" content="en_US">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Stress Test 04: Extension Traps | MMM Framework">
-    <meta name="twitter:description" content="Extensions are cure and disease: NestedMMM recovers a lost channel but invents a prior-determined split; MultivariateMMM's cross-effect flips sign with the prior; a wrong mediator fits perfectly.">
+    <meta name="twitter:description" content="Extensions are cure and disease: NestedMMM surfaces the hidden mediation but only partially recovers it, leaving the mediated channels weakly identified; MultivariateMMM's cross-effect relocates to a sizeable negative and flips sign with the prior; a wrong mediator fits perfectly.">
     <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta name="author" content="Matthew Reda">
     <script type="application/ld+json">
@@ -199,7 +199,7 @@
         {
           "url": "https://redam94.github.io/mmm-framework/stress-04-extension-traps.html",
           "name": "Stress Test 04: Extension Traps | MMM Framework",
-          "description": "When 'more model' cures and when it just adds knobs: the base MMM loses a mediated channel, NestedMMM recovers it but over-credits its sibling 2.6×, a cross-effect flips sign with the prior, and a wrong mediator fits perfectly.",
+          "description": "When 'more model' cures and when it just adds knobs: the base MMM loses a mediated channel, NestedMMM surfaces the hidden mediation but only partially recovers it (the mediated channels stay weakly identified, TV's total-effect interval spanning zero), a cross-effect relocates to a sizeable negative and flips sign with the prior, and a wrong mediator fits perfectly.",
           "inLanguage": "en-US",
           "isPartOf": {
             "@id": "https://redam94.github.io/mmm-framework/#website"
@@ -301,8 +301,8 @@
                     <div class="stat-label">base-model TV ROAS vs a true 2.14 — the brand channel simply vanishes</div>
                 </div>
                 <div class="stat-callout danger">
-                    <div class="stat-value">2.6×</div>
-                    <div class="stat-label">NestedMMM's over-credit on Display, the channel sharing TV's mediator</div>
+                    <div class="stat-value">spans 0</div>
+                    <div class="stat-label">NestedMMM's TV total-effect ROAS (~0.23, true 2.14) — its 90% interval still spans zero: partial recovery, not rescue</div>
                 </div>
                 <div class="stat-callout danger">
                     <div class="stat-value">±</div>
@@ -310,7 +310,7 @@
                 </div>
                 <div class="stat-callout danger">
                     <div class="stat-value">≈ 1.0</div>
-                    <div class="stat-label">proportion mediated reported for a <em>wrong</em> mediator — with clean sampling</div>
+                    <div class="stat-label">proportion mediated reported for a <em>wrong</em> mediator, with clean sampling (PyMC 5 run) — fit alone can't audit the arrow</div>
                 </div>
             </div>
 
@@ -323,7 +323,7 @@
                 </p>
                 <p><strong>You will learn:</strong></p>
                 <ul>
-                    <li>When an extension model is a genuine cure — NestedMMM rescues a mediated brand channel (TV ROAS 0.33 vs a true 2.14) because the awareness survey adds new likelihood — and how the unidentifiable part relocates instead of disappearing.</li>
+                    <li>When an extension model can and cannot help — NestedMMM adds the awareness survey as new likelihood and surfaces the mediation the base model missed (which had left TV at ROAS 0.33 vs a true 2.14), yet only partially recovers it — TV's total-effect ROAS lands near 0.23 with a 90% interval spanning zero — and how the unidentifiable part relocates instead of disappearing.</li>
                     <li>How to count data moments against structural parameters before trusting a new latent path, and why an under-identified ψ flips sign with the prior on the same data.</li>
                     <li>Why the model cannot audit its own arrows: a wrong mediator fits as cleanly and confidently as the right one, so mediator validity is payable only in evidence from outside the model.</li>
                 </ul>
@@ -438,21 +438,27 @@
             <div class="chart-container" id="roasLadderChart"></div>
             <div class="live-verdict" id="roasVerdict"></div>
             <p class="chart-note">
-                <strong>Measured in the notebook (seeded run)</strong> — true total-effect ROAS (dark)
+                <strong>Measured in the notebook (PyMC 5 seeded run)</strong> — true total-effect ROAS (dark)
                 vs each fit's estimate, for the two mediated channels. Base model: TV 0.33 vs true 2.14;
-                Display 0.67 vs true 2.11 (under a third of its truth).
-                Correct mediator: TV 2.29 [1.97, 2.62] — covers the truth; Display 5.47 [4.76, 6.15] —
-                ≈ 2.6× true, interval <em>excludes</em> the truth. Wrong mediator: TV 2.36 and
+                Display 0.67 vs true 2.11 (under a third of its truth) — <em>unchanged under PyMC 6</em>.
+                Correct mediator (PyMC 5): TV 2.29 [1.97, 2.62]; Display 5.47 [4.76, 6.15]. <strong>Under
+                PyMC 6 the same fit only partially recovers</strong>: TV total-effect ROAS ~0.23 with a 90%
+                interval spanning zero, Display ~0.48 (proportion mediated ~0.69 / ~0.40) — the wide
+                intervals are the honest signal, not a rescue. Wrong mediator (PyMC 5): TV 2.36 and
                 Display 5.06 — each as plausible as the correct fit's. 94% HDIs where shown.
             </p>
 
             <p>
-                <strong>Read both halves of the correct-mediator fit.</strong> The nested model hauls TV
-                from a baseline-absorbed shadow back to its true ROAS — the survey anchors the awareness
-                path, the estimand becomes the total effect, and the interval covers the truth. That cure
-                is genuine. And the same fit puts Display at roughly <strong>2.6× its true ROAS, with an
-                interval that excludes the truth</strong>. The extension that fixed TV is confidently
-                wrong about its sibling.
+                <strong>Read what the nested fit does and does not buy you.</strong> The survey anchors
+                the awareness path and the estimand becomes the total effect, so the model finally
+                <em>sees</em> the mediation the base fit missed — proportion mediated ~0.69 (TV) and ~0.40
+                (Display), where the base model credited essentially nothing. But under PyMC 6 the ROAS is
+                only <strong>partially</strong> recovered: TV's total-effect ROAS lands near <strong>0.23
+                with a 90% interval that still spans zero</strong>, and Display near 0.48 — both far below
+                their true ≈ 2.1, both weakly identified. The honest signal is the width of the intervals,
+                not a point rescue. (On PyMC 5 the same notebook read as a near-rescue — TV 2.29 covering
+                the truth, Display over-credited ≈ 2.6× — a confident split that PyMC 6's shifted posterior
+                no longer supports.)
             </p>
             <p>
                 Why? The two channels share <em>one</em> mediator, and the data pins only their
@@ -478,14 +484,16 @@
             <p>
                 TV's edge into awareness is unidentified for the <em>same reason</em> the base model
                 failed: its exposure is near-constant, so \(\beta_{\mathrm{TV}}\) is exchangeable with
-                the mediator's intercept. The prior splits the brand credit roughly evenly between the
-                two channels feeding the shared mediator, and Display's smaller spend then inflates its
-                ROAS. <strong>The allocation between two channels feeding the same mediator is
-                prior-determined, not data-identified.</strong> The unidentifiability didn't vanish — it
-                <em>moved</em> into the mediator equation, one level down, where nobody was looking.
-                Read per-mediator totals with confidence; treat the per-channel split through a shared
-                mediator as a labeled assumption unless the exposures genuinely decorrelate or a
-                per-channel experiment pins one edge.
+                the mediator's intercept. On PyMC 5 the prior split the brand credit roughly evenly between
+                the two channels feeding the shared mediator, and Display's smaller spend then inflated its
+                ROAS into a confident over-credit. Under PyMC 6 the same non-identification surfaces as
+                <em>width</em> instead: the posterior no longer settles on a confident split but stays wide,
+                with TV's total-effect interval spanning zero. Either way, <strong>the allocation between
+                two channels feeding the same mediator is not data-identified.</strong> The
+                unidentifiability didn't vanish — it <em>moved</em> into the mediator equation, one level
+                down, where nobody was looking. Treat both the per-channel split <em>and</em> the
+                per-mediator totals as weakly identified — read them with their full intervals, and lean on
+                a per-channel experiment or genuinely decorrelated exposures before trusting either.
             </p>
 
             <h2 id="counting">The counting doctrine: data moments vs structural parameters</h2>
@@ -532,10 +540,12 @@
                 concrete:
             </p>
             <ul>
-                <li><strong>Contraction tells you the data spoke; the posterior mean tells you what it
-                    said.</strong> In the multivariate fit below, \(\psi\) contracts at ≈ 1.0 — and the
-                    data's confident message is "this knob is ≈ 0". Contraction ≈ 1 pinned to ≈ 0 is a
-                    finding, not an endorsement of the knob.</li>
+                <li><strong>Contraction tells you whether the data spoke; the posterior mean tells you
+                    what it said.</strong> In the multivariate fit below, under PyMC 6 \(\psi\) does not
+                    pin to ≈ 0 — its posterior <em>relocates</em> to a sizeable negative (mean ≈ −1.13),
+                    barely overlapping the prior (overlap ≈ 0.03, a shift of ≈ 5 prior-sds). The data
+                    spoke through <em>location</em>, and what it said is prior-dependent, as the flip
+                    below shows.</li>
                 <li><strong>Contraction is computed within a parameterization.</strong> It certifies the
                     data informed <em>that</em> parameterization — not that the parameterization asks an
                     identifiable question. A prior-dominated split shows weak contraction: in the
@@ -546,10 +556,11 @@
             <div class="chart-container" id="learnChart"></div>
             <p class="chart-note">
                 <strong>Illustrative simulation in your browser</strong> (smooth densities recreated in
-                JS), quoting the <strong>measured contraction labels</strong> from the notebook's seeded
-                run: left, an identified parameter — ψ contracts at ≈ 0.97–1.0 with overlap &lt; 0.3 in
-                <em>both</em> Act-2 fits; right, the typical prior-dominated knob — 13–16 of the
-                multivariate model's 19 free parameters sit at contraction &lt; 0.1, posterior ≈ prior.
+                JS), quoting the <strong>measured labels</strong> from the notebook's seeded run: left, a
+                parameter the data informed — under PyMC 6 ψ's posterior barely overlaps its prior
+                (overlap ≈ 0.03), relocating ≈ 5 prior-sds to a sizeable negative rather than contracting;
+                right, the typical prior-dominated knob — 13–16 of the multivariate model's 19 free
+                parameters sit at contraction &lt; 0.1, posterior ≈ prior.
             </p>
 
             <h2 id="psi-flip">Act 2 · MultivariateMMM: the ψ that flips sign with the prior</h2>
@@ -591,9 +602,9 @@
             <div class="diag-callout">
                 <h4>✅ What the diagnostics said</h4>
                 <p>
-                    Both ψ fits sampled clean — r-hat ≤ 1.02, zero divergences — and ψ "confidently
-                    contracted" in both. Nothing in the convergence dashboard distinguishes the two
-                    opposite stories.
+                    Both ψ fits sampled clean — r-hat ≤ 1.02, zero divergences — and each returned a
+                    confident-looking ψ posterior. Nothing in the convergence dashboard distinguishes the
+                    two opposite stories.
                 </p>
             </div>
 
@@ -623,11 +634,12 @@
                 <p>
                     <strong>A bugfix is not identification.</strong> On the repaired
                     <code>CombinedMMM</code>, the <em>same</em> cannibalization arrow, on the
-                    <em>same</em> data, under the <em>same</em> prior family, lands at
-                    <strong>ψ = −1.25</strong> (sd 0.029, contraction 0.97) — where the multivariate fit
-                    pinned it ≈ 0. Adding the mediator block changed the mean structure, and the
-                    unidentified ψ/ρ split simply landed somewhere else, each model "confident".
-                    Smoother sampling only makes the assumption easier to mistake for a finding.
+                    <em>same</em> data, under the <em>same</em> prior family, landed at
+                    <strong>ψ = −1.25</strong> (sd 0.029) in the PyMC 5 run — where that era's multivariate
+                    fit pinned it ≈ 0. Under PyMC 6 the multivariate fit no longer pins ψ either: it too
+                    relocates, to ≈ −1.13. Either way the unidentified ψ/ρ split lands wherever the
+                    structure and prior push it, each model "confident". Smoother sampling only makes the
+                    assumption easier to mistake for a finding.
                 </p>
             </div>
 
@@ -654,12 +666,12 @@
                 <tbody>
                     <tr>
                         <td>proportion mediated (TV, Display)</td>
-                        <td>≈ 1.0 — matches the truth</td>
+                        <td>≈ 1.0 — matches the truth <em>(PyMC 5)</em></td>
                         <td>≈ 1.0 — <strong>exactly as confident</strong></td>
                     </tr>
                     <tr>
                         <td>TV total-effect ROAS (true 2.14)</td>
-                        <td>2.29 [1.97, 2.62]</td>
+                        <td>2.29 [1.97, 2.62] <em>(PyMC 5)</em></td>
                         <td>2.36 — perfectly plausible</td>
                     </tr>
                     <tr>
@@ -675,11 +687,15 @@
                 </tbody>
             </table>
             <p class="chart-note">
-                <strong>Measured in the notebook (seeded run)</strong> — the right-vs-wrong scorecard.
+                <strong>Measured in the notebook (PyMC 5 seeded run)</strong> — the right-vs-wrong scorecard.
                 The one diagnostic that reacts at all (negative contraction on the β edges) reacts
                 <em>identically</em> in the correct fit: it flags scale tension, and is <em>not</em> a
-                wrong-mediator detector.
-            </p>
+                wrong-mediator detector. <strong>Under PyMC 6</strong> the correct-mediator fit recovers
+                only partially (proportion mediated ~0.69 / ~0.40, TV total-effect ROAS ~0.23 with a 90%
+                interval spanning zero); the wrong-mediator fit was not re-run, but the durable point is
+                unchanged — right and wrong mediators share the same clean-sampling signature, so fit alone
+                cannot tell them apart.
+              </p>
 
             <p>
                 The wrong fit's story is causally upside down — it claims TV <em>builds</em> category
@@ -709,17 +725,19 @@
                 <h4>What to take away</h4>
                 <ul>
                     <li><strong>An extension fixes an estimand; it does not create information.</strong>
-                        NestedMMM worked because the awareness <em>survey</em> was new likelihood, not
-                        because the model grew more structure. Structure without new information is
+                        NestedMMM helped only to the extent the awareness <em>survey</em> was new
+                        likelihood — it surfaced the mediation the base model missed but, under PyMC 6,
+                        still could not pin the mediated ROAS. Structure without new information is
                         priors with better marketing.</li>
                     <li><strong>The unidentifiable part doesn't disappear — it relocates.</strong> TV's
-                        flat exposure broke the base model (ROAS 0.33 vs 2.14); inside NestedMMM it broke
-                        the TV/Display <em>split</em> instead, over-crediting Display ≈ 2.6× with an
-                        interval that excludes the truth.</li>
+                        flat exposure broke the base model (ROAS 0.33 vs 2.14); inside NestedMMM it moves
+                        one level down into the mediator equation — under PyMC 6 as weak identification
+                        (TV's total-effect ROAS ~0.23, its 90% interval spanning zero), and on PyMC 5 as a
+                        confident wrong <em>split</em> that over-credited Display ≈ 2.6×.</li>
                     <li><strong>Count moments before trusting a new latent path.</strong> ψ + ρ ask four
                         parameters of three data moments, so the split is the prior's choice — proven by
-                        the flip: ψ ≈ 0 with ρ = +0.41 under one prior, ψ = +1.80 with ρ = −0.14 under
-                        the other, same data.</li>
+                        the flip: ψ ≈ −1.13 with ρ ≈ +0.31 under the cannibalization prior, ψ = +1.80 with
+                        ρ = −0.14 under the signless one, same data.</li>
                     <li><strong>Contraction ≠ importance.</strong> Contraction tells you the data spoke
                         <em>within that parameterization</em>; the posterior mean tells you what it said.
                         Sign-constrained priors convert "the data says ψ &lt; 0" into "the prior says
@@ -833,16 +851,18 @@
                          'a channel worth a fifth of revenue is invisible and nothing fired.'
             },
             right: {
-                title: 'NestedMMM, correct mediator: TV recovered — Display over-credited 2.6×',
+                title: 'NestedMMM, correct mediator (PyMC 5 run): TV recovered, Display over-credited 2.6× — PyMC 6 only partially recovers',
                 bars: [
                     { ch: 'TV',      est: 2.29, lo: 1.97, hi: 2.62, label: '2.29' },
                     { ch: 'Display', est: 5.47, lo: 4.76, hi: 6.15, label: '5.47' }
                 ],
-                verdict: '<strong>TV 2.29 [1.97, 2.62] — covers the true 2.14. Display 5.47 ' +
-                         '[4.76, 6.15] — &asymp; 2.6&times; its true 2.11, interval excludes the ' +
-                         'truth.</strong> proportion_mediated &asymp; 1.0 for both (matches truth). ' +
-                         'The split between two channels feeding the same mediator is ' +
-                         'prior-determined, not data-identified.'
+                verdict: '<strong>PyMC 5 seeded run — TV 2.29 [1.97, 2.62]; Display 5.47 ' +
+                         '[4.76, 6.15] (&asymp; 2.6&times; its true 2.11).</strong> ' +
+                         'proportion_mediated &asymp; 1.0 for both. The split between two channels ' +
+                         'feeding the same mediator is prior-determined, not data-identified. ' +
+                         '<strong>Under PyMC 6 this fit only partially recovers</strong>: TV ' +
+                         'total-effect ROAS ~0.23 (90% interval spans 0), Display ~0.48, ' +
+                         'proportion mediated ~0.69 / ~0.40 — the wide intervals are the honest signal.'
             },
             wrong: {
                 title: 'NestedMMM, WRONG mediator (the confounder): nothing fires',
@@ -1000,7 +1020,7 @@
             const traces = [
                 // identified: prior N(0,1) -> posterior N(0.6, 0.12), c ~ 0.99
                 curve(0, 1, 1, 'prior', '#9aa79a', false, 'dash'),
-                curve(0.6, 0.12, 1, 'posterior', '#6a8fa8', true),
+                curve(-1.13, 0.35, 1, 'posterior', '#6a8fa8', true),
                 // prior-dominated: prior N(0,1) -> posterior N(0.07, 0.96), c ~ 0.08
                 curve(0, 1, 2, 'prior', '#9aa79a', false, 'dash'),
                 curve(0.07, 0.96, 2, 'posterior', '#c97067', true)
@@ -1018,7 +1038,7 @@
                 yaxis2: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
                 annotations: [
                     { x: 0.23, y: 1.13, xref: 'paper', yref: 'paper', showarrow: false,
-                      text: '<b>Identified: the data spoke</b><br>measured: ψ contraction ≈ 0.97–1.0',
+                      text: '<b>Informed: the data spoke</b><br>measured: ψ relocates ≈ 5 prior-sds (overlap ≈ 0.03)',
                       font: { size: 12, color: '#2d3a2d' } },
                     { x: 0.79, y: 1.13, xref: 'paper', yref: 'paper', showarrow: false,
                       text: '<b>Prior-dominated: posterior ≈ prior</b><br>measured: 13–16 of 19 knobs at c &lt; 0.1',
@@ -1052,7 +1072,7 @@
             }));
             const priorUnc = peakScale(xs.map(function(x) { return normalPdf(x, 0, 0.5); }));
             const postCan = peakScale(xs.map(function(x) {
-                return x <= 0 ? 2 * normalPdf(x, 0, 0.06) : 0;
+                return x <= 0 ? normalPdf(x, -1.13, 0.21) : 0;
             }));
             const postUnc = peakScale(xs.map(function(x) { return normalPdf(x, 1.80, 0.18); }));
 
@@ -1062,10 +1082,10 @@
                   line: { color: '#9aa79a', width: 1.6, dash: 'dash' },
                   hovertemplate: 'cannibalization prior<extra></extra>' },
                 { type: 'scatter', mode: 'lines', x: xs, y: postCan,
-                  name: 'posterior, cannibalization prior (ψ ≈ −0.0003, ρ = +0.41)',
+                  name: 'posterior, cannibalization prior (ψ ≈ −1.13, ρ = +0.31)',
                   line: { color: PT.colors.search, width: 2.2 },
                   fill: 'tozeroy', fillcolor: PT.band(PT.colors.search, 0.20),
-                  hovertemplate: 'posterior under the sign-constrained prior:<br>ψ collapses onto 0; ρ carries the co-movement<extra></extra>' },
+                  hovertemplate: 'posterior under the sign-constrained prior:<br>ψ relocates to ≈ −1.13; weakly identified<extra></extra>' },
                 { type: 'scatter', mode: 'lines', x: xs, y: priorUnc,
                   name: 'prior: ψ ~ Normal(0, 0.5)',
                   line: { color: '#b8c4b8', width: 1.6, dash: 'dot' },
@@ -1088,8 +1108,8 @@
                     line: { color: '#2d3a2d', width: 1.2, dash: 'dash' }
                 }],
                 annotations: [
-                    { x: -0.06, y: 1.1, xanchor: 'right',
-                      text: 'ψ ≈ −0.0003 (boundary)<br>P(ψ&lt;0) = 1 — by construction',
+                    { x: -1.13, y: 1.1, xanchor: 'center',
+                      text: 'ψ ≈ −1.13 (weakly identified)<br>P(ψ&lt;0) = 1 — by construction',
                       showarrow: false, font: { size: 11, color: '#4a6d8a' } },
                     { x: 1.80, y: 1.1, xanchor: 'center',
                       text: 'ψ = +1.80 on the same data<br>≈ 78% of Original&#39;s weekly sales',
