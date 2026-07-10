@@ -5,6 +5,7 @@ import { useCausalPanels } from '../../components/causal/CausalWidgets';
 import { API_BASE, authHeaders } from './constants';
 import { specLeafDiff, specWithDefaults } from './utils/spec';
 import { useAgentSessions } from './hooks/useAgentSessions';
+import { useArtifactGroups } from './hooks/useArtifactGroups';
 import { useChatStream } from './hooks/useChatStream';
 import { ChatPanel } from './components/chat/ChatPanel';
 import { WorkspaceTabs } from './components/tabs/WorkspaceTabs';
@@ -91,6 +92,13 @@ export function AgentPage() {
   });
 
   useEffect(() => { localStorage.setItem('mmm.activeTab', activeTab); }, [activeTab]);
+
+  // Grouped-by-question Results timeline: plots + non-EDA tables + code
+  // segments resolved to the question that produced them (via tool call_id;
+  // unresolvable refs fall into a trailing "Earlier work" group).
+  const artifactGroups = useArtifactGroups(
+    messages, dashboardData.plots, dashboardData.tables, pythonOutputs,
+  );
 
   // Re-load whenever active session changes
   useEffect(() => {
@@ -396,6 +404,7 @@ export function AgentPage() {
         dashboardData={dashboardData}
         artifacts={artifacts}
         pythonOutputs={pythonOutputs}
+        artifactGroups={artifactGroups}
         threadId={threadId}
         apiKey={apiKey}
         modelName={modelName}

@@ -140,10 +140,37 @@ export interface ModelSpec {
   [key: string]: unknown;
 }
 
+// ─── Plots ───────────────────────────────────────────────────────────────────
+
+/** A dashboard plot ref (dashboard_data.plots): content-addressed ({id,title})
+ *  or a legacy inline figure ({data,layout,…} via the index signature).
+ *  call_id/ts/source are optional provenance stamps — newer backends emit
+ *  them; refs from older backends/checkpoints lack them. */
+export interface PlotRef {
+  id?: string;
+  title?: string;
+  /** Producing tool call id (joins the plot to the question that asked for it). */
+  call_id?: string;
+  /** Creation time, epoch seconds. */
+  ts?: number;
+  /** Producing tool name. */
+  source?: string;
+  [key: string]: unknown;
+}
+
 // ─── Tables + EDA (additive — not wired into the UI yet) ─────────────────────
 
 export interface TableColumn { key: string; label: string; type?: 'number' | 'string' | 'percent' | 'currency' | 'date' }
-export interface TableRef { id: string; title: string; source: string; group?: string }
+export interface TableRef {
+  id: string;
+  title: string;
+  source: string;
+  group?: string;
+  /** Producing tool call id (optional provenance; older refs lack it). */
+  call_id?: string;
+  /** Creation time, epoch seconds (optional provenance; older refs lack it). */
+  ts?: number;
+}
 export interface TableSpec { title: string; columns: TableColumn[]; rows: Record<string, unknown>[]; total_rows?: number; truncated?: boolean; source: string; group?: string }
 export interface EdaIssue { severity: string; check: string; variable?: string; message: string }
 export interface OutlierAction { action_id: string; strategy: string; variable?: string; rationale?: string; status: string }
@@ -225,6 +252,7 @@ export interface DataStudioPointer {
 // ─── Dashboard data (streamed via dashboard_update; shape is server-driven) ──
 
 export interface DashboardData {
+  plots?: PlotRef[];
   tables?: TableRef[];
   eda?: EdaFindings;
   data_studio?: DataStudioPointer | null;

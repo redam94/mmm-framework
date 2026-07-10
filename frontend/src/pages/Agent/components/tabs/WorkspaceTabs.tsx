@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Activity, BarChart2, BookOpen, Database, Download,
+  BarChart2, BookOpen, Database, Download,
   ExternalLink, Layers, Maximize2, Minimize2, Network,
   ShieldCheck, SlidersHorizontal, TestTubes,
 } from 'lucide-react';
@@ -10,12 +10,11 @@ import {
 } from '../../../../components/causal/CausalWidgets';
 import { CausalPlanner } from '../../../../components/causal/CausalPlanner';
 import { API_BASE, selectTables } from '../../constants';
+import { GroupedArtifacts } from '../artifacts/GroupedArtifacts';
 import { BrandingModal } from '../branding/BrandingModal';
 import { DashWidget } from '../common/DashWidget';
 import { EmptyTabState } from '../common/EmptyTabState';
-import { PlotCard } from '../plots/PlotCard';
 import { PythonOutputWidget } from '../python/PythonOutputWidget';
-import { TableCard } from '../tables/TableCard';
 import { ArtifactsPanel } from '../widgets/ArtifactsPanel';
 import { DatasetPanel } from '../widgets/DatasetPanel';
 import { DecompositionWidget } from '../widgets/DecompositionWidget';
@@ -38,6 +37,7 @@ import { ValidationTab } from './ValidationTab';
 import { DataStudioModal } from '../dataStudio/DataStudioModal';
 import type { CommitPayload } from '../dataStudio/useDataStudio';
 import type { ModelingMode } from '../../../../api/services/sessionService';
+import type { ArtifactGroup } from '../../utils/artifactGroups';
 import type { Artifact, DashboardData, ModelSpec, OutlierAction, PythonOutput } from '../../types';
 
 // Native dashboard ROI table row (server-driven; all metrics optional). Distinct
@@ -50,13 +50,9 @@ interface RoiMetricRow {
   prob_profitable?: number;
 }
 
-// A captured plot ref handed straight to PlotCard (which reads the loose figure
-// blob internally); we only touch `id` here for the React key.
-interface PlotRef { id?: string; [key: string]: unknown }
-
 export function WorkspaceTabs({
   rightExpanded, onToggleExpand, activeTab, onTabChange,
-  causal, dashboardData, artifacts, pythonOutputs,
+  causal, dashboardData, artifacts, pythonOutputs, artifactGroups,
   threadId, apiKey, modelName, projectId, workspaceRefreshKey,
   chatLoading,
   onApplySpec, onUnlockField, onQuickAction,
@@ -71,6 +67,8 @@ export function WorkspaceTabs({
   dashboardData: DashboardData;
   artifacts: Artifact[];
   pythonOutputs: PythonOutput[];
+  /** Grouped-by-question artifact timeline (built in index.tsx via useArtifactGroups). */
+  artifactGroups: ArtifactGroup[];
   threadId: string | null;
   apiKey: string | null;
   modelName: string | null;
@@ -123,10 +121,14 @@ export function WorkspaceTabs({
     dagModelType,
   );
 
-  // Structured tables, bucketed by group (unknown groups fall into "repl").
+  // EDA tables render in the Data tab; every other table joins the grouped
+  // Results timeline (artifactGroups) alongside plots + code segments.
   const edaTables = selectTables(dashboardData.tables, 'eda');
-  const resultsTables = selectTables(dashboardData.tables, 'results');
-  const replTables = selectTables(dashboardData.tables, 'repl');
+  const timelineCount = artifactGroups.reduce((n, g) => n + g.items.length, 0);
+  // Single source of truth for the Results tab's empty/populated split: the
+  // "No results yet" state and the timeline render as exact complements.
+  const resultsEmpty = !modelCompleted && !hasDecomp && !dashboardData.roi_metrics
+    && !dashboardData.report_path && timelineCount === 0;
 
   // EDA tab badge = error/warning issue count; dot = any proposed outlier action.
   const edaIssueCount = (dashboardData.eda?.issues || [])
@@ -161,7 +163,7 @@ export function WorkspaceTabs({
             { id: 'model',     label: 'Model',     icon: <Layers size={14} />,
               dot: hasSpec },
             { id: 'results',   label: 'Results',   icon: <BarChart2 size={14} />,
-              badge: (dashboardData.plots?.length || 0) > 0 ? String(dashboardData.plots.length) : null,
+              badge: timelineCount > 0 ? String(timelineCount) : null,
               dot: modelCompleted || hasDecomp || !!dashboardData.roi_metrics },
             { id: 'validation', label: 'Validation', icon: <ShieldCheck size={14} />,
               dot: modelCompleted },
@@ -393,7 +395,7 @@ export function WorkspaceTabs({
 
           {activeTab === 'results' && (
             <>
-              {!modelCompleted && !hasDecomp && !dashboardData.roi_metrics && !dashboardData.report_path && resultsTables.length === 0 && (
+              {resultsEmpty && (
                 <EmptyTabState
                   icon={<BarChart2 size={28} />}
                   title="No results yet"
@@ -440,16 +442,6 @@ export function WorkspaceTabs({
                   </DashWidget>
                 );
               })()}
-
-              {resultsTables.length > 0 && (
-                <DashWidget title={`Tables (${resultsTables.length})`} dotColor="bg-indigo-500" color="indigo">
-                  <div className="space-y-4">
-                    {resultsTables.map((t, idx) => (
-                      <TableCard key={t.id} tableRef={t} idx={idx} />
-                    ))}
-                  </div>
-                </DashWidget>
-              )}
 
               {dashboardData.report_path && (() => {
                 // Per-session report routing (U4): the agent writes report HTML
@@ -502,34 +494,12 @@ export function WorkspaceTabs({
             </>
           )}
 
-          {activeTab === 'results' && (
-            <>
-              {dashboardData.plots?.length > 0 ? (
-                <DashWidget title={`Visualizations (${dashboardData.plots.length})`} dotColor="bg-fuchsia-500" color="fuchsia">
-                  <div className="space-y-4">
-                    {(dashboardData.plots as PlotRef[]).map((plot, idx: number) => (
-                      <PlotCard key={plot?.id ?? idx} plot={plot} idx={idx} />
-                    ))}
-                  </div>
-                </DashWidget>
-              ) : replTables.length === 0 ? (
-                <EmptyTabState
-                  icon={<Activity size={28} />}
-                  title="No plots yet"
-                  hint="Ask the agent to run execute_python with fig.show() — charts appear here automatically."
-                />
-              ) : null}
-
-              {replTables.length > 0 && (
-                <DashWidget title={`Tables (${replTables.length})`} dotColor="bg-indigo-500" color="indigo">
-                  <div className="space-y-4">
-                    {replTables.map((t, idx) => (
-                      <TableCard key={t.id} tableRef={t} idx={idx} />
-                    ))}
-                  </div>
-                </DashWidget>
-              )}
-            </>
+          {/* Analysis timeline: plots + tables + code segments grouped by the
+              question they answer, newest question first. Suppressed while the
+              tab-wide "No results yet" empty state is showing (it covers the
+              timeline-empty case too). */}
+          {activeTab === 'results' && !resultsEmpty && (
+            <GroupedArtifacts groups={artifactGroups} threadId={threadId} />
           )}
 
           {activeTab === 'validation' && <ValidationTab projectId={projectId} />}
