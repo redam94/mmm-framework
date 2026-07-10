@@ -33,7 +33,7 @@ from .base import BaseExtendedMMM
 from ..results import MediationEffects
 
 if TYPE_CHECKING:
-    from ..config import LatentFactorSpec, MediatorSpec, StructuralNestedConfig
+    from ..config import LatentFactorSpec, StructuralNestedConfig
 
 _MIN_OBSERVED_POINTS = 3
 _SOFT_OBSERVED_POINTS = 8
