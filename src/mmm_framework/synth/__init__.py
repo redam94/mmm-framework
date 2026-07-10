@@ -24,6 +24,7 @@ from .dgp_geo import GeoScenario
 from .mff import (
     MFF_COLUMNS,
     MIN_WEEKS,
+    brand_funnel_mff,
     generate_mff,
     geo_scenario_to_mff,
     make_awareness_survey,
@@ -47,4 +48,5 @@ __all__ = [
     "geo_scenario_to_mff",
     "truth_summary",
     "make_awareness_survey",
+    "brand_funnel_mff",
 ]

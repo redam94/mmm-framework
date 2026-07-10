@@ -41,6 +41,10 @@ class BaseExtendedMMM:
     - _build_model(): Return built PyMC model
     """
 
+    # Saved-model format version for the extension family (read by
+    # MMMSerializer's extended branch; the core BayesianMMM has its own).
+    _VERSION = "1.0"
+
     def __init__(
         self,
         X_media: np.ndarray,
@@ -258,7 +262,13 @@ class BaseExtendedMMM:
 
     @classmethod
     def load(cls, path: str | Path) -> "BaseExtendedMMM":
-        """Load a model saved with :meth:`save`, reattaching its trace."""
+        """Load a model saved with :meth:`save`, reattaching its trace.
+
+        Also reads :class:`~mmm_framework.serialization.MMMSerializer`'s
+        extended-flavor saves (which gzip the trace to ``trace.nc.gz`` by
+        default) — the trace loader handles both layouts, so a cross-flavor
+        load never silently drops the posterior.
+        """
         import cloudpickle
 
         path = Path(path)
@@ -269,6 +279,10 @@ class BaseExtendedMMM:
             import arviz as az
 
             obj._trace = az.from_netcdf(str(trace_path))
+        elif (path / "trace.nc.gz").exists():
+            from ...serialization import MMMSerializer
+
+            obj._trace = MMMSerializer._load_trace(path)
         return obj
 
     # =====================================================================
@@ -514,6 +528,10 @@ class BaseExtendedMMM:
             except Exception:  # noqa: BLE001 - diagnostics are best-effort
                 pass
 
+            # Stamped on the instance so a serialized model is self-describing
+            # (MMMSerializer records fit_method/approximate from here).
+            self._fit_diagnostics = dict(diagnostics)
+
             return ModelResults(
                 trace=self._trace,
                 model=self.model,
@@ -551,6 +569,8 @@ class BaseExtendedMMM:
             _conv.annotate(diagnostics)
         except Exception:  # noqa: BLE001
             pass
+
+        self._fit_diagnostics = dict(diagnostics)
 
         return ModelResults(
             trace=self._trace,

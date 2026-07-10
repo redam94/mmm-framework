@@ -119,7 +119,9 @@ export function WorkspaceTabs({
   // mmm-kind but take their priors from the causal DAG node configs, not the
   // plain media/control priors — swap in the extension-prior editor for them.
   const dagModelType = String((modelSpec?.dag_model_type as string | undefined) ?? '').toLowerCase();
-  const isExtensionModel = ['nested_mmm', 'multivariate_mmm', 'combined_mmm'].includes(dagModelType);
+  const isExtensionModel = ['nested_mmm', 'structural_nested_mmm', 'multivariate_mmm', 'combined_mmm'].includes(
+    dagModelType,
+  );
 
   // Structured tables, bucketed by group (unknown groups fall into "repl").
   const edaTables = selectTables(dashboardData.tables, 'eda');

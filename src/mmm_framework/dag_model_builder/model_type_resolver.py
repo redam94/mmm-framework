@@ -16,8 +16,43 @@ class ModelType(str, Enum):
 
     BAYESIAN_MMM = "bayesian_mmm"
     NESTED_MMM = "nested_mmm"
+    STRUCTURAL_NESTED_MMM = "structural_nested_mmm"
     MULTIVARIATE_MMM = "multivariate_mmm"
     COMBINED_MMM = "combined_mmm"
+
+
+def _is_structural(dag: DAGSpec) -> bool:
+    """True when the DAG uses features only StructuralNestedMMM can express:
+    a mediator->mediator or control->mediator edge, a structural mediator
+    node-config key (dynamics / per-mediator likelihood / trials or category
+    columns / latent factor consumption ...), a latent-factor declaration in
+    the DAG metadata, or an explicit ``metadata["model_type"]`` override."""
+    from .dag_spec import NodeType
+    from .node_configs import STRUCTURAL_MEDIATOR_KEYS
+
+    meta = dag.metadata or {}
+    if str(meta.get("model_type", "")).lower() == ModelType.STRUCTURAL_NESTED_MMM:
+        return True
+    if meta.get("latent_factors"):
+        return True
+
+    mediator_ids = {n.id for n in dag.mediator_nodes}
+    if not mediator_ids:
+        return False
+    for edge in dag.edges:
+        if edge.source in mediator_ids and edge.target in mediator_ids:
+            return True
+        source = dag.get_node(edge.source)
+        if (
+            source is not None
+            and source.node_type == NodeType.CONTROL
+            and edge.target in mediator_ids
+        ):
+            return True
+    for node in dag.mediator_nodes:
+        if any(k in (node.config or {}) for k in STRUCTURAL_MEDIATOR_KEYS):
+            return True
+    return False
 
 
 def resolve_model_type(dag: DAGSpec) -> ModelType:
@@ -55,6 +90,21 @@ def resolve_model_type(dag: DAGSpec) -> ModelType:
     has_mediators = dag.has_mediators
     has_multiple_outcomes = dag.has_multiple_outcomes
     has_cross_effects = dag.has_cross_effects
+
+    # Structural nested: mediator DAG features (mediator->mediator edges,
+    # per-mediator likelihood/dynamics, latent factors, control->mediator
+    # drivers). Single-outcome only -- combining with multiple outcomes /
+    # cross-effects is not supported.
+    if has_mediators and _is_structural(dag):
+        if has_multiple_outcomes or has_cross_effects:
+            raise ValueError(
+                "This DAG mixes structural-mediator features (mediator chains, "
+                "per-mediator likelihoods, latent factors) with multiple "
+                "outcomes / cross-effects -- StructuralNestedMMM is "
+                "single-outcome and no combined variant exists yet. Drop one "
+                "side or model the extra outcomes separately."
+            )
+        return ModelType.STRUCTURAL_NESTED_MMM
 
     # Combined: mediators + (multiple outcomes OR cross-effects)
     if has_mediators and (has_multiple_outcomes or has_cross_effects):
@@ -102,6 +152,11 @@ def get_model_class(model_type: ModelType):
         from mmm_framework.mmm_extensions.models import NestedMMM
 
         return NestedMMM
+
+    if model_type == ModelType.STRUCTURAL_NESTED_MMM:
+        from mmm_framework.mmm_extensions.models import StructuralNestedMMM
+
+        return StructuralNestedMMM
 
     if model_type == ModelType.MULTIVARIATE_MMM:
         from mmm_framework.mmm_extensions.models import MultivariateMMM
@@ -160,6 +215,12 @@ def describe_model_type(dag: DAGSpec) -> str:
             "Selected: MultivariateMMM (multiple outcomes with potential "
             "cross-effects between them)."
         ),
+        ModelType.STRUCTURAL_NESTED_MMM: (
+            f"{base_info}\n"
+            "Selected: StructuralNestedMMM (structural mediator DAG: mediator "
+            "chains, per-mediator dynamics/likelihoods, latent factors; "
+            "single outcome)."
+        ),
         ModelType.COMBINED_MMM: (
             f"{base_info}\n"
             "Selected: CombinedMMM (mediation + multiple outcomes, "
@@ -167,4 +228,6 @@ def describe_model_type(dag: DAGSpec) -> str:
         ),
     }
 
-    return descriptions[model_type]
+    # Defensive default: a future ModelType without a description should
+    # degrade to the neutral summary, not crash build_model_from_dag.
+    return descriptions.get(model_type, f"{base_info}\nSelected: {model_type.value}.")

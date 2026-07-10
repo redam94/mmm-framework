@@ -44,6 +44,19 @@ class MMMSerializer:
     # BayesianMMM subclass, so `load()` reconstructs THAT class, not the base).
     _FORMAT_VERSION = "1.1"
 
+    @staticmethod
+    def _is_extended(model: Any) -> bool:
+        """True for the BaseExtendedMMM family (Nested / Multivariate /
+        Combined / StructuralNested), which serializes via its own flavor:
+        the core save/load contract is panel-shaped (media re-standardization,
+        panel-compatibility gates) and does not apply to array-level models."""
+        try:
+            from .mmm_extensions.models.base import BaseExtendedMMM
+
+            return isinstance(model, BaseExtendedMMM)
+        except Exception:  # noqa: BLE001 — extensions not importable
+            return False
+
     @classmethod
     def save(
         cls,
@@ -72,6 +85,9 @@ class MMMSerializer:
         ValueError
             If the model has no trace and save_trace is True.
         """
+        if cls._is_extended(model):
+            return cls._save_extended(model, path, save_trace, compress)
+
         final = Path(path)
         final.parent.mkdir(parents=True, exist_ok=True)
 
@@ -116,6 +132,160 @@ class MMMSerializer:
 
         logger.info(f"Model saved to {final}")
 
+    @classmethod
+    def _save_extended(
+        cls,
+        model: Any,
+        path: str | Path,
+        save_trace: bool = True,
+        compress: bool = True,
+    ) -> None:
+        """Save a BaseExtendedMMM-family model (extended flavor).
+
+        The model instance itself (arrays, extension config dataclasses,
+        masks, y stats — everything except the PyMC graph and the trace,
+        which ``__getstate__`` strips) rides ``model.pkl`` via cloudpickle,
+        so loading needs NO panel. The platform-legible sidecars
+        (``metadata.json`` / ``configs.json``) are written in the same shape
+        the load/list surfaces already read.
+        """
+        import cloudpickle
+
+        final = Path(path)
+        final.parent.mkdir(parents=True, exist_ok=True)
+        work = final.parent / f".{final.name}.tmp"
+        if work.exists():
+            shutil.rmtree(work, ignore_errors=True)
+        work.mkdir(parents=True)
+        try:
+            metadata = cls._collect_extended_metadata(model)
+            with open(work / "metadata.json", "w") as f:
+                json.dump(metadata, f, indent=2, default=str)
+
+            configs = cls._collect_extended_configs(model)
+            with open(work / "configs.json", "w") as f:
+                json.dump(configs, f, indent=2, default=str)
+
+            with open(work / "model.pkl", "wb") as f:
+                cloudpickle.dump(model, f)
+
+            if save_trace and model._trace is not None:
+                cls._save_trace(model._trace, work, compress)
+
+            cls._atomic_swap(work, final)
+        finally:
+            if work.exists():
+                shutil.rmtree(work, ignore_errors=True)
+
+        logger.info(f"Extended model saved to {final}")
+
+    @classmethod
+    def _collect_extended_metadata(cls, model: Any) -> dict[str, Any]:
+        """Sidecar metadata for an extended-flavor save (self-describing +
+        readable by saved_model_settings / list_saved_models)."""
+        mcls = type(model)
+        metadata: dict[str, Any] = {
+            "version": getattr(model, "_VERSION", "1.0"),
+            "format_version": cls._FORMAT_VERSION,
+            "model_flavor": "extended",
+            "model_class_qualname": f"{mcls.__module__}.{mcls.__qualname__}",
+            "model_kind": "mmm",
+            "n_obs": int(getattr(model, "n_obs", 0)),
+            "n_channels": int(getattr(model, "n_channels", 0)),
+            "channel_names": list(getattr(model, "channel_names", [])),
+        }
+        for attr in ("mediator_names", "outcome_names", "control_names"):
+            val = getattr(model, attr, None)
+            if val:
+                metadata[attr] = list(val)
+
+        # Fit provenance from the last fit's diagnostics (stamped by
+        # BaseExtendedMMM.fit) — the artifact stays self-describing about
+        # whether its uncertainty is calibrated.
+        diag = getattr(model, "_fit_diagnostics", None) or {}
+        if diag.get("fit_method") is not None:
+            metadata["fit_method"] = str(diag["fit_method"])
+            metadata["approximate"] = bool(diag.get("approximate", False))
+
+        if getattr(model, "experiments", None):
+            try:
+                metadata["experiments"] = [e.to_dict() for e in model.experiments]
+            except Exception:  # noqa: BLE001 — provenance is best-effort
+                pass
+        return metadata
+
+    @classmethod
+    def _collect_extended_configs(cls, model: Any) -> dict[str, Any]:
+        """Best-effort JSON view of an extended model's configuration (the
+        pickle is ground truth; this keeps configs.json readable)."""
+        import dataclasses
+
+        out: dict[str, Any] = {}
+        ext_cfg = getattr(model, "config", None)
+        if ext_cfg is not None and dataclasses.is_dataclass(ext_cfg):
+            try:
+                out["extension_config"] = dataclasses.asdict(ext_cfg)
+            except Exception:  # noqa: BLE001
+                out["extension_config"] = repr(ext_cfg)
+        # Omit (never a string repr) on failure: saved_model_settings reads
+        # these with dict access, and `<str> or {}` would pass the truthiness
+        # guard then crash on .get().
+        mc = getattr(model, "model_config", None)
+        if mc is not None:
+            try:
+                out["model_config"] = mc.model_dump()
+            except Exception:  # noqa: BLE001
+                pass
+        tc = getattr(model, "trend_config", None)
+        if tc is not None:
+            try:
+                out["trend_config"] = tc.to_dict()
+            except Exception:  # noqa: BLE001
+                pass
+        return out
+
+    @classmethod
+    def _load_extended(
+        cls,
+        path: Path,
+        metadata: dict[str, Any],
+        rebuild_model: bool,
+    ) -> Any:
+        """Load an extended-flavor save: unpickle the instance, reattach the
+        trace, optionally rebuild the PyMC graph (parity with the core load —
+        fails fast on environment drift instead of at first use)."""
+        import cloudpickle
+
+        from .mmm_extensions.models.base import BaseExtendedMMM
+
+        # Only warn when a version WAS recorded and differs (legacy
+        # BaseExtendedMMM.save dirs have no metadata at all).
+        saved_version = metadata.get("version")
+        if saved_version is not None and saved_version != BaseExtendedMMM._VERSION:
+            warnings.warn(
+                f"Extended model was saved with version {saved_version}, "
+                f"current version is {BaseExtendedMMM._VERSION}. "
+                "There may be compatibility issues."
+            )
+
+        pkl = path / "model.pkl"
+        if not pkl.exists():
+            raise FileNotFoundError(
+                f"Extended model save at {path} is missing model.pkl"
+            )
+        with open(pkl, "rb") as f:
+            instance = cloudpickle.load(f)
+
+        trace = cls._load_trace(path)
+        if trace is not None:
+            instance._trace = trace
+
+        if rebuild_model:
+            instance._model = instance._build_model()
+
+        logger.info(f"Extended model loaded from {path}")
+        return instance
+
     @staticmethod
     def _atomic_swap(work: Path, final: Path) -> None:
         """Promote the fully-written temp dir ``work`` to ``final``, preserving
@@ -140,7 +310,7 @@ class MMMSerializer:
     def load(
         cls,
         path: str | Path,
-        panel: PanelDataset,
+        panel: PanelDataset | None = None,
         rebuild_model: bool = True,
     ) -> BayesianMMM:
         """
@@ -150,9 +320,12 @@ class MMMSerializer:
         ----------
         path : str or Path
             Directory path where the model was saved.
-        panel : PanelDataset
+        panel : PanelDataset | None
             Panel data to use with the loaded model. Must be compatible
             with the original data (same channels, controls, dimensions).
+            REQUIRED for core (BayesianMMM-family) saves; ignored for
+            extended-flavor saves (BaseExtendedMMM models carry their arrays
+            in the pickle and need no panel).
         rebuild_model : bool, default True
             Whether to rebuild the PyMC model. Set to False if you only
             need access to the trace and don't need to make predictions.
@@ -177,9 +350,26 @@ class MMMSerializer:
         if not path.exists():
             raise FileNotFoundError(f"Model directory not found: {path}")
 
+        # Old-flavor BaseExtendedMMM.save directory (model.pkl, no sidecars):
+        # delegate to the extended loader with synthesized metadata so legacy
+        # extension saves just work instead of a bare metadata.json error.
+        if not (path / "metadata.json").exists() and (path / "model.pkl").exists():
+            return cls._load_extended(path, {}, rebuild_model)
+
         # 1. Load metadata
         with open(path / "metadata.json", "r") as f:
             metadata = json.load(f)
+
+        # Extended flavor (BaseExtendedMMM family): panel-free pickle load.
+        if metadata.get("model_flavor") == "extended":
+            return cls._load_extended(path, metadata, rebuild_model)
+
+        if panel is None:
+            raise TypeError(
+                "MMMSerializer.load requires a `panel` for core "
+                "(BayesianMMM-family) saves — the model is rebuilt against a "
+                "compatible panel. Only extended-flavor saves load panel-free."
+            )
 
         # Version check
         cls._check_version(metadata)

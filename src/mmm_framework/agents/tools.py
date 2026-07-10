@@ -2481,6 +2481,17 @@ def update_model_setting(
             }
         )
 
+    # latent_factors is a DECLARATION list -- upsert the named entry so
+    # `latent_factors.demand.affects_outcome` can create-and-set incrementally
+    # (the generic list walker only edits entries that already exist, which is
+    # right for media_channels but would dead-end factor declarations).
+    if parts[0] == "latent_factors" and len(parts) >= 3:
+        lf = new_spec.setdefault("latent_factors", [])
+        if isinstance(lf, list) and not any(
+            isinstance(x, dict) and x.get("name") == parts[1] for x in lf
+        ):
+            lf.append({"name": parts[1]})
+
     try:
         _set(new_spec, parts, value)
     except Exception as exc:
@@ -2694,6 +2705,26 @@ def save_fitted_model(
     return _modelop_command(res, {}, tool_call_id)
 
 
+def _extended_results_from_disk(mmm) -> "object | None":
+    """Rebuild a ModelResults for a reloaded extended model from its pickled
+    fit diagnostics (best-effort; None when never fitted)."""
+    diag = getattr(mmm, "_fit_diagnostics", None)
+    trace = getattr(mmm, "_trace", None)
+    if not diag or trace is None:
+        return None
+    try:
+        from mmm_framework.mmm_extensions.results import ModelResults
+
+        return ModelResults(
+            trace=trace,
+            model=None,
+            config=getattr(mmm, "config", None),
+            diagnostics=dict(diag),
+        )
+    except Exception:  # noqa: BLE001 — provenance is best-effort
+        return None
+
+
 def load_model_core(
     thread_id: str | None, name: str, spec: dict | None, dataset_path: str | None
 ) -> dict:
@@ -2733,6 +2764,48 @@ def load_model_core(
     saved = saved_model_settings(save_dir)
     saved_spec = saved.get("spec")
     settings = saved.get("settings") or {}
+
+    # Extended-flavor saves (BaseExtendedMMM family) carry their arrays in the
+    # pickle — no panel rebuild, no dataset requirement.
+    is_extended_save = False
+    try:
+        with open(os.path.join(save_dir, "metadata.json")) as _mf:
+            is_extended_save = json.load(_mf).get("model_flavor") == "extended"
+    except Exception:  # noqa: BLE001 — fall through to the core path
+        pass
+    if is_extended_save:
+        try:
+            from mmm_framework.serialization import MMMSerializer
+
+            mmm = MMMSerializer.load(save_dir)
+            _MODEL_CACHE["fitted_model"] = mmm
+            # Preserve fit provenance on reload: an approximate (MAP/ADVI)
+            # extended fit must keep flagging as approximate — the pickled
+            # _fit_diagnostics carry it, so rebuild a results container
+            # instead of discarding to None.
+            _MODEL_CACHE["fit_results"] = _extended_results_from_disk(mmm)
+            message = f"Model **{name}** loaded. You can now run analysis tools."
+            digest = settings_digest_markdown(settings)
+            if digest:
+                message += "\n\n**Model settings (as fitted):**\n" + digest
+            if saved_spec and saved_spec.get("kpi"):
+                message += (
+                    "\n\nThe session's model configuration has been restored to "
+                    "match this saved model."
+                )
+            return {
+                "ok": True,
+                "message": message,
+                "spec": _normalized_spec(saved_spec) if saved_spec else None,
+                "settings": settings,
+            }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "message": f"Load failed: {exc}",
+                "spec": None,
+                "settings": settings,
+            }
 
     panel_spec = saved_spec if (saved_spec and saved_spec.get("kpi")) else spec
 

@@ -53,6 +53,13 @@ from .config import (
     MediatorObservationType,
     AggregatedSurveyLikelihood,
     AggregatedSurveyConfig,
+    # Structural nested model (StructuralNestedMMM)
+    MediatorDynamics,
+    MediatorLikelihood,
+    MediatorMeasurement,
+    MediatorSpec,
+    LatentFactorSpec,
+    StructuralNestedConfig,
     # Variable Selection
     VariableSelectionMethod,
     HorseshoeConfig,
@@ -83,6 +90,9 @@ from .builders import (
     cannibalization_effect,
     halo_effect,
     cross_effect,
+    binary_survey_mediator,
+    likert_mediator,
+    latent_demand_factor,
     # Variable Selection
     HorseshoeConfigBuilder,
     SpikeSlabConfigBuilder,
@@ -149,6 +159,7 @@ if TYPE_CHECKING:
         NestedMMM,
         MultivariateMMM,
         CombinedMMM,
+        StructuralNestedMMM,
     )
 
 
@@ -203,6 +214,7 @@ def __getattr__(name: str):
         "NestedMMM",
         "MultivariateMMM",
         "CombinedMMM",
+        "StructuralNestedMMM",
     }
 
     if name in components_exports:
@@ -244,6 +256,16 @@ __all__ = [
     "LassoConfig",
     "VariableSelectionConfig",
     "AggregatedSurveyConfig",
+    # Structural nested model
+    "MediatorDynamics",
+    "MediatorLikelihood",
+    "MediatorMeasurement",
+    "MediatorSpec",
+    "LatentFactorSpec",
+    "StructuralNestedConfig",
+    "binary_survey_mediator",
+    "likert_mediator",
+    "latent_demand_factor",
     # Builders
     "AdstockConfigBuilder",
     "SaturationConfigBuilder",
@@ -316,4 +338,5 @@ __all__ = [
     "NestedMMM",
     "MultivariateMMM",
     "CombinedMMM",
+    "StructuralNestedMMM",
 ]

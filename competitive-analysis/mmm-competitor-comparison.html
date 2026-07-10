@@ -1,0 +1,854 @@
+<title>MMM Platform Comparison</title>
+<style>
+  /* ============================ TOKENS ============================ */
+  /* Base = light "almanac drafting paper". Dark = "observatory night". */
+  :root{
+    --bg:#e9edf2; --bg-2:#eef1f6; --surface:#ffffff; --surface-2:#f4f6fa;
+    --border:#d3dae4; --border-strong:#b9c3d1;
+    --ink:#16202e; --text:#233043; --text-dim:#566275; --text-faint:#7f8b9d;
+    --accent:#9a6a12;            /* antique brass on paper */
+    --accent-bright:#b8862a;
+    --accent-soft:rgba(154,106,18,.10);
+    --accent-line:rgba(154,106,18,.35);
+    --strong:#187a63; --strong-bg:rgba(24,122,99,.12);
+    --moderate:#37567f; --moderate-bg:rgba(55,86,127,.12);
+    --limited:#a9503c; --limited-bg:rgba(169,80,60,.12);
+    --none:#68748a; --none-bg:rgba(104,116,138,.12);
+    --seg-empty:rgba(22,32,46,.13);
+    --shadow:0 1px 2px rgba(22,32,46,.06),0 8px 24px -12px rgba(22,32,46,.18);
+    --grid-line:rgba(22,32,46,.05);
+    --glow:rgba(184,134,42,.10);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d131e; --bg-2:#111826; --surface:#151d2b; --surface-2:#1b2434;
+      --border:#293449; --border-strong:#39465e;
+      --ink:#f0f3f8; --text:#e4e9f1; --text-dim:#9aa6b8; --text-faint:#6c778a;
+      --accent:#dcab4e; --accent-bright:#ecc06a; --accent-soft:rgba(220,171,78,.12);
+      --accent-line:rgba(220,171,78,.38);
+      --strong:#48b79c; --strong-bg:rgba(72,183,156,.15);
+      --moderate:#7c9bc7; --moderate-bg:rgba(124,155,199,.15);
+      --limited:#cd8471; --limited-bg:rgba(205,132,113,.16);
+      --none:#7e8aa0; --none-bg:rgba(126,138,160,.14);
+      --seg-empty:rgba(240,243,248,.12);
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 18px 40px -20px rgba(0,0,0,.7);
+      --grid-line:rgba(220,171,78,.05);
+      --glow:rgba(220,171,78,.14);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d131e; --bg-2:#111826; --surface:#151d2b; --surface-2:#1b2434;
+    --border:#293449; --border-strong:#39465e;
+    --ink:#f0f3f8; --text:#e4e9f1; --text-dim:#9aa6b8; --text-faint:#6c778a;
+    --accent:#dcab4e; --accent-bright:#ecc06a; --accent-soft:rgba(220,171,78,.12);
+    --accent-line:rgba(220,171,78,.38);
+    --strong:#48b79c; --strong-bg:rgba(72,183,156,.15);
+    --moderate:#7c9bc7; --moderate-bg:rgba(124,155,199,.15);
+    --limited:#cd8471; --limited-bg:rgba(205,132,113,.16);
+    --none:#7e8aa0; --none-bg:rgba(126,138,160,.14);
+    --seg-empty:rgba(240,243,248,.12);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 18px 40px -20px rgba(0,0,0,.7);
+    --grid-line:rgba(220,171,78,.05); --glow:rgba(220,171,78,.14);
+    color-scheme:dark;
+  }
+  :root[data-theme="light"]{
+    --bg:#e9edf2; --bg-2:#eef1f6; --surface:#ffffff; --surface-2:#f4f6fa;
+    --border:#d3dae4; --border-strong:#b9c3d1;
+    --ink:#16202e; --text:#233043; --text-dim:#566275; --text-faint:#7f8b9d;
+    --accent:#9a6a12; --accent-bright:#b8862a; --accent-soft:rgba(154,106,18,.10);
+    --accent-line:rgba(154,106,18,.35);
+    --strong:#187a63; --strong-bg:rgba(24,122,99,.12);
+    --moderate:#37567f; --moderate-bg:rgba(55,86,127,.12);
+    --limited:#a9503c; --limited-bg:rgba(169,80,60,.12);
+    --none:#68748a; --none-bg:rgba(104,116,138,.12);
+    --seg-empty:rgba(22,32,46,.13);
+    --shadow:0 1px 2px rgba(22,32,46,.06),0 8px 24px -12px rgba(22,32,46,.18);
+    --grid-line:rgba(22,32,46,.05); --glow:rgba(184,134,42,.10);
+    color-scheme:light;
+  }
+
+  /* ============================ RESET-ish ============================ */
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0}
+  :root{
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono","Menlo","Consolas","Liberation Mono",monospace;
+  }
+  .page{
+    font-family:var(--sans);
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+    min-height:100vh;
+  }
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+  .reading{max-width:68ch}
+  h1,h2,h3,h4{font-family:var(--serif);color:var(--ink);text-wrap:balance;font-weight:600;margin:0}
+  p{margin:0}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-line)}
+  a:hover{color:var(--accent-bright)}
+  :focus-visible{outline:2px solid var(--accent-bright);outline-offset:3px;border-radius:3px}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  .mono{font-family:var(--mono)}
+  .tnum{font-variant-numeric:tabular-nums}
+
+  /* ============================ THEME TOGGLE ============================ */
+  .toggle{
+    position:fixed;top:16px;right:16px;z-index:50;
+    display:inline-flex;align-items:center;gap:7px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+    background:var(--surface);color:var(--text-dim);
+    border:1px solid var(--border);border-radius:999px;
+    padding:7px 12px;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .toggle:hover{color:var(--ink);border-color:var(--border-strong)}
+  .toggle svg{width:14px;height:14px;display:block}
+
+  /* ============================ HERO ============================ */
+  .hero{position:relative;padding:104px 0 40px;overflow:hidden}
+  .hero-bg{position:absolute;inset:0;z-index:0;pointer-events:none}
+  .hero-bg::before{
+    content:"";position:absolute;inset:0;
+    background:
+      radial-gradient(120% 80% at 82% -10%,var(--glow),transparent 55%),
+      radial-gradient(90% 70% at 8% 8%,var(--accent-soft),transparent 60%);
+  }
+  .hero-bg::after{
+    content:"";position:absolute;inset:0;opacity:.7;
+    background-image:
+      linear-gradient(var(--grid-line) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);
+    background-size:46px 46px;
+    -webkit-mask-image:radial-gradient(140% 100% at 70% 0%,#000 30%,transparent 78%);
+    mask-image:radial-gradient(140% 100% at 70% 0%,#000 30%,transparent 78%);
+  }
+  #starfield{position:absolute;inset:0;z-index:0;opacity:.5;pointer-events:none}
+  .hero .wrap{position:relative;z-index:1}
+  .hero h1{font-size:clamp(2.5rem,6vw,4.15rem);line-height:1.02;letter-spacing:-.015em;margin:20px 0 0}
+  .hero h1 em{font-style:italic;color:var(--accent)}
+  .lede{font-size:clamp(1.06rem,2.1vw,1.28rem);color:var(--text-dim);margin-top:22px;max-width:60ch;line-height:1.55}
+  .lede strong{color:var(--text);font-weight:600}
+  .arc{display:block;width:100%;max-width:520px;margin-top:8px;color:var(--accent-line)}
+
+  .stats{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px}
+  .stat{
+    background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:13px 18px;min-width:120px;box-shadow:var(--shadow)
+  }
+  .stat .n{font-family:var(--mono);font-size:1.5rem;color:var(--ink);font-weight:600;line-height:1}
+  .stat .l{font-size:11px;letter-spacing:.05em;color:var(--text-faint);text-transform:uppercase;margin-top:6px;font-family:var(--mono)}
+
+  /* ============================ SECTIONS ============================ */
+  section{padding:52px 0;border-top:1px solid var(--border)}
+  .sec-head{display:flex;flex-direction:column;gap:10px;margin-bottom:30px}
+  .sec-head h2{font-size:clamp(1.6rem,3.4vw,2.2rem);letter-spacing:-.01em}
+  .sec-head p{color:var(--text-dim);max-width:70ch}
+  .sec-num{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.15em}
+
+  /* ============================ LEGEND ============================ */
+  .legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+  .legend-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
+  .legend-card .lvlname{font-family:var(--mono);font-weight:600;font-size:.86rem;display:flex;align-items:center;gap:9px}
+  .legend-card p{font-size:.83rem;color:var(--text-dim);margin-top:8px;line-height:1.5}
+  .callout{
+    margin-top:16px;background:var(--surface-2);border:1px solid var(--border);
+    border-left:3px solid var(--accent);border-radius:10px;padding:14px 18px;
+    font-size:.86rem;color:var(--text-dim)
+  }
+  .callout strong{color:var(--text)}
+
+  /* meter */
+  .meter{display:inline-flex;gap:2px;align-items:center}
+  .meter i{width:6px;height:13px;border-radius:1.5px;background:var(--seg-empty);display:block}
+  .lvl-strong .meter i.on{background:var(--strong)}
+  .lvl-moderate .meter i.on{background:var(--moderate)}
+  .lvl-limited .meter i.on{background:var(--limited)}
+  .lvl-none .meter i.on{background:var(--none)}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .lvl-strong .dot{background:var(--strong)} .lvl-moderate .dot{background:var(--moderate)}
+  .lvl-limited .dot{background:var(--limited)} .lvl-none .dot{background:var(--none)}
+
+  /* ============================ MATRIX TABLE ============================ */
+  .matrix-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:var(--shadow);-webkit-overflow-scrolling:touch}
+  table.matrix{border-collapse:separate;border-spacing:0;width:100%;min-width:820px;font-size:.8rem}
+  table.matrix th,table.matrix td{padding:0;text-align:center}
+  table.matrix thead th{
+    position:sticky;top:0;z-index:3;background:var(--surface-2);
+    border-bottom:1px solid var(--border-strong);
+    font-family:var(--mono);font-weight:600;font-size:.72rem;letter-spacing:.02em;
+    color:var(--text-dim);padding:12px 8px;white-space:nowrap;vertical-align:bottom
+  }
+  table.matrix thead th.dimhead{text-align:left;left:0;z-index:4;padding-left:18px}
+  table.matrix th.rowhead{
+    position:sticky;left:0;z-index:2;background:var(--surface);
+    text-align:left;font-family:var(--sans);font-weight:600;color:var(--ink);
+    font-size:.82rem;padding:11px 14px 11px 18px;white-space:normal;min-width:186px;max-width:186px;
+    border-bottom:1px solid var(--border);border-right:1px solid var(--border)
+  }
+  table.matrix tbody tr:last-child th.rowhead,table.matrix tbody tr:last-child td{border-bottom:none}
+  table.matrix td{border-bottom:1px solid var(--border);padding:9px 6px;min-width:66px}
+  table.matrix th.col-app,table.matrix td.col-app{
+    background:var(--accent-soft);
+    box-shadow:inset 1px 0 0 var(--accent-line),inset -1px 0 0 var(--accent-line)
+  }
+  table.matrix thead th.col-app{color:var(--accent);border-bottom-color:var(--accent-line)}
+  table.matrix tbody tr:hover th.rowhead{color:var(--accent)}
+  table.matrix tbody tr:hover td:not(.col-app){background:var(--surface-2)}
+  .cell{display:inline-flex;flex-direction:column;align-items:center;gap:4px;cursor:default}
+  .cell .meter i{height:11px;width:5px}
+  .cell .clab{font-family:var(--mono);font-size:.62rem;letter-spacing:.03em;color:var(--text-faint)}
+  .app-tag{display:inline-flex;align-items:center;gap:5px}
+  .app-tag .dot{width:6px;height:6px;background:var(--accent)}
+
+  /* ============================ DIMENSION DETAIL ACCORDION ============================ */
+  .acc-controls{display:flex;gap:10px;margin:26px 0 14px;flex-wrap:wrap}
+  .btn{
+    font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    background:var(--surface);color:var(--text-dim);border:1px solid var(--border);
+    border-radius:8px;padding:8px 14px;cursor:pointer
+  }
+  .btn:hover{color:var(--ink);border-color:var(--border-strong)}
+  details.dim{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow)}
+  details.dim>summary{
+    list-style:none;cursor:pointer;padding:15px 20px;display:flex;align-items:center;gap:14px;
+    justify-content:space-between
+  }
+  details.dim>summary::-webkit-details-marker{display:none}
+  .dim-title{font-family:var(--serif);font-size:1.12rem;color:var(--ink);font-weight:600}
+  .dim-mini{display:flex;gap:3px;align-items:center;flex-wrap:wrap}
+  .dim-mini .chip{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:.62rem;color:var(--text-faint);border:1px solid var(--border);border-radius:6px;padding:2px 6px}
+  .chev{color:var(--text-faint);transition:transform .2s ease;flex:none}
+  details.dim[open] .chev{transform:rotate(90deg)}
+  .dim-body{padding:2px 10px 12px}
+  .prow{display:grid;grid-template-columns:158px 118px 1fr;gap:12px;align-items:start;padding:11px 12px;border-top:1px solid var(--border)}
+  .prow:first-child{border-top:none}
+  .prow.app{background:var(--accent-soft);border-radius:8px}
+  .prow .pname{font-weight:600;color:var(--ink);font-size:.86rem}
+  .prow .pname small{display:block;font-family:var(--mono);font-weight:400;font-size:.66rem;color:var(--text-faint);letter-spacing:.04em;margin-top:2px}
+  .ratechip{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:.68rem;font-weight:600}
+  .ratechip .rlab{color:var(--text)}
+  .lvl-strong .ratechip .rlab{color:var(--strong)} .lvl-moderate .ratechip .rlab{color:var(--moderate)}
+  .lvl-limited .ratechip .rlab{color:var(--limited)} .lvl-none .ratechip .rlab{color:var(--none)}
+  .prow .qual{font-weight:600;color:var(--text);font-size:.8rem}
+  .prow .note{color:var(--text-dim);font-size:.82rem;line-height:1.5;margin-top:3px}
+
+  @media (max-width:640px){
+    .prow{grid-template-columns:1fr;gap:5px;padding:12px 10px}
+    .prow .rateline{display:flex;gap:10px;align-items:center}
+  }
+
+  /* ============================ WINS / LAGS ============================ */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media (max-width:820px){.split{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;box-shadow:var(--shadow)}
+  .panel.win{border-top:3px solid var(--strong)}
+  .panel.lag{border-top:3px solid var(--limited)}
+  .panel h3{font-size:1.24rem;display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .panel .sub{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);margin-bottom:16px}
+  ul.marks{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:13px}
+  ul.marks li{position:relative;padding-left:24px;font-size:.9rem;color:var(--text);line-height:1.52}
+  ul.marks li b{color:var(--ink);font-weight:600}
+  ul.marks.win li::before{content:"";position:absolute;left:2px;top:9px;width:8px;height:8px;border-radius:50%;background:var(--strong)}
+  ul.marks.lag li::before{content:"";position:absolute;left:2px;top:8px;width:9px;height:2px;background:var(--limited);border-radius:2px;box-shadow:0 5px 0 var(--limited)}
+
+  /* ============================ PROFILES ============================ */
+  .profiles{display:flex;flex-direction:column;gap:14px}
+  details.prof{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+  details.prof.subject{border:1.5px solid var(--accent-line);background:linear-gradient(180deg,var(--accent-soft),var(--surface) 120px)}
+  details.prof>summary{list-style:none;cursor:pointer;padding:20px 22px;display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+  details.prof>summary::-webkit-details-marker{display:none}
+  .prof-id{flex:1;min-width:230px}
+  .prof-name{font-family:var(--serif);font-size:1.4rem;color:var(--ink);font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .prof-vendor{font-size:.8rem;color:var(--text-faint);margin-top:4px}
+  .prof-one{font-size:.92rem;color:var(--text-dim);margin-top:10px;line-height:1.55;max-width:74ch}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .badge{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;font-weight:600;padding:4px 9px;border-radius:6px;border:1px solid var(--border);color:var(--text-dim);white-space:nowrap}
+  .badge.open{color:var(--strong);border-color:var(--strong);background:var(--strong-bg)}
+  .badge.saas{color:var(--moderate);border-color:var(--moderate);background:var(--moderate-bg)}
+  .badge.ent{color:var(--limited);border-color:var(--limited);background:var(--limited-bg)}
+  .badge.legacy{color:var(--none);border-color:var(--none);background:var(--none-bg)}
+  .badge.subj{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+  .conf{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:var(--text-faint);display:inline-flex;align-items:center;gap:6px}
+  .conf b{color:var(--text-dim);font-weight:600}
+  .chev-p{color:var(--text-faint);transition:transform .2s ease;align-self:center}
+  details.prof[open] .chev-p{transform:rotate(90deg)}
+  .prof-body{padding:4px 22px 24px;border-top:1px solid var(--border)}
+  .prof-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px 30px;margin-top:18px}
+  @media (max-width:720px){.prof-grid{grid-template-columns:1fr}}
+  .field h4{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:9px}
+  .field p{font-size:.86rem;color:var(--text-dim);line-height:1.55}
+  .field ul{margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+  .field ul li{font-size:.85rem;color:var(--text);line-height:1.48;padding-left:16px;position:relative}
+  .field.pros ul li::before{content:"+";position:absolute;left:0;color:var(--strong);font-weight:700;font-family:var(--mono)}
+  .field.cons ul li::before{content:"–";position:absolute;left:1px;color:var(--limited);font-weight:700;font-family:var(--mono)}
+  .prof-meta{display:flex;flex-wrap:wrap;gap:8px 26px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-size:.82rem}
+  .prof-meta div{color:var(--text-dim)} .prof-meta div b{color:var(--text);font-weight:600;font-family:var(--mono);font-size:.78rem}
+  .srcs{font-size:.76rem;color:var(--text-faint);margin-top:12px;font-family:var(--mono);word-break:break-word}
+  .srcs a{color:var(--text-faint);border:none;text-decoration:underline;text-decoration-color:var(--border-strong)}
+  .srcs a:hover{color:var(--accent)}
+
+  /* ============================ RECOMMENDATIONS ============================ */
+  .recs{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+  .rec{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
+  .rec .uc{font-size:.95rem;color:var(--ink);font-weight:600;font-family:var(--serif);line-height:1.35}
+  .rec .fit{align-self:flex-start;font-family:var(--mono);font-size:.76rem;font-weight:600;color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:7px;padding:5px 11px}
+  .rec .why{font-size:.85rem;color:var(--text-dim);line-height:1.55}
+
+  /* ============================ BOTTOM LINE ============================ */
+  .bottomline{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:14px;padding:30px 34px;box-shadow:var(--shadow)}
+  .bottomline .kicker{margin-bottom:14px;display:block}
+  .bottomline p{font-family:var(--serif);font-size:clamp(1.1rem,2.2vw,1.4rem);color:var(--ink);line-height:1.5}
+  .bottomline p+p{margin-top:14px;font-size:1rem;font-family:var(--sans);color:var(--text-dim)}
+
+  /* ============================ FOOTER ============================ */
+  footer{border-top:1px solid var(--border);padding:44px 0 60px;color:var(--text-faint)}
+  footer h4{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  footer p{font-size:.82rem;color:var(--text-dim);line-height:1.6;max-width:80ch}
+  footer p+p{margin-top:10px}
+  footer .fine{font-size:.76rem;color:var(--text-faint);margin-top:20px}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="page">
+  <button class="toggle" id="themeToggle" aria-label="Toggle light and dark theme">
+    <svg id="tIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+    <span id="tLabel">Theme</span>
+  </button>
+
+  <!-- ===================== HERO ===================== -->
+  <header class="hero">
+    <div class="hero-bg"></div>
+    <canvas id="starfield"></canvas>
+    <div class="wrap">
+      <span class="kicker">Marketing-Mix-Modeling landscape · competitive teardown</span>
+      <h1>Reading the sky<br>of <em>media measurement</em>.</h1>
+      <svg class="arc" viewBox="0 0 520 40" fill="none" aria-hidden="true"><path d="M4 34 Q260 -18 516 34" stroke="currentColor" stroke-width="1.5"/><circle cx="4" cy="34" r="2.5" fill="currentColor"/><circle cx="516" cy="34" r="2.5" fill="currentColor"/><circle cx="260" cy="8" r="2.5" fill="currentColor"/></svg>
+      <p class="lede">How this <strong>fully-Bayesian MMM framework</strong> — with its Oracle agent, adaptive experiment loop, and continuous-learning bandit — stacks up against the platforms marketers actually shortlist: <strong>Meta Robyn, Google Meridian, PyMC-Marketing, Recast, Mutinex</strong>, and the enterprise MMM houses.</p>
+      <div class="stats" id="statRow"></div>
+    </div>
+  </header>
+
+  <main class="wrap" id="main"></main>
+
+  <footer>
+    <div class="wrap reading">
+      <h4>How this comparison was built</h4>
+      <p>The subject platform was characterized directly from its source tree — capabilities are marked shipped vs. deferred, not taken from marketing copy. Every competitor profile was researched from primary sources (vendor docs, GitHub/PyPI, technical papers, funding announcements) and then adversarially fact-checked by a second pass, with corrections logged and a confidence grade assigned.</p>
+      <p>Where a claim originates from a direct competitor's own blog or benchmark, it is flagged <b>competitor-sourced</b> and treated as directional, not settled fact — most notably the head-to-head speed/accuracy numbers PyMC Labs and Recast publish about rivals. Pricing figures for closed vendors (Recast, Mutinex, Analytic Partners, Kantar/Ipsos) are third-party estimates, not quotes; the vendors publish no price lists.</p>
+      <p>Ratings compress a nuanced landscape into a four-step scale for scanning — read the per-dimension notes and profiles for the real texture. This is a point-in-time snapshot (mid-2026): open-source versions, funding, and analyst positions all drift. This document is an independent analysis and is not affiliated with, endorsed by, or reviewed by any vendor named.</p>
+      <p class="fine">Snapshot: July 2026 · 9 platforms · 15 dimensions · researched &amp; verified across ~90 primary sources.</p>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- theme toggle ---------- */
+  var root=document.documentElement, tBtn=document.getElementById('themeToggle');
+  var tLabel=document.getElementById('tLabel'), tIcon=document.getElementById('tIcon');
+  var sun='<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>';
+  var moon='<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path>';
+  function isDark(){ var t=root.getAttribute('data-theme'); if(t) return t==='dark'; return window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches; }
+  function sync(){ var d=isDark(); tLabel.textContent=d?'Dark':'Light'; tIcon.innerHTML=d?moon:sun; }
+  tBtn.addEventListener('click',function(){ root.setAttribute('data-theme', isDark()?'light':'dark'); sync(); drawStars(); });
+  sync();
+
+  /* ---------- starfield (quiet, hero only) ---------- */
+  var cv=document.getElementById('starfield'), ctx=cv&&cv.getContext&&cv.getContext('2d');
+  function drawStars(){
+    if(!ctx) return;
+    var host=cv.parentElement, w=host.offsetWidth, h=host.offsetHeight, dpr=Math.min(window.devicePixelRatio||1,2);
+    cv.width=w*dpr; cv.height=h*dpr; cv.style.width=w+'px'; cv.style.height=h+'px'; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+    var dark=isDark(), col=dark?'220,171,78':'154,106,18';
+    var n=Math.round(w*h/14000); if(n>90)n=90;
+    for(var i=0;i<n;i++){
+      var x=((i*97+41)%100)/100*w, y=((i*57+13)%100)/100*h*0.9;
+      var r=((i*31)%10)/10; var a=(dark?0.5:0.32)*(0.25+r*0.75)*(1-y/h*0.5);
+      ctx.beginPath(); ctx.arc(x,y,0.5+r*1.2,0,6.283); ctx.fillStyle='rgba('+col+','+a.toFixed(3)+')'; ctx.fill();
+    }
+  }
+  if(ctx){ drawStars(); var rt; window.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(drawStars,150);}); }
+
+  /* ============================ DATA ============================ */
+  var P=[
+    {k:'app',  n:'This app',       full:'MMM Framework (this app)'},
+    {k:'robyn',n:'Robyn',          full:'Meta Robyn'},
+    {k:'mer',  n:'Meridian',       full:'Google Meridian'},
+    {k:'pymc', n:'PyMC-Mktg',      full:'PyMC-Marketing'},
+    {k:'recast',n:'Recast',        full:'Recast'},
+    {k:'muti', n:'Mutinex',        full:'Mutinex GrowthOS'},
+    {k:'lmmm', n:'LMMM',           full:'LightweightMMM'},
+    {k:'ap',   n:'Analytic P.',    full:'Analytic Partners'},
+    {k:'ent',  n:'Enterprise',     full:'Enterprise MMM vendors'}
+  ];
+  var Pfull={}; P.forEach(function(p){Pfull[p.k]=p.full;});
+
+  var LVL={strong:{lab:'Strong',seg:4},moderate:{lab:'Moderate',seg:3},limited:{lab:'Limited',seg:2},none:{lab:'None',seg:0}};
+
+  // matrix: dimension -> {platformKey:[level, qualifier, note]}
+  var M=[
+    {d:'Statistical methodology', r:{
+      app:['strong','Fully Bayesian PyMC 6','Standalone PyMC 6 / PyTensor 3 engine: geometric/delayed/Weibull adstock, Hill/logistic/tanh/MM saturation, Fourier seasonality, linear/piecewise/spline/GP trend, ROI-parameterized default priors.'],
+      robyn:['moderate','Ridge, not MCMC-Bayesian','Frequentist L2 ridge (glmnet) + Nevergrad multi-objective search; point estimates (MAP-equivalent under a normal prior), no posterior sampling.'],
+      mer:['strong','Hierarchical Bayesian NUTS','Geo-level hierarchical Bayesian on TensorFlow Probability; adstock + Hill, reach×Hill(frequency); media effects held constant over time.'],
+      pymc:['strong','Fully Bayesian PyMC','NUTS across NumPyro/BlackJAX/Nutpie; standard carryover+shape formulation with a rich transform menu and HSGP time-varying effects.'],
+      recast:['strong','Bayesian Stan HMC, time-varying','8k+ lines of Stan; locally-periodic GPs give time-varying ROI/intercept/saturation; negative-binomial integer-lag adstock, single-param Hill.'],
+      muti:['moderate','Bayesian but opaque','Marketed as Bayesian with a time-varying baseline and "Campaign-Varying" decomposition, but the sampler and adstock/saturation forms are undisclosed.'],
+      lmmm:['moderate','Bayesian but limited / deprecated','NumPyro/JAX NUTS, Normal likelihood, three transform families; polynomial trend + fixed harmonic seasonality only. Archived and unmaintained.'],
+      ap:['moderate','Econometric/ML blend, undisclosed','"Commercial mix modeling" spanning price/promo/distribution/macro; third parties describe a Bayesian/econometric/ML blend, but AP publishes no engine details.'],
+      ent:['moderate','Mixed, modernizing to Bayesian','Historically OLS/GLS/ridge econometrics; modern platforms (Keen, Ipsos MMA, Kantar HamiltonAI) are Bayesian per marketing materials, internals proprietary.']}},
+
+    {d:'Uncertainty quantification', r:{
+      app:['strong','Full posteriors, approx flagged','Genuine HDI/credible intervals on ROI & contributions; MAP/ADVI/Pathfinder approximate fits surfaced end-to-end as "uncertainty not calibrated" (nulled R-hat/ESS, banners).'],
+      robyn:['limited','Model-selection spread','No posterior; uncertainty approximated via k-means over Pareto models + bootstrapped ROAS/CPA CIs — reflects selection spread, not principled posteriors.'],
+      mer:['strong','Genuine posteriors','Full NUTS posteriors and credible intervals on ROI/effects.'],
+      pymc:['strong','Well-calibrated posteriors','Full Bayesian credible intervals on ROAS/contributions/budgets.'],
+      recast:['strong','HMC posteriors on all outputs','Credible intervals on every ROI/saturation/time-shift estimate; prospective out-of-sample scoring (1 − scaled CRPS).'],
+      muti:['moderate','Marketed, unverifiable','Claims distributions of plausible ROI rather than point estimates, but the mechanism is not externally documented.'],
+      lmmm:['strong','Genuine posteriors (deprecated)','Full posteriors/credible intervals — but the project is end-of-life.'],
+      ap:['limited','Not documented','No public statement on whether deliverables report full posteriors/credible intervals vs point estimates + significance.'],
+      ent:['moderate','Inconsistent across vendors','Bayesian platforms yield intervals; classic econometric deliverables typically report point estimates + significance.']}},
+
+    {d:'Causal identification rigor', r:{
+      app:['strong','DAG + refutation + sensitivity','Role-tagged confounder controls, DAG-based specification, a fit-based refutation suite, structural-identification designs, and sensitivity-to-unobserved-confounding.'],
+      robyn:['limited','Business-logic penalty only','DECOMP.RSSD nudges spend-vs-effect alignment (itself critiqued as ad hoc); no causal DAG or confounding framework.'],
+      mer:['strong','Causal-inference designed','Built for causal attribution with ROI priors and experiment calibration; cannot model synergies and is explicitly not for forecasting.'],
+      pymc:['strong','DAG-based identification','DAG-based causal identification (added 2025) to mitigate confounding, plus principled experiment likelihoods.'],
+      recast:['moderate','Observational, assumptions exposed','Assumption-heavy observational model with publicly documented causal assumptions; leans on lift tests for ground truth.'],
+      muti:['moderate','Baseline separation, opaque','Time-varying baseline to avoid crediting organic demand to media; "foundation-model" priors, but the identification method is undocumented.'],
+      lmmm:['limited','No causal framework','Standard Bayesian regression; no DAG, refutation, or experiment calibration.'],
+      ap:['moderate','Econometric base + validation','Argues for a comprehensive econometric base validated by experiments; ROI Genome benchmarks as priors; specifics unpublished.'],
+      ent:['moderate','Triangulation-based','MMM + MTA + experiments + benchmark priors (Ipsos MMA); NCSolutions adds purchase-based ground truth; mechanics proprietary.']}},
+
+    {d:'Experiment / lift-test calibration', r:{
+      app:['strong','In-graph likelihood + off-panel','In-graph likelihood on contribution/ROAS/mROAS estimands, lift-test→beta-prior derivation, and off-panel calibration for experiments run outside the training window.'],
+      robyn:['moderate','Optimization objective','MAPE.LIFT is a third Nevergrad objective when lift data is supplied — a penalty on model selection, not a probabilistic prior; plus a reach&frequency curve calibrator.'],
+      mer:['strong','ROI-prior helpers','Converts an experiment point-estimate+SE or 95% CI into a LogNormal ROI prior; guided-manual given estimand-mismatch warnings.'],
+      pymc:['strong','Likelihood-integrated','add_lift_test_measurements() adds an in-inference likelihood term; a geo-lift workflow updates hierarchical parameters for untested geos.'],
+      recast:['strong','Time-localized ROI prior','Lift results tighten the ROI prior only over the dates the test ran, propagating staleness and handling conflicting tests.'],
+      muti:['limited','Deliberately de-emphasized','CEO publicly argues against forcing lift tests as hard priors ("lazy models"); experiments used to validate, not as a first-class calibration loop.'],
+      lmmm:['limited','Manual only','No built-in lift-test mechanism; folding in experiments is manual (a primary reason for Meridian’s succession).'],
+      ap:['moderate','Validate-not-force','Explicitly critiques experiment-as-prior; uses experiments to validate an econometric base and ROI Genome benchmarks as priors.'],
+      ent:['moderate','Triangulation + purchase data','Benchmark priors, MMM+MTA+experiment triangulation, NCSolutions purchase-based lift; exact experiment-to-prior mechanics proprietary.']}},
+
+    {d:'Continuous / sequential learning', r:{
+      app:['strong','Model-free geo bandit','Standalone NumPyro/JAX response-surface bandit with central-composite designs, Thompson allocation, ENBS stopping, Laplace-KG / D-optimal design selection, drift discounting.'],
+      robyn:['none','Static batch fit','robyn_refresh() exists but docs flag it as not thoroughly tested; no sequential learning loop.'],
+      mer:['none','Batch model fit','No adaptive/sequential learning framework.'],
+      pymc:['limited','Refresh via serialization','Serialize/refresh and time-slice CV, but no bandit or sequential value-of-information loop.'],
+      recast:['moderate','Always-on weekly refresh','Automated weekly model refresh with time-varying coefficients; continuous, but not a designed-experiment bandit.'],
+      muti:['moderate','Continuous MMM','GrowthOS refreshes continuously rather than quarterly; not a formal sequential-experiment loop.'],
+      lmmm:['none','One-shot batch fit','Single batch fit.'],
+      ap:['moderate','Dynamic decisioning','Dynamic Decisioning / Live Modeling for near-real-time managed refresh.'],
+      ent:['moderate','Always-on overlays','SaaS overlays (Kantar LIFT ROI daily; Keen adaptive prior updating) narrow the cadence gap.']}},
+
+    {d:'Geo & hierarchical modeling', r:{
+      app:['strong','Panel + per-geo betas','Geo and geo×product MFF panels, hierarchical partial pooling, opt-in per-geo channel effectiveness (V3 vary_media_by_geo), geo/DMA allocation.'],
+      robyn:['limited','National aggregate','No native hierarchical geo random-effects; typically one coefficient set on a national time series.'],
+      mer:['strong','Geo hierarchical core','Geo-level hierarchical partial pooling of media effects, with a national fallback.'],
+      pymc:['strong','Arbitrary hierarchical dims','multidimensional.MMM supports arbitrary dims (geo×product) with partial pooling.'],
+      recast:['moderate','National top-down','Primarily national time-series; designed geo experimentation is a separate product (GeoLift); geo-panel parity undocumented.'],
+      muti:['moderate','Hierarchical claimed','Geo-level and portfolio/category/brand hierarchical modeling marketed; internals undisclosed.'],
+      lmmm:['strong','National + geo (deprecated)','Native national and sub-national hierarchical models (a reviewer-cited "killer feature") — but archived.'],
+      ap:['moderate','Multi-region enterprise','Handles multi-country/multi-brand data at scale; hierarchical structure not publicly documented.'],
+      ent:['moderate','Multi-market managed','Handles complex multi-market portfolios; geo structure vendor-specific and proprietary.']}},
+
+    {d:'Custom-model extensibility', r:{
+      app:['strong','Model Garden + non-MMM','Author/version/publish CustomMMM subclasses (CONFIG_SCHEMA + pluggable likelihood + estimands) behind a 9-tier compat contract; genuine non-MMM families (CFA/LCA/latent-factor) ride the same pipeline.'],
+      robyn:['limited','Fixed pipeline','Transform choices and hyperparameter bounds are configurable, but the ridge+Nevergrad pipeline is fixed.'],
+      mer:['limited','Fixed TFP backend','Opinionated fixed model spec and sampler; no swappable model classes.'],
+      pymc:['strong','Custom priors/transforms/terms','Custom priors, custom adstock/saturation, custom model terms, arbitrary dims; plus CLV/choice/Bass beyond MMM.'],
+      recast:['none','Closed managed','Proprietary Stan model; cannot self-host or extend.'],
+      muti:['none','Closed','Proprietary engine; the only open artifact (mmm-eval) evaluates other frameworks, not GrowthOS.'],
+      lmmm:['moderate','Code-level custom','Custom priors and code edits possible; three fixed transform families; no friendly extension API.'],
+      ap:['none','Proprietary','Managed proprietary method; no user-extensible modeling.'],
+      ent:['none','Proprietary managed','Vendor-built models; no self-serve extensibility.']}},
+
+    {d:'LLM / agent interface', r:{
+      app:['strong','Oracle is the flagship UX','LangGraph agent with ~100 tools across data/EDA/config/fit/validation/estimands/reporting/experiments/learning, running fits in an isolated kernel; multi-provider LLM.'],
+      robyn:['none','No agent interface','—'],
+      mer:['none','No LLM agent','A no-code Scenario Planner exists, but it is not conversational.'],
+      pymc:['moderate','MMM Agent in gated beta','A proprietary AI "MMM Agent" (invite-only beta) automates data prep/model selection/scenarios; not part of the open library.'],
+      recast:['none','Human data scientists','Managed service with human data scientists, not an agent.'],
+      muti:['moderate','MAITE assistant','An LLM-based "AI growth consultant" layered on each customer’s MMM for NL querying/recommendations.'],
+      lmmm:['none','Code-first library','No agent.'],
+      ap:['limited','Analyst-led','Guidance is human-analyst delivered; no conversational agent surfaced.'],
+      ent:['limited','Mostly analyst-led','Some self-serve scenario UIs; no flagship conversational agent.']}},
+
+    {d:'Automated reporting & deliverables', r:{
+      app:['strong','Multi-format + prefit + branding','Classic + evidence-coded "Augur" HTML readouts, a pre-fit Model Design Readout, model-defense report, estimand-CI + PPC sections, PPTX decks, client-branding auto-recolor — all downloadable artifacts.'],
+      robyn:['moderate','Rich diagnostics','One-pager per model, waterfall decomposition, response/adstock curves; analyst-oriented, not client decks.'],
+      mer:['moderate','Scenario Planner','No-code Looker Studio Scenario Planner over a fitted model; core outputs are charts/optimization, not polished client reports.'],
+      pymc:['moderate','Plotting, DIY UIs','Interactive Plotly plotting and model outputs; stakeholder UIs and reports are DIY.'],
+      recast:['strong','Managed weekly dashboards','Live out-of-sample accuracy dashboards and a planning/optimization UI, refreshed weekly.'],
+      muti:['strong','GrowthOS platform','Integrated scenario planning + optimization + MAITE narrative; a polished decision workflow.'],
+      lmmm:['limited','Basic plots','Standard MMM plots; weaker out-of-the-box reporting than Robyn/Recast.'],
+      ap:['strong','Executive-ready managed','PROPHET planning/optimization plus analyst-delivered strategic storytelling for executives.'],
+      ent:['strong','Managed deliverables','Analyst-built insights presentations plus SaaS scenario/optimization overlays.']}},
+
+    {d:'Experiment design & value-of-information', r:{
+      app:['strong','EIG/EVOI + Pareto optimizer','EIG/EVOI experiment prioritization, a pre-registered lifecycle registry, geo-lift/DiD/flighting designers with power+placebo math, model-anchored economics, a 4-objective Pareto optimizer.'],
+      robyn:['none','No VOI tooling','No experiment design or value-of-information tooling.'],
+      mer:['none','Consumes results only','Consumes experiment results as priors, but has no experiment-design/VOI module.'],
+      pymc:['limited','Consumes lift tests','Integrates lift tests but offers no experiment-design or value-of-information prioritization.'],
+      recast:['moderate','GeoLift product','Augmented-synthetic-control geo incrementality testing (a separate product); no VOI/EIG prioritization surfaced.'],
+      muti:['limited','Validation only','Experiments used to validate; no formal VOI/experiment-design engine documented.'],
+      lmmm:['none','No experiment design','—'],
+      ap:['limited','Validation testing','Uses in-market tests to validate; no published VOI-driven design engine.'],
+      ent:['moderate','In-market test programs','Run structured in-market experiments and triangulation, but not information-theoretic VOI prioritization.']}},
+
+    {d:'Licensing & cost', r:{
+      app:['strong','Apache-2.0, free','Open source; cost is compute + operator time. No seat/subscription fees.'],
+      robyn:['strong','MIT, free','Permissive open source; free for commercial use.'],
+      mer:['strong','Apache-2.0, free','Free open source; cost is GPU compute + analyst time.'],
+      pymc:['strong','Apache-2.0, free','Free library; consulting / MMM Agent priced separately (undisclosed).'],
+      recast:['limited','Premium enterprise SaaS','Opaque custom pricing; ~$10M+ recommended media spend; not viable for small brands.'],
+      muti:['limited','Enterprise custom','No public tiers; enterprise ACV; On-Demand mid-market pricing also undisclosed.'],
+      lmmm:['strong','Apache-2.0, free (EOL)','Free open source — but deprecated/archived.'],
+      ap:['limited','Premium quote-based','No free tier; six-figure+ managed engagements (third-party estimates).'],
+      ent:['limited','High six-figure','Non-public negotiated pricing (~$200K–$500K/project ballpark); Keen is a transparent-subscription exception.']}},
+
+    {d:'Ease of use / onboarding', r:{
+      app:['moderate','Agent lowers barrier, BYO-infra','The Oracle chat and Data Studio ease modeling, but it is a self-hosted, early-version framework requiring technical setup; no turnkey onboarding.'],
+      robyn:['limited','R/stats expertise','Requires R/Python fluency and judgment to select among ~100 Pareto-front models.'],
+      mer:['moderate','Python + no-code planner','Model build needs applied-Bayesian skill; the Scenario Planner gives non-technical users a no-code consumption layer.'],
+      pymc:['limited','Steep library','Requires Python + real Bayesian/PyMC expertise; a framework, not a product.'],
+      recast:['strong','Fully managed','Vendor operates the model; low in-house lift (after a ~2–3 week onboarding).'],
+      muti:['strong','Managed + MAITE','Abstracted behind the platform; On-Demand builds a model in <24h with agentic onboarding.'],
+      lmmm:['limited','Code-first','No GUI; requires Python/Bayesian skill and manual data scaling.'],
+      ap:['strong','Managed service','Consulting-led; no in-house data science required (but longer cycles).'],
+      ent:['strong','Managed service','Analyst-delivered; "no data scientist required" positioning (esp. Keen).']}},
+
+    {d:'Vendor support & maturity', r:{
+      app:['limited','Single author, v0.2.0','An ambitious single-author project at an early version; real bus-factor, support-SLA, and long-term-maintenance risk; newest features lightly battle-tested.'],
+      robyn:['strong','Meta-backed, mature','Widely adopted since ~2020–2021, active CRAN releases, a methodology paper, and a large community.'],
+      mer:['strong','Google-backed','Actively maintained (roughly monthly releases), a certified-partner ecosystem, the official LightweightMMM successor.'],
+      pymc:['strong','PyMC Labs + community','Maintained by PyMC creators, frequent releases, an active community; still pre-1.0 with API churn.'],
+      recast:['moderate','Seed-stage, established product','Small (~11–50), ~$4.5M raised, no round since 2022; but a mature managed product with credible adopters and support.'],
+      muti:['moderate','Funded scale-up','~A$132.5M valuation, named adopters, Dentsu/WARC partnerships; thin independent-review volume.'],
+      lmmm:['none','Deprecated/archived','Unsupported; repo archived read-only Jan 2026.'],
+      ap:['strong','Gartner Leader, 25 yrs','Founded 2000, Gartner MQ Leader 2024+2025, Forrester Wave Leader; deep enterprise pedigree.'],
+      ent:['strong','Established, consolidating','Ipsos MMA / Kantar / Circana / Keen; long histories, major parents, Gartner-recognized.']}},
+
+    {d:'Deployment / multi-tenant hosting', r:{
+      app:['moderate','Self-host, auth layer, BYO-infra','FastAPI + React with org/tenant JWT auth, roles, rate limiting, sandbox-kernel isolation and GCP/k8s assets — but no managed SaaS, and the operator must build the sandbox image.'],
+      robyn:['limited','Self-host library','Runs in the user’s environment; no hosting/multi-tenancy.'],
+      mer:['limited','Self-host, no managed fitting','Self-run Python; the Scenario Planner is a layer over a self-fitted model, not a hosted fitting service.'],
+      pymc:['limited','Self-host DIY','Runs anywhere Python runs; hosting/scheduling/UIs are the user’s responsibility.'],
+      recast:['strong','Managed SaaS, SOC 2','Cloud-native AWS SaaS, SOC 2 compliant, dedicated support.'],
+      muti:['strong','Multi-tenant SaaS','Hosted multi-tenant cloud platform (GrowthOS + DataOS).'],
+      lmmm:['limited','Self-host (EOL)','Self-hosted library, no hosting; archived.'],
+      ap:['strong','Hosted managed platform','Web-based GPS-Enterprise on cloud marketplaces, delivered as managed/hybrid engagements.'],
+      ent:['strong','Hosted managed','Vendor-hosted SaaS overlays + managed delivery; not self-host.']}},
+
+    {d:'Data-connector ecosystem', r:{
+      app:['limited','Upload + GCS/BigQuery, ad stubs','CSV/Excel/MFF upload with validation, Data Studio EDA, synthetic DGP, GCS/BigQuery/S3; the Meta/Google/TikTok connectors are explicit NotImplementedError stubs.'],
+      robyn:['limited','Mostly file-based','Analyst-supplied data; a Meta MMM API connector demo exists, but no broad connector suite.'],
+      mer:['moderate','MMM Data Platform','Can ingest Google Query Volume, YouTube reach/frequency and core media signals; otherwise advertiser-supplied aggregate data.'],
+      pymc:['limited','DIY ingestion','No native connectors; data prep is on the user.'],
+      recast:['moderate','Managed integration','Vendor handles data integration during onboarding; not a self-serve connector catalog.'],
+      muti:['strong','DataOS','A dedicated data-provisioning layer ingesting marketing/sales/pricing/audience data; WARC + Tracksuit integrations.'],
+      lmmm:['limited','Manual data prep','Requires manual data scaling; no connectors.'],
+      ap:['strong','ADAPTA + partners','ADAPTA ETL/ELT orchestration with direct Meta/Google/Amazon/Roku integrations.'],
+      ent:['strong','Enterprise integration','Managed multi-source data integration incl. clean-room / purchase data (NCSolutions).']}}
+  ];
+
+  var WINS=[
+    ['LLM “Oracle” agent as the primary interface','~100 tools running fits in an isolated kernel. No open-source competitor (Robyn, Meridian, LightweightMMM) ships a conversational agent, and PyMC-Marketing’s MMM Agent is an invite-only proprietary beta outside the open library.'],
+    ['An adaptive measurement loop with EIG/EVOI prioritization','A pre-registered experiment lifecycle registry that ranks which experiment to run next by value-of-information. Every other tool here at best consumes experiment results as priors — none prioritize what to test.'],
+    ['A model-free continuous-learning geo bandit','Thompson allocation, a funding-line rule, ENBS stopping, and Laplace-KG / D-optimal design — learning spend→outcome with no pre-fit MMM. A category none of the batch-fit libraries offer at all.'],
+    ['A declarative, named, capability-gated estimand subsystem','Bit-stable post-hoc and in-graph evaluation of causal quantities — a formalization competitors expose only as fixed ROI/contribution outputs.'],
+    ['Model Garden + genuine non-MMM Bayesian families','CFA / LCA / joint latent-factor models ride the same fit→estimand→report pipeline — broader extensibility than Robyn’s fixed pipeline, the closed commercial engines, or even PyMC-Marketing’s custom terms.'],
+    ['Off-panel experiment calibration','Calibrate from an experiment run outside the training window by evaluating the global response curve — not documented in Meridian or PyMC-Marketing, which condition on in-window spend points.'],
+    ['A causal-DAG builder + fit-based refutation + confounding sensitivity','More explicit causal-identification tooling than Robyn’s DECOMP.RSSD heuristic or the opaque enterprise engines.'],
+    ['First-class approximate fits, honestly flagged','MAP/ADVI/Pathfinder surfaced end-to-end as “uncertainty not calibrated” (nulled R-hat/ESS, banners) — a rigor-forward honesty absent from tools that silently present point estimates.'],
+    ['A pre-fit Model Design Readout','Priors, prior-predictive checks, prior-implied ROI, and an SBC verdict as an auditable pre-registration document before fitting — an anti-specification-shopping deliverable no competitor ships.'],
+    ['A broad, self-hosted reporting engine','Evidence-coded HTML readouts, a model-defense report, PPTX decks, and client-branding auto-recolor that rival managed-SaaS polish while staying open.']
+  ];
+  var LAGS=[
+    ['Single primary author at v0.2.0','Real bus-factor, support-SLA, and long-term-maintenance risk versus Meta, Google, PyMC Labs, or a 25-year Gartner-Leader like Analytic Partners.'],
+    ['No vendor-managed hosted SaaS','Multi-tenancy means self-deploying (GCP Terraform/GCE or k8s) and building a sandbox kernel image — versus turnkey, SOC 2-compliant hosted platforms with onboarding.'],
+    ['A thin data-connector ecosystem','The Meta/Google Ads/TikTok connectors are explicit NotImplementedError stubs; real ingestion is CSV/MFF + GCS/BigQuery — well behind Mutinex’s DataOS or Analytic Partners’ ADAPTA.'],
+    ['No proven large-scale or third-party adoption','Validation is internal/synthetic (self-generated DGP worlds + a limited backtest) with no independent benchmarks — versus named enterprise rosters and Gartner/Forrester recognition.'],
+    ['Aspirational commercial & compliance maturity','SOC2/DR/runbook documents are readiness plans, not certifications; go-to-market is a design-partner concept, not a proven product.'],
+    ['Breadth may outpace hardening','~131k LOC across ~292 modules built rapidly by one author; much of the newest functionality (agent, learning, Model Garden, non-MMM) is recent and lightly battle-tested in production.'],
+    ['Partial feature-completeness in places','MultivariateMMM/CombinedMMM keep a joint MvNormal-LKJ likelihood; non-MMM families ship as worked examples not a documented API; several items remain deferred.'],
+    ['Ease of use still trails managed offerings','The agent lowers the barrier, but it is a self-hosted framework — not a point-and-click product like Recast or Mutinex GrowthOS.'],
+    ['No native reach & frequency modeling','A genuine differentiator Meridian offers for video/YouTube-heavy plans.']
+  ];
+
+  var PROFILES=[
+    {k:'app', name:'MMM Framework', vendor:'The application under review · single primary author · v0.2.0 · Apache-2.0',
+     kind:'subj', kindLabel:'Subject', conf:'',
+     one:'A research-grade, fully-Bayesian MMM platform that pairs a standalone PyMC 6 engine with an unusually ambitious workflow layer: an LLM "Oracle" agent, an adaptive T0→T5 measurement loop, a model-free continuous-learning bandit, declarative estimands, and a "Model Garden" for versioned custom and non-MMM Bayesian models.',
+     method:'Fully Bayesian on PyMC 6 / PyTensor 3 (a standalone engine, not a PyMC-Marketing subclass). NUTS via NumPyro / PyMC / NutPie; MAP/ADVI/Pathfinder approximate fits for fast checking, flagged as uncalibrated. Geometric/delayed/Weibull adstock, Hill/logistic/tanh/MM saturation, Fourier seasonality, linear/piecewise/spline/GP trend, and ROI-parameterized default priors that live on the decision scale.',
+     pros:['LLM Oracle agent (~100 tools) runs fits in an isolated kernel','EIG/EVOI experiment prioritization + pre-registered lifecycle','Model-free continuous-learning geo bandit','Declarative, capability-gated estimand subsystem','Model Garden + genuine non-MMM families (CFA/LCA/latent-factor)','Off-panel + in-graph experiment calibration; SBC; prefit design readout'],
+     cons:['Single author, v0.2.0 — bus-factor & support risk','Ad-platform connectors are explicit stubs','No managed SaaS — BYO infrastructure','Benchmarks are internal/synthetic only','Extended models partially feature-complete','No native reach & frequency modeling'],
+     calib:'Fuses experiments into the posterior via an in-graph likelihood on contribution/ROAS/mROAS estimands and lift-test→beta-prior derivation — plus off-panel calibration for experiments outside the training window.',
+     pricing:'Free / open source (Apache-2.0). Cost is compute + operator time.',
+     maturity:'v0.2.0, single primary author; broad surface area, recent features lightly battle-tested.',
+     srcs:[]},
+
+    {k:'robyn', name:'Meta Robyn', vendor:'Meta / Meta Marketing Science · MIT · R (primary) + Python beta',
+     kind:'open', kindLabel:'Open source', conf:'high',
+     one:'The widely-adopted open-source frequentist counterpart to the Bayesian tools: ridge regression with automated hyperparameter search, Prophet decomposition, and lift-test calibration folded in as an optimization objective.',
+     method:'Ridge (L2, glmnet) regression on adstock- (geometric or Weibull) and Hill-transformed media, with Prophet handling trend/seasonality/holidays. A Nevergrad evolutionary optimizer runs a multi-objective search (fit NRMSE, a spend-vs-effect business penalty DECOMP.RSSD, and lift-calibration error MAPE.LIFT) that yields a Pareto front of candidate models the analyst selects from. Point estimates, not posteriors (ridge is MAP-equivalent under a normal prior, but there is no posterior sampling).',
+     pros:['Free, permissive MIT license, Meta-backed, large community','Automates hyperparameter tuning, reducing manual specification','Ridge handles media multicollinearity well','Prophet automates trend/seasonality/holiday baselines','Rigorous lift-test calibration as an optimization objective'],
+     cons:['Point estimates, not genuine Bayesian posteriors','No informative priors; heavier data demands','DECOMP.RSSD is critiqued as ad hoc','Subjective ~100-model Pareto selection; refresh instability','No native hierarchical geo random-effects'],
+     calib:'When lift/geo-test data is supplied, MAPE.LIFT becomes a third Nevergrad objective penalizing models that diverge from the experiment — a model-selection penalty, not a probabilistic prior. A newer reach&frequency curve calibrator bounds saturation shapes.',
+     pricing:'Free. Only cost is analyst time + compute.',
+     maturity:'Mature; first open-sourced ~2020–21, CRAN R 3.12.1 (Jul 2025), actively maintained, methodology paper arXiv:2403.14674.',
+     srcs:['github.com/facebookexperimental/Robyn','facebookexperimental.github.io/Robyn','arxiv.org/abs/2403.14674']},
+
+    {k:'mer', name:'Google Meridian', vendor:'Google · Meridian MMM team · Apache-2.0',
+     kind:'open', kindLabel:'Open source', conf:'high',
+     one:'Google’s current open-source Bayesian MMM and the official successor to LightweightMMM — geo-hierarchical, with native reach & frequency and ROI-priored experiment calibration, plus a no-code Scenario Planner.',
+     method:'Hierarchical Bayesian causal-inference MMM fit by full NUTS on TensorFlow Probability (GPU-accelerated) — a switch from LightweightMMM’s NumPyro/JAX. Geo-level random media coefficients (partial-pooled across geos) that are constant over time; shared adstock + Hill parameters; reach & frequency modeled as Adstock(reach×Hill(frequency)); a knot-interpolated time-varying intercept. Distinctive ROI/mROI-parameterized LogNormal priors.',
+     pros:['Free, Apache-2.0, Google-backed, ~monthly releases','Genuine full posteriors and credible intervals','Built for causal inference: ROI priors + experiment calibration','Native reach & frequency (rare among open tools)','No-code Scenario Planner (Looker Studio) for non-technical users'],
+     cons:['Fixed TFP backend; compute-intensive (GPU effectively needed at scale)','Media effects constant over time (only intercept varies)','Cannot model channel synergies/interactions (Google-stated)','For causal attribution, not forecasting (Google-stated)','Requires Python + applied-Bayesian literacy to build & validate'],
+     calib:'Converts an experiment point-estimate+SE or 95% CI into a LogNormal ROI prior via built-in helpers. Google warns experiment and MMM estimands differ, so calibration is guided-manual.',
+     pricing:'Free, open source. Cost is GPU compute + analyst time; optional certified-partner consulting.',
+     maturity:'GA Jan 29, 2025; v1.7.0 (Jun 2026); ~1.4k GitHub stars; official LightweightMMM successor with a migration guide.',
+     srcs:['github.com/google/meridian','developers.google.com/meridian','blog.google — meridian-open-to-everyone']},
+
+    {k:'pymc', name:'PyMC-Marketing', vendor:'PyMC Labs + community · Apache-2.0 library (+ consulting, gated MMM Agent)',
+     kind:'open', kindLabel:'Open source', conf:'high',
+     one:'A fully-Bayesian, highly-extensible MMM/CLV toolbox from the creators of PyMC — the most flexible open library, with lift-test calibration, time-varying effects, and DAG-based identification. (The subject app is a standalone engine, despite "extends PyMC-Marketing" framing.)',
+     method:'Bayesian probabilistic programming on PyMC/PyTensor; NUTS across NumPyro/BlackJAX/Nutpie with optional GPU. Follows the Jin et al. (2017) carryover + shape-effects formulation, with geometric/delayed/Weibull adstock, logistic/Hill/MM/tanh saturation, HSGP time-varying effects, and arbitrary hierarchical dims via multidimensional.MMM.',
+     pros:['Genuine, well-calibrated Bayesian posteriors','Extremely flexible — custom priors/transforms/terms, arbitrary dims','Multiple fast NUTS backends + GPU','Principled in-inference lift-test / geo-lift calibration','Broad scope beyond MMM (CLV/BTYD, choice, Bass)'],
+     cons:['Steep learning curve — a library, not a product','Slow MCMC iteration vs Robyn’s ridge','No documented native reach & frequency model','API churn: legacy mmm.MMM removed in 0.20.0; still pre-1.0','Headline "beats Meridian" figures are vendor self-benchmarks'],
+     calib:'add_lift_test_measurements() adds an in-inference likelihood term constraining the saturation curve at observed spend points; a geo-lift workflow updates hierarchical parameters for untested geos.',
+     pricing:'Library free (Apache-2.0). PyMC Labs consulting and the MMM Agent are quote-based / undisclosed.',
+     maturity:'Mature but pre-1.0 (v0.19.4, May 2026); active community; clients incl. HelloFresh, Colgate-Palmolive, Haleon.',
+     srcs:['github.com/pymc-labs/pymc-marketing','pymc-marketing.io','pymc-labs.com']},
+
+    {k:'recast', name:'Recast', vendor:'Recast Labs, Inc. (Brooklyn, NY) · founded 2019 · ~$4.5M raised',
+     kind:'saas', kindLabel:'Commercial SaaS', conf:'high',
+     one:'A closed-source, high-touch managed Bayesian MMM service with a strong validation culture: time-varying coefficients, automated weekly refresh, and prospective out-of-sample scoring — aimed at larger advertisers.',
+     method:'A fully-Bayesian hierarchical time-series model in Stan (8k+ lines) fit by HMC/NUTS. Locally-periodic Gaussian processes make ROI, intercept, and a shared saturation multiplier time-varying; adstock is a negative-binomial distribution over integer lags; saturation is single-parameter Hill. Demand-gen→demand-capture funnel structure. Spend-based only (no impressions/clicks or R&F).',
+     pros:['Genuine full Bayesian uncertainty on all outputs','Time-varying coefficients — a real methodological differentiator','Rigorous prospective out-of-sample scoring (1 − scaled CRPS)','Statistically principled, time-localized lift-test calibration','Unusual transparency: public methodology docs'],
+     cons:['Proprietary/closed — cannot self-host or audit the Stan code','Expensive; ~$10M+ media spend recommended','Opaque enterprise pricing; ~2–3 week onboarding','No reach & frequency; geo is a separate GeoLift product','Small seed-stage company; no round since 2022'],
+     calib:'A lift test becomes a prior on ROI only over the dates the test ran (with its uncertainty), so staleness propagates and conflicting tests are treated as point-in-time snapshots.',
+     pricing:'Custom enterprise annual subscription (unpublished); third-party estimates conflict widely. GeoLift by Recast is priced separately (free 6 months, then ~$100/mo).',
+     maturity:'Established product, small company; claims 3,000+ models scored weekly (self-reported). Adopters incl. Block, Canva, Harry’s.',
+     srcs:['docs.getrecast.com','getrecast.com/bayesian-methods-for-mmm']},
+
+    {k:'muti', name:'Mutinex GrowthOS', vendor:'Mutinex Pty Ltd (Melbourne, AU) · ~A$132.5M valuation',
+     kind:'saas', kindLabel:'Commercial SaaS', conf:'medium',
+     one:'A well-funded, always-on Bayesian MMM SaaS marketed on speed and sub-channel granularity ("Campaign-Varying MMM"), with a cross-brand data network and an LLM assistant — but a deliberately opaque model engine.',
+     method:'Bayesian hierarchical econometric modeling ("commercial mix modeling") with a time-varying baseline and a patent-pending Campaign-Varying decomposition down to creative/format/publisher/geo/audience/CPM. Marketed as producing distributions of plausible ROI. Critical gap (independently confirmed): the sampler and the adstock/saturation functional forms are not publicly disclosed.',
+     pros:['Genuine uncertainty quantification (marketed Bayesian)','Model builds/refreshes in hours–24h (vs weeks) — always-on','Sub-channel granularity via Campaign-Varying MMM','Cross-brand "foundation model" data scale','Strong GTM: Dentsu exclusive partner, WARC + Tracksuit'],
+     cons:['Methodological opacity — sampler/adstock/saturation undisclosed','R&F support unverifiable either way','Experiment calibration deliberately de-emphasized ("lazy models")','Flagship not self-serve; pricing opaque','Thin independent validation (single G2 review)'],
+     calib:'Philosophy-driven: leans on Bayesian priors + cross-brand "foundation" data and a time-varying baseline; the CEO publicly argues against forcing lift tests as hard priors (experiments should validate, not calibrate). A formal experiment-likelihood mechanism is not documented.',
+     pricing:'Enterprise custom (unpublished); a mid-market "On-Demand" tier exists (also undisclosed). The open-source mmm-eval validation toolkit is free but is not GrowthOS.',
+     maturity:'Funded scale-up; 100+ brands claimed; adopters incl. Hershey, Samsung, Intuit, Asahi; expanding into the US (2026).',
+     srcs:['mutinex.co/product/growthos','github.com/mutinex/mmm-eval']},
+
+    {k:'lmmm', name:'Google LightweightMMM', vendor:'Google engineers ("not an official Google product") · Apache-2.0',
+     kind:'legacy', kindLabel:'Legacy / deprecated', conf:'high',
+     one:'Google’s influential first open-source Bayesian MMM — now deprecated, unmaintained, and archived (read-only, Jan 2026) in favor of Meridian.',
+     method:'Fully Bayesian on NumPyro/JAX with NUTS; Normal likelihood; polynomial trend + harmonic seasonality; three media transforms (adstock, hill_adstock, carryover); cost-informed HalfNormal media coefficients (so effects are non-negative). National and sub-national geo hierarchical models.',
+     pros:['Genuine Bayesian posteriors','Joint single-model estimation of adstock + saturation','Native geo/hierarchical support (a reviewer-cited "killer feature")','Fast (minutes) vs Robyn (hours), via JAX','Free, Apache-2.0, a widely-used reference implementation'],
+     cons:['Deprecated, unmaintained, repo archived read-only','No reach & frequency; no built-in lift-test calibration','Limited time-varying dynamics (no splines/dynamic coefficients)','Run-to-run instability reported in production','Media effects constrained non-negative'],
+     calib:'Prior-based only (custom_priors, cost-informed coefficient prior); no built-in lift-test mechanism — a primary reason Meridian replaced it.',
+     pricing:'Free (Apache-2.0), but end-of-life.',
+     maturity:'EOL: final release v0.1.9 (May 2023); superseded by Meridian (Jan 2025); repo archived Jan 19, 2026.',
+     srcs:['github.com/google/lightweight_mmm','developers.google.com/meridian/docs/migrate']},
+
+    {k:'ap', name:'Analytic Partners (GPS-Enterprise)', vendor:'Analytic Partners · founded 2000 · Miami/NY · private',
+     kind:'ent', kindLabel:'Enterprise / consulting', conf:'medium',
+     one:'The enterprise category leader: a managed "Commercial Analytics" platform extending measurement beyond media to price, promotion, distribution and margin — a Gartner MQ Leader (2024 & 2025) and Forrester Wave Leader.',
+     method:'Econometric/"commercial mix modeling" at the core; the exact estimation engine is not disclosed in AP’s own materials (third parties describe a Bayesian/econometric/ML blend using ROI Genome benchmarks as informative priors). Three modules: ADAPTA (data), AMP (analytics), PROPHET (forecasting/optimization). Adstock and saturation are implied but the functional forms are unpublished.',
+     pros:['Deep enterprise pedigree (25+ years, Fortune 500 base)','Gartner MQ Leader 2024 + 2025; Forrester Wave Leader','Broadest scope — price/promo/distribution/margin/macro','ROI Genome normative benchmarks as priors','High-touch analyst guidance + executive storytelling'],
+     cons:['Low methodological transparency in primary materials','Consulting-heavy, not self-serve; longer refresh cycles','Better for strategic planning than day-to-day optimization','Premium, opaque, quote-based pricing; no free tier','Uncertainty/calibration mechanics not publicly documented'],
+     calib:'Builds a comprehensive econometric base first and uses experiments to validate it, explicitly critiquing the "calibrate a Bayesian MMM by forcing experiment results in as priors" workflow; ROI Genome benchmarks serve as an informative prior layer.',
+     pricing:'Premium, quote-based, service-heavy; no public tier. Third-party estimates (six-figures+ per program) are unverified.',
+     maturity:'Mature market leader; ~450–530 employees (est.); flagship GPS-Enterprise; global offices.',
+     srcs:['analyticpartners.com/platform','2025 Gartner MQ for MMM','Forrester Wave MMO 2023 / 2026']},
+
+    {k:'ent', name:'Enterprise MMM vendors', vendor:'Category: Ipsos MMA · Kantar (LIFT ROI/HamiltonAI) · Circana (ex-Nielsen MMM + NCSolutions) · Keen Decision Systems',
+     kind:'ent', kindLabel:'Enterprise / consulting', conf:'medium',
+     one:'The established, consolidating category of econometric/decision-science MMM houses — long histories, major parents, and Gartner recognition — modernizing unevenly from regression consulting toward always-on Bayesian platforms.',
+     method:'Historically econometric MMM (log-log/additive OLS/GLS/ridge on ~2–3 years of aggregate data with adstock + saturation). The frontier has moved toward Bayesian, unevenly: Keen is explicitly Bayesian/adaptive; Ipsos MMA markets "Bayesian + ML + guardrails"; Kantar’s HamiltonAI (ex-Blackwood Seven) is documented Bayesian/hierarchical; NCSolutions is purchase-based sales-lift (not a mix model). Engine internals are generally proprietary.',
+     pros:['Deep pedigree & enterprise trust (MMA since 1989)','Ipsos MMA a Gartner Leader; Kantar a Visionary (2025)','Broad scope + expert oversight for messy data','Strong calibration assets (benchmarks, purchase-data ground truth)','Managed delivery removes the in-house DS requirement'],
+     cons:['High cost & slow cadence for the classic model (~$200K–$500K/project est.)','Methodological opacity; hard to verify claimed Bayesian rigor','Uncertainty quantification inconsistent across the category','Vendor lock-in; data-hungry (~2–3 yrs history)','Consolidation/continuity risk (Nielsen exited MMM → Circana)'],
+     calib:'Triangulate MMM + attribution + in-market experiments + benchmark priors; NCSolutions supplies purchase-based lift as ground truth; Keen updates tactic-elasticity priors adaptively. Exact experiment-to-prior mechanics are proprietary.',
+     pricing:'Predominantly high-cost, non-public, negotiated. Keen is a transparent-subscription exception; NCSolutions prices as a data/measurement service.',
+     maturity:'Highly mature, consolidating. 2025 Gartner MMM Leaders: Analytic Partners, Ipsos MMA, TransUnion; Kantar & Ekimetrics Visionaries; Keen, Circana, others evaluated.',
+     srcs:['mma.com','kantar.com/campaigns/lift-roi','keends.com','2025 Gartner MQ for MMM']}
+  ];
+
+  var RECS=[
+    ['An in-house data-science team wanting full control, causal rigor, and a broad experiment/uncertainty toolkit — and comfortable self-hosting','This app (or PyMC-Marketing)','This app uniquely bundles a causal-DAG builder, EIG/EVOI prioritization, off-panel calibration, a continuous-learning bandit, and an agent interface in one open framework; PyMC-Marketing is the more mature, better-supported fallback if bus-factor and community matter more than workflow breadth.'],
+    ['A team whose core need is rigorous, experiment-driven, information-theoretic measurement — what to test next, when to stop, how to calibrate','This app','Its EIG/EVOI prioritization, Pareto experiment optimizer, in-graph + off-panel calibration, SBC, and model-free learning bandit form an experiment-design-and-value-of-information stack no competitor here matches — provided the team can operate a research-grade self-hosted framework.'],
+    ['A startup or analyst wanting a free, well-supported open-source Bayesian MMM to stand up quickly','Google Meridian (or PyMC-Marketing)','Meridian is free, Google-backed, actively maintained, with native reach & frequency and a no-code Scenario Planner; PyMC-Marketing for maximum flexibility. Both carry far less maintenance risk than a v0.2.0 single-author project.'],
+    ['A data-rich digital / direct-response advertiser wanting automated open-source tuning with heavy lift-test calibration','Meta Robyn','Free, mature, automates hyperparameter search and folds lift tests in as a calibration objective — accepting that it is frequentist point estimates, not posteriors, and requires manual Pareto-model selection.'],
+    ['A mid-market/enterprise brand wanting an always-on, fully managed measurement partner with time-varying coefficients','Recast (or Mutinex GrowthOS)','Both deliver hosted, managed SaaS with genuine Bayesian uncertainty and continuous refresh; Recast adds rigorous prospective out-of-sample scoring, Mutinex adds sub-channel granularity and faster onboarding.'],
+    ['An enterprise needing SLAs, managed delivery, executive storytelling, and total-commercial (price/promo/distribution) scope','Analytic Partners (or Ipsos MMA / Kantar)','Gartner/Forrester-recognized pedigree, managed analyst teams, ROI Genome benchmarks, and P&L-level scope that a single-author open framework cannot match on trust or support.'],
+    ['A non-analyst marketer wanting a guided, point-and-click tool with a hosted UI and support','Mutinex GrowthOS or Recast','Fully managed platforms with conversational/assistant layers and no in-house data-science requirement; this app’s Oracle agent helps but still assumes self-hosted, technical operation.']
+  ];
+
+  var POSITIONING='This app is a research-grade, agentic, causally-rigorous open MMM framework in a distinct niche: it matches or exceeds the open-source Bayesian tools (Meridian, PyMC-Marketing, the deprecated LightweightMMM) on methodological depth, then adds a workflow layer none of them ship — an LLM "Oracle" agent, an adaptive measurement loop with EIG/EVOI experiment prioritization, a model-free continuous-learning bandit, a declarative estimand system, and a Model Garden for custom and non-MMM Bayesian families. Against mature commercial SaaS (Recast, Mutinex) and enterprise consulting (Analytic Partners, the Kantar/Ipsos/Circana camp), it trades brand trust, managed support, turnkey data connectors, and proven at-scale adoption for openness, transparency, and an unusually broad experiment-and-uncertainty toolkit.';
+  var BOTTOM1='This app is the most feature-broad and methodologically ambitious open MMM framework in this set: it stands shoulder-to-shoulder with Meridian and PyMC-Marketing on Bayesian rigor, then adds a workflow layer — an LLM agent, an EIG/EVOI measurement loop, a model-free learning bandit, declarative estimands, a Model Garden with non-MMM families, and off-panel calibration — that no competitor, open or commercial, matches in one package.';
+  var BOTTOM2='But it is early-stage and single-author (v0.2.0), with internal-only benchmarks, stubbed ad-platform connectors, no managed SaaS, and none of the brand trust, support SLAs, or proven at-scale adoption that Recast, Mutinex, Analytic Partners, or the Google/Meta-backed open tools bring. For a technical team that values causal rigor, experiment-driven measurement, and full control — and can self-host a research-grade framework — it is genuinely differentiated and often ahead. For buyers who need turnkey hosting, vendor accountability, rich connectors, or independent validation, an established option remains the safer choice today.';
+
+  /* ============================ RENDER HELPERS ============================ */
+  var $=function(h){var d=document.createElement('div');d.innerHTML=h;return d.firstElementChild;};
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function meter(lvl){var seg=LVL[lvl].seg,h='<span class="meter">';for(var i=0;i<4;i++){h+='<i class="'+(i<seg?'on':'')+'"></i>';}return h+'</span>';}
+
+  var main=document.getElementById('main');
+
+  /* stat row */
+  (function(){
+    var stats=[['9','Platforms compared'],['15','Comparison dimensions'],['~90','Primary sources'],['Jul 2026','Verified snapshot']];
+    document.getElementById('statRow').innerHTML=stats.map(function(s){
+      return '<div class="stat"><div class="n tnum">'+s[0]+'</div><div class="l">'+s[1]+'</div></div>';
+    }).join('');
+  })();
+
+  function section(num,title,sub){
+    var s=document.createElement('section');
+    s.innerHTML='<div class="sec-head"><span class="sec-num">'+num+'</span><h2>'+title+'</h2>'+(sub?'<p>'+sub+'</p>':'')+'</div>';
+    return s;
+  }
+
+  /* ---- Legend ---- */
+  (function(){
+    var s=section('01 · How to read this','A four-step scale, and one column that’s the subject.',
+      'Each cell rates a platform on one capability. The bar and label encode the same thing so it reads without relying on color. "This app" — the platform under review — is highlighted in brass throughout.');
+    var levels=[['strong','A first-class, well-developed capability — a genuine strength.'],
+      ['moderate','Present and usable, but partial, indirect, or with caveats.'],
+      ['limited','Minimal, bolt-on, manual, or only inferable from indirect evidence.'],
+      ['none','Not offered.']];
+    var leg='<div class="legend">'+levels.map(function(l){
+      return '<div class="legend-card lvl-'+l[0]+'"><div class="lvlname">'+meter(l[0])+'<span>'+LVL[l[0]].lab+'</span></div><p>'+l[1]+'</p></div>';
+    }).join('')+'</div>';
+    leg+='<div class="callout"><strong>Fairness note.</strong> Ratings compress nuance for scanning — the per-dimension notes carry the real texture. Closed vendors (Recast, Mutinex, Analytic Partners, the enterprise camp) publish little methodology, so some ratings reflect documented opacity, not a proven weakness. Vendor head-to-head benchmarks are flagged competitor-sourced and treated as directional.</div>';
+    s.querySelector('.sec-head').insertAdjacentHTML('afterend',leg);
+    main.appendChild(s);
+  })();
+
+  /* ---- Matrix ---- */
+  (function(){
+    var s=section('02 · The matrix at a glance','15 capabilities × 9 platforms.',
+      'Scan the grid for the shape of each platform, then open any row below for the full per-platform detail. The grid scrolls sideways on narrow screens.');
+    // table
+    var head='<tr><th class="dimhead">Capability</th>'+P.map(function(p){
+      var label=p.k==='app'?'<span class="app-tag"><span class="dot"></span>'+p.n+'</span>':p.n;
+      return '<th class="'+ (p.k==='app'?'col-app':'') +'" title="'+esc(p.full)+'">'+label+'</th>';
+    }).join('')+'</tr>';
+    var rows=M.map(function(row){
+      var tds=P.map(function(p){
+        var r=row.r[p.k]; var lvl=r[0]; var appc=p.k==='app'?' col-app':'';
+        return '<td class="lvl-'+lvl+appc+'" title="'+esc(LVL[lvl].lab+' — '+r[1])+'"><span class="cell">'+meter(lvl)+'<span class="clab">'+LVL[lvl].lab+'</span></span></td>';
+      }).join('');
+      return '<tr><th class="rowhead">'+row.d+'</th>'+tds+'</tr>';
+    }).join('');
+    var tbl='<div class="matrix-scroll"><table class="matrix"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div>';
+
+    // accordion controls + details
+    var ctrl='<div class="acc-controls"><button class="btn" id="expandAll">Expand all rows</button><button class="btn" id="collapseAll">Collapse all</button></div>';
+    var acc=M.map(function(row){
+      var prows=P.map(function(p){
+        var r=row.r[p.k];var appc=p.k==='app'?' app':'';
+        return '<div class="prow lvl-'+r[0]+appc+'">'+
+          '<div class="pname">'+p.full+(p.k==='app'?' <small>subject</small>':'')+'</div>'+
+          '<div class="rateline"><span class="ratechip">'+meter(r[0])+'<span class="rlab">'+LVL[r[0]].lab+'</span></span></div>'+
+          '<div><div class="qual">'+esc(r[1])+'</div>'+(r[2]&&r[2]!=='—'?'<div class="note">'+esc(r[2])+'</div>':'')+'</div>'+
+        '</div>';
+      }).join('');
+      return '<details class="dim"><summary><span class="dim-title">'+row.d+'</span>'+
+        '<span class="chev" aria-hidden="true">›</span></summary><div class="dim-body">'+prows+'</div></details>';
+    }).join('');
+
+    s.querySelector('.sec-head').insertAdjacentHTML('afterend',tbl+ctrl+acc);
+    main.appendChild(s);
+
+    var dets=s.querySelectorAll('details.dim');
+    s.querySelector('#expandAll').addEventListener('click',function(){dets.forEach(function(d){d.open=true;});});
+    s.querySelector('#collapseAll').addEventListener('click',function(){dets.forEach(function(d){d.open=false;});});
+  })();
+
+  /* ---- Wins / Lags ---- */
+  (function(){
+    var s=section('03 · Where this app wins, where it lags','The honest verdict.',
+      'Distilled from the matrix: concrete advantages tied to real competitor gaps, and candid weaknesses versus mature, better-resourced rivals.');
+    function list(items,cls){return '<ul class="marks '+cls+'">'+items.map(function(it){
+      return '<li><b>'+esc(it[0])+'.</b> '+esc(it[1])+'</li>';}).join('')+'</ul>';}
+    var html='<div class="split">'+
+      '<div class="panel win"><h3>Genuine advantages</h3><div class="sub">where it leads the field</div>'+list(WINS,'win')+'</div>'+
+      '<div class="panel lag"><h3>Honest gaps</h3><div class="sub">where established options win today</div>'+list(LAGS,'lag')+'</div>'+
+    '</div>';
+    s.querySelector('.sec-head').insertAdjacentHTML('afterend',html);
+    main.appendChild(s);
+  })();
+
+  /* ---- Positioning ---- */
+  (function(){
+    var s=document.createElement('section');
+    s.innerHTML='<div class="reading"><span class="sec-num">04 · Positioning</span>'+
+      '<div class="bottomline" style="margin-top:18px"><span class="kicker">Where it sits</span><p>'+esc(POSITIONING)+'</p></div></div>';
+    main.appendChild(s);
+  })();
+
+  /* ---- Profiles ---- */
+  (function(){
+    var s=section('05 · Platform profiles','The subject and its eight rivals, in depth.',
+      'The app under review first, then each competitor: methodology, strengths, limitations, calibration, pricing and maturity. Every competitor profile was fact-checked against primary sources.');
+    var cards=PROFILES.map(function(pf,idx){
+      var badge='<span class="badge '+pf.kind+'">'+pf.kindLabel+'</span>';
+      var conf=pf.conf?'<span class="conf">verify <b>'+pf.conf+'</b></span>':'';
+      var pros='<div class="field pros"><h4>Strengths</h4><ul>'+pf.pros.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>';
+      var cons='<div class="field cons"><h4>Limitations</h4><ul>'+pf.cons.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>';
+      var srcs=pf.srcs.length?'<div class="srcs">Sources: '+pf.srcs.map(esc).join(' &nbsp;·&nbsp; ')+'</div>':'';
+      var open=idx===0?' open':'';
+      return '<details class="prof'+(pf.kind==='subj'?' subject':'')+'"'+open+'>'+
+        '<summary><div class="prof-id"><div class="prof-name">'+esc(pf.name)+' <span class="badges">'+badge+conf+'</span></div>'+
+        '<div class="prof-vendor">'+esc(pf.vendor)+'</div>'+
+        '<div class="prof-one">'+esc(pf.one)+'</div></div>'+
+        '<span class="chev-p" aria-hidden="true">›</span></summary>'+
+        '<div class="prof-body">'+
+          '<div class="field" style="margin-top:16px"><h4>Methodology</h4><p>'+esc(pf.method)+'</p></div>'+
+          '<div class="prof-grid">'+pros+cons+'</div>'+
+          '<div class="field" style="margin-top:20px"><h4>Experiment calibration</h4><p>'+esc(pf.calib)+'</p></div>'+
+          '<div class="prof-meta"><div>Pricing &nbsp;<b>'+esc(pf.pricing)+'</b></div><div>Maturity &nbsp;<b>'+esc(pf.maturity)+'</b></div></div>'+
+          srcs+
+        '</div>'+
+      '</details>';
+    }).join('');
+    s.querySelector('.sec-head').insertAdjacentHTML('afterend','<div class="profiles">'+cards+'</div>');
+    main.appendChild(s);
+  })();
+
+  /* ---- Recommendations ---- */
+  (function(){
+    var s=section('06 · Choose by use case','Which platform fits which buyer.',
+      'There is no single winner — the right tool depends on whether you value control, rigor, managed support, or turnkey speed.');
+    var cards='<div class="recs">'+RECS.map(function(r){
+      return '<div class="rec"><div class="uc">'+esc(r[0])+'</div><div class="fit">→ '+esc(r[1])+'</div><div class="why">'+esc(r[2])+'</div></div>';
+    }).join('')+'</div>';
+    s.querySelector('.sec-head').insertAdjacentHTML('afterend',cards);
+    main.appendChild(s);
+  })();
+
+  /* ---- Bottom line ---- */
+  (function(){
+    var s=document.createElement('section');
+    s.innerHTML='<div class="reading"><span class="sec-num">07 · Bottom line</span>'+
+      '<div class="bottomline" style="margin-top:18px"><span class="kicker">The verdict</span>'+
+      '<p>'+esc(BOTTOM1)+'</p><p>'+esc(BOTTOM2)+'</p></div></div>';
+    main.appendChild(s);
+  })();
+
+})();
+</script>

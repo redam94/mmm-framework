@@ -60,6 +60,16 @@ from .observation import (
     build_mediator_observation_dispatch,
 )
 
+# Latent-state dynamics + measurement models (StructuralNestedMMM)
+from .latent_states import (
+    ar1_decay_matrix,
+    build_latent_state,
+    standardize_in_graph,
+    build_gaussian_state_measurement,
+    build_binomial_state_measurement,
+    build_ordered_state_measurement,
+)
+
 # Cross-effect builders
 from .cross_effects import (
     CrossEffectSpec,
@@ -111,6 +121,13 @@ __all__ = [
     "build_aggregated_survey_observation",
     "compute_survey_observation_indices",
     "build_mediator_observation_dispatch",
+    # Latent states (StructuralNestedMMM)
+    "ar1_decay_matrix",
+    "build_latent_state",
+    "standardize_in_graph",
+    "build_gaussian_state_measurement",
+    "build_binomial_state_measurement",
+    "build_ordered_state_measurement",
     # Cross-effects
     "CrossEffectSpec",
     "build_cross_effect_matrix",
