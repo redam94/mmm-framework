@@ -131,6 +131,20 @@ _MEDIATOR_PRIOR_KEYS = {
     "observation_noise_sigma",
     "allow_direct_effect",
 }
+# StructuralNestedMMM mediator nodes accept the plain keys PLUS the structural
+# knobs (dynamics priors, overdispersion, parent/control edge priors, ...) —
+# all map onto MediatorNodeConfig fields consumed by dag_to_structural_config.
+_STRUCTURAL_MEDIATOR_PRIOR_KEYS = _MEDIATOR_PRIOR_KEYS | {
+    "rho_prior_alpha",
+    "rho_prior_beta",
+    "innovation_sigma",
+    "design_effect",
+    "cutpoint_prior_sigma",
+    "state_parameterization",
+    "parent_effect_sigma",
+    "control_effect_sigma",
+    "affects_outcome",
+}
 _OUTCOME_PRIOR_KEYS = {
     "intercept_prior_sigma",
     "media_effect_sigma",
@@ -195,6 +209,8 @@ def unconsumed_prior_path(parts: list[str], value, spec: dict) -> str | None:
         group = parts[1]
         if group in _EXTENSION_PRIOR_GROUPS:
             allowed = _EXTENSION_PRIOR_GROUPS[group]
+            if group == "mediator" and ext == "structural_nested_mmm":
+                allowed = _STRUCTURAL_MEDIATOR_PRIOR_KEYS
             # Typo-check the <name> against the DAG (like the plain path's
             # channel/control check) — an unknown name is accept-then-no-op.
             valid_names = _extension_prior_names(spec).get(group)
@@ -398,6 +414,68 @@ def unconsumed_spec_path(parts: list[str], value, spec: dict) -> str | None:
             "its media priors come from the causal DAG node configs, not the "
             "spec's roi/coefficient mode. Fit a plain MMM to use spec media priors."
         )
+    if top == "latent_factors":
+        if str(spec.get("dag_model_type") or "").lower() != "structural_nested_mmm":
+            return (
+                "`latent_factors` only applies to a structural nested model "
+                "(dag_model_type='structural_nested_mmm') — rebuild the spec "
+                "from a structural DAG with build_model_from_dag (mediator "
+                "chains / per-mediator likelihoods stamp the type), then "
+                "declare factors via latent_factors.<name>.<key>."
+            )
+        _LF_KEYS = {
+            "name",
+            "dynamics",
+            "rho_prior_alpha",
+            "rho_prior_beta",
+            "affects_outcome",
+            "outcome_effect_sigma",
+            "mediator_effect_sigma",
+            "anchor",
+        }
+        # Per-factor scalar sub-path (the update_model_setting idiom):
+        # latent_factors.<name>.<key> — the write layer upserts the entry.
+        if len(parts) >= 3:
+            key = parts[2]
+            if len(parts) > 3:
+                return (
+                    f"`{'.'.join(parts)}` goes too deep — latent factor keys "
+                    "are scalars: latent_factors.<name>.<key>."
+                )
+            if key == "name" or key not in _LF_KEYS:
+                valid = sorted(_LF_KEYS - {"name"})
+                return (
+                    f"`latent_factors.{parts[1]}.{key}` is not a factor setting "
+                    f"— valid keys: {', '.join(valid)}."
+                )
+            return None
+        if len(parts) == 2:
+            valid = sorted(_LF_KEYS - {"name"})
+            return (
+                "set a factor KEY, not the whole entry — use "
+                f"latent_factors.{parts[1]}.<key> where <key> is one of: "
+                f"{', '.join(valid)}."
+            )
+        # Wholesale write (programmatic / FE): a LIST of factor dicts.
+        if not isinstance(value, list):
+            return (
+                "`latent_factors` must be a LIST of factor dicts (e.g. "
+                "[{'name': 'demand', 'affects_outcome': true}]); set a single "
+                "factor key via latent_factors.<name>.<key>."
+            )
+        for entry in value:
+            if not isinstance(entry, dict) or "name" not in entry:
+                return (
+                    "`latent_factors` must be a list of factor dicts each with a "
+                    "'name' (e.g. [{'name': 'demand', 'affects_outcome': true}])."
+                )
+            unknown = set(entry) - _LF_KEYS
+            if unknown:
+                return (
+                    f"latent_factors entry {entry.get('name')!r} has unknown keys "
+                    f"{sorted(unknown)} — valid keys: {', '.join(sorted(_LF_KEYS))}."
+                )
+        return None
     if top in _FREEFORM_TOP_KEYS or top in _SIMPLE_TOP_KEYS:
         return None
 
@@ -929,7 +1007,12 @@ def _trend_config_from_spec(spec: dict):
 
 
 # DAG-resolved model types that need an extension class instead of BayesianMMM.
-_EXTENSION_DAG_TYPES = {"nested_mmm", "multivariate_mmm", "combined_mmm"}
+_EXTENSION_DAG_TYPES = {
+    "nested_mmm",
+    "structural_nested_mmm",
+    "multivariate_mmm",
+    "combined_mmm",
+}
 
 
 def _model_config_from_spec(spec: dict):
@@ -1054,11 +1137,16 @@ def _inject_extension_priors(dag_dict: dict, spec: dict) -> dict:
         cfg.update({k: v for k, v in (override or {}).items() if k in allowed})
         node["config"] = cfg
 
+    mediator_keys = (
+        _STRUCTURAL_MEDIATOR_PRIOR_KEYS
+        if str(spec.get("dag_model_type") or "").lower() == "structural_nested_mmm"
+        else _MEDIATOR_PRIOR_KEYS
+    )
     for node in dag_dict.get("nodes", []):
         nt = str(getattr(node.get("node_type"), "value", node.get("node_type"))).lower()
         name = node.get("variable_name")
         if nt == "mediator" and name in med:
-            _apply(node, med[name], _MEDIATOR_PRIOR_KEYS)
+            _apply(node, med[name], mediator_keys)
         elif nt == "outcome" and name in out:
             _apply(node, out[name], _OUTCOME_PRIOR_KEYS)
 
@@ -1110,6 +1198,23 @@ def _build_extension_model(spec: dict, dataset_path: str):
     # Fold any spec-level extension prior overrides into the DAG node configs so
     # a user-set mediator/outcome/cross-effect prior actually reaches the graph.
     dag_dict = _inject_extension_priors(dag_dict, spec)
+
+    # Structural nested: carry the spec-level latent-factor declarations into
+    # the DAG metadata (where dag_to_structural_config reads them), and stamp
+    # the model type so DAGModelBuilder's structural resolution honors an
+    # explicit spec override even when the DAG itself has no structural keys.
+    if str(spec.get("dag_model_type") or "").lower() == "structural_nested_mmm":
+        import copy as _copy2
+
+        dag_dict = _copy2.deepcopy(dag_dict)
+        meta = dict(dag_dict.get("metadata") or {})
+        meta["model_type"] = "structural_nested_mmm"
+        # Presence (not truthiness): an explicitly-set empty list CLEARS any
+        # DAG-declared factors instead of silently keeping them.
+        if "latent_factors" in spec:
+            meta["latent_factors"] = spec["latent_factors"]
+        dag_dict["metadata"] = meta
+
     dag = DAGSpec.model_validate(dag_dict)
 
     granularity = str(spec.get("time_granularity", "weekly")).lower()

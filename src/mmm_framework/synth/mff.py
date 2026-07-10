@@ -290,3 +290,66 @@ __all__ = [
     "generate_mff",
     "make_awareness_survey",
 ]
+
+
+def brand_funnel_mff(
+    seed: int = 21, *, n_weeks: int = 156
+) -> tuple[pd.DataFrame, dict]:
+    """MFF long table for the :func:`~mmm_framework.synth.dgp.make_brand_funnel`
+    world, INCLUDING its mediator surveys as extra variables — the format the
+    StructuralNestedMMM fit path consumes.
+
+    Beyond the standard Sales/media/Price blocks, the table carries:
+
+    - ``awareness_count`` / ``awareness_trials`` — the weekly binary tracker
+      (rows only for observed weeks; a missing week = no survey, which the
+      structural builder loads as NaN = unobserved)
+    - ``consideration_cat_1`` .. ``_5`` — the weekly Likert category counts
+      (low → high), again with unobserved weeks omitted
+
+    Returns ``(mff_df, answer_key)``; the key carries the structural truth
+    (rho, betas, mediated shares) plus the survey variable names, so a
+    recovery harness can assemble the DAG spec without magic strings.
+    """
+    sc = dgp.make_brand_funnel(seed=seed, n_weeks=n_weeks)
+    mff = scenario_to_mff(sc)
+    period = np.asarray(sc.weeks.strftime("%Y-%m-%d"))
+
+    frames = [mff]
+
+    def _sparse_block(name: str, values: np.ndarray) -> pd.DataFrame:
+        obs = np.isfinite(values)
+        return pd.DataFrame(
+            {
+                "Period": period[obs],
+                "Geography": None,
+                "Product": None,
+                "Campaign": None,
+                "Outlet": None,
+                "Creative": None,
+                "VariableName": name,
+                "VariableValue": np.asarray(values, dtype=float)[obs],
+            }
+        )
+
+    frames.append(_sparse_block("awareness_count", sc.notes["awareness_counts"]))
+    frames.append(_sparse_block("awareness_trials", sc.notes["awareness_trials"]))
+    cons = np.asarray(sc.notes["consideration_counts"], dtype=float)
+    category_variables = [f"consideration_cat_{k + 1}" for k in range(cons.shape[1])]
+    for k, cname in enumerate(category_variables):
+        frames.append(_sparse_block(cname, cons[:, k]))
+
+    out = pd.concat(frames, ignore_index=True)
+    out = out.sort_values(["Period", "VariableName"], kind="stable").reset_index(
+        drop=True
+    )
+
+    key = truth_summary(sc)
+    key["mediator_variables"] = {
+        "awareness": {
+            "counts": "awareness_count",
+            "trials": "awareness_trials",
+        },
+        "consideration": {"category_variables": category_variables},
+    }
+    return out, key

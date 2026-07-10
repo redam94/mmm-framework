@@ -166,18 +166,27 @@ def validate_dag(dag: DAGSpec) -> ValidationResult:
                         f"{target_node.node_type.value} node '{target_node.id}'"
                     )
 
-            # Control can point to: KPI, OUTCOME, or MEDIA (confounders affect media spend)
+            # Control can point to: KPI, OUTCOME, MEDIA (confounders affect
+            # media spend), or MEDIATOR (structural mediator drivers, e.g.
+            # price -> consideration; routes to StructuralNestedMMM)
             if source_node.node_type == NodeType.CONTROL:
-                valid_targets = {NodeType.KPI, NodeType.OUTCOME, NodeType.MEDIA}
+                valid_targets = {
+                    NodeType.KPI,
+                    NodeType.OUTCOME,
+                    NodeType.MEDIA,
+                    NodeType.MEDIATOR,
+                }
                 if target_node.node_type not in valid_targets:
                     errors.append(
                         f"CONTROL node '{source_node.id}' cannot point to "
                         f"{target_node.node_type.value} node '{target_node.id}'"
                     )
 
-            # Mediator can point to: KPI, OUTCOME
+            # Mediator can point to: KPI, OUTCOME, or another MEDIATOR (funnel
+            # chains, e.g. awareness -> consideration; any mediator->mediator
+            # edge routes the DAG to StructuralNestedMMM)
             if source_node.node_type == NodeType.MEDIATOR:
-                valid_targets = {NodeType.KPI, NodeType.OUTCOME}
+                valid_targets = {NodeType.KPI, NodeType.OUTCOME, NodeType.MEDIATOR}
                 if target_node.node_type not in valid_targets:
                     errors.append(
                         f"MEDIATOR node '{source_node.id}' cannot point to "

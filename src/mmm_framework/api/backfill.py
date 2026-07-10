@@ -82,6 +82,9 @@ def backfill_run_metrics(
             problems.append(f"dataset missing: {dataset_path}")
         if not spec or not spec.get("kpi"):
             problems.append("no spec recorded")
+        _ext = _extended_flavor(model_path)
+        if _ext:
+            problems.append(f"extension model ({_ext}): run metrics not supported")
         if problems:
             report.append(
                 {"run_id": run_id, "status": "skipped", "detail": "; ".join(problems)}
@@ -113,6 +116,24 @@ def backfill_run_metrics(
     return report
 
 
+def _extended_flavor(model_path: str | None) -> str | None:
+    """The saved model's class name when it is an extended-flavor save
+    (BaseExtendedMMM family), else None. Cheap sidecar read -- lets backfill
+    skip extension runs BEFORE paying panel + unpickle + graph rebuild
+    (run metrics / estimands assume the core BayesianMMM read surface)."""
+    import json as _json
+
+    try:
+        with open(os.path.join(model_path, "metadata.json")) as f:
+            md = _json.load(f)
+        if md.get("model_flavor") == "extended":
+            qn = md.get("model_class_qualname") or "BaseExtendedMMM"
+            return qn.rsplit(".", 1)[-1]
+    except Exception:  # noqa: BLE001 -- no/unreadable sidecar => not extended
+        pass
+    return None
+
+
 def _load_saved_model(p: dict[str, Any]) -> Any:
     """Rebuild the panel + deserialize the saved model from a run payload.
 
@@ -133,6 +154,9 @@ def _load_saved_model(p: dict[str, Any]) -> Any:
         problems.append(f"dataset missing: {dataset_path}")
     if not spec or not spec.get("kpi"):
         problems.append("no spec recorded")
+    _ext = _extended_flavor(model_path)
+    if _ext:
+        problems.append(f"extension model ({_ext}): backfill not supported")
     if problems:
         raise FileNotFoundError("; ".join(problems))
 

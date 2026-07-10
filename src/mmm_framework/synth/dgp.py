@@ -1723,3 +1723,170 @@ def build(
 
 
 __all__ = ["Scenario", "SCENARIOS", "PRIORITY", "build", "CHANNELS"]
+
+
+# ---------------------------------------------------------------------------
+# brand funnel: the StructuralNestedMMM ground-truth world
+# ---------------------------------------------------------------------------
+
+
+def make_brand_funnel(seed: int = 21, *, n_weeks: int = 156) -> Scenario:
+    """A two-stage brand funnel with a shared latent demand trend.
+
+    Structure (the ``StructuralNestedMMM`` motivating example)::
+
+        TV --> awareness            AR(1) logit state (rho = 0.85), measured by
+                                    a weekly binary tracker with VARYING sample
+                                    size (~75% of weeks observed)
+        Display + Social + awareness + price + demand --> consideration
+                                    static latent index, measured by a 5-point
+                                    Likert survey (Multinomial category counts)
+        consideration + demand + price + Search --> sales
+
+    TV/Display/Social are FULLY mediated (zero direct effect -- the tight
+    direct-prior test); Search is a pure direct-response channel. The latent
+    demand trend confounds consideration and sales (leaving it out biases the
+    mediated path).
+
+    ``true_contribution``/``true_roas`` are counterfactual totals through the
+    full funnel (realized shocks held fixed -- the model's structure-preserving
+    intervention). Mediator survey arrays + every structural parameter live in
+    ``notes`` (this scenario is NOT registered in ``SCENARIOS``: the MFF path
+    cannot carry the mediator surveys yet; consume it directly from Python).
+    """
+    from mmm_framework.config import CausalControlRole
+
+    rng = np.random.default_rng(seed)
+    weeks = pd.date_range("2023-01-02", periods=n_weeks, freq="W-MON")
+    t = np.arange(n_weeks)
+
+    # -- media spend (KPI $000s scale), pulsed flighting per channel --------
+    channels = ["TV", "Display", "Social", "Search"]
+    base = {"TV": 110.0, "Display": 45.0, "Social": 55.0, "Search": 65.0}
+    period = {"TV": 9.0, "Display": 13.0, "Social": 11.0, "Search": 7.0}
+    spend = {}
+    for c in channels:
+        wave = 0.5 * (1 + np.sin(2 * np.pi * t / period[c] + rng.uniform(0, 6)))
+        level = base[c] * (0.4 + 1.2 * wave) * rng.gamma(8.0, 1 / 8.0, n_weeks)
+        dark = rng.random(n_weeks) < 0.12
+        level[dark] = 0.0
+        spend[c] = level
+    spend = pd.DataFrame(spend, index=weeks)
+
+    # -- controls + latent demand ------------------------------------------
+    price = 10.0 + np.cumsum(rng.normal(0.0, 0.05, n_weeks))
+    price_z = (price - price.mean()) / price.std()
+    controls = pd.DataFrame({"Price": price}, index=weeks)
+
+    rho_demand = 0.92
+    d = np.zeros(n_weeks)
+    for i in range(1, n_weeks):
+        d[i] = rho_demand * d[i - 1] + rng.normal(0.0, 0.35)
+    demand_z = (d - d.mean()) / d.std()
+
+    # -- structural parameters (the answer key) ----------------------------
+    rho_aw, mu_aw, b_tv = 0.85, -1.1, 0.9
+    lam_sat = 2.0
+    b_disp, b_soc = 1.2, 0.8
+    lam_aw = 2.5  # consideration lift per point of awareness probability
+    phi_price, w_dem_cons = -0.8, 0.6
+    gamma_cons, beta_search = 2500.0, 6000.0
+    w_dem_sales, phi_price_sales = 2000.0, -1500.0
+    base_sales = 40000.0
+
+    smax = spend.to_numpy(float).max(axis=0) + 1e-9
+
+    # realized shocks, held fixed under intervention (structure-preserving)
+    e_aw = rng.normal(0.0, 0.15, n_weeks)
+    e_cons = rng.normal(0.0, 0.10, n_weeks)
+
+    def _structural(spend_arr: np.ndarray):
+        sat = 1.0 - np.exp(-lam_sat * spend_arr / smax[None, :])
+        z_aw = np.zeros(n_weeks)
+        prev = mu_aw
+        for i in range(n_weeks):
+            prev = mu_aw + rho_aw * (prev - mu_aw) + b_tv * sat[i, 0] + e_aw[i]
+            z_aw[i] = prev
+        p_aw = 1.0 / (1.0 + np.exp(-z_aw))
+        z_cons = (
+            b_disp * sat[:, 1]
+            + b_soc * sat[:, 2]
+            + lam_aw * p_aw
+            + phi_price * price_z
+            + w_dem_cons * demand_z
+            + e_cons
+        )
+        mu = (
+            base_sales
+            + gamma_cons * z_cons
+            + beta_search * sat[:, 3]
+            + w_dem_sales * demand_z
+            + phi_price_sales * price_z
+        )
+        return mu, p_aw, z_cons
+
+    def response_fn(spend_arr: np.ndarray) -> np.ndarray:
+        return _structural(spend_arr)[0]
+
+    mu_struct, p_aw, z_cons = _structural(spend.to_numpy(float))
+    noise = rng.normal(0.0, 800.0, n_weeks)
+
+    # -- mediator measurements ---------------------------------------------
+    # awareness: weekly binary tracker, varying volume, ~75% coverage
+    aw_obs = rng.random(n_weeks) < 0.75
+    aw_trials = np.full(n_weeks, np.nan)
+    aw_counts = np.full(n_weeks, np.nan)
+    aw_trials[aw_obs] = rng.integers(150, 600, aw_obs.sum()).astype(float)
+    aw_counts[aw_obs] = rng.binomial(
+        aw_trials[aw_obs].astype(int), p_aw[aw_obs]
+    ).astype(float)
+
+    # consideration: 5-point Likert category counts, ~85% coverage
+    K = 5
+    cuts = z_cons.mean() + np.array([-1.2, -0.4, 0.4, 1.2])
+    cdf = 1.0 / (1.0 + np.exp(-(cuts[None, :] - z_cons[:, None])))
+    cells = np.concatenate(
+        [cdf[:, :1], np.diff(cdf, axis=1), 1.0 - cdf[:, -1:]], axis=1
+    )
+    cons_obs = rng.random(n_weeks) < 0.85
+    cons_counts = np.full((n_weeks, K), np.nan)
+    for i in np.flatnonzero(cons_obs):
+        cons_counts[i] = rng.multinomial(int(rng.integers(120, 300)), cells[i])
+
+    return _finish(
+        "brand_funnel",
+        "",
+        "Two-stage funnel (binomial awareness tracker -> Likert consideration "
+        "-> sales) with a latent demand confounder; the StructuralNestedMMM "
+        "recovery world.",
+        weeks,
+        spend,
+        mu_struct,
+        noise,
+        controls,
+        response_fn,
+        control_roles={"Price": CausalControlRole.CONFOUNDER},
+        notes={
+            "awareness_counts": aw_counts,
+            "awareness_trials": aw_trials,
+            "consideration_counts": cons_counts,
+            "latent_demand": demand_z,
+            "p_awareness": p_aw,
+            "z_consideration": z_cons,
+            "mediated_share": {"TV": 1.0, "Display": 1.0, "Social": 1.0, "Search": 0.0},
+            "true_params": {
+                "rho_awareness": rho_aw,
+                "b_tv_to_awareness": b_tv,
+                "b_display_to_consideration": b_disp,
+                "b_social_to_consideration": b_soc,
+                "lambda_awareness_to_consideration": lam_aw,
+                "phi_price_to_consideration": phi_price,
+                "w_demand_to_consideration": w_dem_cons,
+                "gamma_consideration": gamma_cons,
+                "beta_search": beta_search,
+                "w_demand_to_sales": w_dem_sales,
+                "rho_demand": rho_demand,
+                "cutpoints": cuts.tolist(),
+            },
+        },
+    )

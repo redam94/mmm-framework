@@ -573,3 +573,233 @@ def dag_to_combined_config(dag: DAGSpec):
         multivariate=multivariate_config,
         mediator_to_outcome_map=mediator_to_outcome_map_tuple,
     )
+
+
+# Valid LatentFactorSpec construction keys for dag.metadata["latent_factors"]
+# entries (kept in sync with mmm_extensions.config.LatentFactorSpec).
+_LATENT_FACTOR_KEYS = {
+    "name",
+    "dynamics",
+    "rho_prior_alpha",
+    "rho_prior_beta",
+    "affects_outcome",
+    "outcome_effect_sigma",
+    "mediator_effect_sigma",
+    "anchor",
+}
+
+
+def dag_to_structural_config(dag: DAGSpec):
+    """Extract a :class:`StructuralNestedConfig` + per-mediator data
+    requirements from a structural DAG.
+
+    Per mediator node: channels from MEDIA->mediator edges, parents from
+    mediator->mediator edges, controls from CONTROL->mediator edges, latent
+    factors + dynamics/measurement/priors from the node config -- mapping ONLY
+    keys present in the RAW config dict so ``MediatorSpec`` defaults (e.g. the
+    tight direct-effect prior, dynamics-resolved adstock) hold when unset.
+    Latent factors come from ``dag.metadata["latent_factors"]`` (a list of
+    LatentFactorSpec-shaped dicts). ``outcome_controls`` is the set of
+    CONTROL->KPI edges, so a control driving only a mediator (price ->
+    consideration) stays out of the outcome equation.
+
+    Returns
+    -------
+    (StructuralNestedConfig, list[dict])
+        The model config and, per non-latent mediator, the MFF data
+        requirement: ``{"name", "likelihood", "variable_name",
+        "trials_variable", "category_variables"}``.
+    """
+    from mmm_framework.mmm_extensions.config import (
+        EffectConstraint,
+        EffectPriorConfig,
+        LatentFactorSpec,
+        MediatorDynamics,
+        MediatorLikelihood,
+        MediatorMeasurement,
+        MediatorSpec,
+        StructuralNestedConfig,
+    )
+
+    constraint_map = {
+        "none": EffectConstraint.NONE,
+        "positive": EffectConstraint.POSITIVE,
+        "negative": EffectConstraint.NEGATIVE,
+    }
+    id_to_node = {n.id: n for n in dag.nodes}
+    # KPI + OUTCOME nodes: a mediator's default affects_outcome comes from
+    # whether the DAG actually draws an edge into one of these.
+    outcome_ids = {n.id for n in dag.outcome_nodes}
+
+    mediator_specs = []
+    data_requirements: list[dict] = []
+
+    for mediator_node in dag.mediator_nodes:
+        raw = dict(mediator_node.config or {})
+        mc = MediatorNodeConfig(
+            **{k: v for k, v in raw.items() if k in MediatorNodeConfig.model_fields}
+        )
+        name = mediator_node.variable_name
+
+        channels: list[str] = []
+        parents: list[str] = []
+        controls: list[str] = []
+        for edge in dag.get_incoming_edges(mediator_node.id):
+            source = id_to_node.get(edge.source)
+            if source is None:
+                continue
+            # Dedupe (order-preserving): duplicate edges would otherwise
+            # produce duplicate driver terms and a PyMC duplicate-RV crash.
+            if source.node_type == NodeType.MEDIA:
+                if source.variable_name not in channels:
+                    channels.append(source.variable_name)
+            elif source.node_type == NodeType.MEDIATOR:
+                if source.variable_name not in parents:
+                    parents.append(source.variable_name)
+            elif source.node_type == NodeType.CONTROL:
+                if source.variable_name not in controls:
+                    controls.append(source.variable_name)
+
+        # Measurement family: explicit `likelihood` wins; else derive from the
+        # plain-nested `mediator_type` (fully_latent -> LATENT, else GAUSSIAN).
+        if mc.likelihood is not None:
+            likelihood = MediatorLikelihood(str(mc.likelihood).lower())
+        elif mc.trials_variable or mc.category_variables:
+            # Survey columns without the matching family would silently derive
+            # GAUSSIAN and fail later with a misleading shape error.
+            raise ValueError(
+                f"Structural mediator '{mediator_node.variable_name}' sets "
+                "trials_variable/category_variables but no `likelihood` -- "
+                "set likelihood='binomial' (trials) or 'ordered' (categories)"
+            )
+        elif mc.mediator_type == "fully_latent":
+            likelihood = MediatorLikelihood.LATENT
+        else:
+            likelihood = MediatorLikelihood.GAUSSIAN
+
+        if likelihood == MediatorLikelihood.BINOMIAL and not mc.trials_variable:
+            raise ValueError(
+                f"Structural mediator '{name}' has a binomial likelihood but "
+                "no `trials_variable` (the weekly survey sample-size column)"
+            )
+        if likelihood == MediatorLikelihood.ORDERED and not mc.category_variables:
+            raise ValueError(
+                f"Structural mediator '{name}' has an ordered likelihood but "
+                "no `category_variables` (the per-category count columns, "
+                "ordered low -> high)"
+            )
+
+        meas_kwargs: dict = {"likelihood": likelihood}
+        if "observation_noise_sigma" in raw:
+            meas_kwargs["noise_sigma"] = mc.observation_noise_sigma
+        if "design_effect" in raw:
+            meas_kwargs["design_effect"] = mc.design_effect
+        if mc.category_variables:
+            meas_kwargs["n_categories"] = len(mc.category_variables)
+        if "cutpoint_prior_sigma" in raw:
+            meas_kwargs["cutpoint_prior_sigma"] = mc.cutpoint_prior_sigma
+
+        spec_kwargs: dict = {
+            "name": name,
+            "channels": tuple(channels),
+            "parents": tuple(parents),
+            "controls": tuple(controls),
+            "latent_factors": tuple(mc.latent_factors or ()),
+            "measurement": MediatorMeasurement(**meas_kwargs),
+        }
+        if "dynamics" in raw:
+            spec_kwargs["dynamics"] = MediatorDynamics(str(mc.dynamics).lower())
+        if "rho_prior_alpha" in raw:
+            spec_kwargs["rho_prior_alpha"] = mc.rho_prior_alpha
+        if "rho_prior_beta" in raw:
+            spec_kwargs["rho_prior_beta"] = mc.rho_prior_beta
+        if "innovation_sigma" in raw:
+            spec_kwargs["innovation_sigma"] = mc.innovation_sigma
+        if "state_parameterization" in raw:
+            spec_kwargs["state_parameterization"] = mc.state_parameterization
+        if "affects_outcome" in raw:
+            spec_kwargs["affects_outcome"] = mc.affects_outcome
+        else:
+            # DAG-faithful default: the mediator feeds the outcome equation
+            # only when the DAG draws that edge (a pure upstream funnel stage
+            # like awareness -> consideration must not get a gamma path the
+            # DAG does not contain).
+            spec_kwargs["affects_outcome"] = any(
+                e.source == mediator_node.id and e.target in outcome_ids
+                for e in dag.edges
+            )
+        if "allow_direct_effect" in raw:
+            spec_kwargs["allow_direct_effect"] = mc.allow_direct_effect
+        if "direct_effect_sigma" in raw:
+            spec_kwargs["direct_effect"] = EffectPriorConfig(
+                sigma=mc.direct_effect_sigma
+            )
+        if "apply_adstock" in raw:
+            spec_kwargs["apply_adstock"] = mc.apply_adstock
+        if "media_effect_sigma" in raw or "media_effect_constraint" in raw:
+            spec_kwargs["media_effect"] = EffectPriorConfig(
+                constraint=constraint_map.get(
+                    mc.media_effect_constraint, EffectConstraint.POSITIVE
+                ),
+                sigma=mc.media_effect_sigma,
+            )
+        if "outcome_effect_sigma" in raw:
+            # Positive (the MediatorSpec default constraint) with the DAG's
+            # scale -- funnel gammas are sign-constrained, unlike plain nested.
+            spec_kwargs["outcome_effect"] = EffectPriorConfig(
+                constraint=EffectConstraint.POSITIVE,
+                sigma=mc.outcome_effect_sigma,
+            )
+        if "parent_effect_sigma" in raw:
+            spec_kwargs["parent_effect"] = EffectPriorConfig(
+                constraint=EffectConstraint.POSITIVE, sigma=mc.parent_effect_sigma
+            )
+        if "control_effect_sigma" in raw:
+            spec_kwargs["control_effect"] = EffectPriorConfig(
+                sigma=mc.control_effect_sigma
+            )
+
+        mediator_specs.append(MediatorSpec(**spec_kwargs))
+        if likelihood != MediatorLikelihood.LATENT:
+            data_requirements.append(
+                {
+                    "name": name,
+                    "likelihood": likelihood.value,
+                    "variable_name": name,
+                    "trials_variable": mc.trials_variable,
+                    "category_variables": list(mc.category_variables or []),
+                }
+            )
+
+    # Latent factors ride the DAG metadata (list of LatentFactorSpec dicts).
+    factors = []
+    for entry in (dag.metadata or {}).get("latent_factors", []) or []:
+        if not isinstance(entry, dict) or "name" not in entry:
+            raise ValueError(
+                "Each dag.metadata['latent_factors'] entry must be a dict with "
+                f"a 'name' (got {entry!r})"
+            )
+        unknown = set(entry) - _LATENT_FACTOR_KEYS
+        if unknown:
+            raise ValueError(
+                f"latent_factors entry {entry.get('name')!r} has unknown keys "
+                f"{sorted(unknown)}; valid: {sorted(_LATENT_FACTOR_KEYS)}"
+            )
+        factors.append(LatentFactorSpec(**entry))
+
+    # Outcome controls: only controls with an edge INTO the KPI.
+    kpi_ids = {n.id for n in dag.nodes if n.node_type == NodeType.KPI}
+    outcome_controls = tuple(
+        id_to_node[e.source].variable_name
+        for e in dag.edges
+        if e.target in kpi_ids
+        and e.source in id_to_node
+        and id_to_node[e.source].node_type == NodeType.CONTROL
+    )
+
+    config = StructuralNestedConfig(
+        mediators=tuple(mediator_specs),
+        latent_factors=tuple(factors),
+        outcome_controls=outcome_controls,
+    )
+    return config, data_requirements

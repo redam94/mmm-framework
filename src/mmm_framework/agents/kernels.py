@@ -463,6 +463,36 @@ try:
             if not _dirs:
                 return None
             _latest = _dirs[-1]
+            from mmm_framework.serialization import MMMSerializer
+
+            # Extended-flavor saves (BaseExtendedMMM family) load panel-free.
+            try:
+                with open(_os.path.join(_latest, "metadata.json")) as _mf:
+                    _flavor = _json.load(_mf).get("model_flavor")
+            except Exception:
+                _flavor = None
+            if _flavor == "extended":
+                mmm = MMMSerializer.load(_latest)
+                # Rebuild results from the pickled fit diagnostics so an
+                # approximate reload keeps flagging as approximate.
+                results = None
+                try:
+                    _diag = getattr(mmm, "_fit_diagnostics", None)
+                    if _diag and getattr(mmm, "_trace", None) is not None:
+                        from mmm_framework.mmm_extensions.results import (
+                            ModelResults as _MR,
+                        )
+
+                        results = _MR(
+                            trace=mmm._trace,
+                            model=None,
+                            config=getattr(mmm, "config", None),
+                            diagnostics=dict(_diag),
+                        )
+                except Exception:
+                    results = None
+                return mmm
+
             with open(_os.path.join(_latest, "run_metadata.json")) as _f:
                 _meta = _json.load(_f)
             _spec = _meta.get("spec")
@@ -471,7 +501,6 @@ try:
                 return None
             from mmm_framework.agents.fitting import _mff_config_from_spec
             from mmm_framework import load_mff
-            from mmm_framework.serialization import MMMSerializer
 
             _panel = load_mff(_dsp, _mff_config_from_spec(_spec))
             mmm = MMMSerializer.load(_latest, _panel)

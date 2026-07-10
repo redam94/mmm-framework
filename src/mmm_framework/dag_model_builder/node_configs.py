@@ -132,7 +132,46 @@ class MediatorNodeConfig(BaseModel):
     apply_adstock: bool = True
     apply_saturation: bool = True
 
+    # --- structural extensions (StructuralNestedMMM) ------------------------
+    # Any of these keys present on a mediator node upgrades the DAG's resolved
+    # model type to STRUCTURAL_NESTED_MMM (see model_type_resolver). All default
+    # to None/neutral so existing plain-nested configs are untouched.
+    dynamics: str | None = None  # static | ar1 | random_walk
+    likelihood: str | None = None  # gaussian | binomial | ordered | latent
+    trials_variable: str | None = None  # binomial: weekly sample-size MFF column
+    category_variables: list[str] | None = None  # ordered: K count columns, low->high
+    design_effect: float = Field(default=1.0, ge=1)
+    cutpoint_prior_sigma: float | None = Field(default=None, gt=0)
+    rho_prior_alpha: float | None = Field(default=None, gt=0)
+    rho_prior_beta: float | None = Field(default=None, gt=0)
+    innovation_sigma: float | None = Field(default=None, gt=0)
+    state_parameterization: str | None = None  # auto | centered | non_centered
+    affects_outcome: bool = True
+    parent_effect_sigma: float | None = Field(default=None, gt=0)
+    control_effect_sigma: float | None = Field(default=None, gt=0)
+    latent_factors: list[str] | None = None  # factor names this equation consumes
+
     model_config = {"extra": "forbid"}
+
+
+# Keys whose PRESENCE on a mediator node's raw config marks the DAG as
+# structural (consumed by model_type_resolver + dag_to_structural_config).
+STRUCTURAL_MEDIATOR_KEYS = {
+    "dynamics",
+    "likelihood",
+    "trials_variable",
+    "category_variables",
+    "design_effect",
+    "cutpoint_prior_sigma",
+    "rho_prior_alpha",
+    "rho_prior_beta",
+    "innovation_sigma",
+    "state_parameterization",
+    "affects_outcome",
+    "parent_effect_sigma",
+    "control_effect_sigma",
+    "latent_factors",
+}
 
 
 class OutcomeNodeConfig(BaseModel):

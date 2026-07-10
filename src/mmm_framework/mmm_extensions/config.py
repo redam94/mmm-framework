@@ -572,6 +572,322 @@ class AggregatedSurveyConfig:
             raise ValueError("design_effect must be positive")
 
 
+# =============================================================================
+# Structural nested model configuration (StructuralNestedMMM)
+# =============================================================================
+
+
+class MediatorDynamics(str, Enum):
+    """Latent-state dynamics of a mediator (or latent factor).
+
+    ``STATIC``      z_t = level + drivers_t (no state carryover)
+    ``AR1``         z_t = level + sum_{s<=t} rho^(t-s) * (drivers_s + sigma*eps_s)
+    ``RANDOM_WALK`` AR1 with rho fixed at 1 (accumulating stock)
+    """
+
+    STATIC = "static"
+    AR1 = "ar1"
+    RANDOM_WALK = "random_walk"
+
+
+class MediatorLikelihood(str, Enum):
+    """Measurement family for a mediator's observed data.
+
+    ``GAUSSIAN`` continuous index, z-scored, masked Normal observation
+    ``BINOMIAL`` per-period success counts + per-period trials, logit link
+    ``ORDERED``  per-period Likert category counts, cumulative-logit Multinomial
+    ``LATENT``   never observed (state identified by in-graph standardization)
+    """
+
+    GAUSSIAN = "gaussian"
+    BINOMIAL = "binomial"
+    ORDERED = "ordered"
+    LATENT = "latent"
+
+
+@dataclass(frozen=True)
+class MediatorMeasurement:
+    """How a mediator's latent state is observed.
+
+    Each measured family pins the latent's scale through its own geometry:
+    GAUSSIAN defines the state on the standardized survey scale (loading fixed
+    at 1), BINOMIAL pins it absolutely on the logit/probability scale, ORDERED
+    anchors location in the cutpoints and scale against the unit-logistic
+    response noise. ``design_effect`` deflates survey information for clustered
+    or weighted samples (``n_eff = n / design_effect``).
+    """
+
+    likelihood: MediatorLikelihood = MediatorLikelihood.GAUSSIAN
+    noise_sigma: float = 0.3
+    design_effect: float = 1.0
+    n_categories: int | None = None
+    cutpoint_prior_sigma: float = 2.0
+
+    def __post_init__(self):
+        object.__setattr__(self, "likelihood", MediatorLikelihood(self.likelihood))
+        if self.noise_sigma <= 0:
+            raise ValueError("noise_sigma must be positive")
+        if self.design_effect < 1.0:
+            raise ValueError(
+                "design_effect must be >= 1 (it deflates survey information; "
+                "values below 1 would claim MORE precision than the sample size)"
+            )
+        if self.cutpoint_prior_sigma <= 0:
+            raise ValueError("cutpoint_prior_sigma must be positive")
+        if self.likelihood == MediatorLikelihood.ORDERED:
+            if self.n_categories is None or self.n_categories < 3:
+                raise ValueError(
+                    "ORDERED measurement requires n_categories >= 3 (a 2-category "
+                    "ordered scale is a binary outcome -- use BINOMIAL)"
+                )
+
+
+@dataclass(frozen=True)
+class MediatorSpec:
+    """One structural mediator equation in a StructuralNestedMMM.
+
+    The latent state is driven by media channels (saturated, optionally
+    adstocked), upstream mediators (``parents`` -- must form a DAG), control
+    columns (e.g. price), and shared latent factors; its dynamics are STATIC,
+    AR1, or RANDOM_WALK; and it is observed through ``measurement``.
+
+    ``apply_adstock=None`` (default) resolves by dynamics: adstock ON for
+    STATIC equations, OFF for AR1/RANDOM_WALK -- the state itself carries the
+    media effect forward there, and adstock + AR would be two
+    nearly-interchangeable geometric carryovers (an alpha/rho ridge). Set it
+    explicitly to override (overriding to True on an AR equation warns at
+    build).
+
+    ``direct_effect`` defaults tight (Normal(0, 0.3)): an over-wide direct
+    path steals the mediated signal (see technical-docs/nested-recovery-search.md).
+    """
+
+    name: str
+    channels: tuple[str, ...] = ()
+    parents: tuple[str, ...] = ()
+    controls: tuple[str, ...] = ()
+    latent_factors: tuple[str, ...] = ()
+
+    dynamics: MediatorDynamics = MediatorDynamics.STATIC
+    rho_prior_alpha: float = 6.0
+    rho_prior_beta: float = 2.0
+    innovation_sigma: float = 0.3
+    # AR-noise sampling geometry for dynamic states: "auto" picks centered when
+    # the measurement is dense (>= 50% of weeks observed -- a strong tracker
+    # pins z_t and the non-centered form funnels), non-centered when sparse.
+    state_parameterization: str = "auto"
+
+    measurement: MediatorMeasurement = field(default_factory=MediatorMeasurement)
+
+    media_effect: EffectPriorConfig = field(
+        default_factory=lambda: EffectPriorConfig(
+            constraint=EffectConstraint.POSITIVE, sigma=1.0
+        )
+    )
+    parent_effect: EffectPriorConfig = field(
+        default_factory=lambda: EffectPriorConfig(
+            constraint=EffectConstraint.POSITIVE, sigma=1.0
+        )
+    )
+    control_effect: EffectPriorConfig = field(
+        default_factory=lambda: EffectPriorConfig(sigma=1.0)
+    )
+    # (Factor-loading prior scales live on LatentFactorSpec.mediator_effect_sigma
+    # -- the loading belongs to the factor, shared across its consumers.)
+
+    outcome_effect: EffectPriorConfig = field(
+        default_factory=lambda: EffectPriorConfig(
+            constraint=EffectConstraint.POSITIVE, sigma=1.0
+        )
+    )
+    affects_outcome: bool = True
+
+    allow_direct_effect: bool = True
+    direct_effect: EffectPriorConfig = field(
+        default_factory=lambda: EffectPriorConfig(sigma=0.3)
+    )
+
+    apply_adstock: bool | None = None
+
+    @property
+    def adstock_enabled(self) -> bool:
+        """The resolved adstock setting (dynamics-dependent when unset)."""
+        if self.apply_adstock is not None:
+            return self.apply_adstock
+        return self.dynamics == MediatorDynamics.STATIC
+
+    def __post_init__(self):
+        if not self.name:
+            raise ValueError("MediatorSpec.name must be non-empty")
+        if self.rho_prior_alpha <= 0 or self.rho_prior_beta <= 0:
+            raise ValueError("rho prior alpha/beta must be positive")
+        if self.innovation_sigma <= 0:
+            raise ValueError("innovation_sigma must be positive")
+        if self.state_parameterization not in ("auto", "centered", "non_centered"):
+            raise ValueError(
+                "state_parameterization must be 'auto', 'centered' or "
+                f"'non_centered'; got {self.state_parameterization!r}"
+            )
+        has_driver = bool(
+            self.channels or self.parents or self.controls or self.latent_factors
+        )
+        if not has_driver and self.measurement.likelihood == MediatorLikelihood.LATENT:
+            raise ValueError(
+                f"Mediator '{self.name}' has no drivers and no measurement -- "
+                "a fully latent state with no inputs is unidentified"
+            )
+        if self.name in self.parents:
+            raise ValueError(f"Mediator '{self.name}' cannot be its own parent")
+        if len(set(self.parents)) != len(self.parents):
+            raise ValueError(
+                f"Mediator '{self.name}' lists duplicate parents: {self.parents}"
+            )
+        # Coerce string enums so downstream `.value` access is safe regardless
+        # of how the spec was constructed.
+        object.__setattr__(self, "dynamics", MediatorDynamics(self.dynamics))
+
+
+@dataclass(frozen=True)
+class LatentFactorSpec:
+    """A shared latent factor (e.g. a demand trend) entering one or more
+    mediator equations and/or the outcome.
+
+    The realized series is standardized in-graph to unit variance (the scale
+    would otherwise trade off against the loadings), so loadings carry the
+    factor's units. Sign is anchored at the outcome loading (HalfNormal) when
+    ``affects_outcome`` is True, else at the first consuming mediator's loading;
+    all other loadings are free-sign Normal.
+    """
+
+    name: str
+    dynamics: MediatorDynamics = MediatorDynamics.AR1
+    rho_prior_alpha: float = 8.0
+    rho_prior_beta: float = 2.0
+    affects_outcome: bool = True
+    outcome_effect_sigma: float = 1.0
+    mediator_effect_sigma: float = 1.0
+    # Where the factor's SIGN is pinned (that loading becomes HalfNormal).
+    # "auto" = the first MEASURED mediator consumer (topological order), else
+    # the outcome. Anchor where the loading is believed materially nonzero:
+    # a reflected factor mode escapes a HalfNormal anchor whose true loading
+    # is small by pushing it to the (cost-free) mode at zero -- observed as
+    # split R-hat ~1.75 chains in the brand-funnel recovery. May name a
+    # consuming mediator explicitly, or "outcome".
+    anchor: str = "auto"
+
+    def __post_init__(self):
+        if not self.name:
+            raise ValueError("LatentFactorSpec.name must be non-empty")
+        if self.rho_prior_alpha <= 0 or self.rho_prior_beta <= 0:
+            raise ValueError("rho prior alpha/beta must be positive")
+        if self.outcome_effect_sigma <= 0 or self.mediator_effect_sigma <= 0:
+            raise ValueError("effect sigmas must be positive")
+        object.__setattr__(self, "dynamics", MediatorDynamics(self.dynamics))
+
+
+@dataclass(frozen=True)
+class StructuralNestedConfig:
+    """Configuration for :class:`StructuralNestedMMM` -- a DAG of mediator
+    equations with per-mediator dynamics + measurement, shared latent factors,
+    and an outcome equation.
+
+    ``outcome_controls=None`` means every control column provided to the model
+    also enters the outcome equation. Channels not routed to any mediator get a
+    plain direct effect with the ``nonmediated_effect`` prior.
+    """
+
+    mediators: tuple[MediatorSpec, ...] = field(default_factory=tuple)
+    latent_factors: tuple[LatentFactorSpec, ...] = field(default_factory=tuple)
+    outcome_controls: tuple[str, ...] | None = None
+    nonmediated_effect: EffectPriorConfig = field(
+        default_factory=lambda: EffectPriorConfig(sigma=1.0)
+    )
+
+    def __post_init__(self):
+        if not self.mediators:
+            raise ValueError("StructuralNestedConfig requires at least one mediator")
+        med_names = [m.name for m in self.mediators]
+        if len(set(med_names)) != len(med_names):
+            raise ValueError(f"Duplicate mediator names: {med_names}")
+        factor_names = [f.name for f in self.latent_factors]
+        if len(set(factor_names)) != len(factor_names):
+            raise ValueError(f"Duplicate latent factor names: {factor_names}")
+        overlap = set(med_names) & set(factor_names)
+        if overlap:
+            raise ValueError(f"Names shared by mediators and factors: {overlap}")
+
+        med_set = set(med_names)
+        for m in self.mediators:
+            unknown = set(m.parents) - med_set
+            if unknown:
+                raise ValueError(
+                    f"Mediator '{m.name}' references unknown parents: {sorted(unknown)}"
+                )
+            unknown_f = set(m.latent_factors) - set(factor_names)
+            if unknown_f:
+                raise ValueError(
+                    f"Mediator '{m.name}' references unknown latent factors: "
+                    f"{sorted(unknown_f)}"
+                )
+
+        # Every factor needs >= 2 observation channels (measured mediators,
+        # plus the outcome when affects_outcome): with only one, the factor is
+        # confounded with that channel's own noise -- outcome-only makes it a
+        # residual absorber, single-mediator-only makes it indistinguishable
+        # from that mediator's process noise. Identification comes from
+        # CO-MOVEMENT across channels.
+        for f in self.latent_factors:
+            measured_consumers = sum(
+                1
+                for m in self.mediators
+                if f.name in m.latent_factors
+                and m.measurement.likelihood != MediatorLikelihood.LATENT
+            )
+            n_channels = measured_consumers + (1 if f.affects_outcome else 0)
+            if n_channels < 2 or measured_consumers < 1:
+                raise ValueError(
+                    f"Latent factor '{f.name}' needs at least two observation "
+                    "channels including one measured mediator (e.g. a measured "
+                    "mediator + the outcome) -- with fewer it is confounded "
+                    "with a single equation's noise"
+                )
+            if f.anchor not in ("auto", "outcome"):
+                consumer = next((m for m in self.mediators if m.name == f.anchor), None)
+                if consumer is None or f.name not in consumer.latent_factors:
+                    raise ValueError(
+                        f"Latent factor '{f.name}' anchor {f.anchor!r} must be "
+                        "'auto', 'outcome', or a mediator that consumes the factor"
+                    )
+            if f.anchor == "outcome" and not f.affects_outcome:
+                raise ValueError(
+                    f"Latent factor '{f.name}' anchor is 'outcome' but "
+                    "affects_outcome is False"
+                )
+
+        # Acyclicity (raises on a cycle); the sorted order is reused at build.
+        self.topological_order()
+
+    def topological_order(self) -> list[str]:
+        """Kahn topological sort of the mediator DAG (parents before children)."""
+        med_by_name = {m.name: m for m in self.mediators}
+        in_deg = {m.name: len(m.parents) for m in self.mediators}
+        queue = sorted(n for n, d in in_deg.items() if d == 0)
+        order: list[str] = []
+        while queue:
+            node = queue.pop(0)
+            order.append(node)
+            for m in self.mediators:
+                if node in m.parents:
+                    in_deg[m.name] -= 1
+                    if in_deg[m.name] == 0:
+                        queue.append(m.name)
+            queue.sort()
+        if len(order) != len(med_by_name):
+            cyclic = sorted(set(med_by_name) - set(order))
+            raise ValueError(f"Mediator parent graph has a cycle involving: {cyclic}")
+        return order
+
+
 @dataclass(frozen=True)
 class MediatorConfigExtended:
     """

@@ -72,7 +72,12 @@ def create_extractor(model: Any, **kwargs) -> DataExtractor:
 
     if model_type == "BayesianMMM":
         return BayesianMMMExtractor(model, **kwargs)
-    elif model_type in ("NestedMMM", "MultivariateMMM", "CombinedMMM"):
+    elif model_type in (
+        "NestedMMM",
+        "MultivariateMMM",
+        "CombinedMMM",
+        "StructuralNestedMMM",
+    ):
         return ExtendedMMMExtractor(model, **kwargs)
     elif model_type == "MMM":
         # pymc-marketing MMM

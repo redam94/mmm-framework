@@ -20,6 +20,7 @@ import type { ModelSpec } from '../../types';
 
 const EXTENSION_DAG_LABELS: Record<string, string> = {
   nested_mmm: 'Nested MMM (mediation)',
+  structural_nested_mmm: 'Structural Nested MMM (survey mediation)',
   multivariate_mmm: 'Multivariate MMM (multi-outcome)',
   combined_mmm: 'Combined MMM',
 };

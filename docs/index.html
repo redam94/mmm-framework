@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-site-verification" content="xHPsFulGPaptw_D3wgCbcgS-4ztvdVH_wxkNYFgA6Ug" />
-    <title>MMM Framework | Bayesian Marketing Mix Modeling</title>
-    <meta name="description" content="A python-based Marketing Mix Modeling framework to calculate adstock, saturation, and ROI using Bayesian inference.">
+    <title>MMM Framework | Honest Causal Marketing Mix Modeling</title>
+    <meta name="description" content="An open-source Bayesian MMM built for honest causal measurement: pre-registered model designs, methodology pressure-tested in public against known ground truth, verified uncertainty calibration, and estimates calibrated against real experiments.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/index.html">
-    <meta property="og:title" content="MMM Framework | Bayesian Marketing Mix Modeling">
-    <meta property="og:description" content="A python-based Marketing Mix Modeling framework to calculate adstock, saturation, and ROI using Bayesian inference.">
+    <meta property="og:title" content="MMM Framework | Honest Causal Marketing Mix Modeling">
+    <meta property="og:description" content="An open-source Bayesian MMM built for honest causal measurement: pre-registered model designs, methodology pressure-tested in public against known ground truth, verified uncertainty calibration, and estimates calibrated against real experiments.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/index.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="website">
@@ -32,30 +32,14 @@
             "priceCurrency": "USD",
             "description": "The open-source Python library is free; the managed Augur platform has paid tiers (see pricing)."
         },
-        "description": "Open-source Python library for Marketing Mix Modeling, addressing adstock decay and channel saturation."
+        "description": "Open-source Python library for honest causal Marketing Mix Modeling — pre-registered model designs, publicly pressure-tested methodology, verified uncertainty calibration, and experiment-calibrated estimates."
         }
     </script>
 
     <link rel="stylesheet" href="shared/styles.css">
     <style>
-        /* Maturity tag for experimental features (see changelog.html#stability) */
-        .exp-badge {
-            display: inline-block;
-            vertical-align: middle;
-            margin-left: 0.5rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.62rem;
-            font-weight: 500;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: #b8860b;
-            background: rgba(212, 168, 106, 0.14);
-            border: 1px solid rgba(212, 168, 106, 0.45);
-            border-radius: 100px;
-            padding: 0.12rem 0.55rem;
-        }
         /* Documentation grid on the home page */
-        .docs-section { padding: 6rem 0; background: var(--color-bg); }
+        .docs-section { padding: 6rem 0; background: var(--color-bg-alt); }
         .docs-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -98,8 +82,75 @@
             line-height: 1.55;
             margin: 0;
         }
+        /* The four-disciplines section */
+        .pillars-section { padding: 6rem 0; background: var(--color-bg); }
+        .pillar-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+        .pillar-card {
+            display: flex;
+            flex-direction: column;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+        .pillar-card .doc-eyebrow { margin-bottom: 0.75rem; }
+        .pillar-card h3 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.5rem;
+            margin: 0 0 0.75rem 0;
+            color: var(--color-text);
+        }
+        .pillar-card > p {
+            font-size: 0.95rem;
+            color: var(--color-text-muted);
+            line-height: 1.65;
+            margin: 0;
+        }
+        .pillar-stat {
+            margin: 1.25rem 0;
+            padding: 0.9rem 1.15rem;
+            background: var(--tint-primary-06);
+            border-left: 3px solid var(--color-primary);
+            border-radius: 0 8px 8px 0;
+            font-size: 0.9rem;
+            line-height: 1.55;
+            color: var(--color-text);
+        }
+        .pillar-stat .stat-tag {
+            display: block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.62rem;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--color-primary-dark);
+            margin-bottom: 0.35rem;
+        }
+        .pillar-links {
+            margin-top: auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem 1.25rem;
+            padding-top: 0.35rem;
+        }
+        .pillar-links a {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-primary-dark);
+            text-decoration: none;
+        }
+        .pillar-links a:hover { text-decoration: underline; }
         @media (max-width: 1024px) {
             .docs-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 900px) {
+            .pillar-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 640px) {
             .docs-grid { grid-template-columns: 1fr; }
@@ -109,8 +160,8 @@
     <meta property="og:site_name" content="MMM Framework">
     <meta property="og:locale" content="en_US">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="MMM Framework | Bayesian Marketing Mix Modeling">
-    <meta name="twitter:description" content="A python-based Marketing Mix Modeling framework to calculate adstock, saturation, and ROI using Bayesian inference.">
+    <meta name="twitter:title" content="MMM Framework | Honest Causal Marketing Mix Modeling">
+    <meta name="twitter:description" content="An open-source Bayesian MMM built for honest causal measurement: pre-registered model designs, methodology pressure-tested in public against known ground truth, verified uncertainty calibration, and estimates calibrated against real experiments.">
     <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta name="author" content="Matthew Reda">
     <script type="application/ld+json">
@@ -144,14 +195,14 @@
         },
         {
           "url": "https://redam94.github.io/mmm-framework/index.html",
-          "name": "MMM Framework | Bayesian Marketing Mix Modeling",
-          "description": "A python-based Marketing Mix Modeling framework to calculate adstock, saturation, and ROI using Bayesian inference.",
+          "name": "MMM Framework | Honest Causal Marketing Mix Modeling",
+          "description": "An open-source Bayesian MMM built for honest causal measurement: pre-registered model designs, methodology pressure-tested in public against known ground truth, verified uncertainty calibration, and estimates calibrated against real experiments.",
           "inLanguage": "en-US",
           "isPartOf": {
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-02",
+          "dateModified": "2026-07-08",
           "@id": "https://redam94.github.io/mmm-framework/index.html#webpage",
           "@type": "WebPage",
           "publisher": {
@@ -169,14 +220,14 @@
     <section class="hero">
         <div class="container hero-content">
             <div class="hero-text">
-                <span class="hero-badge">🎯 Open Source</span>
-                <h1>Marketing Measurement <span>You Can Trust</span></h1>
+                <span class="hero-badge">🎯 Open Source · Apache-2.0</span>
+                <h1>Honest, Causal <span>Marketing Measurement</span></h1>
                 <p class="hero-description">
-                    A marketing mix model answers a causal question — "what would sales have been without this media?" — not just "what moved together?" Our Bayesian framework estimates the <em>incremental</em> impact your media actually caused, with honest uncertainty ranges so you can make decisions with confidence. And unlike most MMM stacks, measurement here is a closed loop: the model prices which experiment to run next, pre-registers it, and folds the result back in.
+                    A marketing mix model answers a causal question — "what would sales have been without this media?" — and an answer you can defend takes discipline, not just software. This framework enforces four: the model design is <a href="#pillar-preregistration">pre-registered</a> before results are seen, the methodology is <a href="#pillar-critique">pressure-tested in public</a> against known ground truth, the model's stated uncertainty is <a href="#pillar-calibration">verified, not assumed</a>, and the estimates are <a href="#pillar-experiments">calibrated against real experiments</a> in a closed loop.
                 </p>
                 <div class="hero-cta">
-                    <a href="#demo" class="btn btn-primary">Try Interactive Demo</a>
-                    <a href="#compare" class="btn btn-secondary">How It Compares</a>
+                    <a href="#pillars" class="btn btn-primary">The Four Disciplines</a>
+                    <a href="pressure-testing.html" class="btn btn-secondary">See the Pressure Tests</a>
                 </div>
             </div>
             <div class="hero-visual">
@@ -188,7 +239,7 @@
     </section>
 
     <!-- Choose your path -->
-    <section class="feature-section" id="paths" style="padding-top: 2.5rem; padding-bottom: 2.5rem;">
+    <section class="models-section" id="paths" style="padding-top: 2.5rem; padding-bottom: 2.5rem;">
         <div class="container">
             <div class="docs-grid" style="margin-top: 0; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));">
                 <a href="business-stakeholders.html" class="doc-card fade-in">
@@ -219,7 +270,7 @@
     <section class="problem-section" id="problem">
         <div class="container">
             <div class="section-header fade-in">
-                <h2>The Hidden Problem with Traditional MMM</h2>
+                <h2 id="specification-shopping">The Hidden Problem with Traditional MMM</h2>
                 <p>When you run many models and only report the "good" ones, you're painting targets around arrows.</p>
             </div>
             <div class="problem-grid">
@@ -227,7 +278,7 @@
                     <h3>Coincidence Is Not Contribution</h3>
                     <p>Lots of things move together: ice cream sales and sunburns rise in the same weeks without one causing the other, and holiday demand lifts both ad spend and sales at once. Separating coincidence from contribution takes discipline — and traditional MMM often skips it, running dozens of model variations and reporting the one that "makes sense."</p>
                     <p>Watch the dartboard: each throw is a model specification. Only the bullseyes get reported; the misses are quietly discarded, so the reported accuracy is an illusion.</p>
-                    <p>This framework takes the opposite path. It accounts for confounders like underlying demand, locks the model design in before results are seen, and checks its answers against real-world experiments such as regional holdout tests. The result is an estimate of <em>incremental</em> impact — what your media actually caused. Read <a href="about.html">the full argument</a>, or see <a href="business-stakeholders.html">what specification shopping costs the business</a>.</p>
+                    <p>This framework takes the opposite path. Variable roles are declared up front, the model design is locked in a <a href="modeling-guide.html#preregister">pre-registered analysis plan</a> before results are seen, and answers are checked against real-world experiments such as regional holdout tests. The result is an estimate of <em>incremental</em> impact — what your media actually caused. Read <a href="about.html">the full argument</a>, or see <a href="business-stakeholders.html#what-is-specification-shopping">what specification shopping costs the business</a>.</p>
                 </div>
                 <div class="dartboard-demo fade-in">
                     <div class="dartboard-container">
@@ -270,125 +321,74 @@
         </div>
     </section>
 
-    <!-- Models Section -->
-    <section class="models-section" id="models">
+    <!-- Four Disciplines Section -->
+    <section class="pillars-section" id="pillars">
         <div class="container">
             <div class="section-header fade-in">
-                <h2>Three Models for Different Needs</h2>
-                <p>Choose the right level of complexity for your measurement challenge.</p>
+                <h2 id="four-disciplines">Four Disciplines of Honest Causal MMM</h2>
+                <p>Every vendor's deck says "Bayesian" and "calibrated." These four disciplines make the words mean something — each one enforced by the workflow, and each one measured in public rather than asserted.</p>
             </div>
-            <div class="model-cards">
-                <!-- Standard Model -->
-                <div class="model-card fade-in" onclick="window.location.href='technical-guide.html#standard'">
-                    <div class="model-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 3v18h18" stroke="#8fa86a"/>
-                            <path d="M7 16l4-8 4 6 4-10" stroke="#6a8fa8"/>
-                        </svg>
+            <div class="pillar-grid">
+                <div class="pillar-card fade-in">
+                    <div class="doc-eyebrow">Discipline 01 &middot; Pre-Registration</div>
+                    <h3 id="pillar-preregistration">The Design Is Locked Before Results Are Seen</h3>
+                    <p>Specification shopping — running many models and reporting the flattering one — invalidates the very uncertainty statements that make measurement useful. The antidote is a commitment device: variable roles, priors, functional forms, and decision criteria are written into an analysis plan before the model sees the data's verdict, so there is no quiet path to a more flattering model later. Experiments get the same treatment — design, estimator, and primary outcome locked in a signed pre-registration memo before launch, then tracked through a lifecycle from draft to calibrated. The platform can even generate a pre-fit design readout recording every prior, assumption, and prior-predictive check before the final fit runs.</p>
+                    <div class="pillar-stat">
+                        <span class="stat-tag">Simulated</span>
+                        Run 20 specifications and report only the best: for a true effect of 0.05, the expected reported estimate is 0.35 — a 7&times; overestimate. Pre-registration is the lock.
                     </div>
-                    <h3>Standard MMM</h3>
-                    <div class="use-case">Best for: Single outcome measurement</div>
-                    <p>The foundation. Measures how media drives a single outcome (sales, leads, etc.) with proper uncertainty quantification.</p>
-                    <div class="model-visual">
-                        <svg viewBox="0 0 200 80" width="100%" height="80">
-                            <rect x="10" y="25" width="50" height="30" rx="6" fill="#8fa86a" opacity="0.8"/>
-                            <text x="35" y="44" text-anchor="middle" fill="white" font-size="10" font-weight="600">Media</text>
-                            <rect x="140" y="25" width="50" height="30" rx="6" fill="#6a8fa8" opacity="0.8"/>
-                            <text x="165" y="44" text-anchor="middle" fill="white" font-size="10" font-weight="600">Sales</text>
-                            <path d="M 65 40 L 135 40" stroke="#5a6b5a" stroke-width="2" fill="none" marker-end="url(#arrow1)"/>
-                            <defs><marker id="arrow1" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#5a6b5a"/></marker></defs>
-                        </svg>
+                    <div class="pillar-links">
+                        <a href="modeling-guide.html#preregister">Pre-register your specification →</a>
+                        <a href="artifacts/preregistration-memo.html">The pre-registration memo →</a>
+                        <a href="scientific-modeling.html#honest-iteration">Honest iteration vs. shopping →</a>
                     </div>
-                    <a href="technical-guide.html#standard" class="learn-more">Learn more →</a>
                 </div>
-
-                <!-- Nested Model -->
-                <div class="model-card fade-in" onclick="window.location.href='technical-guide.html#nested'">
-                    <div class="model-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="6" cy="12" r="3" stroke="#8fa86a"/>
-                            <circle cx="12" cy="6" r="3" stroke="#6a8fa8"/>
-                            <circle cx="18" cy="12" r="3" stroke="#d4a86a"/>
-                            <path d="M9 12h3M12 9v-3" stroke="#5a6b5a"/>
-                        </svg>
+                <div class="pillar-card fade-in">
+                    <div class="doc-eyebrow">Discipline 02 &middot; Model Critique</div>
+                    <h3 id="pillar-critique">Attack the Model Before You Trust It</h3>
+                    <p>Convergence diagnostics validate the computation, not the causal claim — a model can be confidently, quietly wrong. So the methodology is attacked before it is trusted: 16 synthetic markets with known causal ground truth, each breaking one real-world assumption, graded and published — including the eight worlds where attribution failed silently while every standard check stayed green. A four-test causal refutation suite ("a tripwire, not a verdict"), prior and posterior predictive checks, and a prior-dominated-posterior diagnostic complete the critique toolkit — each documented with what it can and cannot see.</p>
+                    <div class="pillar-stat">
+                        <span class="stat-tag">Measured</span>
+                        8 of 16 stress worlds failed silently — materially wrong attribution with R-hat &le; 1.02 and zero divergences on every one.
                     </div>
-                    <h3>Nested Model <span class="exp-badge" title="Experimental API — subject to change before 1.0">Experimental</span></h3>
-                    <div class="use-case">Best for: Measuring indirect effects</div>
-                    <p>Captures how media works through intermediate steps like awareness or consideration before driving sales.</p>
-                    <div class="model-visual">
-                        <svg viewBox="0 0 200 80" width="100%" height="80">
-                            <rect x="5" y="25" width="40" height="30" rx="6" fill="#8fa86a" opacity="0.8"/>
-                            <text x="25" y="44" text-anchor="middle" fill="white" font-size="8" font-weight="600">Media</text>
-                            <rect x="80" y="10" width="45" height="25" rx="6" fill="#6a8fa8" opacity="0.8"/>
-                            <text x="102" y="26" text-anchor="middle" fill="white" font-size="7" font-weight="600">Awareness</text>
-                            <rect x="155" y="25" width="40" height="30" rx="6" fill="#d4a86a" opacity="0.8"/>
-                            <text x="175" y="44" text-anchor="middle" fill="white" font-size="8" font-weight="600">Sales</text>
-                            <path d="M 48 35 Q 65 20 78 22" stroke="#5a6b5a" stroke-width="1.5" fill="none" marker-end="url(#arrow2)"/>
-                            <path d="M 127 22 Q 140 20 153 35" stroke="#5a6b5a" stroke-width="1.5" fill="none" marker-end="url(#arrow2)"/>
-                            <path d="M 48 45 L 153 45" stroke="#8fa86a" stroke-width="2" stroke-dasharray="4,2" fill="none" marker-end="url(#arrow2)"/>
-                            <defs><marker id="arrow2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#5a6b5a"/></marker></defs>
-                        </svg>
+                    <div class="pillar-links">
+                        <a href="pressure-testing.html">The scorecard: 16 worlds →</a>
+                        <a href="identification-assumptions.html">The identification contract →</a>
+                        <a href="stress-00-rosy-picture.html#toolkit">What each check can see →</a>
                     </div>
-                    <a href="technical-guide.html#nested" class="learn-more">Learn more →</a>
                 </div>
-
-                <!-- Multivariate Model -->
-                <div class="model-card fade-in" onclick="window.location.href='technical-guide.html#multivariate'">
-                    <div class="model-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7" rx="2" stroke="#8fa86a"/>
-                            <rect x="14" y="3" width="7" height="7" rx="2" stroke="#6a8fa8"/>
-                            <rect x="3" y="14" width="7" height="7" rx="2" stroke="#d4a86a"/>
-                            <rect x="14" y="14" width="7" height="7" rx="2" stroke="#c97067"/>
-                            <path d="M10 6.5h4M6.5 10v4M17.5 10v4M10 17.5h4" stroke="#5a6b5a" stroke-dasharray="2,2"/>
-                        </svg>
+                <div class="pillar-card fade-in">
+                    <div class="doc-eyebrow">Discipline 03 &middot; Model Calibration</div>
+                    <h3 id="pillar-calibration">Uncertainty You Can Quote</h3>
+                    <p>A model is calibrated when its stated uncertainty is accurate — when 90% intervals contain the truth about 90% of the time. Wide intervals are honest communication, but only if the width itself can be trusted. The framework verifies it: simulation-based calibration checks that the posterior's uncertainty statements are themselves honest, posterior-predictive coverage is graded against nominal, and rolling-origin backtests confront the intervals with data the model never saw. Approximate fits (MAP, ADVI, Pathfinder) are labeled what they are — not calibrated, re-fit with NUTS before deciding — so a quick check is never mistaken for a defensible posterior.</p>
+                    <div class="pillar-stat">
+                        <span class="stat-tag">Measured</span>
+                        Out-of-time backtest: 3.0% MAPE, with 80% intervals covering 90% of held-out weeks — and on the trend-break negative control the harness honestly fails (58% coverage). A backtest that cannot fail cannot validate.
                     </div>
-                    <h3>Multivariate Model <span class="exp-badge" title="Experimental API — subject to change before 1.0">Experimental</span></h3>
-                    <div class="use-case">Best for: Product portfolio analysis</div>
-                    <p>Measures interactions between products—how promoting one SKU affects others (cannibalization or halo effects).</p>
-                    <div class="model-visual">
-                        <svg viewBox="0 0 200 80" width="100%" height="80">
-                            <rect x="10" y="25" width="50" height="30" rx="6" fill="#8fa86a" opacity="0.8"/>
-                            <text x="35" y="44" text-anchor="middle" fill="white" font-size="9" font-weight="600">Promo</text>
-                            <rect x="120" y="10" width="70" height="22" rx="5" fill="#6a8fa8" opacity="0.8"/>
-                            <text x="155" y="24" text-anchor="middle" fill="white" font-size="8" font-weight="600">Product A</text>
-                            <rect x="120" y="48" width="70" height="22" rx="5" fill="#d4a86a" opacity="0.8"/>
-                            <text x="155" y="62" text-anchor="middle" fill="white" font-size="8" font-weight="600">Product B</text>
-                            <path d="M 62 35 L 118 21" stroke="#6abf8a" stroke-width="2" fill="none" marker-end="url(#arrow3g)"/>
-                            <path d="M 62 45 L 118 59" stroke="#c97067" stroke-width="2" fill="none" marker-end="url(#arrow3r)"/>
-                            <path d="M 155 34 L 155 46" stroke="#5a6b5a" stroke-width="1" stroke-dasharray="3,2" fill="none"/>
-                            <defs>
-                                <marker id="arrow3g" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#6abf8a"/></marker>
-                                <marker id="arrow3r" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#c97067"/></marker>
-                            </defs>
-                        </svg>
+                    <div class="pillar-links">
+                        <a href="workflow-forecasting.html#backtesting">The backtest harness →</a>
+                        <a href="bayesian-workflow.html#calibration">Calibration &amp; PIT →</a>
+                        <a href="platform-overview.html#oracle">The validation battery →</a>
                     </div>
-                    <a href="technical-guide.html#multivariate" class="learn-more">Learn more →</a>
+                </div>
+                <div class="pillar-card fade-in">
+                    <div class="doc-eyebrow">Discipline 04 &middot; Experimental Calibration</div>
+                    <h3 id="pillar-experiments">The Model Proposes, an Experiment Disposes</h3>
+                    <p>Only evidence from outside the observational data can catch a silent failure. The framework prices which experiment buys the most learning — expected information gain in bits, expected value of information in dollars — then designs pre-registered geo-lift, matched-market, and budget-neutral flighting tests directly from the posterior. Readouts fold back in — as informed priors on a channel's coefficient, or directly in the likelihood, where they update the coefficient, the saturation curve, and the adstock kernel jointly. Calibration is surgical, not contagious: it corrects what was tested, and untested channels keep their bias — which is why the loop keeps running.</p>
+                    <div class="pillar-stat">
+                        <span class="stat-tag">Measured</span>
+                        In the gauntlet world, one lift test pulls Search ROAS from 5.59 to 0.65 against a ground truth of 0.66 — while an uncalibrated sibling channel stays wrong.
+                    </div>
+                    <div class="pillar-links">
+                        <a href="measurement-calibration.html">The calibration loop →</a>
+                        <a href="math-05-calibration.html">The exact math →</a>
+                        <a href="workflow-calibration-decisions.html">The decision workshop →</a>
+                    </div>
                 </div>
             </div>
-        </div>
-    </section>
-
-    <!-- Variable Selection Feature Section (NEW) -->
-    <section class="feature-section" id="variable-selection">
-        <div class="container">
-            <div class="feature-grid">
-                <div class="feature-content fade-in">
-                    <span class="warning-badge">⚠️ Use with Caution</span>
-                    <h3>Principled Variable Selection</h3>
-                    <p>Traditional variable selection (stepwise regression, p-value hunting) is a form of specification shopping that invalidates inference. Our framework provides Bayesian alternatives that quantify uncertainty about which variables matter.</p>
-                    <p>But variable selection is not a general-purpose tool. It should <strong>only</strong> be applied to precision control variables—never to confounders, mediators, or your media variables themselves.</p>
-                    <div style="margin-top: 1.5rem;">
-                        <a href="variable-selection.html" class="btn btn-primary">Learn When & How to Use It</a>
-                    </div>
-                </div>
-                <div class="feature-visual fade-in">
-                    <div id="pip-preview-chart" style="height: 280px;"></div>
-                    <p style="text-align: center; color: var(--color-text-muted); font-size: 0.9rem; margin-top: 1rem;">
-                        Posterior inclusion probabilities quantify variable importance
-                    </p>
-                </div>
-            </div>
+            <p style="text-align: center; color: var(--color-text-muted); margin-top: 2.5rem; max-width: 760px; margin-left: auto; margin-right: auto;">
+                The four disciplines close into one loop: a pre-registered model is critiqued, its uncertainty is verified, and its claims are tested against reality — then the experiment results become the next cycle's priors. Every measured number above traces to a seeded, re-runnable notebook: <em>measured, not asserted</em>.
+            </p>
         </div>
     </section>
 
@@ -396,8 +396,8 @@
     <section class="demo-section" id="demo">
         <div class="container">
             <div class="section-header fade-in">
-                <h2>See Bayesian Updates in Action</h2>
-                <p>Watch how prior beliefs combine with data to produce honest uncertainty ranges.</p>
+                <h2 id="bayesian-demo">Watch Honest Uncertainty Update</h2>
+                <p>Prior beliefs combine with data to produce a posterior — and the width of that posterior is information, not weakness. Adjust the levers and see what the data can and cannot pin down.</p>
             </div>
             <div class="demo-grid fade-in">
                 <div class="demo-controls">
@@ -436,43 +436,11 @@
         </div>
     </section>
 
-    <!-- Cross Effects Demo -->
-    <section class="cross-effects-section" id="cross-effects">
-        <div class="container">
-            <div class="section-header fade-in">
-                <h2>Why Cross-Effects Matter</h2>
-                <p>Promoting one product affects others. Ignoring this leads to inflated ROI estimates.</p>
-            </div>
-            <div class="cross-effects-grid fade-in">
-                <div class="cross-effects-visual">
-                    <div id="cross-effect-chart" style="height: 300px;"></div>
-                </div>
-                <div class="cross-effects-insight">
-                    <div class="insight-card">
-                        <div class="insight-icon">⚠️</div>
-                        <div>
-                            <strong>Without cross-effects:</strong>
-                            Multipack promotion looks like pure incremental gain. Your ROI calculation overstates the true value.
-                        </div>
-                    </div>
-                    <div class="insight-card">
-                        <div class="insight-icon">✓</div>
-                        <div>
-                            <strong>With cross-effects:</strong>
-                            Net portfolio impact is lower—some "lift" was shifted from single-pack, not created. Honest measurement leads to better decisions.
-                        </div>
-                    </div>
-                    <a href="technical-guide.html#cross-effects" class="btn btn-secondary" style="margin-top: 1rem;">See the Math →</a>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <!-- Measurement Loop Section -->
-    <section class="feature-section" id="measurement-loop">
+    <section class="models-section" id="measurement-loop">
         <div class="container">
             <div class="section-header fade-in">
-                <h2>Measurement Is a Loop, Not a Report</h2>
+                <h2 id="loop">Measurement Is a Loop, Not a Report</h2>
                 <p>One model fit is a snapshot. The framework's operating rhythm is a cycle that keeps sharpening your answers — like a research budget for your media plan, spent exactly where learning changes the next decision most.</p>
             </div>
             <div class="docs-grid">
@@ -489,7 +457,7 @@
                 <div class="doc-card fade-in">
                     <div class="doc-eyebrow">T&#8322; &middot; Run</div>
                     <h3>Run the Right Experiment</h3>
-                    <p>Pre-registered tests that buy the most learning: regional holdout (geo lift), matched-market, or budget-neutral flighting designs.</p>
+                    <p>Pre-registered tests that buy the most learning: regional holdout (geo lift), matched-market, or budget-neutral flighting designs — success criteria locked before launch.</p>
                 </div>
                 <div class="doc-card fade-in">
                     <div class="doc-eyebrow">T&#8323; &middot; Feed Back</div>
@@ -508,6 +476,7 @@
                 </div>
             </div>
             <p style="text-align: center; color: var(--color-text-muted); margin-top: 2rem;">
+                Every test ships with a <a href="artifacts/preregistration-memo.html">pre-registration memo</a> — estimand, design, power, stopping rule — signed before launch.
                 See how the loop works in <a href="measurement-calibration.html">the calibration loop guide</a>, or follow <a href="workflow-calibration-decisions.html">a worked calibration decision</a> end to end.
                 No usable history to fit a model on yet? The <a href="continuous-learning.html">continuous-learning loop</a> runs the same rhythm model-free, straight from designed geo experiments.
             </p>
@@ -515,10 +484,10 @@
     </section>
 
     <!-- Platform Section -->
-    <section class="models-section" id="platform">
+    <section class="feature-section" id="platform">
         <div class="container">
             <div class="section-header fade-in">
-                <h2>The Platform</h2>
+                <h2 id="the-platform">The Platform</h2>
                 <p>The measurement loop runs in a modern web application — and everything it does is also available as a Python library for teams who prefer code.</p>
             </div>
             <div class="docs-grid">
@@ -530,7 +499,7 @@
                 <a class="doc-card" href="platform-overview.html">
                     <div class="doc-eyebrow">Web app</div>
                     <h3>Experiments</h3>
-                    <p>A priority matrix of what to test next, a lifecycle board from draft to calibrated, and a studio for designing the tests themselves.</p>
+                    <p>A priority matrix of what to test next, a lifecycle board from draft to calibrated — every test pre-registered before results are seen — and a studio for designing the tests themselves.</p>
                 </a>
                 <a class="doc-card" href="platform-overview.html">
                     <div class="doc-eyebrow">Web app</div>
@@ -550,7 +519,7 @@
                 <a class="doc-card" href="platform-overview.html">
                     <div class="doc-eyebrow">Web app</div>
                     <h3>AI Agent Workspace</h3>
-                    <p>A chat-based analyst assistant that validates data, fits models, plans experiments, and drafts client-ready reports — with dashboards alongside the conversation.</p>
+                    <p>A chat-based analyst assistant that validates data, fits models, and runs a one-click validation battery — convergence, prior→posterior learning, posterior-predictive checks, and simulation-based calibration — before drafting client-ready reports.</p>
                 </a>
             </div>
             <p style="text-align: center; color: var(--color-text-muted); margin-top: 2rem;">
@@ -560,10 +529,10 @@
     </section>
 
     <!-- Comparison Section -->
-    <section class="feature-section" id="compare">
+    <section class="models-section" id="compare">
         <div class="container">
             <div class="section-header fade-in">
-                <h2>Honest About the Alternatives</h2>
+                <h2 id="alternatives">Honest About the Alternatives</h2>
                 <p>Meridian, Robyn, and PyMC-Marketing are serious tools built by serious teams. Here is the difference in approach — stated plainly, the way we would want a vendor to state it to us.</p>
             </div>
             <div class="docs-grid">
@@ -593,7 +562,7 @@
     <section class="docs-section" id="documentation">
         <div class="container">
             <div class="section-header fade-in">
-                <h2>Explore the Documentation</h2>
+                <h2 id="explore-docs">Explore the Documentation</h2>
                 <p>Everything you need to go from your first model fit to a quarterly closed-loop measurement program.</p>
             </div>
             <div class="docs-grid">
@@ -605,37 +574,62 @@
                 <a class="doc-card" href="modeling-guide.html">
                     <div class="doc-eyebrow">For modelers</div>
                     <h3>Modeling Guide</h3>
-                    <p>Step-by-step guidance for building statistically sound MMMs - priors, hierarchy, diagnostics, and iteration.</p>
+                    <p>Step-by-step guidance for statistically sound MMMs — the pre-registered analysis plan, priors, hierarchy, diagnostics, and honest iteration.</p>
                 </a>
                 <a class="doc-card" href="interpreting-results.html">
                     <div class="doc-eyebrow">For media planners &amp; CMOs</div>
                     <h3>Interpreting Results</h3>
                     <p>How to read MMM outputs, communicate uncertainty, and translate posteriors into confident budget decisions.</p>
                 </a>
-                <a class="doc-card" href="measurement-calibration.html">
-                    <div class="doc-eyebrow">Measurement</div>
-                    <h3>Calibration Loop</h3>
-                    <p>Wire experiments and the MMM into one self-correcting cycle - EIG, EVOI, and the virtuous loop.</p>
+                <a class="doc-card" href="pressure-testing.html">
+                    <div class="doc-eyebrow">Model critique</div>
+                    <h3>Pressure Testing</h3>
+                    <p>The measured scorecard: 16 synthetic worlds with known causal truth, 8 published silent failures, and the fix ladder of recovery moves — each measured before and after.</p>
                 </a>
-                <a class="doc-card" href="continuous-learning.html">
-                    <div class="doc-eyebrow">Measurement</div>
-                    <h3>Continuous Learning</h3>
-                    <p>Learn channel response and synergies straight from designed geo experiments — no fitted MMM required, with a built-in stopping rule.</p>
+                <a class="doc-card" href="identification-assumptions.html">
+                    <div class="doc-eyebrow">Model critique</div>
+                    <h3>Identification Assumptions</h3>
+                    <p>The seven causal assumptions behind any MMM — stated formally, labeled testable or untestable, and priced against the stress-test scorecard.</p>
                 </a>
-                <a class="doc-card" href="model-garden.html">
-                    <div class="doc-eyebrow">Platform</div>
-                    <h3>Model Garden &amp; Atelier</h3>
-                    <p>Author bespoke Bayesian models in-app, prove them against a compatibility suite, and publish versions any analyst can fit through the agent.</p>
+                <a class="doc-card" href="scientific-modeling.html">
+                    <div class="doc-eyebrow">Methodology</div>
+                    <h3>Scientific Modeling</h3>
+                    <p>All models are wrong, some are useful: honest iteration vs. specification shopping, when to stop, and how to communicate what remains uncertain.</p>
                 </a>
                 <a class="doc-card" href="bayesian-workflow.html">
-                    <div class="doc-eyebrow">Foundations</div>
+                    <div class="doc-eyebrow">Model calibration</div>
                     <h3>Bayesian Workflow</h3>
-                    <p>The disciplined Bayesian process: priors, prior predictive checks, fitting, posterior diagnostics, and PPCs.</p>
+                    <p>The disciplined process: priors, prior predictive checks, sampling diagnostics, posterior predictive checks, and interval calibration (PIT).</p>
+                </a>
+                <a class="doc-card" href="workflow-forecasting.html">
+                    <div class="doc-eyebrow">Model calibration</div>
+                    <h3>Forecast Backtesting</h3>
+                    <p>Rolling-origin out-of-time accuracy, measured not asserted — including the negative control where the harness honestly fails.</p>
+                </a>
+                <a class="doc-card" href="real-data-guide.html">
+                    <div class="doc-eyebrow">For modelers</div>
+                    <h3>Real-Data Guide</h3>
+                    <p>What replaces the truth column on client data: prior→posterior learning, out-of-time backtests, stability checks, and interval honesty.</p>
+                </a>
+                <a class="doc-card" href="measurement-calibration.html">
+                    <div class="doc-eyebrow">Experimental calibration</div>
+                    <h3>Calibration Loop</h3>
+                    <p>Wire experiments and the MMM into one self-correcting cycle — EIG, EVOI, three calibration mechanisms, and the virtuous loop.</p>
+                </a>
+                <a class="doc-card" href="workflow-calibration-decisions.html">
+                    <div class="doc-eyebrow">Experimental calibration</div>
+                    <h3>Calibration Decisions</h3>
+                    <p>An interactive workshop: live calculators for the Bayesian update, EIG, EVOI in dollars, experiment portfolios, and geo-test power.</p>
+                </a>
+                <a class="doc-card" href="continuous-learning.html">
+                    <div class="doc-eyebrow">Experimental calibration</div>
+                    <h3>Continuous Learning</h3>
+                    <p>Learn channel response and synergies straight from designed geo experiments — no fitted MMM required, with a built-in stopping rule.</p>
                 </a>
                 <a class="doc-card" href="causal-inference.html">
                     <div class="doc-eyebrow">Foundations</div>
                     <h3>Causal Inference</h3>
-                    <p>DAGs, do-calculus, and counterfactuals - the causal scaffolding behind every defensible MMM specification.</p>
+                    <p>DAGs, do-calculus, and counterfactuals — the causal scaffolding behind every defensible MMM specification.</p>
                 </a>
                 <a class="doc-card" href="variable-selection.html">
                     <div class="doc-eyebrow">Methodology</div>
@@ -645,17 +639,22 @@
                 <a class="doc-card" href="business-stakeholders.html">
                     <div class="doc-eyebrow">For sponsors</div>
                     <h3>For Business Stakeholders</h3>
-                    <p>The risks of specification shopping and what defensible measurement looks like for agencies and brands.</p>
+                    <p>The risks of specification shopping, the seven questions to ask any modeling partner, and what defensible measurement looks like.</p>
                 </a>
                 <a class="doc-card" href="demos.html">
                     <div class="doc-eyebrow">See it run</div>
                     <h3>Demos &amp; Reports</h3>
                     <p>Interactive workflow demonstrations, scenario analyses, and an example MMM report from a Q4 2025 fit.</p>
                 </a>
+                <a class="doc-card" href="model-garden.html">
+                    <div class="doc-eyebrow">Platform</div>
+                    <h3>Model Garden &amp; Atelier</h3>
+                    <p>Author bespoke Bayesian models in-app, prove them against a compatibility suite, and publish versions any analyst can fit through the agent.</p>
+                </a>
                 <a class="doc-card" href="technical-guide.html">
                     <div class="doc-eyebrow">Reference</div>
                     <h3>Technical Guide</h3>
-                    <p>Math and implementation details for every model in the framework - standard, nested, multivariate, and combined.</p>
+                    <p>Math and implementation details for every model in the framework — standard, nested, multivariate, and combined.</p>
                 </a>
                 <a class="doc-card" href="https://github.com/redam94/mmm-framework/tree/main/src/mmm_framework" target="_blank" rel="noopener">
                     <div class="doc-eyebrow">Reference &middot; Sphinx</div>
@@ -665,7 +664,7 @@
                 <a class="doc-card" href="glossary.html">
                     <div class="doc-eyebrow">Reference</div>
                     <h3>Glossary</h3>
-                    <p>Definitions of every term used across the docs - adstock, EIG, EVOI, MFF, ITT, MDE, ROPE, and more.</p>
+                    <p>Definitions of every term used across the docs — adstock, EIG, EVOI, MFF, ITT, MDE, ROPE, and more.</p>
                 </a>
                 <a class="doc-card" href="faq.html">
                     <div class="doc-eyebrow">Reference</div>
@@ -689,11 +688,11 @@
     <!-- CTA Section -->
     <section class="cta-section">
         <div class="container">
-            <h2>Ready for Honest Measurement?</h2>
-            <p>The framework is open source and ready to use. Start with our documentation or dive straight into the code.</p>
+            <h2>Ready for Measurement You Can Defend?</h2>
+            <p>The framework is open source, the methodology is public, and every measured claim traces to a notebook you can re-run. Start with the documentation or go straight to the evidence.</p>
             <div class="cta-buttons">
                 <a href="getting-started.html" class="btn btn-white">Get Started</a>
-                <a href="technical-guide.html" class="btn btn-outline-white">Read Technical Guide</a>
+                <a href="pressure-testing.html" class="btn btn-outline-white">See the Pressure Tests</a>
                 <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline-white" target="_blank">View on GitHub</a>
             </div>
         </div>
@@ -713,12 +712,6 @@
                 { x, y: prior, type: 'scatter', mode: 'lines', name: 'Prior Belief', line: { color: chartColors.textMuted, width: 2, dash: 'dash' }, fill: 'tozeroy', fillcolor: 'rgba(90, 107, 90, 0.1)' },
                 { x, y: posterior, type: 'scatter', mode: 'lines', name: 'After Data', line: { color: chartColors.primary, width: 3 }, fill: 'tozeroy', fillcolor: 'rgba(143, 168, 106, 0.3)' }
             ], { ...chartLayout, showlegend: true, legend: { x: 0.7, y: 0.95, bgcolor: 'rgba(255,255,255,0.8)' }, xaxis: { ...chartLayout.xaxis, title: 'Media Effect' }, yaxis: { ...chartLayout.yaxis, title: 'Probability', showticklabels: false }, annotations: [{ x: 0.7, y: 1.05, xref: 'x', yref: 'y', text: 'Most likely value', showarrow: true, arrowhead: 2, arrowcolor: chartColors.primary, font: { color: chartColors.primary, size: 11 } }] }, chartConfig);
-        }
-
-        function initPIPPreviewChart() {
-            const variables = ['Weather', 'Holiday', 'Sports', 'Gas Price', 'Unemployment'];
-            const pips = [0.92, 0.87, 0.64, 0.31, 0.18];
-            Plotly.newPlot('pip-preview-chart', [{ x: variables, y: pips, type: 'bar', marker: { color: pips.map(p => p >= 0.5 ? chartColors.success : chartColors.danger) }, hovertemplate: '<b>%{x}</b><br>PIP: %{y:.0%}<extra></extra>' }], { ...chartLayout, margin: { t: 20, r: 20, b: 60, l: 50 }, xaxis: { ...chartLayout.xaxis, tickangle: -30 }, yaxis: { ...chartLayout.yaxis, title: 'Inclusion Prob.', range: [0, 1], tickformat: '.0%' }, shapes: [{ type: 'line', x0: -0.5, x1: 4.5, y0: 0.5, y1: 0.5, line: { color: chartColors.textMuted, width: 2, dash: 'dash' } }] }, chartConfig);
         }
 
         let dartboardAnimationRunning = false, dartsThrown = 0, dartsKept = 0;
@@ -820,9 +813,6 @@
                 }
             }, 10);
         }
-        function initCrossEffectChart() {
-            Plotly.newPlot('cross-effect-chart', [{ x: ['Multipack Lift', 'Single-Pack<br>Cannibalization', 'Net Portfolio<br>Impact'], y: [100, -35, 65], type: 'waterfall', orientation: 'v', connector: { line: { color: chartColors.grid } }, decreasing: { marker: { color: chartColors.danger } }, increasing: { marker: { color: chartColors.success } }, totals: { marker: { color: chartColors.accent } }, measure: ['relative', 'relative', 'total'], textposition: 'outside', text: ['+100', '-35', '65'], hoverinfo: 'text' }], { ...chartLayout, title: { text: 'Portfolio Impact of Multipack Promo', font: { size: 14 } }, xaxis: { ...chartLayout.xaxis, title: '' }, yaxis: { ...chartLayout.yaxis, title: 'Incremental Units', range: [-50, 120] }, showlegend: false }, chartConfig);
-        }
 
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
@@ -831,7 +821,7 @@
         }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
         document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
         document.querySelectorAll('.control-group input[type="range"]').forEach(input => { input.addEventListener('input', () => { const valueSpan = input.parentElement.querySelector('.control-value span'); if (valueSpan) valueSpan.textContent = input.value; }); });
-        document.addEventListener('DOMContentLoaded', function() { initHeroChart(); initPIPPreviewChart(); runSimulation(); initCrossEffectChart(); });
+        document.addEventListener('DOMContentLoaded', function() { initHeroChart(); runSimulation(); });
     </script>
 </body>
 </html>

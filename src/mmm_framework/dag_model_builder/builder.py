@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Self
 
+import numpy as np
 import pandas as pd
 
 from mmm_framework.config import InferenceMethod, MFFConfig, ModelConfig
@@ -17,6 +18,7 @@ from .config_translator import (
     dag_to_mff_config,
     dag_to_multivariate_config,
     dag_to_nested_config,
+    dag_to_structural_config,
 )
 from .dag_spec import DAGEdge, DAGNode, DAGSpec
 from .model_type_resolver import ModelType, get_model_class, resolve_model_type
@@ -740,9 +742,48 @@ class DAGModelBuilder:
         # not a panel: the MFF panel carries kpi/media/controls only, so
         # mediator / additional-outcome series are pulled from the raw MFF
         # table and aligned to the panel's period index.
-        y, X_media, _ = self._panel.to_numpy()
+        y, X_media, X_controls = self._panel.to_numpy()
         channel_names = list(self._panel.X_media.columns)
         index = self._panel.X_media.index
+
+        if model_type == ModelType.STRUCTURAL_NESTED_MMM:
+            structural_config, data_requirements = dag_to_structural_config(dag)
+            mediator_data: dict = {}
+            mediator_trials: dict = {}
+            for req in data_requirements:
+                if req["likelihood"] == "ordered":
+                    # (n_obs, K) count matrix from the K category columns;
+                    # NaN weeks = unobserved (the model masks them).
+                    cols = self._national_series(
+                        req["category_variables"], allow_missing=True
+                    )
+                    mediator_data[req["name"]] = np.column_stack(
+                        [cols[c] for c in req["category_variables"]]
+                    )
+                else:
+                    mediator_data[req["name"]] = self._national_series(
+                        [req["variable_name"]], allow_missing=True
+                    )[req["variable_name"]]
+                    if req["likelihood"] == "binomial":
+                        mediator_trials[req["name"]] = self._national_series(
+                            [req["trials_variable"]], allow_missing=True
+                        )[req["trials_variable"]]
+            control_names = (
+                list(self._panel.X_controls.columns) if X_controls is not None else None
+            )
+            return model_class(
+                X_media=X_media,
+                y=y,
+                channel_names=channel_names,
+                config=structural_config,
+                mediator_data=mediator_data,
+                mediator_trials=mediator_trials,
+                X_controls=X_controls,
+                control_names=control_names,
+                index=index,
+                model_config=model_config,
+                trend_config=self._trend_config,
+            )
 
         if model_type == ModelType.NESTED_MMM:
             nested_config = dag_to_nested_config(dag)
@@ -802,11 +843,17 @@ class DAGModelBuilder:
         else:
             raise DAGBuildError(f"Unknown model type: {model_type}")
 
-    def _national_series(self, names: list[str]) -> dict[str, Any]:
+    def _national_series(
+        self, names: list[str], *, allow_missing: bool = False
+    ) -> dict[str, Any]:
         """National per-period series for DAG variables that are NOT in the
         MFF panel (mediators / additional outcomes), aligned to the panel's
         period index. Values are summed across any geo/product rows — the
-        same national collapse the MFF loader applies."""
+        same national collapse the MFF loader applies.
+
+        ``allow_missing=True`` keeps NaN for periods with no rows instead of
+        raising — structural mediator surveys treat NaN as "no survey that
+        week" (the plain nested/multivariate branches keep strict coverage)."""
         if not names:
             return {}
         if self._mff_raw is None:
@@ -842,7 +889,7 @@ class DAGModelBuilder:
                 .sum()
             )
             aligned = series.reindex(pd.to_datetime(panel_index))
-            if aligned.isna().any():
+            if aligned.isna().any() and not allow_missing:
                 missing = int(aligned.isna().sum())
                 raise DAGBuildError(
                     f"DAG variable '{name}' does not cover the panel's periods "

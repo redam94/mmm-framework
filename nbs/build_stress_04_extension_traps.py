@@ -107,6 +107,7 @@ import sys, pathlib, warnings, logging, time
 import numpy as np, pandas as pd
 import matplotlib.pyplot as plt
 import arviz as az
+from mmm_framework.utils.arviz_compat import dataset_extremum
 
 warnings.filterwarnings("ignore")
 for _n in ("pymc", "pymc.sampling", "numpyro", "jax", "arviz", "pytensor"):
@@ -543,8 +544,12 @@ scorecard = pd.DataFrame({
         "proportion_mediated Display": float(med.loc["Display", "proportion_mediated"]),
         "ROAS TV (true 2.14)": roas_c["TV"],
         "ROAS Display (true 2.11)": roas_c["Display"],
-        "max r-hat (key params)": float(az.rhat(post_n[["gamma_awareness",
-            "delta_direct_TV", "delta_direct_Display"]]).to_array().max()),
+        # arviz 1.x: the posterior group is a DataTree node -- convert to a
+        # Dataset before multi-variable selection, and reduce via the repo's
+        # version-robust shim (``.to_array`` drifted).
+        "max r-hat (key params)": dataset_extremum(az.rhat(
+            post_n.to_dataset()[["gamma_awareness",
+            "delta_direct_TV", "delta_direct_Display"]]), "max"),
         "divergences": int(nested.trace.sample_stats["diverging"].sum()),
     },
     "(d) WRONG mediator (confounder!)": {
@@ -552,8 +557,9 @@ scorecard = pd.DataFrame({
         "proportion_mediated Display": float(medw.loc["Display", "proportion_mediated"]),
         "ROAS TV (true 2.14)": roas_d["TV"],
         "ROAS Display (true 2.11)": roas_d["Display"],
-        "max r-hat (key params)": float(az.rhat(post_w[["gamma_demand_proxy",
-            "delta_direct_TV", "delta_direct_Display"]]).to_array().max()),
+        "max r-hat (key params)": dataset_extremum(az.rhat(
+            post_w.to_dataset()[["gamma_demand_proxy",
+            "delta_direct_TV", "delta_direct_Display"]]), "max"),
         "divergences": int(wrong.trace.sample_stats["diverging"].sum()),
     },
 }).round(3)
@@ -929,7 +935,9 @@ print(f"divergences: {ndiv} of {n_total} post-warmup draws")
 
 scalar_vars = [v for v in comb.trace.posterior.data_vars
                if "mu" not in v and "_latent" not in v and "effect_" not in v]
-rhat_c = float(az.rhat(comb.trace.posterior[scalar_vars]).to_array().max())
+# arviz 1.x: DataTree list-selection is gone -- select on the Dataset.
+rhat_c = dataset_extremum(
+    az.rhat(comb.trace.posterior.to_dataset()[scalar_vars]), "max")
 print(f"max r-hat over structural parameters: {rhat_c:.3f}")
 
 # The cross-effect block the repaired model builds: ONLY the configured arrow.

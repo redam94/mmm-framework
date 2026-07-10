@@ -38,6 +38,11 @@ from .config import (
     AggregatedSurveyLikelihood,
     MediatorObservationType,
     MediatorConfigExtended,
+    MediatorDynamics,
+    MediatorLikelihood,
+    MediatorMeasurement,
+    MediatorSpec,
+    LatentFactorSpec,
 )
 from .components import compute_survey_observation_indices
 
@@ -1786,4 +1791,111 @@ def survey_awareness_mediator(
         .with_positive_media_effect()
         .with_direct_effect()
         .build()
+    )
+
+
+# =============================================================================
+# StructuralNestedMMM factory functions
+# =============================================================================
+
+
+def binary_survey_mediator(
+    name: str,
+    channels: tuple[str, ...] | list[str],
+    *,
+    parents: tuple[str, ...] | list[str] = (),
+    controls: tuple[str, ...] | list[str] = (),
+    latent_factors: tuple[str, ...] | list[str] = (),
+    persistence: str = "high",
+    design_effect: float = 1.0,
+    affects_outcome: bool = True,
+    allow_direct_effect: bool = True,
+    direct_effect_sigma: float = 0.3,
+) -> MediatorSpec:
+    """A binary-tracker mediator ("have you seen this brand?"): AR(1) latent
+    state on the logit scale, binomial measurement with per-week trials.
+
+    ``persistence`` sets the Beta prior on the AR(1) rho: "high" (Beta(9, 1.5),
+    awareness-like carryover), "medium" (Beta(6, 2)), "low" (Beta(2, 4)). The
+    AR(1) state carries the media effect forward, so adstock is OFF for this
+    equation (adstock + AR(1) would double-count carryover).
+    """
+    rho = {"high": (9.0, 1.5), "medium": (6.0, 2.0), "low": (2.0, 4.0)}
+    if persistence not in rho:
+        raise ValueError(f"persistence must be one of {sorted(rho)}")
+    a, b = rho[persistence]
+    return MediatorSpec(
+        name=name,
+        channels=tuple(channels),
+        parents=tuple(parents),
+        controls=tuple(controls),
+        latent_factors=tuple(latent_factors),
+        dynamics=MediatorDynamics.AR1,
+        rho_prior_alpha=a,
+        rho_prior_beta=b,
+        measurement=MediatorMeasurement(
+            likelihood=MediatorLikelihood.BINOMIAL, design_effect=design_effect
+        ),
+        affects_outcome=affects_outcome,
+        allow_direct_effect=allow_direct_effect,
+        direct_effect=EffectPriorConfig(sigma=direct_effect_sigma),
+        apply_adstock=False,
+    )
+
+
+def likert_mediator(
+    name: str,
+    channels: tuple[str, ...] | list[str],
+    *,
+    n_categories: int = 5,
+    parents: tuple[str, ...] | list[str] = (),
+    controls: tuple[str, ...] | list[str] = (),
+    latent_factors: tuple[str, ...] | list[str] = (),
+    dynamics: MediatorDynamics = MediatorDynamics.STATIC,
+    design_effect: float = 1.0,
+    affects_outcome: bool = True,
+    allow_direct_effect: bool = True,
+    direct_effect_sigma: float = 0.3,
+) -> MediatorSpec:
+    """A Likert-measured mediator (e.g. consideration): cumulative-logit
+    Multinomial measurement over per-week category counts. Location lives in
+    the cutpoints; feed upstream mediators via ``parents`` (e.g. awareness)
+    and drivers like price via ``controls``."""
+    return MediatorSpec(
+        name=name,
+        channels=tuple(channels),
+        parents=tuple(parents),
+        controls=tuple(controls),
+        latent_factors=tuple(latent_factors),
+        dynamics=dynamics,
+        measurement=MediatorMeasurement(
+            likelihood=MediatorLikelihood.ORDERED,
+            n_categories=n_categories,
+            design_effect=design_effect,
+        ),
+        affects_outcome=affects_outcome,
+        allow_direct_effect=allow_direct_effect,
+        direct_effect=EffectPriorConfig(sigma=direct_effect_sigma),
+    )
+
+
+def latent_demand_factor(
+    name: str = "demand",
+    *,
+    affects_outcome: bool = True,
+    outcome_effect_sigma: float = 1.0,
+    mediator_effect_sigma: float = 1.0,
+) -> LatentFactorSpec:
+    """A smooth latent demand trend: AR(1) with a high-persistence prior
+    (Beta(9, 1.5)), unit-standardized in-graph, sign-anchored at the outcome
+    loading. Route it into mediator equations via
+    ``MediatorSpec.latent_factors=(name,)``."""
+    return LatentFactorSpec(
+        name=name,
+        dynamics=MediatorDynamics.AR1,
+        rho_prior_alpha=9.0,
+        rho_prior_beta=1.5,
+        affects_outcome=affects_outcome,
+        outcome_effect_sigma=outcome_effect_sigma,
+        mediator_effect_sigma=mediator_effect_sigma,
     )
