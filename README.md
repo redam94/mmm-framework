@@ -220,9 +220,12 @@ results = model.fit(
 )
 
 # Get contributions with uncertainty
-contributions = model.compute_contributions()
-print(contributions.mean_contributions)
-print(contributions.hdi_contributions)  # 94% credible intervals
+from mmm_framework.analysis import MMMAnalyzer
+analyzer = MMMAnalyzer(model)
+contributions = analyzer.compute_counterfactual_contributions()
+print(contributions.summary())
+print(contributions.contribution_hdi_low)   # 94% credible interval lower bounds
+print(contributions.contribution_hdi_high)  # 94% credible interval upper bounds
 ```
 
 ### Fluent Configuration API

@@ -105,6 +105,7 @@ mmm-framework/
 │   │   ├── dag_spec.py         # DAG specification
 │   │   ├── node_configs.py     # Node configurations
 │   │   ├── validation.py       # DAG validation
+│   │   ├── identification.py   # Identification checks
 │   │   ├── config_translator.py
 │   │   ├── frontend_adapter.py
 │   │   └── model_type_resolver.py
@@ -116,11 +117,15 @@ mmm-framework/
 │   │   │   ├── base.py
 │   │   │   ├── nested.py       # NestedMMM (mediation)
 │   │   │   ├── multivariate.py # MultivariateMMM (multi-outcome)
-│   │   │   └── combined.py     # CombinedMMM
+│   │   │   ├── combined.py     # CombinedMMM
+│   │   │   └── structural.py   # StructuralNestedMMM (multi-mediator SEM)
 │   │   └── components/         # Extension components
 │   │       ├── cross_effects.py
+│   │       ├── latent_states.py  # Latent mediator states (AR1/RW)
 │   │       ├── observation.py
+│   │       ├── outcome.py        # Outcome likelihood builders
 │   │       ├── priors.py
+│   │       ├── temporal.py       # Trend/seasonality for extensions
 │   │       ├── transforms.py
 │   │       └── variable_selection.py
 │   └── reporting/              # HTML report generation
@@ -135,20 +140,26 @@ mmm-framework/
 │       │   ├── extended.py
 │       │   ├── fit.py
 │       │   ├── geo.py
+│       │   ├── ppc.py          # Posterior predictive check charts
+│       │   ├── prior.py        # Prior predictive charts
 │       │   └── roi.py
 │       ├── extractors/         # Data extraction for reports
 │       │   ├── base.py
 │       │   ├── bayesian.py
 │       │   ├── bundle.py
 │       │   ├── extended.py
+│       │   ├── factor_analysis.py  # CFA/LCA/latent-factor extractor
 │       │   ├── mixins.py
 │       │   └── pymc_marketing.py
 │       └── helpers/            # Report helper utilities
 │           ├── adstock.py
 │           ├── decomposition.py
+│           ├── measurement.py  # Channel divisor / ROI measurement resolution
 │           ├── mediated.py
+│           ├── prefit.py       # Pre-fit readout facts helpers
 │           ├── prior_posterior.py
 │           ├── protocols.py
+│           ├── reallocation.py
 │           ├── results.py
 │           ├── roi.py
 │           ├── saturation.py
@@ -336,14 +347,15 @@ generator = MMMReportGenerator()
 html = generator.generate_report(results, config)
 
 # Model serialization
-from mmm_framework import MMMSerializer
-serializer = MMMSerializer()
-serializer.save(model, results, "model.pkl")
-model, results = serializer.load("model.pkl")
+from mmm_framework.serialization import MMMSerializer
+MMMSerializer.save(model, "model.pkl")
+model = MMMSerializer.load("model.pkl")
 
 # Analysis
-from mmm_framework.analysis import MarginalAnalysisResult
-analysis = MarginalAnalysisResult.from_model(model, results)
+from mmm_framework.analysis import MMMAnalyzer
+analyzer = MMMAnalyzer(model)
+contributions = analyzer.compute_counterfactual_contributions()
+marginal = analyzer.compute_marginal_contributions(spend_increase_pct=10)
 ```
 
 ## Troubleshooting
