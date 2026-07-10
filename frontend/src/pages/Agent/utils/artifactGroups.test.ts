@@ -161,6 +161,20 @@ describe('buildArtifactGroups', () => {
     expect(groups[0].counts.code).toBe(1);
   });
 
+  it('resolves expert-run cells through po.callId (the delegation call_id)', () => {
+    // An expert cell's own id (exp-1) is unknown to the transcript; its
+    // callId carries the orchestrator's delegate_to_expert call_id instead.
+    const groups = buildArtifactGroups(
+      messages,
+      [],
+      [],
+      [code('exp-1', { callId: 'call-2' })],
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].qIdx).toBe(1); // grouped under the delegating question
+    expect(groups[0].items[0].id).toBe('exp-1');
+  });
+
   it('assigns legacy refs synthetic inline ids when the plot ref has no id', () => {
     const groups = buildArtifactGroups([], [{ title: 'inline fig' }, { title: 'another' }], [], []);
     expect(groups[0].items.map(i => i.id)).toEqual(['inline-0', 'inline-1']);

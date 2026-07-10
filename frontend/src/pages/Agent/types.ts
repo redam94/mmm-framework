@@ -27,6 +27,10 @@ export interface PythonOutput {
   output: string;
   hasError: boolean;
   plotCount: number;
+  /** Question-resolution override: for expert-run code (delegate_to_expert /
+   * review panel) this is the ORCHESTRATOR's delegation call_id — the expert's
+   * own call_id (= `id`) never appears in the chat transcript. */
+  callId?: string;
 }
 
 // ─── Session + Artifact types ────────────────────────────────────────────────

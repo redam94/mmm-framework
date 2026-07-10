@@ -12,7 +12,7 @@ import type { ValidationCheck } from '../services/validationService';
  * `history` lists past validations across reloads and `load(item)` re-opens a
  * past run's full result.
  */
-export function useValidation(projectId: string | null) {
+export function useValidation(projectId: string | null, threadId: string | null = null) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [check, setCheck] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -20,7 +20,7 @@ export function useValidation(projectId: string | null) {
   const start = useMutation({
     mutationFn: (c: ValidationCheck) => {
       setCheck(c);
-      return validationService.start(projectId!, c);
+      return validationService.start(projectId!, c, threadId);
     },
     onSuccess: (data) => setJobId(data.job_id),
   });
@@ -33,9 +33,11 @@ export function useValidation(projectId: string | null) {
       ['done', 'error'].includes(q.state.data?.status ?? '') ? false : 1500,
   });
 
+  // Scoped to the current session when a threadId is provided — runs from
+  // other sessions on the same project stay out of this list.
   const history = useQuery({
-    queryKey: ['validations', projectId],
-    queryFn: () => validationService.history(projectId!),
+    queryKey: ['validations', projectId, threadId],
+    queryFn: () => validationService.history(projectId!, threadId),
     enabled: !!projectId,
   });
 

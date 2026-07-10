@@ -4,6 +4,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useCausalPanels } from '../../components/causal/CausalWidgets';
 import { API_BASE, authHeaders } from './constants';
 import { specLeafDiff, specWithDefaults } from './utils/spec';
+import { pythonOutputsFromArtifacts } from './utils/python';
 import { useAgentSessions } from './hooks/useAgentSessions';
 import { useArtifactGroups } from './hooks/useArtifactGroups';
 import { useChatStream } from './hooks/useChatStream';
@@ -82,7 +83,13 @@ export function AgentPage() {
     onTurnSettled: async () => {
       try {
         const arts = await fetch(`${API_BASE}/artifacts/${threadId}`, { headers: authHeaders(apiKey, modelName) }).then(r => r.json());
-        if (Array.isArray(arts)) setArtifacts(arts);
+        if (Array.isArray(arts)) {
+          setArtifacts(arts);
+          // Rebuild code segments from the persisted artifacts: code the EXPERT
+          // sub-agent ran (delegate_to_expert / review panel) never streams an
+          // execute_python tool event to this client, so it only shows up here.
+          setPythonOutputs(pythonOutputsFromArtifacts(arts));
+        }
       } catch { /* ignore */ }
       causal.refresh();
       // Refresh workspace output files (newly generated reports/CSVs/PNGs).

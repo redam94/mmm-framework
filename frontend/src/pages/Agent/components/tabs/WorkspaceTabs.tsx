@@ -502,7 +502,9 @@ export function WorkspaceTabs({
             <GroupedArtifacts groups={artifactGroups} threadId={threadId} />
           )}
 
-          {activeTab === 'validation' && <ValidationTab projectId={projectId} />}
+          {activeTab === 'validation' && (
+            <ValidationTab projectId={projectId} threadId={threadId} />
+          )}
 
           {activeTab === 'library' && (
             <>
