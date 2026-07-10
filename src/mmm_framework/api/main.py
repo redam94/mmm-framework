@@ -5395,19 +5395,34 @@ async def delete_artifact_endpoint(
 
 
 @app.get("/sessions/{thread_id}/export", dependencies=[_sess_read])
-async def export_session_endpoint(thread_id: str, format: str = "py"):
+async def export_session_endpoint(
+    thread_id: str, format: str = "py", scope: str = "all"
+):
     """Download the session's Python work as a standalone, runnable script.
 
     Synthesizes a preamble that reconstitutes tool-injected state (dataset,
-    fitted model, helpers), then the execute_python cells in order — so the
-    download is a real, portable reproduction of the session, not a code dump
-    that NameErrors. See ``agents/session_export.build_session_script``.
+    fitted model, helpers), then replays the conversation's tool calls (fits
+    as ``build_and_fit`` with the fitted spec embedded, model ops, EDA) and
+    execute_python cells in order — so the download is a real, portable
+    reproduction of the session, not a code dump that NameErrors. ``scope``
+    narrows to ``last`` (final user turn) or ``turn:<k>`` (1-based); invalid
+    values export everything. See ``agents/session_export.build_session_script``.
     """
     import re
 
     from mmm_framework.agents.session_export import build_session_script
 
-    script = build_session_script(thread_id)
+    messages: list = []
+    try:
+        g = _admin_graph()
+        state = await g.aget_state({"configurable": {"thread_id": thread_id}})
+        if state and state.values:
+            messages = list(state.values.get("messages", []))
+    except Exception:
+        logger.exception("export: could not read checkpoint for %s", thread_id)
+        messages = []
+
+    script = build_session_script(thread_id, messages=messages, scope=scope)
     sess = sessions_store.get_session(thread_id) or {}
     slug = re.sub(r"[^A-Za-z0-9._-]+", "_", str(sess.get("name") or thread_id)).strip(
         "_"

@@ -870,7 +870,13 @@ def test_session_export_reconstitutes_fitted_model_and_marks_errors(store):
     )
 
     script = build_session_script(tid)
-    assert "MMMSerializer().load('mmm_models/run_X')" in script  # fit reconstituted
+    # Fit reconstituted with the CORRECTED reload form: the old emitted
+    # `MMMSerializer().load(path)` never ran (core loads require a panel and
+    # return a single model, not a tuple) — the canonical reload rebuilds the
+    # panel from the saved run's spec, exactly like the kernel's rehydrate.
+    assert "MMMSerializer().load(" not in script
+    assert "mmm = MMMSerializer.load('mmm_models/run_X', panel)" in script
+    assert "panel = load_mff(dataset_path, _mff_config_from_spec(spec))" in script
     assert "print(results.summary())" in script  # cell kept
     assert "raised an error" in script  # errored cell marked, not dropped
 
