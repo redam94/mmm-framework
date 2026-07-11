@@ -16,7 +16,6 @@ from langgraph.types import Command
 
 import mmm_framework.agents.tools as T
 
-
 # ── Structural tool split ─────────────────────────────────────────────────────
 
 
@@ -158,6 +157,99 @@ def test_delegate_empty_summary_falls_back(monkeypatch):
     )
     (msg,) = cmd.update["messages"]
     assert "no summary" in msg.content.lower()
+
+
+def test_delegate_persists_expert_code_artifacts(monkeypatch, tmp_path):
+    """Code the EXPERT runs via execute_python never passes through the /chat
+    streaming layer's artifact capture — delegate_to_expert must persist it
+    itself (same code_snippet/text_output schema, keyed by call_id) so the
+    session timeline + export include expert-written code."""
+    from mmm_framework.api import sessions as S
+
+    monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
+    S.init_db()
+
+    result_state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "execute_python",
+                        "args": {"code": "print('hi')"},
+                        "id": "exp-1",
+                    }
+                ],
+            ),
+            ToolMessage(
+                content="hi\nGenerated 2 Plotly figure(s)", tool_call_id="exp-1"
+            ),
+            AIMessage(content="Done."),
+        ],
+    }
+    stub = _StubExpertGraph(result_state)
+    monkeypatch.setattr(T, "_get_expert_graph", lambda override=None, mode=None: stub)
+
+    T.delegate_to_expert.func(
+        state={},
+        task="Plot the KPI over time.",
+        tool_call_id="c1",
+        config={"configurable": {"thread_id": "sess-1"}},
+    )
+
+    arts = S.list_artifacts("sess-1")
+    by_kind: dict[str, list] = {}
+    for a in arts:
+        by_kind.setdefault(a["kind"], []).append(a["payload"])
+    (code,) = by_kind["code_snippet"]
+    assert code["call_id"] == "exp-1"
+    assert code["code"] == "print('hi')"
+    assert code["via"] == "delegate_to_expert"
+    assert code["question"].startswith("Plot the KPI")
+    assert code["parent_call_id"] == "c1"  # the delegation's own call_id
+    assert "ts" in code
+    (out,) = by_kind["text_output"]
+    assert out["call_id"] == "exp-1"
+    assert out["stdout"].startswith("hi")
+    assert out["plot_count"] == 2
+    assert out["is_error"] is False
+    assert out["parent_call_id"] == "c1"
+
+
+def test_delegate_skips_artifacts_for_non_python_tools(monkeypatch, tmp_path):
+    """Only execute_python cells are recorded — other expert tool calls (and
+    empty code) write nothing."""
+    from mmm_framework.api import sessions as S
+
+    monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
+    S.init_db()
+
+    result_state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "fit_mmm_model", "args": {}, "id": "f-1"},
+                    {"name": "execute_python", "args": {"code": "   "}, "id": "e-1"},
+                ],
+            ),
+            ToolMessage(content="fit done", tool_call_id="f-1"),
+            AIMessage(content="Done."),
+        ],
+    }
+    stub = _StubExpertGraph(result_state)
+    monkeypatch.setattr(T, "_get_expert_graph", lambda override=None, mode=None: stub)
+
+    T.delegate_to_expert.func(
+        state={},
+        task="fit",
+        tool_call_id="c1",
+        config={"configurable": {"thread_id": "sess-2"}},
+    )
+
+    kinds = {a["kind"] for a in S.list_artifacts("sess-2")}
+    assert "code_snippet" not in kinds
+    assert "text_output" not in kinds
 
 
 def test_delegate_passes_expert_override_to_build(monkeypatch):

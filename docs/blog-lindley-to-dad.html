@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>From Lindley to Deep Adaptive Design: 65 Years of Bayesian Experimental Design | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Bayesian experimental design from Lindley's 1956 information measure to Deep Adaptive Design: EIG, nested Monte Carlo, variational bounds, policy networks.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-lindley-to-dad.html">
+    <meta property="og:title" content="From Lindley to Deep Adaptive Design: 65 Years of Bayesian Experimental Design">
+    <meta property="og:description" content="Bayesian experimental design from Lindley's 1956 information measure to Deep Adaptive Design: EIG, nested Monte Carlo, variational bounds, policy networks.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-lindley-to-dad.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="From Lindley to Deep Adaptive Design: 65 Years of Bayesian Experimental Design">
+    <meta name="twitter:description" content="Bayesian experimental design from Lindley's 1956 information measure to Deep Adaptive Design: EIG, nested Monte Carlo, variational bounds, policy networks.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-lindley-to-dad.html",
+          "name": "From Lindley to Deep Adaptive Design: 65 Years of Bayesian Experimental Design | MMM Framework",
+          "description": "Bayesian experimental design from Lindley's 1956 information measure to Deep Adaptive Design: EIG, nested Monte Carlo, variational bounds, policy networks.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-lindley-to-dad.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-lindley-to-dad.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "From Lindley to Deep Adaptive Design: 65 Years of Bayesian Experimental Design",
+          "datePublished": "2026-06-27",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-lindley-to-dad.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-lindley-to-dad.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "From Lindley to Deep Adaptive Design: 65 Years of Bayesian Experimental Design",
+              "item": "https://redam94.github.io/mmm-framework/blog-lindley-to-dad.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#the-measure">1956: The Measure</a></li>
+                <li><a href="#why-information-won">Why Information Won</a></li>
+                <li><a href="#the-long-freeze">The Long Freeze</a></li>
+                <li><a href="#computational-revolution">The Computational Revolution</a></li>
+                <li><a href="#designs-to-policies">From Designs to Policies</a></li>
+                <li><a href="#open-challenges">Open Challenges</a></li>
+                <li><a href="#the-arc-applied">The Arc, Applied</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">From Lindley to Deep Adaptive Design: 65 Years of Bayesian Experimental Design</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-06-27">June 27, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Experimental design</span>
+            </p>
+            <p class="lead">In 1956, Dennis Lindley wrote down what an experiment is worth: the expected reduction in uncertainty about the thing you want to learn. The definition was complete, the theorems proved, the design rule stated in a sentence — yet it took nearly seven decades before the number he defined could be routinely computed and optimized. This post traces that arc — and why the ending matters to anyone who runs experiments for a living.</p>
+
+            <p>The history of Bayesian experimental design (BED) is unusual among statistical ideas: the theory arrived essentially finished, and everything since has been a fight with an integral. That fight — what made the objective intractable, which estimators broke the deadlock, and how the field leapt from optimizing designs to training design <em>policies</em> — is the fastest way to understand the modern toolkit.</p>
+
+            <h2 id="the-measure">1956: A Measure of What an Experiment Is Worth</h2>
+            <p>Shannon's 1948 theory established that information is a statistical quantity — defined relative to a distribution, and measured by an essentially unique functional of it. Lindley's move, eight years later, was to point this machinery at an <em>experiment</em> rather than a message: the transmitted signal is your knowledge of a parameter \( \theta \) before the experiment, the received signal your knowledge after, and the difference is what the experiment told you.</p>
+            <p>The move required a commitment unfashionable at the time: a prior distribution. Lindley argued priors are not optional here, for a reason that is self-evident once stated — if the prior concentrates on a single value of \( \theta \), no experiment can be informative, because nothing is left to learn. Experimental information is a relation between an experiment and a state of knowledge, not a property of the experiment alone.</p>
+
+            <div class="definition">
+                <h4>Definition: Lindley's average information (1956)</h4>
+                <p>For an experiment with outcome density \( p(x \mid \theta) \) and prior \( p(\theta) \), define the information in a distribution as \( \mathcal{I}_0 = \int p(\theta) \log p(\theta)\, d\theta \) — the <em>negative</em> of Shannon entropy, so concentration means maximum information — and \( \mathcal{I}_1(x) \) as the same functional of the posterior. The <strong>average information provided by the experiment</strong> is the gain, averaged over the outcomes the prior predicts:</p>
+                $$ \mathcal{I}\big(\mathcal{E}, p(\theta)\big) \;=\; \mathbb{E}_{x}\big[\, \mathcal{I}_1(x) \,\big] - \mathcal{I}_0 . $$
+                <p>This is the modern <strong>expected information gain</strong>.</p>
+            </div>
+
+            <p>Lindley showed the measure can be rewritten in a symmetric joint form,</p>
+            $$ \mathcal{I}\big(\mathcal{E}, p(\theta)\big) \;=\; \iint p(x, \theta) \log \frac{p(x, \theta)}{p(x)\,p(\theta)} \, dx \, d\theta , $$
+            <p>which a modern reader recognizes at once as the <em>mutual information</em> between parameter and outcome — invariant under one-to-one reparameterization of \( \theta \) (the single-outcome gain is not), and exactly Shannon's transmission rate of a channel: an experiment is a noisy channel from nature to the experimenter.</p>
+            <p>The paper then proves, in one sweep, most of what the field would need. The measure is non-negative on average — though a particular surprising outcome can leave you more uncertain than you started. It is additive across stages, the seed of every sequential method since. Sufficient statistics preserve it; insufficient ones strictly lose it. Independent repetitions show diminishing returns: the information from \( n \) replicates is concave and increasing in \( n \). And a prior-free partial order — one experiment beats another if it wins under <em>every</em> prior — connects the measure to Blackwell's comparison of experiments, whose ordering implies Lindley's but not conversely.</p>
+            <p>Finally, the paper states the design principle that defines the field: perform the experiment with the greatest expected information gain, and continue until a preassigned amount of information is reached. From this one rule Lindley recovered the Wald sequential probability ratio test as an information-threshold stopping rule and, in the multivariate normal case, the determinant criterion later canonized as D-optimality. The agenda of the next 65 years fits in that sentence.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>The two closed forms Lindley could actually compute</summary>
+                <div class="deep-dive-body">
+                    <p>The 1956 paper works out the measure exactly in the conjugate normal cases — instructive mainly for where the computation stops. For an experiment \( \mathcal{E}(\sigma) \) observing \( x \sim \mathcal{N}(\theta, \sigma^2) \) under a normal prior \( \mathcal{N}(\mu, \tau^2) \),</p>
+                    $$ \mathcal{I}\big(\mathcal{E}(\sigma), p_\tau\big) = \tfrac{1}{2} \log\!\left( 1 + \frac{\tau^2}{\sigma^2} \right), \qquad j_n = \tfrac{1}{2} \log\!\left( 1 + \frac{n \tau^2}{\sigma^2} \right) $$
+                    <p>for \( n \) replicates. The formula shows the concavity theorem directly — each observation buys less — though \( j_n \) grows without bound, unlike the frequentist's precision \( n/\sigma^2 \). For a \( k \)-dimensional normal with observation covariance \( C \) and prior covariance \( A \),</p>
+                    $$ \mathcal{I}\big(\mathcal{E}(C), p_A\big) = \tfrac{1}{2} \log \frac{\lvert A + C \rvert}{\lvert C \rvert}, $$
+                    <p>and under near-ignorance the comparison of two experiments reduces to comparing determinants of their dispersion matrices — the D-optimality criterion. Outside the conjugate world, evaluating the measure means integrating over outcomes an expression that itself contains an integral over parameters — and in 1956 no machinery for that existed. The theory was finished; the computation had not begun.</p>
+                </div>
+            </details>
+
+            <h2 id="why-information-won">Why Information Won the Argument with Fisher Information</h2>
+            <p>Lindley's objective was not the only candidate. Classical optimal design maximizes a functional of the <strong>Fisher information matrix</strong> (FIM) — determinant, trace, or smallest eigenvalue: the "alphabetic" D-, A-, and E-optimality criteria. Bernardo (1979) and Chaloner and Verdinelli (1995) placed both approaches in one decision-theoretic frame — choose the design maximizing the expected utility of the data, for some posterior functional as the utility. The entropy (log-score) utility gives the EIG; Fisher-information gain is another member of the family.</p>
+            <p>The review of Rainforth et al. (2024) gives the modern case for why the information objective prevailed, and it comes down to two structural flaws in the FIM route. First, the FIM is a <em>matrix</em>: optimizing it requires a scalar summary, and unlike the EIG those summaries do not fully reflect gains in the joint distribution and can change with the model's parameterization. Second, the FIM <em>depends on the unknown true parameters</em> — the very quantity the experiment is meant to learn. Practitioners must plug in a point estimate (ignoring uncertainty), take a worst case, or average over a prior — at which point they have specified a Bayesian model and may as well use it coherently. The failure is sharpest in adaptive settings, which require propagating uncertainty consistently across decisions; the Bayesian framework does this by construction — yesterday's posterior is today's prior.</p>
+            <p>One caveat, worth stating early: EIG-based design reasons about data not yet gathered, so it is only as good as the model it reasons with.</p>
+
+            <h2 id="the-long-freeze">The Long Freeze: Double Intractability</h2>
+            <p>In modern notation, with the design \( \xi \) made explicit and \( y \) the outcome, the objective is</p>
+            $$ \mathrm{EIG}(\xi) \;=\; \mathbb{E}_{p(\theta)\, p(y \mid \theta, \xi)}\!\left[ \log \frac{p(y \mid \theta, \xi)}{p(y \mid \xi)} \right], \qquad p(y \mid \xi) = \mathbb{E}_{p(\theta)}\big[ p(y \mid \theta, \xi) \big], $$
+            <p>with equivalent posterior and joint forms via Bayes' rule — the likelihood form is preferred when the outcome is lower-dimensional than the parameter. Every form contains a normalizing density with no closed form: the marginal \( p(y \mid \xi) \) or the posterior \( p(\theta \mid y, \xi) \). This is the <strong>double intractability</strong> that froze the field: the EIG is an expectation whose integrand contains <em>another</em> intractable expectation — one that changes with every simulated outcome and must be re-estimated fresh each time.</p>
+            <p>The workhorse is the <strong>nested Monte Carlo</strong> (NMC) estimator: draw \( N \) outer samples from the joint and approximate each inner marginal with \( M \) fresh prior draws,</p>
+            $$ \hat{\mu}_{\mathrm{NMC}}(\xi) \;=\; \frac{1}{N} \sum_{n=1}^{N} \log \frac{p(y_n \mid \theta_{n,0}, \xi)}{\frac{1}{M} \sum_{m=1}^{M} p(y_n \mid \theta_{n,m}, \xi)} . $$
+            <p>NMC is consistent but inherits three linked pathologies (Rainforth et al., 2018): multiplicative cost \( C = NM \); an upward bias at any finite \( M \), because the logarithm of an unbiased inner estimate is a Jensen-gap error; and — balancing outer variance against squared inner bias, \( M \propto \sqrt{N} \) — an overall rate of \( \mathcal{O}(C^{-1/3}) \), decisively worse than ordinary Monte Carlo's \( \mathcal{O}(C^{-1/2}) \). Wrap a grid search around an estimator like that, as the pre-2019 literature had to, and design optimization at realistic scale is out of reach. The <a href="blog-geo-holdout-eig.html">applied companion post</a> works through what this bias means for a concrete design problem — geo-holdout selection — so the applied detail lives there.</p>
+
+            <div class="note">
+                <h4>💡 Why nobody just "used more samples"</h4>
+                <p>The nested structure means error decays with the <em>cube root</em> of compute: halving the RMSE costs roughly eight times the budget — for scoring a <em>single</em> candidate design. An optimizer needs thousands of scores, adaptive experiments need them in real time, and the upward bias flatters the designs whose inner estimates are noisiest. The bottleneck was structural, not a matter of patience.</p>
+            </div>
+
+            <h2 id="computational-revolution">The Computational Revolution</h2>
+            <p>What Rainforth et al. (2024) call the computational revolution is a family of escape routes from the \( \mathcal{O}(C^{-1/3}) \) trap, sharing one insight: stop re-estimating the intractable inner quantity from scratch for every simulated outcome — either <em>learn</em> it once, or <em>debias</em> the nested estimate.</p>
+            <p>The variational thread (Foster et al., 2019) learns the intractable density once and reuses it. A normalized approximation to the marginal, \( q(y \mid \xi) \approx p(y \mid \xi) \), yields an <strong>upper</strong> bound on the EIG; an amortized posterior network \( q(\theta \mid y, \xi) \) yields the classical Barber&ndash;Agakov <strong>lower</strong> bound,</p>
+            $$ \mathrm{EIG}(\xi) \;\ge\; \mathbb{E}_{p(\theta)\, p(y \mid \theta, \xi)}\big[ \log q(\theta \mid y, \xi) - \log p(\theta) \big], $$
+            <p>each tight exactly when the learned density is exact. Since the EIG <em>is</em> a mutual information, any MI bound becomes an EIG estimator. Costs turn additive rather than multiplicative — \( \mathcal{O}(N + M) \) instead of \( \mathcal{O}(NM) \) — restoring the ordinary \( \mathcal{O}(T^{-1/2}) \) rate when the family can represent the target.</p>
+            <p>The contrastive thread turns NMC's vice into a controlled bound. Prior contrastive estimation (PCE) and its adaptive refinement ACE (Foster et al., 2020) include the outer sample \( \theta_0 \) among the inner "contrastive" samples in the denominator:</p>
+            $$ \mathrm{EIG}(\xi) \;\ge\; \mathbb{E}\!\left[ \log \frac{p(y \mid \theta_0, \xi)}{\frac{1}{M+1} \sum_{m=0}^{M} p(y \mid \theta_m, \xi)} \right] . $$
+            <p>That one adjustment flips the biased NMC over-estimate into a valid <strong>lower</strong> bound whose tightness is controlled by \( M \), and pairing it with the NMC upper bound sandwiches the truth from both sides.</p>
+            <p>The debiasing thread removes the variational family altogether. Goda et al. (2022) write the exact EIG as a telescoping sum of NMC estimators with geometrically growing inner sample sizes, couple each level's halves antithetically, and randomize over levels so that a single sampled term unbiasedly estimates the whole sum. The result is a <em>fully unbiased</em>, finite-variance estimator of the EIG — and of its design gradient — at the \( \mathcal{O}(C^{-1/2}) \) rate, with no approximation-family bias, at higher per-sample cost. A fourth line handles <strong>implicit models</strong> — likelihoods you can sample but not evaluate — via classification-based density-ratio estimation and critic-based MI bounds in the style of MINE (Kleinegesse &amp; Gutmann, 2020), extending everything above to pure simulators.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Estimator family</th><th>Relation to EIG</th><th>Bias</th><th>Rate</th><th>Needs</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Nested Monte Carlo</td><td>consistent estimate</td><td>upward, \( \mathcal{O}(1/M) \)</td><td>\( \mathcal{O}(C^{-1/3}) \)</td><td>likelihood evaluations only</td></tr>
+                    <tr><td>Variational marginal</td><td>upper bound</td><td>family misspecification</td><td>\( \mathcal{O}(T^{-1/2}) \)</td><td>normalized \( q(y \mid \xi) \)</td></tr>
+                    <tr><td>Barber&ndash;Agakov posterior</td><td>lower bound</td><td>family misspecification</td><td>\( \mathcal{O}(T^{-1/2}) \)</td><td>normalized \( q(\theta \mid y, \xi) \)</td></tr>
+                    <tr><td>PCE / ACE (contrastive)</td><td>lower bound</td><td>controlled by \( M \)</td><td>\( \mathcal{O}(T^{-1/2}) \)</td><td>contrastive samples; SGA-friendly</td></tr>
+                    <tr><td>Randomized MLMC</td><td>unbiased estimate</td><td>none</td><td>\( \mathcal{O}(C^{-1/2}) \)</td><td>no variational family; costlier samples</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="gradient-schemes">Optimizing the design itself</h3>
+            <p>Estimation is half the job; the point is to <em>maximize</em> over designs. The older literature wrapped black-box optimizers — enumeration, Bayesian optimization, evolutionary search, coordinate exchange — around the estimator, paying full estimation cost at every query and using no gradients. Stochastic-gradient ascent on the EIG dates to Huan and Marzouk (2014), but gradients of a biased estimator can converge to confidently wrong designs; the practical significance of the newer estimators is that their gradients are trustworthy. Foster et al. (2020) unified the pieces into one stochastic optimization ascending the design \( \xi \) and the variational parameters <em>simultaneously</em>, demonstrated on design spaces with hundreds of dimensions. Discrete designs remain the awkward case — relaxations sometimes help, and the review flags the problem as unresolved.</p>
+
+            <h2 id="designs-to-policies">From Designs to Policies</h2>
+            <p>Lindley's design rule was already sequential — continue until a preassigned amount of information is attained — and his additivity theorem supplies the accounting: total information is the sum of per-step increments. Traditional Bayesian adaptive design operationalizes this greedily: at step \( t \), with history \( h_{t-1} = \{(\xi_k, y_k)\}_{k \lt t} \), choose the design maximizing the <strong>incremental EIG</strong>,</p>
+            $$ \mathrm{EIG}(\xi_t \mid h_{t-1}) \;=\; \mathbb{E}_{p(\theta \mid h_{t-1})\, p(y_t \mid \theta, \xi_t)}\!\left[ \log \frac{p(y_t \mid \theta, \xi_t)}{p(y_t \mid \xi_t, h_{t-1})} \right], $$
+            <p>which is an ordinary EIG with the prior replaced by the current posterior. This loop — design, observe, infer, repeat — works, but carries two structural flaws (Rainforth et al., 2024). It requires full Bayesian inference <em>between every pair of steps</em>, ruling out experiments where the next decision is needed in seconds. And it is myopic: each step maximizes only its own increment, ignoring how today's design shapes what tomorrow's steps can learn.</p>
+            <p><strong>Deep Adaptive Design</strong> (Foster et al., 2021) dissolves both problems with one move: amortize the entire design loop into a <em>policy network</em> \( \pi_\phi \) that maps the raw history directly to the next design, \( \xi_t = \pi_\phi(h_{t-1}) \). The policy is trained offline to maximize the <strong>total</strong> expected information gain over all \( T \) steps,</p>
+            $$ \mathrm{TEIG}(\pi_\phi) \;=\; \mathbb{E}_{p(\theta)\, p(y_{1:T} \mid \theta, \pi_\phi)}\!\left[ \log \frac{p(y_{1:T} \mid \theta, \pi_\phi)}{p(y_{1:T} \mid \pi_\phi)} \right], $$
+            <p>with the rollout generated autoregressively by the policy itself, estimated with the contrastive bounds and ascended with the stochastic gradients of the previous section. By the additivity theorem the total EIG equals the sum of the incremental EIGs, so maximizing it is exactly the non-myopic objective greedy BAD forgoes. At deployment, each design decision is a single forward pass — no inference, no optimization, real time — and one trained policy serves many runs of the experiment. Nothing is lost by conditioning on raw history: given the model, the history determines the belief state. The lineage runs through Huan and Marzouk (2016), who framed sequential design as dynamic programming but still needed per-step posterior updates; iDAD extended policies to implicit-likelihood models, and later work trains the policy by reinforcement learning. Strikingly, amortized policies have proved not merely faster but often <em>better</em> than greedy per-step optimization: non-myopia and freedom from per-step approximate-inference error compound.</p>
+
+            <h2 id="open-challenges">Open Challenges</h2>
+            <p>The review closes with a frontier list. Policy-based design is powerful but young: scaling with the dimensionality of the design space, model smoothness, and the horizon \( T \) is unsolved; better architectures, objectives, and training schemes are needed, discrete designs again being the stubborn case. The connections to neighboring fields are real but under-exploited: Bayesian active learning is a special case of adaptive design (the BALD acquisition score <em>is</em> a per-step EIG on model parameters) and has scaled to high-dimensional data in ways BED has not, so techniques should flow both directions — though BALD's parameter target is itself sub-optimal when the real goal is predictions. Bayesian reinforcement learning shares the same underlying decision process, and the links remain largely unexplored.</p>
+
+            <div class="warning">
+                <h4>⚠️ Misspecification is BED's Achilles' heel</h4>
+                <p>An EIG-optimal design is optimal <em>under the model</em>. Because BED uses the model twice — to fit the data it has and to choose the data it gets — misspecification can be self-reinforcing in a way passive data collection is not. The stark example from Rainforth et al. (2024): in linear regression the EIG for the coefficients is maximized at the extremes of the input range regardless of the prior, so a misspecified linear model never probes the interior where its linearity would be falsified — and adaptive loops can get stuck querying uninformative designs. Mitigation is under-studied; it is the strongest argument for pairing optimal design with routine model criticism.</p>
+            </div>
+
+            <h2 id="the-arc-applied">The Arc, Applied</h2>
+            <p>For measurement practitioners the arc has a practical punchline: the objects Lindley defined are now cheap enough to sit inside a working system. Scoring a proposed geo experiment by expected information gain against a fitted model's posterior is exactly the calculation the <a href="blog-geo-holdout-eig.html">geo-holdout companion post</a> walks through. And the sequential logic — posterior becomes prior, information adds across waves, stop when further testing no longer covers its cost — is the backbone of the <a href="continuous-learning-math.html">continuous-learning mathematics</a> behind this framework's experiment loop. Sixty-five years on, Lindley's design rule reads less like history and more like a specification.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Lindley (1956) defined the value of an experiment as its expected information gain — the mutual information between parameter and outcome — and stated the design rule the whole field still follows.</li>
+                    <li>The EIG is doubly intractable; nested Monte Carlo pays a multiplicative cost, carries an upward Jensen bias, and converges at only \( \mathcal{O}(C^{-1/3}) \).</li>
+                    <li>The modern estimators break the trap three ways: variational bounds (learn the inner density once), contrastive bounds (turn the NMC bias into a controlled lower bound), and randomized MLMC (debias it exactly).</li>
+                    <li>Differentiable bounds make design a stochastic-gradient problem, and Deep Adaptive Design amortizes the whole sequential loop into a policy network — non-myopic and real-time.</li>
+                    <li>The open flank is model misspecification: an optimal design is optimal under the model that chose it, so optimal design and model criticism must travel together.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Lindley, D. V. (1956). <em>On a Measure of the Information Provided by an Experiment</em>. Annals of Mathematical Statistics, 27(4).</li>
+                <li>Shannon, C. E. (1948). <em>A Mathematical Theory of Communication</em>. Bell System Technical Journal, 27.</li>
+                <li>Kullback, S., &amp; Leibler, R. A. (1951). <em>On Information and Sufficiency</em>. Annals of Mathematical Statistics, 22(1).</li>
+                <li>Blackwell, D. (1953). <em>Equivalent Comparisons of Experiments</em>. Annals of Mathematical Statistics, 24(2).</li>
+                <li>Bernardo, J. M. (1979). <em>Expected Information as Expected Utility</em>. Annals of Statistics, 7(3).</li>
+                <li>Chaloner, K., &amp; Verdinelli, I. (1995). <em>Bayesian Experimental Design: A Review</em>. Statistical Science, 10(3).</li>
+                <li>Huan, X., &amp; Marzouk, Y. M. (2014). <em>Gradient-Based Stochastic Optimization Methods in Bayesian Experimental Design</em>. International Journal for Uncertainty Quantification, 4(6).</li>
+                <li>Huan, X., &amp; Marzouk, Y. M. (2016). <em>Sequential Bayesian Optimal Experimental Design via Approximate Dynamic Programming</em>. arXiv:1604.08320.</li>
+                <li>Rainforth, T., Cornish, R., Yang, H., Warrington, A., &amp; Wood, F. (2018). <em>On Nesting Monte Carlo Estimators</em>. ICML.</li>
+                <li>Foster, A., Jankowiak, M., Bingham, E., Horsfall, P., Teh, Y. W., Rainforth, T., &amp; Goodman, N. (2019). <em>Variational Bayesian Optimal Experimental Design</em>. NeurIPS.</li>
+                <li>Foster, A., Jankowiak, M., O'Meara, M., Teh, Y. W., &amp; Rainforth, T. (2020). <em>A Unified Stochastic Gradient Approach to Designing Bayesian-Optimal Experiments</em>. AISTATS.</li>
+                <li>Kleinegesse, S., &amp; Gutmann, M. U. (2020). <em>Bayesian Experimental Design for Implicit Models by Mutual Information Neural Estimation</em>. ICML.</li>
+                <li>Foster, A., Ivanova, D. R., Malik, I., &amp; Rainforth, T. (2021). <em>Deep Adaptive Design: Amortizing Sequential Bayesian Experimental Design</em>. ICML.</li>
+                <li>Ivanova, D. R., Foster, A., Kleinegesse, S., Gutmann, M. U., &amp; Rainforth, T. (2021). <em>Implicit Deep Adaptive Design: Policy-Based Experimental Design without Likelihoods</em>. NeurIPS.</li>
+                <li>Goda, T., Hironaka, T., Kitade, W., &amp; Foster, A. (2022). <em>Unbiased MLMC Stochastic Gradient-Based Optimization of Bayesian Experimental Designs</em>. SIAM Journal on Scientific Computing, 44(1).</li>
+                <li>Rainforth, T., Foster, A., Ivanova, D. R., &amp; Bickford Smith, F. (2024). <em>Modern Bayesian Experimental Design</em>. Statistical Science, 39(1).</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

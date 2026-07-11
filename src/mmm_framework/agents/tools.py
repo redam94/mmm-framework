@@ -5931,6 +5931,86 @@ def _final_message_text(messages: list) -> str:
     return ""
 
 
+def _persist_expert_code_artifacts(
+    thread_id: str | None,
+    messages: list,
+    question: str | None,
+    via: str,
+    parent_call_id: str | None = None,
+) -> None:
+    """Persist the expert sub-graph's ``execute_python`` cells as session artifacts.
+
+    The ``/chat`` streaming layer records ``code_snippet``/``text_output``
+    artifacts by watching the ORCHESTRATOR's tool calls, so code the expert runs
+    inside ``delegate_to_expert`` / ``convene_review_panel`` never reaches it and
+    used to be silently lost (absent from the results timeline AND the session
+    export). Mirror the exact artifact schema the streaming layer writes — plus a
+    ``via`` marker attributing the cell to the expert flow and the delegation
+    task as the ``question`` stamp — so expert code lands in the same stores.
+    Best-effort: a recording failure never fails the delegation itself.
+    """
+    if not thread_id or not messages:
+        return
+    try:
+        import re
+        import time
+
+        from mmm_framework.api import sessions as _sessions
+
+        stamp: dict[str, Any] = {"ts": time.time(), "via": via}
+        if question:
+            stamp["question"] = str(question)[:200]
+        if parent_call_id:
+            # The orchestrator's delegation call_id — the expert's own call_ids
+            # never appear in the chat transcript, so the UI resolves these
+            # cells to their triggering question through the parent instead.
+            stamp["parent_call_id"] = parent_call_id
+
+        python_call_ids: set[str] = set()
+        for msg in messages:
+            for tc in getattr(msg, "tool_calls", None) or []:
+                if tc.get("name") != "execute_python":
+                    continue
+                call_id = tc.get("id")
+                if not call_id or call_id in python_call_ids:
+                    continue
+                python_call_ids.add(call_id)
+                code = (tc.get("args") or {}).get("code") or ""
+                if code.strip():
+                    _sessions.add_artifact(
+                        thread_id,
+                        "code_snippet",
+                        {"call_id": call_id, "code": code, **stamp},
+                    )
+            tool_call_id = getattr(msg, "tool_call_id", None)
+            if isinstance(msg, ToolMessage) and tool_call_id in python_call_ids:
+                content = msg.content
+                if isinstance(content, list):
+                    content = "\n".join(
+                        blk.get("text", "") if isinstance(blk, dict) else str(blk)
+                        for blk in content
+                        if (isinstance(blk, dict) and blk.get("type") == "text")
+                        or isinstance(blk, str)
+                    )
+                out_text = content if isinstance(content, str) else str(content)
+                m = re.search(r"Generated (\d+) Plotly", out_text)
+                _sessions.add_artifact(
+                    thread_id,
+                    "text_output",
+                    {
+                        "call_id": tool_call_id,
+                        "stdout": out_text,
+                        "plot_count": int(m.group(1)) if m else 0,
+                        "is_error": "Error executing code" in out_text,
+                        **stamp,
+                    },
+                )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Failed to persist expert code artifacts for thread %s", thread_id
+        )
+
+
 @tool
 def delegate_to_expert(
     state: Annotated[dict, InjectedState],
@@ -6035,6 +6115,16 @@ def delegate_to_expert(
         )
 
     result = last_state or {}
+    # The expert's execute_python cells never pass through the /chat streaming
+    # layer's artifact capture — record them here (also salvages the code from
+    # a run that hit the step limit).
+    _persist_expert_code_artifacts(
+        thread_id,
+        result.get("messages") or [],
+        question=task,
+        via="delegate_to_expert",
+        parent_call_id=tool_call_id,
+    )
     summary = _final_message_text(result.get("messages") or [])
     if hit_limit:
         note = (
@@ -6184,7 +6274,7 @@ def convene_review_panel(
             else:
                 into[k] = v
 
-    for persona in _REVIEW_PERSONAS.values():
+    for persona_key, persona in _REVIEW_PERSONAS.items():
         task = (
             f"{persona['brief']}\n\n## Focus of this review\n{focus}\n\n"
             "Report ONLY your own perspective, concisely (a few short paragraphs)."
@@ -6195,9 +6285,9 @@ def convene_review_panel(
             "dashboard_data": {},
         }
         text = ""
+        last_state: dict | None = None
         try:
             graph = _get_expert_graph(expert_override, mode=expert_mode)
-            last_state: dict | None = None
             for chunk in graph.stream(
                 init_state,
                 config={
@@ -6215,6 +6305,15 @@ def convene_review_panel(
         except Exception as e:  # noqa: BLE001
             logger.exception("review panel persona failed for thread %s", thread_id)
             text = f"(this reviewer could not complete: {e})"
+        # Record any code this persona ran — the streaming layer never sees the
+        # expert sub-graph's tool calls (last_state survives a step-limit abort).
+        _persist_expert_code_artifacts(
+            thread_id,
+            (last_state or {}).get("messages") or [],
+            question=focus,
+            via=f"review_panel:{persona_key}",
+            parent_call_id=tool_call_id,
+        )
         sections.append(f"### {persona['label']}\n\n{text or '(no response)'}")
 
     summary = "## Review panel\n\n" + "\n\n".join(sections)

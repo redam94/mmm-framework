@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Bias: Why Observational Ad Measurement Flatters Itself | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Activity bias in ad measurement: why observational exposed-vs-unexposed comparisons overstate ad effects by 100x or more, and why controls can't fix it.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-activity-bias.html">
+    <meta property="og:title" content="Activity Bias: Why Observational Ad Measurement Flatters Itself">
+    <meta property="og:description" content="Activity bias in ad measurement: why observational exposed-vs-unexposed comparisons overstate ad effects by 100x or more, and why controls can't fix it.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-activity-bias.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Activity Bias: Why Observational Ad Measurement Flatters Itself">
+    <meta name="twitter:description" content="Activity bias in ad measurement: why observational exposed-vs-unexposed comparisons overstate ad effects by 100x or more, and why controls can't fix it.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-activity-bias.html",
+          "name": "Activity Bias: Why Observational Ad Measurement Flatters Itself | MMM Framework",
+          "description": "Activity bias in ad measurement: why observational exposed-vs-unexposed comparisons overstate ad effects by 100x or more, and why controls can't fix it.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-activity-bias.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-activity-bias.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Activity Bias: Why Observational Ad Measurement Flatters Itself",
+          "datePublished": "2026-04-08",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-activity-bias.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-activity-bias.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Activity Bias: Why Observational Ad Measurement Flatters Itself",
+              "item": "https://redam94.github.io/mmm-framework/blog-activity-bias.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#the-natural-comparison">The Comparison Everyone Wants to Make</a></li>
+                <li><a href="#what-activity-bias-is">The Mechanism: Activity Bias</a></li>
+                <li><a href="#three-experiments">Three Experiments, One Lesson</a></li>
+                <li><a href="#why-controls-fail">Why Controls Don't Fix It</a></li>
+                <li><a href="#implications">What This Means for Practice</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Activity Bias: Why Observational Ad Measurement Flatters Itself</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-04-08">April 8, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Causal inference</span>
+            </p>
+            <p class="lead">Compare the people who saw your ad with the people who didn't, and advertising looks miraculous. Lewis, Rao, and Reiley ran that comparison against randomized ground truth and found the observational estimate overstated the true effect by two orders of magnitude — and adding every control they had barely moved it. This is the founding cautionary tale of modern ad measurement, and it is worth knowing in detail.</p>
+
+            <p>This post opens a series on the research that shapes how we think about measurement. It starts here because the failure it documents is the one every other method in the series exists to avoid: reading an exposure correlation as a causal effect. The paper's numbers are extreme enough that once you have seen them, you stop asking whether observational lift studies are biased and start asking only how badly.</p>
+
+            <h2 id="the-natural-comparison">The Comparison Everyone Wants to Make</h2>
+            <p>Digital advertising generates an irresistible dataset. The platform logs who was served each impression; the analytics stack logs who searched, browsed, signed up, and bought. Join the two, split users into exposed and unexposed, and difference the outcomes. The analysis is cheap, it is always available, and at the scale of a major campaign it is precise — millions of users make the confidence intervals gratifyingly narrow.</p>
+
+            <p>The trouble is the thing the join quietly assumes: that seeing the ad was, conditional on whatever covariates you include, as good as random. It was not. To be exposed to a display campaign you had to be online that day, on the specific pages where the campaign ran, during the window when it flew. The population that satisfies those conditions is not a random draw of your customers — it is the population that happened to be <em>active online at that moment</em>. And people who are active online do more of everything online.</p>
+
+            <h2 id="what-activity-bias-is">The Mechanism: Activity Bias</h2>
+
+            <div class="definition">
+                <h4>Definition: Activity bias</h4>
+                <p>The systematic overestimation of advertising effects that arises because ad exposure is itself a marker of online activity. Users who see a campaign are, by construction, active on the days and pages where it runs — and those same active users search more, view more pages, sign up for more services, and buy more, ad or no ad. An exposed-vs-unexposed comparison therefore attributes correlated background activity to the advertising (Lewis, Rao, &amp; Reiley, 2011).</p>
+            </div>
+
+            <p>What makes activity bias so destructive is that the confounder is not a stable trait you could measure once and adjust away. It is a <em>day-level</em> state: being an active internet user today. Ad exposure on a given day is close to a proxy for that state, which means exposure and the confounder are almost the same variable. Conditioning on demographics, historical behavior, or even same-day usage summaries leaves most of the entanglement intact, because none of those observables fully captures the fluctuating propensity to be online and doing things at the moment the campaign is in flight.</p>
+
+            <p>In the language of identification, the conditional independence assumption fails, and fails badly: there is no set of observed covariates rich enough to make exposure ignorable. That is a structural problem, not a data-quality problem, which is why the fixes discussed later are design changes rather than better regressions.</p>
+
+            <h2 id="three-experiments">Three Experiments, One Lesson</h2>
+            <p>The paper's contribution is not the abstract argument — it is that the authors could check the observational answer against experimental truth. Working with large randomized campaigns on Yahoo!, they measured the same effects both ways: once using the randomization, and once pretending they only had observational data, exactly as an analyst without an experiment would.</p>
+
+            <h3 id="experiment-1-searches">Experiment 1: Brand searches</h3>
+            <p>The first study measured whether a large display campaign on the Yahoo! front page lifted brand-related searches. The randomized comparison — treatment versus a control group that was withheld the ad by design — put the true effect at a <strong>5.4% increase</strong> in brand searches. Real, positive, and modest.</p>
+            <p>The observational version of the same question compared users who happened to be exposed with users who were not. With no controls, the estimated lift was <strong>1,198%</strong> — the exposed group searched for the brand at roughly thirteen times the rate of the unexposed group. That is not a subtle discrepancy; it is an estimate about 220 times larger than the truth. And, as the next section shows, throwing controls at it recovered almost none of the gap.</p>
+
+            <h3 id="experiment-2-page-views">Experiment 2: Page views</h3>
+            <p>The second study tracked page views on the advertiser's own Yahoo! content around a similar campaign. The pattern repeated: observational comparisons showed large apparent effects that the experimental benchmark did not support. Notably, an apparent &ldquo;competitive effect&rdquo; — activity that looked like it was being driven to related content by the ad exposure — turned out to be minimal once the randomization spoke. Exposed users visited more of everything, and a naive analysis read that as the campaign radiating influence across the site.</p>
+
+            <h3 id="experiment-3-competitor-signups">Experiment 3: Sign-ups at a competitor</h3>
+            <p>The third analysis is the most instructive, because it works like a placebo test. The outcome was account sign-ups at a <em>competitor's</em> website — something the campaign had no plausible business driving. Exposed users nevertheless showed a clear spike in competitor sign-ups on the campaign day. The tell: the randomized control group, which never saw the ad, showed the <em>same spike on the same day</em>. The entire correlation was ambient activity. People were simply more active online that day — visiting Yahoo!, seeing ads, and signing up for services everywhere — and the exposed-vs-unexposed split repackaged that co-movement as an advertising effect.</p>
+
+            <p>Three different outcomes — searches, page views, sign-ups — and one mechanism underneath all of them. Activity bias is not specific to a metric; it contaminates every outcome that active users produce more of, which is to say nearly every outcome an advertiser cares about.</p>
+
+            <h2 id="why-controls-fail">Why Controls Don't Fix It</h2>
+            <p>The instinctive response to a confounded comparison is to add controls. The paper runs that playbook to its end, and the progression is the most quotable table in the ad-measurement literature. For the brand-search outcome, where the experimental truth was 5.4%:</p>
+
+            <table>
+                <thead>
+                    <tr><th>Model</th><th>Controls</th><th>Estimated lift</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>(0)</td><td>None</td><td>1,198%</td></tr>
+                    <tr><td>(1)</td><td>Day dummies</td><td>894%</td></tr>
+                    <tr><td>(2)</td><td>+ Session dummies</td><td>871%</td></tr>
+                    <tr><td>(3)</td><td>+ Page views, minutes spent</td><td>872%</td></tr>
+                    <tr><td><strong>Truth</strong></td><td><strong>Randomized experiment</strong></td><td><strong>5.4%</strong></td></tr>
+                </tbody>
+            </table>
+
+            <p>Each row adds information an analyst would reasonably reach for: which day it was, which session, how many pages the user viewed, how many minutes they spent. The estimate falls from 1,198% to the high 800s and then simply stops falling — the last, richest specification lands at 872%, still roughly <strong>160 times</strong> the experimental answer. The controls absorb a sliver of the activity signal and leave the rest fused to exposure.</p>
+
+            <p>Matching fares no better, and for the same structural reason. Propensity score matching promises to pair each exposed user with an observably similar unexposed one. But in display advertising, exposure is determined by visiting particular pages at particular times — so the &ldquo;similar&rdquo; unexposed user is someone who looked alike on the covariates yet, in that moment, was doing something different online. The matched groups differ in precisely the unobserved dimension that drives the outcome. This is the selection problem in its purest form: units select into treatment on the very trait the treatment is supposed to move. The assumptions that would license a causal reading here belong to the same family this site catalogs for aggregate models on the <a href="identification-assumptions.html">identification assumptions</a> page — and in this setting they are simply false.</p>
+
+            <div class="warning">
+                <h4>⚠️ More data makes it worse, not better</h4>
+                <p>Activity bias is a bias problem, not a variance problem. Scaling from thousands of users to millions shrinks the standard errors around the <em>wrong number</em>, turning a flattering estimate into a flattering estimate with four significant digits. No sample size rescues an identification strategy that conflates exposure with activity — precision is not validity.</p>
+            </div>
+
+            <div class="note">
+                <h4>💡 A textbook Type M error</h4>
+                <p>In the error taxonomy of Gelman and Carlin (2014), the 1,198%-vs-5.4% comparison is an exaggeration ratio of roughly 220&times; — a magnitude (Type M) error, delivered with high statistical confidence. It is a useful mental benchmark: when someone quotes an observational ad lift, the honest uncertainty is not the confidence interval on the estimate but the unmodeled gap between the estimate's assumptions and reality, and that gap has been measured at two orders of magnitude.</p>
+            </div>
+
+            <h2 id="implications">What This Means for Practice</h2>
+            <p>The practical conclusions follow directly from the mechanism, and they have held up in the fifteen years since the paper circulated.</p>
+
+            <p><strong>Randomize when you can.</strong> The experiments in the paper did not merely produce better estimates — they produced the <em>only</em> credible estimates, because randomly withholding the ad from a control group is the one operation that severs the link between exposure and activity. The control group spikes on the campaign day too, and the design subtracts that spike out. Everything this site builds on experimentation — geo holdouts, calibration experiments, sequential testing — traces its justification to this point.</p>
+
+            <p><strong>When you cannot randomize, name your identification strategy.</strong> Not every effect can be tested, and aggregate methods like media mix modeling exist precisely because user-level randomization is often unavailable. But the lesson transfers: an observational method earns a causal reading only through explicit, stated, defensible assumptions — a strategy for why the variation you are exploiting is as good as random — never through the volume of controls in the regression. The <a href="causal-inference.html">causal inference</a> page lays out what that looks like for MMM: structural assumptions, confounders named up front, and experimental calibration wherever the assumptions are weakest. The distance between that posture and &ldquo;we added controls&rdquo; is exactly the distance between 5.4% and 872%.</p>
+
+            <p><strong>Treat exposed-vs-unexposed lift studies as upper bounds at best.</strong> A vendor-reported lift built on comparing exposed users to matched unexposed users inherits activity bias in full. Such numbers should not be used to benchmark experimental results or MMM outputs — when they disagree with a randomized readout, the disagreement is the expected direction and the expected sign, not evidence that the experiment &ldquo;missed&rdquo; something.</p>
+
+            <p><strong>Expect the mechanism outside advertising.</strong> Activity bias is a special case of a general pattern: whenever exposure to a treatment correlates with baseline engagement — email opens, push notifications, feature announcements, in-app promotions — the exposed population is selected on the very activity that produces the outcome. The 100&times;-plus magnitudes documented here are what that selection can do when the confounder and the exposure are nearly the same variable.</p>
+
+            <p>None of this says advertising doesn't work. The randomized estimate in Experiment 1 was positive — advertising moved brand searches by a real 5.4%. What the paper demolishes is a measurement practice, not a channel: the observational comparison didn't exaggerate a zero, it exaggerated a genuine effect by a factor of a couple hundred, which is arguably worse, because the flattering number is always available and always larger than the honest one.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Exposed-vs-unexposed comparisons conflate ad effects with online activity: the same users who see ads search, browse, and sign up more everywhere, ad or no ad.</li>
+                    <li>The measured magnitude is enormous — a 1,198% observational lift against a 5.4% experimental truth, with the fully controlled model still ~160&times; too high.</li>
+                    <li>Controls and propensity matching cannot repair the comparison, because day-level activity is entangled with exposure in ways no observable covariate set captures.</li>
+                    <li>More data sharpens the wrong answer: activity bias is a bias problem, and sample size only buys precision around a systematically inflated estimate.</li>
+                    <li>Credible ad measurement requires randomized experiments or an explicit, defensible identification strategy — never a raw exposure correlation.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Lewis, R. A., Rao, J. M., &amp; Reiley, D. H. (2011). <em>Here, There, and Everywhere: Correlated Online Behaviors Can Lead to Overestimates of the Effects of Advertising</em>. Proceedings of the 20th International Conference on World Wide Web (WWW '11).</li>
+                <li>Gelman, A., &amp; Carlin, J. (2014). <em>Beyond Power Calculations: Assessing Type S (Sign) and Type M (Magnitude) Errors</em>. Perspectives on Psychological Science, 9(6).</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

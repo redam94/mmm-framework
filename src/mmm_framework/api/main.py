@@ -31,6 +31,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from mmm_framework.agents.graph import create_agent_graph
 from mmm_framework.agents.serde import MsgpackSafeSerializer
 from mmm_framework.agents.spec_locks import apply_spec_patch, is_spec_patch
+from mmm_framework.agents.state import _union_refs
 from mmm_framework.api import sessions as sessions_store
 from mmm_framework.auth import store as auth_store
 from mmm_framework.auth.deps import (
@@ -144,6 +145,16 @@ def _fold_dashboard_update(combined: dict, dd: dict, live_spec: dict) -> dict:
         dd["model_spec"] = live_spec
     elif isinstance(spec, dict):
         live_spec = spec
+    # Ref-list keys (plots/tables) union like the state reducer (_merge_dashboard)
+    # instead of last-write-wins: concurrent tools in one ToolNode step each
+    # copy-append from the SAME pre-step list, and a sub-agent (delegate_to_expert)
+    # folds back a list built from an EMPTY seed — a plain dict.update would put a
+    # subset on the wire and previously-streamed results would vanish from the UI
+    # until a reload re-hydrated the (correctly unioned) checkpoint. An explicit
+    # None still clears (the documented escape hatch).
+    for key in _REF_LIST_DASHBOARD_KEYS:
+        if dd.get(key) and combined.get(key):
+            dd[key] = _union_refs(combined.get(key), dd[key])
     combined.update(dd)
     return live_spec
 
@@ -3480,6 +3491,9 @@ _VALIDATION_CHECKS: dict[str, tuple[str, dict]] = {
 
 class ValidationRunRequest(BaseModel):
     check: str = "validate"
+    # Originating chat session — stamped into the artifact payload so the
+    # history list can be scoped to the session that launched the run.
+    thread_id: str | None = None
 
 
 async def _run_validation_job(
@@ -3558,6 +3572,7 @@ async def start_model_validation(project_id: str, body: ValidationRunRequest):
             "status": "pending",
             "project_id": project_id,
             "check": check,
+            "thread_id": body.thread_id,
             "result": None,
             "error": None,
         },
@@ -3573,10 +3588,12 @@ async def start_model_validation(project_id: str, body: ValidationRunRequest):
     "/projects/{project_id}/validations",
     dependencies=[_proj_read],
 )
-async def list_model_validations(project_id: str):
+async def list_model_validations(project_id: str, thread_id: str | None = None):
     """History of validation runs for a project — every completed/pending run
     survives reload: UI-started jobs AND chat-run checks (the agent's
     validate_model / run_* / run_calibration_check tools persist here too).
+    Pass ``?thread_id=`` to scope the list to the session that launched each
+    run (rows persisted before session stamping existed are excluded).
     Summary rows only; fetch a run's full result via
     ``GET /projects/{id}/validate/{job_id}``."""
     if sessions_store.get_project(project_id) is None:
@@ -3587,12 +3604,15 @@ async def list_model_validations(project_id: str):
         if a.get("kind") != "model_validation":
             continue
         p = a.get("payload") or {}
+        if thread_id is not None and p.get("thread_id") != thread_id:
+            continue
         rows.append(
             {
                 "job_id": a["id"],
                 "check": p.get("check"),
                 "status": p.get("status"),
                 "source": p.get("source", "job"),
+                "thread_id": p.get("thread_id"),
                 "error": p.get("error"),
                 "created_at": a.get("created_at"),
             }

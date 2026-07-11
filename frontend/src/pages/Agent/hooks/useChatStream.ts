@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { API_BASE, authHeaders } from '../constants';
 import { normalizeContent } from '../utils/text';
-import { extractPythonOutput } from '../utils/python';
+import { extractPythonOutput, pythonOutputsFromArtifacts } from '../utils/python';
+import { mergeDashboardData } from '../utils/dashboard';
 import type { Artifact, ChatMessage, DashboardData, PythonOutput, ToolCall } from '../types';
 
 /** Raw message shape from the persisted thread state (`GET /state/{tid}`). */
@@ -85,27 +86,7 @@ export function useChatStream({ threadId, apiKey, modelName, onTurnSettled, onAr
 
       // Rehydrate persisted python outputs from text_output artifacts, pairing
       // each with its code_snippet by call_id (code may be unavailable for some).
-      const codeByCall: Record<string, string> = {};
-      for (const a of arts) {
-        if (a.kind === 'code_snippet' && a.payload?.call_id) {
-          codeByCall[a.payload.call_id] = String(a.payload.code ?? '');
-        }
-      }
-      const rehydrated: PythonOutput[] = arts
-        .filter(a => a.kind === 'text_output')
-        .sort((x, y) => x.created_at - y.created_at)
-        .map(a => {
-          const callId = String(a.payload?.call_id ?? a.id);
-          const output = String(a.payload?.stdout ?? '');
-          return {
-            id: callId,
-            code: codeByCall[callId] ?? '',
-            output,
-            hasError: !!a.payload?.is_error,
-            plotCount: Number(a.payload?.plot_count ?? 0),
-          };
-        });
-      setPythonOutputs(rehydrated);
+      setPythonOutputs(pythonOutputsFromArtifacts(arts));
     } catch (e) { console.error('Failed to load thread state', e); }
   }, [apiKey, modelName, onArtifactsLoaded]);
 
@@ -179,7 +160,10 @@ export function useChatStream({ threadId, apiKey, modelName, onTurnSettled, onAr
           try {
             const data = JSON.parse(line.substring(6));
             if (data.dashboard_data && Object.keys(data.dashboard_data).length > 0)
-              setDashboardData((prev: DashboardData) => ({ ...prev, ...data.dashboard_data }));
+              // Ref-list-aware merge — a plain spread would let a payload
+              // carrying a subset of plots/tables wipe the accumulated ones
+              // from the Results tab until reload.
+              setDashboardData((prev: DashboardData) => mergeDashboardData(prev, data.dashboard_data));
             if (data.type === 'dashboard_update') continue;
             if (data.type === 'error') {
               // Replace the pending AI bubble with an error notice

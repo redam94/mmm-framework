@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thompson Sampling: A Practical Tour | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Thompson sampling in practice: sample from the posterior, act as if it were true. Beta-Bernoulli mechanics, regret bounds, and media failure modes.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-thompson-sampling.html">
+    <meta property="og:title" content="Thompson Sampling: A Practical Tour">
+    <meta property="og:description" content="Thompson sampling in practice: sample from the posterior, act as if it were true. Beta-Bernoulli mechanics, regret bounds, and media failure modes.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-thompson-sampling.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Thompson Sampling: A Practical Tour">
+    <meta name="twitter:description" content="Thompson sampling in practice: sample from the posterior, act as if it were true. Beta-Bernoulli mechanics, regret bounds, and media failure modes.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-thompson-sampling.html",
+          "name": "Thompson Sampling: A Practical Tour | MMM Framework",
+          "description": "Thompson sampling in practice: sample from the posterior, act as if it were true. Beta-Bernoulli mechanics, regret bounds, and media failure modes.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-thompson-sampling.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-thompson-sampling.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Thompson Sampling: A Practical Tour",
+          "datePublished": "2026-07-03",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-thompson-sampling.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-thompson-sampling.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Thompson Sampling: A Practical Tour",
+              "item": "https://redam94.github.io/mmm-framework/blog-thompson-sampling.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#sample-act-repeat">Sample, Act, Repeat</a></li>
+                <li><a href="#beta-bernoulli">The Beta-Bernoulli Bandit</a></li>
+                <li><a href="#greedy-ucb">Greedy, UCB, and the Case for Sampling</a></li>
+                <li><a href="#regret">What "Near-Optimal" Means</a></li>
+                <li><a href="#extensions">Extensions That Matter</a></li>
+                <li><a href="#media-failure-modes">Where It Breaks for Media</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Thompson Sampling: A Practical Tour</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-03">July 3, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Experimental design</span>
+            </p>
+            <p class="lead">Every always-on test — creative rotation, landing pages, bid strategies — faces the same tension: keep serving the option that looks best, or spend impressions learning whether something else is better. Thompson sampling resolves it with one move: draw a sample from the posterior, act as if the sample were true, update, repeat. This post covers how it works, why it beats the obvious alternatives, and where it quietly fails on media problems.</p>
+
+            <h2 id="sample-act-repeat">Sample, Act, Repeat</h2>
+            <p>The multi-armed bandit is the canonical formalization of learning while earning: \( K \) actions ("arms"), each period the agent picks one, collects a reward from that arm's unknown distribution, and tries to maximize the cumulative total. The internet made the problem operationally urgent: an ad server runs thousands of small experiments per hour, and every impression is simultaneously a trial and a payout. Exploration is not free — it has to be earned back through better future decisions.</p>
+
+            <div class="definition">
+                <h4>Definition: Thompson sampling (probability matching)</h4>
+                <p>Maintain a posterior over the unknown parameters \( \theta \). Each period, draw one sample \( \hat\theta \), play the action that would be optimal if \( \hat\theta \) were the truth, and update on the observed outcome. Because \( \hat\theta \) is a posterior draw, each action is selected with probability equal to the posterior probability that it is best:</p>
+                $$ \Pr(x_t = k \mid \mathbb{H}_{t-1}) \;=\; \Pr\big(k = x^* \mid \mathbb{H}_{t-1}\big). $$
+            </div>
+
+            <p>That equality is the whole design. Arms that could plausibly be optimal keep getting tried, in proportion to how plausible they are; arms the posterior has written off get abandoned — no confidence bounds, no exploration rate to tune. The idea is old: Thompson (1933) proposed it for allocating patients between two treatments, and it sat largely ignored for eight decades until Chapelle and Li (2011) and Scott (2010) showed it beating standard alternatives in display advertising and web optimization; it now runs in production across most large internet platforms. Where bandits sit alongside Bayesian experimental design and Bayesian optimization is the subject of a <a href="blog-bed-bo-bandits.html">companion post</a>; the short version is that bandits are the branch that insists on earning reward <em>during</em> the experiment.</p>
+
+            <h2 id="beta-bernoulli">The Beta-Bernoulli Bandit</h2>
+            <p>The cleanest concrete instance is binary rewards with conjugate priors. Arm \( k \) pays 1 with unknown probability \( \theta_k \) and 0 otherwise; give each \( \theta_k \) an independent \( \mathrm{Beta}(\alpha_k, \beta_k) \) prior (\( \alpha_k = \beta_k = 1 \) is uniform). Conjugacy makes the posterior update after playing arm \( x_t \) and observing reward \( r_t \in \{0,1\} \) a pair of counter increments:</p>
+            $$ (\alpha_{x_t}, \beta_{x_t}) \;\leftarrow\; (\alpha_{x_t} + r_t,\; \beta_{x_t} + 1 - r_t), $$
+            <p>with all other arms untouched. The parameters are pseudo-counts — \( \alpha_k \) tallies successes, \( \beta_k \) failures — and the posterior concentrates as they grow. The full algorithm fits in a few lines:</p>
+
+            <pre><code># illustrative
+# Beta-Bernoulli Thompson sampling: two counters of state per arm
+alpha = [1.0] * K                       # prior successes + 1
+beta  = [1.0] * K                       # prior failures  + 1
+for t in range(T):
+    samples = [rng.beta(alpha[k], beta[k]) for k in range(K)]
+    k = argmax(samples)                 # act as if the draw were true
+    r = pull(k)                         # observe 0/1 reward
+    alpha[k] += r                       # conjugate update
+    beta[k]  += 1 - r</code></pre>
+
+            <p>The greedy version is identical except for one line: it acts on the posterior mean \( \alpha_k/(\alpha_k+\beta_k) \) instead of a draw. That single line is the difference between an algorithm that provably keeps learning and one that can lock onto a mediocre arm forever. And the pattern generalizes verbatim: wherever you can sample the posterior and solve the best-action problem for a given \( \hat\theta \), Thompson sampling is greedy with the point estimate swapped for a draw — even on combinatorially large action spaces, where the argmax step might be Dijkstra's algorithm on sampled edge weights.</p>
+
+            <div class="note">
+                <h4>💡 The draw is a parameter, not an outcome</h4>
+                <p>A common misreading: the sampled \( \hat\theta_k \) is <em>not</em> a simulated click or conversion. It is a statistically plausible value of the arm's underlying success <em>rate</em> — the algorithm asks "if this were the true rate, what would I do?", not "what might happen next?". Sampling outcomes instead of parameters is a different, much worse algorithm.</p>
+            </div>
+
+            <h2 id="greedy-ucb">Greedy, UCB, and the Case for Sampling</h2>
+            <p>Why not just be greedy? Because greedy assigns zero value to uncertainty: if an early lucky streak flatters a mediocre arm, greedy plays it forever and never collects the data that would correct the mistake. The standard patch, \( \epsilon \)-greedy "dithering," forces a random action some fixed fraction of the time — fixing the lock-in but exploring <em>uniformly</em>, wasting budget on arms the posterior has already ruled out.</p>
+
+            <p>A worked example from Russo et al. (2018): two arms have been played a thousand times each, with posteriors concentrated near success rates of 0.6 and 0.4; a third has been tried only three times. Thompson sampling plays them with probabilities of roughly 0.82, 0, and 0.18 — each arm's posterior probability of being best. The hopeless middle arm gets nothing; the uncertain newcomer gets real traffic. An \( \epsilon \)-greedy scheme would split its exploration budget evenly between the two.</p>
+
+            <p>The serious classical competitor is the upper-confidence-bound (UCB) family: score each arm by a statistically plausible <em>best case</em> and play the highest. The canonical UCB1 index (Auer, Cesa-Bianchi, and Fischer, 2002) adds an exploration bonus that shrinks with plays:</p>
+            $$ U_t(k) \;=\; \frac{\alpha_k}{\alpha_k+\beta_k} \;+\; c\,\sqrt{\frac{1.5\,\log t}{\alpha_k+\beta_k}}. $$
+            <p>UCB and Thompson sampling are close cousins — far closer to each other than either is to greedy. Where they diverge is on <em>structured</em> actions. Scoring a ranked list or bundle by each component's individually optimistic bound assumes every component attains its best case simultaneously — a hyper-rectangular confidence set that grows wildly over-optimistic as components multiply, when the truly plausible region is closer to an ellipsoid. A joint posterior draw has no such defect: one coordinate can run high, but all rarely deviate together. This is why the sampling variant wins at scale in the cascading-recommendation experiments of Russo et al. (2018) — though a re-tuned UCB narrows the gap and can win at small sizes. The comparison is scale-dependent, not a blanket verdict.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Rule</th><th>How it treats uncertainty</th><th>Characteristic failure</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Greedy</td><td>Ignores it — acts on the point estimate</td><td>Locks onto a lucky early arm; never self-corrects</td></tr>
+                    <tr><td>\( \epsilon \)-greedy</td><td>Ignores it, plus uniform random probes</td><td>Wastes exploration on arms already known to be bad</td></tr>
+                    <tr><td>UCB</td><td>Inflates each estimate by a confidence width</td><td>Per-coordinate optimism compounds on structured actions</td></tr>
+                    <tr><td>Thompson sampling</td><td>Propagates it — acts on a joint posterior draw</td><td>Over-explores when identification, not reward, is the goal</td></tr>
+                </tbody>
+            </table>
+
+            <h2 id="regret">What "Near-Optimal" Means</h2>
+            <p>The field's performance currency is <strong>regret</strong>: the cumulative reward lost to not knowing the best arm from the start,</p>
+            $$ \mathrm{Regret}(T) \;=\; \sum_{t=1}^{T} \Big( \mu(x^*, \theta) - \mu(x_t, \theta) \Big), $$
+            <p>where \( x^* \) is the optimal action under the true \( \theta \). Linear growth means the algorithm is failing to learn; sublinear means its per-period mistakes vanish. Three results calibrate "near-optimal."</p>
+
+            <p><strong>It hits the classical gold standard.</strong> For the Bernoulli bandit, Lai and Robbins (1985) proved that no reasonable algorithm's regret can grow slower than \( \log T \), with an instance-dependent constant governed by the arms' gaps and KL divergences. Thompson sampling attains it exactly, constant included (Agrawal and Goyal, 2012; Kaufmann, Korda, and Munos, 2012), after Chapelle and Li (2011) showed it empirically. It also carries a worst-case guarantee of order \( \sqrt{KT \log T} \) against a fundamental limit of order \( \sqrt{KT} \) for any algorithm — within a logarithmic factor of unbeatable.</p>
+
+            <p><strong>Its guarantees inherit from UCB on structured problems.</strong> Because Thompson sampling plays \( x_t \) with the posterior distribution of the optimum \( x^* \), any history-measurable confidence sequence satisfies \( \mathbb{E}[U_t(x_t)] = \mathbb{E}[U_t(x^*)] \) — so nearly any UCB regret proof converts into a Thompson-sampling bound, with one asymmetry: UCB's performance depends on the specific bound it uses, while Thompson sampling only needs a good bound to <em>exist</em> (Russo and Van Roy, 2014). For linear reward models in dimension \( d \), this route gives regret of order \( d\sqrt{T}\log T \) — scaling with model dimension, not the number of actions, which may be infinite.</p>
+
+            <p><strong>Information theory explains the "why."</strong> Russo and Van Roy (2016) define the information ratio — squared expected per-period regret divided by the information gained about the optimal action's identity — and show that any algorithm keeping it below \( \overline{\Gamma} \) satisfies</p>
+            $$ \mathbb{E}[\mathrm{Regret}(T)] \;\le\; \sqrt{\overline{\Gamma}\; H(x^*)\; T}, $$
+            <p>where \( H(x^*) \) is the entropy of the prior over which action is best. Read it as a budget: the algorithm pays regret to buy bits about \( x^* \), and there are only \( H(x^*) \) bits to buy. The bound scales with the entropy of the <em>answer</em>, not the size of the action space — which is why informative priors and rich feedback genuinely accelerate learning. On an online shortest-path problem, observing each edge's travel time rather than only the total cost improves the ratio from order \( d \) to a small constant.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>The entropy-budget argument in four lines</summary>
+                <div class="deep-dive-body">
+                    <p>Write \( I_t = I\big(x^*; (x_t, y_t) \mid \mathbb{H}_{t-1}\big) \) for the information the period-\( t \) observation carries about the optimal action, and let \( \Gamma_t \) be the information ratio, so that expected per-period regret equals \( \sqrt{\Gamma_t I_t} \). Then</p>
+                    $$ \mathbb{E}[\mathrm{Regret}(T)] \;=\; \sum_{t=1}^{T} \sqrt{\Gamma_t\, I_t} \;\le\; \sqrt{\overline{\Gamma}\, T \sum_{t=1}^{T} I_t} \;\le\; \sqrt{\overline{\Gamma}\, T\, H(x^*)}. $$
+                    <p>The first inequality is Cauchy&ndash;Schwarz; the second is the chain rule for mutual information — the total information ever gained about \( x^* \) cannot exceed its prior entropy. The same decomposition predicts the failure modes below: when the most <em>informative</em> action is not a plausibly <em>optimal</em> one, probability matching never plays it, and the ratio — not the entropy — becomes the binding constraint.</p>
+                </div>
+            </details>
+
+            <h2 id="extensions">Extensions That Matter</h2>
+            <p>Nothing in the algorithm required independent arms or Bernoulli rewards. Two extension families carry most of the practical weight.</p>
+
+            <h3 id="contextual-linear">Contextual and linear bandits</h3>
+            <p>If a context arrives before each decision — user features, time of day — no new algorithm is needed: fold the context into the action and let the admissible set vary period to period. The workhorse model is linear or generalized-linear: in the news-recommendation setting of Chapelle and Li (2011), an article's click probability is a logistic function \( g(z_t^\top \theta_x) \) of user features, and Thompson sampling draws from the posterior over the coefficients. Two structural lessons matter more than the model. <em>Model correlations between actions</em>: a sampler that captures shared shocks substantially outperforms one that pretends arms are independent, because one arm's outcome then teaches you about many. And <em>share parameters across arms</em>: per-article coefficients learn nothing transferable, while interaction features with a single shared vector let every impression inform every article. In a product-assortment example, Thompson sampling beats greedy precisely because greedy never deliberately probes the substitution effects between products.</p>
+
+            <h3 id="approximate-ts">Approximate posterior sampling</h3>
+            <p>Conjugate posteriors are the exception. Once the reward model has a logistic link or a neural network in it, the exact draw is unavailable — and the fix is to approximate the <em>sample</em>, not the whole posterior. Four methods recur. The <strong>Laplace approximation</strong> fits a Gaussian at the posterior mode (Chapelle and Li's choice for display-ad click models); cheap, but sensitive to parameterization. <strong>Langevin Monte Carlo</strong> runs a gradient-guided random walk whose stationary distribution is the posterior; with minibatch gradients and preconditioning it scales well. The <strong>bootstrap</strong> resamples history and refits — nonparametric and easy to ship, but essentially without guarantees. And <strong>ensemble sampling</strong> (Lu and Van Roy, 2017) maintains a few dozen perturbed models trained in parallel, picking one at random each period as the "draw" — extending the idea to neural-network reward models; roughly thirty members suffice, and too few collapses it toward greedy. Where exact sampling is available as a benchmark, all of these track its regret closely.</p>
+
+            <p>This is also where bandits connect back to marketing measurement. A geo-level budget experiment is a bandit whose "arm" is a spend allocation and whose posterior lives over a response surface; drawing one sample of the surface and allocating as if it were true is precisely the wave-level recommendation logic in this framework's <a href="continuous-learning.html">continuous learning</a> methodology. Same principle, heavier posterior.</p>
+
+            <h2 id="media-failure-modes">Where It Breaks for Media</h2>
+            <p>Thompson sampling's guarantees assume rewards arrive immediately, the world is stationary, and decisions update one at a time. Media violates all three.</p>
+
+            <div class="warning">
+                <h4>⚠️ Delayed conversions bias the posterior against new arms</h4>
+                <p>A conversion credited days after the impression is not a missing failure — but a naive update treats it as one. Every pending outcome counted as a zero deflates the estimated rate of whichever arm was played most recently — usually the arm you are trying to learn about — precisely while the algorithm is deciding its fate. The estimator must be corrected for the probability that each pull's outcome <em>could have arrived yet</em>.</p>
+            </div>
+
+            <p>The theory here is sharper than folklore suggests. Vernade, Cappé, and Perchet (2017) model each pull as triggering a latent conversion indicator plus a random delay, and prove two contrasting results. If every conversion is <em>eventually</em> observed, delay costs nothing in the leading-order regret rate — the extra regret is an additive term bounded by the mean delay. But if outcomes older than some window are permanently lost — the realistic case: attribution stops matching after days or weeks — the problem is exactly as hard as a bandit whose conversion rates are all scaled down by the probability of landing inside the window. Their delay-corrected algorithms discount each pull by the probability its outcome could have resolved by now — widening recent arms' uncertainty instead of penalizing them. The translation for a Thompson-sampling system: update on <em>resolved</em> outcomes with a delay-aware likelihood, and expect learning to slow as conversion lag grows relative to decision cadence.</p>
+
+            <p><strong>Non-stationarity</strong> is the second breakage. Creative fatigues, competitors move, seasonality shifts the base rate — but a standard posterior concentrates monotonically, so exploration decays to zero and the algorithm ends up totally confident in stale data. The remedy is to deliberately re-inject uncertainty — decay the pseudo-counts toward the prior at some rate \( \gamma \) each period, so the posterior never fully hardens. The price is permanent: per-period regret can no longer reach zero, because the target never stops moving.</p>
+
+            <p><strong>Batched assignment</strong> is the third. Ad servers do not update a posterior between impressions; they assign thousands of users per model refresh. This is the "concurrence" setting: many actions drawn from one frozen posterior, none informed by the others' outcomes. Independent draws per decision works — regret per action falls <em>faster</em> as more decisions run in parallel — but learning per <em>action count</em> is slower than fully sequential updating, so a batched system needs more traffic to reach the same certainty. Batching also compounds delay: by the time one batch resolves, several more have been assigned from the stale posterior.</p>
+
+            <p>Finally, some media questions should not be given to Thompson sampling at all. Probability matching maximizes reward during learning — it exploits as soon as it is confident. That is the wrong shape for pure identification ("which creative wins, decided once at quarter end"), where it converges slowly on near-ties it no longer cares to separate; for time-boxed tests; and for "revealing" actions — an action known to pay poorly but that would settle all uncertainty is never played, because it is never plausibly optimal. Those cases call for pure-exploration variants or information-directed sampling, which buy information deliberately rather than incidentally.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Thompson sampling is greedy with one line changed: act on a posterior <em>draw</em> instead of the posterior mean. The draw is a plausible parameter value, not a simulated outcome.</li>
+                    <li>Probability matching explores where uncertainty is decision-relevant — unlike \( \epsilon \)-greedy's uniform dithering or UCB's per-coordinate optimism on structured actions.</li>
+                    <li>It matches the Lai&ndash;Robbins \( \log T \) lower bound for Bernoulli arms; information-theoretic bounds scale with the entropy of the optimal action, not the size of the action space.</li>
+                    <li>Non-conjugate models are not a blocker — Laplace, Langevin, bootstrap, and ensemble approximations track exact sampling closely.</li>
+                    <li>For media, delay-correct the updates, decay the posterior under drift, account for batched assignment — and use a pure-exploration method when the goal is a one-shot decision, not cumulative reward.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Thompson, W. R. (1933). <em>On the Likelihood that One Unknown Probability Exceeds Another in View of the Evidence of Two Samples</em>. Biometrika, 25(3&ndash;4).</li>
+                <li>Russo, D., Van Roy, B., Kazerouni, A., Osband, I., &amp; Wen, Z. (2018). <em>A Tutorial on Thompson Sampling</em>. Foundations and Trends in Machine Learning, 11(1).</li>
+                <li>Chapelle, O., &amp; Li, L. (2011). <em>An Empirical Evaluation of Thompson Sampling</em>. NeurIPS.</li>
+                <li>Scott, S. L. (2010). <em>A Modern Bayesian Look at the Multi-Armed Bandit</em>. Applied Stochastic Models in Business and Industry, 26(6).</li>
+                <li>Lai, T. L., &amp; Robbins, H. (1985). <em>Asymptotically Efficient Adaptive Allocation Rules</em>. Advances in Applied Mathematics, 6(1).</li>
+                <li>Auer, P., Cesa-Bianchi, N., &amp; Fischer, P. (2002). <em>Finite-Time Analysis of the Multiarmed Bandit Problem</em>. Machine Learning, 47.</li>
+                <li>Agrawal, S., &amp; Goyal, N. (2012). <em>Analysis of Thompson Sampling for the Multi-Armed Bandit Problem</em>. COLT.</li>
+                <li>Kaufmann, E., Korda, N., &amp; Munos, R. (2012). <em>Thompson Sampling: An Asymptotically Optimal Finite-Time Analysis</em>. ALT.</li>
+                <li>Russo, D., &amp; Van Roy, B. (2014). <em>Learning to Optimize via Posterior Sampling</em>. Mathematics of Operations Research, 39(4).</li>
+                <li>Russo, D., &amp; Van Roy, B. (2016). <em>An Information-Theoretic Analysis of Thompson Sampling</em>. Journal of Machine Learning Research, 17.</li>
+                <li>Li, L., Chu, W., Langford, J., &amp; Schapire, R. E. (2010). <em>A Contextual-Bandit Approach to Personalized News Article Recommendation</em>. WWW.</li>
+                <li>Lu, X., &amp; Van Roy, B. (2017). <em>Ensemble Sampling</em>. NeurIPS.</li>
+                <li>Vernade, C., Capp&eacute;, O., &amp; Perchet, V. (2017). <em>Stochastic Bandit Models for Delayed Conversions</em>. UAI.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

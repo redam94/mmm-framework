@@ -36,6 +36,9 @@ uv run sphinx-build -b html docs/api/source docs/api/build/html
 # `python3 tools/build_seo.py` refreshes JSON-LD, sitemap.xml and llms.txt.
 # Dark mode is a [data-theme="dark"] token swap in shared/styles.css — keep
 # page-local styles on var(--color-*) tokens, never hardcoded light colors.
+# Blog posts are flat `blog-<slug>.html` pages (index blog.html, nav label "Research");
+# the `blog-` prefix drives BlogPosting JSON-LD + the Research breadcrumb in build_seo.py,
+# datePublished comes from the post's visible <time datetime> byline.
 
 # Start the application
 

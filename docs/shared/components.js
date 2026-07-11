@@ -91,6 +91,7 @@
                 { href: 'artifacts/index.html', label: 'Consultant Artifacts' }
             ]
         },
+        { href: 'blog.html', label: 'Research' },
         {
             label: 'Project',
             items: [
@@ -152,6 +153,23 @@
             ['workflow-budget-optimization.html', 'Budget Optimization'],
             ['workflow-forecasting.html', 'Forecasting'],
             ['workflow-calibration-decisions.html', 'Calibration Decisions']
+        ],
+        'Measurement research': [
+            ['blog-activity-bias.html', 'Activity Bias in Ad Measurement'],
+            ['blog-causal-estimates-observational.html', 'Causal Estimates Without Experiments'],
+            ['blog-geo-experiments-tbr.html', 'Geo Experiments & TBR'],
+            ['blog-synthetic-control.html', 'Synthetic Control, Done Right'],
+            ['blog-staggered-did.html', 'Modern Staggered DiD'],
+            ['blog-causalimpact-bsts.html', 'CausalImpact & Structural Time Series'],
+            ['blog-bayesian-mmm-carryover-shape.html', 'Carryover & Shape in Bayesian MMM'],
+            ['blog-carryover-experiment-timing.html', 'Adstock & Experiment Timing'],
+            ['blog-modeling-pitfalls.html', 'Statistical Modeling Pitfalls'],
+            ['blog-multiple-comparisons.html', 'Multiple Comparisons & Model Selection'],
+            ['blog-lindley-to-dad.html', 'Lindley to Deep Adaptive Design'],
+            ['blog-geo-holdout-eig.html', 'A Geo-Holdout as Bayesian Design'],
+            ['blog-bed-bo-bandits.html', 'BED vs. BO vs. Bandits'],
+            ['blog-thompson-sampling.html', 'Thompson Sampling in Practice'],
+            ['blog-continuous-learning-interactions.html', 'Continuous Learning with Interactions']
         ]
     };
 
@@ -214,6 +232,24 @@
         'aurora-03-extended-mmm.html': TIER_ANALYST,
         'aurora-04-reporting.html': TIER_ANALYST,
         'aurora-05-unified-workflow.html': TIER_ANALYST,
+
+        'blog.html': TIER_OVERVIEW,
+        'blog-activity-bias.html': TIER_ANALYST,
+        'blog-causal-estimates-observational.html': TIER_ANALYST,
+        'blog-synthetic-control.html': TIER_ANALYST,
+        'blog-carryover-experiment-timing.html': TIER_ANALYST,
+        'blog-modeling-pitfalls.html': TIER_ANALYST,
+        'blog-multiple-comparisons.html': TIER_ANALYST,
+        'blog-bed-bo-bandits.html': TIER_ANALYST,
+        'blog-thompson-sampling.html': TIER_ANALYST,
+        'blog-continuous-learning-interactions.html': TIER_ANALYST,
+
+        'blog-geo-experiments-tbr.html': TIER_TECHNICAL,
+        'blog-staggered-did.html': TIER_TECHNICAL,
+        'blog-causalimpact-bsts.html': TIER_TECHNICAL,
+        'blog-bayesian-mmm-carryover-shape.html': TIER_TECHNICAL,
+        'blog-lindley-to-dad.html': TIER_TECHNICAL,
+        'blog-geo-holdout-eig.html': TIER_TECHNICAL,
 
         'technical-guide.html': TIER_TECHNICAL,
         'continuous-learning-math.html': TIER_TECHNICAL,
@@ -298,6 +334,10 @@
         }
         // Highlight "Demos & Reports" for all demo sub-pages
         if (href === 'demos.html' && DEMO_PAGES.includes(currentPage)) {
+            return true;
+        }
+        // Highlight "Research" for the blog index and every blog post
+        if (href === 'blog.html' && (currentPage === 'blog.html' || currentPage.startsWith('blog-'))) {
             return true;
         }
         return currentPage === href;

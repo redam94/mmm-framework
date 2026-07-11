@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Staggered Difference-in-Differences | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Why two-way fixed effects breaks under staggered rollouts, and the Callaway–Sant'Anna rebuild: group-time ATT(g,t), doubly robust estimation, uniform inference.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-staggered-did.html">
+    <meta property="og:title" content="Modern Staggered Difference-in-Differences">
+    <meta property="og:description" content="Why two-way fixed effects breaks under staggered rollouts, and the Callaway–Sant'Anna rebuild: group-time ATT(g,t), doubly robust estimation, uniform inference.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-staggered-did.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Modern Staggered Difference-in-Differences">
+    <meta name="twitter:description" content="Why two-way fixed effects breaks under staggered rollouts, and the Callaway–Sant'Anna rebuild: group-time ATT(g,t), doubly robust estimation, uniform inference.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-staggered-did.html",
+          "name": "Modern Staggered Difference-in-Differences | MMM Framework",
+          "description": "Why two-way fixed effects breaks under staggered rollouts, and the Callaway–Sant'Anna rebuild: group-time ATT(g,t), doubly robust estimation, uniform inference.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-staggered-did.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-staggered-did.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Modern Staggered Difference-in-Differences",
+          "datePublished": "2026-06-17",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-staggered-did.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-staggered-did.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Modern Staggered Difference-in-Differences",
+              "item": "https://redam94.github.io/mmm-framework/blog-staggered-did.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#classic-did">The Classic 2&times;2 and Parallel Trends</a></li>
+                <li><a href="#twfe-breakdown">Where Two-Way Fixed Effects Breaks</a></li>
+                <li><a href="#group-time-att">The Building Block: ATT(g,t)</a></li>
+                <li><a href="#identifying-assumptions">What You Have to Assume</a></li>
+                <li><a href="#doubly-robust">Doubly Robust Estimation</a></li>
+                <li><a href="#aggregation">Aggregations That Answer Questions</a></li>
+                <li><a href="#inference">Simultaneous Inference</a></li>
+                <li><a href="#in-practice">Reading a Rollout in Practice</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Modern Staggered Difference-in-Differences</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-06-17">June 17, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Causal inference</span>
+            </p>
+            <p class="lead">Campaigns and product features rarely launch everywhere at once — they roll out market by market over months. The regression most teams reach for to measure such a rollout, two-way fixed effects, can get the answer badly wrong when effects differ across markets or build over time. This post walks through why it fails, and through the modern rebuild of difference-in-differences that replaces it.</p>
+
+            <p>Picture a brand launching a new always-on campaign DMA by DMA: ten markets in January, fifteen more in April, another dozen in September, and a set of markets with no launch planned. Every market that starts, stays on. Six months in, the CMO asks the obvious question: what did the launch do to sales? The design is a <em>staggered adoption</em> panel, and it is one of the most common structures in applied measurement — which makes it worth understanding exactly when the standard tools work and when they quietly invert the answer.</p>
+
+            <h2 id="classic-did">The Classic 2&times;2 and Parallel Trends</h2>
+            <p>Difference-in-differences begins with two groups and two periods. One group receives treatment between the periods; the other never does. Each group's before&ndash;after change removes anything fixed about that group; differencing the two changes removes the shared time trend:</p>
+            $$ \hat{\beta}_{DD} = \big(\bar{Y}_{\text{treat,after}} - \bar{Y}_{\text{treat,before}}\big) - \big(\bar{Y}_{\text{control,after}} - \bar{Y}_{\text{control,before}}\big). $$
+            <p>The identifying assumption is <strong>parallel trends</strong>: absent treatment, the treated group's outcome would have moved in parallel with the control group's. Levels may differ — a launch market can be structurally bigger than a holdout market — but the <em>trends</em> must match. This is the same style of untestable structural assumption that underpins any observational <a href="causal-inference.html">causal inference</a>: the data alone cannot certify it, so the design has to make it plausible. The canonical application is Card and Krueger's (1994) minimum-wage study — New Jersey raised its minimum wage, Pennsylvania did not — and the estimator generalizes naturally to a regression with group and time effects, which makes adding covariates and extra periods easy (Angrist &amp; Pischke, 2009). A Bayesian formulation of the same 2&times;2 model returns a full posterior over the effect rather than a point estimate, with the parallel-trends assumption embodied as a single shared slope (Vincent, 2022).</p>
+
+            <h2 id="twfe-breakdown">Where Two-Way Fixed Effects Breaks</h2>
+            <p>With many periods and staggered launch dates there is no single "before" and "after," so the standard move is the two-way fixed effects (TWFE) regression:</p>
+            $$ Y_{i,t} = \alpha_i + \lambda_t + \beta\, D_{i,t} + \varepsilon_{i,t}, $$
+            <p>with unit effects \( \alpha_i \), time effects \( \lambda_t \), and a treatment dummy \( D_{i,t} \) that switches on when market \( i \) launches. The temptation is to read \( \beta \) as "the" average treatment effect. It is not. Under staggered adoption, OLS mechanically constructs \( \beta \) as a weighted average of many underlying cohort-period effects, with weights chosen by the estimator's variance algebra rather than by any question you asked. Goodman-Bacon (2021) shows the estimate decomposes into all possible 2&times;2 comparisons in the panel — including ones that use <em>already-treated</em> markets as controls for later launchers. When treatment effects are dynamic — and a campaign effect that builds with adstock and awareness is exactly that — the still-growing effect in those "control" markets gets differenced away as if it were a baseline trend. The result is that some effects enter \( \beta \) with <strong>negative weights</strong>: the estimate can come out negative even when the launch helped every single market.</p>
+            <p>Nor does the familiar event-study regression with leads and lags rescue things. Sun and Abraham (2021) show that under heterogeneous effects each estimated lag coefficient is contaminated by other cohorts' effects at other horizons — the plotted "dynamics" can be an artifact of the weighting, not a property of any cohort. And in marketing rollouts heterogeneity is the norm, not the exception: early-launch markets are usually chosen because they are expected to respond well, effects ramp over weeks, and creative or budgets differ by wave.</p>
+
+            <div class="note">
+                <h4>💡 The failure is heterogeneity, not staggering alone</h4>
+                <p>If every market had exactly the same effect at every point in time, TWFE would be fine — in that special case all the estimands discussed below, and TWFE's \( \beta \), coincide. The problem is the interaction of staggered timing with effects that vary by cohort or evolve with exposure. If you would not be willing to assert a constant, instantaneous, permanent effect, you need the machinery below.</p>
+            </div>
+
+            <h2 id="group-time-att">The Building Block: ATT(g,t)</h2>
+            <p>Callaway and Sant'Anna (2021) rebuild staggered DiD by separating three steps that TWFE fuses together: <em>identify</em> disaggregated effects, <em>aggregate</em> them with weights you choose, and <em>infer</em>. The disaggregated object is indexed by cohort and calendar time. Define a unit's <strong>group</strong> \( g \) as the period it is first treated (with \( g = \infty \) for the never-treated), and require staggered adoption: once treated, always treated.</p>
+
+            <div class="definition">
+                <h4>Definition: Group-time average treatment effect</h4>
+                <p>For a cohort first treated in period \( g \), observed at calendar time \( t \),</p>
+                $$ \mathrm{ATT}(g,t) \;=\; \mathbb{E}\big[\, Y_t(g) - Y_t(0) \mid G_g = 1 \,\big], $$
+                <p>the average difference between the outcome under first-treatment-at-\( g \) and the never-treated potential outcome, among group-\( g \) units. It imposes no restriction on how effects differ across cohorts, when treatment started, or how effects evolve over time; in the two-period, two-group case it collapses to the canonical ATT.</p>
+            </div>
+
+            <p>In the rollout example, \( \mathrm{ATT}(\text{Apr}, \text{Jun}) \) is the average lift in the April-launch wave two months in. Fixing the cohort and sweeping \( t \) traces that wave's ramp curve; comparing across cohorts reveals whether early waves genuinely respond differently. Each number carries a clean causal interpretation on its own — which is precisely what a single TWFE coefficient cannot claim. The paper's empirical application (county minimum-wage increases and teen employment) reads the family directly: the cohort treated in 2004 shows effects growing from roughly \(-3.4\%\) on impact to \(-13.6\%\) three years later, a dynamic pattern a single pooled coefficient would flatten into mush.</p>
+
+            <h2 id="identifying-assumptions">What You Have to Assume</h2>
+            <p>Point-identifying the whole family \( \{\mathrm{ATT}(g,t)\} \) requires four conditions beyond random sampling — the staggered-panel analogue of the <a href="identification-assumptions.html">identification assumptions</a> any causal model should state up front.</p>
+            <ul>
+                <li><strong>Limited anticipation.</strong> There is a known horizon \( \delta \ge 0 \) such that units do not respond before \( g - \delta \). With \( \delta = 0 \) this is the standard no-anticipation condition; allowing \( \delta \gt 0 \) handles, say, markets that see teaser activity a period before launch. A subtle trade-off: the larger the anticipation window you allow, the <em>stronger</em> the parallel-trends condition you need.</li>
+                <li><strong>Conditional parallel trends — never-treated comparison.</strong> Conditional on covariates \( X \), each cohort's untreated outcome path would have moved in parallel with the never-treated group's. Natural when a sizable, comparable set of no-launch markets exists.</li>
+                <li><strong>Conditional parallel trends — not-yet-treated comparison.</strong> Alternatively, use as controls the units not yet treated by the relevant date. This exploits more comparison units (better precision) and is essential when nearly everyone eventually launches — but unlike the never-treated version it does restrict pre-treatment trends, and it can fail if early periods experienced different shocks than later ones.</li>
+                <li><strong>Overlap.</strong> Each cohort has positive mass, and the generalized propensity score — the probability of belonging to cohort \( g \) given covariates — is bounded away from one. No cohort may be perfectly predictable from observables.</li>
+            </ul>
+            <p>The word <em>conditional</em> is doing real work. Launch order is rarely random: bigger, faster-growing markets go first. If market size and growth also drive baseline sales trends, unconditional parallel trends is not credible — but parallel trends <em>within</em> strata of market characteristics may be. Callaway and Sant'Anna's framework is the first to incorporate covariate-specific trends into staggered designs, and only pre-treatment covariates qualify, since post-launch covariates can themselves be moved by the campaign.</p>
+
+            <div class="warning">
+                <h4>⚠️ Don't pre-test your way to an assumption</h4>
+                <p>It is tempting to run statistical tests on pre-treatment trends and let the result choose your comparison group or bless the design. Roth (2022) shows this conditioning distorts subsequent inference: estimates that survive a pre-test are a selected sample, and their confidence intervals no longer mean what they say. Choose the comparison group from context — which markets genuinely resemble the launch markets absent the launch — and use pre-trend estimates as a visual credibility check, not a gate.</p>
+            </div>
+
+            <h2 id="doubly-robust">Doubly Robust Estimation</h2>
+            <p>Under those assumptions, each \( \mathrm{ATT}(g,t) \) is nonparametrically identified three equivalent ways (Callaway &amp; Sant'Anna, 2021, Theorem 1): by <strong>outcome regression</strong> (model the comparison group's outcome evolution given covariates), by <strong>inverse probability weighting</strong> (model cohort membership, following Abadie, 2005), or by a <strong>doubly robust</strong> combination of both (extending Sant'Anna &amp; Zhao, 2020, and the matching-evaluation tradition of Heckman, Ichimura &amp; Todd, 1997). All three compare "long differences" — the outcome change from a reference period \( g - \delta - 1 \), the last period before anticipation could contaminate the baseline, out to period \( t \). With no anticipation and no covariates, everything collapses to the intuitive 2&times;2-style contrast of average changes.</p>
+            <p>The doubly robust estimand, for the never-treated comparison with \( \delta = 0 \), reweights the long difference net of the outcome-regression prediction:</p>
+            $$ \mathrm{ATT}_{dr}(g,t) = \mathbb{E}\!\left[\left(\frac{G_g}{\mathbb{E}[G_g]} - \frac{\tfrac{p_g(X)\,C}{1-p_g(X)}}{\mathbb{E}\!\left[\tfrac{p_g(X)\,C}{1-p_g(X)}\right]}\right)\Big(Y_t - Y_{g-1} - m_{g,t}(X)\Big)\right], $$
+            <p>where \( p_g(X) \) is the generalized propensity score, \( C \) flags never-treated units, and \( m_{g,t}(X) \) is the comparison group's expected outcome change given covariates. In practice both nuisance functions are fit with ordinary parametric workhorses — a logit for \( p_g \), least squares for \( m_{g,t} \) — and the estimator is a two-step plug-in. The payoff for the extra structure: the DR estimator remains consistent if <em>either</em> the propensity model <em>or</em> the outcome model is correctly specified, not necessarily both. Since neither model is ever exactly right, buying two chances at consistency for the price of one specification is the sensible default.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Why double robustness works, in one paragraph</summary>
+                <div class="deep-dive-body">
+                    <p>Algebraically, the DR estimand is the IPW estimand minus a correction term involving \( m_{g,t}(X) \). If the propensity score is correct, the treated and reweighted-comparison averages of any function of \( X \) coincide, so the correction has expectation zero by the law of iterated expectations — the DR estimand inherits IPW's consistency, whatever \( m \) is. Symmetrically, the DR estimand equals the outcome-regression estimand plus a term that vanishes whenever \( m \) is the true comparison-group regression, whatever \( p_g \) is. Each nuisance model covers for the other's failure; the estimand only breaks when <em>both</em> are wrong. A caveat from the same theorem: the three estimands are identical as identification targets but generally differ as finite-sample estimators once nuisances are fitted — and a TWFE regression with covariates entered linearly does <strong>not</strong> recover \( \mathrm{ATT}(g,t) \) unless effects are homogeneous in \( X \) and covariate-specific trends are ruled out. Regression adjustment is not a substitute for the estimand.</p>
+                </div>
+            </details>
+
+            <h2 id="aggregation">Aggregations That Answer Questions</h2>
+            <p>A rollout with a dozen cohorts and two years of data produces a large family of \( \mathrm{ATT}(g,t) \)'s — too many to brief a CMO on. The second step aggregates them with explicit, non-negative, researcher-chosen weights: \( \theta = \sum_g \sum_t w(g,t)\, \mathrm{ATT}(g,t) \). Different weighting schemes answer different questions:</p>
+
+            <table>
+                <thead>
+                    <tr><th>Aggregation</th><th>Question it answers</th><th>Form</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Event study \( \theta_{es}(e) \)</td><td>What is the average effect \( e \) periods after launch?</td><td>Average of \( \mathrm{ATT}(g, g+e) \) over cohorts observed at exposure \( e \)</td></tr>
+                    <tr><td>Group \( \theta_{sel}(\tilde g) \)</td><td>How did the \( \tilde g \) launch wave do overall?</td><td>Mean of \( \mathrm{ATT}(\tilde g, t) \) over its post periods</td></tr>
+                    <tr><td>Calendar \( \theta_c(\tilde t) \)</td><td>What was the effect in period \( \tilde t \) among live markets?</td><td>Cohort-share-weighted \( \mathrm{ATT}(g, \tilde t) \) for \( g \le \tilde t \)</td></tr>
+                    <tr><td>Overall \( \theta_{sel}^{O} \)</td><td>What was the average effect of ever launching?</td><td>Group effects \( \theta_{sel}(g) \), averaged over cohorts by size</td></tr>
+                </tbody>
+            </table>
+
+            <p>The event-study aggregation is the proper target for the ramp-curve plot every marketer wants, without the contaminated-lag pathology of dynamic TWFE. It carries one caveat: as \( e \) grows, later cohorts drop out of the average, so the curve mixes true dynamics with compositional change. The balanced variant fixes the set of cohorts observed for at least \( e' \) periods — fewer groups, cleaner dynamics. For a single headline number, the recommended overall parameter averages each cohort's post-launch effect first and then averages across cohorts by size,</p>
+            $$ \theta_{sel}^{O} \;=\; \sum_{g \in \mathcal{G}} \theta_{sel}(g)\, P\big(G = g \mid G \le \mathcal{T}\big), $$
+            <p>the natural multi-period analogue of the classic ATT: the average effect experienced by markets that ever launched, without over-weighting the waves that happen to have been live longest. Because every scheme uses non-negative weights, the positive-effects-everywhere-but-negative-estimate pathology is ruled out by construction. These summaries genuinely differ from one another whenever effects are heterogeneous — they only coincide (with each other, and with TWFE) in the constant-effect special case.</p>
+
+            <h2 id="inference">Simultaneous Inference</h2>
+            <p>The estimators are \( \sqrt{n} \)-asymptotically normal with an influence function that accounts for estimating the nuisance models. Rather than plug-in standard errors, Callaway and Sant'Anna recommend a <strong>multiplier bootstrap</strong>: perturb each unit's estimated influence-function contribution by an i.i.d. mean-zero, unit-variance weight (Mammen, 1993) and recompute. No propensity model is re-fit per draw, every cohort is represented in every draw (an empirical bootstrap can resample a small cohort away entirely), clustering amounts to drawing weights at the cluster level, and the whole procedure is fast — the paper's application, with a thousand bootstrap iterations, runs in about three seconds.</p>
+            <p>The reason to care is <em>simultaneity</em>. An event-study plot displays many estimates at once, and pointwise 95% intervals around each understate the joint uncertainty of the path — some interval will exclude its truth by chance alone. The multiplier bootstrap yields <strong>uniform confidence bands</strong>: a widened band, calibrated from the bootstrap distribution of the studentized maximum deviation, that covers the entire path of effects with the stated probability. Pre-treatment placebo effects — which should be zero under the assumptions — can be estimated alongside and plotted inside the same band, giving a multiple-testing-honest read on parallel trends.</p>
+            <p>The stakes are not hypothetical. In the paper's minimum-wage application — staggered state adoption, dynamic effects, cohort heterogeneity, all the complications a marketing rollout shares — the TWFE post-treatment coefficient is a statistically insignificant \(-0.008\), while the heterogeneity-robust overall effect under conditional parallel trends is about \(-3.1\%\), with event-study effects growing from roughly \(-2.4\%\) on impact to \(-7.1\%\) at three years of exposure. The method choice changes the qualitative conclusion, not just the decimal places.</p>
+
+            <h2 id="in-practice">Reading a Rollout in Practice</h2>
+            <p>For a measurement team the recipe is concrete. Encode each market's launch date as its group; decide from context whether never-launched markets are credible controls or whether not-yet-launched markets must serve; pick the pre-launch covariates that make within-stratum parallel trends defensible; estimate the \( \mathrm{ATT}(g,t) \) family doubly robustly; and report the event-study band plus the overall \( \theta_{sel}^{O} \) with uniform intervals (the reference implementation is the R package <code>did</code>). The output slots naturally into a broader measurement program: a staggered-rollout readout is exactly the kind of quasi-experimental evidence that can calibrate an MMM's channel priors, and its assumptions deserve the same explicit pre-registration we argue for in <a href="identification-assumptions.html">stating identification assumptions</a> generally.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>A market-by-market rollout is a staggered adoption design. TWFE's single coefficient averages cohort-period effects with estimator-chosen, possibly negative weights — it can report a negative number when every market benefited.</li>
+                    <li>The fix is to disaggregate first: \( \mathrm{ATT}(g,t) \), the effect for the cohort launched at \( g \) measured at \( t \), is causally interpretable under any pattern of heterogeneity.</li>
+                    <li>Identification needs limited anticipation, conditional parallel trends against a deliberately chosen comparison group (never-treated or not-yet-treated), and overlap — choose by context, not pre-tests.</li>
+                    <li>Estimate doubly robustly: consistency survives one misspecified nuisance model. Aggregate with transparent non-negative weights matched to the question — ramp curve, wave report card, or one headline ATT.</li>
+                    <li>Use multiplier-bootstrap uniform bands so the event-study plot and its pre-trend placebos are honest about multiple comparisons.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Callaway, B., &amp; Sant'Anna, P. H. C. (2021). <em>Difference-in-Differences with Multiple Time Periods</em>. Journal of Econometrics, 225(2).</li>
+                <li>Goodman-Bacon, A. (2021). <em>Difference-in-Differences with Variation in Treatment Timing</em>. Journal of Econometrics, 225(2).</li>
+                <li>Sun, L., &amp; Abraham, S. (2021). <em>Estimating Dynamic Treatment Effects in Event Studies with Heterogeneous Treatment Effects</em>. Journal of Econometrics, 225(2).</li>
+                <li>de Chaisemartin, C., &amp; D'Haultf&oelig;uille, X. (2020). <em>Two-Way Fixed Effects Estimators with Heterogeneous Treatment Effects</em>. American Economic Review, 110(9).</li>
+                <li>Sant'Anna, P. H. C., &amp; Zhao, J. (2020). <em>Doubly Robust Difference-in-Differences Estimators</em>. Journal of Econometrics, 219(1).</li>
+                <li>Abadie, A. (2005). <em>Semiparametric Difference-in-Differences Estimators</em>. Review of Economic Studies, 72(1).</li>
+                <li>Heckman, J. J., Ichimura, H., &amp; Todd, P. E. (1997). <em>Matching as an Econometric Evaluation Estimator: Evidence from Evaluating a Job Training Programme</em>. Review of Economic Studies, 64(4).</li>
+                <li>Card, D., &amp; Krueger, A. B. (1994). <em>Minimum Wages and Employment: A Case Study of the Fast-Food Industry in New Jersey and Pennsylvania</em>. American Economic Review, 84(4).</li>
+                <li>Roth, J. (2022). <em>Pretest with Caution: Event-Study Estimates after Testing for Parallel Trends</em>. American Economic Review: Insights, 4(3).</li>
+                <li>Mammen, E. (1993). <em>Bootstrap and Wild Bootstrap for High Dimensional Linear Models</em>. Annals of Statistics, 21(1).</li>
+                <li>Angrist, J. D., &amp; Pischke, J.-S. (2009). <em>Mostly Harmless Econometrics: An Empiricist's Companion</em>. Princeton University Press.</li>
+                <li>Vincent, B. T. (2022). <em>Difference in Differences</em>. PyMC Examples.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

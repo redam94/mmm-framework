@@ -100,6 +100,59 @@ def test_panel_runs_all_personas_and_merges(monkeypatch):
     assert table_ids == {"pre", "t-STAT", "t-PLAN", "t-CMO"}
 
 
+def test_panel_persists_persona_code_artifacts(monkeypatch, tmp_path):
+    """A persona that runs execute_python gets its code recorded as session
+    artifacts (via=review_panel:<persona>), same as delegate_to_expert."""
+    from mmm_framework.api import sessions as S
+
+    monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
+    S.init_db()
+
+    class _CodeStub:
+        def stream(self, init_state, config=None, stream_mode=None):
+            task = init_state["messages"][0].content
+            call_id = f"exp-{abs(hash(task)) % 1000}"
+            yield {
+                "messages": [
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "execute_python",
+                                "args": {"code": "1 + 1"},
+                                "id": call_id,
+                            }
+                        ],
+                    ),
+                    ToolMessage(content="2", tool_call_id=call_id),
+                    AIMessage(content="reviewed"),
+                ],
+                "dashboard_data": {},
+            }
+
+    monkeypatch.setattr(
+        T, "_get_expert_graph", lambda override=None, mode=None: _CodeStub()
+    )
+    T.convene_review_panel.func(
+        state={},
+        focus="check the residuals",
+        tool_call_id="c1",
+        config={"configurable": {"thread_id": "panel-1"}},
+    )
+
+    snippets = [
+        a["payload"] for a in S.list_artifacts("panel-1") if a["kind"] == "code_snippet"
+    ]
+    assert len(snippets) == 3  # one per persona
+    vias = {s["via"] for s in snippets}
+    assert vias == {
+        "review_panel:statistician",
+        "review_panel:media_planner",
+        "review_panel:cmo",
+    }
+    assert all(s["question"] == "check the residuals" for s in snippets)
+
+
 def test_panel_degrades_when_a_reviewer_fails(monkeypatch):
     class _Boom:
         def stream(self, *a, **k):
