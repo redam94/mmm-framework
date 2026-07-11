@@ -20,6 +20,7 @@ __all__ = ["INTERACTIVE_INSIGHT_SLOTS", "build_interactive_insights"]
 INTERACTIVE_INSIGHT_SLOTS = (
     "standfirst",
     "exec_gloss",
+    "decomp_gloss",
     "fit_gloss",
     "ppc_stats_gloss",
     "roi_gloss",
@@ -27,6 +28,8 @@ INTERACTIVE_INSIGHT_SLOTS = (
     "estimands_gloss",
     "curves_gloss",
     "carryover_gloss",
+    "pathways_gloss",
+    "latent_gloss",
     "prior_posterior_gloss",
     "realloc_gloss",
     "sensitivity_gloss",
@@ -125,6 +128,57 @@ def _fallback_insights(f: dict[str, Any]) -> dict[str, str]:
             else "Fit statistics are shown per series."
         )
     )
+
+    share_txt = f"media's {share['mean']:.0%} share" if share else "the media share"
+    out["decomp_gloss"] = (
+        "The stacked view separates what marketing added each week from what "
+        f"the business would have done anyway — {share_txt} sits on top of "
+        "the baseline (trend, seasonality, controls). Below it, spend share "
+        "vs effect share shows which channels punch above or below their "
+        "budget weight."
+    )
+
+    med = f.get("mediation")
+    if med:
+        n_ind = sum(1 for lk in med.get("links", []) if lk.get("kind") == "indirect")
+        meds = ", ".join(med.get("mediators", [])) or "the mediator"
+        out["pathways_gloss"] = (
+            f"This model is structural: {n_ind} channel effect"
+            f"{'s' if n_ind != 1 else ''} reach the outcome indirectly "
+            f"through {meds}, alongside direct response. The Sankey shows "
+            "both routes at once — a channel judged only on its direct arrow "
+            "would be under-credited for everything it moves upstream."
+        )
+    else:
+        out["pathways_gloss"] = (
+            "Structural models decompose each channel's effect into a direct "
+            "route and indirect routes through mediators; this model has no "
+            "mediation structure."
+        )
+    lat = f.get("latent")
+    if lat:
+        n_load = len(lat.get("loadings") or [])
+        n_traj = len(lat.get("trajectories") or [])
+        neg = sum(1 for r in lat.get("loadings") or [] if r.get("mean", 0) < 0)
+        out[
+            "latent_gloss"
+        ] = "The model infers unobserved drivers jointly with the media " "effects, so their uncertainty propagates into every ROI above. " + (
+            f"{n_load} indicators load on the factor"
+            + (f" ({neg} negatively)" if neg else "")
+            + ". "
+            if n_load
+            else ""
+        ) + (
+            f"{n_traj} latent state{'s' if n_traj != 1 else ''} "
+            "tracked over time below."
+            if n_traj
+            else ""
+        )
+    else:
+        out["latent_gloss"] = (
+            "Models with latent factors report their loadings and inferred "
+            "states here; this model has none."
+        )
 
     stats = (f.get("ppc_stats") or {}).get("stats") or []
     extreme = [s["label"] for s in stats if s.get("extreme")]
@@ -295,11 +349,14 @@ _LLM_SLOT_LABELS = {
     "EXEC": "exec_gloss",
     "FIT": "fit_gloss",
     "PPC_STATS": "ppc_stats_gloss",
+    "DECOMPOSITION": "decomp_gloss",
     "ROI": "roi_gloss",
     "YOY": "yoy_gloss",
     "ESTIMANDS": "estimands_gloss",
     "CURVES": "curves_gloss",
     "CARRYOVER": "carryover_gloss",
+    "PATHWAYS": "pathways_gloss",
+    "LATENT": "latent_gloss",
     "PRIOR_POSTERIOR": "prior_posterior_gloss",
     "REALLOCATION": "realloc_gloss",
     "SENSITIVITY": "sensitivity_gloss",
@@ -353,6 +410,20 @@ def _facts_blob(f: dict[str, Any]) -> str:
             )
     for ch, lo, hi in _sensitivity_spread(f):
         lines.append(f"Sensitivity {ch}: ROI ranges {lo:.2f}–{hi:.2f} across specs.")
+    med = f.get("mediation")
+    if med:
+        for lk in med.get("links", [])[:12]:
+            lines.append(
+                f"Pathway {lk['source']} -> {lk['target']} ({lk['kind']}): "
+                f"{lk['mean']:.3g} ({lk['lower']:.3g} to {lk['upper']:.3g}), "
+                f"units: {med.get('units')}."
+            )
+    lat = f.get("latent")
+    if lat:
+        for r in (lat.get("loadings") or [])[:10]:
+            lines.append(f"Loading {r['indicator']} on {r['factor']}: {r['mean']:.2f}.")
+        for tr in lat.get("trajectories") or []:
+            lines.append(f"Latent state tracked: {tr['name']}.")
     yoy = (f.get("yoy") or {}).get("latest")
     if yoy:
         lines.append(
@@ -417,8 +488,14 @@ def _enrich_with_llm(
         "PPC_STATS: interpret the posterior-predictive test-statistic "
         "p-values — which KPI properties (extremes, volatility, "
         "autocorrelation) the model reproduces or misses.\n"
+        "DECOMPOSITION: the media-vs-baseline story and spend-vs-effect "
+        "imbalances.\n"
         "ROI: which channels lead/trail and where uncertainty matters.\n"
         "YOY: what drove the year-over-year KPI change (media vs baseline).\n"
+        "PATHWAYS: direct vs mediated effect routes (only if mediation "
+        "facts exist).\n"
+        "LATENT: what the latent factors/loadings say (only if latent facts "
+        "exist).\n"
         "ESTIMANDS: average vs marginal returns — where they disagree here.\n"
         "CURVES: what the response curves imply about headroom/saturation.\n"
         "CARRYOVER: which channels have long memory and what that changes.\n"

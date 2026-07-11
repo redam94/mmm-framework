@@ -25,6 +25,7 @@ The window-recomputation contract (shared with the report's JS):
 from __future__ import annotations
 
 import base64
+import re
 import warnings
 from typing import Any
 
@@ -561,6 +562,253 @@ def _yoy_facts(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Mediation pathways (Sankey) — structural models with direct/indirect effects
+# ─────────────────────────────────────────────────────────────────────────────
+def _pretty_var(name: str) -> str:
+    return name.replace("_latent", "").replace("_", " ").strip().title()
+
+
+def _mediation_facts(
+    model: Any,
+    trace: Any,
+    channels: list[str],
+    interval: float,
+) -> dict[str, Any] | None:
+    """Direct/indirect effect flows for models with mediation structure.
+
+    Duck-typed, draw-exact, two shapes:
+
+    1. ``indirect_<channel>_via_<mediator>`` deterministics plus
+       ``delta_direct_<channel>`` (the NestedMMM / StructuralNestedMMM
+       convention) — path-coefficient scale (KPI units per unit saturated
+       media).
+    2. ``proportion_mediated_<channel>`` plus ``beta_<channel>`` and
+       ``satsum_<channel>`` (the survey-mediation garden convention) —
+       full-window incremental-KPI scale.
+
+    Returns ``None`` when the model exposes neither, so plain MMMs never grow
+    a pathways section.
+    """
+    post = getattr(trace, "posterior", None)
+    if post is None:
+        return None
+    names = list(getattr(post, "data_vars", {}))
+    y_std = float(getattr(model, "y_std", 1.0) or 1.0)
+    outcome = "KPI"
+    try:
+        outcome = str(model.mff_config.kpi.name)
+    except Exception:  # noqa: BLE001
+        pass
+
+    def link(src: str, dst: str, draws: np.ndarray, kind: str) -> dict[str, Any]:
+        lo, hi = _eti(draws, interval)
+        return {
+            "source": src,
+            "target": dst,
+            "mean": float(draws.mean()),
+            "lower": lo,
+            "upper": hi,
+            "kind": kind,
+        }
+
+    links: list[dict[str, Any]] = []
+    mediators: list[str] = []
+    units = ""
+
+    indirect_re = re.compile(r"^indirect_(.+)_via_(.+)$")
+    indirect_vars = [(v, indirect_re.match(v)) for v in names]
+    indirect_vars = [(v, m) for v, m in indirect_vars if m]
+    if indirect_vars:
+        units = "effect strength (KPI units per unit saturated media)"
+        med_inbound: dict[str, np.ndarray] = {}
+        for var, m in indirect_vars:
+            ch, med = m.group(1), m.group(2)
+            draws = _flat_posterior(trace, var)
+            if draws is None:
+                continue
+            draws = draws.reshape(-1)
+            med_label = _pretty_var(med)
+            links.append(link(ch, med_label, draws, "indirect"))
+            med_inbound[med_label] = med_inbound.get(med_label, 0.0) + draws
+        for ch in channels:
+            d = _flat_posterior(trace, f"delta_direct_{ch}")
+            if d is not None:
+                links.append(link(ch, outcome, d.reshape(-1) * y_std, "direct"))
+        for med_label, inbound in med_inbound.items():
+            mediators.append(med_label)
+            links.append(link(med_label, outcome, inbound, "mediated"))
+    else:
+        prop_channels = [ch for ch in channels if f"proportion_mediated_{ch}" in names]
+        if not prop_channels:
+            return None
+        units = f"incremental {outcome} (full window)"
+        med_label = "Mediator"
+        latent_names = [
+            v for v in names if v.endswith("_latent") and not v.startswith(("y_", "mu"))
+        ]
+        if len(latent_names) == 1:
+            med_label = _pretty_var(latent_names[0])
+        med_inbound_total: np.ndarray | None = None
+        for ch in channels:
+            beta = _flat_posterior(trace, f"beta_{ch}")
+            satsum = _flat_posterior(trace, f"satsum_{ch}")
+            if beta is None or satsum is None:
+                continue
+            total = beta.reshape(-1) * satsum.reshape(-1) * y_std
+            if ch in prop_channels:
+                prop = _flat_posterior(trace, f"proportion_mediated_{ch}")
+                prop = np.clip(prop.reshape(-1), 0.0, 1.0)
+                med_d = total * prop
+                links.append(link(ch, med_label, med_d, "indirect"))
+                links.append(link(ch, outcome, total * (1 - prop), "direct"))
+                med_inbound_total = (
+                    med_d if med_inbound_total is None else med_inbound_total + med_d
+                )
+            else:
+                links.append(link(ch, outcome, total, "direct"))
+        if med_inbound_total is None:
+            return None
+        mediators.append(med_label)
+        links.append(link(med_label, outcome, med_inbound_total, "mediated"))
+
+    if not any(lk["kind"] == "indirect" for lk in links):
+        return None
+    negatives = [f"{lk['source']} → {lk['target']}" for lk in links if lk["mean"] < 0]
+    return {
+        "outcome": outcome,
+        "mediators": mediators,
+        "links": links,
+        "units": units,
+        "interval": interval,
+        "negatives": negatives,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Latent structure (factor loadings + latent trajectories)
+# ─────────────────────────────────────────────────────────────────────────────
+_LATENT_EXCLUDE_NAMES = {
+    "channel_contributions",
+    "media_total",
+    "controls_total",
+    "control_contributions",
+    "y_obs_scaled",
+    "mu",
+    "intercept_component",
+    "trend_component",
+    "seasonality_component",
+    "geo_component",
+    "product_component",
+}
+_LATENT_EXCLUDE_PREFIXES = (
+    "beta_",
+    "sat_",
+    "adstock_",
+    "roi_",
+    "delta_",
+    "gamma_",
+    "sigma",
+    "intercept",
+    "trend",
+    "season",
+    "satsum_",
+    "proportion_mediated_",
+    "indirect_",
+    "direct_",
+    "loading_",
+    "mu",
+    "geo",
+    "product",
+    "u_",
+    "z_",
+    "w_",
+    "channel_",
+    "control",
+    "media_",
+    "y_obs",
+    "tau",
+    "alpha",
+)
+
+
+def _latent_facts(
+    model: Any,
+    trace: Any,
+    time_idx: np.ndarray,
+    n_periods: int,
+    interval: float,
+    max_trajectories: int = 4,
+) -> dict[str, Any] | None:
+    """Latent-structure facts: factor loadings (duck-typed
+    ``factor_loadings_summary()``) plus latent state trajectories over time
+    (posterior vars with a period- or obs-shaped axis that are not standard
+    MMM parameters/components). ``None`` for plain MMMs."""
+    loadings: list[dict[str, Any]] = []
+    if hasattr(model, "factor_loadings_summary"):
+        try:
+            df = model.factor_loadings_summary()
+            for rec in df.reset_index().to_dict("records"):
+                mean = rec.get("loading", rec.get("mean", rec.get("value")))
+                if mean is None:
+                    continue
+                loadings.append(
+                    {
+                        "indicator": str(
+                            rec.get("indicator") or rec.get("item") or "?"
+                        ),
+                        "factor": str(rec.get("factor") or "Factor"),
+                        "mean": float(mean),
+                        "lower": _jsafe(rec.get("hdi_low", rec.get("lower"))),
+                        "upper": _jsafe(rec.get("hdi_high", rec.get("upper"))),
+                    }
+                )
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"interactive report: factor loadings unavailable: {e}")
+
+    trajectories: list[dict[str, Any]] = []
+    post = getattr(trace, "posterior", None)
+    n_obs = int(time_idx.shape[0])
+    if post is not None:
+        onehot = _period_onehot(time_idx, n_periods)
+        counts = np.maximum(onehot.sum(axis=0), 1.0)
+        lo_q = (1.0 - interval) / 2.0 * 100.0
+        for name in getattr(post, "data_vars", {}):
+            if name in _LATENT_EXCLUDE_NAMES or name.startswith(
+                _LATENT_EXCLUDE_PREFIXES
+            ):
+                continue
+            vals = _flat_posterior(trace, name)
+            if vals is None or vals.ndim != 2:
+                continue
+            if vals.shape[1] == n_periods:
+                per = vals
+            elif vals.shape[1] == n_obs and n_obs != n_periods:
+                per = (vals @ onehot) / counts
+            elif vals.shape[1] == n_obs:
+                per = vals
+            else:
+                continue
+            trajectories.append(
+                {
+                    "name": _pretty_var(name),
+                    "median": _jsafe(np.median(per, axis=0)),
+                    "lower": _jsafe(np.percentile(per, lo_q, axis=0)),
+                    "upper": _jsafe(np.percentile(per, 100.0 - lo_q, axis=0)),
+                }
+            )
+            if len(trajectories) >= max_trajectories:
+                break
+
+    if not loadings and not trajectories:
+        return None
+    return {
+        "loadings": loadings,
+        "trajectories": trajectories,
+        "interval": interval,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Sensitivity battery (no refits — window/data perturbations + estimator swap)
 # ─────────────────────────────────────────────────────────────────────────────
 def _window_specs(
@@ -916,6 +1164,9 @@ def interactive_report_facts(
 
     yoy = _yoy_facts(actual_national, contrib_dp, periods, channels, interval)
 
+    mediation = _mediation_facts(model, trace, channels, interval)
+    latent = _latent_facts(model, trace, time_idx, n_periods, interval)
+
     assumptions = [r.to_dict() for r in model_assumptions(model)]
 
     diagnostics: dict[str, Any] = {}
@@ -966,6 +1217,8 @@ def interactive_report_facts(
         "ppc_prior": ppc_prior,
         "headline": headline,
         "yoy": yoy,
+        "mediation": mediation,
+        "latent": latent,
         "assumptions": assumptions,
         "diagnostics": _jsafe(diagnostics),
     }

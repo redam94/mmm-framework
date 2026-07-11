@@ -24,6 +24,8 @@ from mmm_framework.reporting.interactive.facts import (
     _eti,
     _half_life_draws,
     _jsafe,
+    _latent_facts,
+    _mediation_facts,
     _ppc_stat_facts,
     _series_stats,
     _stat_over_rows,
@@ -33,9 +35,11 @@ from mmm_framework.reporting.interactive.facts import (
 
 _XSS = "<script>alert(1)</script>"
 
+#: Sections present for every model (mediation/latent are data-gated extras).
 _SECTION_IDS = (
     "insights",
     "executive-summary",
+    "decomposition",
     "model-fit",
     "predictive-checks",
     "channel-roi",
@@ -233,6 +237,74 @@ def _canned_facts(*, approximate=False, channels=None) -> dict:
             "obs_sd": 31.0,
             "n_draws": 100,
         },
+        "mediation": {
+            "outcome": "Sales",
+            "mediators": ["Awareness"],
+            "units": "incremental Sales (full window)",
+            "interval": 0.9,
+            "negatives": [],
+            "links": [
+                {
+                    "source": "TV",
+                    "target": "Awareness",
+                    "mean": 900.0,
+                    "lower": 500.0,
+                    "upper": 1300.0,
+                    "kind": "indirect",
+                },
+                {
+                    "source": "TV",
+                    "target": "Sales",
+                    "mean": 200.0,
+                    "lower": 50.0,
+                    "upper": 380.0,
+                    "kind": "direct",
+                },
+                {
+                    "source": "Digital",
+                    "target": "Sales",
+                    "mean": 700.0,
+                    "lower": 400.0,
+                    "upper": 1000.0,
+                    "kind": "direct",
+                },
+                {
+                    "source": "Awareness",
+                    "target": "Sales",
+                    "mean": 900.0,
+                    "lower": 500.0,
+                    "upper": 1300.0,
+                    "kind": "mediated",
+                },
+            ],
+        },
+        "latent": {
+            "interval": 0.9,
+            "loadings": [
+                {
+                    "indicator": "consumer_confidence",
+                    "factor": "EconomicHealth",
+                    "mean": 0.8,
+                    "lower": 0.5,
+                    "upper": 1.1,
+                },
+                {
+                    "indicator": "unemployment",
+                    "factor": "EconomicHealth",
+                    "mean": -0.6,
+                    "lower": -0.9,
+                    "upper": -0.3,
+                },
+            ],
+            "trajectories": [
+                {
+                    "name": "Economic Health",
+                    "median": list(rng.normal(0, 1, P)),
+                    "lower": list(rng.normal(-1, 0.2, P)),
+                    "upper": list(rng.normal(1, 0.2, P)),
+                }
+            ],
+        },
         "yoy": {
             "years": ["2024", "2025"],
             "latest": {
@@ -391,6 +463,141 @@ class TestFactsHelpers:
         out = _yoy_facts(np.ones(30), {"TV": np.ones((10, 30))}, periods, ["TV"], 0.9)
         assert out is None
 
+    @staticmethod
+    def _fake_trace(var_dict):
+        """A trace-shaped object with a real xarray posterior group."""
+        import xarray as xr
+
+        class _T:
+            posterior = xr.Dataset(
+                {
+                    k: (
+                        (
+                            ("chain", "draw")
+                            + tuple(f"d{i}" for i in range(np.ndim(v) - 2))
+                        ),
+                        np.asarray(v),
+                    )
+                    for k, v in var_dict.items()
+                }
+            )
+
+        return _T()
+
+    def test_mediation_facts_from_proportion_shape(self):
+        rng = np.random.default_rng(0)
+        S = (2, 100)
+        trace = self._fake_trace(
+            {
+                "beta_TV": rng.normal(1.0, 0.1, S),
+                "satsum_TV": np.full(S, 50.0),
+                "proportion_mediated_TV": rng.uniform(0.6, 0.8, S),
+                "beta_Search": rng.normal(0.5, 0.05, S),
+                "satsum_Search": np.full(S, 40.0),
+                "awareness_latent": rng.normal(0, 1, S + (12,)),
+            }
+        )
+
+        class _M:
+            y_std = 2.0
+
+        med = _mediation_facts(_M(), trace, ["TV", "Search"], 0.9)
+        assert med is not None
+        assert med["mediators"] == ["Awareness"]
+        kinds = {(lk["source"], lk["target"]): lk for lk in med["links"]}
+        # TV splits into mediated + direct; Search is all direct
+        tv_med = kinds[("TV", "Awareness")]
+        tv_dir = kinds[("TV", "KPI")]
+        total_tv = tv_med["mean"] + tv_dir["mean"]
+        assert total_tv == pytest.approx(1.0 * 50.0 * 2.0, rel=0.05)
+        assert tv_med["mean"] > tv_dir["mean"]  # ~70% mediated
+        assert ("Search", "KPI") in kinds
+        # mediator outflow equals inbound mediated flow
+        assert kinds[("Awareness", "KPI")]["mean"] == pytest.approx(
+            tv_med["mean"], rel=1e-6
+        )
+
+    def test_mediation_facts_from_indirect_vars(self):
+        rng = np.random.default_rng(1)
+        S = (2, 80)
+        trace = self._fake_trace(
+            {
+                "indirect_TV_via_awareness": rng.normal(0.4, 0.05, S),
+                "indirect_TV_via_consideration": rng.normal(0.2, 0.05, S),
+                "delta_direct_TV": rng.normal(0.1, 0.02, S),
+            }
+        )
+
+        class _M:
+            y_std = 1.0
+
+        med = _mediation_facts(_M(), trace, ["TV"], 0.9)
+        assert set(med["mediators"]) == {"Awareness", "Consideration"}
+        assert len([lk for lk in med["links"] if lk["kind"] == "indirect"]) == 2
+        for lk in med["links"]:
+            assert lk["lower"] <= lk["mean"] <= lk["upper"]
+
+    def test_mediation_facts_none_for_plain_model(self):
+        trace = self._fake_trace(
+            {"beta_TV": np.ones((2, 50)), "sigma": np.ones((2, 50))}
+        )
+
+        class _M:
+            y_std = 1.0
+
+        assert _mediation_facts(_M(), trace, ["TV"], 0.9) is None
+
+    def test_latent_facts_trajectories_and_loadings(self):
+        rng = np.random.default_rng(2)
+        S, P_ = (2, 60), 20
+        trace = self._fake_trace(
+            {
+                "economic_health": rng.normal(0, 1, S + (P_,)),
+                "beta_TV": rng.normal(1, 0.1, S),  # excluded param
+                "channel_contributions": rng.normal(0, 1, S + (P_, 2)),
+            }
+        )
+
+        class _M:
+            def factor_loadings_summary(self):
+                return pd.DataFrame(
+                    [
+                        {
+                            "indicator": "confidence",
+                            "factor": "Econ",
+                            "loading": 0.8,
+                            "hdi_low": 0.5,
+                            "hdi_high": 1.1,
+                        },
+                        {
+                            "indicator": "unemployment",
+                            "factor": "Econ",
+                            "loading": -0.6,
+                            "hdi_low": -0.9,
+                            "hdi_high": -0.3,
+                        },
+                    ]
+                )
+
+        lat = _latent_facts(_M(), trace, np.arange(P_), P_, 0.9)
+        assert lat is not None
+        assert {r["indicator"] for r in lat["loadings"]} == {
+            "confidence",
+            "unemployment",
+        }
+        assert [t["name"] for t in lat["trajectories"]] == ["Economic Health"]
+        assert len(lat["trajectories"][0]["median"]) == P_
+
+    def test_latent_facts_none_for_plain_model(self):
+        trace = self._fake_trace(
+            {
+                "beta_TV": np.ones((2, 50)),
+                "trend_component": np.ones((2, 50, 20)),
+                "channel_contributions": np.ones((2, 50, 20, 1)),
+            }
+        )
+        assert _latent_facts(object(), trace, np.arange(20), 20, 0.9) is None
+
     def test_window_specs_shapes(self):
         P = 120
         periods = [
@@ -468,7 +675,7 @@ class TestGenerator:
 
     def test_full_document_structure(self):
         html = InteractiveReportGenerator(facts=_canned_facts()).generate_report()
-        for sid in _SECTION_IDS:
+        for sid in _SECTION_IDS + ("pathways", "latent-structure"):
             assert f'href="#{sid}"' in html, f"nav missing {sid}"
             assert f'id="{sid}"' in html, f"section missing {sid}"
         assert "__IR_DATA__" in html
@@ -515,6 +722,26 @@ class TestGenerator:
             assert f'href="#{sid}"' not in html
         for sid in ("insights", "channel-roi", "reallocation"):
             assert f'id="{sid}"' in html
+
+    def test_structural_sections_gate_off_for_plain_models(self):
+        facts = _canned_facts()
+        facts["mediation"] = None
+        facts["latent"] = None
+        html = InteractiveReportGenerator(facts=facts).generate_report()
+        assert 'href="#pathways"' not in html
+        assert 'href="#latent-structure"' not in html
+
+    def test_pathways_and_latent_render(self):
+        html = InteractiveReportGenerator(facts=_canned_facts()).generate_report()
+        assert 'id="pathwaysChart"' in html
+        assert 'id="latentLoadings"' in html
+        assert 'id="latentGrid"' in html
+        assert 'id="decompChart"' in html
+        assert 'id="sharesChart"' in html
+        assert 'id="calibChart"' in html
+        gloss = build_interactive_insights(_canned_facts())
+        assert "Awareness" in gloss["pathways_gloss"]
+        assert "1 negatively" in gloss["latent_gloss"]
 
     def test_yoy_section_gating_and_controls(self):
         html = InteractiveReportGenerator(facts=_canned_facts()).generate_report()
@@ -663,6 +890,10 @@ class TestEndToEnd:
         for sid in _SECTION_IDS:
             assert f'id="{sid}"' in html
         assert "Approximate fit (ADVI)" in html
+        # a plain MMM grows no structural sections
+        assert f["mediation"] is None and f["latent"] is None
+        assert 'href="#pathways"' not in html
+        assert 'href="#latent-structure"' not in html
 
     def test_facts_require_fit(self):
         from mmm_framework.reporting.interactive import interactive_report_facts

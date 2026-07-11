@@ -77,6 +77,8 @@ _PAYLOAD_KEYS = (
     "prior_posterior",
     "sensitivity",
     "yoy",
+    "mediation",
+    "latent",
 )
 
 _EXTRA_CSS = r"""
@@ -165,6 +167,7 @@ class InteractiveReportGenerator:
         for builder in (
             self._section_insights,
             self._section_exec,
+            self._section_decomp,
             self._section_fit,
             self._section_ppc_stats,
             self._section_roi,
@@ -172,6 +175,8 @@ class InteractiveReportGenerator:
             self._section_estimands,
             self._section_curves,
             self._section_carryover,
+            self._section_pathways,
+            self._section_latent,
             self._section_prior_posterior,
             self._section_realloc,
             self._section_sensitivity,
@@ -294,6 +299,29 @@ class InteractiveReportGenerator:
             body,
         )
 
+    def _section_decomp(self) -> tuple[_NavEntry, str]:
+        body = (
+            f'<p class="lede">{self._insight("decomp_gloss")}</p>'
+            '<div class="chart-card"><div id="decompChart"></div></div>'
+            '<p class="chart-caption">Posterior-mean incremental contribution '
+            "per channel, stacked on the non-media baseline (trend, "
+            "seasonality, controls, intercept), against the observed KPI "
+            "(dotted). The baseline is the model's predictive mean minus "
+            "total media, so the stack always adds up to the fit.</p>"
+            "<h3>Share of spend vs share of effect</h3>"
+            '<div class="chart-card"><div id="sharesChart"></div></div>'
+            '<p class="chart-caption">Where the money goes vs where the '
+            "effect comes from (full window). A channel whose effect share "
+            "(with credible interval) sits above its spend share is "
+            "over-delivering for its budget; below, under-delivering.</p>"
+        )
+        return _NavEntry("decomposition", "Decomposition"), self._wrap(
+            "decomposition",
+            "Decomposition",
+            "Where the KPI comes from",
+            body,
+        )
+
     def _section_fit(self) -> tuple[_NavEntry, str] | None:
         fit = self.facts.get("fit") or {}
         if not fit.get("order"):
@@ -369,6 +397,12 @@ class InteractiveReportGenerator:
             "line. The Bayesian p-value is P(T(y_rep) ≥ T(y_obs)); values "
             "near 0 or 1 mean the observed data would be surprising if the "
             "model were true. Computed on the national period-summed KPI.</p>"
+            "<h3>Interval calibration</h3>"
+            '<div class="chart-card"><div id="calibChart"></div></div>'
+            '<p class="chart-caption">Empirical coverage of the 50 / 80 / 90 '
+            "/ 95% predictive intervals against their nominal level "
+            "(national series). Points on the diagonal mean the model's "
+            "uncertainty is neither overstated nor understated.</p>"
         )
         return _NavEntry("predictive-checks", "Predictive checks"), self._wrap(
             "predictive-checks",
@@ -477,6 +511,66 @@ class InteractiveReportGenerator:
         )
         return _NavEntry("carryover", "Carryover"), self._wrap(
             "carryover", "Carryover effects", "How long each channel echoes", body
+        )
+
+    def _section_pathways(self) -> tuple[_NavEntry, str] | None:
+        med = self.facts.get("mediation")
+        if not med or not med.get("links"):
+            return None
+        neg = ""
+        if med.get("negatives"):
+            neg = (
+                '<p class="note">Negative flows shown as magnitude (see '
+                "hover): "
+                f"{_esc(', '.join(med['negatives']))}.</p>"
+            )
+        body = (
+            f'<p class="lede">{self._insight("pathways_gloss")}</p>'
+            '<div class="chart-card"><div id="pathwaysChart"></div></div>'
+            '<p class="chart-caption">How each channel\'s effect reaches '
+            f"{_esc(med.get('outcome', 'the KPI'))}: flows through "
+            f"{_esc(', '.join(med.get('mediators', [])) or 'the mediator')} "
+            "are indirect (mediated) effects, flows straight to the outcome "
+            "are direct. Link widths are posterior means in "
+            f"{_esc(med.get('units', 'effect units'))}; hover any link for "
+            "its credible interval.</p>"
+            f"{neg}"
+        )
+        return _NavEntry("pathways", "Effect pathways"), self._wrap(
+            "pathways",
+            "Structural pathways",
+            "How the effect flows: direct vs mediated",
+            body,
+        )
+
+    def _section_latent(self) -> tuple[_NavEntry, str] | None:
+        lat = self.facts.get("latent")
+        if not lat:
+            return None
+        parts = [f'<p class="lede">{self._insight("latent_gloss")}</p>']
+        if lat.get("loadings"):
+            parts.append(
+                "<h3>Factor loadings</h3>"
+                '<div class="chart-card"><div id="latentLoadings"></div></div>'
+                '<p class="chart-caption">How strongly each indicator moves '
+                "with the latent factor (posterior mean with credible "
+                "interval). Signs matter: a negative loading means the "
+                "indicator falls when the factor rises.</p>"
+            )
+        if lat.get("trajectories"):
+            parts.append(
+                "<h3>Latent states over time</h3>"
+                '<div class="sat-grid" id="latentGrid"></div>'
+                '<p class="chart-caption">Posterior median and credible band '
+                "of each latent state, on the model's latent scale. These "
+                "are the unobserved quantities the model inferred from the "
+                "indicators and the KPI jointly.</p>"
+            )
+        return _NavEntry("latent-structure", "Latent structure"), self._wrap(
+            "latent-structure",
+            "Latent structure",
+            "The unobserved drivers the model inferred",
+            "".join(parts),
         )
 
     def _section_prior_posterior(self) -> tuple[_NavEntry, str] | None:
