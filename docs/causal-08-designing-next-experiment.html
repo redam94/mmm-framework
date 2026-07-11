@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Inference 08: Designing the Next Experiment | MMM Framework</title>
+    <meta name="description" content="The default TV flighting test buys an 'inconclusive' — MDE 1.46 vs an expected readout of 0.39. The optimizer's ±21% × 16-week design fixes it; every national Print test is a no.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-08-designing-next-experiment.html">
+    <meta property="og:title" content="Causal Inference 08: Designing the Next Experiment | MMM Framework">
+    <meta property="og:description" content="The fitted posterior joins the design loop: anchored readouts, opportunity cost, the Pareto frontier, cool-downs — and the engine's most valuable answer, 'no'.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-08-designing-next-experiment.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Causal Inference in Practice series
+           (same kit as the Pressure Tests pages — tokens only).
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .discipline-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .discipline-card ol { margin: 0.5rem 0 0 1.1rem; }
+        .discipline-card li { margin: 0.5rem 0; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Causal Inference 08: Designing the Next Experiment | MMM Framework">
+    <meta name="twitter:description" content="The fitted posterior joins the design loop: anchored readouts, opportunity cost, the Pareto frontier, cool-downs — and the engine's most valuable answer, 'no'.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/causal-08-designing-next-experiment.html",
+          "name": "Causal Inference 08: Designing the Next Experiment | MMM Framework",
+          "description": "The default TV flighting test buys an 'inconclusive' — MDE 1.46 vs an expected readout of 0.39. The optimizer's ±21% × 16-week design fixes it; every national Print test is a no.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/causal-08-designing-next-experiment.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/causal-08-designing-next-experiment.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Causal Inference 08: Designing the Next Experiment",
+          "datePublished": "2026-06-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/causal-08-designing-next-experiment.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/causal-08-designing-next-experiment.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Demos & Reports",
+              "item": "https://redam94.github.io/mmm-framework/demos.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Causal Inference 08: Designing the Next Experiment",
+              "item": "https://redam94.github.io/mmm-framework/causal-08-designing-next-experiment.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">The model joins the loop</a></li>
+                <li><a href="#default-design">The default design</a></li>
+                <li><a href="#anchor">The anchored readout</a></li>
+                <li><a href="#cost">What learning costs</a></li>
+                <li><a href="#pareto">The Pareto choice</a></li>
+                <li><a href="#saying-no">The engine says no</a></li>
+                <li><a href="#cooldowns">Cool-downs</a></li>
+                <li><a href="#identification">Effect vs curve</a></li>
+                <li><a href="#checklist">The design checklist</a></li>
+                <li><a href="#quiz">Check your understanding</a></li>
+                <li><a href="#run-it">Run it yourself</a></li>
+            </ul>
+
+            <h3>Causal Inference in Practice</h3>
+            <ul class="sidebar-nav">
+                <li><a href="causal-06-calibrating-the-model.html">06 · Calibrating the Model</a></li>
+                <li><a href="causal-07-many-experiments.html">07 · Many Experiments</a></li>
+                <li><a href="causal-08-designing-next-experiment.html" class="active">08 · Designing the Next Experiment</a></li>
+                <li><a href="causal-09-measurement-program.html">09 · The Measurement Program</a></li>
+                <li><a href="causal-10-closed-loop.html">10 · The Closed Loop</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Causal Inference 08: Designing the Next Experiment</h1>
+            <p class="lead">
+                The model stops being the patient and becomes the surgeon's assistant. Rung 5 designed
+                a test from the raw geo panel alone — deliberately, because an experiment's
+                <em>validity</em> must never depend on the model it will later repair. But its
+                <em>efficiency</em> should absolutely use the model. This page mirrors
+                <code>nbs/causal/causal_08_designing_the_next_experiment.ipynb</code>: Veranda Home's
+                fitted posterior (the cached rung-2 fit — designing costs posterior passes, not
+                refits) prices two candidate tests from
+                <a href="causal-07-many-experiments.html">notebook&nbsp;07</a>'s to-do list —
+                <strong>TV</strong>, the stubborn residual under-read, and <strong>Print</strong>, the
+                twin that inherited the pair-sum bias — and hands them <strong>opposite
+                verdicts</strong>.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">1.46 vs 0.39</div>
+                    <div class="stat-label">the default 12-week TV design's MDE (ROAS) vs the model-anchored expected readout — 3.7× apart: as specified, the test buys an "inconclusive"</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">±21% × 16 wk</div>
+                    <div class="stat-label">the optimizer's recommended TV flighting — MDE 0.63 ROAS, power shortfall 0.02</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">$0</div>
+                    <div class="stat-label">dollars at risk in the budget-neutral flighting window; P(net KPI loss) 0%</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">0.71</div>
+                    <div class="stat-label">power shortfall of the <em>best</em> national Print candidate (MDE 4.7 ROAS) — the engine's answer is "change the mode"</div>
+                </div>
+            </div>
+
+            <h2 id="default-design">1 — Candidate one: a TV flighting test</h2>
+            <p>
+                Veranda's data is national, so the recommended design family is <strong>budget-neutral
+                flighting</strong>: alternate TV spend between a high and a low level in randomized
+                blocks — same annual budget, honest identification from the <em>contrast</em>. The
+                design engine's default for this dataset: <code>national_flighting</code>,
+                <strong>12 weeks</strong>, spend levels <strong>[0.5, 1.5]</strong> of plan,
+                budget-neutral — with a minimum detectable effect of <strong>1.46 ROAS</strong>
+                (the framework's power rule, \( \mathrm{MDE} = 2.8\,\hat\sigma_{\text{design}} \),
+                at 80% power and 5% two-sided size).
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.planning.design import design_experiment
+from mmm_framework.planning.design_anchor import model_anchored_effect
+from mmm_framework.planning.opportunity_cost import compute_opportunity_cost
+
+design = design_experiment("veranda_weekly.csv", "Sales", "TV")
+# -> national_flighting | 12 weeks | levels [0.5, 1.5] | MDE 1.46 ROAS
+
+anchor = model_anchored_effect(mmm, design, max_draws=60, random_seed=42)
+# -> the readout the test would produce: median 0.39, 90% HDI [0.25, 0.49]
+
+cost = compute_opportunity_cost(mmm, design, max_draws=60, random_seed=42,
+                                kpi_kind="revenue")
+# -> spend_at_risk 0.0, P(KPI loss over the window) 0%</code></pre>
+            </div>
+
+            <h2 id="anchor">2 — What would we actually see? The model-anchored readout</h2>
+            <p>
+                The design's MDE says what is <em>detectable</em>. The posterior says what is
+                <em>expected</em>: push the candidate schedule through the fitted response curves —
+                a spend perturbation on the test window only, not the global curve — and read the
+                distribution of incremental ROAS the test would measure. For the default TV design:
+                <strong>median 0.39, 90% HDI [0.25, 0.49]</strong>. The expected readout sits
+                <strong>far below the 1.46 MDE</strong> — as specified, this test would probably
+                come back "inconclusive". Better to know that before spending a quarter on it.
+            </p>
+
+            <div class="chart-container" id="anchorChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — <code>nbs/artifacts/causal_08_design.json</code>. What the
+                default 12-week TV flighting would read (median 0.39, 90% HDI [0.25, 0.49]) against
+                what it could detect (MDE 1.46). The optimizer's job is to pull the detection bar
+                down to the readout — its recommended design (section 4) lands at 0.63.
+            </p>
+
+            <h2 id="cost">3 — What does learning cost? (Almost nothing, if you design it that way)</h2>
+            <p>
+                The posterior counterfactual of running the schedule vs business-as-usual prices the
+                test's short-term risk: <strong>dollars at risk $0</strong>, <strong>P(net KPI loss
+                over the window) 0%</strong> — the posterior actually expects a small <em>positive</em>
+                KPI delta (+92 units) over the window, since the flighting spends the same dollars on
+                a curve that is not linear. One honest footnote: randomized blocks against a varying
+                baseline round to <em>approximately</em> neutral — the notebook's window nets to
+                +2.2% of annual TV spend, not exactly zero. Budget-neutral flighting is still the
+                free lunch of measurement: the same media plan, rearranged into an instrument.
+            </p>
+
+            <h2 id="pareto">4 — The Pareto choice</h2>
+            <p>
+                Candidate designs trade four objectives — <strong>MDE ↓, power shortfall ↓, short-term
+                cost ↓, duration ↓</strong> — and no single design wins all four.
+                <code>suggest_experiment</code> sweeps the design space (intensity × duration), keeps
+                the non-dominated frontier, and recommends the knee among <em>powered</em> designs.
+                The sweep over ±30–100% intensity and 6–16 weeks:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>intensity</th>
+                        <th>duration</th>
+                        <th>MDE (ROAS)</th>
+                        <th>power shortfall</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>±13%</td><td>6 wk</td><td>1.03</td><td>0.40</td></tr>
+                    <tr><td>±19%</td><td>11 wk</td><td>0.76</td><td>0.17</td></tr>
+                    <tr><td><strong>±21%</strong></td><td><strong>16 wk</strong></td><td><strong>0.63</strong></td><td><strong>0.02</strong></td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured</strong> — the TV candidate grid from the notebook's seeded run. The
+                recommended design: <strong>±21% intensity × 16 weeks → MDE 0.63 ROAS, power
+                shortfall 0.02</strong>. Note what the optimizer traded: a <em>gentler</em> contrast
+                than the default's ±50%, held for <em>longer</em> — more weeks of a smaller, cheaper
+                wiggle beat a short violent one.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.planning.experiment_optimizer import (
+    suggest_experiment, cooldown_weeks)
+from mmm_framework.agents.model_ops import identify_structural_parameters
+
+sug = suggest_experiment(mmm, "veranda_weekly.csv", "Sales", "TV",
+                         duration_min=6, duration_max=16,
+                         intensity_min=30.0, intensity_max=100.0,
+                         max_draws=40, random_seed=42)
+rec = sug["recommended"]        # ±21% x 16 weeks -> MDE 0.63, shortfall 0.02
+
+gap = cooldown_weeks(mmm, "TV") # {'alpha': 0.46, ..., 'cooldown_weeks': 4}
+
+ident = identify_structural_parameters(mmm, dataset_path="veranda_weekly.csv",
+                                       kpi="Sales", channel="TV", duration=24)</code></pre>
+            </div>
+
+            <div class="chart-container tall" id="frontierChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the design frontier for both candidates, on one axis. TV's
+                candidates descend toward the expected readout as duration grows; the big marker is
+                the recommended, powered pick. Print's candidates (section 5) never get anywhere near
+                the line — the <em>best</em> national Print design's MDE is 3.9 ROAS, an order of
+                magnitude above any plausible readout.
+            </p>
+
+            <h2 id="saying-no">5 — The engine's most valuable answer: "no"</h2>
+            <p>
+                Now Print — the channel <a href="causal-07-many-experiments.html">notebook&nbsp;07</a>
+                flagged as the top re-test priority. Print's national spend is a rounding error of
+                TV's, so a national budget-neutral flighting contrast moves almost no dollars, and no
+                candidate in the sweep comes close to powered: MDEs run <strong>6.4 → 4.7 → 3.9
+                ROAS</strong> across 6/11/16 weeks, with power shortfalls stuck at
+                <strong>0.70–0.73</strong> (best available: MDE 4.7, shortfall 0.71). The honest
+                recommendation is <strong>not</strong> "run the least-bad one" — it is <strong>change
+                the mode</strong>: a matched-pair geo holdout (rung 5's machinery) concentrates the
+                contrast in a subset of markets, or measures the Radio+Print pair jointly. The design
+                engine just saved a quarter's Print budget from buying an "inconclusive".
+                <em>A test you shouldn't run is a result too.</em>
+            </p>
+
+            <h2 id="cooldowns">6 — Cool-downs: carryover contaminates the calendar</h2>
+            <p>
+                Two tests on the same channel back-to-back are not independent: the first test's
+                adstock is still paying out during the second's window. The fitted carryover implies a
+                <strong>washout period</strong> per channel — the minimum gap before the next test on
+                that channel, and the minimum block length inside a flighting schedule:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>channel</th>
+                        <th>fitted adstock α</th>
+                        <th>half-life (weeks)</th>
+                        <th>cool-down (weeks)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>TV</strong></td><td>0.46</td><td>0.90</td><td><strong>4</strong></td></tr>
+                    <tr><td>Search</td><td>0.21</td><td>0.45</td><td>2</td></tr>
+                    <tr><td>Print</td><td>0.26</td><td>0.51</td><td>3</td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured</strong> — <code>cooldown_weeks</code> reads each channel's fitted
+                adstock and returns the smallest gap after which the residual carryover falls below
+                5%. These numbers become scheduling constraints in
+                <a href="causal-09-measurement-program.html">notebook&nbsp;09</a>'s calendar.
+            </p>
+
+            <h2 id="identification">7 — Identifying the curve, not just the effect</h2>
+            <p>
+                Everything above measures <em>an average effect</em>. Budget <strong>allocation</strong>
+                needs the <em>curve</em> — the saturation shape and the carryover — and rung 2 showed
+                those parameters barely move under observational data. A multi-level flighting
+                schedule (≥3 spend levels) is the design that can, in principle, trace the curve.
+                <code>identify_structural_parameters</code> computes, per structural parameter, the
+                detection power and the expected prior→posterior <em>contraction</em> the schedule
+                would buy — Fisher-information math against the fitted posterior, with a fail-closed
+                self-check that the forward op mirrors the graph.
+            </p>
+
+            <div class="chart-container" id="identChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — expected prior→posterior contraction per structural
+                parameter (log scale), 12-week vs 24-week 3-level TV schedules. Detection power barely
+                moves (β: 0.830 → 0.833; saturation λ: 0.678 → 0.682; adstock α: ≈1.00 at both), but
+                contraction is roughly <strong>10× larger at 24 weeks</strong> — and only the 24-week
+                commitment crosses the engine's identification bar:
+                <code>identifies_anything</code> = <strong>False at 12w, True at 24w</strong>.
+                Curvature knowledge is expensive; buy it deliberately or don't claim it.
+            </p>
+
+            <div class="note">
+                <h4>📎 The honest arithmetic of curve identification</h4>
+                <p>
+                    A well-built 12-week schedule <em>detects</em> the effect with high power yet
+                    barely contracts the structural priors. Detection asks "is the average effect
+                    nonzero?" — one number. Identification asks "which saturation curve and which
+                    carryover kernel produced it?" — a shape. The same contrast that answers the first
+                    question in 12 weeks needs 24 to start answering the second.
+                    <strong>Measure effects cheaply and often; measure curves rarely and on
+                    purpose.</strong>
+                </p>
+            </div>
+
+            <h2 id="checklist">8 — The design checklist this rung leaves behind</h2>
+            <div class="discipline-card">
+                <ol>
+                    <li><strong>Anchor before you run.</strong> If the model's expected readout sits
+                        below the design's MDE, redesign or don't run.</li>
+                    <li><strong>Prefer budget-neutral contrasts</strong> — flighting turns measurement
+                        into a rearrangement of dollars you were spending anyway.</li>
+                    <li><strong>Let the engine say no.</strong> An underpowered mode (national Print)
+                        is a changed design, not a smaller ambition.</li>
+                    <li><strong>Respect cool-downs.</strong> Carryover makes the testing calendar a
+                        scheduling problem, not a wishlist.</li>
+                    <li><strong>Decide which you're buying: the effect or the curve.</strong> They
+                        cost different orders of magnitude.</li>
+                </ol>
+            </div>
+
+            <div class="check-understanding" id="quiz">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>The default 12-week design is perfectly valid — randomized, budget-neutral, honest MDE. Why does the engine still say "don't run it as specified"?</summary>
+                    <div class="quiz-answer">
+                        <p>Because validity and efficiency are different properties. The design would
+                        produce an unbiased readout — of an effect it almost certainly cannot
+                        distinguish from zero. The model-anchored pass says the readout would land
+                        near 0.39 ROAS (90% HDI [0.25, 0.49]) while the design can only detect 1.46:
+                        the likely outcome is a six-figure "inconclusive". The anchor doesn't make the
+                        experiment depend on the model — the readout stays model-free — it just stops
+                        you from buying a coin flip. The optimizer then fixes exactly this, trading a
+                        gentler ±21% contrast held for 16 weeks to bring the MDE down to 0.63.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Why is the verdict for Print "change the mode" rather than "run the least-bad national candidate"?</summary>
+                    <div class="quiz-answer">
+                        <p>Because the failure is structural, not marginal. A national budget-neutral
+                        flighting contrast can only move Print's own (tiny) budget, so even the best
+                        candidate in the sweep has an MDE of 3.9–4.7 ROAS with a power shortfall of
+                        ~0.71 — no plausible Print ROAS is detectable at any duration in the range.
+                        Running the least-bad one converts a quarter of calendar into an
+                        "inconclusive" by construction. The fix is a different <em>mode</em>: a
+                        matched-pair geo holdout concentrates the same contrast in a subset of
+                        markets, where the effective per-market perturbation is large enough to
+                        power. The ambition stays; the instrument changes.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>The 12-week 3-level schedule has ≥83% power on TV's effect, yet <code>identifies_anything</code> comes back False. What's the difference between detecting and identifying?</summary>
+                    <div class="quiz-answer">
+                        <p>Power measures the chance of declaring the <em>average effect</em> nonzero
+                        — and 12 weeks is plenty for that (β power 0.830). Identification measures
+                        whether the schedule would actually <em>move the structural priors</em>:
+                        expected contraction on the saturation and adstock parameters is ~0.001 at 12
+                        weeks — the posterior would come back essentially the prior. At 24 weeks
+                        contraction grows ~10× (β 0.0064, λ 0.0077) and crosses the engine's bar.
+                        If you fund 12 weeks, claim an effect measurement; only the 24-week
+                        commitment buys a curve.</p>
+                    </div>
+                </details>
+            </div>
+
+            <div class="note" id="run-it">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/causal/causal_08_designing_the_next_experiment.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/causal/causal_08_designing_the_next_experiment.ipynb</code></a>
+                    — notebook 8 of 11 in the <em>Causal Inference in Practice</em> series (brand:
+                    Veranda Home; synthetic worlds with sealed answer keys; every claim graded by an
+                    assert). All numbers from <code>nbs/artifacts/causal_08_design.json</code>,
+                    produced by <code>nbs/causal/causal_08_designing_the_next_experiment.ipynb</code>.
+                    Previous: <a href="causal-07-many-experiments.html">07 · Many Experiments</a>.
+                    Next: <a href="causal-09-measurement-program.html">09 · The Measurement
+                    Program</a> — from one test to a program: EIG, EVOI, the EVPI ceiling, and
+                    evidence that decays while you're not looking. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank"
+                       rel="noopener">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // Causal-series Plotly helpers (palette shared across the series).
+        const CI = {
+            colors: {
+                tv: '#3b6fb6', search: '#d98c3f', social: '#5a9e6f',
+                display: '#b15a7a', video: '#6f5aa0', radio: '#3f8f8f',
+                print: '#8a6d3b', truth: '#1a1a1a', danger: '#c0504d',
+                good: '#4a8d57', amber: '#c9a45a', muted: '#8a949e',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2b2f36', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // ==================================================================
+        // What the default 12-week TV flighting would read vs what it could
+        // detect (causal_08_design.json)
+        // ==================================================================
+        function drawAnchor() {
+            const traces = [
+                {
+                    type: 'scatter', mode: 'markers',
+                    name: 'model-anchored expected readout',
+                    x: [0.39], y: ['expected readout<br>(model-anchored)'],
+                    error_x: { type: 'data', symmetric: false,
+                               array: [0.49 - 0.39], arrayminus: [0.39 - 0.25],
+                               color: CI.colors.tv, thickness: 2.5, width: 8 },
+                    marker: { size: 14, color: CI.colors.tv,
+                              line: { color: CI.colors.truth, width: 1 } },
+                    hovertemplate: 'median 0.39 · 90% HDI [0.25, 0.49]<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers',
+                    name: 'default design MDE (12 wk, ±50%)',
+                    x: [1.46], y: ['default design MDE<br>(12 wk, ±50%)'],
+                    marker: { size: 15, symbol: 'diamond', color: CI.band(CI.colors.danger, 0.75),
+                              line: { color: CI.colors.danger, width: 1.5 } },
+                    hovertemplate: 'MDE 1.46 ROAS — 3.7x the expected readout<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers',
+                    name: 'recommended design MDE (16 wk, ±21%)',
+                    x: [0.63], y: ['recommended MDE<br>(16 wk, ±21%)'],
+                    marker: { size: 15, symbol: 'diamond', color: CI.band(CI.colors.good, 0.75),
+                              line: { color: CI.colors.good, width: 1.5 } },
+                    hovertemplate: 'MDE 0.63 ROAS · power shortfall 0.02<extra></extra>'
+                }
+            ];
+
+            const layout = CI.layout({
+                xaxis: { title: 'incremental ROAS', range: [0, 1.65] },
+                yaxis: { automargin: true },
+                showlegend: false,
+                margin: { l: 10, r: 30, t: 30, b: 60 },
+                shapes: [{
+                    type: 'rect', x0: 0.25, x1: 0.49, y0: -0.5, y1: 2.5,
+                    fillcolor: CI.band(CI.colors.tv, 0.10), line: { width: 0 }, layer: 'below'
+                }],
+                annotations: [{
+                    x: 1.46, y: 1, yanchor: 'bottom', yshift: 14,
+                    text: 'detectable only here —<br>the likely readout is not',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }]
+            });
+
+            Plotly.newPlot('anchorChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // The design frontier — TV vs Print candidates, one axis
+        // (candidate grids from the notebook's seeded run)
+        // ==================================================================
+        function drawFrontier() {
+            const tv = [
+                { i: 13.21, d: 6,  mde: 1.032, ps: 0.400 },
+                { i: 18.92, d: 11, mde: 0.762, ps: 0.170 },
+                { i: 21.21, d: 16, mde: 0.632, ps: 0.018 }   // recommended
+            ];
+            const pr = [
+                { i: 9.09,  d: 6,  mde: 6.36, ps: 0.73 },
+                { i: 12.82, d: 11, mde: 4.70, ps: 0.71 },
+                { i: 14.29, d: 16, mde: 3.90, ps: 0.70 }
+            ];
+
+            const traces = [
+                {
+                    type: 'scatter', mode: 'markers+text', name: 'TV candidates',
+                    x: tv.map(function(r) { return r.d; }),
+                    y: tv.map(function(r) { return r.mde; }),
+                    text: tv.map(function(r) { return '±' + Math.round(r.i) + '%'; }),
+                    textposition: 'top center',
+                    marker: {
+                        size: [14, 14, 26],
+                        color: tv.map(function(r) { return r.ps < 0.1 ? CI.band(CI.colors.good, 0.8) : CI.band(CI.colors.danger, 0.6); }),
+                        line: { color: CI.colors.tv, width: 2 }
+                    },
+                    customdata: tv.map(function(r) { return [r.ps]; }),
+                    hovertemplate: 'TV ±%{text} × %{x} wk<br>MDE %{y:.2f} ROAS · power shortfall %{customdata[0]:.2f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers+text', name: 'Print candidates (all underpowered)',
+                    x: pr.map(function(r) { return r.d; }),
+                    y: pr.map(function(r) { return r.mde; }),
+                    text: pr.map(function(r) { return '±' + Math.round(r.i) + '%'; }),
+                    textposition: 'top center',
+                    marker: { size: 14, symbol: 'square',
+                              color: CI.band(CI.colors.danger, 0.5),
+                              line: { color: CI.colors.print, width: 2 } },
+                    customdata: pr.map(function(r) { return [r.ps]; }),
+                    hovertemplate: 'Print ±%{text} × %{x} wk<br>MDE %{y:.2f} ROAS · power shortfall %{customdata[0]:.2f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', name: 'default TV design (12 wk, ±50%)',
+                    x: [12], y: [1.46],
+                    marker: { size: 15, symbol: 'diamond',
+                              color: CI.band(CI.colors.danger, 0.75),
+                              line: { color: CI.colors.danger, width: 1.5 } },
+                    hovertemplate: 'default TV design: MDE 1.46 ROAS<extra></extra>'
+                }
+            ];
+
+            const layout = CI.layout({
+                xaxis: { title: 'duration (weeks)', range: [4.5, 17.5], dtick: 2 },
+                yaxis: { title: 'MDE (ROAS)', range: [0, 7.0] },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 70, r: 30, t: 45, b: 55 },
+                shapes: [{
+                    type: 'line', x0: 4.5, x1: 17.5, y0: 0.39, y1: 0.39,
+                    line: { color: CI.colors.truth, width: 1.5, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: 5.1, y: 0.39, yanchor: 'bottom', xanchor: 'left',
+                    text: 'expected readout (0.39)',
+                    showarrow: false, font: { size: 11, color: '#2b2f36' }
+                }, {
+                    x: 16, y: 0.632, yanchor: 'top', yshift: -12,
+                    text: 'the pick', showarrow: false,
+                    font: { size: 11, color: '#3f7a58' }
+                }, {
+                    x: 11.6, y: 5.6, xanchor: 'center',
+                    text: 'no national Print design<br>gets anywhere near the line',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }]
+            });
+
+            Plotly.newPlot('frontierChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // Curve identification — prior→posterior contraction, 12 vs 24 weeks
+        // (identify_structural_parameters, log scale)
+        // ==================================================================
+        function drawIdent() {
+            const params = ['effect β', 'saturation λ', 'adstock α'];
+            const c12 = [0.0007, 0.0008, 0.0002];
+            const c24 = [0.0064, 0.0077, 0.0012];
+            const p12 = [0.830, 0.678, 1.00];
+            const p24 = [0.833, 0.682, 1.00];
+
+            const traces = [
+                {
+                    type: 'bar', name: '12-week schedule (identifies_anything: False)',
+                    x: params, y: c12,
+                    marker: { color: CI.band(CI.colors.muted, 0.55),
+                              line: { color: CI.colors.muted, width: 1.5 } },
+                    customdata: p12.map(function(p) { return [p]; }),
+                    hovertemplate: '%{x} · 12 wk<br>contraction %{y:.4f} · detection power %{customdata[0]:.2f}<extra></extra>'
+                },
+                {
+                    type: 'bar', name: '24-week schedule (identifies_anything: True)',
+                    x: params, y: c24,
+                    marker: { color: CI.band(CI.colors.tv, 0.65),
+                              line: { color: CI.colors.tv, width: 1.5 } },
+                    customdata: p24.map(function(p) { return [p]; }),
+                    hovertemplate: '%{x} · 24 wk<br>contraction %{y:.4f} · detection power %{customdata[0]:.2f}<extra></extra>'
+                }
+            ];
+
+            const layout = CI.layout({
+                barmode: 'group',
+                yaxis: { title: 'expected prior→posterior contraction (log)',
+                         type: 'log', range: [-3.9, -1.7] },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 80, r: 20, t: 40, b: 55 },
+                annotations: [{
+                    x: 0.5, xref: 'paper', y: -1.85, yref: 'y',
+                    text: 'detection power is ~identical at both durations — contraction is what the extra 12 weeks buy',
+                    showarrow: false, font: { size: 11.5, color: '#5a6b5a' }
+                }]
+            });
+
+            Plotly.newPlot('identChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        function init() {
+            drawAnchor();
+            drawFrontier();
+            drawIdent();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

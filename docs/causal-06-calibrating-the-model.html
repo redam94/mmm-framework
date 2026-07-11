@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Inference 06: Calibrating the Model | MMM Framework</title>
+    <meta name="description" content="A 0.49 ± 0.08 lift readout meets a +43% confounded Search: the prior route leaves +42%, the in-graph likelihood lands +5% — and the wrong estimand silently voids the test (+38%).">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-06-calibrating-the-model.html">
+    <meta property="og:title" content="Causal Inference 06: Calibrating the Model | MMM Framework">
+    <meta property="og:description" content="A prior is a suggestion; a likelihood is a commitment. Two routes for folding one honest experiment into a confounded MMM — and the estimand slip that makes it vanish.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-06-calibrating-the-model.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Causal Inference in Practice series
+           (same kit as the Pressure Tests pages — tokens only).
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .discipline-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .discipline-card ol { margin: 0.5rem 0 0 1.1rem; }
+        .discipline-card li { margin: 0.5rem 0; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Causal Inference 06: Calibrating the Model | MMM Framework">
+    <meta name="twitter:description" content="A prior is a suggestion; a likelihood is a commitment. Two routes for folding one honest experiment into a confounded MMM — and the estimand slip that makes it vanish.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/causal-06-calibrating-the-model.html",
+          "name": "Causal Inference 06: Calibrating the Model | MMM Framework",
+          "description": "A 0.49 ± 0.08 lift readout meets a +43% confounded Search: the prior route leaves +42%, the in-graph likelihood lands +5% — and the wrong estimand silently voids the test (+38%).",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/causal-06-calibrating-the-model.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/causal-06-calibrating-the-model.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Causal Inference 06: Calibrating the Model",
+          "datePublished": "2026-06-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/causal-06-calibrating-the-model.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/causal-06-calibrating-the-model.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Demos & Reports",
+              "item": "https://redam94.github.io/mmm-framework/demos.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Causal Inference 06: Calibrating the Model",
+              "item": "https://redam94.github.io/mmm-framework/causal-06-calibrating-the-model.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">The merge</a></li>
+                <li><a href="#patient">The confounded patient</a></li>
+                <li><a href="#readout">What the experiment measured</a></li>
+                <li><a href="#route-a">Route A · the prior</a></li>
+                <li><a href="#route-b">Route B · the likelihood</a></li>
+                <li><a href="#wrong-estimand">The quietest failure</a></li>
+                <li><a href="#discipline">Calibration discipline</a></li>
+                <li><a href="#quiz">Check your understanding</a></li>
+                <li><a href="#run-it">Run it yourself</a></li>
+            </ul>
+
+            <h3>Causal Inference in Practice</h3>
+            <ul class="sidebar-nav">
+                <li><a href="causal-04-latent-confounders.html">04 · Latent Confounders</a></li>
+                <li><a href="causal-05-measuring-one-experiment.html">05 · Measuring One Experiment</a></li>
+                <li><a href="causal-06-calibrating-the-model.html" class="active">06 · Calibrating the Model</a></li>
+                <li><a href="causal-07-many-experiments.html">07 · Many Experiments</a></li>
+                <li><a href="causal-08-designing-next-experiment.html">08 · Designing the Next Experiment</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Causal Inference 06: Calibrating the Model</h1>
+            <p class="lead">
+                One honest experiment meets a confidently confounded posterior. The Search lift test
+                <a href="causal-05-measuring-one-experiment.html">designed in notebook&nbsp;05</a> has
+                run: an 8-week go-dark, read with the pre-registered calibrated estimator. The readout
+                lands on the desk of the analyst who owns Veranda Home's national MMM — the model that
+                over-credits Search by <strong>+43%</strong> and <em>cannot know it</em>. This page
+                mirrors <code>nbs/causal/causal_06_calibrating_the_model.ipynb</code>: two mechanically
+                different routes for folding the experiment into the Bayesian MMM — and they are
+                <strong>not</strong> equivalent. A prior <em>suggests</em>; a likelihood
+                <em>commits</em>. Then the quietest failure in applied calibration: the same number
+                filed under the wrong estimand, and a six-figure experiment evaporating without a
+                single warning.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">+42%</div>
+                    <div class="stat-label">Search error after Route A (informative prior) — the confounded likelihood steamrolls a prior that said "cut it in half"</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">+5%</div>
+                    <div class="stat-label">Search error after Route B (in-graph likelihood) — truth back inside the 90% interval</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+38%</div>
+                    <div class="stat-label">Search error when the same readout is filed as MARGINAL ROAS — the test silently voided</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+40%</div>
+                    <div class="stat-label">Social (untested) error after calibration — surgery repairs only what was measured</div>
+                </div>
+            </div>
+
+            <h2 id="patient">1 — The patient: a confidently confounded model</h2>
+            <p>
+                The baseline is the series' rung-1 fit on the <code>unobserved_confounding</code>
+                history (156 weeks, national grain): a latent demand wave drives both Search spend and
+                sales, so the model routes demand's credit to the channel that chases it. Graded
+                against the sealed key: <strong>Search +43% over-credited, truth outside the 90%
+                interval</strong> — with every sampler diagnostic green. Social, the other
+                demand-chaser, sits at +38%. TV (−18%) and Display (−27%) carry the compensating
+                under-credit, but their intervals at least cover.
+            </p>
+
+            <h2 id="readout">2 — The readout, and what an experiment actually measures</h2>
+            <p>
+                The go-dark window: <strong>weeks 100–111</strong>, Search off in the treated markets.
+                The readout — generated in the notebook from the world's sealed truth plus sampling
+                noise at the design's SE, a well-run experiment rather than an oracle — is
+                <strong>window incremental ROAS 0.49 ± 0.08</strong> (the world's true window ROAS:
+                0.56, within one SE). Note the <strong>carryover tail</strong>: the lost effect
+                extends past the window's end, because the window's spend was still working the next
+                month. A competent readout — and the model's in-graph estimand — accounts for it.
+            </p>
+
+            <h2 id="route-a">3 — Route A: the experiment as a prior</h2>
+            <p>
+                <code>ExperimentCalibrator</code> reduces the lift to the coefficient scale using the
+                fitted model's own response shape (the <em>design factor</em>), derives a tight prior,
+                and refits. The derivation does its job perfectly: from the readout it computes a
+                coefficient target of <strong>β = 1.15 ± 0.19</strong>, against a confounded fitted
+                mean of <strong>β ≈ 2.20</strong> — "cut Search roughly in half."
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.calibration import ExperimentCalibrator
+from mmm_framework.validation.results import LiftTestResult
+
+lift = LiftTestResult(
+    channel="Search", test_period=(dark_start, dark_end),
+    measured_lift=readout_roas * window_spend,   # KPI units
+    lift_se=readout_se * window_spend,
+)
+cal = ExperimentCalibrator(model)          # the fitted, confounded MMM
+report = cal.derive_priors([lift])         # -> beta target 1.15 +/- 0.19
+out = cal.calibrate([lift], refit=True)    # refit with the derived prior</code></pre>
+            </div>
+
+            <p>
+                And then the data does what data does. After the refit, Search sits at
+                <strong>+42%</strong> — the posterior barely moved. A prior worth one experiment's
+                information faces 156 weeks of confounded likelihood, and the likelihood wins.
+                <strong>A prior is a suggestion.</strong>
+            </p>
+
+            <div class="note">
+                <h4>📎 Route A is not broken — it has a different job</h4>
+                <p>
+                    Prior-route calibration is built for a portable library of lift-test evidence
+                    that composes across model versions and vintages by inverse-variance. As a
+                    <em>correction device against confounded in-sample data</em>, though, what you
+                    need is a likelihood.
+                </p>
+            </div>
+
+            <h2 id="route-b">4 — Route B: the experiment as data</h2>
+            <p>
+                <code>add_experiment_calibration</code> attaches the readout to the graph as an
+                <strong>observation</strong> of the model-implied window ROAS:
+            </p>
+            <p>
+                \[ \text{ROAS}_{\text{readout}} \;\sim\;
+                \mathcal{N}\!\bigl(\text{ROAS}_{\text{window}}(\theta),\; \text{SE}^2\bigr) \]
+            </p>
+            <p>
+                Now agreement with the experiment is part of what "fitting the data" <em>means</em> —
+                the sampler must find parameters that explain the history <strong>and</strong> the
+                test, jointly re-negotiating the coefficient, the saturation curve, and the carryover.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.calibration import ExperimentEstimand, ExperimentMeasurement
+
+readout = ExperimentMeasurement(
+    channel="Search", test_period=(dark_start, dark_end),
+    value=0.49, se=0.08,                 # the calibrated readout from nb05
+    estimand=ExperimentEstimand.ROAS,    # a go-dark measures AVERAGE window ROAS
+    distribution="normal", name="search_dark",
+)
+model.add_experiment_calibration([readout])   # the readout becomes an observation
+results = model.fit(draws=1000, tune=1000)    # jointly re-negotiates the posterior</code></pre>
+            </div>
+
+            <div class="chart-container" id="routesChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — <code>nbs/artifacts/causal_06_calibration.json</code>.
+                Search relative error vs the sealed truth: baseline <strong>+43%</strong>, Route A
+                (prior) <strong>+42%</strong>, Route B (likelihood) <strong>+5%</strong> — with the
+                90% interval covering truth again. The wrong-estimand filing (section 5) sits at
+                <strong>+38%</strong>. One experiment, two routes: only the likelihood commits.
+            </p>
+
+            <div class="chart-container" id="surgicalChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — calibration is <strong>surgical</strong>. Search (tested)
+                goes +43% → +5%; Social — the other demand-chaser, untested — keeps its confounding
+                bias almost untouched, +38% → +40%. An experiment repairs what it measured, not what
+                you wish it had measured. That is why
+                <a href="causal-07-many-experiments.html">notebook&nbsp;07</a> builds a
+                <em>portfolio</em>.
+            </p>
+
+            <h2 id="wrong-estimand">5 — The quietest failure: the wrong estimand</h2>
+            <p>
+                Rung 2 drew the line between <strong>average</strong> ROAS (what a go-dark measures)
+                and <strong>marginal</strong> ROAS (what the next dollar buys). Here is what happens
+                when the analyst files this readout under the wrong one — same number 0.49, same SE
+                0.08, declared as <em>marginal</em> at +10% spend
+                (<code>estimand=ExperimentEstimand.MROAS, spend_lift_pct=10.0</code>): Search lands at
+                <strong>+38%</strong>, essentially as biased as the never-calibrated baseline.
+            </p>
+            <p>
+                Why so <em>quiet</em>? Saturation puts the marginal below the average — the confounded
+                model's marginal ROAS near current spend already sits close to the misfiled number, so
+                the likelihood term is satisfied <strong>without moving anything</strong>. The
+                constraint lands non-binding. No error, no warning, no correction: the test is simply
+                spent. Estimand bookkeeping isn't pedantry — it's the difference between an experiment
+                that repairs the model and one that vanishes into it.
+            </p>
+
+            <h2 id="discipline">6 — Calibration discipline, in five lines</h2>
+            <div class="discipline-card">
+                <ol>
+                    <li><strong>Match the estimand.</strong> A go-dark window measures <em>average
+                        window ROAS</em>; a small flighting delta measures <em>marginal</em>. File it
+                        where it happened.</li>
+                    <li><strong>Prefer the likelihood route</strong> when the goal is correcting
+                        <em>this</em> model against <em>this</em> (possibly confounded) history; use
+                        prior-route calibration for portable evidence libraries.</li>
+                    <li><strong>Carry the SE honestly.</strong> The likelihood weighs the experiment
+                        by its precision; understating the SE overrules 156 weeks of data with 8, and
+                        overstating it buys nothing.</li>
+                    <li><strong>Expect surgery, not absolution.</strong> Untested channels keep their
+                        biases — which is why the next notebook builds a portfolio.</li>
+                    <li><strong>Re-check afterwards.</strong> A calibrated fit is a new model; the
+                        refutation battery and learning diagnostics still apply.</li>
+                </ol>
+            </div>
+
+            <div class="check-understanding" id="quiz">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>The derived prior said "β = 1.15 ± 0.19" against a fitted β ≈ 2.20 — a precise, well-targeted correction. Why did the posterior barely move?</summary>
+                    <div class="quiz-answer">
+                        <p>Because a prior competes with the likelihood on information content, and it
+                        was outgunned: one experiment's worth of information against 156 weeks of
+                        history whose confounded correlations all say "Search drives sales." The
+                        posterior is the compromise, and the compromise lands almost exactly where the
+                        data was — Search error moved from +43% to +42%. Route B avoids the contest by
+                        changing what the likelihood <em>is</em>: the readout becomes one more
+                        observation the parameters must explain, and Search lands at +5% with the
+                        interval covering.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Why does filing the readout as marginal ROAS produce no warning — no divergence, no worse fit, nothing?</summary>
+                    <div class="quiz-answer">
+                        <p>Because the misfiled constraint is <em>satisfiable for free</em>. Under a
+                        saturating response curve the marginal ROAS is mechanically below the average
+                        ROAS, and the confounded model's marginal near current spend already sits
+                        close to 0.49. So the extra likelihood term is happy exactly where the
+                        posterior already was — non-binding, zero information transferred. The fit
+                        quality is unchanged, the diagnostics are green, and the only casualty is the
+                        experiment's budget. The failure is bookkeeping, so only bookkeeping can catch
+                        it.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>After Route B lands Search at +5%, what does the model believe about Social — and what should the measurement program conclude?</summary>
+                    <div class="quiz-answer">
+                        <p>Social stays at roughly +40% over-credited (measured: +38% → +40%). The
+                        calibration was surgical: the go-dark identified Search's window response and
+                        re-negotiated Search's parameters; it said nothing about the other channel the
+                        latent demand wave inflates. The program conclusion is the portfolio logic of
+                        notebook 07 — each confounded channel needs its own evidence, and the next
+                        test should be chosen by what it would resolve, which is notebook 08's
+                        job.</p>
+                    </div>
+                </details>
+            </div>
+
+            <div class="note" id="run-it">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/causal/causal_06_calibrating_the_model.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/causal/causal_06_calibrating_the_model.ipynb</code></a>
+                    — notebook 6 of 11 in the <em>Causal Inference in Practice</em> series (brand:
+                    Veranda Home; synthetic worlds with sealed answer keys; every claim graded by an
+                    assert). All numbers from <code>nbs/artifacts/causal_06_calibration.json</code>,
+                    produced by <code>nbs/causal/causal_06_calibrating_the_model.ipynb</code>.
+                    Previous: <a href="causal-05-measuring-one-experiment.html">05 · Measuring One
+                    Experiment</a>. Next:
+                    <a href="causal-07-many-experiments.html">07 · Many Experiments</a> — evidence as
+                    a portfolio: off-panel tests, conflicting legacy studies, and the collinear ridge
+                    snapped by a single well-placed readout. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank"
+                       rel="noopener">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // Causal-series Plotly helpers (palette shared across the series).
+        const CI = {
+            colors: {
+                tv: '#3b6fb6', search: '#d98c3f', social: '#5a9e6f',
+                display: '#b15a7a', radio: '#3f8f8f', print: '#8a6d3b',
+                truth: '#1a1a1a', danger: '#c0504d', good: '#4a8d57',
+                muted: '#8a949e', grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2b2f36', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // ==================================================================
+        // One readout, four filings — Search relative error vs sealed truth
+        // (causal_06_calibration.json)
+        // ==================================================================
+        function drawRoutes() {
+            const labels = ['baseline<br>(no experiment)', 'Route A<br>prior', 'Route B<br>likelihood', 'wrong estimand<br>(as marginal)'];
+            const errs   = [0.4264, 0.4170, 0.0514, 0.3799];
+            const cols   = [CI.colors.muted, CI.colors.search, CI.colors.good, CI.colors.danger];
+
+            const traces = [{
+                type: 'bar',
+                x: labels, y: errs,
+                marker: { color: cols.map(function(c) { return CI.band(c, 0.6); }),
+                          line: { color: cols, width: 1.5 } },
+                text: errs.map(function(e) { return (e >= 0 ? '+' : '') + Math.round(e * 100) + '%'; }),
+                textposition: 'outside',
+                hovertemplate: '%{x}<br>Search error vs truth: %{y:+.0%}<extra></extra>',
+                showlegend: false
+            }];
+
+            const layout = CI.layout({
+                yaxis: { title: 'Search relative error vs sealed truth', tickformat: '+.0%',
+                         range: [0, 0.52] },
+                margin: { l: 80, r: 20, t: 30, b: 70 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 3.5, y0: 0, y1: 0,
+                    line: { color: CI.colors.truth, width: 1.5 }
+                }],
+                annotations: [{
+                    x: 2, y: 0.0514, yanchor: 'bottom', yshift: 26,
+                    text: 'truth back inside<br>the 90% interval',
+                    showarrow: false, font: { size: 11, color: '#3f7a58' }
+                }]
+            });
+
+            Plotly.newPlot('routesChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // Surgical calibration — tested vs untested channel, before/after B
+        // ==================================================================
+        function drawSurgical() {
+            const chans  = ['Search (tested)', 'Social (untested)'];
+            const before = [0.4264, 0.3798];
+            const after  = [0.0514, 0.3978];
+
+            const traces = [
+                {
+                    type: 'bar', name: 'before calibration',
+                    x: chans, y: before,
+                    marker: { color: CI.band(CI.colors.muted, 0.55),
+                              line: { color: CI.colors.muted, width: 1.5 } },
+                    hovertemplate: '%{x}<br>before: %{y:+.0%}<extra></extra>'
+                },
+                {
+                    type: 'bar', name: 'after Route B (likelihood)',
+                    x: chans, y: after,
+                    marker: { color: [CI.band(CI.colors.good, 0.65), CI.band(CI.colors.danger, 0.55)],
+                              line: { color: [CI.colors.good, CI.colors.danger], width: 1.5 } },
+                    hovertemplate: '%{x}<br>after: %{y:+.0%}<extra></extra>'
+                }
+            ];
+
+            const layout = CI.layout({
+                barmode: 'group',
+                yaxis: { title: 'relative error vs sealed truth', tickformat: '+.0%',
+                         range: [0, 0.5] },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 80, r: 20, t: 40, b: 55 },
+                annotations: [{
+                    x: 0.22, y: 0.0514, yanchor: 'bottom', yshift: 4,
+                    text: '+43% → +5%', showarrow: false,
+                    font: { size: 11, color: '#3f7a58' }
+                }, {
+                    x: 1.22, y: 0.3978, yanchor: 'bottom', yshift: 4,
+                    text: '+38% → +40%<br>untouched', showarrow: false,
+                    font: { size: 11, color: '#a44c43' }
+                }]
+            });
+
+            Plotly.newPlot('surgicalChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        function init() {
+            drawRoutes();
+            drawSurgical();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

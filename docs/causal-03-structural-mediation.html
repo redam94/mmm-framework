@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Inference 03: Structural Mediation | MMM Framework</title>
+    <meta name="description" content="Model the funnel instead of conditioning on it: a structural MMM recovers all 5 mechanism parameters, three latent series (demand corr 0.95), and each channel's mediated share — graded against a sealed answer key.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-03-structural-mediation.html">
+    <meta property="og:title" content="Causal Inference 03: Structural Mediation | MMM Framework">
+    <meta property="og:description" content="TV → awareness → consideration → sales, learned jointly from binomial and Likert surveys: all five structural parameters recovered inside their 90% intervals, and a latent demand series recovered with no survey at all.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-03-structural-mediation.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Causal Inference in Practice
+           series (mirrors the Pressure Tests series conventions).
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout.good .stat-value { color: var(--color-success); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Causal Inference 03: Structural Mediation | MMM Framework">
+    <meta name="twitter:description" content="TV → awareness → consideration → sales, learned jointly from binomial and Likert surveys: all five structural parameters recovered inside their 90% intervals, and a latent demand series recovered with no survey at all.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/causal-03-structural-mediation.html",
+          "name": "Causal Inference 03: Structural Mediation | MMM Framework",
+          "description": "Model the funnel instead of conditioning on it: a structural MMM recovers all 5 mechanism parameters, three latent series (demand corr 0.95), and each channel's mediated share — graded against a sealed answer key.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/causal-03-structural-mediation.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/causal-03-structural-mediation.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Causal Inference 03: Structural Mediation",
+          "datePublished": "2026-06-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/causal-03-structural-mediation.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/causal-03-structural-mediation.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Demos & Reports",
+              "item": "https://redam94.github.io/mmm-framework/demos.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Causal Inference 03: Structural Mediation",
+              "item": "https://redam94.github.io/mmm-framework/causal-03-structural-mediation.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">The CMO's question</a></li>
+                <li><a href="#world">1 · The world &amp; its surveys</a></li>
+                <li><a href="#flat">2 · The flat MMM first</a></li>
+                <li><a href="#structure">3 · Positing the structure</a></li>
+                <li><a href="#fit">4 · The joint fit, graded</a></li>
+                <li><a href="#latents">5 · Three unobserved series</a></li>
+                <li><a href="#mediation">6 · The mediation split</a></li>
+                <li><a href="#tradeoff">7 · What structure bought</a></li>
+                <li><a href="#quiz">Check your understanding</a></li>
+                <li><a href="#run-it">Run it yourself</a></li>
+            </ul>
+
+            <h3>The Causal Series</h3>
+            <ul class="sidebar-nav">
+                <li><a href="causal-02-mmm-as-causal-model.html">02 · The MMM as a Causal Model</a></li>
+                <li><a href="causal-03-structural-mediation.html" class="active">03 · Structural Mediation</a></li>
+                <li><a href="causal-04-latent-confounders.html">04 · Latent Confounders</a></li>
+                <li><a href="causal-05-measuring-one-experiment.html">05 · Measuring One Experiment</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Causal Inference 03: Structural Mediation</h1>
+            <p class="lead">
+                Veranda Home's CMO believes something no flat MMM can even <em>express</em>: TV doesn't
+                sell patio sets this week — it builds <strong>awareness</strong>, awareness feeds
+                <strong>consideration</strong>, and consideration converts to sales over months.
+                <a href="causal-02-mmm-as-causal-model.html">Notebook 02</a> ended with a warning:
+                conditioning on a funnel variable <em>amputates</em> the effect flowing through it.
+                The fix is not to ignore the funnel — it's to <strong>model it</strong>. This guide
+                mirrors <code>nbs/causal/causal_03_structural_mediation.ipynb</code>: the brand-funnel
+                world is posited as a structural causal model and fit jointly against binomial and
+                Likert survey data with <code>StructuralNestedMMM</code> — then every structural claim
+                is graded against the world's sealed answer key.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout good">
+                    <div class="stat-value">5 / 5</div>
+                    <div class="stat-label">structural parameters recovered inside their 90% posterior intervals</div>
+                </div>
+                <div class="stat-callout good">
+                    <div class="stat-value">0.95</div>
+                    <div class="stat-label">correlation with the true latent demand series — a state with <em>no survey at all</em></div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">4.4 wk</div>
+                    <div class="stat-label">estimated brand-stock half-life (sealed truth: ρ = 0.85 ⇒ 4.3 weeks)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">≈ 0.00</div>
+                    <div class="stat-label">Search's estimated mediated share — the sealed key says exactly 0</div>
+                </div>
+            </div>
+
+            <div class="note">
+                <h4>🧭 Before you start</h4>
+                <p>
+                    <strong>Prerequisites:</strong> <a href="causal-02-mmm-as-causal-model.html">Causal 02</a>
+                    (the MMM as a causal model, and the bad-control trap this page resolves).
+                    &nbsp;·&nbsp; <strong>Time:</strong> ~25–35 min.
+                </p>
+                <p><strong>You will learn:</strong></p>
+                <ul>
+                    <li>Why the answer to "awareness is a bad control" is a <em>state equation</em>, not a column — modeling the mediator keeps the causal path intact and lets survey data discipline it.</li>
+                    <li>How one PyMC graph joins media, an AR(1) awareness state observed through a varying-<em>n</em> binomial tracker, a Likert-measured consideration index, a latent demand confounder, and sales — so survey information flows <em>backwards</em> into the media coefficients.</li>
+                    <li>What structure buys (mechanism parameters, flighting cadence, funnel-stage attribution) and what it honestly does not (tighter totals).</li>
+                </ul>
+                <p>
+                    <strong>Run it:</strong>
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/causal/causal_03_structural_mediation.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/causal/causal_03_structural_mediation.ipynb</code></a> on GitHub.
+                </p>
+            </div>
+
+            <h2 id="world">1 — The world: spend, sales, and two surveys</h2>
+            <p>
+                The brand-funnel world (<code>make_brand_funnel</code> in
+                <code>src/mmm_framework/synth/dgp.py</code>) ships the standard dashboard — 156 weeks,
+                four channels, sales, price — <em>plus</em> the two survey tracks a real brand team
+                would run. The structure the sealed key encodes:
+            </p>
+            <ul>
+                <li><strong>TV → awareness.</strong> An AR(1) latent state on the logit scale
+                    (persistence ρ = 0.85 — brand stock decays slowly), observed through a weekly
+                    binary tracker: <code>aware_count</code> out of <em>n</em> respondents. The
+                    tracker is realistically imperfect: only <strong>115 of 156 weeks observed</strong>
+                    (~26% missing) with weekly sample sizes swinging from <strong>152 to 599</strong>.
+                    A binomial measurement model turns that varying <em>n</em> into varying
+                    <em>precision</em> instead of pretending every week is equally trustworthy.</li>
+                <li><strong>Display + Social + awareness + price + demand → consideration.</strong>
+                    A latent index observed through a 5-point <strong>Likert</strong> survey
+                    (ordered category counts, 122 of 156 weeks).</li>
+                <li><strong>Consideration + Search (+ demand, price) → sales.</strong> Search is a
+                    pure direct-response channel; TV, Display and Social are <em>fully</em> mediated —
+                    the sealed mediated share is 1.0 for the brand channels and exactly 0.0 for Search.</li>
+                <li><strong>A latent demand trend</strong> confounds consideration and sales — and has
+                    no survey of its own.</li>
+            </ul>
+            <p>
+                The awareness state equation, in the model's own terms:
+                \( z_t = \mu + \rho\,(z_{t-1} - \mu) + \beta_{\mathrm{TV}}\, f(s_t) + \varepsilon_t \),
+                with the tracker observing \( \mathrm{count}_t \sim \mathrm{Binomial}(n_t,\,
+                \sigma(z_t)) \). Persistence ρ is the parameter a media planner actually wants:
+                the implied brand-stock half-life is \( t_{1/2} = \ln 0.5 / \ln \rho \).
+            </p>
+
+            <h2 id="flat">2 — The wrong model first: a flat MMM</h2>
+            <p>
+                Hand this world to the standard four-channel MMM (surveys ignored — a flat model has
+                nowhere to put them). Two honest observations, both measured in the notebook run:
+            </p>
+            <ol>
+                <li><strong>The flat model's totals are not crazy.</strong> Mediation by itself
+                    doesn't bias a total-effect estimate — the effect still flows from spend to
+                    sales. Graded against the sealed key, the flat contribution errors are
+                    TV +27%, Display −25%, Social +39%, Search −0%, and <strong>all four truths land
+                    inside their 90% intervals</strong>. (The latent demand confounder does the
+                    damage here, mildly.)</li>
+                <li><strong>The flat model has no opinion about anything the CMO actually asked.</strong>
+                    How long does brand stock last? Which funnel stage does each channel move? What
+                    is a survey point worth? Those aren't parameters it has.</li>
+            </ol>
+
+            <h2 id="structure">3 — Positing the structure</h2>
+            <p>
+                Now say what we believe, as a graph. <code>StructuralNestedMMM</code> takes the funnel
+                as configuration: each mediator declares its drivers (channels, parent mediators,
+                controls, latent factors), its state dynamics, and its <strong>measurement</strong> —
+                binomial for the awareness tracker, cumulative-logit ordered for the Likert. The
+                latent demand factor is declared with no measurement of its own: it is identified
+                purely by the co-movement it induces between consideration and sales.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.mmm_extensions import (
+    StructuralNestedConfig,
+    binary_survey_mediator,
+    likert_mediator,
+    latent_demand_factor,
+)
+
+cfg = StructuralNestedConfig(
+    mediators=(
+        binary_survey_mediator(
+            "awareness", ["TV"], persistence="high", affects_outcome=False
+        ),
+        likert_mediator(
+            "consideration",
+            ["Display", "Social"],
+            parents=["awareness"],
+            controls=["Price"],
+            latent_factors=["demand"],
+            n_categories=5,
+        ),
+    ),
+    latent_factors=(latent_demand_factor("demand"),),
+)</code></pre>
+            </div>
+
+            <p>
+                Everything — media effects, funnel edges, survey measurement, latent demand, sales —
+                becomes <em>one</em> PyMC graph, so survey information flows backwards to discipline
+                the media coefficients, and uncertainty flows forward from the surveys into every
+                causal claim:
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.mmm_extensions import StructuralNestedMMM
+from mmm_framework.synth.dgp import make_brand_funnel
+
+world = make_brand_funnel()               # sealed answer key in world.notes
+funnel = StructuralNestedMMM(
+    world.spend.to_numpy(float), world.y.to_numpy(float),
+    world.channels, cfg,
+    mediator_data={"awareness": world.notes["awareness_counts"],
+                   "consideration": world.notes["consideration_counts"]},
+    mediator_trials={"awareness": world.notes["awareness_trials"]},
+    X_controls=world.controls.to_numpy(float), control_names=["Price"],
+    index=world.weeks,
+)
+funnel.fit(draws=500, tune=1000, chains=4, nuts_sampler="numpyro")
+
+mediation = funnel.get_mediation_effects()   # exact posterior counterfactuals
+pathways = funnel.get_pathway_effects()      # per-path decomposition
+roas = funnel.get_channel_roas()</code></pre>
+            </div>
+
+            <h2 id="fit">4 — The joint fit, graded parameter by parameter</h2>
+            <p>
+                This is the one genuinely expensive fit of the series: full NUTS, 4 chains × 500
+                draws after 1,000 tuning steps — <strong>741 seconds (~12 minutes)</strong> in the
+                notebook run, max r-hat <strong>1.067</strong>, under the 1.1 bar the framework's own
+                recovery test pins. (Approximate methods like MAP are documented-unstable for
+                latent-state models; the series never uses them here.) Here is what a flat MMM could
+                never produce — the mechanism itself, graded against the sealed key:
+            </p>
+
+            <div class="chart-container" id="recoveryForest"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — posterior mean and 90% interval per structural parameter
+                vs the sealed true value (near-black tick). ρ = 0.854 vs 0.85 true; TV→awareness
+                1.00 vs 0.9; awareness→consideration 1.99 vs 2.5; price→consideration −0.98 vs −0.8;
+                demand→consideration 0.59 vs 0.6. <strong>All five truths inside their 90%
+                intervals.</strong> Numbers: <code>nbs/artifacts/causal_03_mediation_recovery.json</code>.
+            </p>
+
+            <p>
+                The persistence posterior is the headline for the media plan: ρ = 0.854 implies a
+                brand-stock half-life of <strong>≈ 4.4 weeks</strong> (sealed truth: ρ = 0.85 ⇒ 4.3
+                weeks). That single number — how fast the awareness a TV flight builds decays to
+                half — is a flighting-cadence decision no flat MMM could have produced, recovered
+                here from a noisy, gappy survey.
+            </p>
+
+            <h2 id="latents">5 — Three unobserved series, recovered through their footprints</h2>
+            <p>
+                The model also had to infer three <em>time series</em> it never observed directly:
+                the true awareness probability (through the binomial tracker — corr with truth
+                <strong>0.985</strong>), the latent consideration level (through the Likert counts —
+                corr <strong>0.995</strong>), and — hardest — the <strong>latent demand factor</strong>,
+                which has no survey at all and is identified only by the co-movement it induces
+                between consideration and sales (|corr| <strong>0.951</strong>):
+            </p>
+
+            <div class="chart-container" id="demandChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the recovered latent demand series (posterior mean, 90%
+                band) against the true series from the sealed key, aligned for display (a latent
+                with no measurement is identified up to sign/scale). Correlation with truth:
+                <strong>0.951</strong>. The awareness and consideration states recover even more
+                tightly (0.985, 0.995); the notebook plots all three.
+            </p>
+
+            <h2 id="mediation">6 — The mediation decomposition</h2>
+            <p>
+                The headline for the CMO: <strong>how much of each channel's effect flows through the
+                funnel?</strong> These are exact posterior counterfactuals — the model re-runs its own
+                world with each channel off, holding the inferred shocks fixed — not back-of-envelope
+                path products.
+            </p>
+
+            <div class="chart-container" id="mediationChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — direct vs through-the-funnel contribution per channel
+                (KPI units, notebook run). Estimated proportion mediated: TV 1.26, Display 0.69,
+                Social 0.78, Search −0.00 — against sealed truths of 1.0, 1.0, 1.0, 0.0. TV's
+                <em>direct</em> effect is −78.7k ± 57.5k: indistinguishable from zero, so its
+                mediated-share posterior brackets 1.0. Search shows exactly no funnel path.
+            </p>
+
+            <p>
+                The funnel story survives grading: the brand channels flow through the funnel;
+                Search doesn't. This is also the design-review guard the framework itself tests —
+                mediated totals must be genuinely nonzero for brand channels (an in-graph centering
+                bug would make them identically zero), and Search's mediated share must sit at ~0.
+            </p>
+
+            <h2 id="tradeoff">7 — What the structure bought (and what it didn't)</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>question</th>
+                        <th>flat MMM</th>
+                        <th>structural model</th>
+                        <th>sealed truth</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>total effects</td>
+                        <td>respectable (all 4 covered)</td>
+                        <td>comparable, wider (honest)</td>
+                        <td>✓ graded above</td>
+                    </tr>
+                    <tr>
+                        <td>how long does brand stock last?</td>
+                        <td><em>(no such parameter)</em></td>
+                        <td>ρ = 0.854 ⇒ ~4.4-week half-life</td>
+                        <td>ρ = 0.85 ⇒ 4.3 wks</td>
+                    </tr>
+                    <tr>
+                        <td>which stage does each channel move?</td>
+                        <td><em>(no such parameter)</em></td>
+                        <td>TV→awareness; Display/Social→consideration</td>
+                        <td>✓</td>
+                    </tr>
+                    <tr>
+                        <td>mediated share</td>
+                        <td><em>(no such parameter)</em></td>
+                        <td>≈ 1.0 brand channels, ~0.00 Search</td>
+                        <td>1.0 / 0.0</td>
+                    </tr>
+                    <tr>
+                        <td>what is a survey point worth?</td>
+                        <td>ignored</td>
+                        <td>week-precision weighted, backwards-flowing</td>
+                        <td>—</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="definition">
+                <h4>📌 The honest framing</h4>
+                <p>
+                    The structural model is <strong>not</strong> a magic accuracy upgrade on totals —
+                    its total-effect intervals are <em>wider</em> than the flat model's, because it is
+                    honest about survey noise and latent-state uncertainty. What it buys is the
+                    <strong>mechanism</strong>: the parameters the CMO's actual decisions (flighting
+                    cadence, funnel-stage investment, survey program budget) depend on. And it
+                    resolves rung 2's trap cleanly: instead of <em>conditioning on</em> awareness (a
+                    bad control that amputates the mediated path), it <em>models</em> awareness — the
+                    path stays intact, and the surveys make it measurable. If you only need totals,
+                    <a href="causal-02-mmm-as-causal-model.html">rung 2</a> was enough. If your
+                    decisions mention the funnel, only structure answers the question you're asking.
+                </p>
+            </div>
+
+            <div class="check-understanding" id="quiz">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>Notebook 02 called conditioning on awareness a "bad control." Why is <em>modeling</em> awareness different?</summary>
+                    <div class="quiz-answer">
+                        <p>Conditioning on a mediator blocks the very path you are trying to measure — a regression that holds awareness fixed attributes none of TV's effect to TV. Modeling awareness as a latent state equation keeps the TV→awareness→consideration→sales path <em>intact</em> inside the graph; the surveys then discipline the state rather than amputating the path. The mediation numbers come from counterfactuals run <em>through</em> the funnel, not from a coefficient that pretends the funnel is frozen.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>The structural model's total-effect intervals came out <em>wider</em> than the flat MMM's. Is that a defect?</summary>
+                    <div class="quiz-answer">
+                        <p>No — it's the point. The flat model's narrower intervals are borrowed confidence: it silently ignores survey noise and latent-state uncertainty, sources of doubt that genuinely exist. The structural model carries them in the same posterior as the media effects. Both models' totals graded acceptably against the sealed key here; only one of them prices in what it doesn't know — and only one has mechanism parameters at all.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>The latent demand factor has no survey. What identifies it — and how well did that work?</summary>
+                    <div class="quiz-answer">
+                        <p>Its footprints: demand is declared as a smooth AR(1) factor loading on both consideration (which has a Likert survey) and sales. The co-movement between those two series that media, price and awareness cannot explain is attributed to the factor, with a sign anchor pinning its orientation. Measured recovery: |corr| = 0.951 with the true demand series, and the demand→consideration loading posterior (0.59, 90% CI [0.54, 0.66]) covers the sealed 0.6.</p>
+                    </div>
+                </details>
+            </div>
+
+            <div class="note" id="run-it">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This guide mirrors
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/causal/causal_03_structural_mediation.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/causal/causal_03_structural_mediation.ipynb</code></a>
+                    (Notebook 3 of the Causal Inference in Practice series), backed by the
+                    brand-funnel world in <code>src/mmm_framework/synth/dgp.py</code>. Every
+                    computational cell ends in a seeded assert encoding the claim it demonstrates —
+                    if the notebook executes clean, this page is still true. All numbers from
+                    <code>nbs/artifacts/causal_03_mediation_recovery.json</code>, produced by
+                    <code>nbs/causal/causal_03_structural_mediation.ipynb</code>.
+                    Next in the series: <a href="causal-04-latent-confounders.html">Causal 04 —
+                    Latent Confounders</a>, the other structural move: when the confounder itself is
+                    invisible but leaves fingerprints on things you <em>can</em> measure.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // CI: shared Plotly helpers for the Causal Inference series
+        // (chart conventions copied from the Pressure Tests series).
+        // ------------------------------------------------------------------
+        const CI = {
+            colors: {
+                tv: '#3b6fb6', search: '#d98c3f', social: '#5a9e6f', display: '#b15a7a',
+                awareness: '#c95d90', consideration: '#7a6fb0', demand: '#708090',
+                truth: '#1a1a1a', danger: '#c0504d', good: '#4a8d57',
+                muted: '#9aa7b0', grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // ==================================================================
+        // Chart 1 — structural parameters vs the sealed key (measured).
+        // Source: nbs/artifacts/causal_03_mediation_recovery.json
+        // ==================================================================
+        function drawRecoveryForest() {
+            const rows = [
+                { label: 'awareness persistence ρ',      truth: 0.85, post: 0.854, lo: 0.831,  hi: 0.876 },
+                { label: 'TV → awareness',               truth: 0.9,  post: 0.997, lo: 0.746,  hi: 1.396 },
+                { label: 'awareness → consideration',    truth: 2.5,  post: 1.986, lo: 1.243,  hi: 2.747 },
+                { label: 'price → consideration',        truth: -0.8, post: -0.978, lo: -1.217, hi: -0.752 },
+                { label: 'demand → consideration',       truth: 0.6,  post: 0.592, lo: 0.542,  hi: 0.658 }
+            ];
+            const traces = [];
+            rows.forEach(function(r, i) {
+                traces.push({
+                    type: 'scatter', mode: 'lines',
+                    x: [r.lo, r.hi], y: [i, i],
+                    line: { color: CI.colors.consideration, width: 6 },
+                    opacity: 0.45, showlegend: false, hoverinfo: 'skip'
+                });
+                traces.push({
+                    type: 'scatter', mode: 'markers',
+                    x: [r.post], y: [i],
+                    marker: { color: CI.colors.consideration, size: 11 },
+                    name: 'posterior mean (90% CI)', showlegend: (i === 0),
+                    hovertemplate: r.label + ': %{x:.3f}<br>90% CI [' + r.lo + ', ' + r.hi + ']<extra>posterior</extra>'
+                });
+                traces.push({
+                    type: 'scatter', mode: 'markers',
+                    x: [r.truth], y: [i],
+                    marker: { color: CI.colors.truth, symbol: 'line-ns-open', size: 18,
+                              line: { width: 3 } },
+                    name: 'sealed truth', showlegend: (i === 0),
+                    hovertemplate: r.label + ' truth: %{x:.2f}<extra>sealed key</extra>'
+                });
+            });
+            const layout = CI.layout({
+                xaxis: { title: 'parameter value', zeroline: true },
+                yaxis: {
+                    tickvals: [0, 1, 2, 3, 4],
+                    ticktext: rows.map(function(r) { return r.label; }),
+                    autorange: 'reversed', gridcolor: 'rgba(0,0,0,0)'
+                },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 210, r: 30, t: 40, b: 55 }
+            });
+            Plotly.newPlot('recoveryForest', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // Chart 2 — the latent demand series, recovered with NO survey.
+        // Measured posterior band + truth (aligned), notebook run.
+        // ==================================================================
+        function drawDemand() {
+            const dmMean = [-0.887,-0.766,-0.865,-0.634,0.095,0.391,0.477,0.426,0.558,-0.115,-0.09,0.143,0.488,1.562,2.014,2.287,2.99,2.631,1.594,1.469,1.886,2.656,2.506,1.894,1.511,0.568,0.604,0.832,0.346,-0.094,-0.37,-0.576,-0.132,0.059,0.218,-0.028,0.414,0.594,0.336,-0.05,-0.159,-1.016,-0.267,0.313,0.124,0.383,0.131,0.04,0.118,0.039,-0.609,-0.882,-1.057,-0.798,-0.807,-0.559,-0.687,-0.809,-1.223,-0.609,0.062,0.254,-0.394,-0.374,-0.465,-0.48,0.299,0.02,-0.221,0.423,0.409,0.651,0.767,0.312,0.458,0.67,0.149,0.086,-0.029,-0.312,-0.194,-0.725,-1.087,-0.802,-0.391,-0.491,-0.673,-1.081,-1.029,-0.757,-0.484,-0.462,-0.195,-0.049,-0.675,-0.484,-0.251,-0.198,-0.632,-0.799,-1.347,-1.373,-1.613,-1.273,-1.271,-1.68,-2.005,-1.779,-1.47,-1.268,-1.242,-1.094,-1.818,-1.266,-1.328,-0.763,-0.687,0.201,0.239,0.163,0.984,1.159,1.54,1.632,1.531,0.503,0.063,-0.087,0.466,0.374,0.163,0.01,0.325,0.007,0.224,1.053,1.407,1.346,1.119,0.817,0.901,0.921,0.775,0.723,0.102,-0.196,-0.582,-0.76,-0.766,-0.768,-0.609,-0.607,-0.864,-0.502,0.558,0.287];
+            const dmLo = [-1.451,-1.217,-1.332,-1.043,-0.278,0.001,0.094,0.045,0.142,-0.514,-0.5,-0.24,0.068,1.104,1.574,1.838,2.459,2.143,1.089,0.943,1.277,1.991,1.875,1.265,0.823,-0.121,-0.096,0.085,-0.335,-0.651,-0.919,-1.134,-0.665,-0.432,-0.344,-0.518,-0.125,0.08,-0.09,-0.456,-0.58,-1.454,-0.668,-0.11,-0.273,-0.023,-0.301,-0.429,-0.329,-0.423,-1.114,-1.42,-1.57,-1.33,-1.292,-1.015,-1.121,-1.246,-1.699,-1.052,-0.403,-0.225,-0.799,-0.823,-0.855,-0.891,-0.123,-0.354,-0.58,-0.012,0.002,0.202,0.356,-0.075,0.073,0.21,-0.316,-0.392,-0.519,-0.774,-0.671,-1.189,-1.574,-1.288,-0.881,-0.965,-1.168,-1.57,-1.584,-1.299,-1.029,-0.927,-0.664,-0.51,-1.181,-0.968,-0.726,-0.629,-1.032,-1.203,-1.756,-1.747,-2.01,-1.682,-1.736,-2.117,-2.412,-2.19,-1.916,-1.719,-1.774,-1.671,-2.392,-1.894,-1.959,-1.464,-1.3,-0.467,-0.387,-0.423,0.373,0.522,0.835,0.933,0.848,-0.103,-0.506,-0.683,-0.2,-0.285,-0.469,-0.623,-0.385,-0.751,-0.477,0.285,0.605,0.569,0.354,0.054,0.134,0.216,0.068,0.008,-0.605,-0.884,-1.229,-1.406,-1.416,-1.354,-1.179,-1.109,-1.333,-1.002,0.018,-0.299];
+            const dmHi = [-0.286,-0.254,-0.345,-0.193,0.471,0.754,0.86,0.805,0.955,0.297,0.328,0.543,0.915,1.977,2.415,2.699,3.397,3.033,2.086,1.963,2.391,3.183,3.014,2.411,2.053,1.182,1.242,1.483,0.997,0.47,0.201,0.021,0.385,0.537,0.72,0.467,0.899,1.047,0.723,0.372,0.23,-0.518,0.122,0.691,0.506,0.781,0.568,0.495,0.548,0.468,-0.099,-0.315,-0.488,-0.237,-0.319,-0.11,-0.25,-0.359,-0.7,-0.148,0.517,0.663,0.021,0.039,-0.085,-0.076,0.676,0.391,0.189,0.82,0.82,1.065,1.145,0.695,0.856,1.093,0.589,0.547,0.449,0.124,0.25,-0.253,-0.56,-0.287,0.092,0.002,-0.183,-0.521,-0.434,-0.222,0.058,0.017,0.288,0.39,-0.153,0.009,0.236,0.244,-0.199,-0.392,-0.909,-0.982,-1.215,-0.884,-0.797,-1.231,-1.542,-1.36,-1.01,-0.774,-0.636,-0.463,-1.119,-0.549,-0.576,-0.029,-0.003,0.883,0.854,0.795,1.578,1.751,2.167,2.242,2.122,1.128,0.691,0.552,1.125,1.029,0.814,0.698,1.049,0.79,0.941,1.774,2.126,2.014,1.845,1.567,1.599,1.585,1.43,1.389,0.81,0.559,0.138,-0.013,-0.036,-0.148,0,-0.055,-0.354,0.054,1.067,0.865];
+            const dmTruth = [-1.112,-0.76,-0.668,-0.22,0.502,0.277,0.147,0.229,0.584,-0.286,-0.325,0.71,0.631,1.298,2.127,2.229,2.922,2.678,1.751,1.397,1.836,2.714,2.706,1.83,1.661,0.721,0.674,1.235,0.751,0.321,0.086,-0.083,0.132,0.235,0.489,0.031,0.478,0.675,0.251,-0.001,-0.28,-0.961,-0.144,0.092,0.087,0.511,0.384,0.268,0.74,0.251,-0.139,-0.821,-1.056,-0.588,-0.777,-0.138,-0.366,-0.281,-0.717,-0.406,0.396,0.214,-0.47,-0.506,-0.216,-0.565,0.211,-0.354,-0.134,0.408,0.455,0.891,0.976,0.695,0.413,1.069,0.24,0.274,-0.109,-0.322,-0.004,-0.397,-1.035,-0.523,-0.028,-0.062,-0.469,-0.886,-0.743,-0.57,-0.389,-0.154,-0.208,-0.011,-0.087,0.003,-0.153,-0.09,-0.521,-0.633,-1.108,-0.863,-1.101,-1.355,-1.576,-1.861,-2.17,-1.84,-1.567,-1.159,-1.382,-1.246,-2,-1.565,-1.92,-1.34,-1.031,-0.191,-0.047,-0.376,0.447,0.858,1.179,1.728,1.513,0.405,0.23,-0.078,0.123,-0.102,0.075,-0.327,0.091,0.276,-0.085,0.411,0.934,1.046,0.676,0.71,0.642,0.361,0.249,0.115,-0.509,-0.547,-0.987,-0.981,-1.045,-0.688,-0.889,-0.823,-1.399,-0.887,-0.018,-0.125];
+
+            const weeks = dmMean.map(function(_, i) {
+                const d = new Date(2023, 0, 2);
+                d.setDate(d.getDate() + 7 * i);
+                return d;
+            });
+
+            const traces = [
+                { type: 'scatter', mode: 'lines', x: weeks, y: dmHi,
+                  line: { width: 0 }, hoverinfo: 'skip', showlegend: false },
+                { type: 'scatter', mode: 'lines', x: weeks, y: dmLo,
+                  fill: 'tonexty', fillcolor: CI.band(CI.colors.demand, 0.25),
+                  line: { width: 0 }, name: '90% posterior band', hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: weeks, y: dmMean,
+                  line: { color: CI.colors.demand, width: 2 },
+                  name: 'recovered demand (posterior mean)',
+                  hovertemplate: '%{x|%d %b %Y}: %{y:.2f}<extra>posterior</extra>' },
+                { type: 'scatter', mode: 'lines', x: weeks, y: dmTruth,
+                  line: { color: CI.colors.truth, width: 1.4, dash: 'dot' },
+                  name: 'sealed truth (aligned)',
+                  hovertemplate: '%{x|%d %b %Y}: %{y:.2f}<extra>truth</extra>' }
+            ];
+            const layout = CI.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'latent demand (standardized)' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 70, r: 20, t: 40, b: 55 }
+            });
+            Plotly.newPlot('demandChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // Chart 3 — the mediation decomposition (measured).
+        // ==================================================================
+        function drawMediation() {
+            const chs = ['TV', 'Display', 'Social', 'Search'];
+            const direct   = [-78694, 98606, 58944, 539142];
+            const indirect = [377927, 219804, 204778, 0];
+            const propTxt  = ['1.26', '0.69', '0.78', '−0.00'];
+            const truthTxt = ['1.0', '1.0', '1.0', '0.0'];
+            const traces = [
+                { type: 'bar', name: 'direct',
+                  x: chs, y: direct,
+                  marker: { color: CI.colors.muted, opacity: 0.85 },
+                  hovertemplate: '%{x} direct: %{y:,}<extra></extra>' },
+                { type: 'bar', name: 'through the funnel',
+                  x: chs, y: indirect,
+                  marker: { color: CI.colors.awareness, opacity: 0.9 },
+                  hovertemplate: '%{x} via funnel: %{y:,}<extra></extra>' }
+            ];
+            const layout = CI.layout({
+                barmode: 'relative',
+                yaxis: { title: 'contribution to sales (KPI units)' },
+                legend: { orientation: 'h', y: 1.14 },
+                margin: { l: 85, r: 20, t: 40, b: 45 },
+                annotations: chs.map(function(c, i) {
+                    return {
+                        x: i, y: Math.max(direct[i], 0) + indirect[i], yanchor: 'bottom',
+                        text: 'mediated ' + propTxt[i] + ' (true ' + truthTxt[i] + ')',
+                        showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                    };
+                })
+            });
+            Plotly.newPlot('mediationChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        function init() {
+            drawRecoveryForest();
+            drawDemand();
+            drawMediation();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Inference 05: Measuring One Experiment | MMM Framework</title>
+    <meta name="description" content="26% false positives from the 'sophisticated' estimator on null data, ~5% after placebo calibration, 100% power at the expected effect — pre-registering a 10-market geo lift test.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-05-measuring-one-experiment.html">
+    <meta property="og:title" content="Causal Inference 05: Measuring One Experiment | MMM Framework">
+    <meta property="og:description" content="Run your test on nothing first: A/A calibration catches a 26% false-positive rate, injected-truth A/B simulation certifies 100% power, and the leaderboard picks pooled DiD.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-05-measuring-one-experiment.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Causal Inference in Practice series
+           (same kit as the Pressure Tests pages — tokens only).
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(74, 141, 87, 0.16); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(192, 80, 77, 0.14); color: #a44c43; }
+
+        .prereg-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .prereg-card p { margin: 0.35rem 0; }
+        .prereg-card strong { color: var(--color-text); }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Causal Inference 05: Measuring One Experiment | MMM Framework">
+    <meta name="twitter:description" content="Run your test on nothing first: A/A calibration catches a 26% false-positive rate, injected-truth A/B simulation certifies 100% power, and the leaderboard picks pooled DiD.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/causal-05-measuring-one-experiment.html",
+          "name": "Causal Inference 05: Measuring One Experiment | MMM Framework",
+          "description": "26% false positives from the 'sophisticated' estimator on null data, ~5% after placebo calibration, 100% power at the expected effect — pre-registering a 10-market geo lift test.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/causal-05-measuring-one-experiment.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/causal-05-measuring-one-experiment.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Causal Inference 05: Measuring One Experiment",
+          "datePublished": "2026-06-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/causal-05-measuring-one-experiment.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/causal-05-measuring-one-experiment.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Demos & Reports",
+              "item": "https://redam94.github.io/mmm-framework/demos.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Causal Inference 05: Measuring One Experiment",
+              "item": "https://redam94.github.io/mmm-framework/causal-05-measuring-one-experiment.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">The homework before the test</a></li>
+                <li><a href="#world">Ten markets, one question</a></li>
+                <li><a href="#design">Matched pairs, then a coin flip</a></li>
+                <li><a href="#aa">The A/A discipline</a></li>
+                <li><a href="#power">Power against injected truth</a></li>
+                <li><a href="#leaderboard">The leaderboard</a></li>
+                <li><a href="#prereg">The pre-registration</a></li>
+                <li><a href="#quiz">Check your understanding</a></li>
+                <li><a href="#run-it">Run it yourself</a></li>
+            </ul>
+
+            <h3>Causal Inference in Practice</h3>
+            <ul class="sidebar-nav">
+                <li><a href="causal-04-latent-confounders.html">04 · Latent Confounders</a></li>
+                <li><a href="causal-05-measuring-one-experiment.html" class="active">05 · Measuring One Experiment</a></li>
+                <li><a href="causal-06-calibrating-the-model.html">06 · Calibrating the Model</a></li>
+                <li><a href="causal-07-many-experiments.html">07 · Many Experiments</a></li>
+                <li><a href="causal-08-designing-next-experiment.html">08 · Designing the Next Experiment</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Causal Inference 05: Measuring One Experiment</h1>
+            <p class="lead">
+                Reading a lift test honestly is a skill, not a formality. Notebooks 00–04 pushed
+                observational modeling as far as it goes and hit the same wall every time — a residual
+                the data cannot settle, culminating in the
+                <a href="causal-04-latent-confounders.html">latent-confounder wall of notebook&nbsp;04</a>.
+                The cure is an <em>experiment</em>: randomization severs every back-door by construction.
+                But an experiment only <em>buys</em> truth if it's read honestly — and the field is
+                littered with lift tests that weren't. This page mirrors
+                <code>nbs/causal/causal_05_measuring_one_experiment.ipynb</code>: Veranda Home, a
+                national home &amp; garden retailer, has ten test markets and wants to measure
+                <strong>Search</strong> — the channel every observational rung kept over-crediting.
+                Before a single dollar moves, three pieces of homework, all on pre-period data,
+                all pure pandas — no MCMC, no MMM.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">26%</div>
+                    <div class="stat-label">naive false-positive rate of the "sophisticated" regression-adjusted estimator on null data (nominal: 5%)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">5.2%</div>
+                    <div class="stat-label">false-positive rate for all three estimators once the placebo-calibrated critical value is used</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.27</div>
+                    <div class="stat-label">placebo-calibrated minimum detectable effect (ROAS), 5 matched pairs, 8-week holdout</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">100%</div>
+                    <div class="stat-label">empirical power at the expected effect for both calibrated DiD estimators</div>
+                </div>
+            </div>
+
+            <p>
+                The three failure modes this page is built to prevent: treatment markets picked by
+                convenience (the big ones), not by matching; significance declared with a t-test whose
+                assumptions the data violates; and estimators chosen <em>after</em> seeing the data,
+                because one of them "found" lift. Every claim below is graded — the synthetic world's
+                answer key stays sealed until the notebook's end.
+            </p>
+
+            <h2 id="world">1 — Ten markets, one question</h2>
+            <p>
+                The brand at DMA grain (the <code>geo_heterogeneous</code> world from
+                <code>src/mmm_framework/synth/</code>): <strong>10 markets × 130 weeks</strong> of
+                weekly sales, each market with its own baseline, budget share, and — because this
+                world is honest about geography — its own true regional effectiveness. The question:
+                what is Search's incremental ROAS, really?
+            </p>
+
+            <h2 id="design">2 — Design: matched pairs, then a coin flip</h2>
+            <p>
+                <code>geo_lift_design</code> builds the treatment geometry a referee would accept:
+            </p>
+            <ul>
+                <li><strong>Matched pairs</strong> — markets paired by pre-period KPI similarity
+                    (residualized against spend), so each treated market carries its own
+                    counterfactual twin;</li>
+                <li><strong>Randomization inside each pair</strong> — a coin flip decides which twin
+                    gets treated, severing any lingering association between assignment and demand;</li>
+                <li><strong>Placebo-calibrated power</strong> — the design's minimum detectable effect
+                    comes from re-running the analysis on <strong>123 pre-period placebo windows</strong>,
+                    not from a textbook variance formula.</li>
+            </ul>
+            <p>
+                The measured design: <strong>5 matched randomized pairs</strong>
+                (Boston–Atlanta, Dallas–Minneapolis, Denver–Chicago, Seattle–Portland, Miami–Phoenix),
+                an <strong>8-week holdout</strong>, design MDE <strong>≈ 0.27 ROAS</strong> at a
+                readout SE of <strong>0.095</strong>.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.planning.design import design_options, geo_lift_design
+from mmm_framework.planning.simulation import (
+    build_sim_panel, build_geo_assignment, run_aa_simulation,
+    run_ab_simulation, fixed_lift_injector, methodology_leaderboard,
+    pooled_did_estimator, per_pair_did_estimator, regadj_geo_estimator,
+)
+
+# 1. Design: matched randomized pairs + placebo-calibrated MDE
+opts = design_options("veranda_geo.csv", "Sales", "Search")
+design = geo_lift_design("veranda_geo.csv", "Sales", "Search",
+                         design="holdout", duration=8, seed=42)
+
+# 2. A/A: each estimator's REAL false-positive rate, measured on null windows
+panel = build_sim_panel("veranda_geo.csv", "Sales", "Search")
+assignment = build_geo_assignment(panel, seed=42)
+aa = run_aa_simulation(panel, regadj_geo_estimator, assignment,
+                       duration=8, seed=42, name="regression-adjusted")
+
+# 3. A/B: inject known lifts into real history, measure empirical power
+injector = fixed_lift_injector(panel, assignment, duration=8,
+                               pct_of_baseline=0.10)
+ab = run_ab_simulation(panel, pooled_did_estimator, assignment, injector,
+                       duration=8, aa_result=aa, seed=42, name="pooled DiD")
+
+# 4. One honest recommendation: validity first, then power, then cost
+lb = methodology_leaderboard("veranda_geo.csv", "Sales", "Search",
+                             duration=8, seed=42)</code></pre>
+            </div>
+
+            <h2 id="aa">3 — The A/A discipline: test your test on nothing</h2>
+            <p>
+                Before trusting any estimator with a real experiment, run it on <strong>null
+                data</strong>: 115 rolling windows in which <em>no experiment happened</em>, asking how
+                often it cries "significant!" anyway. Weekly KPI series are autocorrelated — adjacent
+                weeks share trend, season, and demand shocks — so the <em>effective</em> sample size
+                is far below the nominal one, and naive standard errors are too small. Three candidate
+                estimators, same frozen assignment. The DiD estimand for a treated–control pair:
+            </p>
+            <p>
+                \[ \hat{\tau} \;=\; \bigl(\bar{Y}_{T,\text{test}} - \bar{Y}_{T,\text{pre}}\bigr)
+                \;-\; \bigl(\bar{Y}_{C,\text{test}} - \bar{Y}_{C,\text{pre}}\bigr) \]
+            </p>
+
+            <div class="chart-container" id="aaFprChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — <code>nbs/artifacts/causal_05_methodology.json</code>,
+                115 null windows per estimator. Naive t-test false-positive rates: pooled DiD
+                <strong>0.9%</strong>, per-pair DiD <strong>8.7%</strong>, regression-adjusted
+                <strong>26.1%</strong> — the most "sophisticated" of the three is the one that lies,
+                at more than five times the nominal 5%. The design-calibrated critical value (the
+                empirical 95th percentile of |placebo estimates|) restores <strong>5.2%</strong> for
+                every estimator, by construction.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ Sophistication is not validity</h4>
+                <p>
+                    The regression-adjusted estimator is flagged <code>inflated</code> and
+                    <strong>invalid</strong> on this panel. Nothing about its extra covariates makes
+                    it wrong in general — but on <em>this</em> data, its naive decision rule
+                    false-positives ~26% of the time at nominal 5%. Calibrate on placebo history,
+                    pre-register the critical value, <em>then</em> run the test.
+                </p>
+            </div>
+
+            <h2 id="power">4 — Power against injected truth</h2>
+            <p>
+                The A/A test protects against false positives; the <strong>A/B simulation</strong>
+                measures power against false <em>negatives</em>. Take real history, inject a
+                <strong>known</strong> lift into the treated markets across a grid of effect sizes,
+                and count how often each (calibrated) estimator detects it. Because the injected lift
+                is known, this is the estimator graded against a sealed key — the same epistemics as
+                the rest of the series, at simulation speed.
+            </p>
+
+            <div class="chart-container" id="powerChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — injected-truth power curves for the two calibrated DiD
+                estimators (their curves coincide on this panel). At a quarter of the expected effect,
+                power is 69%; from half the expected effect upward, both detect the planted lift
+                every time. At the expected effect size — a 10%-of-baseline lift —
+                <strong>power = 100% for both</strong>, comfortably past the 80% bar.
+            </p>
+
+            <h2 id="leaderboard">5 — The leaderboard: one honest recommendation</h2>
+            <p>
+                <code>methodology_leaderboard</code> runs the full A/A + A/B battery for every
+                estimator the data supports, on one frozen assignment, and ranks by
+                <strong>validity first</strong> (honest false-positive rate), then power, then cost.
+                The data supports three designs (<code>geo_lift</code>,
+                <code>matched_market_did</code>, <code>national_flighting</code>; recommended:
+                <code>geo_lift</code>), and the estimator ranking lands:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>estimator</th>
+                        <th>valid size?</th>
+                        <th>naive FPR (null data)</th>
+                        <th>power at expected effect</th>
+                        <th>verdict</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>pooled DiD</strong></td>
+                        <td>✓</td>
+                        <td>0.9%</td>
+                        <td>100%</td>
+                        <td><span class="verdict-pill ok">recommended</span></td>
+                    </tr>
+                    <tr>
+                        <td>per-pair DiD</td>
+                        <td>✓</td>
+                        <td>8.7%</td>
+                        <td>100%</td>
+                        <td><span class="verdict-pill ok">valid runner-up</span></td>
+                    </tr>
+                    <tr>
+                        <td>regression-adjusted</td>
+                        <td><strong>✗</strong></td>
+                        <td><strong>26.1%</strong></td>
+                        <td>—</td>
+                        <td><span class="verdict-pill silent">disqualified on A/A size</span></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                Two caveats the leaderboard itself reports: sliding placebo windows overlap, so the
+                rates are indicative rather than independent Bernoulli trials; and the false-positive
+                rate is measured against the analytic decision rule — the calibrated critical value
+                is what restores nominal size.
+            </p>
+
+            <h2 id="prereg">6 — What a pre-registration now says</h2>
+            <p>The homework above compresses to five lines, written <em>before</em> the test:</p>
+
+            <div class="prereg-card">
+                <p><strong>Estimand:</strong> incremental Search ROAS, 8-week window, treated DMAs.</p>
+                <p><strong>Design:</strong> 5 matched randomized pairs (holdout).</p>
+                <p><strong>Estimator:</strong> pooled DiD.</p>
+                <p><strong>Decision rule:</strong> effect declared iff |estimate| &gt; the
+                   placebo-calibrated 95th-percentile critical value.</p>
+                <p><strong>Power:</strong> &gt;80% at the expected effect; MDE 0.27 ROAS as designed.</p>
+            </div>
+
+            <p>
+                Every choice was made on pre-period data — nothing was picked because it "found lift".
+                That discipline is what makes the number an experiment produces worth folding into a
+                model, which is exactly what
+                <a href="causal-06-calibrating-the-model.html">notebook&nbsp;06</a> does next.
+            </p>
+
+            <div class="check-understanding" id="quiz">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>Why does the most sophisticated estimator have the <em>worst</em> false-positive rate on null data?</summary>
+                    <div class="quiz-answer">
+                        <p>Weekly KPI series are autocorrelated — adjacent weeks share trend, season,
+                        and demand shocks — so the effective sample size is far below the nominal one
+                        and naive standard errors come out too small. The regression-adjusted
+                        estimator compounds this: its extra structure gives it more ways to fit noise
+                        in any particular window, and its analytic decision rule doesn't know that.
+                        Measured on 115 null windows it declares a nonexistent effect 26.1% of the
+                        time at nominal 5%, versus 0.9% for pooled DiD. Sophistication is not
+                        validity — the A/A test is the only way to find out which is which on
+                        <em>your</em> panel.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>What does the placebo-calibrated critical value do that a textbook variance formula cannot?</summary>
+                    <div class="quiz-answer">
+                        <p>It replaces an assumption with a measurement. Instead of deriving the null
+                        distribution from independence assumptions the data violates, it re-runs the
+                        estimator on hundreds of pre-period windows where no experiment happened and
+                        takes the empirical 95th percentile of |placebo estimates| as the bar. That
+                        makes the test honest <em>by construction</em>, whatever the panel's
+                        autocorrelation structure — measured here, it restores a 5.2% false-positive
+                        rate for all three estimators, including the one whose naive rate was 26%.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Why must the estimator be chosen before the experiment runs?</summary>
+                    <div class="quiz-answer">
+                        <p>If three estimators are available and you pick the one that "found lift"
+                        after the fact, your true false-positive rate is roughly the union of the
+                        three individual rates — even three honest 5% tests give you far more than 5%,
+                        and with an invalid 26% member in the menu the post-hoc pick is nearly
+                        guaranteed to find something. Pre-registering the design, estimator, and
+                        critical value on pre-period data is what makes the eventual readout an
+                        experiment rather than a story.</p>
+                    </div>
+                </details>
+            </div>
+
+            <div class="note" id="run-it">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/causal/causal_05_measuring_one_experiment.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/causal/causal_05_measuring_one_experiment.ipynb</code></a>
+                    — notebook 5 of 11 in the <em>Causal Inference in Practice</em> series (brand:
+                    Veranda Home; synthetic worlds with sealed answer keys; every claim graded by an
+                    assert). All numbers from <code>nbs/artifacts/causal_05_methodology.json</code>,
+                    produced by <code>nbs/causal/causal_05_measuring_one_experiment.ipynb</code>.
+                    Previous: <a href="causal-04-latent-confounders.html">04 · Latent Confounders</a>.
+                    Next: <a href="causal-06-calibrating-the-model.html">06 · Calibrating the
+                    Model</a>, where the readout this design produces meets the confounded MMM.
+                    Source: <a href="https://github.com/redam94/mmm-framework" target="_blank"
+                    rel="noopener">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // Causal-series Plotly helpers (palette shared across the series).
+        const CI = {
+            colors: {
+                tv: '#3b6fb6', search: '#d98c3f', social: '#5a9e6f',
+                display: '#b15a7a', radio: '#3f8f8f', print: '#8a6d3b',
+                truth: '#1a1a1a', danger: '#c0504d', good: '#4a8d57',
+                muted: '#8a949e', grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2b2f36', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // ==================================================================
+        // A/A false-positive rates — measured (causal_05_methodology.json)
+        // ==================================================================
+        function drawAaFpr() {
+            const estimators = ['pooled DiD', 'per-pair DiD', 'regression-adjusted'];
+            const naive      = [0.009, 0.087, 0.261];   // fpr at nominal alpha
+            const calibrated = [0.052, 0.052, 0.052];   // fpr at placebo critical value
+
+            const traces = [
+                {
+                    type: 'bar', name: 'naive t-test',
+                    x: estimators, y: naive,
+                    marker: { color: CI.band(CI.colors.danger, 0.65),
+                              line: { color: CI.colors.danger, width: 1.5 } },
+                    hovertemplate: '%{x}<br>naive FPR: %{y:.1%}<extra></extra>'
+                },
+                {
+                    type: 'bar', name: 'design-calibrated critical value',
+                    x: estimators, y: calibrated,
+                    marker: { color: CI.band(CI.colors.good, 0.65),
+                              line: { color: CI.colors.good, width: 1.5 } },
+                    hovertemplate: '%{x}<br>calibrated FPR: %{y:.1%}<extra></extra>'
+                }
+            ];
+
+            const layout = CI.layout({
+                barmode: 'group',
+                yaxis: { title: 'false-positive rate on NULL data', tickformat: '.0%',
+                         range: [0, 0.30] },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 70, r: 20, t: 40, b: 55 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 2.5, y0: 0.05, y1: 0.05,
+                    line: { color: CI.colors.truth, width: 1.5, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: 0.02, xref: 'paper', y: 0.05, yanchor: 'bottom',
+                    text: 'nominal α = 5%', showarrow: false,
+                    font: { size: 11, color: '#5a6570' }
+                }, {
+                    x: 2, y: 0.261, yanchor: 'bottom',
+                    text: '26% — the "sophisticated"<br>estimator is the one that lies',
+                    showarrow: false, yshift: 6,
+                    font: { size: 11, color: '#a44c43' }
+                }]
+            });
+
+            Plotly.newPlot('aaFprChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // Injected-truth power curves — measured (notebook A/B simulation)
+        // ==================================================================
+        function drawPower() {
+            const scales = [0.25, 0.50, 0.75, 1.00, 1.50, 2.00];
+            const powerPooled  = [0.69, 1.00, 1.00, 1.00, 1.00, 1.00];
+            const powerPerPair = [0.69, 1.00, 1.00, 1.00, 1.00, 1.00];
+
+            const traces = [
+                {
+                    type: 'scatter', mode: 'lines+markers', name: 'pooled DiD (calibrated)',
+                    x: scales, y: powerPooled,
+                    line: { color: CI.colors.tv, width: 2.5 },
+                    marker: { size: 8 },
+                    hovertemplate: '%{x:.2f}× expected effect<br>power %{y:.0%}<extra>pooled DiD</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines+markers', name: 'per-pair DiD (calibrated)',
+                    x: scales, y: powerPerPair,
+                    line: { color: CI.colors.search, width: 2.5, dash: 'dash' },
+                    marker: { size: 8, symbol: 'diamond' },
+                    hovertemplate: '%{x:.2f}× expected effect<br>power %{y:.0%}<extra>per-pair DiD</extra>'
+                }
+            ];
+
+            const layout = CI.layout({
+                xaxis: { title: 'injected lift (multiple of the expected effect)',
+                         range: [0.15, 2.1] },
+                yaxis: { title: 'empirical power (calibrated test)', tickformat: '.0%',
+                         range: [0, 1.06] },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 70, r: 20, t: 40, b: 55 },
+                shapes: [{
+                    type: 'line', x0: 0.15, x1: 2.1, y0: 0.8, y1: 0.8,
+                    line: { color: CI.colors.truth, width: 1.5, dash: 'dot' }
+                }, {
+                    type: 'line', x0: 1.0, x1: 1.0, y0: 0, y1: 1.06,
+                    line: { color: CI.colors.muted, width: 1, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: 0.16, y: 0.8, xanchor: 'left', yanchor: 'bottom',
+                    text: '80% power bar', showarrow: false,
+                    font: { size: 11, color: '#5a6570' }
+                }, {
+                    x: 1.0, y: 0.08, xanchor: 'left',
+                    text: ' the expected effect:<br> a 10%-of-baseline lift → power 100%',
+                    showarrow: false, align: 'left',
+                    font: { size: 11, color: '#5a6570' }
+                }]
+            });
+
+            Plotly.newPlot('powerChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        function init() {
+            drawAaFpr();
+            drawPower();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

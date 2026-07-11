@@ -148,6 +148,19 @@
             ['aurora-04-reporting.html', 'Reporting'],
             ['aurora-05-unified-workflow.html', 'The Unified Workflow']
         ],
+        'Causal inference series': [
+            ['causal-00-the-ladder.html', 'The Ladder of Evidence'],
+            ['causal-01-confounding-adjustment.html', 'Confounding & Adjustment'],
+            ['causal-02-mmm-as-causal-model.html', 'The MMM as a Causal Model'],
+            ['causal-03-structural-mediation.html', 'Structural Mediation'],
+            ['causal-04-latent-confounders.html', 'Latent Confounders'],
+            ['causal-05-measuring-one-experiment.html', 'Measuring One Experiment'],
+            ['causal-06-calibrating-the-model.html', 'Calibrating the Model'],
+            ['causal-07-many-experiments.html', 'Many Experiments'],
+            ['causal-08-designing-next-experiment.html', 'Designing the Next Experiment'],
+            ['causal-09-measurement-program.html', 'The Measurement Program'],
+            ['causal-10-closed-loop.html', 'The Closed Loop']
+        ],
         'Decision workflows': [
             ['workflow-channel-effectiveness.html', 'Channel Effectiveness'],
             ['workflow-budget-optimization.html', 'Budget Optimization'],
@@ -232,6 +245,17 @@
         'aurora-03-extended-mmm.html': TIER_ANALYST,
         'aurora-04-reporting.html': TIER_ANALYST,
         'aurora-05-unified-workflow.html': TIER_ANALYST,
+        'causal-00-the-ladder.html': TIER_ANALYST,
+        'causal-01-confounding-adjustment.html': TIER_ANALYST,
+        'causal-02-mmm-as-causal-model.html': TIER_ANALYST,
+        'causal-03-structural-mediation.html': TIER_ANALYST,
+        'causal-04-latent-confounders.html': TIER_ANALYST,
+        'causal-05-measuring-one-experiment.html': TIER_ANALYST,
+        'causal-06-calibrating-the-model.html': TIER_ANALYST,
+        'causal-07-many-experiments.html': TIER_ANALYST,
+        'causal-08-designing-next-experiment.html': TIER_ANALYST,
+        'causal-09-measurement-program.html': TIER_ANALYST,
+        'causal-10-closed-loop.html': TIER_ANALYST,
 
         'blog.html': TIER_OVERVIEW,
         'blog-activity-bias.html': TIER_ANALYST,
@@ -323,7 +347,18 @@
         'math-03-seasonality-trend.html',
         'math-04-bayesian-model.html',
         'math-05-calibration.html',
-        'math-06-extensions.html'
+        'math-06-extensions.html',
+        'causal-00-the-ladder.html',
+        'causal-01-confounding-adjustment.html',
+        'causal-02-mmm-as-causal-model.html',
+        'causal-03-structural-mediation.html',
+        'causal-04-latent-confounders.html',
+        'causal-05-measuring-one-experiment.html',
+        'causal-06-calibrating-the-model.html',
+        'causal-07-many-experiments.html',
+        'causal-08-designing-next-experiment.html',
+        'causal-09-measurement-program.html',
+        'causal-10-closed-loop.html'
     ];
 
     function isActive(href) {

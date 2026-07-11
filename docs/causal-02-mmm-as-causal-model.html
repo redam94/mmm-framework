@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Inference 02: The MMM as a Causal Model | MMM Framework</title>
+    <meta name="description" content="Graded against truth: 5/7 channels within ±20%, a mediator control amputates TV/Video 18–23%, refutation passes 3/4 yet misses TV's −18% bias (0.996 ridge).">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-02-mmm-as-causal-model.html">
+    <meta property="og:title" content="Causal Inference 02: The MMM as a Causal Model | MMM Framework">
+    <meta property="og:description" content="Graded against truth: 5/7 channels within ±20%, a mediator control amputates TV/Video 18–23%, refutation passes 3/4 yet misses TV's −18% bias (0.996 ridge).">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-02-mmm-as-causal-model.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Causal Inference in Practice series.
+           Same conventions as the Pressure Tests guides.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .diag-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin: 0.75rem 0 0;
+        }
+        .diag-strip span {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            padding: 0.2rem 0.65rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+        }
+        .diag-strip span.green { border-color: rgba(106,191,138,0.6); color: #3f7a58; }
+        .diag-strip span.red   { border-color: rgba(201,112,103,0.6); color: #a44c43; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Causal Inference 02: The MMM as a Causal Model | MMM Framework">
+    <meta name="twitter:description" content="Graded against truth: 5/7 channels within ±20%, a mediator control amputates TV/Video 18–23%, refutation passes 3/4 yet misses TV's −18% bias (0.996 ridge).">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/causal-02-mmm-as-causal-model.html",
+          "name": "Causal Inference 02: The MMM as a Causal Model | MMM Framework",
+          "description": "Graded against truth: 5/7 channels within ±20%, a mediator control amputates TV/Video 18–23%, refutation passes 3/4 yet misses TV's −18% bias (0.996 ridge).",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/causal-02-mmm-as-causal-model.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/causal-02-mmm-as-causal-model.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Causal Inference 02: The MMM as a Causal Model",
+          "datePublished": "2026-06-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/causal-02-mmm-as-causal-model.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/causal-02-mmm-as-causal-model.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Demos & Reports",
+              "item": "https://redam94.github.io/mmm-framework/demos.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Causal Inference 02: The MMM as a Causal Model",
+              "item": "https://redam94.github.io/mmm-framework/causal-02-mmm-as-causal-model.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Seven channels, thirteen controls</a></li>
+                <li><a href="#world">The world on the analyst's desk</a></li>
+                <li><a href="#fit">The causal fit</a></li>
+                <li><a href="#estimands">Three estimands, three questions</a></li>
+                <li><a href="#bad-control">The bad-control trap</a></li>
+                <li><a href="#refutation">Earning trust by attack</a></li>
+                <li><a href="#learning">Did the data teach the model?</a></li>
+                <li><a href="#ridge">The Radio/Print ridge</a></li>
+                <li><a href="#quiz">Check your understanding</a></li>
+                <li><a href="#run-it">Run it yourself</a></li>
+            </ul>
+
+            <h3>Causal Inference in Practice</h3>
+            <ul class="sidebar-nav">
+                <li><a href="causal-00-the-ladder.html">00 · The Ladder of Evidence</a></li>
+                <li><a href="causal-01-confounding-adjustment.html">01 · Confounding &amp; Adjustment</a></li>
+                <li><a href="causal-02-mmm-as-causal-model.html" class="active">02 · The MMM as a Causal Model</a></li>
+                <li><a href="causal-03-structural-mediation.html">03 · Structural Mediation</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Causal Inference 02: The MMM as a Causal Model</h1>
+            <p class="lead">
+                <a href="causal-01-confounding-adjustment.html">Rung 1</a> taught adjustment on a
+                four-channel toy. Veranda Home's real modeling problem looks nothing like a toy:
+                <strong>seven channels</strong> (two of them weak and bought on the same calendar),
+                <strong>thirteen candidate controls</strong> (two genuine confounders, four precision
+                variables, six irrelevant series someone exported from the warehouse, and one variable
+                that will quietly sabotage the model if you include it), demand-chasing budgets, and
+                realistically low media signal-to-noise. This page mirrors
+                <code>nbs/causal/causal_02_mmm_as_causal_model.ipynb</code>, which treats the fitted
+                MMM the way a careful practitioner should — as a <strong>causal model making explicit
+                claims</strong>, every one of them graded against the sealed answer key.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">5 / 7</div>
+                    <div class="stat-label">channels graded within ~±20% of truth with honest intervals, on the defensible control set</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">18% · 23%</div>
+                    <div class="stat-label">of TV's and Video's measured effect amputated by adding one bad control (the awareness mediator)</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">−18%</div>
+                    <div class="stat-label">TV's residual bias — invisible to a refutation battery that passes 3 of 4 attacks</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">0.996</div>
+                    <div class="stat-label">Radio–Print spend correlation — and the model answers with the two widest intervals by far</div>
+                </div>
+            </div>
+
+            <h2 id="world">The world on the analyst's desk</h2>
+            <p>
+                The data dictionary below is the analyst's causal homework, done: each candidate
+                control tagged by <em>why</em> it belongs (or doesn't) in the model. Two things deserve
+                special note — <code>brand_awareness</code> is a <strong>mediator</strong> (TV and
+                Video build it, it drives sales: conditioning on it would block the very effect we're
+                estimating), and Radio/Print are bought on <strong>one flighting calendar</strong>
+                (Print's spend is nearly a scaled copy of Radio's; correlation 0.996).
+            </p>
+            <table>
+                <thead>
+                    <tr><th>causal role</th><th>variables</th><th>in the model?</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>confounder</strong></td><td><code>category_demand</code>, <code>distribution</code></td><td>Yes — marked <code>CONFOUNDER</code> (wide, un-shrunk priors)</td></tr>
+                    <tr><td><strong>precision</strong></td><td><code>price</code>, <code>competitor_promo</code>, <code>weather</code>, <code>holiday</code></td><td>Yes — default shrinkage</td></tr>
+                    <tr><td><strong>irrelevant</strong></td><td><code>noise_1</code> … <code>noise_6</code></td><td>Yes — a real warehouse export always has them; the model should shrink them to zero on its own</td></tr>
+                    <tr><td><strong>mediator</strong></td><td><code>brand_awareness</code></td><td><strong>No</strong> — the trap, sprung on purpose below</td></tr>
+                </tbody>
+            </table>
+            <p>
+                Spend shares: TV 28%, Search 20%, Social 15%, Display 13%, Video 11%, Radio 8%,
+                Print 5%.
+            </p>
+
+            <h2 id="fit">The causal fit, graded</h2>
+            <p>
+                The model gets the defensible control set — both confounders, the four precision
+                controls, the six irrelevant series, and <em>not</em> the mediator — and its
+                counterfactual contributions are graded against the sealed key:
+            </p>
+            <table>
+                <thead>
+                    <tr><th>channel</th><th>true</th><th>estimate</th><th>rel. error</th><th>truth in 90% CI</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>TV</strong></td><td>8,948</td><td>7,302</td><td>−18%</td><td><strong>✗</strong></td></tr>
+                    <tr><td><strong>Search</strong></td><td>3,978</td><td>4,310</td><td>+8%</td><td>✓</td></tr>
+                    <tr><td><strong>Social</strong></td><td>3,948</td><td>4,617</td><td>+17%</td><td>✓</td></tr>
+                    <tr><td><strong>Display</strong></td><td>3,090</td><td>3,677</td><td>+19%</td><td>✓</td></tr>
+                    <tr><td><strong>Video</strong></td><td>8,286</td><td>8,956</td><td>+8%</td><td>✓</td></tr>
+                    <tr><td><strong>Radio</strong></td><td>3,301</td><td>2,098</td><td>−36%</td><td>✓</td></tr>
+                    <tr><td><strong>Print</strong></td><td>2,097</td><td>1,755</td><td>−16%</td><td>✓</td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                Counterfactual contribution (KPI units) vs the sealed key —
+                <code>nbs/artifacts/causal_02_estimands.json</code>.
+            </p>
+            <p>
+                Mostly honest: five of seven channels land within ~±20% and covered. The residual
+                wrinkle is <strong>TV</strong> — the hardest demand-chaser <em>and</em> a mediated
+                channel — still under-read by 18% even with the right controls, with the truth outside
+                its interval. The demand index is a noisy proxy;
+                <a href="causal-01-confounding-adjustment.html">rung 1's lesson</a> compounds at scale.
+                Structure (<a href="causal-03-structural-mediation.html">notebook 03</a>) and
+                experiments (notebooks 05+) exist precisely for what adjustment leaves behind. Radio's
+                −36% is a different story — the ridge, below, where the model at least <em>says</em> it
+                doesn't know.
+            </p>
+
+            <h2 id="estimands">Three estimands, three different questions</h2>
+            <p>
+                "What's the ROAS?" is not one question. The three below have different answers,
+                different uses, and different failure modes — a report that doesn't say which one it's
+                quoting is not yet a claim:
+            </p>
+            <table>
+                <thead>
+                    <tr><th>estimand</th><th>counterfactual question</th><th>decision it serves</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Total contribution</strong></td><td>"What if this channel had never run?"</td><td>annual planning, PR</td></tr>
+                    <tr><td><strong>Average ROAS</strong></td><td>contribution &divide; dollars spent</td><td>budget <em>defense</em></td></tr>
+                    <tr><td><strong>Marginal ROAS</strong></td><td>"What does the <em>next</em> 10% buy?"</td><td>budget <em>allocation</em></td></tr>
+                </tbody>
+            </table>
+            <p>
+                Because these worlds ship an executable truth, all three get graded — including the
+                marginal, which almost never gets graded in real life. The true marginal comes from
+                nudging each channel's whole spend path by +10% inside the data-generating process:
+            </p>
+            <p>
+                \[ \mathrm{mROAS}_c \;=\;
+                \frac{\sum_t \bigl( f_c(1.1\, s_{c,t}) - f_c(s_{c,t}) \bigr)}
+                     {0.1 \sum_t s_{c,t}} \]
+            </p>
+            <pre><code class="python">marg = model.compute_marginal_contributions(spend_increase_pct=10.0)
+lrn = model.compute_parameter_learning(prior_samples=2000)
+</code></pre>
+
+            <div class="chart-container" id="roasDumbbellChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — estimated average vs marginal ROAS per channel. Saturation
+                makes the marginal <strong>less than the average for every channel</strong> — in the
+                estimate <em>and</em> in the truth (e.g. Video: average 2.09 vs marginal 1.57
+                estimated; 1.93 vs 1.44 true). Ranking channels by average ROAS and allocating budget
+                by that ranking is a category error this chart makes visible: <em>defense</em> numbers
+                and <em>allocation</em> numbers are different estimands.
+            </p>
+
+            <h2 id="bad-control">The bad-control trap, sprung on purpose</h2>
+            <p>
+                <code>brand_awareness</code> correlates beautifully with sales. A naive modeler adds it
+                ("more signal!"). But it is a <strong>mediator</strong>: TV and Video work
+                <em>through</em> it. In a total-effect model, conditioning on a mediator amputates
+                exactly the effect you're paid to measure. The framework refuses a control explicitly
+                marked <code>MEDIATOR</code> at build time — so the notebook does what the naive
+                modeler does, and adds it <em>unmarked</em>:
+            </p>
+
+            <div class="chart-container" id="badControlChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the moment the mediator enters the control set, TV's
+                estimated contribution drops 7,302 &rarr; 5,996 (<strong>−18%</strong>) and Video's
+                8,956 &rarr; 6,863 (<strong>−23%</strong>) — both walking <em>away</em> from a truth
+                they were already below or near. A variable can be predictive, well-measured,
+                statistically significant — and still make the model causally worse.
+                <strong>Roles first, R&sup2; later.</strong>
+            </p>
+
+            <h2 id="refutation">Earning trust by attack: the refutation battery</h2>
+            <p>
+                A causal claim you haven't tried to break isn't a claim, it's a hope. The framework's
+                refutation suite attacks the fitted model four ways, each test refitting on perturbed
+                data:
+            </p>
+            <pre><code class="python">from mmm_framework.validation import ModelValidator, ValidationConfigBuilder
+
+summary = ModelValidator(model).validate(
+    ValidationConfigBuilder().quick().with_causal_refutation().build()
+)
+</code></pre>
+            <table>
+                <thead>
+                    <tr><th>test</th><th>expectation</th><th>original &rarr; refuted</th><th>result</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>placebo treatment</strong> (permuted spend)</td><td>effect should vanish</td><td>2.617 &rarr; 0.281</td><td><strong>FAIL</strong> — a residual survives the permutation</td></tr>
+                    <tr><td><strong>negative-control outcome</strong></td><td>no effect on an outcome media can't touch</td><td>0.963 &rarr; 0.135</td><td>Pass</td></tr>
+                    <tr><td><strong>random common cause</strong> (Social)</td><td>estimates should not move</td><td>0.983 &rarr; 1.090</td><td>Pass</td></tr>
+                    <tr><td><strong>data subset</strong> (80% of weeks, Search)</td><td>the story should survive</td><td>1.120 &rarr; 1.463</td><td>Pass</td></tr>
+                </tbody>
+            </table>
+            <div class="warning">
+                <h4>⚠️ Refutation ≠ verification</h4>
+                <div class="diag-strip">
+                    <span class="green">3 of 4 attacks passed ✓</span>
+                    <span class="red">TV's −18% residual bias: invisible to all four ✗</span>
+                </div>
+                <p>
+                    Note what the battery grades: <strong>internal consistency under
+                    perturbation</strong>. It re-fits the same structure on perturbed data; it cannot
+                    see that TV's point estimate carries residual confounding bias, because the
+                    perturbations <em>preserve</em> the very back-door that causes it. A model can pass
+                    every internal check and still be wrong about the world. Refutation is a lie
+                    detector for broken models, not a truth detector for biased worlds — that's what
+                    experiments are for.
+                </p>
+            </div>
+
+            <h2 id="learning">Did the data actually teach the model anything?</h2>
+            <p>
+                The second trust check: compare each parameter's prior to its posterior. A parameter
+                whose posterior is just its prior echoed back (<em>prior-dominated</em>) is a number
+                the <strong>analyst</strong> chose, not one the data produced — and it deserves an
+                asterisk in any deck.
+            </p>
+            <table>
+                <thead>
+                    <tr><th>parameter</th><th>prior mean</th><th>posterior mean</th><th>contraction</th><th>verdict</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>beta_TV</code></td><td>1.53</td><td><strong>2.73</strong></td><td><strong>0.13</strong></td><td>moderate — the relocation flag</td></tr>
+                    <tr><td><code>beta_Video</code></td><td>1.50</td><td>1.66</td><td>0.47</td><td>moderate</td></tr>
+                    <tr><td><code>beta_Print</code></td><td>1.51</td><td>0.79</td><td>0.59</td><td>strong</td></tr>
+                    <tr><td><code>beta_Display</code></td><td>1.51</td><td>0.95</td><td>0.62</td><td>strong</td></tr>
+                    <tr><td><code>beta_Radio</code></td><td>1.53</td><td>0.83</td><td>0.63</td><td>strong</td></tr>
+                    <tr><td><code>beta_Social</code></td><td>1.46</td><td>0.98</td><td>0.63</td><td>strong</td></tr>
+                    <tr><td><code>beta_Search</code></td><td>1.50</td><td>1.12</td><td>0.83</td><td>strong</td></tr>
+                </tbody>
+            </table>
+            <p>
+                The diagnostic's headline is <code>beta_TV</code>: by far the lowest contraction of the
+                seven media coefficients (0.13) combined with the largest prior&rarr;posterior move
+                (1.53 &rarr; 2.73) — the <strong>relocated</strong> signature, a posterior that moved
+                far from the prior <em>without narrowing</em>. That is the model waving a small flag
+                over exactly the channel the sealed key says carries residual bias: the data is pulling
+                hard against the prior, somewhere off to the side. It's an oblique warning, not a
+                diagnosis — but it's the only internal check on this page that points at TV at all.
+            </p>
+
+            <h2 id="ridge">The dignity of "I don't know": the Radio/Print ridge</h2>
+            <p>
+                Radio and Print carry real, material effects in truth — but their spend moves in
+                lockstep (correlation <strong>0.996</strong>). Observational data can identify their
+                <strong>combined</strong> effect; the <strong>split</strong> between them is simply not
+                in the data. The honest output is exactly what the model produces: enormous intervals
+                on each.
+            </p>
+
+            <div class="chart-container" id="ridgeChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — 90% interval width &divide; |estimate| per channel. The two
+                collinear channels carry, by far, the widest relative intervals:
+                Print <strong>2.30</strong> and Radio <strong>1.85</strong>, against 0.40–1.12 for
+                everything else. This is not a failure — it is the model honestly saying
+                <em>"I know Radio+Print matter; I cannot tell you the split."</em> A model that
+                returned tight intervals here would be lying. The split isn't a modeling problem; it's
+                a <strong>missing-information</strong> problem — and a single Radio lift test (notebooks
+                05–07) will snap the ridge shut.
+            </p>
+
+            <h2>What this rung bought</h2>
+            <p>
+                A fitted MMM, treated properly, is a <strong>structured set of causal claims</strong>:
+                named estimands, a defended control set, checks that attack the model from inside, and
+                wide intervals where the data is silent. On the realistic world that discipline gets
+                five of seven channels right and — crucially — <em>labels</em> the places it can't
+                settle: TV's residual bias (invisible internally, flagged only obliquely by the
+                relocation diagnostic) and the Radio/Print split (loudly visible as variance). Both
+                open questions have the same answer, and it isn't a better prior: for channels that
+                work through a funnel, model the funnel
+                (<a href="causal-03-structural-mediation.html">03 · Structural Mediation</a>); for what
+                no structure can settle, buy information with an experiment (notebooks 05–07).
+            </p>
+
+            <div class="check-understanding" id="quiz">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary><code>brand_awareness</code> has one of the strongest sales correlations in the warehouse. Why does adding it as a control make the model worse — and by how much here?</summary>
+                    <div class="quiz-answer">
+                        <p>Because it's a <em>mediator</em>: TV and Video cause awareness, and awareness causes sales. Conditioning on it blocks the mediated slice of exactly the effect a total-effect MMM is supposed to measure. Measured on this world: TV's estimated contribution drops 18% and Video's 23% the moment the mediator enters the control set — both moving <em>away</em> from truth. Predictive power is not a credential for a control; its position in the causal graph is. If a channel genuinely works through a funnel you want to model, that's a structural mediation model (<a href="causal-03-structural-mediation.html">notebook 03</a>), not a control.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>The refutation battery passed 3 of 4 attacks. Does that verify TV's point estimate?</summary>
+                    <div class="quiz-answer">
+                        <p>No — and this is the page's sharpest lesson. The battery re-fits the same model structure on perturbed data, so it tests <em>internal consistency</em>: does the effect vanish under placebo spend, stay flat under a fake confounder, survive on subsets? TV's −18% residual bias comes from an open back-door in the world, and every perturbation preserves that back-door — so no internal attack can see it. Refutation catches broken models; it cannot certify unbiased ones. Ground truth for a point estimate has to be bought with an intervention, which is where the series goes next (notebooks 05–07).</p>
+                    </div>
+                </details>
+            </div>
+
+            <div class="note" id="run-it">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/causal/causal_02_mmm_as_causal_model.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/causal/causal_02_mmm_as_causal_model.ipynb</code></a>
+                    on GitHub. All numbers from <code>nbs/artifacts/causal_02_estimands.json</code>,
+                    produced by <code>nbs/causal/causal_02_mmm_as_causal_model.ipynb</code>.
+                    Previous: <a href="causal-01-confounding-adjustment.html">Causal Inference 01 —
+                    Confounding &amp; Adjustment</a>. Next:
+                    <a href="causal-03-structural-mediation.html">Causal Inference 03 — Structural
+                    Mediation</a>, where the funnel gets modeled instead of amputated.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        const CI = {
+            colors: {
+                tv: '#3b6fb6', search: '#d98c3f', social: '#5a9e6f', display: '#b15a7a',
+                video: '#6f5aa0', radio: '#3f8f8f', print: '#8a6d3b',
+                truth: '#1a1a1a', danger: '#c0504d', good: '#4a8d57',
+                muted: '#9aa79a', grid: '#e3e9e3'
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display', 'Video', 'Radio', 'Print'];
+
+        // ==================================================================
+        // Average vs marginal ROAS (estimated) — the allocation-vs-defense gap
+        // nbs/artifacts/causal_02_estimands.json (marginal) + notebook table
+        // ==================================================================
+        function drawRoasDumbbell() {
+            const avg  = [0.65, 0.55, 0.75, 0.73, 2.09, 0.65, 0.84];
+            const marg = [0.56, 0.40, 0.52, 0.55, 1.57, 0.49, 0.62];
+
+            // Connecting segments (null-separated single trace).
+            const segX = [], segY = [];
+            CHANNELS.forEach(function(c, i) {
+                segX.push(c, c, null);
+                segY.push(avg[i], marg[i], null);
+            });
+
+            const traces = [
+                { type: 'scatter', mode: 'lines',
+                  x: segX, y: segY,
+                  line: { color: '#c9c9c9', width: 2 },
+                  hoverinfo: 'skip', showlegend: false },
+                { type: 'scatter', mode: 'markers', name: 'average ROAS (est)',
+                  x: CHANNELS, y: avg,
+                  marker: { color: CI.colors.muted, size: 11,
+                            line: { color: 'rgba(26,26,26,0.4)', width: 1 } },
+                  hovertemplate: '%{x} average: %{y:.2f}<extra></extra>' },
+                { type: 'scatter', mode: 'markers', name: 'marginal ROAS (est, next +10%)',
+                  x: CHANNELS, y: marg,
+                  marker: { color: CI.colors.truth, size: 11, symbol: 'diamond' },
+                  hovertemplate: '%{x} marginal: %{y:.2f}<extra></extra>' }
+            ];
+            const layout = CI.layout({
+                yaxis: { title: 'ROAS (incremental sales per dollar)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 70, r: 20, t: 40, b: 45 },
+                annotations: [{
+                    x: 4, y: 2.09, yanchor: 'bottom',
+                    text: 'marginal < average for every channel — saturation',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('roasDumbbellChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // The bad-control trap — mediator amputation, measured
+        // ==================================================================
+        function drawBadControl() {
+            const med = ['TV', 'Video'];
+            const causal   = [7302, 8956];
+            const withMed  = [5996, 6863];
+            const truth    = [8948, 8286];
+            const ampLabel = ['−18%', '−23%'];
+
+            const traces = [
+                { type: 'bar', name: 'causal control set',
+                  x: med, y: causal,
+                  marker: { color: CI.colors.good, opacity: 0.88 },
+                  hovertemplate: '%{x} causal fit: %{y:,}<extra></extra>' },
+                { type: 'bar', name: '+ brand_awareness (mediator)',
+                  x: med, y: withMed,
+                  marker: { color: CI.colors.danger, opacity: 0.88 },
+                  customdata: ampLabel,
+                  hovertemplate: '%{x} with mediator: %{y:,}<br>amputated %{customdata}<extra></extra>' },
+                { type: 'scatter', mode: 'markers', name: 'sealed truth',
+                  x: med, y: truth,
+                  marker: { color: CI.colors.truth, size: 14, symbol: 'diamond' },
+                  hovertemplate: '%{x} truth: %{y:,}<extra></extra>' }
+            ];
+            const layout = CI.layout({
+                barmode: 'group',
+                yaxis: { title: 'total contribution (KPI units)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 80, r: 20, t: 40, b: 45 },
+                annotations: med.map(function(c, i) {
+                    return { x: i + 0.15, y: withMed[i], yanchor: 'bottom',
+                             text: ampLabel[i] + ' ✗', showarrow: false,
+                             font: { size: 12, color: '#a44c43' } };
+                })
+            });
+            Plotly.newPlot('badControlChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // The Radio/Print ridge — the model KNOWS it doesn't know
+        // ==================================================================
+        function drawRidge() {
+            const chs    = ['Print', 'Radio', 'Display', 'Social', 'Search', 'Video', 'TV'];
+            const widths = [2.30, 1.85, 1.12, 0.72, 0.67, 0.57, 0.40];
+            const colors = chs.map(function(c) {
+                return (c === 'Print' || c === 'Radio') ? CI.colors.danger : CI.colors.muted;
+            });
+
+            const traces = [
+                { type: 'bar',
+                  x: chs, y: widths,
+                  marker: { color: colors, opacity: 0.9,
+                            line: { color: 'rgba(26,26,26,0.3)', width: 1 } },
+                  hovertemplate: '%{x}: interval ÷ estimate = %{y:.2f}<extra></extra>',
+                  showlegend: false }
+            ];
+            const layout = CI.layout({
+                yaxis: { title: '90% interval width ÷ |estimate|', rangemode: 'tozero' },
+                margin: { l: 80, r: 20, t: 30, b: 45 },
+                annotations: [{
+                    x: 0.5, y: 2.30, yanchor: 'bottom',
+                    text: 'corr(Radio, Print spend) = 0.996 — the split is not in the data',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }]
+            });
+            Plotly.newPlot('ridgeChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        function init() {
+            drawRoasDumbbell();
+            drawBadControl();
+            drawRidge();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

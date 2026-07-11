@@ -1,0 +1,29 @@
+{
+  "tv_default": {
+    "mde_roas": 1.4589491998470119,
+    "expected_readout": 0.3912913285420574
+  },
+  "tv_recommended": {
+    "intensity_pct": 21.209999999999994,
+    "duration": 16,
+    "mde_roas": 0.6317435349492461,
+    "power_shortfall": 0.018451913472576464
+  },
+  "print_verdict": {
+    "best_mde_roas": 4.700489331680359,
+    "power_shortfall": 0.7147823689303909
+  },
+  "opportunity": {
+    "spend_at_risk": 0.0,
+    "prob_kpi_loss": 0.0
+  },
+  "cooldown_weeks": {
+    "TV": 4,
+    "Search": 2,
+    "Print": 3
+  },
+  "identification": {
+    "w12": false,
+    "w24": true
+  }
+}

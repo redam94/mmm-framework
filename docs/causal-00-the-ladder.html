@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Inference 00: The Ladder of Evidence | MMM Framework</title>
+    <meta name="description" content="Naive attribution inflates Social 1.8× and reads the best channel lowest; even a full Bayesian MMM over-credits Search +43%. Rung 0 of the causal ladder.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-00-the-ladder.html">
+    <meta property="og:title" content="Causal Inference 00: The Ladder of Evidence | MMM Framework">
+    <meta property="og:description" content="Naive attribution inflates Social 1.8× and reads the best channel lowest; even a full Bayesian MMM over-credits Search +43%. Rung 0 of the causal ladder.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-00-the-ladder.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Causal Inference in Practice series.
+           Same conventions as the Pressure Tests guides.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .diag-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin: 0.75rem 0 0;
+        }
+        .diag-strip span {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            padding: 0.2rem 0.65rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+        }
+        .diag-strip span.green { border-color: rgba(106,191,138,0.6); color: #3f7a58; }
+        .diag-strip span.red   { border-color: rgba(201,112,103,0.6); color: #a44c43; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Causal Inference 00: The Ladder of Evidence | MMM Framework">
+    <meta name="twitter:description" content="Naive attribution inflates Social 1.8× and reads the best channel lowest; even a full Bayesian MMM over-credits Search +43%. Rung 0 of the causal ladder.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/causal-00-the-ladder.html",
+          "name": "Causal Inference 00: The Ladder of Evidence | MMM Framework",
+          "description": "Naive attribution inflates Social 1.8× and reads the best channel lowest; even a full Bayesian MMM over-credits Search +43%. Rung 0 of the causal ladder.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/causal-00-the-ladder.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/causal-00-the-ladder.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Causal Inference 00: The Ladder of Evidence",
+          "datePublished": "2026-06-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/causal-00-the-ladder.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/causal-00-the-ladder.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Demos & Reports",
+              "item": "https://redam94.github.io/mmm-framework/demos.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Causal Inference 00: The Ladder of Evidence",
+              "item": "https://redam94.github.io/mmm-framework/causal-00-the-ladder.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">The question dashboards can't answer</a></li>
+                <li><a href="#dashboard">The dashboard</a></li>
+                <li><a href="#naive">The naive read, graded</a></li>
+                <li><a href="#backdoor">The hidden third cause</a></li>
+                <li><a href="#better-model">A better model doesn't fix it</a></li>
+                <li><a href="#two-worlds">Same dashboard, different world</a></li>
+                <li><a href="#ladder">The ladder</a></li>
+                <li><a href="#quiz">Check your understanding</a></li>
+                <li><a href="#run-it">Run it yourself</a></li>
+            </ul>
+
+            <h3>Causal Inference in Practice</h3>
+            <ul class="sidebar-nav">
+                <li><a href="causal-00-the-ladder.html" class="active">00 · The Ladder of Evidence</a></li>
+                <li><a href="causal-01-confounding-adjustment.html">01 · Confounding &amp; Adjustment</a></li>
+                <li><a href="causal-02-mmm-as-causal-model.html">02 · The MMM as a Causal Model</a></li>
+                <li><a href="causal-03-structural-mediation.html">03 · Structural Mediation</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Causal Inference 00: The Ladder of Evidence</h1>
+            <p class="lead">
+                <strong>Veranda Home</strong> sells patio furniture, planters, and garden tools across
+                the country. Like every brand, it has a dashboard: weekly spend on four channels, weekly
+                sales, three years of history. And like every brand, it keeps asking the dashboard a
+                question the dashboard cannot answer: <em>"what did each channel actually cause?"</em>
+                The dashboard shows what happened. Causation is a claim about what would have happened
+                <strong>otherwise</strong> — a counterfactual — and no amount of staring at observed
+                history settles a counterfactual by itself. This page mirrors
+                <code>nbs/causal/causal_00_the_ladder.ipynb</code>, the opening notebook of an
+                eleven-part series in which every world is synthetic, every world ships a
+                <strong>sealed answer key</strong>, and every claim is graded against ground truth.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout danger">
+                    <div class="stat-value">1.8&times;</div>
+                    <div class="stat-label">Social's naive read vs its true ROAS — the hardest demand-chaser is the most over-credited</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">0.39&times;</div>
+                    <div class="stat-label">TV's naive read vs truth — the channel with the best true return per dollar reads lowest</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+43%</div>
+                    <div class="stat-label">Search over-read by a full Bayesian MMM on the same history — truth outside the 90% interval</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">1.02</div>
+                    <div class="stat-label">max r-hat on that fooled MMM — every convergence diagnostic green</div>
+                </div>
+            </div>
+
+            <p>
+                The series' conceit keeps everyone honest: the analyst never sees the answer key while
+                modeling. The key — each channel's true causal contribution, computed from the
+                data-generating process itself — is unsealed only to <em>grade</em>. The grading
+                machinery is itself machine-verified on every run, and every headline number on this
+                page comes from the notebook's recorded artifact, not from anyone's memory of it.
+            </p>
+
+            <h2 id="dashboard">The dashboard says everything works</h2>
+            <p>
+                Here is the dashboard-level "evidence" from Veranda's three years: every channel's
+                weekly spend is positively correlated with sales.
+            </p>
+            <table>
+                <thead>
+                    <tr><th>channel</th><th>corr(spend, sales)</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Search</strong></td><td>0.54</td></tr>
+                    <tr><td><strong>Social</strong></td><td>0.47</td></tr>
+                    <tr><td><strong>TV</strong></td><td>0.26</td></tr>
+                    <tr><td><strong>Display</strong></td><td>0.18</td></tr>
+                </tbody>
+            </table>
+            <p>
+                A dashboard reader — or a last-click report, or a correlation matrix — would call this
+                marketing that works, with Search and Social the stars. Hold that ranking; the rest of
+                the page dismantles it.
+            </p>
+
+            <h2 id="naive">The naive read, graded against the sealed key</h2>
+            <p>
+                The simplest quantitative version of the dashboard's story: regress sales on spend
+                (ordinary least squares, all four channels at once) and call each slope "the ROAS".
+                This is what a spreadsheet, a BI-tool trendline, or a junior analyst's first model does.
+                Then unseal the key. The world's true causal ROAS is the exact counterfactual quantity
+                the CMO is asking about — zero out one channel's spend inside the data-generating
+                process, sum the difference in response (carryover included), divide by dollars spent:
+            </p>
+            <p>
+                \[ \mathrm{ROAS}^{\text{true}}_c \;=\;
+                \frac{\sum_t \bigl( y_t(\mathbf{s}) - y_t(\mathbf{s} \mid s_c = 0) \bigr)}
+                     {\textstyle\sum_t s_{c,t}} \]
+            </p>
+
+            <div class="chart-container" id="naiveVsTruthChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — <code>nbs/artifacts/causal_00_naive_vs_truth.json</code>.
+                The two demand-chasing channels read high: Social's naive read is
+                <strong>1.8&times;</strong> its true ROAS and Search's is <strong>1.26&times;</strong>.
+                TV — which actually carries the largest true return per dollar of the four (0.68) —
+                reads <em>lowest</em> (0.27, just 0.39&times; of truth). A budget reallocation taken
+                from this table would move money in exactly the wrong direction.
+            </p>
+
+            <h2 id="backdoor">Why: the hidden third cause</h2>
+            <p>
+                The world this history was drawn from (<code>unobserved_confounding</code>) has a
+                <strong>latent demand</strong> signal — seasonal appetite for patio furniture, housing
+                turnover, weather, consumer mood — that does two things at once: it lifts
+                <strong>sales</strong> directly, and it lifts <strong>spend</strong>, because Veranda's
+                budgeting <em>chases</em> demand. Search and Social budgets are turned up when the
+                category heats up.
+            </p>
+            <p>
+                That double arrow is a <strong>back-door path</strong>:
+                spend &larr; demand &rarr; sales. Correlation flows along it even when advertising does
+                nothing. The channels that chase demand hardest (Search, Social) inherit the most
+                borrowed correlation — which is exactly the pattern the naive read produced.
+            </p>
+
+            <h2 id="better-model">"Just build a better model" doesn't fix it</h2>
+            <p>
+                Maybe the naive read fails because OLS ignores adstock and saturation? The notebook
+                uses the real thing: a Bayesian MMM with geometric carryover, saturating response
+                curves, a trend, and full uncertainty — the same model family this whole framework is
+                built on:
+            </p>
+            <pre><code class="python">from mmm_framework.synth import build
+from mmm_framework.model import BayesianMMM, TrendConfig, TrendType
+from mmm_framework.config import InferenceMethod, ModelConfig
+
+sc = build("unobserved_confounding", seed=1)   # the world, answer key sealed
+panel = sc.panel()                             # what the analyst gets to see
+
+model = BayesianMMM(
+    panel,
+    ModelConfig(inference_method=InferenceMethod.BAYESIAN_NUMPYRO,
+                n_draws=500, n_tune=500, n_chains=2,
+                use_parametric_adstock=True),
+    TrendConfig(type=TrendType.LINEAR),
+)
+results = model.fit(random_seed=7)
+contrib = model.compute_counterfactual_contributions(
+    compute_uncertainty=True, hdi_prob=0.9)
+</code></pre>
+
+            <div class="chart-container" id="mmmGradeChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the MMM's counterfactual contributions graded against the
+                sealed key. The MMM is a far better model of the <em>data</em> — and still over-credits
+                the demand-chasers: Search <strong>+43%</strong> and Social <strong>+38%</strong>, with
+                the truth <em>outside</em> both channels' 90% intervals. The bias is in the world, not
+                in the estimator.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What the diagnostics said</h4>
+                <div class="diag-strip">
+                    <span class="green">r-hat max 1.02 ✓</span>
+                    <span class="red">Search: truth outside 90% CI ✗</span>
+                    <span class="red">Social: truth outside 90% CI ✗</span>
+                </div>
+                <p>
+                    The model is confident <em>and</em> wrong about the chasers. Confounding is not a
+                    model-quality problem: no diagnostic that looks only at the fit — convergence,
+                    residuals, holdout accuracy — can see an open back-door, because the back-door is a
+                    fact about how the data came to exist, not about how well the curve goes through it.
+                </p>
+            </div>
+
+            <h2 id="two-worlds">Same dashboard, different world — the opposite failure</h2>
+            <p>
+                Here's the uncomfortable part. Draw a <strong>different</strong> hidden world —
+                <code>clean</code>, where spend is set by a media calendar that ignores demand entirely,
+                so there is no back-door at all — and put its dashboard next to Veranda's. The
+                correlation tables are the same <em>kind</em> of table. Nothing on either dashboard
+                announces which world generated it. Yet in the clean world the naive OLS read is biased
+                in the <strong>opposite direction</strong>: it under-reads every channel, because
+                straight lines can't represent carryover and saturation.
+            </p>
+
+            <div class="chart-container" id="worldCompareChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — naive read &divide; true ROAS in both worlds. Confounded
+                world: Social 1.80&times;, Search 1.26&times; (over-read), TV 0.39&times; (crushed).
+                Clean world: every channel between 0.43&times; and 0.80&times; (uniformly under-read).
+                Same method, same-looking data, opposite failure. <strong>The size and direction of
+                your error is a property of the world — and the world is exactly what observational
+                data won't show you.</strong>
+            </p>
+
+            <h2 id="ladder">The ladder of evidence</h2>
+            <p>
+                So: dashboards can't answer causal questions, and better curve-fitting doesn't rescue
+                them. What does? <strong>Stronger evidence, rung by rung.</strong> Each rung of this
+                series buys a specific, nameable thing — and has a specific, nameable failure mode that
+                the next rung exists to fix.
+            </p>
+            <table>
+                <thead>
+                    <tr><th>rung</th><th>evidence</th><th>what it buys</th><th>where</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>0</strong></td><td>A dashboard</td><td>Nothing causal — the cautionary tale</td><td><a href="causal-00-the-ladder.html">00 (here)</a></td></tr>
+                    <tr><td><strong>1</strong></td><td>Adjustment (controls)</td><td>Closes back-doors you can <em>observe</em></td><td><a href="causal-01-confounding-adjustment.html">01</a></td></tr>
+                    <tr><td><strong>2</strong></td><td>A causal MMM + estimands</td><td>Explicit claims, refutation checks, honest "I don't know"</td><td><a href="causal-02-mmm-as-causal-model.html">02</a></td></tr>
+                    <tr><td><strong>3</strong></td><td>Structural mediation</td><td>The funnel: brand channels that work <em>through</em> awareness</td><td><a href="causal-03-structural-mediation.html">03</a></td></tr>
+                    <tr><td><strong>4</strong></td><td>Latent-factor structure</td><td>Confounders you can't see but can <em>measure</em></td><td>04</td></tr>
+                    <tr><td><strong>5</strong></td><td>One experiment, read honestly</td><td>Ground truth for one channel, one window</td><td>05</td></tr>
+                    <tr><td><strong>6</strong></td><td>Calibration</td><td>The experiment repairs the model — surgically</td><td>06</td></tr>
+                    <tr><td><strong>7</strong></td><td>A portfolio of experiments</td><td>Evidence composes; conflicts surface</td><td>07</td></tr>
+                    <tr><td><strong>8</strong></td><td>Designed experiments</td><td>The <em>next</em> test, chosen by information value</td><td>08</td></tr>
+                    <tr><td><strong>9</strong></td><td>A measurement program</td><td>A year of learning, budgeted by EVPI</td><td>09</td></tr>
+                    <tr><td><strong>10</strong></td><td>The closed loop</td><td>Fit &rarr; design &rarr; measure &rarr; calibrate &rarr; converge</td><td>10</td></tr>
+                </tbody>
+            </table>
+            <p>
+                Every notebook in the series keeps three habits. <strong>Sealed keys:</strong> the truth
+                exists, is machine-checked, and is only unsealed to grade.
+                <strong>Directional asserts:</strong> every headline claim executes as an assert — if
+                the world or the framework drifts, the notebook fails to bake rather than silently
+                telling a stale story. <strong>One brand, many worlds:</strong> Veranda Home's dashboard
+                looks the same in every notebook; what changes is the <em>hidden history</em> — which is
+                the whole point.
+            </p>
+
+            <div class="check-understanding" id="quiz">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>Search has the highest spend–sales correlation on the dashboard (0.54). What does that number tell you about what Search caused?</summary>
+                    <div class="quiz-answer">
+                        <p>By itself, nothing. Correlation flows along <em>every</em> open path between spend and sales, including the back-door through latent demand — and Search's budget is the one most aggressively turned up when the category heats up, so it inherits the most borrowed correlation. In this world Search's naive read is 1.26&times; its true ROAS while TV, the channel with the best true return per dollar, has the <em>lowest</em> correlation and the lowest naive read. The dashboard ranking is close to inverted.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>A colleague proposes fixing the naive read by upgrading to a proper Bayesian MMM with adstock, saturation, and full uncertainty. What does the measured result say?</summary>
+                    <div class="quiz-answer">
+                        <p>The upgrade helps with the things models can help with — carryover, curvature, honest intervals — but the fitted MMM still over-credits Search by +43% and Social by +38%, with the truth outside both 90% intervals and every convergence diagnostic green (r-hat 1.02). Confounding is a property of the <em>world</em>, not the estimator: the back-door path exists in how the data was generated, and no amount of curve-fitting sophistication closes it. Closing it takes either a measured confounder (<a href="causal-01-confounding-adjustment.html">rung 1</a>) or an intervention (rungs 5+).</p>
+                    </div>
+                </details>
+            </div>
+
+            <div class="note" id="run-it">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/causal/causal_00_the_ladder.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/causal/causal_00_the_ladder.ipynb</code></a>
+                    on GitHub. All numbers from <code>nbs/artifacts/causal_00_naive_vs_truth.json</code>,
+                    produced by <code>nbs/causal/causal_00_the_ladder.ipynb</code>.
+                    Next on the ladder:
+                    <a href="causal-01-confounding-adjustment.html">Causal Inference 01 — Confounding &amp;
+                    Adjustment</a>, where three possible hidden histories of the same brand show what a
+                    control variable actually buys you — and the one disease no control can cure.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // CI: shared Plotly helpers for the Causal Inference series
+        // (same conventions as the Pressure Tests series).
+        // ------------------------------------------------------------------
+        const CI = {
+            colors: {
+                tv: '#3b6fb6', search: '#d98c3f', social: '#5a9e6f', display: '#b15a7a',
+                video: '#6f5aa0', radio: '#3f8f8f', print: '#8a6d3b',
+                truth: '#1a1a1a', danger: '#c0504d', good: '#4a8d57',
+                muted: '#9aa79a', grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CH_COLORS = [CI.colors.tv, CI.colors.search, CI.colors.social, CI.colors.display];
+
+        // ==================================================================
+        // Naive OLS read vs the sealed key
+        // nbs/artifacts/causal_00_naive_vs_truth.json
+        // ==================================================================
+        function drawNaiveVsTruth() {
+            const naive = [0.27, 0.80, 0.84, 0.57];
+            const truth = [0.68, 0.63, 0.47, 0.67];
+            const ratio = ['0.39×', '1.26×', '1.80×', '0.85×'];
+
+            const traces = [
+                { type: 'bar', name: "naive OLS 'ROAS'",
+                  x: CHANNELS, y: naive,
+                  marker: { color: CH_COLORS, opacity: 0.85,
+                            line: { color: 'rgba(26,26,26,0.3)', width: 1 } },
+                  customdata: ratio,
+                  hovertemplate: '%{x} naive read: %{y:.2f}<br>naive ÷ true = %{customdata}<extra></extra>' },
+                { type: 'bar', name: 'true causal ROAS (sealed key)',
+                  x: CHANNELS, y: truth,
+                  marker: { color: CI.colors.truth, opacity: 0.85 },
+                  hovertemplate: '%{x} truth: %{y:.2f}<extra></extra>' }
+            ];
+            const layout = CI.layout({
+                barmode: 'group',
+                yaxis: { title: 'ROAS (incremental sales per dollar)', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 70, r: 20, t: 40, b: 45 },
+                annotations: CHANNELS.map(function(c, i) {
+                    return { x: i - 0.19, y: naive[i], yanchor: 'bottom',
+                             text: ratio[i], showarrow: false,
+                             font: { size: 11, color: '#a44c43' } };
+                })
+            });
+            Plotly.newPlot('naiveVsTruthChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // A real Bayesian MMM on the same history — still fooled
+        // ==================================================================
+        function drawMmmGrade() {
+            const relErr  = [-18, 43, 38, -27];
+            const covered = [true, false, false, true];
+            const colors = CHANNELS.map(function(c, i) {
+                return covered[i] ? CH_COLORS[i] : CI.colors.danger;
+            });
+            const labels = ['−18%', '+43%', '+38%', '−27%'];
+
+            const traces = [
+                { type: 'bar',
+                  x: CHANNELS, y: relErr,
+                  marker: { color: colors, opacity: 0.9,
+                            line: { color: 'rgba(26,26,26,0.3)', width: 1 } },
+                  customdata: covered.map(function(cv) { return cv ? 'yes' : 'NO'; }),
+                  hovertemplate: '%{x}: %{y}% vs truth<br>truth inside 90% CI: %{customdata}<extra></extra>',
+                  showlegend: false }
+            ];
+            const layout = CI.layout({
+                yaxis: { title: 'relative error vs sealed key (%)', ticksuffix: '%',
+                         zerolinecolor: '#8b968b', zerolinewidth: 2 },
+                margin: { l: 80, r: 20, t: 30, b: 45 },
+                annotations: CHANNELS.map(function(c, i) {
+                    const over = relErr[i] > 0;
+                    return { x: i, y: relErr[i], yanchor: over ? 'bottom' : 'top',
+                             text: labels[i] + (covered[i] ? '' : ' ✗'),
+                             showarrow: false,
+                             font: { size: 12, color: covered[i] ? '#5a6b5a' : '#a44c43' } };
+                }).concat([{
+                    x: 1.5, y: 50, showarrow: false,
+                    text: '✗ = truth outside the 90% interval',
+                    font: { size: 11, color: '#a44c43' }
+                }])
+            });
+            Plotly.newPlot('mmmGradeChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // Naive ÷ true in the confounded world vs the clean world
+        // ==================================================================
+        function drawWorldCompare() {
+            const confounded = [0.39, 1.26, 1.80, 0.85];
+            const clean      = [0.43, 0.68, 0.80, 0.55];
+
+            const traces = [
+                { type: 'bar', name: 'confounded world (naive ÷ true)',
+                  x: CHANNELS, y: confounded,
+                  marker: { color: CI.colors.danger, opacity: 0.88 },
+                  hovertemplate: '%{x}: %{y:.2f}× of truth<extra>confounded</extra>' },
+                { type: 'bar', name: 'clean world (naive ÷ true)',
+                  x: CHANNELS, y: clean,
+                  marker: { color: CI.colors.good, opacity: 0.88 },
+                  hovertemplate: '%{x}: %{y:.2f}× of truth<extra>clean</extra>' }
+            ];
+            const layout = CI.layout({
+                barmode: 'group',
+                yaxis: { title: 'naive read ÷ true ROAS', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 70, r: 20, t: 40, b: 45 },
+                shapes: [{
+                    type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1, y1: 1,
+                    line: { color: CI.colors.truth, width: 1.5, dash: 'dash' }
+                }],
+                annotations: [{
+                    xref: 'paper', x: 0.99, y: 1, yanchor: 'bottom', xanchor: 'right',
+                    text: 'perfect attribution = 1.0',
+                    showarrow: false, font: { size: 11, color: '#5a6b5a' }
+                }]
+            });
+            Plotly.newPlot('worldCompareChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        function init() {
+            drawNaiveVsTruth();
+            drawMmmGrade();
+            drawWorldCompare();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
