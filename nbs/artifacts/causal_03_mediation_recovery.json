@@ -1,0 +1,55 @@
+{
+  "rhat_max": 1.0669702666387695,
+  "fit_seconds": 741.8,
+  "structural_recovery": {
+    "awareness_persistence": {
+      "true": 0.85,
+      "post": 0.853876267744633,
+      "covered": true
+    },
+    "beta_TV_to_awareness": {
+      "true": 0.9,
+      "post": 0.9967107867322006,
+      "covered": true
+    },
+    "lambda_awareness_to_consideration": {
+      "true": 2.5,
+      "post": 1.985954586456248,
+      "covered": true
+    },
+    "phi_Price_to_consideration": {
+      "true": -0.8,
+      "post": -0.9782926427257452,
+      "covered": true
+    },
+    "w_demand_to_consideration": {
+      "true": 0.6,
+      "post": 0.5924398830282664,
+      "covered": true
+    }
+  },
+  "half_life_weeks": 4.3878689040031364,
+  "latent_corr": {
+    "awareness": 0.9850854775032416,
+    "consideration": 0.9953736715283491,
+    "demand": 0.950591349776411
+  },
+  "proportion_mediated": {
+    "TV": 1.2629837134597406,
+    "Display": 0.6903173838798564,
+    "Social": 0.7764914711139539,
+    "Search": -1.0796352390714674e-18
+  },
+  "true_mediated_share": {
+    "TV": 1.0,
+    "Display": 1.0,
+    "Social": 1.0,
+    "Search": 0.0
+  },
+  "flat_grade": {
+    "TV": 0.2698925381308221,
+    "Display": -0.2540123033946289,
+    "Social": 0.38778769502513494,
+    "Search": -0.00017982962583737186
+  }
+}

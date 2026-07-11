@@ -1,0 +1,31 @@
+{
+  "n_geos": 10,
+  "design": {
+    "n_pairs": 5,
+    "mde_roas": 0.26663867177253253,
+    "se_roas": 0.09522809706161878,
+    "duration": 8
+  },
+  "aa_fpr": {
+    "pooled DiD": {
+      "naive": 0.008695652173913044,
+      "calibrated": 0.05217391304347826,
+      "inflated": false
+    },
+    "per-pair DiD": {
+      "naive": 0.08695652173913043,
+      "calibrated": 0.05217391304347826,
+      "inflated": false
+    },
+    "regression-adjusted": {
+      "naive": 0.2608695652173913,
+      "calibrated": 0.05217391304347826,
+      "inflated": true
+    }
+  },
+  "power_at_expected": {
+    "pooled DiD": 1.0,
+    "per-pair DiD": 1.0
+  },
+  "leaderboard_choice": "pooled_did"
+}

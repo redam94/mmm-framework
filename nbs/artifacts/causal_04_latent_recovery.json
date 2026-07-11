@@ -1,0 +1,32 @@
+{
+  "ladder": {
+    "A \u2014 ignore it": 4.056332208098089,
+    "B \u2014 indicators as controls": 1.0137965526163293,
+    "C \u2014 joint latent factor": 1.122237705174649
+  },
+  "search_rel_err": {
+    "A": 7.782922956989633,
+    "B": 1.7199451468162963,
+    "C": 1.9081327210019727
+  },
+  "loadings": {
+    "gdp_growth": {
+      "post": 0.9012039102190227,
+      "true": 0.9
+    },
+    "consumer_confidence": {
+      "post": 0.8689072080861112,
+      "true": 0.8
+    },
+    "unemployment": {
+      "post": -0.8265780379736596,
+      "true": -0.7
+    },
+    "retail_sales": {
+      "post": 0.7524098181642204,
+      "true": 0.6
+    }
+  },
+  "factor_corr": 0.9807179000182596,
+  "rhat_max": 1.01691994785567
+}

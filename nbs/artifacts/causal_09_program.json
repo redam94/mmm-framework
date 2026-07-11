@@ -1,0 +1,95 @@
+{
+  "as_of": "2024-07-01",
+  "grid": [
+    {
+      "channel": "Print",
+      "eig": 1.169250398309277,
+      "evoi": 633.6580775340218,
+      "priority": 1.0,
+      "quadrant": "test_now",
+      "retest_due": false
+    },
+    {
+      "channel": "Radio",
+      "eig": 1.026944867496289,
+      "evoi": 591.296702412713,
+      "priority": 0.9053052562153542,
+      "quadrant": "test_now",
+      "retest_due": true
+    },
+    {
+      "channel": "Display",
+      "eig": 0.5278310181711582,
+      "evoi": 158.27699731164816,
+      "priority": 0.3357956798068194,
+      "quadrant": "test_now",
+      "retest_due": false
+    },
+    {
+      "channel": "Social",
+      "eig": 0.369943230682389,
+      "evoi": 30.856407232864967,
+      "priority": 0.12412491676474373,
+      "quadrant": "learn_cheaply",
+      "retest_due": false
+    },
+    {
+      "channel": "Search",
+      "eig": 0.24723030106736052,
+      "evoi": 42.263532717906855,
+      "priority": 0.11875516185045651,
+      "quadrant": "monitor",
+      "retest_due": false
+    },
+    {
+      "channel": "TV",
+      "eig": 0.10352543622961433,
+      "evoi": 15.499677397625723,
+      "priority": 0.04653756043058719,
+      "quadrant": "deprioritize",
+      "retest_due": false
+    },
+    {
+      "channel": "Video",
+      "eig": 0.2504805727560388,
+      "evoi": 0.6065460701074699,
+      "priority": 0.014319823645545593,
+      "quadrant": "deprioritize",
+      "retest_due": false
+    }
+  ],
+  "evpi": 1623.948488218637,
+  "v_current": 36637.83594868969,
+  "calendar": [
+    {
+      "name": "Print geo holdout",
+      "channel": "Print",
+      "start": 0,
+      "end": 8
+    },
+    {
+      "name": "Radio re-test (flighting)",
+      "channel": "Radio",
+      "start": 26,
+      "end": 38
+    },
+    {
+      "name": "Display follow-up",
+      "channel": "Display",
+      "start": 39,
+      "end": 47
+    },
+    {
+      "name": "Social probe",
+      "channel": "Social",
+      "start": 48,
+      "end": 56
+    },
+    {
+      "name": "TV validation test",
+      "channel": "TV",
+      "start": 57,
+      "end": 73
+    }
+  ]
+}

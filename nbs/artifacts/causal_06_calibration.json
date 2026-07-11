@@ -1,0 +1,26 @@
+{
+  "readout": {
+    "observed": 0.49118851151058146,
+    "true": 0.5553430255308572,
+    "se": 0.08,
+    "window": [
+      100,
+      112
+    ]
+  },
+  "search_rel_err": {
+    "baseline": 0.4264386042098575,
+    "route_a_prior": 0.4170054594551814,
+    "route_b_likelihood": 0.05143472688084528,
+    "wrong_estimand": 0.3799224456480734
+  },
+  "social_untested_rel_err": {
+    "baseline": 0.3797662409852739,
+    "after_b": 0.3977893100808952
+  },
+  "derived_prior": {
+    "beta_target": 1.1450933302819142,
+    "beta_sigma": 0.18650164707807845,
+    "beta_fit_mean": 2.1993783052538323
+  }
+}
