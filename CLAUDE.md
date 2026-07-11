@@ -121,11 +121,16 @@ mmm-framework/
 │   │   │   ├── base.py
 │   │   │   ├── nested.py       # NestedMMM (mediation)
 │   │   │   ├── multivariate.py # MultivariateMMM (multi-outcome)
-│   │   │   └── combined.py     # CombinedMMM
+│   │   │   ├── combined.py     # CombinedMMM
+│   │   │   └── structural.py   # StructuralNestedMMM
 │   │   └── components/         # Extension components
+│   │       ├── builders.py
 │   │       ├── cross_effects.py
+│   │       ├── latent_states.py
 │   │       ├── observation.py
+│   │       ├── outcome.py
 │   │       ├── priors.py
+│   │       ├── temporal.py
 │   │       ├── transforms.py
 │   │       └── variable_selection.py
 │   └── reporting/              # HTML report generation
@@ -140,20 +145,26 @@ mmm-framework/
 │       │   ├── extended.py
 │       │   ├── fit.py
 │       │   ├── geo.py
+│       │   ├── ppc.py
+│       │   ├── prior.py
 │       │   └── roi.py
 │       ├── extractors/         # Data extraction for reports
 │       │   ├── base.py
 │       │   ├── bayesian.py
 │       │   ├── bundle.py
 │       │   ├── extended.py
+│       │   ├── factor_analysis.py
 │       │   ├── mixins.py
 │       │   └── pymc_marketing.py
 │       └── helpers/            # Report helper utilities
 │           ├── adstock.py
 │           ├── decomposition.py
+│           ├── measurement.py
 │           ├── mediated.py
+│           ├── prefit.py
 │           ├── prior_posterior.py
 │           ├── protocols.py
+│           ├── reallocation.py
 │           ├── results.py
 │           ├── roi.py
 │           ├── saturation.py

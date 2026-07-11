@@ -1186,8 +1186,8 @@ combined_model = CombinedMMM(
 results = combined_model.fit()
 
 # Access decomposed effects
-print(nested_model.get_mediation_effects())    # Direct vs mediated per channel
-print(multivariate_model.get_cross_effects_summary())  # Outcome → outcome</code></pre>
+print(combined_model.get_effect_decomposition())    # Direct vs indirect per channel/outcome
+print(combined_model.get_cross_effects_summary())   # Outcome → outcome cross-effects</code></pre>
 
             <h2 id="hierarchical">Hierarchical Structure</h2>
             <p>
