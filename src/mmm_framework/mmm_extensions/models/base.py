@@ -7,6 +7,7 @@ Provides common functionality for NestedMMM, MultivariateMMM, and CombinedMMM.
 from __future__ import annotations
 
 import warnings
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Sequence
 
@@ -589,6 +590,117 @@ class BaseExtendedMMM:
         """Get the fitted trace."""
         self._check_fitted()
         return self._trace
+
+    # -- posterior-predictive outcome (BayesianMMM.predict parity) ------------
+
+    @contextmanager
+    def _swapped_data(
+        self,
+        X_media: np.ndarray | None = None,
+        X_controls: np.ndarray | None = None,
+    ):
+        """Temporarily swap the graph's ``pm.Data`` containers for a
+        counterfactual pass, restoring the training data afterwards — the same
+        in-graph pattern :class:`StructuralNestedMMM` uses for its exact
+        counterfactual mediation effects. ``X_media`` is raw-scale (the graph
+        normalizes internally); ``X_controls`` is raw-scale and re-standardized
+        with the training moments when the model standardizes controls."""
+        model = self.model
+        updates: dict[str, np.ndarray] = {}
+        restores: dict[str, np.ndarray] = {}
+        if X_media is not None:
+            if "X_media" not in model.named_vars:
+                raise ValueError(
+                    "This model's graph has no 'X_media' data container; "
+                    "counterfactual media prediction is not supported."
+                )
+            updates["X_media"] = np.asarray(X_media, dtype=float)
+            restores["X_media"] = np.asarray(self.X_media, dtype=float)
+        if X_controls is not None:
+            if "X_controls" not in model.named_vars:
+                raise ValueError("This model has no control-variable data container.")
+            xc = np.asarray(X_controls, dtype=float)
+            c_mean = getattr(self, "_controls_mean", None)
+            c_std = getattr(self, "_controls_std", None)
+            if c_mean is not None and c_std is not None:
+                xc = (xc - c_mean) / c_std
+            updates["X_controls"] = xc
+            restores["X_controls"] = np.asarray(self.X_controls, dtype=float)
+        if not updates:
+            yield
+            return
+        with model:
+            try:
+                pm.set_data(updates)
+                yield
+            finally:
+                pm.set_data(restores)
+
+    def predict(
+        self,
+        X_media: np.ndarray | None = None,
+        X_controls: np.ndarray | None = None,
+        return_original_scale: bool = True,
+        hdi_prob: float = 0.94,
+        random_seed: int | None = None,
+    ):
+        """Posterior-predictive outcome draws, mirroring
+        :meth:`mmm_framework.model.base.BayesianMMM.predict`.
+
+        Resamples the outcome likelihood (``y_obs``) under the posterior —
+        optionally with counterfactual raw-scale ``X_media`` / ``X_controls``
+        swapped into the graph — and returns a
+        :class:`~mmm_framework.model.results.PredictionResults` whose
+        ``y_pred_samples`` has shape ``(n_draws, n_obs)``. Latent states
+        (mediators, factors) keep their posterior draws, so counterfactuals
+        are structure-preserving.
+
+        Single-outcome models only (:class:`NestedMMM`,
+        :class:`StructuralNestedMMM`): the joint multi-outcome likelihood of
+        MultivariateMMM / CombinedMMM has no single prediction axis and
+        raises ``NotImplementedError``.
+        """
+        self._check_fitted()
+        model = self.model
+        if "y_obs" not in model.named_vars:
+            raise NotImplementedError(
+                f"{type(self).__name__} has no 'y_obs' outcome node."
+            )
+        if model.named_vars["y_obs"].ndim != 1:
+            raise NotImplementedError(
+                f"{type(self).__name__}'s outcome is multi-dimensional "
+                "(joint multi-outcome likelihood); predict() supports "
+                "single-outcome extension models only."
+            )
+
+        with self._swapped_data(X_media, X_controls):
+            with model:
+                pp = pm.sample_posterior_predictive(
+                    self._trace,
+                    var_names=["y_obs"],
+                    random_seed=random_seed,
+                    progressbar=False,
+                )
+
+        y_samples = pp.posterior_predictive["y_obs"].values
+        y_samples = y_samples.reshape(-1, y_samples.shape[-1]).astype(float)
+        # The extension likelihoods observe the STANDARDIZED outcome; bridge
+        # back to the caller's units exactly as the base model does.
+        if return_original_scale:
+            y_samples = y_samples * self.y_std + self.y_mean
+
+        from ...model.results import PredictionResults
+        from ...utils import compute_hdi_bounds
+
+        y_hdi_low, y_hdi_high = compute_hdi_bounds(y_samples, hdi_prob=hdi_prob, axis=0)
+        return PredictionResults(
+            posterior_predictive=pp,
+            y_pred_mean=y_samples.mean(axis=0),
+            y_pred_std=y_samples.std(axis=0),
+            y_pred_hdi_low=y_hdi_low,
+            y_pred_hdi_high=y_hdi_high,
+            y_pred_samples=y_samples,
+        )
 
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary statistics."""
