@@ -3283,6 +3283,145 @@ def generate_client_report(
 
 
 @tool
+def generate_interactive_report(
+    state: Annotated[dict, InjectedState],
+    client_name: str = None,
+    report_title: Optional[str] = None,
+    analysis_period: Optional[str] = None,
+    ai_insights: bool = True,
+    max_draws: int = 200,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """
+    Generate the interactive **MMM Results Report** from the fitted model.
+
+    The fitted-model sibling of the Model Design Readout: same editorial
+    layout, but the headline numbers recompute in the browser. It embeds
+    thinned posterior draws so the reader can: pick any start/end date for
+    the executive summary, channel-ROI forest plot (with a year-over-year
+    split) and estimand explorer (contribution ROI / marginal ROAS /
+    incremental contribution / KPI share); switch geo on the model-fit plot
+    (nested 50/80/90/95% predictive bands + fit statistics); explore
+    response / ROI / marginal-ROI curves with current-spend markers; view
+    carryover kernels, prior-vs-posterior densities on the estimand scale,
+    an approximate budget reallocator, a no-refit sensitivity battery,
+    prior predictive checks and the causal-assumptions record. Every
+    estimate carries a credible interval.
+
+    Call after `fit_mmm_model`. Building takes a minute or two (it runs a
+    few extra posterior passes for the marginal contrast and response-curve
+    grid).
+
+    Args:
+        client_name: Client/company name (defaults to the branded client name).
+        report_title: Optional title (default "MMM Results Report").
+        analysis_period: Optional period string, e.g. "Q1–Q2 2024".
+        ai_insights: True (default) enriches the narrative with the LLM;
+            False keeps the grounded templated prose (no LLM call).
+        max_draws: Posterior draws embedded per channel/period matrix
+            (payload size vs. interval fidelity; default 200).
+    """
+    _activate_thread(config)
+    mmm = _MODEL_CACHE.get("fitted_model")
+    results = _MODEL_CACHE.get("fit_results")
+    if mmm is None:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="No fitted model found. Please fit a model first.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+    from mmm_framework.agents.branding import (
+        branding_to_channel_colors,
+        is_active as _brand_active,
+        resolve_branding,
+    )
+
+    branding = resolve_branding(get_current_thread())
+    if not client_name:
+        client_name = (branding or {}).get("client_name") or "Client"
+    report_path = str(_ws.report_path("agent_results_report.html"))
+
+    try:
+        from mmm_framework.reporting import InteractiveReportGenerator
+        from mmm_framework.reporting.config import (
+            ColorPalette,
+            ColorScheme,
+            ReportConfig,
+        )
+
+        llm = None
+        if ai_insights:
+            try:
+                from mmm_framework.agents.llm import build_llm
+
+                llm = build_llm()
+            except Exception:
+                llm = None
+
+        channel_colors = None
+        if _brand_active(branding):
+            channels = [
+                m.get("name")
+                for m in _normalized_spec(state.get("model_spec")).get(
+                    "media_channels", []
+                )
+                if m.get("name")
+            ]
+            if channels:
+                channel_colors = branding_to_channel_colors(branding, channels)
+
+        rcfg = ReportConfig(
+            title=report_title or "MMM Results Report",
+            client=client_name,
+            analysis_period=analysis_period,
+            color_scheme=ColorScheme.from_palette(ColorPalette.AUGUR),
+            confidential=True,
+        )
+        gen = InteractiveReportGenerator(
+            mmm,
+            results,
+            config=rcfg,
+            llm=llm,
+            channel_colors=channel_colors,
+            max_draws=max_draws,
+        )
+        gen.save_report(report_path)
+        summary = (
+            f"Interactive results report generated at `{report_path}`. It is "
+            "self-recomputing: date-window, geo and estimand selectors "
+            "re-aggregate the embedded posterior draws in the browser."
+        )
+    except Exception as e:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Failed to generate interactive report: {e}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+
+    dashboard_data = dict(state.get("dashboard_data") or {})
+    dashboard_data["results_report_path"] = report_path
+
+    return Command(
+        update={
+            "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
+            "dashboard_data": dashboard_data,
+        }
+    )
+
+
+@tool
 def generate_model_design_readout(
     state: Annotated[dict, InjectedState],
     client_name: str = None,
@@ -6936,6 +7075,7 @@ TOOLS = [
     generate_project_report,
     generate_slide_deck,
     generate_client_report,
+    generate_interactive_report,
     generate_model_design_readout,
     generate_model_defense_report,
     generate_client_slides,

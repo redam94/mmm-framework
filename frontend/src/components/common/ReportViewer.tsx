@@ -8,10 +8,16 @@ export type ReportKind =
   | 'project-slides'
   | 'prefit'
   | 'defense'
-  | 'client-slides';
+  | 'client-slides'
+  | 'results';
 
 const REPORTS: Record<ReportKind, { path: string; label: string; file: string }> = {
   mmm: { path: '/report', label: 'MMM report', file: 'mmm_report.html' },
+  results: {
+    path: '/results-report',
+    label: 'Interactive results report',
+    file: 'mmm_results_report.html',
+  },
   project: { path: '/project-report', label: 'Project report', file: 'project_report.html' },
   client: { path: '/client-report', label: 'Client report', file: 'client_report.html' },
   'project-slides': { path: '/project-slides', label: 'Slides', file: 'project_slides.html' },
