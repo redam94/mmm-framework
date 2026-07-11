@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Measurement Research | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Research essays on modern marketing measurement: causal inference, geo experiments, Bayesian MMM, experimental design, bandits, and the pitfalls in between.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog.html">
+    <meta property="og:title" content="Modern Measurement Research">
+    <meta property="og:description" content="Research essays on modern marketing measurement: causal inference, geo experiments, Bayesian MMM, experimental design, bandits, and the pitfalls in between.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <!-- Page-Specific Styles (tokens only — dark theme handled by the token swap) -->
+    <style>
+        .hero {
+            padding-top: 8rem;
+            padding-bottom: 3rem;
+            background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%);
+        }
+
+        .hero h1 {
+            margin-bottom: 1rem;
+        }
+
+        .arc-section {
+            padding: 2.5rem 0;
+        }
+
+        .arc-kicker {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--color-primary-dark);
+            margin-bottom: 0.35rem;
+        }
+
+        .arc-section h2 {
+            margin-bottom: 0.5rem;
+        }
+
+        .arc-intro {
+            color: var(--color-text-muted);
+            max-width: 62ch;
+            margin-bottom: 1.75rem;
+        }
+
+        .post-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .post-card {
+            display: block;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            transition: var(--transition-smooth);
+            text-decoration: none;
+            color: var(--color-text);
+        }
+
+        .post-card:hover {
+            border-color: var(--border-hover);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        .post-card-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem 0.6rem;
+            align-items: center;
+            font-size: 0.83rem;
+            color: var(--color-text-muted);
+            margin-bottom: 0.6rem;
+        }
+
+        .post-card-meta time {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .post-card h3 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.25rem;
+            line-height: 1.3;
+            margin: 0 0 0.5rem;
+        }
+
+        .post-card p {
+            color: var(--color-text-muted);
+            font-size: 0.95rem;
+            margin: 0;
+        }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Modern Measurement Research">
+    <meta name="twitter:description" content="Research essays on modern marketing measurement: causal inference, geo experiments, Bayesian MMM, experimental design, bandits, and the pitfalls in between.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog.html",
+          "name": "Modern Measurement Research | MMM Framework",
+          "description": "Research essays on modern marketing measurement: causal inference, geo experiments, Bayesian MMM, experimental design, bandits, and the pitfalls in between.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation and Footer are injected by components.js -->
+
+    <section class="hero">
+        <div class="container">
+            <h1>Modern Measurement Research</h1>
+            <p class="lead">Research essays on how marketing measurement actually works — and where it quietly fails. Written from the primary literature: causal inference, geo experiments, Bayesian media mix modeling, and the design of the next experiment.</p>
+        </div>
+    </section>
+
+    <section class="arc-section">
+        <div class="container">
+            <p class="arc-kicker">Part I</p>
+            <h2>Why Measurement Is Hard</h2>
+            <p class="arc-intro">Before any method can help, it pays to understand why the naive answers are wrong. Observational data flatters advertising, and untangling cause from correlation takes deliberate machinery.</p>
+            <div class="post-grid">
+                <a class="post-card" href="blog-activity-bias.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-04-08">Apr 8, 2026</time>
+                        <span class="post-tag">Causal inference</span>
+                        <span>&approx; 9 min read</span>
+                    </div>
+                    <h3>Activity Bias: Why Observational Ad Measurement Flatters Itself</h3>
+                    <p>People who browse more see more ads and do more of everything else online. That single fact can inflate observational estimates of ad effectiveness by orders of magnitude.</p>
+                </a>
+                <a class="post-card" href="blog-causal-estimates-observational.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-04-10">Apr 10, 2026</time>
+                        <span class="post-tag">Causal inference</span>
+                        <span>&approx; 15 min read</span>
+                    </div>
+                    <h3>Uncovering Causal Estimates from Non-Experimental Data</h3>
+                    <p>A working tour of the identification strategies that stand between you and a causal claim when you cannot randomize: adjustment, instruments, panels, discontinuities, and sensitivity analysis.</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section class="arc-section">
+        <div class="container">
+            <p class="arc-kicker">Part II</p>
+            <h2>Quasi-Experimental Methods</h2>
+            <p class="arc-intro">The workhorse designs for measuring incrementality without a full randomized experiment — and the assumptions each one quietly leans on.</p>
+            <div class="post-grid">
+                <a class="post-card" href="blog-geo-experiments-tbr.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-07-03">Jul 3, 2026</time>
+                        <span class="post-tag">Experiments</span>
+                        <span>&approx; 14 min read</span>
+                    </div>
+                    <h3>Geo Experiments: TBR, Power, and the Stationarity You're Assuming</h3>
+                    <p>Time-based regression turns a geo split into a causal estimate of ad-driven lift. It works — right up until the pre-period relationship between markets stops holding.</p>
+                </a>
+                <a class="post-card" href="blog-synthetic-control.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-04-11">Apr 11, 2026</time>
+                        <span class="post-tag">Causal inference</span>
+                        <span>&approx; 15 min read</span>
+                    </div>
+                    <h3>Synthetic Control, Done Right</h3>
+                    <p>When only one market gets the treatment, a weighted blend of untreated markets can stand in for the counterfactual — if you respect the method's bias theory, placebo inference, and requirements.</p>
+                </a>
+                <a class="post-card" href="blog-staggered-did.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-06-17">Jun 17, 2026</time>
+                        <span class="post-tag">Causal inference</span>
+                        <span>&approx; 13 min read</span>
+                    </div>
+                    <h3>Modern Staggered Difference-in-Differences</h3>
+                    <p>Two-way fixed effects breaks when treatment rolls out in waves and effects differ across markets or build over time. Group-time average treatment effects rebuild DiD from clean comparisons — and tell you exactly what you're averaging.</p>
+                </a>
+                <a class="post-card" href="blog-causalimpact-bsts.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-06-28">Jun 28, 2026</time>
+                        <span class="post-tag">Causal inference</span>
+                        <span>&approx; 13 min read</span>
+                    </div>
+                    <h3>CausalImpact: Counterfactuals from Bayesian Structural Time Series</h3>
+                    <p>Fit a state-space model to the pre-period, forecast the world where the campaign never launched, and read the lift as the gap — with honest uncertainty that widens over time.</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section class="arc-section">
+        <div class="container">
+            <p class="arc-kicker">Part III</p>
+            <h2>Models and Their Failure Modes</h2>
+            <p class="arc-intro">Media mix models encode strong assumptions about carryover, saturation, and selection. These essays cover the modeling choices that matter and the mistakes that survive peer review.</p>
+            <div class="post-grid">
+                <a class="post-card" href="blog-bayesian-mmm-carryover-shape.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-06-17">Jun 17, 2026</time>
+                        <span class="post-tag">MMM</span>
+                        <span>&approx; 14 min read</span>
+                    </div>
+                    <h3>Carryover and Shape Effects in Bayesian MMM</h3>
+                    <p>Adstock and saturation are where a media mix model's causal claims live. How the carryover and Hill-shape transforms work, why their parameters are hard to identify, and what priors buy you.</p>
+                </a>
+                <a class="post-card" href="blog-carryover-experiment-timing.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-07-01">Jul 1, 2026</time>
+                        <span class="post-tag">Experiments</span>
+                        <span>&approx; 13 min read</span>
+                    </div>
+                    <h3>Adstock Dynamics and the Timing of Sequential Experiments</h3>
+                    <p>Carryover doesn't just complicate models — it contaminates experiments. How long to wash out, how long to measure, and when a lagged effect makes back-to-back tests read each other's answers.</p>
+                </a>
+                <a class="post-card" href="blog-modeling-pitfalls.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-04-09">Apr 9, 2026</time>
+                        <span class="post-tag">Practice</span>
+                        <span>&approx; 12 min read</span>
+                    </div>
+                    <h3>Common Pitfalls in Statistical Modeling</h3>
+                    <p>A field guide to the failure modes that quietly invalidate applied statistical work — from confounded regressions and the R-squared trap to the garden of forking paths.</p>
+                </a>
+                <a class="post-card" href="blog-multiple-comparisons.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-04-09">Apr 9, 2026</time>
+                        <span class="post-tag">Practice</span>
+                        <span>&approx; 14 min read</span>
+                    </div>
+                    <h3>Hundreds of Models, One Winner: Multiple Comparisons and the Winner's Curse</h3>
+                    <p>Select the best of hundreds of model runs and its performance is almost surely exaggerated. Type S/M errors, the winner's curse, and why partial pooling beats correction-by-penalty.</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section class="arc-section">
+        <div class="container">
+            <p class="arc-kicker">Part IV</p>
+            <h2>Designing the Next Experiment</h2>
+            <p class="arc-intro">Measurement is a loop, not a report. Information theory tells you which experiment to run next; bandits tell you how to earn while you learn.</p>
+            <div class="post-grid">
+                <a class="post-card" href="blog-lindley-to-dad.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-06-27">Jun 27, 2026</time>
+                        <span class="post-tag">Experimental design</span>
+                        <span>&approx; 15 min read</span>
+                    </div>
+                    <h3>From Lindley to Deep Adaptive Design: 65 Years of Bayesian Experimental Design</h3>
+                    <p>The expected-information-gain criterion is older than most measurement teams realize. From Lindley's 1956 measure to variational estimators and amortized design policies.</p>
+                </a>
+                <a class="post-card" href="blog-geo-holdout-eig.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-07-01">Jul 1, 2026</time>
+                        <span class="post-tag">Experimental design</span>
+                        <span>&approx; 9 min read</span>
+                    </div>
+                    <h3>A Geo-Holdout Is a Bayesian Experimental Design: Computing Its EIG</h3>
+                    <p>Encode a holdout test as a design vector, treat the MMM posterior as the prior, and the value of the experiment becomes a computable quantity — expected information gain.</p>
+                </a>
+                <a class="post-card" href="blog-bed-bo-bandits.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-07-01">Jul 1, 2026</time>
+                        <span class="post-tag">Experimental design</span>
+                        <span>&approx; 13 min read</span>
+                    </div>
+                    <h3>BED vs. Bayesian Optimization vs. Bandits for Media Experimentation</h3>
+                    <p>Three adaptive frameworks, three different goals: learn the model, find the optimum, or earn while learning. Choosing the wrong one wastes budget in predictable ways.</p>
+                </a>
+                <a class="post-card" href="blog-thompson-sampling.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-07-03">Jul 3, 2026</time>
+                        <span class="post-tag">Experimental design</span>
+                        <span>&approx; 14 min read</span>
+                    </div>
+                    <h3>Thompson Sampling: A Practical Tour</h3>
+                    <p>Sample from the posterior, act as if the sample were true, repeat. Why this one-line algorithm earns near-optimal regret, and what breaks when feedback is delayed or non-stationary.</p>
+                </a>
+                <a class="post-card" href="blog-continuous-learning-interactions.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-07-01">Jul 1, 2026</time>
+                        <span class="post-tag">MMM</span>
+                        <span>&approx; 13 min read</span>
+                    </div>
+                    <h3>Continuous Learning in Media Measurement (with Interaction Effects)</h3>
+                    <p>Closing the loop: a standing program of designed experiments that keeps a response model current — including the channel-interaction effects one-off tests never identify.</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>From Reading to Measuring</h2>
+            <p>The framework puts these ideas to work: causal identification, calibrated Bayesian MMMs, and experiment design in one loop.</p>
+            <div class="cta-buttons">
+                <a href="causal-inference.html" class="btn btn-white">Causal Inference Methodology</a>
+                <a href="getting-started.html" class="btn btn-outline-white">Get Started</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Shared Components (loads nav + footer) -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

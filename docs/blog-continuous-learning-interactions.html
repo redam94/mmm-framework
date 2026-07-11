@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuous Learning in Media Measurement (with Interaction Effects) | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Continuous learning for media measurement: a closed loop of designed experiments, shrinkage priors, and information gain that learns channel interactions.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-continuous-learning-interactions.html">
+    <meta property="og:title" content="Continuous Learning in Media Measurement (with Interaction Effects)">
+    <meta property="og:description" content="Continuous learning for media measurement: a closed loop of designed experiments, shrinkage priors, and information gain that learns channel interactions.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-continuous-learning-interactions.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Continuous Learning in Media Measurement (with Interaction Effects)">
+    <meta name="twitter:description" content="Continuous learning for media measurement: a closed loop of designed experiments, shrinkage priors, and information gain that learns channel interactions.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-continuous-learning-interactions.html",
+          "name": "Continuous Learning in Media Measurement (with Interaction Effects) | MMM Framework",
+          "description": "Continuous learning for media measurement: a closed loop of designed experiments, shrinkage priors, and information gain that learns channel interactions.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-continuous-learning-interactions.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-continuous-learning-interactions.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Continuous Learning in Media Measurement (with Interaction Effects)",
+          "datePublished": "2026-07-01",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-continuous-learning-interactions.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-continuous-learning-interactions.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Continuous Learning in Media Measurement (with Interaction Effects)",
+              "item": "https://redam94.github.io/mmm-framework/blog-continuous-learning-interactions.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#why-one-shot-fails">Why One-Shot Measurement Falls Short</a></li>
+                <li><a href="#the-cell-explosion">The Cell Explosion</a></li>
+                <li><a href="#model-the-surface">Model the Surface, Not the Grid</a></li>
+                <li><a href="#shrinkage-priors">Let Interactions Exist — Cheaply</a></li>
+                <li><a href="#the-closed-loop">The Closed Loop</a></li>
+                <li><a href="#one-logic">One Logic: Information and Value</a></li>
+                <li><a href="#where-the-series-meets">Where the Series Meets</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Continuous Learning in Media Measurement (with Interaction Effects)</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-01">July 1, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">MMM</span>
+            </p>
+            <p class="lead">A measurement study answers one question about one quarter's plan, and its answer starts aging the day it lands. This post — the capstone of the series — argues for the alternative: a standing program in which a living response model and a stream of deliberately designed experiments keep each other honest, including on the channel interactions no testing calendar could ever enumerate.</p>
+
+            <p>Everything earlier in the series is a component of this machine. The quasi-experimental posts built instruments for reading a single test cleanly; the experimental-design posts built the targeting system that decides which test to run. What remains is to assemble them — and the assembly is forced by the hardest object in media measurement: the interaction effect.</p>
+
+            <h2 id="why-one-shot-fails">Why One-Shot Measurement Falls Short</h2>
+            <p>The default posture of media measurement is static: fit a media mix model to two or three years of weekly observational history, read off channel effects, hand the deck to planning. Two problems undermine it, and they are different problems.</p>
+            <p>The first is <strong>information starvation</strong>. A typical MMM sample is small relative to the flexibility of the model — a hundred-odd weekly observations against saturation shapes, carryover rates, and a coefficient per channel. In this regime the posterior for many parameters is dominated by the prior, and the data cannot correct a bias the prior brings in. The consequence surfaces exactly where it hurts: Jin et al. (2017) found that the optimal media mix implied by a fitted MMM carries large variance — in one of their scenarios the posterior over the optimum was multimodal, with three distinct candidate allocations. The decision layer does not average this uncertainty away; it amplifies it.</p>
+            <p>The second is <strong>decay</strong>. Even a well-identified estimate describes the mix you actually ran, in the market that existed while you ran it. Spend levels move, creative rotates, competitors react, channels change their auction dynamics. A one-off geo experiment patches the first problem locally — it injects clean causal information about one channel at one point in time — but it is just as much a snapshot as the model it calibrates. Twelve months later, both are historical documents.</p>
+            <p>Continuous learning replaces the one-shot fit with a loop: <em>model</em> the response surface as a Bayesian posterior, <em>decide</em> the allocation against that posterior, <em>experiment</em> where the posterior is weakest and the decision most sensitive, and <em>update</em>. Each pass through the loop is cheap; the program, not any single study, is the unit of measurement.</p>
+
+            <h2 id="the-cell-explosion">The Cell Explosion</h2>
+            <p>Interactions — TV priming branded search, two prospecting channels cannibalizing the same audience — are the terms that make the loop necessary rather than merely nice. They are hard for a structural reason: they are precisely the parameters with the least observational identification. Channels are planned together; seasonal flighting moves budgets up and down in unison; the cross-terms the planner most wants are confounded by the planner's own past behavior.</p>
+            <p>Could you simply test your way to them? Count the cells. A full factorial over \( K \) channels — every on/off combination — needs \( 2^K \) cells: 256 experimental conditions for eight channels, over a thousand for ten. Add spend <em>levels</em> rather than on/off and it becomes \( L^K \). Restricting ambition to pairwise synergies still leaves \( \binom{K}{2} = K(K-1)/2 \) joint perturbations — 45 two-channel experiments for ten channels, each demanding its own geos, its own weeks, its own budget at risk. No testing calendar covers this, and a calendar that tried would collide with decay: by the time the last cell reads out, the first has expired.</p>
+            <p>The combinatorial problem is real, but it is a problem with <em>enumeration</em>, not with learning. The rest of this post is about the two moves that dissolve it: model interactions continuously instead of cell by cell, and let the prior carry the interactions the data have not yet earned.</p>
+
+            <h2 id="model-the-surface">Model the Surface, Not the Grid</h2>
+            <p>The estimand is not a table of cell means. It is a response surface: expected outcome as a function of the whole spend allocation. Two model families make that surface learnable without a factorial.</p>
+            <p><strong>Parametric interaction terms.</strong> The standard Bayesian MMM already handles the two nonlinearities that break linear regression — carryover (adstock) and saturation. Interactions enter the same mean function as cross-terms on the transformed spends:</p>
+            $$ \mathbb{E}[y_t] \;=\; \mu \;+\; \sum_{m} \beta_m\, f_m(x_{m,t}) \;+\; \sum_{m \lt m'} \gamma_{mm'}\, f_m(x_{m,t})\, f_{m'}(x_{m',t}), $$
+            <p>where \( f_m \) is channel \( m \)'s adstock-then-saturation transform and \( \gamma_{mm'} \) is a synergy (positive) or cannibalization (negative) coefficient. The market-response literature catalogues multiplicative and other non-additive functional forms of exactly this kind (Hanssens, Parsons, &amp; Schultz, 2001) — interaction as a modeled quantity, not an experimental cell.</p>
+            <p><strong>Nonparametric surrogates.</strong> Alternatively, place a Gaussian process over the response surface. A GP with a non-additive kernel represents interactions of every order implicitly, through the covariance function; there is nothing to enumerate, only a smooth surface to infer from wherever data happen to sit (Rasmussen &amp; Williams, 2006). Reduced-rank constructions such as Hilbert-space GPs keep this tractable at MMM data sizes (Solin &amp; S&auml;rkk&auml;, 2020).</p>
+
+            <div class="note">
+                <h4>💡 Cells become queries</h4>
+                <p>This is the pivotal reframing. Both model families replace enumeration with a function: you learn a continuous response surface and <em>query</em> it at any allocation. A "cell" stops being a slot in a grid you must fill and becomes a point you may — or may not — choose to sample. The question shifts from "how do we cover the design?" to "which single point teaches us the most?" — which is a question with a computable answer.</p>
+            </div>
+
+            <h2 id="shrinkage-priors">Let Interactions Exist — Cheaply</h2>
+            <p>A parametric surface with all pairwise terms still carries \( K(K-1)/2 \) extra coefficients into a likelihood that was information-starved before they arrived. The answer is not more data per coefficient but stronger structure over the coefficients: priors under which many candidate interactions can exist in the model while only the genuinely supported ones survive with any magnitude.</p>
+
+            <div class="definition">
+                <h4>Definition: Global–local shrinkage prior</h4>
+                <p>Each interaction coefficient gets its own scale, tied together by a shared global scale:</p>
+                $$ \gamma_j \mid \lambda_j, \tau \;\sim\; \mathcal{N}\!\big(0,\; \tau^2 \lambda_j^2\big), \qquad \lambda_j \sim \mathrm{C}^{+}(0, 1). $$
+                <p>The global scale \( \tau \) pulls <em>every</em> coefficient toward zero; the heavy-tailed half-Cauchy local scale \( \lambda_j \) lets an individual coefficient escape entirely when the data insist. The result — the horseshoe prior — shrinks noise aggressively while leaving strong signals nearly untouched (Carvalho, Polson, &amp; Scott, 2010).</p>
+            </div>
+
+            <p>The <strong>regularized horseshoe</strong> refines this for exactly the regime MMM lives in. It lets the analyst encode an expected number of nonzero coefficients — "I believe perhaps three of these 45 interactions are real" — through the prior's effective-nonzeros parameter, and it keeps even the escaped coefficients regularized when the likelihood is weak, so a barely-identified interaction cannot balloon (Piironen &amp; Vehtari, 2017).</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Encoding sparsity: the regularized horseshoe's effective nonzeros</summary>
+                <div class="deep-dive-body">
+                    <p>The regularized horseshoe replaces the raw local scale with a slab-limited version,</p>
+                    $$ \gamma_j \mid \lambda_j, \tau, c \;\sim\; \mathcal{N}\!\big(0,\; \tau^2 \tilde{\lambda}_j^2\big), \qquad \tilde{\lambda}_j^2 \;=\; \frac{c^2 \lambda_j^2}{c^2 + \tau^2 \lambda_j^2}, $$
+                    <p>so that small coefficients feel the ordinary horseshoe while large ones are softly capped by the slab width \( c \) — the cap that matters when the likelihood alone cannot restrain them. Each coefficient's shrinkage can be summarized by a factor \( \kappa_j \in [0,1] \) (1 = shrunk to zero, 0 = untouched), and the <em>effective number of nonzero coefficients</em> is \( m_{\mathrm{eff}} = \sum_j (1 - \kappa_j) \). Working backward from a prior guess for \( m_{\mathrm{eff}} \) gives a principled scale for the global parameter,</p>
+                    $$ \tau_0 \;=\; \frac{m_{\mathrm{eff}}}{D - m_{\mathrm{eff}}} \cdot \frac{\sigma}{\sqrt{n}}, $$
+                    <p>with \( D \) candidate coefficients, \( n \) observations, and noise scale \( \sigma \). For an MMM this is a directly meaningful elicitation: the planner's belief about how many channel pairs genuinely interact becomes the prior's anchor, instead of an arbitrary regularization constant.</p>
+                </div>
+            </details>
+
+            <p>The same logic extends hierarchically. Where interaction structure repeats across units — geo &times; channel effects, say — partial pooling treats the unit-level effects as draws from a population distribution, pulling noisy cells toward the group mean roughly in proportion to their noise while leaving well-estimated cells alone. That data-adaptive shrinkage is also a multiple-comparisons correction: with dozens of candidate effects examined at once, the pooled estimates are the ones you can rank and select from without a false-discovery reckoning (Gelman, Hill, &amp; Yajima, 2012).</p>
+            <p>The net effect of shrinkage is the statistical half of the answer to the cell explosion: the model can <em>nominally</em> contain far more interaction terms than you could ever test, because the prior spends degrees of freedom only where the data demand it. Unsupported interactions sit dormant near zero at essentially no cost.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Approach</th><th>How it handles interactions</th><th>What it costs</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Parametric cross-terms</td><td>One interpretable \( \gamma_{mm'} \) per channel pair on transformed spends</td><td>Quadratic growth in terms; the functional form must be roughly right</td></tr>
+                    <tr><td>GP surrogate</td><td>All-order interactions implicit in a non-additive kernel</td><td>Less interpretable; needs reduced-rank approximations at scale</td></tr>
+                    <tr><td>Global–local shrinkage</td><td>Carries many candidate terms; only supported ones keep magnitude</td><td>Prior elicitation matters; shrinkage controls variance, not identification</td></tr>
+                </tbody>
+            </table>
+
+            <div class="warning">
+                <h4>⚠️ Shrinkage is not identification</h4>
+                <p>A horseshoe prior makes many interaction terms cheap to <em>carry</em>; it does not make them cheap to <em>learn</em>. A coefficient the data pattern cannot distinguish from zero simply stays at its prior, however elegant that prior is. Learning \( \gamma_{mm'} \) requires variation in which the two channels move jointly and independently of everything else — which observational flighting almost never provides. That variation must be designed. Shrinkage buys you the right to wait; experiments pay the bill.</p>
+            </div>
+
+            <h2 id="the-closed-loop">The Closed Loop</h2>
+            <p>Which experiments, in which order? This is where Bayesian experimental design takes over, and the loop closes:</p>
+            <ol>
+                <li><strong>Fit.</strong> Maintain the posterior over the full surface — main effects, transforms, and the shrunken interaction terms.</li>
+                <li><strong>Decide.</strong> Allocate budget by minimizing expected loss under the current posterior. This step happens every cycle regardless; the model is always the best available basis for action.</li>
+                <li><strong>Design.</strong> Score candidate perturbations — geo-holdouts, spend scale-ups, joint two-channel flights — by their expected information gain about the parameters that are both <em>wide</em> and <em>decision-relevant</em>, and run the best one.</li>
+                <li><strong>Read out and calibrate.</strong> Analyze the experiment with the quasi-experimental machinery built earlier in the series, and feed the measured lift back into the model as a calibration observation.</li>
+                <li><strong>Repeat</strong> from the updated posterior.</li>
+            </ol>
+            <p>The design step is the engine. For a candidate design \( \xi \), the expected information gain is the expected reduction in posterior entropy about the latent parameters \( \theta \):</p>
+            $$ \mathrm{EIG}(\xi) \;=\; \mathbb{E}_{p(y \mid \xi)}\big[ \mathrm{H}[p(\theta)] - \mathrm{H}[p(\theta \mid y, \xi)] \big], \qquad \xi^{*} = \arg\max_{\xi} \mathrm{EIG}(\xi), $$
+            <p>a criterion that goes back to Lindley (1956). The <a href="blog-geo-holdout-eig.html">previous post</a> worked through the full encoding — the holdout as a design vector, the fitted MMM as both prior and outcome simulator, the estimators that make the doubly intractable expectation computable — so here the point is what the criterion <em>does</em> for interactions. Aim \( \theta \) at the interaction coefficients that are still uncertain and that move the budget decision, and EIG-maximization proposes, on its own, the test that best resolves them: typically a design that varies two channels jointly, because that is what the interaction likelihood responds to. Instead of testing all cells, you test the handful that pay for themselves in information.</p>
+            <p>Three properties make this loop a practical program rather than a research exercise. It is <strong>adaptive</strong>: sequential Bayesian design chooses each experiment against the posterior conditioned on everything observed so far, so every cycle starts from the current state of knowledge. It is <strong>amortizable</strong>: when cycles are frequent, re-optimizing the EIG each time can be replaced by a policy network trained offline — Deep Adaptive Design — which maps the measurement history to the next design in a single, non-myopic forward pass (Foster et al., 2021). And it <strong>scales</strong>: gradient-based Bayesian experimental design has delivered roughly twice the EIG of standard baselines on a 400-dimensional design problem and outperformed human experts on a 100-dimensional real-world design task (Foster et al., 2020; Rainforth et al., 2024) — regimes where enumerating cells is hopeless but following gradients is routine.</p>
+            <p>One more property matters for a standing program: the loop has no natural end. Because effects drift, the value of past information decays, and a parameter pinned down last year quietly re-widens; the loop re-tests it when its uncertainty again crosses the threshold of decision relevance. The <a href="continuous-learning.html">continuous learning methodology page</a> covers the operational side of this cadence — how a program decides that a previously measured effect is due for re-measurement rather than treating any readout as permanent.</p>
+
+            <h2 id="one-logic">One Logic: Information and Value</h2>
+            <p>One unification hides in the loop. Choosing an experiment to maximize expected information gain is the same expected-value-of-information calculation that Bayesian optimization performs when it chooses its next evaluation through an acquisition function (Garnett, 2023). The two differ only in objective. If the goal is to <em>characterize</em> the surface — learn the interactions — the objective is EIG about parameters. If the goal is to <em>find the best allocation</em>, swap in expected improvement, GP-UCB, or the knowledge gradient; the entropy-search family makes the connection literal, since it is EIG about the location of the optimum. If the goal is to <em>earn while learning</em>, the same posterior drives a bandit. All three run on the same Bayesian surrogate, and a mature program moves among them as the decision changes.</p>
+            <p>Two extensions from the optimization literature map directly onto media practice: batch design, for proposing several geo tests to run in parallel, and multi-fidelity modeling, which treats cheap-but-confounded observational reads and expensive-but-clean experiments as two fidelities of evidence about one surface — in effect, what experiment-calibrated MMM already does. The derivations behind the EIG estimators and acquisition functions used here are collected on the <a href="continuous-learning-math.html">mathematical foundations page</a>.</p>
+
+            <h2 id="where-the-series-meets">Where the Series Meets</h2>
+            <p>This is the point of the series. The <a href="blog-synthetic-control.html">quasi-experimental</a> <a href="blog-causalimpact-bsts.html">methods</a> of the earlier posts — time-based regression for geo splits, synthetic control, staggered difference-in-differences, structural time-series counterfactuals — are the <em>instruments</em>: how a single designed perturbation becomes a credible causal number. The <a href="blog-lindley-to-dad.html">experimental-design machinery</a> — EIG, adaptive design, amortized policies, the bandit and optimization variants — is the <em>targeting system</em>: it points those instruments where the posterior is weakest and the decision most exposed. The response model is the memory that binds them, carrying every readout forward and handing the targeting system an honest map of what is still unknown.</p>
+            <p>Interactions are the acid test of the arrangement precisely because no single study can identify a surface. A one-off holdout measures a main effect at a point; only a program — surrogate, shrinkage, and an information objective spending experiments where they pay — can learn how channels behave <em>together</em>. That is what continuous learning in media measurement means: not measuring more often, but building the loop in which each measurement chooses the next one.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>One-shot MMM is information-starved (the prior dominates) and its answers decay; a standing loop — fit, decide, design, run, calibrate, refit — is the alternative.</li>
+                    <li>The interaction cell explosion (\( 2^K \) factorial cells, \( K(K-1)/2 \) pairwise tests) is a problem with enumeration, not learning: model a continuous response surface and query it instead.</li>
+                    <li>Global–local shrinkage (horseshoe, regularized horseshoe) and partial pooling let the model carry many candidate interactions while only evidence-backed ones keep magnitude.</li>
+                    <li>Shrinkage is not identification: learning an interaction requires a designed joint perturbation, and targeted EIG picks the few perturbations that pay for themselves.</li>
+                    <li>EIG-based design, Bayesian-optimization acquisitions, and bandits are one value-of-information logic with different objectives — characterize, optimize, or earn.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Jin, Y., Wang, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). <em>Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects</em>. Google Research.</li>
+                <li>Chan, D., &amp; Perry, M. (2017). <em>Challenges and Opportunities in Media Mix Modeling</em>. Google Research.</li>
+                <li>Hanssens, D. M., Parsons, L. J., &amp; Schultz, R. L. (2001). <em>Market Response Models: Econometric and Time Series Analysis</em>. Kluwer Academic Publishers.</li>
+                <li>Carvalho, C. M., Polson, N. G., &amp; Scott, J. G. (2010). <em>The Horseshoe Estimator for Sparse Signals</em>. Biometrika, 97(2).</li>
+                <li>Piironen, J., &amp; Vehtari, A. (2017). <em>Sparsity Information and Regularization in the Horseshoe and Other Shrinkage Priors</em>. Electronic Journal of Statistics, 11(2).</li>
+                <li>Gelman, A., Hill, J., &amp; Yajima, M. (2012). <em>Why We (Usually) Don't Have to Worry About Multiple Comparisons</em>. Journal of Research on Educational Effectiveness, 5(2).</li>
+                <li>Lindley, D. V. (1956). <em>On a Measure of the Information Provided by an Experiment</em>. Annals of Mathematical Statistics, 27(4).</li>
+                <li>Rainforth, T., Foster, A., Ivanova, D. R., &amp; Bickford Smith, F. (2024). <em>Modern Bayesian Experimental Design</em>. Statistical Science, 39(1).</li>
+                <li>Foster, A., Jankowiak, M., O'Meara, M., Teh, Y. W., &amp; Rainforth, T. (2020). <em>A Unified Stochastic Gradient Approach to Designing Bayesian-Optimal Experiments</em>. AISTATS.</li>
+                <li>Foster, A., Ivanova, D. R., Malik, I., &amp; Rainforth, T. (2021). <em>Deep Adaptive Design: Amortizing Sequential Bayesian Experimental Design</em>. ICML.</li>
+                <li>Rasmussen, C. E., &amp; Williams, C. K. I. (2006). <em>Gaussian Processes for Machine Learning</em>. MIT Press.</li>
+                <li>Solin, A., &amp; S&auml;rkk&auml;, S. (2020). <em>Hilbert Space Methods for Reduced-Rank Gaussian Process Regression</em>. Statistics and Computing, 30.</li>
+                <li>Garnett, R. (2023). <em>Bayesian Optimization</em>. Cambridge University Press.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CausalImpact: Counterfactuals from Bayesian Structural Time Series | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="CausalImpact estimates campaign lift by forecasting the counterfactual: BSTS state-space models, spike-and-slab control selection, honest uncertainty.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-causalimpact-bsts.html">
+    <meta property="og:title" content="CausalImpact: Counterfactuals from Bayesian Structural Time Series">
+    <meta property="og:description" content="CausalImpact estimates campaign lift by forecasting the counterfactual: BSTS state-space models, spike-and-slab control selection, honest uncertainty.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-causalimpact-bsts.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="CausalImpact: Counterfactuals from Bayesian Structural Time Series">
+    <meta name="twitter:description" content="CausalImpact estimates campaign lift by forecasting the counterfactual: BSTS state-space models, spike-and-slab control selection, honest uncertainty.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-causalimpact-bsts.html",
+          "name": "CausalImpact: Counterfactuals from Bayesian Structural Time Series | MMM Framework",
+          "description": "CausalImpact estimates campaign lift by forecasting the counterfactual: BSTS state-space models, spike-and-slab control selection, honest uncertainty.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-causalimpact-bsts.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-causalimpact-bsts.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "CausalImpact: Counterfactuals from Bayesian Structural Time Series",
+          "datePublished": "2026-06-28",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-causalimpact-bsts.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-causalimpact-bsts.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "CausalImpact: Counterfactuals from Bayesian Structural Time Series",
+              "item": "https://redam94.github.io/mmm-framework/blog-causalimpact-bsts.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#forecast-error">The Effect Is a Forecast Error</a></li>
+                <li><a href="#state-space">A Model Assembled from Blocks</a></li>
+                <li><a href="#trend-and-seasonality">Trend and Seasonality</a></li>
+                <li><a href="#spike-and-slab">Spike-and-Slab Control Selection</a></li>
+                <li><a href="#from-forecast-to-impact">From Forecast to Impact</a></li>
+                <li><a href="#empirical-application">The Google Campaign</a></li>
+                <li><a href="#assumptions">The Assumptions That Carry the Weight</a></li>
+                <li><a href="#versus-synthetic-control">Versus Synthetic Control</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">CausalImpact: Counterfactuals from Bayesian Structural Time Series</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-06-28">June 28, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Causal inference</span>
+            </p>
+            <p class="lead">A campaign launches, a price changes, a competitor exits — and the measurement question arrives after the fact, with no holdout group in sight. CausalImpact answers it by forecasting the world in which the intervention never happened, then reading the effect as the gap between forecast and reality. This post walks through the machinery: the state-space model behind the forecast, the prior that picks control series automatically, and why the uncertainty bands honestly widen the longer you look.</p>
+
+            <p>The method comes from Brodersen, Gallusser, Koehler, Remy, and Scott (2015), and its central move is a reframing: a causal effect on a time series is the difference between the observed trajectory and the counterfactual one where the intervention never occurred. The first is data; the second is a <em>forecast</em>. Fit a flexible time-series model on pre-intervention data, run it forward as if nothing had changed, and difference the prediction against reality. Everything else in the paper is about making that forecast trustworthy.</p>
+
+            <h2 id="forecast-error">The Effect Is a Forecast Error</h2>
+            <p>Write \( y_t \) for the observed outcome — daily site visits, weekly sales — and \( \tilde{y}_t \) for the counterfactual outcome after the intervention at time \( n \). The causal impact at each post-intervention time point is simply \( y_t - \tilde{y}_t \). The difficulty is that \( \tilde{y}_t \) is never observed, so it must be inferred from two sources: the treated series' own pre-intervention behavior, and contemporaneous <em>control series</em> unaffected by the intervention.</p>
+            <p>The classical tool here, difference-in-differences, is too rigid for real outcome series: it compares pre/post means across two groups, assumes independent observations, and has no vocabulary for trends, seasonality, or serial correlation. Brodersen et al. generalize it with a diffusion-regression state-space model combining four things:</p>
+            <ul>
+                <li>a <strong>local trend</strong> that adapts to the series' own drift,</li>
+                <li><strong>seasonal components</strong> for weekly or annual cycles,</li>
+                <li>a <strong>regression on control series</strong> — a synthetic control assembled from untreated markets or industry indices,</li>
+                <li><strong>fully Bayesian inference</strong>, so the counterfactual comes with a posterior distribution rather than a point forecast.</li>
+            </ul>
+            <p>The generality is real: difference-in-differences, Abadie-style synthetic control, ARIMA models, and ordinary multiple regression all fall out as special cases under particular parameter restrictions.</p>
+
+            <h2 id="state-space">A Model Assembled from Blocks</h2>
+            <p>The engine is a linear-Gaussian state-space model. Two equations define it: one linking observations to a latent state, one governing how the state evolves.</p>
+
+            <div class="definition">
+                <h4>Definition: BSTS state-space form</h4>
+                <p><strong>Observation equation:</strong></p>
+                $$ y_t = Z_t^\top \alpha_t + \varepsilon_t, \qquad \varepsilon_t \sim \mathcal{N}(0, \sigma_\varepsilon^2) $$
+                <p><strong>State equation:</strong></p>
+                $$ \alpha_{t+1} = T_t \alpha_t + R_t \eta_t, \qquad \eta_t \sim \mathcal{N}(0, Q_t) $$
+                <p>Here \( y_t \) is the scalar outcome, \( \alpha_t \) is a \( d \)-dimensional latent state, \( Z_t \) is the output vector, \( T_t \) the transition matrix, and \( R_t \) maps a \( q \)-dimensional system error (\( q \le d \)) into the state.</p>
+            </div>
+
+            <p>The design is deliberately modular. The state vector concatenates independent components — trend, seasonality, regression — and the system matrices become block-diagonal, one block per component. Adding annual seasonality to a model that already has a trend is a matter of appending blocks to \( Z_t \), \( T_t \), and \( Q_t \).</p>
+            <p>The regression component is where the control series enter. In its <em>static</em> form the coefficients are fixed: the contribution \( \beta^\top \mathbf{x}_t \) folds into the observation vector with a degenerate state, so the treated series is predicted, week by week, from a weighted combination of its controls. A <em>dynamic</em> variant lets each coefficient evolve as its own random walk for settings where the treated&ndash;control relationship drifts over time; static coefficients are the default when the controls are the same kind of quantity as the outcome and the relationship is stable.</p>
+
+            <div class="note">
+                <h4>💡 The regression component is a synthetic control</h4>
+                <p>The weighted combination of untreated series that predicts the treated one is exactly the synthetic-control idea. But where the classic construction restricts weights to be non-negative and sum to one, the BSTS regression places no sign or sum constraint on \( \beta \), and the trend and seasonal blocks absorb structure the donors alone cannot explain. Scott and Varian (2014) used the same trend-plus-regression architecture for nowcasting before it was repurposed for counterfactual inference.</p>
+            </div>
+
+            <h2 id="trend-and-seasonality">Trend and Seasonality</h2>
+            <p>The default trend block is the <em>local linear trend</em>: a level \( \mu_t \) and a slope \( \delta_t \), each evolving as a random walk,</p>
+            $$ \mu_{t+1} = \mu_t + \delta_t + \eta_{\mu,t}, \qquad \delta_{t+1} = \delta_t + \eta_{\delta,t}, $$
+            <p>with \( \eta_{\mu,t} \sim \mathcal{N}(0, \sigma_\mu^2) \) and \( \eta_{\delta,t} \sim \mathcal{N}(0, \sigma_\delta^2) \). The two variances have clean interpretations: \( \sigma_\mu^2 \) sets how quickly the level jumps; \( \sigma_\delta^2 \) sets how quickly the slope reorients. This component adapts fast to local variation, but it pays for the flexibility at long horizons: a slope that is itself a random walk drifts without bound, and prediction intervals inflate accordingly. For longer-range work the paper offers a stabler variant in which the slope reverts to a long-term value \( D \) at rate \( \rho \), with \( |\rho| \lt 1 \):</p>
+            $$ \delta_{t+1} = D + \rho\,(\delta_t - D) + \eta_{\delta,t}. $$
+            <p>Seasonality is handled by a sum-to-zero component. With \( S \) seasons per cycle, each new seasonal effect is minus the sum of the previous \( S-1 \), plus noise:</p>
+            $$ \gamma_{t+1} = -\sum_{s=0}^{S-2} \gamma_{t-s} + \eta_{\gamma,t}, $$
+            <p>so the effects average to zero over a full cycle and the level component keeps custody of the series' overall height. Daily data commonly carries two such blocks: day-of-week (\( S = 7 \)) and annual. Each component's diffusion variance gets an inverse-Gamma prior; the default is weakly informative, centering the prior diffusion variance at roughly 10% of the sample variance with the weight of a single observation.</p>
+
+            <h2 id="spike-and-slab">Spike-and-Slab Control Selection</h2>
+            <p>A practical counterfactual analysis rarely has one obvious control series. It has dozens — every untreated market, every industry index, every related search-volume series. Including all of them invites overfitting; hand-picking a subset injects the researcher degrees of freedom the analysis is supposed to avoid. The BSTS answer makes selection part of the inference, via a spike-and-slab prior on the regression (George &amp; McCulloch, 1993).</p>
+            <p>Attach to each candidate a binary inclusion indicator \( \varrho_j \), with \( \varrho_j = 1 \) meaning \( \beta_j \neq 0 \). The prior factorizes as</p>
+            $$ p(\varrho, \beta, 1/\sigma_\varepsilon^2) \;=\; p(\varrho)\; p(\sigma_\varepsilon^2 \mid \varrho)\; p(\beta_\varrho \mid \varrho, \sigma_\varepsilon^2), $$
+            <p>where the <em>spike</em> is an independent Bernoulli on each indicator,</p>
+            $$ p(\varrho) \;=\; \prod_{j=1}^{J} \pi_j^{\varrho_j} (1 - \pi_j)^{1 - \varrho_j}, $$
+            <p>and the <em>slab</em> is a weakly informative Gaussian on the coefficients that survive, \( \beta_\varrho \mid \varrho, \sigma_\varepsilon^2 \sim \mathcal{N}(\mathbf{b}_\varrho,\, \sigma_\varepsilon^2 (\Sigma_\varrho^{-1})^{-1}) \). Rather than eliciting each \( \pi_j \), the recommended shortcut is to name an expected model size \( M \) and set \( \pi_j = M/J \); setting an individual \( \pi_j \) to 1 or 0 forces a control in or out. The slab's precision follows Zellner's g-prior, \( \Sigma^{-1} = \tfrac{g}{n}\{ w\, X^\top X + (1-w)\, \mathrm{diag}(X^\top X) \} \), worth \( g \) observations of prior information (default \( g = 1 \)), with the diagonal average (default \( w = 0.5 \)) keeping the prior proper when candidates are collinear.</p>
+            <p>Two properties make this machinery earn its keep. Computationally, the Gibbs sampler flips one indicator at a time, and every matrix it touches has dimension equal to the number of <em>included</em> controls, so a sparse model over hundreds of candidates stays fast. Statistically, the counterfactual never commits to any single subset: the posterior predictive averages over control sets weighted by posterior probability — Bayesian model averaging doing the robustness work that manual sensitivity analyses approximate.</p>
+
+            <h2 id="from-forecast-to-impact">From Forecast to Impact</h2>
+            <p>Fitting the model on pre-intervention data yields the object everything else is computed from: the posterior predictive distribution over counterfactual trajectories,</p>
+            $$ p\big(\tilde{\mathbf{y}}_{n+1:m} \mid \mathbf{y}_{1:n}, \mathbf{x}_{1:m}\big), $$
+            <p>conditioned on the pre-period outcomes and the full run of control series, with all parameters — coefficients, inclusion indicators, variances — integrated out. It is a <em>joint</em> distribution over the whole post-period, not a set of per-week marginals, so serial correlation in the counterfactual is preserved. Each MCMC iteration draws one complete alternate history \( \tilde{\mathbf{y}}_{n+1:m}^{(\tau)} \).</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>The Gibbs sampler behind the counterfactual</summary>
+                <div class="deep-dive-body">
+                    <p>The spike-and-slab prior rules out closed-form posteriors, so inference alternates two blocks. The <strong>state step</strong> draws the full latent trajectory \( \alpha_{1:m} \) given parameters, using the simulation smoother of Durbin and Koopman (2002) — a refinement of the forward-filtering, backward-sampling algorithms of Carter and Kohn (1994) and Fr&uuml;hwirth-Schnatter (1994). The trick is a Gaussian identity: the conditional variance of the states does not depend on the observed data, so one can simulate a fake dataset and state sequence from the model, subtract the fake sequence's smoothed mean, and add back the real data's smoothed mean from the Kalman filter — an exact draw from the state posterior.</p>
+                    <p>The <strong>parameter step</strong> conditions on the states: with \( \alpha \) known the component errors are observable, so each diffusion variance is a conjugate Gamma draw, while the regression block updates each \( \varrho_j \) given the others (a two-point distribution) and draws \( \beta_\varrho \) and \( \sigma_\varepsilon^2 \) from conjugate formulae involving only the included columns. Each iteration then runs the model forward through the post-period to emit one counterfactual trajectory. The algorithm is linear in the number of time points and quadratic in the state dimension — under 30 seconds for 500 time points, 10 covariates, and 10,000 iterations.</p>
+                </div>
+            </details>
+
+            <p>With posterior draws in hand, the causal quantities are arithmetic. The <strong>pointwise impact</strong> at each post-period time \( t \) is, per draw,</p>
+            $$ \phi_t^{(\tau)} \;=\; y_t - \tilde{y}_t^{(\tau)}, $$
+            <p>and the collection over draws is a full posterior for the effect at each time point — the time-series generalization of the difference-in-differences contrast. The <strong>cumulative impact</strong> \( \sum_{t'=n+1}^{t} \phi_{t'}^{(\tau)} \) totals the effect from launch; it is the headline number for <em>flow</em> outcomes like weekly sales or daily clicks, but meaningless for <em>stock</em> outcomes like subscriber counts, where summing levels double-counts. For stocks, the <strong>running average</strong> \( \tfrac{1}{t-n}\sum_{t'=n+1}^{t} \phi_{t'}^{(\tau)} \) is the interpretable summary. Each quantity is reported as a posterior mean with a central 95% credible interval, and an effect is called significant when that interval excludes zero.</p>
+
+            <h3 id="widening-uncertainty">Why the bands widen — and why that is correct</h3>
+            <p>Every CausalImpact plot shares a visual signature: the interval around the counterfactual fans out as the post-period lengthens. This is not a defect. The local linear trend's slope is a random walk, so uncertainty about where the series <em>would have gone</em> compounds with horizon — the further from the last pre-period observation, the more alternate histories are consistent with the data. The paper's simulations confirm the consequence: absolute estimation error grows with campaign length, and structural breaks accelerate the decay. The design implication: measure over the shortest window the business question allows, and treat any tool reporting constant-width uncertainty at month six as overconfident, not more precise.</p>
+
+            <h2 id="empirical-application">The Google Campaign</h2>
+            <p>The paper's empirical test wraps an observational method around a randomized experiment and checks whether the two agree. A Google advertiser ran search ads for six consecutive weeks, geo-targeted to 95 of 190 US designated market areas with randomized assignment; the outcome was total search-related visits to the advertiser's site, with roughly a year of pre-campaign history. The model used a local level plus a static regression under a spike-and-slab prior with an expected model size of three, run for 10,000 MCMC iterations. Three analyses:</p>
+            <ul>
+                <li><strong>Randomized controls.</strong> Using the untreated DMAs as control series, the estimated cumulative lift was 88,400 incremental clicks, a 22% increase with a 95% interval of [13%, 30%]. The effect peaked around week three and faded within a week of the campaign ending. A classical two-stage geo analysis in the style of Vaver and Koehler (2011) put the lift at 84,700 clicks — agreement within 5%, though with the Bayesian intervals appropriately wider than the classical confidence interval.</li>
+                <li><strong>Observational controls.</strong> Discarding the randomized control regions entirely and using industry keyword search volume as controls gave 85,900 incremental clicks — a 21% lift, interval [12%, 30%]: nearly identical, from publicly available data any analyst could assemble without an experiment.</li>
+                <li><strong>Placebo test.</strong> Pointing the same machinery at the <em>untreated</em> regions, where the true effect is zero by construction, returned a 2% lift with interval [&minus;6%, 10%] — correctly insignificant, no sign of spillover or industry-wide confounding.</li>
+            </ul>
+            <p>The simulation study backs up the calibration story: a true effect of 25% was detected in over 90% of runs, effects below 1% were correctly left unflagged about 90% of the time, and the central 95% interval covered the true effect at close to its nominal rate across campaign lengths.</p>
+
+            <h2 id="assumptions">The Assumptions That Carry the Weight</h2>
+            <p>The counterfactual is only as good as the bridge from pre-period to post-period, and two assumptions form that bridge.</p>
+
+            <div class="warning">
+                <h4>⚠️ Controls must be untouched, and relationships must hold</h4>
+                <p><strong>First:</strong> the control series must not themselves be affected by the intervention. A national campaign that spills into &ldquo;control&rdquo; markets, or steals share from the competitor series used as a predictor, contaminates the counterfactual and biases the estimate. <strong>Second:</strong> the relationship between controls and the treated series, learned entirely from pre-intervention data, must remain stable through the post-period. Nothing in the model can detect a post-period break in that relationship — it will silently misattribute the break to the intervention.</p>
+            </div>
+
+            <p>Neither assumption is checkable from the treated series alone, which is why the workflow leans on design: choose controls that are structurally insulated from the treatment (industry aggregates, geographically separated markets), inspect the pre-period fit — a model that cannot track the treated series <em>before</em> the intervention has no business forecasting it after — and run placebo analyses on units that should show nothing, the falsification check that makes an observational estimate credible.</p>
+
+            <h2 id="versus-synthetic-control">Versus Synthetic Control</h2>
+            <p>CausalImpact and <a href="blog-synthetic-control.html">Abadie-style synthetic control</a> aim at the same estimand — the effect of an intervention on a single treated unit, inferred from untreated peers — and a practitioner should think of them as siblings rather than rivals. The differences are in the machinery:</p>
+            <table>
+                <thead>
+                    <tr><th></th><th>Synthetic control</th><th>CausalImpact (BSTS)</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Counterfactual</td><td>Convex combination of donor units matched on the pre-period</td><td>Posterior predictive forecast from a state-space model</td></tr>
+                    <tr><td>Donor weights</td><td>Non-negative, sum to one</td><td>Unconstrained regression coefficients; may be negative</td></tr>
+                    <tr><td>Trend &amp; seasonality</td><td>Must be inherited from the donors</td><td>Explicit local-trend and seasonal state components</td></tr>
+                    <tr><td>Control selection</td><td>Analyst curates the donor pool</td><td>Spike-and-slab prior averages over control subsets</td></tr>
+                    <tr><td>Uncertainty</td><td>Placebo permutation inference</td><td>Credible intervals from the joint posterior</td></tr>
+                </tbody>
+            </table>
+            <p>Formally, the synthetic-control construction is a special case: fix the trend variance at zero, drop seasonality, constrain the weights, and the BSTS regression collapses to it. The Bayesian version buys three practical upgrades — structure the donors cannot supply, automatic selection when the donor pool is large, and uncertainty that propagates parameter and forecast error jointly — at the price of the modeling assumptions above.</p>
+            <p>Within a measurement program, this machinery is not only for retrospective rescue jobs. It is the natural <em>readout</em> for experiments you did design: the counterfactual for treated geos in a <a href="blog-geo-holdout-eig.html">geo-holdout chosen by expected information gain</a> is exactly a BSTS forecast from the untreated markets. And the lift it produces — a posterior, with honest width — is the form of evidence that <a href="measurement-calibration.html">calibrating a media mix model against experiments</a> requires: the interval, not just the point, determines how hard the MMM's parameters should update.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>CausalImpact turns causal measurement into forecasting: fit a structural time-series model on pre-intervention data, forecast the no-intervention world, and read the effect as observed minus predicted.</li>
+                    <li>The model is modular — local linear trend, sum-to-zero seasonality, and a regression on control series snap together as independent state-space blocks.</li>
+                    <li>The spike-and-slab prior selects control series automatically and averages over subsets, replacing hand-picked donors with Bayesian model averaging.</li>
+                    <li>Report cumulative impact for flows, running-average impact for stocks — and expect intervals to widen with horizon, because they should.</li>
+                    <li>The estimate rests on two assumptions: controls unaffected by the treatment, and a stable pre-period relationship. Placebo tests and pre-period fit checks are the defense.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Brodersen, K. H., Gallusser, F., Koehler, J., Remy, N., &amp; Scott, S. L. (2015). <em>Inferring Causal Impact Using Bayesian Structural Time-Series Models</em>. Annals of Applied Statistics, 9(1).</li>
+                <li>Scott, S. L., &amp; Varian, H. R. (2014). <em>Predicting the Present with Bayesian Structural Time Series</em>. International Journal of Mathematical Modelling and Numerical Optimisation, 5(1/2).</li>
+                <li>George, E. I., &amp; McCulloch, R. E. (1993). <em>Variable Selection via Gibbs Sampling</em>. Journal of the American Statistical Association, 88(423).</li>
+                <li>Zellner, A. (1986). <em>On Assessing Prior Distributions and Bayesian Regression Analysis with g-Prior Distributions</em>. In Bayesian Inference and Decision Techniques: Essays in Honor of Bruno de Finetti.</li>
+                <li>Durbin, J., &amp; Koopman, S. J. (2002). <em>A Simple and Efficient Simulation Smoother for State Space Time Series Analysis</em>. Biometrika, 89(3).</li>
+                <li>Carter, C. K., &amp; Kohn, R. (1994). <em>On Gibbs Sampling for State Space Models</em>. Biometrika, 81(3).</li>
+                <li>Fr&uuml;hwirth-Schnatter, S. (1994). <em>Data Augmentation and Dynamic Linear Models</em>. Journal of Time Series Analysis, 15(2).</li>
+                <li>Abadie, A., Diamond, A., &amp; Hainmueller, J. (2010). <em>Synthetic Control Methods for Comparative Case Studies: Estimating the Effect of California's Tobacco Control Program</em>. Journal of the American Statistical Association, 105(490).</li>
+                <li>Vaver, J., &amp; Koehler, J. (2011). <em>Measuring Ad Effectiveness Using Geo Experiments</em>. Google Research.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

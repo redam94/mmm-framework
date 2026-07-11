@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carryover and Shape Effects in Bayesian MMM | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Geometric vs delayed adstock, Hill saturation, weak identification, and why average ROAS is not marginal ROAS — the Jin et al. (2017) Bayesian MMM.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-bayesian-mmm-carryover-shape.html">
+    <meta property="og:title" content="Carryover and Shape Effects in Bayesian MMM">
+    <meta property="og:description" content="Geometric vs delayed adstock, Hill saturation, weak identification, and why average ROAS is not marginal ROAS — the Jin et al. (2017) Bayesian MMM.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-bayesian-mmm-carryover-shape.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Carryover and Shape Effects in Bayesian MMM">
+    <meta name="twitter:description" content="Geometric vs delayed adstock, Hill saturation, weak identification, and why average ROAS is not marginal ROAS — the Jin et al. (2017) Bayesian MMM.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-bayesian-mmm-carryover-shape.html",
+          "name": "Carryover and Shape Effects in Bayesian MMM | MMM Framework",
+          "description": "Geometric vs delayed adstock, Hill saturation, weak identification, and why average ROAS is not marginal ROAS — the Jin et al. (2017) Bayesian MMM.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-bayesian-mmm-carryover-shape.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-bayesian-mmm-carryover-shape.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Carryover and Shape Effects in Bayesian MMM",
+          "datePublished": "2026-06-17",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-bayesian-mmm-carryover-shape.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-bayesian-mmm-carryover-shape.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Carryover and Shape Effects in Bayesian MMM",
+              "item": "https://redam94.github.io/mmm-framework/blog-bayesian-mmm-carryover-shape.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#combined-model">The Model in One Equation</a></li>
+                <li><a href="#carryover">Carryover: Geometric vs Delayed Adstock</a></li>
+                <li><a href="#shape">Shape: The Hill Function</a></li>
+                <li><a href="#composition-order">Which Transform Comes First?</a></li>
+                <li><a href="#identifiability">Weak Identification, Priors, and Calibration</a></li>
+                <li><a href="#roas-mroas">ROAS vs Marginal ROAS</a></li>
+                <li><a href="#model-selection">Model-Selection Cautions</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Carryover and Shape Effects in Bayesian MMM</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-06-17">June 17, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">MMM</span>
+            </p>
+            <p class="lead">Every media mix model has to answer two questions before it can say anything useful about budgets: how long does an ad's effect persist after the exposure, and how does response bend as spend grows? Jin, Wang, Sun, Chan, and Koehler's 2017 Google Research paper is the modern reference point for both — and, just as importantly, for an honest accounting of how weakly a typical MMM dataset identifies the parameters involved.</p>
+
+            <p>A media mix model is, at bottom, a regression of aggregate sales on media spend and controls. Two well-documented features of advertising response break the plain linear version: <strong>carryover</strong> — part of an ad's impact lands in the weeks after exposure, through delayed consumer response, inventory cycles, and word of mouth — and the <strong>shape effect</strong> — response is not linear in spend; returns diminish and the channel eventually saturates. Jin et&nbsp;al. (2017) model both with flexible functional forms, estimate by MCMC, and then — the part practitioners skip at their peril — run the model against simulated ground truth to show exactly where a couple of years of weekly data stops being informative.</p>
+
+            <h2 id="combined-model">The Model in One Equation</h2>
+            <p>For weekly national data over \( t = 1, \dots, T \), with \( M \) media channels and \( C \) control variables, sales (or log-sales) are modeled as</p>
+            $$ y_t \;=\; \tau \;+\; \sum_{m=1}^{M} \beta_m \,\mathrm{Hill}\!\left(x^{*}_{t,m};\, \mathcal{K}_m, \mathcal{S}_m\right) \;+\; \sum_{c=1}^{C} \gamma_c\, z_{t,c} \;+\; \epsilon_t, $$
+            <p>where \( x^{*}_{t,m} \) is the carryover-transformed spend of channel \( m \), \( \mathrm{Hill}(\cdot) \) is the saturation transform, \( \beta_m \ge 0 \) is the channel coefficient, \( \tau \) is baseline sales, \( \gamma_c \) picks up controls such as price, distribution, and promotion, and \( \epsilon_t \) is white noise. Media effects are additive — no cross-channel synergy — a simplification the authors flag explicitly. Everything interesting happens inside the two transforms.</p>
+
+            <h2 id="carryover">Carryover: Geometric vs Delayed Adstock</h2>
+            <p>The adstock transformation replaces this week's spend with a normalized weighted average of the last \( L \) weeks of spend, so the regression sees the cumulative media pressure rather than the instantaneous flight:</p>
+
+            <div class="definition">
+                <h4>Definition: Adstock (finite-window, normalized)</h4>
+                $$ x^{*}_{t,m} \;=\; \operatorname{adstock}\!\left(x_{t-L+1,m}, \dots, x_{t,m};\, w_m, L\right) \;=\; \frac{\sum_{l=0}^{L-1} w_m(l)\, x_{t-l,m}}{\sum_{l=0}^{L-1} w_m(l)}, $$
+                <p>where \( w_m(\cdot) \ge 0 \) is a weight function and \( L \) is the maximum carryover duration, taken common across channels for simplicity. The denominator normalizes the weights so adstock is a proper weighted average and preserves the spend scale; a large \( L \) approximates an infinite window.</p>
+            </div>
+
+            <p>The paper considers two weight functions. <strong>Geometric decay</strong> puts the peak effect at the exposure week and decays by a retention rate \( \alpha_m \):</p>
+            $$ w^{g}_m(l;\, \alpha_m) \;=\; \alpha_m^{\,l}, \qquad 0 \lt \alpha_m \lt 1 . $$
+            <p>This is the discrete geometric distributed lag — the marketing analog of the classic Koyck lag, with \( \alpha_m \) playing the carryover coefficient's role. It suits direct-response channels where effect is strongest immediately.</p>
+            <p><strong>Delayed adstock</strong> handles the other case: media, such as brand television, whose effect takes time to build and peaks some weeks after the exposure. The weights are</p>
+            $$ w^{d}_m(l;\, \alpha_m, \theta_m) \;=\; \alpha_m^{\,(l - \theta_m)^2}, \qquad 0 \lt \alpha_m \lt 1, \quad 0 \le \theta_m \le L-1, $$
+            <p>where \( \theta_m \) is the delay of the peak effect: the weight is maximized at lag \( l = \theta_m \) rather than at \( l = 0 \). The form is proportional to a normal density centered at \( \theta_m \) — the Gaussian radial kernel familiar from local regression — and setting \( \theta_m = 0 \) recovers geometric decay, so the delayed form nests the simple one. With the same retention rate, geometric adstock decays monotonically from lag zero while delayed adstock rises to a pulse around its peak lag and then falls away. In the paper's simulations and its real application the window is \( L = 13 \) weeks, long enough that the truncated weights are negligible. The <a href="math-01-adstock.html">adstock mathematics page</a> works through these forms, their normalization, and their implementation in this framework in more detail.</p>
+
+            <h2 id="shape">Shape: The Hill Function</h2>
+            <p>Saturation is modeled with the Hill function, borrowed from pharmacology, where it originated as an empirical model of receptor binding (Hill, 1910; Gesztelyi et&nbsp;al., 2012):</p>
+            $$ \mathrm{Hill}(x;\, \mathcal{K}_m, \mathcal{S}_m) \;=\; \frac{1}{1 + \left(x / \mathcal{K}_m\right)^{-\mathcal{S}_m}}, \qquad x \ge 0 . $$
+            <p>Two parameters control the curve. \( \mathcal{K}_m \gt 0 \) is the <strong>half-saturation point</strong>: \( \mathrm{Hill}(\mathcal{K}_m) = 1/2 \) for any slope, so it marks the spend level at which the channel has delivered half its maximum effect. \( \mathcal{S}_m \gt 0 \) is the <strong>shape (slope) parameter</strong>: \( \mathcal{S}_m \gt 1 \) gives an S-shaped curve, convex near zero before saturating; \( \mathcal{S}_m \lt 1 \) gives a curve that is more sharply concave near zero and flattens faster; \( \mathcal{S}_m = 1 \) is the intermediate concave case. Scaling by the channel coefficient gives the "\( \beta \)Hill" transform, in which \( \beta_m \) is the asymptotic maximum effect:</p>
+            $$ \beta_m\, \mathrm{Hill}_m(x) \;=\; \beta_m \;-\; \frac{\mathcal{K}_m^{\mathcal{S}_m}\, \beta_m}{x^{\mathcal{S}_m} + \mathcal{K}_m^{\mathcal{S}_m}} . $$
+            <p>A leaner alternative is the one-parameter <strong>reach transformation</strong> of Jin, Shobowale, Koehler, and Case (2012), \( R = a - b/(G + b/a) \), which maps onto \( \beta\mathrm{Hill} \) exactly when \( \mathcal{S} = 1 \) (take \( a = \beta \), \( b = \mathcal{K}\beta \)). Estimating reach instead of the full Hill form trades away the S-shape option for fewer parameters and better identifiability — a trade that, as we'll see, the data often endorses. The framework's <a href="math-02-saturation.html">saturation mathematics page</a> covers the Hill family alongside the logistic and other curvature choices; sigmoids, normal-CDF integrals, and monotone splines are viable too, and share the identifiability issue discussed below.</p>
+
+            <h2 id="composition-order">Which Transform Comes First?</h2>
+            <p>The combined model composes the two transforms in a fixed order: adstock first, then Hill — carryover accumulates raw spend into adstocked pressure, and saturation is applied to the accumulated quantity. Jin et&nbsp;al. note this ordering is appropriate when spend in any single period is small relative to the cumulative spend in the window, so that saturation is a property of sustained pressure rather than of a single week's flight. The reverse composition — saturate each week's spend, then let the saturated effect carry over — is the natural choice when weekly bursts are large enough to saturate on their own. The order is a modeling assumption, not a discovery: choose it to match how the channel is actually bought, because it changes what the shape parameters mean.</p>
+
+            <h2 id="identifiability">Weak Identification, Priors, and Calibration</h2>
+            <p>The uncomfortable core of the paper is that the flexible \( \beta \)Hill form is <strong>essentially unidentifiable</strong> from typical MMM data. Two failure modes are demonstrated directly. First, within a finite observed spend range, very different parameter triples produce nearly the same curve: a curve with \( (\mathcal{K} = 0.5,\, \mathcal{S} = 1,\, \beta = 0.3) \) is matched almost exactly by \( (\mathcal{K} = 0.95,\, \mathcal{S} = 0.748,\, \beta = 0.393) \), the two diverging only beyond the observed range. Second, when the half-saturation point lies outside the range of spend the advertiser has ever tried, curves that agree inside the range can disagree arbitrarily outside it. The consequence is sharp: the model cannot extrapolate the response curve beyond observed spend, even when it fits beautifully within it.</p>
+
+            <div class="note">
+                <h4>💡 The curve is identified; the parameters are not</h4>
+                <p>In the paper's large-sample simulations, the \( \beta \)Hill <em>curves</em> are recovered with very low bias and small variance while the posterior medians of \( \mathcal{K} \), \( \mathcal{S} \), and \( \beta \) individually vary widely. If your decision depends on the response curve over the historical spend range — attribution, within-range reallocation — weak parameter identification is survivable. If it depends on the parameters themselves, or on the curve outside the observed range — "what happens if we double TV?" — it is not.</p>
+            </div>
+
+            <p>Because a single MMM dataset carries little information relative to its parameter count (Chan &amp; Perry, 2017), the Bayesian framing here is less a philosophical stance than a survival strategy: priors carry the information the data lacks. The paper's prior menu respects each parameter's support — a beta or uniform prior on the retention rate \( \alpha \in [0,1) \), uniform on the delay \( \theta \) over \( [0, L-1] \), gamma on the slope \( \mathcal{S} \), half-normal on the nonnegative coefficients \( \beta_m \), and, tellingly, a beta prior on \( \mathcal{K} \) constrained to the <em>observed spend range</em>, precisely because values outside it are unidentifiable.</p>
+            <p>What do priors buy? In simulations comparing a realistic two years of weekly data against an implausible sixty years, the adstock parameters \( (\alpha, \theta) \) are recovered fairly well at both sizes — but the shape parameters and the resulting curves are badly biased at two years, with the \( \beta \)Hill curves systematically underestimated. Relative bias of the curve at \( x = 1 \) ran from roughly −18% to −33% across the three simulated channels at two years, shrinking to a few percent at sixty. The mechanism is prior dominance: when the sample is small and the signal weak, the posterior looks almost like the prior, and the data cannot correct any bias the prior brings. The paper's prior-sensitivity studies (see the deep dive below) drive it home: the same prior swap that removes bias in one scenario worsens it in the mirror-image scenario. There is no universally correct prior — only one that encodes real knowledge, or one that doesn't.</p>
+            <p>That is why the practical fix is not longer history — market conditions drift faster than the sample grows, and the authors explicitly do not recommend it — but <em>more informative priors from outside the dataset</em>: hierarchical pooling across related brands (Wang et&nbsp;al., 2017) or geographies (Sun et&nbsp;al., 2017), and, in modern practice, calibrating the channel-effect priors against randomized lift experiments. Treating prior choice, prior-predictive checking, and experiment calibration as first-class steps rather than afterthoughts is the theme of the <a href="bayesian-workflow.html">Bayesian workflow page</a>, which turns the paper's cautionary findings into a checklist.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Prior sensitivity: the coefficient and half-saturation experiments</summary>
+                <div class="deep-dive-body">
+                    <p>The first study varies the coefficient prior across 500 simulated datasets: half-normal(0,&thinsp;1), normal(0,&thinsp;1), and uniform(0,&thinsp;3). The two normal-family priors give nearly identical, underestimated curves; the uniform puts more mass on large \( \beta \) and pulls the estimate up — cutting one channel's curve bias from about −18% to −1.5% — but only because the truth happened to sit above where the normal priors concentrated. In a scenario where curves were overestimated, the same wide prior would worsen the bias. The lesson is not "use flat priors"; it is that in a prior-dominated regime the posterior inherits the prior's center of mass, so the prior must be defended on substantive grounds.</p>
+                    <p>The second study varies the half-saturation prior — beta(2,&thinsp;2), uniform(0,&thinsp;1), uniform(0,&thinsp;10) — under two ground truths: \( \mathcal{K} = 0.2 \) inside the observed spend range, and \( \mathcal{K} = 2 \) outside it. The fitted <em>curves</em> barely move across priors, but the individual \( \mathcal{K} \) estimates swing markedly under the wide uniform. Since media effect depends on the curve rather than on \( \mathcal{K} \) in isolation, the model is fairly robust to this prior — though a tighter, knowledge-backed prior speeds sampler convergence. And when the true \( \mathcal{K} \) lies outside the data range, no prior rescues its estimate; the curve inside the range remains fine regardless. Identification is a property of the data's spend variation, and priors can compensate for it but not conjure it.</p>
+                </div>
+            </details>
+
+            <h2 id="roas-mroas">ROAS vs Marginal ROAS</h2>
+            <p>Attribution metrics fall out of the fitted model counterfactually. Let \( \hat{Y}_t(\cdot\,; \Phi) \) be predicted sales as a function of channel \( m \)'s spend history, and let \( \tilde{x}_{t,m} \) be the counterfactual in which channel \( m \)'s spend is zeroed during a change period \( [t_0, t_1] \). Then <strong>ROAS</strong> — total incremental revenue per dollar of the channel's spend — is</p>
+            $$ \mathrm{ROAS}_m \;=\; \frac{\displaystyle\sum_{t_0 \le t \le t_1 + L - 1} \left[\, \hat{Y}_t\!\left(x_{t-L+1,m}, \dots, x_{t,m};\, \Phi\right) - \hat{Y}_t\!\left(\tilde{x}_{t-L+1,m}, \dots, \tilde{x}_{t,m};\, \Phi\right) \right]}{\displaystyle\sum_{t_0 \le t \le t_1} x_{t,m}} . $$
+            <p>Note the numerator's upper limit: the sales difference is summed through \( t_1 + L - 1 \), beyond the end of the spend change, because carryover keeps moving sales after the flight stops. Truncating at \( t_1 \) understates every channel with meaningful adstock. <strong>Marginal ROAS</strong> asks the forward-looking question instead — what does the <em>next</em> dollar return? With \( \bar{x}_{t,m} \) the historical spend raised by 1% during the change period,</p>
+            $$ \mathrm{mROAS}_m \;=\; \frac{\displaystyle\sum_{t_0 \le t \le t_1 + L - 1} \left[\, \hat{Y}_t\!\left(\bar{x}_{t-L+1,m}, \dots;\, \Phi\right) - \hat{Y}_t\!\left(x_{t-L+1,m}, \dots;\, \Phi\right) \right]}{0.01 \displaystyle\sum_{t_0 \le t \le t_1} x_{t,m}} . $$
+            <p>Under saturation these two numbers routinely disagree, and the disagreement is the whole point of modeling shape. A channel far up its Hill curve can show a healthy average ROAS — the historical dollars, including the early cheap ones, paid off — while its marginal ROAS is near zero because the next dollar lands on the flat part of the curve. Budget decisions turn on the marginal quantity; reporting decisions tend to quote the average one. Conflating them is how saturated channels keep winning budget.</p>
+
+            <div class="warning">
+                <h4>⚠️ Plug in posterior samples, not posterior means</h4>
+                <p>Both metrics are functions of the full parameter vector \( \Phi \). The correct Bayesian computation plugs <em>each posterior draw</em> \( \Phi_j \) into the formulas, yielding a posterior distribution of ROAS and mROAS to summarize with a median and credible interval. Averaging the parameters first and plugging in the means ignores the strong posterior correlations among the transform parameters and can produce simply wrong metrics.</p>
+            </div>
+
+            <p>The same machinery extends to an optimal media mix: maximize total predicted sales over the change and post-change periods subject to a budget constraint, with the flight pattern fixed so only per-channel totals vary. Optimizing each posterior draw separately yields the <em>posterior of the optimal mix</em>, and that posterior is the warning label: in a simulation scenario where the budget pushed the optimizer into a sparsely observed region of spend, it came out with three modes, and predicted sales varied more across posterior draws than across candidate mixes. When parameter uncertainty swamps the decision's effect, the "optimal" mix is a coin flip wearing an optimizer's badge.</p>
+
+            <h2 id="model-selection">Model-Selection Cautions</h2>
+            <p>The right adstock and shape forms are not known a priori, so the paper fits competing specifications and compares them by BIC,</p>
+            $$ \mathrm{BIC} \;=\; -2 \log \hat{\mathcal{L}} \;+\; k \log n, $$
+            <p>with the maximized log-likelihood approximated by averaging over post&#8209;burn&#8209;in posterior draws. In the real application — 2.5 years of weekly volume sales for a shampoo advertiser, five media channels, with highly correlated controls orthogonalized first — four specifications cross {delayed, geometric} adstock with {Hill, reach} shape:</p>
+            <table>
+                <thead>
+                    <tr><th>Model</th><th>Adstock</th><th>Shape</th><th>NegLogLik</th><th>BIC</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>I</td><td>delayed</td><td>&beta;Hill</td><td>98.12</td><td>98.12</td></tr>
+                    <tr><td>II</td><td>delayed</td><td>reach</td><td>98.11</td><td>74.81</td></tr>
+                    <tr><td>III</td><td>geometric</td><td>&beta;Hill</td><td>98.06</td><td>74.76</td></tr>
+                    <tr><td>IV</td><td>geometric</td><td>reach</td><td>98.09</td><td><strong>51.49</strong></td></tr>
+                </tbody>
+            </table>
+            <p>The likelihoods are nearly identical — the extra flexibility buys essentially no fit — so the ranking is driven entirely by the complexity penalty, and the most parsimonious specification wins. The diagnostics agree with the verdict: the delay parameter \( \theta \) is not actually estimated (its posterior is nearly the uniform prior), so the delayed form contributes parameters without information; and the flexible \( \beta \)Hill yields much wider credible intervals than reach with no better fit. Even the retention rate's posterior sits close to its prior — the data carries little information about carryover at all. Three cautions follow.</p>
+            <p>First, <strong>prefer the simplest form the data cannot reject</strong>. Flexibility that the data cannot discipline is not free: it inflates posterior uncertainty in everything downstream, from ROAS intervals to the optimal mix. Second, <strong>information criteria select the best regression, not the best causal model</strong> — BIC (or DIC, or WAIC) rewards predictive fit, and a well-fitting specification can still be causally wrong if confounders are missing or media targeting responds to demand. Third, <strong>check residuals anyway</strong>: in the shampoo application, residual autocorrelation was far below that of raw log-sales but remained significant out to roughly fifteen weeks — a signature of misspecification that functional-form shopping within this model class did not resolve; the authors point toward richer multi-stage and graphical structures as the eventual answer.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Model carryover with adstock: geometric decay when effect peaks at exposure, the delayed (Gaussian-kernel) form when the peak lags by \( \theta_m \) periods — the delayed form nests the geometric at \( \theta_m = 0 \).</li>
+                    <li>Model shape with the Hill function: \( \mathcal{K} \) is the half-saturation point, \( \mathcal{S} \) selects concave vs S-shaped; the one-parameter reach transform is the \( \mathcal{S}=1 \) special case and often all the data can support.</li>
+                    <li>Typical MMM data identifies the response <em>curve</em> only within observed spend, not the parameters — priors dominate small samples, and informative priors from pooling or experiments are the fix, not longer history.</li>
+                    <li>Average ROAS and marginal ROAS diverge under saturation; budget decisions need the marginal number, computed per posterior draw with the post-period carryover window included.</li>
+                    <li>Prefer parsimonious specifications, treat information criteria as regression-fit judges rather than causal arbiters, and expect the optimal-mix posterior to be too wide to trust when it extrapolates.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Jin, Y., Wang, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). <em>Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects</em>. Google Research.</li>
+                <li>Chan, D., &amp; Perry, M. (2017). <em>Challenges and Opportunities in Media Mix Modeling</em>. Google Research.</li>
+                <li>Jin, Y., Shobowale, S., Koehler, J., &amp; Case, H. (2012). <em>The Incremental Reach and Cost Efficiency of Online Video Ads over TV Ads</em>. Google Research.</li>
+                <li>Wang, Y., Jin, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). <em>A Hierarchical Bayesian Approach to Improve Media Mix Models Using Category Data</em>. Google Research.</li>
+                <li>Sun, Y., Wang, Y., Jin, Y., Chan, D., &amp; Koehler, J. (2017). <em>Geo-level Bayesian Hierarchical Media Mix Modeling</em>. Google Research.</li>
+                <li>Hill, A. V. (1910). <em>The Possible Effects of the Aggregation of the Molecules of Haemoglobin on Its Dissociation Curves</em>. Journal of Physiology, 40.</li>
+                <li>Gesztelyi, R., Zsuga, J., Kemeny-Beke, A., Varga, B., Juhasz, B., &amp; Tosaki, A. (2012). <em>The Hill Equation and the Origin of Quantitative Pharmacology</em>. Archive for History of Exact Sciences, 66.</li>
+                <li>Koyck, L. M. (1954). <em>Distributed Lags and Investment Analysis</em>. North-Holland.</li>
+                <li>Tellis, G. J. (2006). <em>Modeling Marketing Mix</em>. In Handbook of Marketing Research.</li>
+                <li>Zhang, S., &amp; Vaver, J. (2017). <em>Introduction to the Aggregate Marketing System Simulator</em>. Google Research.</li>
+                <li>Schwarz, G. (1978). <em>Estimating the Dimension of a Model</em>. Annals of Statistics, 6(2).</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

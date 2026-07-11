@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adstock Dynamics and the Timing of Sequential Experiments | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Adstock carryover contaminates experiments: how to size measurement windows, set washout periods from the retention rate, and space sequential media tests.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-carryover-experiment-timing.html">
+    <meta property="og:title" content="Adstock Dynamics and the Timing of Sequential Experiments">
+    <meta property="og:description" content="Adstock carryover contaminates experiments: how to size measurement windows, set washout periods from the retention rate, and space sequential media tests.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-carryover-experiment-timing.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Adstock Dynamics and the Timing of Sequential Experiments">
+    <meta name="twitter:description" content="Adstock carryover contaminates experiments: how to size measurement windows, set washout periods from the retention rate, and space sequential media tests.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-carryover-experiment-timing.html",
+          "name": "Adstock Dynamics and the Timing of Sequential Experiments | MMM Framework",
+          "description": "Adstock carryover contaminates experiments: how to size measurement windows, set washout periods from the retention rate, and space sequential media tests.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-carryover-experiment-timing.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-carryover-experiment-timing.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Adstock Dynamics and the Timing of Sequential Experiments",
+          "datePublished": "2026-07-01",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-carryover-experiment-timing.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-carryover-experiment-timing.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Adstock Dynamics and the Timing of Sequential Experiments",
+              "item": "https://redam94.github.io/mmm-framework/blog-carryover-experiment-timing.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#effect-outlives-exposure">The Effect Outlives the Exposure</a></li>
+                <li><a href="#measurement-window">Sizing the Measurement Window</a></li>
+                <li><a href="#washout-periods">Washouts Between Sequential Tests</a></li>
+                <li><a href="#contamination">When Tests Read Each Other's Answers</a></li>
+                <li><a href="#latent-state">Carryover as a Latent State</a></li>
+                <li><a href="#delay-aware-scheduling">Scheduling with Delayed Information</a></li>
+                <li><a href="#testing-calendar">A Calendar That Respects Carryover</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Adstock Dynamics and the Timing of Sequential Experiments</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-01">July 1, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Experiments</span>
+            </p>
+            <p class="lead">A media experiment ends when the spend change ends — but its effect does not. Carryover keeps moving sales for weeks after a flight stops, and that quietly breaks two things analysts rely on: the measurement window of a single test, and the spacing between consecutive tests. This post turns the retention rate you already estimate into concrete rules for a testing calendar.</p>
+
+            <p>Carryover is usually discussed as a modeling problem: pick an adstock form, put a prior on the retention rate, let the sampler sort it out. But the same dynamics that complicate the model contaminate the experiments meant to validate it. A holdout read too early understates the channel it was supposed to measure; two tests run back to back superpose, and each readout silently includes a piece of the other's answer. Neither failure announces itself. The fix is not better experiment analytics — it is timing, and the timing is computable from a single parameter.</p>
+
+            <h2 id="effect-outlives-exposure">The Effect Outlives the Exposure</h2>
+            <p>The adstock transform exists because advertising works through memory, goodwill, and word-of-mouth — mechanisms that persist after the exposure. Instead of regressing sales on this week's spend, the model regresses on a weighted history of spend, so the regression sees the cumulative media pressure rather than the instantaneous flight. (The <a href="math-01-adstock.html">adstock mathematics page</a> develops the functional forms in full; here we only need their timing implications.)</p>
+
+            <div class="definition">
+                <h4>Definition: Geometric adstock and the retention rate</h4>
+                <p>With spend \( x_t \) and a maximum carryover duration of \( L \) periods, the normalized geometric adstock of Jin et al. (2017) is</p>
+                $$ \mathrm{adstock}(x_t;\,\alpha, L) \;=\; \frac{\sum_{l=0}^{L-1} \alpha^{\,l}\, x_{t-l}}{\sum_{l=0}^{L-1} \alpha^{\,l}}, \qquad 0 \lt \alpha \lt 1, $$
+                <p>where \( \alpha \) is the <strong>retention rate</strong>: the fraction of this period's effect that survives into the next. Dropping the normalization, the same dynamics are a one-line recursion, \( a_t = x_t + \alpha\, a_{t-1} \) — each period the accumulated stock decays by \( \alpha \) and new spend tops it up. This is the marketing analog of the Koyck geometric distributed lag (Koyck, 1954; Hanssens, Parsons, &amp; Schultz, 2001), whose carryover coefficient \( \lambda \) plays exactly the role of \( \alpha \).</p>
+            </div>
+
+            <p>Two consequences of the geometry are worth internalizing. First, the effect of a burst of spend is spread over roughly \( \lambda/(1-\lambda) \) periods on average — the Koyck mean lag. At a retention rate of 0.8 that is four weeks of average delay, on top of the flight itself. Second, geometric decay is the <em>optimistic</em> case: it assumes the effect peaks in the exposure week. Jin et al.'s delayed adstock, \( w(l) = \alpha^{(l-\theta)^2} \), lets the peak arrive \( \theta \) periods after exposure — the empirically common pattern for upper-funnel media like brand TV. A channel with a delayed peak has not even reached its maximum effect when a short test window closes.</p>
+
+            <h2 id="measurement-window">Sizing the Measurement Window</h2>
+            <p>Suppose an experiment changes a channel's spend over weeks \( [t_0, t_1] \). Because of carryover, sales keep responding to that change well past \( t_1 \). The counterfactual attribution in Jin et al. (2017) is explicit about this: ROAS is computed by comparing predicted sales under historical versus perturbed spend, summed over</p>
+            $$ t_0 \;\le\; t \;\le\; t_1 + L - 1, $$
+            <p>that is, over the change period <em>and</em> the post-change period out to the maximum carryover duration. The change window is framed by pre- and post-periods each of length \( L \): the pre-period so that adstock flowing in from before the test is accounted for, the post-period so that the tail of the test's own effect is captured.</p>
+
+            <div class="warning">
+                <h4>⚠️ Truncation bias runs one way</h4>
+                <p>Reading a test at its end date does not add noise — it adds bias, and always in the same direction. Every week of uncounted tail is incremental effect the readout attributes to zero, so a truncated window systematically <em>understates</em> lift and ROAS. A channel with slow carryover, measured with a short window, will look weaker than a fast-decaying channel of identical true effectiveness. If that readout then calibrates the MMM, the bias propagates into the model as an artificially low coefficient.</p>
+            </div>
+
+            <p>The practical rule: the readout window is the flight plus the effective carryover duration. For geometric adstock, the residual fraction of effect still live \( k \) weeks after a flight ends is \( \alpha^k \), so the number of weeks needed for the residual to fall below 5% is</p>
+            $$ L_{\text{eff}} \;\approx\; \frac{\ln(0.05)}{\ln(\alpha)}. $$
+            <p>For a channel with a delayed peak, start this clock at the peak — roughly \( \theta \) weeks after exposure — not at the flight's last day. Jin et al. use \( L = 13 \) weeks in both their simulations and their real application; for their parameter choices the weights beyond that horizon are negligible, which gives a sense of the scale involved: a quarter, not a fortnight.</p>
+
+            <h2 id="washout-periods">Washouts Between Sequential Tests</h2>
+            <p>The same arithmetic that sizes the readout window sizes the gap between tests. If the next experiment on a channel (or in a geography) should start from a clean baseline, the previous test's adstock must first decay to a negligible level. The washout length is driven entirely by the retention rate:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Retention rate \( \alpha \)</th>
+                        <th>Half-life (weeks)</th>
+                        <th>Weeks to \( \lt 5\% \) residual</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>0.3</td><td>0.6</td><td>3</td></tr>
+                    <tr><td>0.5</td><td>1.0</td><td>5</td></tr>
+                    <tr><td>0.7</td><td>1.9</td><td>9</td></tr>
+                    <tr><td>0.8</td><td>3.1</td><td>14</td></tr>
+                    <tr><td>0.9</td><td>6.6</td><td>29</td></tr>
+                </tbody>
+            </table>
+
+            <p>The table assumes weekly data and geometric decay; the half-life is \( \ln(0.5)/\ln(\alpha) \) and the washout column is \( \ln(0.05)/\ln(\alpha) \), rounded up. The nonlinearity is the point. Moving the retention rate from 0.5 to 0.8 does not roughly double the required spacing — it triples it. A search channel with fast decay supports a test nearly every month; a brand channel at \( \alpha = 0.9 \) supports perhaps two clean sequential tests a year. Testing calendars that allocate the same cadence to every channel are implicitly assuming every channel has the same retention rate.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>From retention rate to washout length</summary>
+                <div class="deep-dive-body">
+                    <p>Write the unnormalized adstock recursion \( a_t = x_t + \alpha a_{t-1} \) and consider a test that perturbs spend during \( [t_0, t_1] \), returning to baseline afterward. The perturbation to the adstock state at the flight's end is some \( \Delta a_{t_1} \); with no further perturbed spend, it evolves as \( \Delta a_{t_1+k} = \alpha^k \Delta a_{t_1} \). Since the sales response is a function of the adstock state, the test's lingering influence \( k \) weeks after the flight scales with the state residual \( \alpha^k \) (exactly proportional in the linear-response regime; approximately so under mild saturation around the operating point). Solving \( \alpha^k \le \varepsilon \) gives \( k \ge \ln \varepsilon / \ln \alpha \): the washout for tolerance \( \varepsilon \). The normalized form used in fitting rescales the weights but not their ratio, so the same \( k \) applies. For delayed adstock the kernel \( \alpha^{(l-\theta)^2} \) rises until lag \( \theta \) and then falls faster than geometrically, so a conservative washout is \( \theta \) plus a few half-widths of the kernel — the delay shifts the clock more than the decay lengthens it. The tolerance is a judgment call: 5% is a common working choice, but if the next test's expected lift is small relative to the previous test's, tighten \( \varepsilon \) — the contaminating residual is scaled by the <em>previous</em> effect size, not the next one.</p>
+                </div>
+            </details>
+
+            <div class="note">
+                <h4>💡 Estimate the retention rate at the cadence you test at</h4>
+                <p>The washout table is only as good as the \( \alpha \) that feeds it, and retention rates are notoriously sensitive to temporal aggregation: Clarke (1976) showed that carryover estimated from annual data implies durations 20&ndash;50 times longer than estimates from monthly data on the same process, because aggregation sums the within-period carryover into the apparent retention. Use the shortest data interval available — for most MMM stacks, weekly — and take the spacing rule from the model's posterior on \( \alpha \) rather than a category benchmark. If you want conservative spacing, size the washout from the upper end of that posterior, not the point estimate.</p>
+            </div>
+
+            <h2 id="contamination">When Tests Read Each Other's Answers</h2>
+            <p>Now consider the failure mode the washout exists to prevent. Experiment \( k \) ends; experiment \( k{+}1 \) begins in the same market a week later. The sales series during the second test superposes two effects: the new test's response and the decaying tail of the old one. A difference-in-differences or holdout readout of test \( k{+}1 \) cannot tell them apart — the design is confounded, and each estimate absorbs a share of the other's effect. The error's direction depends on the signs of the interventions: a spend increase following a holdout looks weaker than it is (the baseline is still depressed by the holdout's tail), while two same-signed tests inflate each other.</p>
+
+            <p>There are two defensible responses, and they trade information for simplicity:</p>
+            <ul>
+                <li><strong>Washout.</strong> Leave a gap sized by the table above. This is operationally simple and makes each test's analysis self-contained, at the cost of slowing the learning loop — at \( \alpha = 0.8 \), fourteen idle weeks between tests is a real price.</li>
+                <li><strong>Model the overlap.</strong> Carry the residual adstock from prior tests as a known covariate in the likelihood \( p(y \mid \theta, \xi) \), so the analysis de-confounds the concurrent effects instead of waiting for one to die. The prior test's spend schedule is known exactly, so its adstock trajectory is computable given \( \alpha \) — this is uncertainty to propagate, not a missing variable. This keeps the calendar dense and is the more information-efficient choice, at the cost of coupling every test's readout to the model.</li>
+            </ul>
+
+            <p>The same logic applies when the tests are scored prospectively. In a sequential design loop, the value of a candidate next experiment is its incremental expected information gain — an EIG evaluated against the <em>current</em> posterior (Rainforth et al., 2024). If that posterior does not condition on the in-flight carryover from the previous test, the candidate design gets credit for "resolving" variation that the lingering adstock already explains, and the loop overestimates how much new information the next test will buy.</p>
+
+            <h2 id="latent-state">Carryover as a Latent State</h2>
+            <p>Both remedies above treat carryover as an inconvenience. The cleaner framing treats it as what it literally is: a hidden quantity that evolves over time and drives the observations. That is a state-space model. The adstock accumulator becomes (part of) the latent state \( \mathbf{x}_k \): it decays by \( \alpha \) each period and is topped up by spend (the transition equation), and, after saturation, it contributes to observed sales (the observation equation):</p>
+            $$ \mathbf{x}_k = \mathbf{A}\,\mathbf{x}_{k-1} + \mathbf{q}_{k-1}, \qquad \mathbf{y}_k = \mathbf{H}\,\mathbf{x}_k + \mathbf{r}_k, $$
+            <p>with the retention rate sitting on the diagonal of the transition matrix \( \mathbf{A} \) (Särkkä, 2013). Under this encoding, a delayed outcome is nothing special — just an observation of a slowly decaying state. The Kalman filter runs forward through the data attributing each week's sales to the current state estimate; the smoother runs backward and reattributes them using everything observed later. Both passes are linear in the number of time steps — the machinery was built for exactly this "act now, observe later" structure.</p>
+
+            <p>This is also, not coincidentally, the machinery behind the standard experiment readout. The Bayesian structural time-series approach of Brodersen et al. (2015) — the CausalImpact construction — is a state-space decomposition into trend, seasonality, and regression components whose posterior predictive supplies the counterfactual over the <em>post-intervention period</em>. For a geo test whose effect trails off gradually rather than switching cleanly off, that is the right readout instrument: it does not force a hard end date onto an effect that does not have one, and its credible intervals widen honestly as the tail decays into the noise.</p>
+
+            <h2 id="delay-aware-scheduling">Scheduling with Delayed Information</h2>
+            <p>Sequential experimentation formalizes the testing calendar as an adaptive design loop: after history \( h_{t-1} \) of designs and outcomes, choose the next design by maximizing the incremental EIG,</p>
+            $$ \mathrm{EIG}(\xi_t \mid h_{t-1}) \;=\; \mathbb{E}\!\left[ \log \frac{p(y_t \mid \theta, \xi_t, h_{t-1})}{p(y_t \mid \xi_t, h_{t-1})} \right], $$
+            <p>an ordinary EIG with the prior replaced by the current posterior (Foster et al., 2019; Rainforth et al., 2024). The standard loop assumes each outcome is fully observed before the next design is chosen. Carryover breaks that assumption: when it is time to pick \( \xi_t \), the informative sales from \( \xi_{t-1} \) are still accruing. A greedy loop that pretends otherwise mis-times its choices twice over — it reads the previous test too early (truncation bias flowing into the posterior) and then scores the next design against that corrupted posterior.</p>
+
+            <p>Two remedies parallel the single-test case. The first is <strong>delay-aware scheduling</strong>: condition the design step on the partially observed outcome — the filtered state from the section above — rather than waiting for, or worse fabricating, a final readout. The filter is exactly the object that says how much of test \( t-1 \)'s answer has arrived and how much uncertainty remains in the tail. The second is to go <strong>non-myopic</strong>: a policy in the Deep Adaptive Design family (Foster et al., 2021) is trained offline to maximize the <em>total</em> EIG over the whole horizon, and in doing so internalizes the delay structure — it learns to space and sequence tests so that late-arriving information is still information the plan counts on. This timing discipline is one of the constraints baked into the <a href="continuous-learning.html">continuous learning</a> methodology: a fit&nbsp;&rarr;&nbsp;design&nbsp;&rarr;&nbsp;test&nbsp;&rarr;&nbsp;calibrate loop only converges if each cycle's readout is clean when it is consumed.</p>
+
+            <h2 id="testing-calendar">A Calendar That Respects Carryover</h2>
+            <p>For an analyst planning the next two quarters of tests, the pieces above reduce to a short procedure:</p>
+            <ul>
+                <li><strong>Pull the retention rates from the fitted model</strong>, per channel, at weekly cadence — not from category folklore, and never from estimates fit on aggregated data.</li>
+                <li><strong>Size each readout window</strong> as flight length plus \( \ln(0.05)/\ln(\alpha) \) weeks, adding the peak delay \( \theta \) for channels with delayed response. Pre-register the window with the test.</li>
+                <li><strong>Space same-channel, same-market tests</strong> by the washout column of the table, or run them denser and explicitly carry the prior tests' residual adstock as a covariate in the readout model.</li>
+                <li><strong>Stagger across channels and geos</strong>: tests that perturb disjoint channels or disjoint markets can overlap in time, because their carryover tails do not superpose in the same readout contrast.</li>
+                <li><strong>Read with a counterfactual instrument</strong> — a BSTS-style post-period counterfactual rather than a hard-window difference — so slow tails widen intervals instead of biasing points.</li>
+            </ul>
+            <p>None of this requires new estimation machinery. It requires taking a parameter the model already produces and letting it set the tempo of the measurement program, rather than letting the fiscal calendar do it.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Carryover means a test's effect outlives its flight: the readout window must extend past the spend change by the effective carryover duration, or ROAS is biased low — always low.</li>
+                    <li>The washout between sequential tests is computable from the retention rate: \( \ln(0.05)/\ln(\alpha) \) weeks to reach a 5% residual — about 5 weeks at \( \alpha=0.5 \), 14 at \( \alpha=0.8 \), 29 at \( \alpha=0.9 \).</li>
+                    <li>Back-to-back tests superpose through lingering adstock; either wait out the washout or model the residual carryover explicitly as a known covariate — and score the next design against a posterior that conditions on in-flight effects.</li>
+                    <li>The cleanest treatment makes carryover a latent state: Kalman filtering/smoothing attributes delayed sales to past exposures in linear time, and BSTS counterfactuals read out post-period effects honestly.</li>
+                    <li>Different channels earn different testing cadences. A fast-decay channel supports monthly tests; a high-retention brand channel supports two clean tests a year.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Jin, Y., Wang, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). <em>Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects</em>. Google Research.</li>
+                <li>Hanssens, D. M., Parsons, L. J., &amp; Schultz, R. L. (2001). <em>Market Response Models: Econometric and Time Series Analysis</em> (2nd ed.). Kluwer Academic Publishers.</li>
+                <li>Koyck, L. M. (1954). <em>Distributed Lags and Investment Analysis</em>. North-Holland.</li>
+                <li>Clarke, D. G. (1976). <em>Econometric Measurement of the Duration of Advertising Effect on Sales</em>. Journal of Marketing Research, 13(4).</li>
+                <li>Rainforth, T., Foster, A., Ivanova, D. R., &amp; Bickford Smith, F. (2024). <em>Modern Bayesian Experimental Design</em>. Statistical Science, 39(1).</li>
+                <li>Foster, A., Jankowiak, M., Bingham, E., Horsfall, P., Teh, Y. W., Rainforth, T., &amp; Goodman, N. (2019). <em>Variational Bayesian Optimal Experimental Design</em>. NeurIPS.</li>
+                <li>Foster, A., Ivanova, D. R., Malik, I., &amp; Rainforth, T. (2021). <em>Deep Adaptive Design: Amortizing Sequential Bayesian Experimental Design</em>. ICML.</li>
+                <li>S&auml;rkk&auml;, S. (2013). <em>Bayesian Filtering and Smoothing</em>. Cambridge University Press.</li>
+                <li>Brodersen, K. H., Gallusser, F., Koehler, J., Remy, N., &amp; Scott, S. L. (2015). <em>Inferring Causal Impact Using Bayesian Structural Time-Series Models</em>. Annals of Applied Statistics, 9(1).</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

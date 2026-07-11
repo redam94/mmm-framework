@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geo Experiments: TBR, Power, and the Stationarity You're Assuming | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Classical geo-experiment methodology: GBR design and power analysis, the TBR counterfactual estimator, and the stationarity assumption that carries it.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-geo-experiments-tbr.html">
+    <meta property="og:title" content="Geo Experiments: TBR, Power, and the Stationarity You're Assuming">
+    <meta property="og:description" content="Classical geo-experiment methodology: GBR design and power analysis, the TBR counterfactual estimator, and the stationarity assumption that carries it.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-geo-experiments-tbr.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Geo Experiments: TBR, Power, and the Stationarity You're Assuming">
+    <meta name="twitter:description" content="Classical geo-experiment methodology: GBR design and power analysis, the TBR counterfactual estimator, and the stationarity assumption that carries it.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-geo-experiments-tbr.html",
+          "name": "Geo Experiments: TBR, Power, and the Stationarity You're Assuming | MMM Framework",
+          "description": "Classical geo-experiment methodology: GBR design and power analysis, the TBR counterfactual estimator, and the stationarity assumption that carries it.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-geo-experiments-tbr.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-geo-experiments-tbr.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Geo Experiments: TBR, Power, and the Stationarity You're Assuming",
+          "datePublished": "2026-07-03",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-geo-experiments-tbr.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-geo-experiments-tbr.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Geo Experiments: TBR, Power, and the Stationarity You're Assuming",
+              "item": "https://redam94.github.io/mmm-framework/blog-geo-experiments-tbr.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#why-geo-experiments">Why Geo Experiments</a></li>
+                <li><a href="#gbr-design">GBR: The Founding Design</a></li>
+                <li><a href="#power-analysis">Power Analysis Before You Spend</a></li>
+                <li><a href="#tbr-estimator">Time-Based Regression</a></li>
+                <li><a href="#design-sensitivity">What Moves the Interval</a></li>
+                <li><a href="#stationarity">The Stationarity You're Assuming</a></li>
+                <li><a href="#protecting-the-assumption">Protecting the Assumption</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Geo Experiments: TBR, Power, and the Stationarity You're Assuming</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-03">July 3, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Experiments</span>
+            </p>
+            <p class="lead">Geo experiments are the workhorse of incrementality measurement: partition markets into treatment and control, perturb spend, read off the lift. Two Google papers define the classical methodology — Vaver and Koehler (2011) for design and power, Kerman, Wang, and Vaver (2017) for the time-based regression estimator that works down to a single matched-market pair. Both rest on an assumption that is easy to state and easy to violate: the pre-period relationship between treatment and control must hold through the test.</p>
+
+            <p>This post walks the classical pipeline end to end: the geo-based regression (GBR) design and its closed-form power analysis; the time-based regression (TBR) estimator — pre-period regression of the treatment aggregate on the control aggregate, extrapolated into a counterfactual and cumulated into a lift curve; then the failure mode and the design choices that protect against it.</p>
+
+            <h2 id="why-geo-experiments">Why Geo Experiments</h2>
+            <p>Advertisers need the <em>incremental</em> impact of spend — what would have happened without it — not correlational metrics like cost-per-click. Observational methods are cheap but lean on strong modeling assumptions; user-level randomized experiments are rigorous but blind to behavior downstream of the initial exposure. Geo experiments split the difference: randomized control-group rigor at an aggregated, privacy-friendly geographic level.</p>
+            <p>The units are <strong>geos</strong> — non-overlapping regions small enough to target advertising individually, large enough that ad delivery and response tracking are geographically accurate. Postal codes are too small; the 210 U.S. Designated Market Areas (DMAs) are a standard choice. Every geo experiment shares one temporal structure:</p>
+            <ul>
+                <li><strong>Pretest</strong> — no campaign differences; treatment and control run at the same baseline.</li>
+                <li><strong>Intervention</strong> — the treatment geos' campaigns are modified, creating a nonzero <strong>ad-spend differential</strong> relative to control.</li>
+                <li><strong>Cooldown</strong> — campaigns reset, but lagged effects (offline sales following research and consideration) may still accrue; the window extends a delay \( \nu \) past the spend change to capture them.</li>
+            </ul>
+            <p>The design vector is the same one that appears in the <a href="blog-geo-holdout-eig.html">Bayesian experimental-design companion post</a>: which geos, how large a spend change, over what window. GBR and TBR are the classical answer — designs sized to a target confidence-interval half-width rather than maximal expected information gain, with a linear regression in place of a full media mix model.</p>
+
+            <h2 id="gbr-design">GBR: The Founding Design</h2>
+            <p>Vaver and Koehler (2011) analyze the experiment with a single cross-sectional regression, one observation per geo: each geo's series is collapsed to a pretest total and a test total, and replication across geos supplies the power.</p>
+
+            <div class="definition">
+                <h4>Definition: Geo-based regression model</h4>
+                <p>For geos \( i = 1, \dots, N \),</p>
+                $$ y_{i,1} \;=\; \beta_0 + \beta_1\, y_{i,0} + \beta_2\, \delta_i + \epsilon_i, $$
+                <p>where \( y_{i,1} \), \( y_{i,0} \) are geo \( i \)'s aggregate response in the test and pretest periods and \( \delta_i \) is the spend differential — actual test-period spend minus the spend that would have occurred without the experiment. Fit is by weighted least squares with \( w_i = 1/y_{i,0} \), absorbing the heteroscedasticity of differently sized geos. \( \beta_0, \beta_1 \) soak up seasonal shifts common to the pretest&rarr;test transition; \( \beta_2 \) <strong>is the return on ad spend (ROAS)</strong>.</p>
+            </div>
+
+            <h3 id="spend-differential">Constructing the spend differential</h3>
+            <p>With no pretest spend, \( \delta_i \) is simply the treatment geo's test-period spend. When baseline spend is scaled up or down, the counterfactual spend is estimated from an auxiliary regression fit on <em>control geos only</em>, whose campaigns were never touched:</p>
+            $$ s_{i,1} \;=\; \gamma_0 + \gamma_1\, s_{i,0} + \mu_i, \qquad i \in C, $$
+            <p>weighted by \( 1/s_{i,0} \). Trained where no treatment occurred, this captures the seasonal drift of spend absent any intervention; the differential is \( \delta_i = s_{i,1} - (\gamma_0 + \gamma_1 s_{i,0}) \) for treated geos, zero for controls. A planned aggregate budget change \( \Delta \) can instead be prorated across treatment geos by pretest volume.</p>
+            <p>Assignment is randomized — the guard against unmeasured geo differences masquerading as treatment effects — but constraining the randomization helps: rank geos by pretest volume, partition into groups of size \( M \), pick one per group for treatment. This size-stratified assignment cut the ROAS interval width by about 10% in the paper's data.</p>
+            <p>The flagship example makes the case for the whole enterprise. A multi-week search-ads experiment across the 210 DMAs converged to \( \beta_2 \approx 1/3 \) incremental click per dollar — a cost per <em>incremental</em> click of $3, against a naively reported cost-per-click of $2.40: a 20% understatement of true incremental cost. Read on offline sales, the same experiment showed cumulative incremental revenue still climbing <em>after</em> spend returned to baseline — the lagged response that motivates the cooldown, roughly absent for clicks.</p>
+
+            <h2 id="power-analysis">Power Analysis Before You Spend</h2>
+            <p>The design half of the methodology is a variance formula. With mean pretest response \( \bar y_0 \) and mean differential \( \bar\delta \), linear theory gives</p>
+            $$ \mathrm{var}(\beta_2) \;=\; \frac{\sigma_\epsilon^2}{\big(1-\rho_{y\delta}^2\big)\left[\sum_{i=1}^N w_i(\delta_i-\bar\delta)^2\right]}, \qquad
+            \rho_{y\delta}^2 \;=\; \frac{\left[\sum_i w_i(y_{i,0}-\bar y_0)(\delta_i - \bar\delta)\right]^2}{\sum_i w_i(y_{i,0}-\bar y_0)^2 \, \sum_i w_i (\delta_i-\bar\delta)^2}, $$
+            <p>with \( \sigma_\epsilon^2 \) the residual variance and \( \rho_{y\delta} \) the weighted correlation between pretest volume and spend differential. The 95% confidence-interval half-width on ROAS is \( 2\sqrt{\mathrm{var}(\beta_2)} \). Everything here except \( \sigma_\epsilon \) is a design choice, and \( \sigma_\epsilon \) comes from history — so the formula becomes a pre-experiment power calculator:</p>
+            <ol>
+                <li>Carve historical geo data into <em>pseudo</em> pretest and test windows matching the proposed lengths.</li>
+                <li>Randomly assign geos (with the stratified procedure).</li>
+                <li>Hypothesize the differentials \( \delta_i \).</li>
+                <li>Estimate \( \sigma_\epsilon \) from the reduced model \( y_{i,1} = \hat\beta_0 + \hat\beta_1 y_{i,0} + \hat\epsilon \) — the regression with the \( \delta_i \) term dropped.</li>
+                <li>Plug into the variance formula; repeat over many randomizations and circularly shifted pseudo-windows, and average.</li>
+            </ol>
+            <p>The result is a predicted interval for an experiment that has not yet spent a dollar. One caution: circular shifting reuses data, and once the hypothesized experiment outlasts the available history the prediction turns overly optimistic — the paper shows it tracking the realized interval closely up to exactly that point, then diverging.</p>
+
+            <h2 id="tbr-estimator">Time-Based Regression: Power from Time, Not Geos</h2>
+            <p>GBR's power scales with the number of geos, so it fails when only a handful exist — smaller countries, subregions, or the deliberately cheap <strong>matched market test</strong> of one test region against one control. TBR fills the gap by drawing power from pretest <em>time points</em> instead, degrading gracefully down to two geos; it underlies Google's open-source Matched Markets tooling. Where GBR collapses each geo to two totals, TBR collapses across geos at every time point: one treatment series \( y_t \), one control series \( x_t \).</p>
+
+            <div class="definition">
+                <h4>Definition: TBR pretest model and counterfactual</h4>
+                <p>During the pretest,</p>
+                $$ y_t \;=\; \alpha + \beta x_t + \epsilon_t, \qquad \epsilon_t \sim \mathcal N(0, \sigma^2)\ \text{i.i.d.}, $$
+                <p>with the control series assumed a sufficient, <em>stable</em> predictor of the treatment series across all three periods absent the intervention. For each test-period time point the potential outcome is the extrapolation</p>
+                $$ y_t^* \;=\; \alpha + \beta x_t + \epsilon_t^*, $$
+                <p>whose posterior predictive folds in both the estimation uncertainty in \( (\alpha, \beta, \sigma) \) and a fresh prediction error \( \epsilon_t^* \).</p>
+            </div>
+
+            <p>Fit uses a noninformative prior on \( (\alpha, \beta, \log\sigma) \): conditional on \( \sigma \), the posterior of \( (\alpha,\beta) \) is Normal with the classical OLS mean and covariance \( \sigma^2 (X'X)^{-1} \); integrating out \( \sigma \) gives a shifted, scaled \( t \)-distribution with \( n-2 \) degrees of freedom, \( n \) the number of pretest points. Everything downstream stays closed-form.</p>
+
+            <h3 id="lift-and-iroas">From counterfactual to cumulative lift and iROAS</h3>
+            <p>The pointwise causal effect is the gap between what happened and what the pretest relationship predicts:</p>
+            $$ \phi_t \;=\; y_t - y_t^*, \qquad \Delta(t) \;=\; \sum_{t'=1}^{t} \phi_{t'}, $$
+            <p>cumulated from the first day of the intervention. Since \( y_t \) is observed and \( y_t^* \) has a posterior, \( \phi_t \) and \( \Delta(t) \) inherit posteriors — again \( t \)-distributions, no simulation required. Incremental ROAS is the ratio of two such analyses, one on the response metric and one on cost:</p>
+            $$ \mathrm{iROAS}(t) \;=\; \frac{\Delta_{\text{resp}}(t)}{\Delta_{\text{cost}}(t)}, $$
+            <p>its posterior obtained by drawing from the two \( t \)-distributions and dividing, with posterior medians as point estimates. One clean special case: with zero pretest spend the counterfactual cost is zero with certainty, so \( \Delta_{\text{cost}}(t) \) is the observed cumulative spend and the iROAS posterior is exactly a scaled, shifted \( t \)-distribution.</p>
+            <p>TBR is explicitly a simplified cousin of CausalImpact (Brodersen et al., 2015): the same train-on-pretest, extrapolate, difference logic, but a single static regression on one control aggregate in place of a state-space model with local level, trend, seasonality, and covariate selection. The trade is right exactly when there is one clean control series and nothing to select among.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>The closed-form posterior scale of the cumulative effect</summary>
+                <div class="deep-dive-body">
+                    <p>The appendix of Kerman, Wang, and Vaver (2017) derives the variance of the cumulative effect at the end of a test period of length \( T \), conditional on \( \sigma \):</p>
+                    $$ \mathrm{Var}\big(\Delta(T)\mid\sigma\big) \;=\; T^2\,\mathrm{Var}(\alpha) \;+\; \mathrm{Var}(\beta)\Big(\sum_t x_t\Big)^{\!2} \;+\; 2T\,\mathrm{Cov}(\alpha,\beta)\Big(\sum_t x_t\Big) \;+\; T\sigma^2. $$
+                    <p>The first three terms are pretest estimation uncertainty propagated through the extrapolation; the last is fresh prediction noise accumulating linearly in \( T \). Integrating over \( \sigma \) yields the \( t \)-scale</p>
+                    $$ T s \left( v_\alpha + 2\bar x_T\, v_{\alpha\beta} + v_\beta\, \bar x_T^2 + \tfrac{1}{T} \right)^{1/2}, $$
+                    <p>with \( s \) the residual-SD estimate, \( \bar x_T \) the test-period mean of the control series, and \( v_\alpha, v_\beta, v_{\alpha\beta} \) entries of \( (X'X)^{-1} \). Dividing by cumulative cost \( \bar c\, T \) gives the iROAS posterior directly, and every sensitivity result in the next section falls out by inspection.</p>
+                </div>
+            </details>
+
+            <h2 id="design-sensitivity">What Moves the Interval</h2>
+            <p>TBR's design procedure is the time-series analogue of GBR's: build pseudo-geo-experiment datasets from history — each starting at a different date, running the full experiment length, recycling dates from the start of the series when the window runs off the end — analyze each with the standard TBR pipeline, and take the <em>median</em> half-width as the prediction. The closed-form scale then says how each lever moves it:</p>
+
+            <table>
+                <thead>
+                    <tr><th>Design lever</th><th>Effect on iROAS CI half-width</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Spend intensity \( \bar c \)</td><td>The dominant lever: multiplying intensity by \( f \) divides the half-width by \( f \) — limited only by ad inventory and diminishing returns.</td></tr>
+                    <tr><td>Pretest length \( n \)</td><td>Shrinks the width at rate \( 1/\sqrt n \), but bounded below: as \( n \to \infty \) it approaches \( \sigma_0 / (\bar c \sqrt T) \). More history cannot substitute indefinitely for spend or test length.</td></tr>
+                    <tr><td>Test length \( T \)</td><td>Improves precision with diminishing returns at fixed intensity.</td></tr>
+                    <tr><td>Cooldown length</td><td>At fixed total spend, longer cooldown <em>lowers</em> average intensity, so the width <em>grows</em> — roughly as \( \sqrt T \) for large \( T \). Just long enough for \( \Delta(t) \) to flatten, no longer.</td></tr>
+                    <tr><td>Control-group volume</td><td>No effect: rescaling \( x_t \) leaves the posterior scale unchanged once refit.</td></tr>
+                    <tr><td>Treatment-group volume</td><td>Rescaling \( y_t \) by \( \kappa_y \) rescales the residual SD and the width by the same \( \kappa_y \) — fewer treatment geos directly widens the interval (and proportionally lowers cost).</td></tr>
+                    <tr><td>Geo count</td><td>Never enters the estimator directly, but very few geos means less protection from randomization, and \( \sigma \) tends to suffer; high treatment&ndash;control correlation offsets this.</td></tr>
+                </tbody>
+            </table>
+
+            <p>The paper validates the loop on the 210-DMA revenue experiment. The pseudo-experiment procedure priced the target iROAS precision at about $22,000 of incremental spend; the budget was $20,000, so the target was relaxed to \( 0.5 \times 22{,}000 / 20{,}000 = 0.55 \) by pure rescaling — no re-simulation, since width scales as \( 1/f \) in spend. The experiment spent $18,273 and achieved precision 0.62; in cost-per-unit-half-width terms, prediction and realization differed by about 3%.</p>
+
+            <h2 id="stationarity">The Stationarity You're Assuming</h2>
+            <p>Everything above — counterfactual, closed-form posteriors, power analysis — is conditional on one substantive assumption.</p>
+
+            <div class="definition">
+                <h4>Definition: TBR stationarity (stability) condition</h4>
+                <p>TBR is unbiased provided \( y_t = \alpha + \beta x_t + \epsilon_t \) holds with the <em>same</em> \( (\alpha, \beta) \) and stationary error structure in the pretest, where it is fit, and the test period, where it is extrapolated — in the counterfactual absence of the intervention. Whatever process translates the control aggregate's movements into the treatment aggregate's must not itself shift: no differential trend, level shift, or seasonal pattern in the treatment&ndash;control relationship that is not caused by the ad change being measured.</p>
+            </div>
+
+            <p>When the assumption holds, TBR is remarkably well behaved. The paper simulates weekly geo sales as a mix of a common seasonal component and geo-specific noise, sweeping cross-geo correlation \( \rho \in \{0, 0.5, 0.8\} \) and coefficient of variation \( c \in \{0.15, 0.25, 0.5\} \), 2,000 datasets per combination. Across all nine scenarios and pretest lengths from 4 to 40 points, empirical coverage of the 90% and 50% posterior intervals matched nominal, and the posterior-median iROAS was practically unbiased — squared bias averaged 0.04% of mean squared error. Essentially all of TBR's error is variance, not bias, <em>when the pretest relationship is genuinely stable</em>.</p>
+            <p>Then the paper breaks it on purpose. Injecting sustained exponential baseline growth of about half a percent per week — a proxy for a strong trend, such as a holiday season, shifting the relationship mid-experiment — turns the picture: point estimates become biased, approaching the true iROAS of 2.0 only slowly as treatment&ndash;control correlation rises, and 90% coverage falls well below nominal at low correlation. The static regression is extrapolating a relationship that no longer exists.</p>
+            <p>The proposed fix is <strong>TBR-OR</strong>: orthogonal (Deming) regression, an errors-in-variables model that treats the control series itself as noisy, fixing the otherwise-unidentifiable variance ratio at the empirical pretest ratio \( \mathrm{Var}(y)/\mathrm{Var}(x) \). Under the same sustained-growth simulation its point estimates are noticeably less biased.</p>
+
+            <div class="warning">
+                <h4>⚠️ TBR-OR is not a free upgrade</h4>
+                <p>The treatment&ndash;control correlation sits in the denominator of the orthogonal-regression slope. When it is low (roughly \( \rho \lt 0.5 \)), especially with little seasonality in the data, the slope becomes unstable and predictions unreliable — the paper's verdict is that TBR-OR "should not be used at all" in that regime, and its bootstrap intervals under-cover more severely than TBR's. Plain TBR remains the default; reserve TBR-OR for experiments known to span strong, sustained trend or seasonal change — precisely where plain stationarity is most stressed.</p>
+            </div>
+
+            <h2 id="protecting-the-assumption">Protecting the Assumption by Design</h2>
+            <p>Stationarity cannot be verified during the test — the counterfactual is unobservable by construction. What the methodology offers instead is design choices and diagnostics that make violations less likely and more visible:</p>
+            <ul>
+                <li><strong>Choose a control aggregate that tracks treatment tightly.</strong> High pretest correlation shrinks the residual variance (precision) and is the regime where even misspecified estimators stay closest to truth (validity). Size-stratified or paired assignment is the cheap way to get it.</li>
+                <li><strong>Schedule around known non-stationarity.</strong> A window straddling a holiday season or major promotion is where the relationship is most likely to drift. If the calendar cannot move, plan the TBR-OR analysis in advance — or step up to a state-space counterfactual (CausalImpact), built to absorb exactly this drift.</li>
+                <li><strong>Keep the cooldown honest.</strong> If \( \Delta(t) \) has not visibly flattened by the end of a reasonably chosen cooldown, something is wrong — a long-lived lagged effect, an interfering event, or a shifting relationship the static regression cannot represent. The flattening curve is TBR's closest thing to an internal validity check.</li>
+                <li><strong>Run the power analysis first.</strong> An underpowered test invites over-reading noise; the pseudo-experiment procedure prices the test before any incremental dollar is committed, and the 3% prediction accuracy above is evidence the pricing is real.</li>
+            </ul>
+            <p>Where does the readout go? A geo experiment's iROAS is the ground truth that <a href="measurement-calibration.html">calibrates a media mix model</a>, contracting the channel parameters observational data cannot pin down. And because relationships drift, one experiment is never the end: a standing design&ndash;test&ndash;calibrate&ndash;retest program is the subject of the <a href="continuous-learning.html">continuous learning</a> page. The classical machinery here sizes each test; the <a href="blog-geo-holdout-eig.html">Bayesian companion post</a> shows how a fitted model chooses <em>which</em> test to run next.</p>
+
+            <div class="note">
+                <h4>💡 GBR or TBR?</h4>
+                <p>Mostly a function of geo count. Tens of geos, single ROAS number wanted: GBR. A handful of geos — or a matched-market pair — and a full time-series readout wanted: TBR. Many donor geos and doubt that one control aggregate will track treatment: a synthetic-control counterfactual is the natural third branch. All three share the same design space; they differ only in how the counterfactual is built.</p>
+            </div>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>GBR estimates ROAS from one cross-sectional regression over geos; its variance formula plus pseudo-experiment simulation prices the test before any spend is committed.</li>
+                    <li>TBR regresses the treatment aggregate on the control aggregate in the pretest, extrapolates the counterfactual, and cumulates the gap — closed-form \( t \)-distribution posteriors for lift and iROAS, workable down to two geos.</li>
+                    <li>Spend intensity is the dominant precision lever (half-width scales as \( 1/f \)); pretest length helps only up to \( \sigma_0/(\bar c \sqrt T) \); extending the cooldown at fixed budget makes precision <em>worse</em>.</li>
+                    <li>Validity rests on stationarity of the pretest treatment&ndash;control relationship. Under a sustained trend, TBR biases and under-covers; TBR-OR helps there but fails outright at low correlation.</li>
+                    <li>Protect the assumption by design — tightly tracking controls, scheduling around known drift, a cooldown just long enough for the lift curve to flatten — then feed the readout back into the model that plans the next test.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Vaver, J., &amp; Koehler, J. (2011). <em>Measuring Ad Effectiveness Using Geo Experiments</em>. Google Research.</li>
+                <li>Kerman, J., Wang, P., &amp; Vaver, J. (2017). <em>Estimating Ad Effectiveness Using Geo Experiments in a Time-Based Regression Framework</em>. Google Research.</li>
+                <li>Brodersen, K. H., Gallusser, F., Koehler, J., Remy, N., &amp; Scott, S. L. (2015). <em>Inferring Causal Impact Using Bayesian Structural Time-Series Models</em>. Annals of Applied Statistics, 9(1).</li>
+                <li>Gelman, A., Carlin, J. B., Stern, H. S., Dunson, D. B., Vehtari, A., &amp; Rubin, D. B. (2013). <em>Bayesian Data Analysis</em> (3rd ed.). CRC Press.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
