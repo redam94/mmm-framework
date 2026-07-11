@@ -78,10 +78,11 @@ htmlcov/
 /REFACTORING_GUIDE.md
 
 # Notebook-rendered reports & data dumps (the measured-evidence JSONs above are
-# kept via their ! exceptions; nbs/mff.csv is already covered by *.csv)
+# kept via their ! exceptions; nbs/legacy/mff.csv is already covered by *.csv)
 nbs/*.html
+nbs/legacy/*.html
 nbs/artifacts/*.html
-nbs/output.xlsx
+nbs/legacy/output.xlsx
 
 # Redundant copies of the docs/examples/ demo reports (the docs site links to
 # the docs/examples/ copies, which stay tracked)

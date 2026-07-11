@@ -169,14 +169,14 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-04",
+          "dateModified": "2026-07-09",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/aurora-03-extended-mmm.html#breadcrumb"
           },
           "@id": "https://redam94.github.io/mmm-framework/aurora-03-extended-mmm.html#webpage",
           "@type": "TechArticle",
           "headline": "Aurora 03: Extended Models",
-          "datePublished": "2026-07-04",
+          "datePublished": "2026-07-09",
           "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
           "author": {
             "@type": "Person",
@@ -273,8 +273,8 @@
                 </ul>
                 <p>
                     <strong>Run it:</strong>
-                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/03_extended_mmm.ipynb"
-                       target="_blank" rel="noopener"><code>nbs/03_extended_mmm.ipynb</code></a> on GitHub.
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/aurora/03_extended_mmm.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/aurora/03_extended_mmm.ipynb</code></a> on GitHub.
                 </p>
             </div>
 
@@ -289,8 +289,8 @@
             <div class="chart-container" id="blindspotChart"></div>
             <p class="chart-note">
                 <strong>Measured</strong> — base-model ROAS from the chapter-2 fit
-                (<code>nbs/02_base_mmm.ipynb</code>) vs the known true ROAS from the Aurora generator
-                (<code>nbs/aurora.py</code>). TV: 0.35 vs 2.14. Display: 0.67 vs 2.11. Meanwhile Search
+                (<code>nbs/aurora/02_base_mmm.ipynb</code>) vs the known true ROAS from the Aurora generator
+                (<code>nbs/builders/aurora.py</code>). TV: 0.35 vs 2.14. Display: 0.67 vs 2.11. Meanwhile Search
                 — the demand-chasing mirage from <a href="aurora-00-overview.html">chapter 0</a> — reads
                 1.05 against a truth of 0.66. The base model undervalues the brand engines three- to
                 six-fold and overvalues the demand-chaser by ~60%.
@@ -607,9 +607,9 @@ ce = mv.get_cross_effects_summary()</code></pre>
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>
-                    This page mirrors <code>nbs/03_extended_mmm.ipynb</code> (committed with baked
-                    outputs), regenerated from <code>nbs/build_aurora_notebooks.py</code>. The shared
-                    Aurora world — ground truth included — lives in <code>nbs/aurora.py</code>; the series
+                    This page mirrors <code>nbs/aurora/03_extended_mmm.ipynb</code> (committed with baked
+                    outputs), regenerated from <code>nbs/builders/build_aurora_notebooks.py</code>. The shared
+                    Aurora world — ground truth included — lives in <code>nbs/builders/aurora.py</code>; the series
                     guide is <code>nbs/README_aurora.md</code>. Fits use small draw counts (500/500, 2
                     chains) to stay fast; use ≥4 chains and ≥1000 draws for real analyses. Source:
                     <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
@@ -693,7 +693,7 @@ ce = mv.get_cross_effects_summary()</code></pre>
         // ------------------------------------------------------------------
         const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
         const CH_COLORS = [PT.colors.tv, PT.colors.search, PT.colors.social, PT.colors.display];
-        const BASE_ROAS = [0.35, 1.05, 0.64, 0.67];      // nbs/02_base_mmm.ipynb cell "ROAS vs truth"
+        const BASE_ROAS = [0.35, 1.05, 0.64, 0.67];      // nbs/aurora/02_base_mmm.ipynb cell "ROAS vs truth"
         const TRUE_ROAS = [2.14, 0.66, 0.49, 2.11];      // aurora.py true_roas
         const MED_DIRECT   = { TV: 0.05,   Display: 0.11   };  // 03 nb: get_mediation_effects()
         const MED_INDIRECT = { TV: 151.48, Display: 186.28 };

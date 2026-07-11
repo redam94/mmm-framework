@@ -296,7 +296,7 @@
                 Every channel in an MMM gets a <em>shape</em>: a carryover kernel that says when the
                 effect arrives, and a saturation curve that says how it bends with spend. No sampler
                 diagnostic ever inspects either. This guide mirrors
-                <code>nbs/stress_01_carryover_and_shape.ipynb</code>: three worlds from
+                <code>nbs/stress/stress_01_carryover_and_shape.ipynb</code>: three worlds from
                 <code>src/mmm_framework/synth/dgp.py</code> where exactly one shape assumption is wrong, three naive
                 fits that converge beautifully onto badly wrong attribution, and three measured pivots.
                 <a href="stress-00-rosy-picture.html">Stress&nbsp;00</a> set the doctrine — <em>green
@@ -346,8 +346,8 @@
                 </ul>
                 <p>
                     <strong>Run it:</strong>
-                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_01_carryover_and_shape.ipynb"
-                       target="_blank" rel="noopener"><code>nbs/stress_01_carryover_and_shape.ipynb</code></a> on GitHub.
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress/stress_01_carryover_and_shape.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress/stress_01_carryover_and_shape.ipynb</code></a> on GitHub.
                 </p>
             </div>
 
@@ -831,8 +831,8 @@
             <div class="note" id="run-it">
                 <h4>💡 Run it yourself</h4>
                 <p>
-                    This guide mirrors <code>nbs/stress_01_carryover_and_shape.ipynb</code> (authored by
-                    <code>nbs/build_stress_01_carryover_shape.py</code>), backed by the scenario harness in
+                    This guide mirrors <code>nbs/stress/stress_01_carryover_and_shape.ipynb</code> (authored by
+                    <code>nbs/builders/build_stress_01_carryover_shape.py</code>), backed by the scenario harness in
                     <code>tests/synth/</code> — worlds <code>adstock_misspec</code>,
                     <code>saturation_misspec</code>, <code>spend_outliers</code>. Every computational cell
                     ends in a seeded assert encoding the claim it demonstrates; if the notebook executes

@@ -1,7 +1,7 @@
 """Multi-seed re-run of the misspecification study, with Monte Carlo SEs.
 
 The single-cycle numbers quoted by ``docs/continuous-learning-math.html``
-(§Misspecification), the narrative page and ``nbs/continuous_learning.ipynb``
+(§Misspecification), the narrative page and ``nbs/continuous_learning/continuous_learning.ipynb``
 §14 — profit gap 0.9% (single Hill) / 1.4% (logistic) / 0.9% (correct
 mixture), marginal-ROAS 90%-CI coverage 3/4 / 2/4 / 4/4, and the sequential
 convergence 0.9 -> 0.5 -> 0.2 -> 0.3% — were one-seed point estimates. Per
@@ -37,7 +37,7 @@ from pathlib import Path
 
 import numpy as np
 
-# ── study constants: MUST match nbs/build_continuous_learning.py §14 ─────────
+# ── study constants: MUST match nbs/builders/build_continuous_learning.py §14 ─────────
 CENTER = np.full(4, 0.7)
 B = 3.2
 VALUE = 5.0

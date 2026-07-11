@@ -62,7 +62,7 @@ _Last updated: 2026-06-12._
 
 12. **`examples/ex_fit_and_report.py` hand-rolls HTML** instead of using
     `MMMReportGenerator(model=…, panel=…, results=…, config=ReportConfig(…)).to_html(path)`
-    (the real pattern, used by the aurora builder and `nbs/real_data_onboarding.ipynb`).
+    (the real pattern, used by the aurora builder and `nbs/demos/real_data_onboarding.ipynb`).
     Update the example so it demonstrates the shipped generator.
 
 13. **Two `/projects` APIs exist and answer differently.** The top-level Models API
