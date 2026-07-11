@@ -23,6 +23,7 @@ INTERACTIVE_INSIGHT_SLOTS = (
     "fit_gloss",
     "ppc_stats_gloss",
     "roi_gloss",
+    "yoy_gloss",
     "estimands_gloss",
     "curves_gloss",
     "carryover_gloss",
@@ -173,6 +174,36 @@ def _fallback_insights(f: dict[str, Any]) -> dict[str, str]:
             "Per-channel returns with credible intervals over the selected window."
         )
 
+    yoy = (f.get("yoy") or {}).get("latest")
+    if yoy:
+        drivers = sorted(
+            yoy.get("drivers", []), key=lambda d: abs(d["mean"]), reverse=True
+        )
+        top = drivers[0] if drivers else None
+        base = yoy.get("baseline") or {}
+        delta = yoy.get("delta", 0.0)
+        out["yoy_gloss"] = (
+            f"From {yoy['year_a']} to {yoy['year_b']} the KPI moved by "
+            f"{delta:+,.0f}. "
+            + (
+                f"The largest media driver was {top['name']} "
+                f"({top['mean']:+,.0f}; {top['lower']:+,.0f} to "
+                f"{top['upper']:+,.0f}), "
+                if top
+                else ""
+            )
+            + f"while baseline and non-media factors account for "
+            f"{base.get('mean', 0):+,.0f}. The waterfall decomposes any pair "
+            "of years the same way, with credible intervals on every media "
+            "driver."
+        )
+    else:
+        out["yoy_gloss"] = (
+            "The waterfall bridges one year's total KPI to the next, "
+            "splitting the change into per-channel media drivers (with "
+            "credible intervals) and the residual baseline movement."
+        )
+
     out["estimands_gloss"] = (
         "The same posterior supports several causal questions. Average ROI "
         'answers "what did past spend return"; marginal ROAS answers "what '
@@ -265,6 +296,7 @@ _LLM_SLOT_LABELS = {
     "FIT": "fit_gloss",
     "PPC_STATS": "ppc_stats_gloss",
     "ROI": "roi_gloss",
+    "YOY": "yoy_gloss",
     "ESTIMANDS": "estimands_gloss",
     "CURVES": "curves_gloss",
     "CARRYOVER": "carryover_gloss",
@@ -321,6 +353,17 @@ def _facts_blob(f: dict[str, Any]) -> str:
             )
     for ch, lo, hi in _sensitivity_spread(f):
         lines.append(f"Sensitivity {ch}: ROI ranges {lo:.2f}–{hi:.2f} across specs.")
+    yoy = (f.get("yoy") or {}).get("latest")
+    if yoy:
+        lines.append(
+            f"YoY {yoy['year_a']}->{yoy['year_b']}: total change "
+            f"{yoy.get('delta', 0):+,.0f}; baseline "
+            f"{(yoy.get('baseline') or {}).get('mean', 0):+,.0f}; drivers "
+            + ", ".join(
+                f"{d['name']} {d['mean']:+,.0f}" for d in yoy.get("drivers", [])
+            )
+            + "."
+        )
     for s in (f.get("ppc_stats") or {}).get("stats") or []:
         lines.append(
             f"PPC stat {s['label']}: observed {s['observed']:.3g}, replicate "
@@ -375,6 +418,7 @@ def _enrich_with_llm(
         "p-values — which KPI properties (extremes, volatility, "
         "autocorrelation) the model reproduces or misses.\n"
         "ROI: which channels lead/trail and where uncertainty matters.\n"
+        "YOY: what drove the year-over-year KPI change (media vs baseline).\n"
         "ESTIMANDS: average vs marginal returns — where they disagree here.\n"
         "CURVES: what the response curves imply about headroom/saturation.\n"
         "CARRYOVER: which channels have long memory and what that changes.\n"

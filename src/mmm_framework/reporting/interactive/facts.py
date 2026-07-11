@@ -475,16 +475,19 @@ def _prior_posterior_rows(
 
         post_lo, post_hi = _eti(post, interval)
         meta = divisor_meta.get(ch, {})
+        ref = meta.get("reference", 1.0)
         row: dict[str, Any] = {
             "channel": ch,
             "label": meta.get("roi_label") or "ROI",
-            "reference": meta.get("reference", 1.0),
+            "reference": ref,
             "grid": _jsafe(grid),
             "posterior": {
                 "density": _jsafe(_kde_curve(post, grid)),
                 "mean": float(post.mean()),
+                "sd": float(post.std()),
                 "lower": post_lo,
                 "upper": post_hi,
+                "p_above": float(np.mean(post > float(ref))),
             },
         }
         if prior_draws.size:
@@ -492,11 +495,66 @@ def _prior_posterior_rows(
             row["prior"] = {
                 "density": _jsafe(_kde_curve(prior_draws, grid)),
                 "mean": float(prior_draws.mean()),
+                "sd": float(prior_draws.std()),
                 "lower": pr_lo,
                 "upper": pr_hi,
+                "p_above": float(np.mean(prior_draws > float(ref))),
             }
         rows.append(row)
     return rows
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Year-over-year drivers (for the waterfall + grounded gloss)
+# ─────────────────────────────────────────────────────────────────────────────
+def _yoy_facts(
+    actual_national: np.ndarray,
+    contrib_dp: dict[str, np.ndarray],
+    periods: list[str],
+    channels: list[str],
+    interval: float,
+) -> dict[str, Any] | None:
+    """Latest-pair YoY decomposition (grounds the gloss + gates the section).
+
+    The waterfall itself recomputes any year pair client-side from the same
+    embedded draws; this mirrors that math in Python for the most recent
+    qualifying pair: per-channel contribution deltas (posterior draws → CI)
+    plus the residual "baseline & other" delta that closes to the observed
+    total change.
+    """
+    year_idx: dict[str, list[int]] = {}
+    for i, p in enumerate(periods):
+        year_idx.setdefault(p[:4], []).append(i)
+    qual = [y for y in sorted(year_idx) if len(year_idx[y]) >= 26]
+    if len(qual) < 2:
+        return None
+    ya, yb = qual[-2], qual[-1]
+    ia = np.array(year_idx[ya], dtype=int)
+    ib = np.array(year_idx[yb], dtype=int)
+    tot_a = float(np.nansum(actual_national[ia]))
+    tot_b = float(np.nansum(actual_national[ib]))
+
+    drivers: list[dict[str, Any]] = []
+    media_delta = None
+    for ch in channels:
+        d = contrib_dp[ch][:, ib].sum(axis=1) - contrib_dp[ch][:, ia].sum(axis=1)
+        media_delta = d if media_delta is None else media_delta + d
+        lo, hi = _eti(d, interval)
+        drivers.append({"name": ch, "mean": float(d.mean()), "lower": lo, "upper": hi})
+    base = (tot_b - tot_a) - media_delta
+    b_lo, b_hi = _eti(base, interval)
+    return {
+        "years": qual,
+        "latest": {
+            "year_a": ya,
+            "year_b": yb,
+            "total_a": tot_a,
+            "total_b": tot_b,
+            "delta": tot_b - tot_a,
+            "drivers": drivers,
+            "baseline": {"mean": float(base.mean()), "lower": b_lo, "upper": b_hi},
+        },
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -853,6 +911,8 @@ def interactive_report_facts(
         channels, actual_national, contrib_dp, spend, divisor_meta, fit, interval
     )
 
+    yoy = _yoy_facts(actual_national, contrib_dp, periods, channels, interval)
+
     assumptions = [r.to_dict() for r in model_assumptions(model)]
 
     diagnostics: dict[str, Any] = {}
@@ -902,6 +962,7 @@ def interactive_report_facts(
         "sensitivity": sensitivity,
         "ppc_prior": ppc_prior,
         "headline": headline,
+        "yoy": yoy,
         "assumptions": assumptions,
         "diagnostics": _jsafe(diagnostics),
     }

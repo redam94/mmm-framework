@@ -434,9 +434,24 @@ INTERACTIVE_REPORT_JS = r"""
     }
   }
 
-  // ── response / ROI / mROI curves ───────────────────────────────────────
+  // ── layout helper: balanced chart grids (no lonely last cell) ──────────
+  function balanceGrid(el, n) {
+    var cols = 3;
+    if (n % 3 === 0) cols = 3;
+    else if (n % 2 === 0) cols = 2;
+    else if (n <= 3) cols = n;
+    el.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+  }
+
+  // ── response / ROI / mROI curves + per-channel deep dive ───────────────
   var curveMode = 'response';
-  function curveSeries(ch) {
+  var curveChannel = 'all';
+  var CURVE_MODES = [
+    ['response', 'Response', 'Weekly contribution'],
+    ['roi', 'ROI', 'ROI at spend level'],
+    ['mroi', 'Marginal ROI', 'Marginal ROI']
+  ];
+  function curveSeries(ch, mode) {
     // Per-draw weekly-average curves over the multiplier grid.
     var spendTot = IR.curves.spend_total[ch] || 0;
     var nP = IR.curves.n_periods || P;
@@ -448,9 +463,9 @@ INTERACTIVE_REPORT_JS = r"""
       var draws = m.col(l);
       var x = mult * spendTot / nP;
       var ys = null;
-      if (curveMode === 'response') {
+      if (mode === 'response') {
         ys = draws.map(function (v) { return v / nP; });
-      } else if (curveMode === 'roi') {
+      } else if (mode === 'roi') {
         if (mult <= 0 || spendTot <= 0) continue;
         ys = draws.map(function (v) { return v / (mult * spendTot); });
       } else { // mroi: centered finite difference on the grid
@@ -466,52 +481,107 @@ INTERACTIVE_REPORT_JS = r"""
     }
     return { xs: xs, med: med, lo: lo, hi: hi, avgWeekly: spendTot / nP };
   }
+  function curveChart(divId, ch, mode, height, titleTxt) {
+    var cs = curveSeries(ch, mode);
+    if (!cs.xs.length) return false;
+    var c = chColor(ch);
+    var yTitle = CURVE_MODES.filter(function (m) { return m[0] === mode; })[0][2];
+    var traces = [
+      { x: cs.xs, y: cs.lo, type: 'scatter', mode: 'lines', line: { width: 0 },
+        hoverinfo: 'skip', showlegend: false },
+      { x: cs.xs, y: cs.hi, type: 'scatter', mode: 'lines', line: { width: 0 },
+        fill: 'tonexty', fillcolor: rgba(c, 0.16), hoverinfo: 'skip', showlegend: false },
+      { x: cs.xs, y: cs.med, type: 'scatter', mode: 'lines', name: ch,
+        line: { color: c, width: 2 },
+        hovertemplate: 'spend/wk %{x:.3g} → %{y:.3g}<extra>' + esc(ch) + '</extra>' }
+    ];
+    var shapes = [];
+    if (mode !== 'mroi' || (cs.avgWeekly >= cs.xs[0] && cs.avgWeekly <= cs.xs[cs.xs.length - 1])) {
+      shapes.push({
+        type: 'line', x0: cs.avgWeekly, x1: cs.avgWeekly, yref: 'paper', y0: 0, y1: 1,
+        line: { color: TH.gold || '#b08d3f', width: 1.2, dash: 'dot' }
+      });
+    }
+    if (mode !== 'response') {
+      shapes.push({
+        type: 'line', x0: cs.xs[0], x1: cs.xs[cs.xs.length - 1], y0: refOf(ch), y1: refOf(ch),
+        line: { color: TH.rust || '#b0563f', width: 1, dash: 'dash' }
+      });
+    }
+    var ly = baseLayout({
+      title: { text: titleTxt, font: { size: 12 }, x: 0.02, y: 0.98 },
+      height: height, margin: { l: 48, r: 8, t: 26, b: 34 },
+      xaxis: { title: { text: 'avg weekly ' + ((meta[ch] || {}).divisor_units || 'spend'), font: { size: 10 } } },
+      yaxis: { title: { text: yTitle, font: { size: 10 } } },
+      shapes: shapes
+    });
+    Plotly.newPlot(divId, traces, ly, CFG);
+    return true;
+  }
+  function headroomSummary(ch) {
+    // Per-draw extra contribution available at 2x vs current spend.
+    var m = curveM[ch], L = LV.length;
+    var i1 = LV.indexOf(1.0), i2 = L - 1;
+    if (i1 < 0) return null;
+    var cur = m.col(i1), top = m.col(i2);
+    var out = new Float64Array(cur.length), ok = 0;
+    for (var d = 0; d < cur.length; d++) {
+      if (cur[d] > 1e-9) { out[ok++] = (top[d] - cur[d]) / cur[d]; }
+    }
+    return ok > 10 ? summar(out.slice(0, ok)) : null;
+  }
   function renderCurves() {
     var grid = document.getElementById('curvesGrid');
     if (!grid) return;
     grid.innerHTML = '';
-    var yTitle = curveMode === 'response' ? 'Weekly contribution'
-      : curveMode === 'roi' ? 'ROI at spend level' : 'Marginal ROI';
-    CH.forEach(function (ch, i) {
-      var cs = curveSeries(ch);
-      if (!cs.xs.length) return;
+    var modeCtl = document.getElementById('curveModeCtl');
+    if (curveChannel === 'all') {
+      if (modeCtl) modeCtl.style.display = '';
+      var shown = 0;
+      CH.forEach(function (ch, i) {
+        var cell = document.createElement('div');
+        cell.className = 'sat-cell';
+        var div = document.createElement('div');
+        div.id = 'curve_' + i; cell.appendChild(div); grid.appendChild(cell);
+        if (!curveChart(div.id, ch, curveMode, 240, esc(ch))) cell.remove();
+        else shown++;
+      });
+      balanceGrid(grid, shown);
+      return;
+    }
+    // Deep dive: one channel, all three curve views + summary cards.
+    if (modeCtl) modeCtl.style.display = 'none';
+    var ch = curveChannel;
+    var cards = document.createElement('div');
+    cards.className = 'kpi-grid';
+    var nP = IR.curves.n_periods || P;
+    var units = (meta[ch] || {}).divisor_units || 'spend';
+    var roi = summar(roiDraws(ch, 0, P - 1) || []);
+    var mro = summar(mroasDraws(ch, 0, P - 1) || []);
+    var head = headroomSummary(ch);
+    cards.innerHTML =
+      kpiCard('Avg weekly spend', fmt((IR.curves.spend_total[ch] || 0) / nP),
+        esc(units) + ' · gold marker on the curves') +
+      kpiCard('Contribution ROI', roi ? roi.mean.toFixed(2) : '—',
+        ivPct + '% CI: ' + ciTxt(roi)) +
+      kpiCard('Marginal ROAS', mro ? mro.mean.toFixed(2) : '—',
+        ivPct + '% CI: ' + ciTxt(mro)) +
+      kpiCard('Headroom to 2×', head ? fmtPct(head.mean) : '—',
+        head ? 'extra contribution, CI ' + fmtPct(head.lower) + ' – ' +
+          fmtPct(head.upper) : 'undefined at zero current response');
+    grid.appendChild(cards);
+    cards.style.gridColumn = '1 / -1';
+    var shownDeep = 0;
+    CURVE_MODES.forEach(function (mspec, i) {
       var cell = document.createElement('div');
       cell.className = 'sat-cell';
       var div = document.createElement('div');
-      div.id = 'curve_' + i; cell.appendChild(div); grid.appendChild(cell);
-      var c = chColor(ch);
-      var traces = [
-        { x: cs.xs, y: cs.lo, type: 'scatter', mode: 'lines', line: { width: 0 },
-          hoverinfo: 'skip', showlegend: false },
-        { x: cs.xs, y: cs.hi, type: 'scatter', mode: 'lines', line: { width: 0 },
-          fill: 'tonexty', fillcolor: rgba(c, 0.16), hoverinfo: 'skip', showlegend: false },
-        { x: cs.xs, y: cs.med, type: 'scatter', mode: 'lines', name: ch,
-          line: { color: c, width: 2 },
-          hovertemplate: 'spend/wk %{x:.3g} → %{y:.3g}<extra>' + esc(ch) + '</extra>' }
-      ];
-      var shapes = [];
-      if (curveMode !== 'mroi' || (cs.avgWeekly >= cs.xs[0] && cs.avgWeekly <= cs.xs[cs.xs.length - 1])) {
-        shapes.push({
-          type: 'line', x0: cs.avgWeekly, x1: cs.avgWeekly, yref: 'paper', y0: 0, y1: 1,
-          line: { color: TH.gold || '#b08d3f', width: 1.2, dash: 'dot' }
-        });
-      }
-      if (curveMode !== 'response') {
-        var ref = refOf(ch);
-        shapes.push({
-          type: 'line', x0: cs.xs[0], x1: cs.xs[cs.xs.length - 1], y0: ref, y1: ref,
-          line: { color: TH.rust || '#b0563f', width: 1, dash: 'dash' }
-        });
-      }
-      var ly = baseLayout({
-        title: { text: esc(ch), font: { size: 12 }, x: 0.02, y: 0.98 },
-        height: 240, margin: { l: 48, r: 8, t: 26, b: 34 },
-        xaxis: { title: { text: 'avg weekly ' + ((meta[ch] || {}).divisor_units || 'spend'), font: { size: 10 } } },
-        yaxis: { title: { text: yTitle, font: { size: 10 } } },
-        shapes: shapes
-      });
-      Plotly.newPlot(div.id, traces, ly, CFG);
+      div.id = 'curvedeep_' + i; cell.appendChild(div); grid.appendChild(cell);
+      if (!curveChart(div.id, ch, mspec[0], 300, esc(ch) + ' — ' + mspec[1])) {
+        cell.remove();
+      } else shownDeep++;
     });
+    balanceGrid(grid, shownDeep);
   }
 
   // ── budget reallocator ─────────────────────────────────────────────────
@@ -750,46 +820,199 @@ INTERACTIVE_REPORT_JS = r"""
       Plotly.newPlot(div.id, traces, ly, CFG);
     });
   }
+  function ppChart(divId, r, height, withTitle) {
+    var col = chColor(r.channel), traces = [];
+    if (r.prior && r.prior.density) {
+      traces.push({
+        x: r.grid, y: r.prior.density, type: 'scatter', mode: 'lines', name: 'Prior',
+        line: { color: TH.muted || '#9aa498', width: 1.6, dash: 'dot' },
+        fill: 'tozeroy', fillcolor: rgba(TH.muted || '#9aa498', 0.10)
+      });
+    }
+    if (r.posterior && r.posterior.density) {
+      traces.push({
+        x: r.grid, y: r.posterior.density, type: 'scatter', mode: 'lines', name: 'Posterior',
+        line: { color: col, width: 2 }, fill: 'tozeroy', fillcolor: rgba(col, 0.18)
+      });
+    }
+    if (!traces.length) return false;
+    var shapes = [{
+      type: 'line', x0: r.reference, x1: r.reference, yref: 'paper', y0: 0, y1: 1,
+      line: { color: TH.rust || '#b0563f', width: 1, dash: 'dash' }
+    }];
+    var ly = baseLayout({
+      title: withTitle ? {
+        text: esc(r.channel) + ' — ' + esc(r.label) +
+          ' · post. ' + r.posterior.mean.toFixed(2) +
+          ' (' + r.posterior.lower.toFixed(2) + '–' + r.posterior.upper.toFixed(2) + ')',
+        font: { size: 11 }, x: 0.02, y: 0.98
+      } : undefined,
+      showlegend: true, legend: { orientation: 'h', y: -0.25, font: { size: 10 } },
+      height: height, margin: { l: 34, r: 8, t: withTitle ? 26 : 10, b: 44 },
+      xaxis: { title: { text: esc(r.label), font: { size: 10 } } },
+      yaxis: { showticklabels: false }, shapes: shapes
+    });
+    Plotly.newPlot(divId, traces, ly, CFG);
+    return true;
+  }
+  var ppChannel = 'all';
   function renderPriorPosterior() {
     var grid = document.getElementById('ppGrid');
     if (!grid) return;
-    (IR.prior_posterior.rows || []).forEach(function (r, i) {
-      var cell = document.createElement('div');
-      cell.className = 'sat-cell';
-      var div = document.createElement('div');
-      div.id = 'pp_' + i; cell.appendChild(div); grid.appendChild(cell);
-      var col = chColor(r.channel), traces = [];
-      if (r.prior && r.prior.density) {
-        traces.push({
-          x: r.grid, y: r.prior.density, type: 'scatter', mode: 'lines', name: 'Prior',
-          line: { color: TH.muted || '#9aa498', width: 1.6, dash: 'dot' },
-          fill: 'tozeroy', fillcolor: rgba(TH.muted || '#9aa498', 0.10)
-        });
-      }
-      if (r.posterior && r.posterior.density) {
-        traces.push({
-          x: r.grid, y: r.posterior.density, type: 'scatter', mode: 'lines', name: 'Posterior',
-          line: { color: col, width: 2 }, fill: 'tozeroy', fillcolor: rgba(col, 0.18)
-        });
-      }
-      if (!traces.length) return;
-      var shapes = [{
-        type: 'line', x0: r.reference, x1: r.reference, yref: 'paper', y0: 0, y1: 1,
-        line: { color: TH.rust || '#b0563f', width: 1, dash: 'dash' }
-      }];
-      var ly = baseLayout({
-        title: {
-          text: esc(r.channel) + ' — ' + esc(r.label) +
-            ' · post. ' + r.posterior.mean.toFixed(2) +
-            ' (' + r.posterior.lower.toFixed(2) + '–' + r.posterior.upper.toFixed(2) + ')',
-          font: { size: 11 }, x: 0.02, y: 0.98
-        },
-        showlegend: true, legend: { orientation: 'h', y: -0.25, font: { size: 10 } },
-        height: 230, margin: { l: 34, r: 8, t: 26, b: 44 },
-        yaxis: { showticklabels: false }, shapes: shapes
+    grid.innerHTML = '';
+    var rows = IR.prior_posterior.rows || [];
+    if (ppChannel === 'all') {
+      var shown = 0;
+      rows.forEach(function (r, i) {
+        var cell = document.createElement('div');
+        cell.className = 'sat-cell';
+        var div = document.createElement('div');
+        div.id = 'pp_' + i; cell.appendChild(div); grid.appendChild(cell);
+        if (!ppChart(div.id, r, 230, true)) cell.remove();
+        else shown++;
       });
-      Plotly.newPlot(div.id, traces, ly, CFG);
+      balanceGrid(grid, shown);
+      return;
+    }
+    // Deep dive: one channel — larger density + belief-update cards.
+    var r = rows.filter(function (x) { return x.channel === ppChannel; })[0];
+    if (!r) return;
+    grid.style.gridTemplateColumns = '1fr';
+    var cards = document.createElement('div');
+    cards.className = 'kpi-grid';
+    var post = r.posterior, prior = r.prior;
+    var narrowing = null;
+    if (prior && prior.sd > 1e-12 && post.sd != null) {
+      narrowing = 1 - post.sd / prior.sd;
+    }
+    cards.innerHTML =
+      kpiCard('Prior ' + esc(r.label),
+        prior ? prior.mean.toFixed(2) : '—',
+        prior ? ivPct + '% CI: ' + prior.lower.toFixed(2) + ' – ' +
+          prior.upper.toFixed(2) : 'no prior draws') +
+      kpiCard('Posterior ' + esc(r.label), post.mean.toFixed(2),
+        ivPct + '% CI: ' + post.lower.toFixed(2) + ' – ' + post.upper.toFixed(2)) +
+      kpiCard('Uncertainty reduction',
+        narrowing == null ? '—' : fmtPct(narrowing),
+        'posterior sd vs prior sd — how much the data spoke') +
+      kpiCard('P(above ' + fmt(r.reference, 1) + ')',
+        post.p_above == null ? '—' : fmtPct(post.p_above),
+        prior && prior.p_above != null
+          ? 'was ' + fmtPct(prior.p_above) + ' under the prior'
+          : 'posterior probability');
+    grid.appendChild(cards);
+    var cell = document.createElement('div');
+    cell.className = 'sat-cell';
+    var div = document.createElement('div');
+    div.id = 'pp_deep'; cell.appendChild(div); grid.appendChild(cell);
+    ppChart(div.id, r, 340, true);
+  }
+
+  // ── year-over-year driver waterfall ────────────────────────────────────
+  function yearIndices(y) {
+    var out = [];
+    for (var i = 0; i < P; i++) if (IR.periods[i].slice(0, 4) === y) out.push(i);
+    return out;
+  }
+  function sumIdx(arr, idx) {
+    var acc = 0;
+    for (var i = 0; i < idx.length; i++) {
+      var v = arr[idx[i]];
+      if (v != null && isFinite(v)) acc += v;
+    }
+    return acc;
+  }
+  function contribYearDraws(ch, idx) {
+    var m = contrib[ch], out = new Float64Array(m.rows);
+    for (var d = 0; d < m.rows; d++) {
+      var base = d * m.cols, acc = 0;
+      for (var i = 0; i < idx.length; i++) acc += m.a[base + idx[i]];
+      out[d] = acc;
+    }
+    return out;
+  }
+  function renderYoY() {
+    var el = document.getElementById('yoyChart');
+    if (!el || !IR.yoy) return;
+    var ya = document.getElementById('yoyA').value;
+    var yb = document.getElementById('yoyB').value;
+    if (ya === yb) { el.innerHTML = '<p class="note">Pick two different years.</p>'; return; }
+    var ia = yearIndices(ya), ib = yearIndices(yb);
+    var totA = sumIdx(IR.actual_national, ia);
+    var totB = sumIdx(IR.actual_national, ib);
+    var mediaDelta = null;
+    var drivers = CH.map(function (ch) {
+      var d = new Float64Array(D);
+      var a = contribYearDraws(ch, ia), b = contribYearDraws(ch, ib);
+      for (var k = 0; k < D; k++) d[k] = b[k] - a[k];
+      if (!mediaDelta) mediaDelta = new Float64Array(D);
+      for (var k2 = 0; k2 < D; k2++) mediaDelta[k2] += d[k2];
+      return { name: ch, sum: summar(d) };
+    }).filter(function (x) { return x.sum; });
+    drivers.sort(function (a, b) { return b.sum.mean - a.sum.mean; });
+    var baseD = new Float64Array(D);
+    for (var k = 0; k < D; k++) baseD[k] = (totB - totA) - mediaDelta[k];
+    var baseSum = summar(baseD);
+
+    var labels = [ya], vals = [totA], bases = [0],
+      colors = [TH.ink || '#3a4838'], errHi = [0], errLo = [0],
+      hovers = [ya + ' total: ' + fmt(totA)];
+    var running = totA;
+    var steps = [{ name: 'Baseline & other', sum: baseSum }].concat(drivers);
+    steps.forEach(function (s) {
+      labels.push(s.name);
+      bases.push(running);
+      vals.push(s.sum.mean);
+      colors.push(s.sum.mean >= 0 ? (TH.accent || '#5a7a3a') : (TH.rust || '#a04535'));
+      errHi.push(s.sum.upper - s.sum.mean);
+      errLo.push(s.sum.mean - s.sum.lower);
+      hovers.push(esc(s.name) + ': ' + (s.sum.mean >= 0 ? '+' : '') + fmt(s.sum.mean) +
+        ' (' + ivPct + '% CI ' + fmt(s.sum.lower) + ' – ' + fmt(s.sum.upper) + ')');
+      running += s.sum.mean;
     });
+    labels.push(yb); vals.push(totB); bases.push(0);
+    colors.push(TH.ink || '#3a4838'); errHi.push(0); errLo.push(0);
+    hovers.push(yb + ' total: ' + fmt(totB));
+
+    var shapes = [];
+    var lvl = totA;
+    for (var i = 1; i < labels.length - 1; i++) {
+      shapes.push({
+        type: 'line', x0: i - 1 + 0.4, x1: i - 0.4, y0: lvl, y1: lvl,
+        line: { color: TH.muted || '#7a8a78', width: 1, dash: 'dot' }
+      });
+      lvl += vals[i];
+    }
+    shapes.push({
+      type: 'line', x0: labels.length - 2 + 0.4, x1: labels.length - 1 - 0.4,
+      y0: lvl, y1: lvl,
+      line: { color: TH.muted || '#7a8a78', width: 1, dash: 'dot' }
+    });
+
+    var traces = [{
+      x: labels, y: vals, base: bases, type: 'bar',
+      marker: { color: colors.map(function (c) { return rgba(c, 0.75); }),
+        line: { color: colors, width: 1 } },
+      error_y: { type: 'data', symmetric: false, array: errHi, arrayminus: errLo,
+        thickness: 1.2, width: 4, color: TH.ink || '#3a4838' },
+      customdata: hovers,
+      hovertemplate: '%{customdata}<extra></extra>'
+    }];
+    var ly = baseLayout({
+      height: 400, margin: { l: 64, r: 16, t: 16, b: 60 },
+      xaxis: { tickangle: -20 },
+      yaxis: { title: { text: (IR.meta.kpi || 'KPI') + ' per year', font: { size: 11 } } },
+      shapes: shapes, bargap: 0.35
+    });
+    Plotly.react('yoyChart', traces, ly, CFG);
+    var note = document.getElementById('yoyNote');
+    if (note) {
+      var pct = totA !== 0 ? ' (' + (((totB - totA) / Math.abs(totA)) * 100).toFixed(1) + '%)' : '';
+      note.textContent = ya + ' → ' + yb + ': ' + (totB - totA >= 0 ? '+' : '') +
+        fmt(totB - totA) + pct + '. Media driver bars carry ' + ivPct +
+        '% credible intervals; "Baseline & other" is the residual (trend, ' +
+        'seasonality, controls, intercept) that closes to the observed change.';
+    }
   }
 
   // ── boot ───────────────────────────────────────────────────────────────
@@ -826,10 +1049,35 @@ INTERACTIVE_REPORT_JS = r"""
         renderCurves();
       });
     });
+    var curveSel = document.getElementById('curveChannelSelect');
+    if (curveSel) {
+      curveSel.add(new Option('All channels', 'all'));
+      CH.forEach(function (ch) { curveSel.add(new Option(ch, ch)); });
+      curveSel.onchange = function () { curveChannel = curveSel.value; renderCurves(); };
+    }
     renderCurves();
     renderPpcStats();
     renderCarryover();
+    var ppSel = document.getElementById('ppChannelSelect');
+    if (ppSel) {
+      ppSel.add(new Option('All channels', 'all'));
+      (IR.prior_posterior.rows || []).forEach(function (r) {
+        ppSel.add(new Option(r.channel, r.channel));
+      });
+      ppSel.onchange = function () { ppChannel = ppSel.value; renderPriorPosterior(); };
+    }
     renderPriorPosterior();
+    if (IR.yoy && document.getElementById('yoyA')) {
+      var yrs = IR.yoy.years || [];
+      ['yoyA', 'yoyB'].forEach(function (id) {
+        var sel = document.getElementById(id);
+        yrs.forEach(function (y) { sel.add(new Option(y, y)); });
+        sel.onchange = renderYoY;
+      });
+      document.getElementById('yoyA').value = yrs[yrs.length - 2];
+      document.getElementById('yoyB').value = yrs[yrs.length - 1];
+      renderYoY();
+    }
     renderRealloc();
     renderSensitivity();
   });

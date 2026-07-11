@@ -76,9 +76,13 @@ _PAYLOAD_KEYS = (
     "carryover",
     "prior_posterior",
     "sensitivity",
+    "yoy",
 )
 
 _EXTRA_CSS = r"""
+/* Balanced cards: auto-fit instead of the theme's fixed 3 columns, so four
+   cards fill one row instead of leaving a lonely straggler. */
+.kpi-grid{grid-template-columns:repeat(auto-fit,minmax(185px,1fr));}
 .ir-controls{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1rem;padding:.7rem .9rem;background:var(--cream-100);border:1px solid var(--line-200);border-radius:10px;}
 .ir-lbl{font-size:.78rem;color:var(--ink-400);}
 .ir-select{font-family:var(--font-mono);font-size:.78rem;color:var(--ink-700);background:var(--cream-50);border:1px solid var(--line-300);border-radius:7px;padding:.35rem .5rem;max-width:190px;}
@@ -164,6 +168,7 @@ class InteractiveReportGenerator:
             self._section_fit,
             self._section_ppc_stats,
             self._section_roi,
+            self._section_yoy,
             self._section_estimands,
             self._section_curves,
             self._section_carryover,
@@ -391,6 +396,33 @@ class InteractiveReportGenerator:
             "channel-roi", "Channel ROI", "What each channel returned", body
         )
 
+    def _section_yoy(self) -> tuple[_NavEntry, str] | None:
+        yoy = self.facts.get("yoy")
+        if not yoy or len(yoy.get("years", [])) < 2:
+            return None
+        body = (
+            f'<p class="lede">{self._insight("yoy_gloss")}</p>'
+            '<div class="ir-controls">'
+            '<span class="ir-lbl">Compare</span>'
+            '<select class="ir-select" id="yoyA"></select>'
+            '<span class="ir-lbl">→</span>'
+            '<select class="ir-select" id="yoyB"></select></div>'
+            '<div class="chart-card"><div id="yoyChart"></div></div>'
+            '<p class="chart-caption" id="yoyNote"></p>'
+            '<p class="chart-caption">Waterfall from the first year\'s total '
+            "to the second's: green bars are drivers that added KPI, rust "
+            "bars drivers that cost KPI. Media bars are posterior "
+            "contribution deltas with credible intervals; the baseline bar "
+            "is the residual non-media change, so the bridge always closes "
+            "to the observed totals.</p>"
+        )
+        return _NavEntry("yoy-drivers", "YoY drivers"), self._wrap(
+            "yoy-drivers",
+            "Year over year",
+            "What drove the change vs last year?",
+            body,
+        )
+
     def _section_estimands(self) -> tuple[_NavEntry, str]:
         body = (
             f'<p class="lede">{self._insight("estimands_gloss")}</p>'
@@ -412,10 +444,13 @@ class InteractiveReportGenerator:
         body = (
             f'<p class="lede">{self._insight("curves_gloss")}</p>'
             '<div class="ir-controls">'
+            '<span class="ir-lbl">Channel</span>'
+            '<select class="ir-select" id="curveChannelSelect"></select>'
+            '<span id="curveModeCtl" style="display:inline-flex;gap:.5rem">'
             '<button type="button" class="ir-btn active" data-curvemode="response">Response</button>'
             '<button type="button" class="ir-btn" data-curvemode="roi">ROI</button>'
             '<button type="button" class="ir-btn" data-curvemode="mroi">Marginal ROI</button>'
-            "</div>"
+            "</span></div>"
             '<div class="sat-grid" id="curvesGrid"></div>'
             '<p class="chart-caption">Bands are posterior uncertainty about '
             "each curve; the dotted gold line marks the channel's current "
@@ -450,6 +485,9 @@ class InteractiveReportGenerator:
             return None
         body = (
             f'<p class="lede">{self._insight("prior_posterior_gloss")}</p>'
+            '<div class="ir-controls">'
+            '<span class="ir-lbl">Channel</span>'
+            '<select class="ir-select" id="ppChannelSelect"></select></div>'
             '<div class="sat-grid" id="ppGrid"></div>'
             '<p class="chart-caption">Prior (dotted grey) vs posterior '
             "(filled) densities of each channel's return — the estimand "

@@ -28,6 +28,7 @@ from mmm_framework.reporting.interactive.facts import (
     _series_stats,
     _stat_over_rows,
     _window_specs,
+    _yoy_facts,
 )
 
 _XSS = "<script>alert(1)</script>"
@@ -38,6 +39,7 @@ _SECTION_IDS = (
     "model-fit",
     "predictive-checks",
     "channel-roi",
+    "yoy-drivers",
     "estimands",
     "response-curves",
     "carryover",
@@ -59,7 +61,8 @@ def _summary(mean=1.5, lo=1.0, hi=2.0):
 def _canned_facts(*, approximate=False, channels=None) -> dict:
     rng = np.random.default_rng(0)
     ch_names = channels or ["TV", "Digital"]
-    D, P, L = 6, 12, 5
+    # Two full calendar years so the YoY-drivers section is exercised.
+    D, P, L = 6, 108, 5
     periods = [
         str(p)[:10] for p in pd.date_range("2024-01-01", periods=P, freq="W-MON")
     ]
@@ -174,14 +177,18 @@ def _canned_facts(*, approximate=False, channels=None) -> dict:
                     "posterior": {
                         "density": list(rng.uniform(0.1, 1, 50)),
                         "mean": 1.5,
+                        "sd": 0.3,
                         "lower": 1.1,
                         "upper": 2.0,
+                        "p_above": 0.94,
                     },
                     "prior": {
                         "density": list(rng.uniform(0.05, 0.4, 50)),
                         "mean": 1.0,
+                        "sd": 1.1,
                         "lower": 0.2,
                         "upper": 4.0,
+                        "p_above": 0.5,
                     },
                 }
                 for ch in ch_names
@@ -225,6 +232,21 @@ def _canned_facts(*, approximate=False, channels=None) -> dict:
             "obs_mean": 1002.0,
             "obs_sd": 31.0,
             "n_draws": 100,
+        },
+        "yoy": {
+            "years": ["2024", "2025"],
+            "latest": {
+                "year_a": "2024",
+                "year_b": "2025",
+                "total_a": 52000.0,
+                "total_b": 56000.0,
+                "delta": 4000.0,
+                "drivers": [
+                    {"name": ch, "mean": 800.0, "lower": 300.0, "upper": 1300.0}
+                    for ch in ch_names
+                ],
+                "baseline": {"mean": 2400.0, "lower": 1200.0, "upper": 3600.0},
+            },
         },
         "headline": {
             "total_kpi": 12000.0,
@@ -343,6 +365,31 @@ class TestFactsHelpers:
     def test_ppc_stat_facts_degrades_on_tiny_input(self):
         out = _ppc_stat_facts(np.zeros((5, 3)), np.zeros(3))
         assert out["stats"] == []
+
+    def test_yoy_facts_decomposition_closes(self):
+        P, D = 104, 50
+        periods = [
+            str(p)[:10] for p in pd.date_range("2023-01-02", periods=P, freq="W-MON")
+        ]
+        actual = np.full(P, 100.0)
+        actual[52:] = 110.0  # year B runs 10/wk hotter
+        contrib = np.full((D, P), 10.0)
+        contrib[:, 52:] = 12.0  # TV contributes 2/wk more in year B
+        out = _yoy_facts(actual, {"TV": contrib}, periods, ["TV"], 0.9)
+        latest = out["latest"]
+        assert out["years"] == ["2023", "2024"]
+        assert latest["delta"] == pytest.approx(52 * 10.0)
+        tv = latest["drivers"][0]
+        assert tv["mean"] == pytest.approx(52 * 2.0)
+        # baseline closes the bridge exactly: delta = media + baseline
+        assert latest["baseline"]["mean"] + tv["mean"] == pytest.approx(latest["delta"])
+
+    def test_yoy_facts_none_without_two_years(self):
+        periods = [
+            str(p)[:10] for p in pd.date_range("2023-01-02", periods=30, freq="W-MON")
+        ]
+        out = _yoy_facts(np.ones(30), {"TV": np.ones((10, 30))}, periods, ["TV"], 0.9)
+        assert out is None
 
     def test_window_specs_shapes(self):
         P = 120
@@ -469,6 +516,26 @@ class TestGenerator:
         for sid in ("insights", "channel-roi", "reallocation"):
             assert f'id="{sid}"' in html
 
+    def test_yoy_section_gating_and_controls(self):
+        html = InteractiveReportGenerator(facts=_canned_facts()).generate_report()
+        assert 'id="yoy-drivers"' in html
+        assert 'id="yoyA"' in html and 'id="yoyB"' in html
+        facts = _canned_facts()
+        facts["yoy"] = None
+        html2 = InteractiveReportGenerator(facts=facts).generate_report()
+        assert 'href="#yoy-drivers"' not in html2
+
+    def test_yoy_gloss_is_grounded(self):
+        gloss = build_interactive_insights(_canned_facts())["yoy_gloss"]
+        assert "2024" in gloss and "2025" in gloss
+        assert "+4,000" in gloss
+
+    def test_channel_deepdive_controls_present(self):
+        html = InteractiveReportGenerator(facts=_canned_facts()).generate_report()
+        assert 'id="curveChannelSelect"' in html
+        assert 'id="ppChannelSelect"' in html
+        assert 'id="curveModeCtl"' in html
+
     def test_ppc_stats_table_and_verdicts(self):
         html = InteractiveReportGenerator(facts=_canned_facts()).generate_report()
         assert 'id="predictive-checks"' in html
@@ -509,7 +576,8 @@ class TestEndToEnd:
         from mmm_framework.model import BayesianMMM
         from mmm_framework.model.trend_config import TrendConfig, TrendType
 
-        periods = pd.date_range("2023-01-02", periods=80, freq="W-MON")
+        # Two full calendar years so the YoY-drivers section renders.
+        periods = pd.date_range("2023-01-02", periods=110, freq="W-MON")
         n = len(periods)
         rng = np.random.default_rng(7)
         tv = np.abs(rng.standard_normal(n) * 50 + 100)
@@ -570,7 +638,11 @@ class TestEndToEnd:
         D, P = f["contrib"]["n_draws"], len(f["periods"])
         raw = base64.b64decode(f["contrib"]["draws_b64"]["TV"])
         assert np.frombuffer(raw, dtype="<f4").shape == (D * P,)
-        assert P == 80
+        assert P == 110
+        # YoY decomposition present and closes to the observed delta
+        yoy = f["yoy"]["latest"]
+        media = sum(d["mean"] for d in yoy["drivers"])
+        assert yoy["delta"] == pytest.approx(media + yoy["baseline"]["mean"], rel=1e-6)
         # headline rows carry CIs
         rows = f["headline"]["channels"]
         assert {r["channel"] for r in rows} == {"TV", "Digital"}
