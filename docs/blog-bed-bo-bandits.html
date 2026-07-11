@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BED vs. Bayesian Optimization vs. Bandits for Media Experimentation | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Bayesian experimental design, Bayesian optimization, and bandits for media experiments: one Bayesian surrogate, three objectives — learn, optimize, or earn.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-bed-bo-bandits.html">
+    <meta property="og:title" content="BED vs. Bayesian Optimization vs. Bandits for Media Experimentation">
+    <meta property="og:description" content="Bayesian experimental design, Bayesian optimization, and bandits for media experiments: one Bayesian surrogate, three objectives — learn, optimize, or earn.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-bed-bo-bandits.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="BED vs. Bayesian Optimization vs. Bandits for Media Experimentation">
+    <meta name="twitter:description" content="Bayesian experimental design, Bayesian optimization, and bandits for media experiments: one Bayesian surrogate, three objectives — learn, optimize, or earn.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-bed-bo-bandits.html",
+          "name": "BED vs. Bayesian Optimization vs. Bandits for Media Experimentation | MMM Framework",
+          "description": "Bayesian experimental design, Bayesian optimization, and bandits for media experiments: one Bayesian surrogate, three objectives — learn, optimize, or earn.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-bed-bo-bandits.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-bed-bo-bandits.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "BED vs. Bayesian Optimization vs. Bandits for Media Experimentation",
+          "datePublished": "2026-07-01",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-bed-bo-bandits.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-bed-bo-bandits.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "BED vs. Bayesian Optimization vs. Bandits for Media Experimentation",
+              "item": "https://redam94.github.io/mmm-framework/blog-bed-bo-bandits.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#one-surrogate">One Surrogate, Three Objectives</a></li>
+                <li><a href="#bed">BED: Learn the Model</a></li>
+                <li><a href="#bo">BO: Find the Optimum</a></li>
+                <li><a href="#bandits">Bandits: Earn While Learning</a></li>
+                <li><a href="#side-by-side">The Frameworks Side by Side</a></li>
+                <li><a href="#wrong-tool">Where the Wrong Tool Wastes Budget</a></li>
+                <li><a href="#compose">Layers, Not Rivals</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">BED vs. Bayesian Optimization vs. Bandits for Media Experimentation</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-01">July 1, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Experimental design</span>
+            </p>
+            <p class="lead">Three families of adaptive experimentation get pitched for the same media problems, often in the same meeting: Bayesian experimental design, Bayesian optimization, and multi-armed bandits. They share so much machinery — a Bayesian model, an exploration&ndash;exploitation trade-off, a rule for picking the next action — that it is tempting to treat them as interchangeable. They are not, and choosing the wrong one spends real budget answering a question nobody asked.</p>
+
+            <h2 id="one-surrogate">One Surrogate, Three Objectives</h2>
+            <p>Strip each framework to its skeleton and the same structure appears. There is a Bayesian surrogate — a posterior over how spend maps to outcomes, which in media practice is a media mix model or a Gaussian process over the response surface. There is a stream of candidate actions: geo tests, budget splits, creative assignments. And there is a decision rule that scores each candidate by an <em>expectation under the posterior</em> and picks the best. Everything that separates the three frameworks lives in <em>which expectation they optimize</em>:</p>
+            <ul>
+                <li><strong>Bayesian experimental design (BED)</strong> maximizes expected <em>information</em> about the model's parameters. The deliverable is a measurement: you want to <em>learn</em>.</li>
+                <li><strong>Bayesian optimization (BO)</strong> maximizes expected <em>improvement</em> toward the optimum of an expensive function. The deliverable is a decision: you want to <em>find</em> the best allocation.</li>
+                <li><strong>Bandits</strong> maximize expected <em>cumulative reward</em> — equivalently, they minimize regret. The deliverable is revenue: you want to <em>earn while learning</em>.</li>
+            </ul>
+            <p>The confusion is understandable because the frameworks borrow each other's vocabulary freely. "Acquisition function" originates in BO but describes the EIG in BED just as well; the upper-confidence-bound rule appears in the bandit literature and in BO under the same acronym; all three talk about exploration and exploitation. The objective, not the algorithm's name, is the reliable way to tell them apart — and the reliable way to choose.</p>
+
+            <h2 id="bed">BED: Learn the Model</h2>
+            <p>Bayesian experimental design starts from a prior \( p(\theta) \) over the quantities you are uncertain about — channel coefficients, saturation shapes, cross-channel interactions — and a likelihood \( p(y \mid \theta, \xi) \) describing what data an experiment with design \( \xi \) would produce. It scores a candidate design by the expected reduction in entropy about \( \theta \), averaged over the outcomes the model itself predicts:</p>
+            $$ \mathrm{EIG}(\xi) \;=\; \mathbb{E}_{p(\theta)\,p(y \mid \theta, \xi)}\!\left[ \log p(y \mid \theta, \xi) - \log p(y \mid \xi) \right] \;=\; \mathrm{MI}_\xi(\theta;\, y), $$
+            <p>the mutual information between parameters and outcome. The design rule is simply \( \xi^* = \arg\max_\xi \mathrm{EIG}(\xi) \) (Lindley, 1956; Rainforth et al., 2024). What the procedure converges to, over repeated experiments, is a concentrated posterior: tight estimates of the effects, elasticities, and interactions the tests were aimed at — or, with the targeted variant that focuses the EIG on a decision-relevant subset of parameters, tight estimates of exactly the quantities the business decision turns on.</p>
+            <p>This is the right tool whenever the deliverable is a <em>report</em>: defensible attribution, a saturation curve planning can trust, an interaction term that decides whether two channels are substitutes or complements. In a standing measurement program, the design step repeats each cycle, and the modern move is to amortize it — train a policy that maps the experiment history directly to the next design rather than re-optimizing from scratch (Foster et al., 2021). <a href="blog-lindley-to-dad.html">A companion post</a> traces that arc from Lindley's 1956 information measure to these deep adaptive design policies.</p>
+            <p>Note what is absent from the objective: money. The EIG has no revenue term. BED prices an experiment purely in bits, and it will happily recommend a test that loses money this quarter if that test is the most informative one available. That is a feature when information is genuinely the product — and a trap when it isn't.</p>
+
+            <h2 id="bo">BO: Find the Optimum</h2>
+            <p>Bayesian optimization addresses a different problem: find the maximizer of an expensive, noisy, black-box function in as few evaluations as possible (Hennig, Osborne, &amp; Kersting, 2022). In media terms the function is profit (or incremental revenue) as a function of the budget allocation, and an "evaluation" is a multi-week in-market test — expensive enough that every one must count. BO fits a Gaussian-process surrogate to the tests run so far and chooses the next allocation by maximizing an <em>acquisition function</em> that trades off exploiting promising regions against exploring uncertain ones. The canonical choice is expected improvement (Mockus et al., 1978): with \( f^{+} \) the best result observed so far,</p>
+            $$ \alpha_{\mathrm{EI}}(x) \;=\; \mathbb{E}\big[ \max\{\, f(x) - f^{+},\, 0 \,\} \;\big|\; \mathcal{D} \big], $$
+            <p>which is large where the posterior mean is high (exploitation) or the posterior variance is large (exploration), and has a closed form under a GP. Its siblings each shift the balance: probability of improvement (Kushner, 1964) is the most exploitative; GP-UCB, \( m(x) + \beta_t\,\sigma(x) \), makes the trade-off explicit through \( \beta_t \) and admits regret guarantees (Srinivas et al., 2010); the knowledge gradient values improvement in the posterior <em>mean</em> rather than in raw evaluations, which makes it markedly more robust to noise (Frazier, Powell, &amp; Dayanik, 2009) — a relevant property when each "evaluation" is a noisy lift readout.</p>
+            <p>A further branch of the family is explicitly information-theoretic: entropy search and its successors choose the evaluation that most reduces uncertainty about <em>where the optimum is</em> (Hennig &amp; Schuler, 2012) or <em>what the optimal value is</em> (Wang &amp; Jegelka, 2017). These acquisitions expose the deep connection to BED:</p>
+
+            <div class="note">
+                <h4>💡 BED and entropy-search BO are two settings of one dial</h4>
+                <p>BED maximizes information about <em>all</em> of \( \theta \) — the whole response surface. Entropy-search BO maximizes information about <em>one derived quantity</em>: the location of the optimum. Choose BED when the deliverable is a characterized surface; choose entropy-search BO when you only need to know where its peak sits and are happy to leave the rest vague. Same currency, different target.</p>
+            </div>
+
+            <p>That is also the honest statement of what BO converges to: the argmax, and little else. The surrogate ends the campaign confident near the optimum and deliberately uncertain everywhere the search decided not to spend evaluations. For media programs, two extensions from the BO literature matter in practice: <em>batch</em> BO proposes several evaluations at once under a joint posterior over their outcomes — the natural fit for launching parallel geo tests — and <em>multi-fidelity</em> BO blends cheap, low-quality signals with expensive, clean ones, the analogue of letting inexpensive correlational reads guide where to place the costly clean experiment (Hennig, Osborne, &amp; Kersting, 2022). One practical caveat carries over from the optimization literature: BO is reliable up to roughly twenty active dimensions, which covers a channel-level budget split comfortably but not a campaign-by-DMA allocation grid.</p>
+
+            <h2 id="bandits">Bandits: Earn While Learning</h2>
+            <p>The bandit setting changes the accounting. There are \( K \) actions with unknown reward distributions; the agent plays one per period, observes the reward, and keeps going. Nothing is a "test" run off to the side — every action is simultaneously a trial and a payout, so exploration is not an investment line item but a live cost.</p>
+
+            <div class="definition">
+                <h4>Definition: Cumulative Regret</h4>
+                <p>With expected reward \( \mu(x) \) and optimal action \( x^* \), the cumulative regret of playing \( x_1, \dots, x_T \) is</p>
+                $$ \mathrm{Regret}(T) \;=\; \sum_{t=1}^{T} \big[\, \mu(x^*) - \mu(x_t) \,\big], $$
+                <p>the reward given up to not having known the best action from the start (Lai &amp; Robbins, 1985; Russo et al., 2018). A bandit algorithm's entire objective is to make this quantity grow as slowly as possible.</p>
+            </div>
+
+            <p>The practical default is Thompson sampling: draw one sample \( \hat\theta \) from the current posterior, play the action that would be optimal if \( \hat\theta \) were true, update, repeat. Because the draw comes from the posterior, each action is selected with exactly the posterior probability that it is the best one — "probability matching" — so plausible contenders keep getting tried and implausible ones fade out, with no confidence bounds ever computed. The idea dates to Thompson (1933), was ignored for most of a century, and was rediscovered as a top empirical performer in online advertising and recommendation (Chapelle &amp; Li, 2011). Its guarantees are strong: on the classical Bernoulli bandit it matches the Lai&ndash;Robbins asymptotic lower bound — no algorithm learns faster in the long run — and it carries worst-case and information-theoretic bounds that extend to the linear and generalized-linear reward models a media allocator would actually use (Russo et al., 2018). <a href="blog-thompson-sampling.html">A companion post</a> works through the algorithm and its regret guarantees in detail.</p>
+            <p>The natural media home for bandits is the always-on tactical layer: creative and message rotation, real-time bidding, on-site placement — decisions made thousands of times per day where a formal experiment per decision is absurd and revenue accrues continuously. What a bandit converges to is behavioral, not epistemic: it plays the optimal action with probability approaching one. It does <em>not</em> converge to a calibrated model of all the arms — quite the opposite, and that asymmetry is the source of the most common misuse.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>The information ratio: where regret meets information gain</summary>
+                <div class="deep-dive-body">
+                    <p>The cleanest bridge between the bandit and BED worldviews is the information-ratio analysis of Russo and Van Roy (2016). Define, at each period,</p>
+                    $$ \Gamma_t \;=\; \frac{\big(\, \mathbb{E}[\, \mu(x^*) - \mu(x_t) \,] \,\big)^2}{I\big( x^* ;\, (x_t, y_t) \mid \mathcal{H}_{t-1} \big)}, $$
+                    <p>the squared expected per-period regret divided by the mutual information between the identity of the optimal action and the impending observation, given the history. \( \Gamma_t \) reads as a price: the expected cost, in regret, of each bit of information acquired about which action is best. Bounding it by \( \overline{\Gamma} \) yields</p>
+                    $$ \mathbb{E}[\mathrm{Regret}(T)] \;\le\; \sqrt{ \overline{\Gamma}\; H(x^*)\; T }, $$
+                    <p>where \( H(x^*) \) is the entropy of the prior over the optimal action — total regret is capped by how much there is to learn about the optimum, times the price per bit. The proof is a Cauchy&ndash;Schwarz step plus the chain rule for mutual information: cumulative information about \( x^* \) can never exceed its prior entropy. The unification is satisfying. A bandit is a buyer of information about <em>the optimum's identity</em>, paying in regret; BED is a buyer of information about <em>the parameters</em>, paying in experiment cost with no reward offset; entropy-search BO buys information about the optimum's <em>location</em> with a fixed evaluation budget. Same ledger, three different line items — and the same analysis pinpoints when Thompson sampling overpays, which is exactly the failure-mode catalog discussed below.</p>
+                </div>
+            </details>
+
+            <h2 id="side-by-side">The Frameworks Side by Side</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>&nbsp;</th>
+                        <th>Bayesian experimental design</th>
+                        <th>Bayesian optimization</th>
+                        <th>Bandits</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Objective</strong></td>
+                        <td>Maximize expected information gain about \( \theta \)</td>
+                        <td>Find \( \arg\max_x f(x) \) in few expensive evaluations</td>
+                        <td>Minimize cumulative regret while acting live</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Design / acquisition rule</strong></td>
+                        <td>\( \xi^* = \arg\max_\xi \mathrm{EIG}(\xi) \); adaptive or amortized policies sequentially</td>
+                        <td>EI, GP-UCB, knowledge gradient, entropy search on a GP surrogate</td>
+                        <td>Thompson sampling or UCB, one action per period</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Converges to</strong></td>
+                        <td>A concentrated posterior over the targeted parameters</td>
+                        <td>The optimum's location; the surface elsewhere stays uncertain</td>
+                        <td>Playing the optimal arm with probability approaching one</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Exploration is</strong></td>
+                        <td>An investment, priced in bits</td>
+                        <td>An investment, priced per evaluation</td>
+                        <td>A cost, charged to the P&amp;L as regret</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Right when the deliverable is</strong></td>
+                        <td>A measurement: attribution, elasticities, interactions</td>
+                        <td>A decision: the best budget split, found cheaply</td>
+                        <td>Revenue: an always-on allocation that tunes itself</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2 id="wrong-tool">Where the Wrong Tool Wastes Budget</h2>
+
+            <div class="warning">
+                <h4>⚠️ A bandit is not a measurement tool</h4>
+                <p>A bandit deliberately starves the arms it believes are losing — that is precisely how it keeps regret low. So when the quarterly review asks "what is channel B's ROI?", a bandit that judged B suboptimal months ago has barely sampled it since, and the credible interval on B never tightened. The bandit's honest answer is "it doesn't matter, don't fund it" — which may be operationally correct and is still not a measurement. If the organization needs defensible estimates of <em>every</em> channel's effect, the sampling pattern that minimizes regret is close to the worst one you could choose.</p>
+            </div>
+
+            <p>The failure modes run in every direction, and each one has a budget attached.</p>
+            <p><strong>A bandit where a measurement was needed.</strong> Beyond starving the losers, Thompson sampling has documented weaknesses precisely on measurement-shaped problems (Russo et al., 2018): on pure best-arm identification it converges slowly once it is confident, because refining near-ties earns no reward; and it will never play a "revealing" action — one known to pay poorly but guaranteed to resolve uncertainty — no matter how much that information is worth. Both are exactly the actions a measurement program exists to take.</p>
+            <p><strong>BED where revenue was needed.</strong> Because the EIG carries no dollar term, a program run purely on information gain can string together tests that are individually optimal in bits and collectively expensive in margin. Worse, the <em>untargeted</em> EIG rewards information about everything, including main effects the observational data already pinned down — budget spent re-confirming the known. The fixes are targeting (score information only on decision-relevant parameters) and an explicit value-of-information layer that nets expected learning against expected cost before any test is approved.</p>
+            <p><strong>BO where attribution was needed.</strong> A BO trace is a sequence of allocations that rushed toward the optimum. Try to read channel elasticities or interactions out of it afterwards and you inherit its sampling bias: regions far from the optimum were visited once or never, so the surface estimate there is prior, not evidence. If planning needs the curve and not just its peak, the evaluations must be placed for information — which is BED again. And all the myopia caveats apply to both: greedy EIG and EI are one-step rules, and expected improvement in particular is known to under-explore; genuinely non-myopic planning is a dynamic program that is exponential in the horizon, which is what amortized design policies approximate.</p>
+
+            <h2 id="compose">Layers, Not Rivals</h2>
+            <p>The practical resolution is that the three frameworks compose, because they can share one surrogate. Run BED (or entropy-search BO) <em>periodically</em> — quarterly geo experiments, designed for information — to establish and refresh the response surface: effects, saturation, interactions. Hand that posterior, without discarding it, to a bandit that exploits it <em>continuously</em> in the tactical layer: Thompson sampling on the current model posterior is nothing more than acting greedily on one posterior draw per period, so the hand-off is literally a change of objective, not of model. When the environment drifts and the information the surface encodes decays, the value of a fresh designed test rises again, and the cycle repeats. That fit &rarr; design &rarr; test &rarr; calibrate &rarr; allocate &rarr; re-test loop is the subject of the <a href="continuous-learning.html">continuous learning</a> methodology page; this post's contribution is the naming convention that keeps each stage honest about what it is buying.</p>
+            <p>The discipline to carry out of the comparison: match the tool to the deliverable, not to the algorithm's popularity. If the deliverable is a report, design for information. If it is a one-shot allocation found under a tight testing budget, optimize. If it is live revenue from decisions made continuously, let a bandit earn — and accept that it will not leave a measurement behind.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>All three frameworks keep a Bayesian surrogate and pick actions by maximizing an expectation under it — they differ only in the objective: information (BED), improvement (BO), cumulative reward (bandits).</li>
+                    <li>The rule of thumb: learn &rarr; BED, optimize &rarr; BO, earn-while-learning &rarr; bandit. Choose by deliverable, not by fashion.</li>
+                    <li>A bandit is not a measurement tool: minimizing regret means starving exactly the arms you would need precise estimates for.</li>
+                    <li>BED and BO treat exploration as an investment; a bandit charges it to the P&amp;L as regret in real time. Budget for each accordingly.</li>
+                    <li>They compose: establish the response surface with periodic designed experiments, then let a bandit exploit it continuously between refreshes — one posterior, swapped objectives.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Lindley, D. V. (1956). <em>On a Measure of the Information Provided by an Experiment</em>. Annals of Mathematical Statistics, 27(4).</li>
+                <li>Rainforth, T., Foster, A., Ivanova, D. R., &amp; Bickford Smith, F. (2024). <em>Modern Bayesian Experimental Design</em>. Statistical Science, 39(1).</li>
+                <li>Foster, A., Ivanova, D. R., Malik, I., &amp; Rainforth, T. (2021). <em>Deep Adaptive Design: Amortizing Sequential Bayesian Experimental Design</em>. ICML.</li>
+                <li>Hennig, P., Osborne, M. A., &amp; Kersting, H. P. (2022). <em>Probabilistic Numerics: Computation as Machine Learning</em>. Cambridge University Press.</li>
+                <li>Kushner, H. J. (1964). <em>A New Method of Locating the Maximum Point of an Arbitrary Multipeak Curve in the Presence of Noise</em>. Journal of Basic Engineering, 86(1).</li>
+                <li>Mockus, J., Tiesis, V., &amp; Zilinskas, A. (1978). <em>The Application of Bayesian Methods for Seeking the Extremum</em>. Towards Global Optimization, 2.</li>
+                <li>Srinivas, N., Krause, A., Kakade, S., &amp; Seeger, M. (2010). <em>Gaussian Process Optimization in the Bandit Setting: No Regret and Experimental Design</em>. ICML.</li>
+                <li>Frazier, P., Powell, W., &amp; Dayanik, S. (2009). <em>The Knowledge-Gradient Policy for Correlated Normal Beliefs</em>. INFORMS Journal on Computing, 21(4).</li>
+                <li>Hennig, P., &amp; Schuler, C. J. (2012). <em>Entropy Search for Information-Efficient Global Optimization</em>. Journal of Machine Learning Research, 13.</li>
+                <li>Wang, Z., &amp; Jegelka, S. (2017). <em>Max-value Entropy Search for Efficient Bayesian Optimization</em>. ICML.</li>
+                <li>Thompson, W. R. (1933). <em>On the Likelihood that One Unknown Probability Exceeds Another in View of the Evidence of Two Samples</em>. Biometrika, 25(3&ndash;4).</li>
+                <li>Russo, D., Van Roy, B., Kazerouni, A., Osband, I., &amp; Wen, Z. (2018). <em>A Tutorial on Thompson Sampling</em>. Foundations and Trends in Machine Learning, 11(1).</li>
+                <li>Chapelle, O., &amp; Li, L. (2011). <em>An Empirical Evaluation of Thompson Sampling</em>. NeurIPS.</li>
+                <li>Lai, T. L., &amp; Robbins, H. (1985). <em>Asymptotically Efficient Adaptive Allocation Rules</em>. Advances in Applied Mathematics, 6(1).</li>
+                <li>Russo, D., &amp; Van Roy, B. (2016). <em>An Information-Theoretic Analysis of Thompson Sampling</em>. Journal of Machine Learning Research, 17.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -31,8 +31,9 @@ ORG_ID = f"{SITE}/#organization"
 SITE_ID = f"{SITE}/#website"
 SENTINEL = "<!-- seo:augmented (structured data + social cards) -->"
 DEFAULT_IMG = f"{SITE}/assets/mmm-framework-social-preview.png"
-TODAY = "2026-06-24"
+TODAY = "2026-07-10"
 EXCLUDE = {"TEMPLATE.html", "TEMPLATE-SIDEBAR.html", "404.html"}
+BLOG_PREFIX = "blog-"  # blog-*.html posts emit BlogPosting nodes (index: blog.html)
 
 DEMO_PAGES = {
     "demos.html", "scientific-workflow-demo.html", "scientific-workflow-simple.html",
@@ -75,6 +76,7 @@ NAV_LABEL = {
     "demos.html": "Demos & Reports", "pressure-testing.html": "Pressure Testing",
     "mmm-walkthrough.html": "MMM Walkthrough", "mmm-example-report.html": "Example Report",
     "about.html": "About", "evaluator.html": "For Evaluators", "changelog.html": "Changelog",
+    "blog.html": "Research",
 }
 
 ORG_NODE = {
@@ -96,6 +98,12 @@ def git_date(p):
     d = subprocess.run(["git", "log", "-1", "--format=%cs", "--", p],
                        capture_output=True, text=True).stdout.strip()
     return d or TODAY
+
+
+def byline_date(s):
+    """Publication date from a blog post's visible <time datetime="…"> byline."""
+    m = re.search(r'<time\s+datetime="(\d{4}-\d{2}-\d{2})"', s)
+    return m.group(1) if m else None
 
 
 def head_of(s):
@@ -178,7 +186,7 @@ class FaqParser(HTMLParser):
         if self.mode: self.buf.append(html.unescape("&#%s;" % n))
 
 
-def page_node(f, title, desc, canon, img, date):
+def page_node(f, title, desc, canon, img, date, published=None):
     is_tech = f in TECH_EXPLICIT or f.startswith(TECH_PREFIXES)
     is_faq = f == "faq.html"
     node = {
@@ -188,6 +196,11 @@ def page_node(f, title, desc, canon, img, date):
     }
     if is_faq:
         node["@type"] = "FAQPage"
+    elif f.startswith(BLOG_PREFIX):
+        node["@type"] = "BlogPosting"
+        node.update({"headline": strip_brand(title), "datePublished": published or date,
+                     "image": img, "author": {"@type": "Person", "name": "Matthew Reda"},
+                     "publisher": {"@id": ORG_ID}, "mainEntityOfPage": canon})
     elif is_tech:
         node["@type"] = "TechArticle"
         node.update({"headline": strip_brand(title), "datePublished": date, "image": img,
@@ -203,6 +216,8 @@ def breadcrumb_node(f, leaf, canon):
     items = [("Home", f"{SITE}/index.html")]
     if f in DEMO_PAGES and f != "demos.html":
         items.append(("Demos & Reports", f"{SITE}/demos.html"))
+    if f.startswith(BLOG_PREFIX):
+        items.append(("Research", f"{SITE}/blog.html"))
     items.append((leaf, canon))
     # Dedupe by URL (the homepage's self-crumb collapses into the Home crumb).
     seen, deduped = set(), []
@@ -247,7 +262,8 @@ def build_block(f, s):
     if _name(head, "author") is None:
         lines.append('    <meta name="author" content="Matthew Reda">')
 
-    node, is_faq = page_node(f, html.unescape(title), html.unescape(desc), canon, img, git_date(f))
+    node, is_faq = page_node(f, html.unescape(title), html.unescape(desc), canon, img, git_date(f),
+                             published=byline_date(s))
     bc = breadcrumb_node(f, html.unescape(clean_leaf(f, title)), canon)
     if bc is None:
         node.pop("breadcrumb", None)
@@ -324,6 +340,15 @@ SERIES = [
     ("Pressure-testing / stress series", ["stress-00-rosy-picture.html", "stress-01-carryover-shape.html", "stress-02-time-structure.html", "stress-03-confounding-selection.html", "stress-04-extension-traps.html", "stress-05-gauntlet.html", "stress-06-geo-hierarchy.html"]),
     ("Bayesian workshop series (beginner)", ["workshop-00-thinking-in-distributions.html", "workshop-01-priors.html", "workshop-02-sampling.html", "workshop-03-first-mmm.html", "workshop-04-reading-the-posterior.html", "workshop-05-from-draws-to-decisions.html"]),
     ("Aurora framework tour", ["aurora-00-overview.html", "aurora-01-causality.html", "aurora-02-base-mmm.html", "aurora-03-extended-mmm.html", "aurora-04-reporting.html", "aurora-05-unified-workflow.html"]),
+    ("Modern measurement research (blog)", ["blog.html",
+        "blog-activity-bias.html", "blog-causal-estimates-observational.html",
+        "blog-geo-experiments-tbr.html", "blog-synthetic-control.html",
+        "blog-staggered-did.html", "blog-causalimpact-bsts.html",
+        "blog-bayesian-mmm-carryover-shape.html", "blog-carryover-experiment-timing.html",
+        "blog-modeling-pitfalls.html", "blog-multiple-comparisons.html",
+        "blog-lindley-to-dad.html", "blog-geo-holdout-eig.html",
+        "blog-bed-bo-bandits.html", "blog-thompson-sampling.html",
+        "blog-continuous-learning-interactions.html"]),
     ("Consultant artifacts (templates)", ["artifacts/index.html"]),
 ]
 

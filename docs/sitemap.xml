@@ -29,7 +29,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/aurora-03-extended-mmm.html</loc>
-        <lastmod>2026-07-04</lastmod>
+        <lastmod>2026-07-09</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -44,6 +44,86 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/bayesian-workflow.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-activity-bias.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-bayesian-mmm-carryover-shape.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-bed-bo-bandits.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-carryover-experiment-timing.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-causal-estimates-observational.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-causalimpact-bsts.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-continuous-learning-interactions.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-geo-experiments-tbr.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-geo-holdout-eig.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-lindley-to-dad.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-modeling-pitfalls.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-multiple-comparisons.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-staggered-did.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-synthetic-control.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-thompson-sampling.html</loc>
+        <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog.html</loc>
         <lastmod>2026-07-10</lastmod>
         <changefreq>monthly</changefreq>
     </url>
@@ -259,7 +339,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/stress-04-extension-traps.html</loc>
-        <lastmod>2026-07-04</lastmod>
+        <lastmod>2026-07-09</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>

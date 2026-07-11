@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Common Pitfalls in Statistical Modeling | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Statistical modeling pitfalls: a field guide to confounding, forking paths, overfitting, missing data, and Type S/M errors — and the remedies that work.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-modeling-pitfalls.html">
+    <meta property="og:title" content="Common Pitfalls in Statistical Modeling">
+    <meta property="og:description" content="Statistical modeling pitfalls: a field guide to confounding, forking paths, overfitting, missing data, and Type S/M errors — and the remedies that work.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-modeling-pitfalls.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Common Pitfalls in Statistical Modeling">
+    <meta name="twitter:description" content="Statistical modeling pitfalls: a field guide to confounding, forking paths, overfitting, missing data, and Type S/M errors — and the remedies that work.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-modeling-pitfalls.html",
+          "name": "Common Pitfalls in Statistical Modeling | MMM Framework",
+          "description": "Statistical modeling pitfalls: a field guide to confounding, forking paths, overfitting, missing data, and Type S/M errors — and the remedies that work.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-modeling-pitfalls.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-modeling-pitfalls.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Common Pitfalls in Statistical Modeling",
+          "datePublished": "2026-04-09",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-modeling-pitfalls.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-modeling-pitfalls.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Common Pitfalls in Statistical Modeling",
+              "item": "https://redam94.github.io/mmm-framework/blog-modeling-pitfalls.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#correlation-cause">Mistaking Correlation for Cause</a></li>
+                <li><a href="#forking-paths">The Garden of Forking Paths</a></li>
+                <li><a href="#overfitting-underfitting">Overfitting and the R-Squared Trap</a></li>
+                <li><a href="#missing-data">Ignoring How the Data Went Missing</a></li>
+                <li><a href="#golem-tests">Statistical Tests as Golems</a></li>
+                <li><a href="#model-checking">Skipping the Model Check</a></li>
+                <li><a href="#blaming-the-sampler">Blaming the Sampler</a></li>
+                <li><a href="#type-s-type-m">Significant, but the Wrong Sign and Size</a></li>
+                <li><a href="#field-checklist">A Field Checklist</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Common Pitfalls in Statistical Modeling</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-04-09">April 9, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Practice</span>
+            </p>
+            <p class="lead">Most modeling failures are not exotic — they are the same eight mistakes, recurring across industries and decades, each producing output that looks exactly like success. This is a field guide: what each pitfall looks like in practice, why it sails through review, and what fixes it.</p>
+
+            <p>The unsettling property these failure modes share is that none of them announce themselves. A confounded regression converges cleanly; an overfit model fits beautifully in-sample; a forking-paths specification arrives with an entirely sincere analyst attached. The diagnostics that would catch each one are rarely the ones anyone asks for — which is why the pitfalls persist.</p>
+
+            <h2 id="correlation-cause">1. Mistaking Correlation for Cause</h2>
+            <p><strong>What it looks like.</strong> A regression of revenue on media spend reports, with a clean fit and a significant coefficient, that paid search "drives" a startling share of sales. It is mostly measuring the media plan: budgets were set against demand forecasts, so the demand that causes the sales also caused the spend. Three mechanisms produce this family of errors. <em>Confounding</em>: a common cause moves both predictor and outcome, the way regional culture drives both Waffle House density and divorce rates in McElreath's running example. <em>Selection</em>: the raw treated-versus-untreated gap is the true effect on the treated <em>plus</em> a selection term, which can be large enough to flip the sign — why hospitals look dangerous in observational data. <em>Omitted variables</em>: the bias from a left-out variable is the product of its effect on the outcome and its correlation with what you kept — predictable in direction, and rarely small.</p>
+
+            <div class="note">
+                <h4>💡 The 160x lesson</h4>
+                <p>Lewis, Rao, and Reiley (2011) compared observational estimates of online display-ad effectiveness against a randomized experiment on the same campaigns: the observational methods overstated the causal effect by roughly a factor of 160. The mechanism — activity bias — is that people who see ads are simply more active online across the board, and no covariate set repairs it. "We controlled for everything" is not an identification strategy.</p>
+            </div>
+
+            <p><strong>Why it survives review.</strong> Significance and fit look identical whether an association is causal or spurious. Reviewers audit the regression's internals — standard errors, residuals, robustness to covariate swaps — none of which know anything about the assignment mechanism. The one question that matters, <em>why did the treated units get treated?</em>, is not on most checklists.</p>
+
+            <div class="warning">
+                <h4>⚠️ Post-treatment bias: the control that kills the effect</h4>
+                <p>The mirror-image error is controlling too much. If TV drives branded search which drives sales, adding branded search as a control blocks the indirect path and makes TV look dead — the model dutifully reports the effect <em>not routed through</em> the mediator. Angrist and Pischke call these "bad controls": conditioning on variables caused by the treatment is not caution, it is a different estimand.</p>
+            </div>
+
+            <p><strong>The remedy.</strong> Draw the causal graph before writing the model, and name the estimand before estimating anything. Randomize where possible; otherwise use an explicit identification strategy — instruments, differences-in-differences, discontinuities — and state the assumption each one rents. A DAG will not make an unidentifiable effect identifiable, but it makes the failure visible before the coefficient does damage.</p>
+
+            <h2 id="forking-paths">2. The Garden of Forking Paths</h2>
+            <p><strong>What it looks like.</strong> A media mix analyst tries a grid of adstock half-lives, two saturation forms, three control sets, and a couple of date windows, then reports the winning specification's intervals as though it were the only model ever fit. Nothing was hidden and nothing was hacked. Gelman and Loken's point is that intent is irrelevant: the analysis you ran is one path through a garden of analyses you <em>would have</em> run had the data come out differently, and the reported p-value knows nothing about the rest of the garden. Five binary analytic choices already give thirty-two paths; the chance that at least one clears the conventional significance bar is far above five percent. Simmons, Nelson, and Simonsohn catalogued how much flexibility ordinary analyses contain — enough to present nearly anything as significant.</p>
+            <p><strong>Why it survives review.</strong> The forks are invisible in the deliverable. A reviewer sees one clean analysis, not the thirty-one counterfactual ones, and each individual decision reads as competent judgment rather than as a degree of freedom. The paper trail only records the path taken.</p>
+            <p><strong>The remedy.</strong> Shrink the garden or walk all of it. Pre-specification removes the forks; hierarchical models with partial pooling estimate all the branches at once and shrink them toward each other — why Gelman, Hill, and Yajima argue multilevel modeling dissolves the multiple-comparisons problem rather than correcting for it. For the specification-search version, regularizing priors and <a href="variable-selection.html">principled variable selection</a> — projection predictive methods in particular — replace "fit many, report one" with a procedure whose selection step is itself accounted for.</p>
+
+            <h2 id="overfitting-underfitting">3. Overfitting and the R-Squared Trap</h2>
+            <p><strong>What it looks like.</strong> McElreath frames model complexity as a strait between two monsters: Scylla, the overfit model that learns the noise, and Charybdis, the underfit model that misses the signal. The current pushes toward Scylla, because in-sample fit <em>always</em> improves with more parameters — even randomly generated predictors raise R-squared. The demonstration: a fifth-degree polynomial through seven data points achieves an R-squared of 0.99 and predicts negative brain volumes between the observations. The marketing version: enough flexible controls that the fit chart is immaculate while ROAS estimates swing wildly between refits — flexibility spent memorizing this dataset's accidents.</p>
+            <p><strong>Why it survives review.</strong> Because the number reviewers ask for is the one that rewards the failure. "How well does it fit?" is answered in-sample, and in-sample the overfit model wins every time. Absent an out-of-sample discipline, complexity is indistinguishable from insight.</p>
+            <p><strong>The remedy.</strong> Two families. First, regularizing priors — informative, mildly skeptical priors on effect sizes, the Bayesian counterpart of ridge and lasso. Second, score models on <em>estimated out-of-sample</em> predictive accuracy rather than fit: WAIC, or in practice PSIS-LOO cross-validation, whose Pareto-k diagnostic also flags observations where the approximation itself is straining (Vehtari, Gelman, and Gabry, 2017).</p>
+
+            <div class="warning">
+                <h4>⚠️ The information budget</h4>
+                <p>Priors that were sensible in a small model quietly stop being sensible in a big one. Independent standard-normal priors on each logistic-regression coefficient look innocuous one at a time, but as predictors accumulate the <em>joint</em> prior grows strongly informative, pushing predicted probabilities toward zero or one. The rule: as the model grows, the priors must tighten.</p>
+            </div>
+
+            <h2 id="missing-data">4. Ignoring How the Data Went Missing</h2>
+            <p><strong>What it looks like.</strong> Rows with gaps are silently dropped — usually by a software default rather than a decision — and the analysis proceeds on "complete cases." Whether that is harmless depends entirely on the causal mechanism generating the missingness:</p>
+            <table>
+                <thead>
+                    <tr><th>Mechanism</th><th>What it means</th><th>Implication</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>MCAR</td><td>Missingness unrelated to anything</td><td>Complete-case analysis is unbiased — but this mechanism is rare in the wild</td></tr>
+                    <tr><td>MAR</td><td>Missingness explained by observed variables</td><td>Imputation is valid if you condition on the right observables</td></tr>
+                    <tr><td>MNAR</td><td>Missingness depends on the unobserved value itself</td><td>The missingness mechanism must be modeled explicitly</td></tr>
+                </tbody>
+            </table>
+            <p>A tracking outage that blanks three weeks of impressions is plausibly MCAR. Competitor spend a vendor only reports in covered markets is MAR at best. Survey responses that go missing <em>because</em> of the attitude being surveyed are MNAR, and no naive fix recovers the truth. Worse, complete-case analysis conditions on being observed — draw the missingness indicator into the causal graph as a node and that conditioning can open collider paths that bias estimates even under MAR.</p>
+            <p><strong>Why it survives review.</strong> Deleted rows leave no trace. The model summary looks the same whether ten rows or forty percent of the panel quietly vanished, and because dropping is the default, nobody ever made a visible choice to defend.</p>
+            <p><strong>The remedy.</strong> Ask what causes the missingness, then treat missing values as latent quantities in the model — Bayesian imputation assigns them priors and infers them jointly, so uncertainty about what was missing propagates into the parameters instead of being deleted with the rows.</p>
+
+            <h2 id="golem-tests">5. Statistical Tests as Golems</h2>
+            <p><strong>What it looks like.</strong> McElreath opens <em>Statistical Rethinking</em> with the golem of Prague: powerful, obedient, and without judgment about whether its instructions make sense. Classical tests are pre-fabricated golems — a t-test, a chi-squared, an ANOVA chosen from a flowchart and set loose on data they may or may not suit. The deeper problems: hypotheses are not models (the hypothesis-to-model mapping is many-to-many, so rejecting a null tells you far less than it feels like it does), and clean falsification is rare in a world of measurement error and continuous hypotheses.</p>
+            <p><strong>Why it survives review.</strong> Ritual reads as rigor: a named test with a p-value looks like due diligence precisely because it required no modeling judgment. The most common casualty is the comparison of significance levels — channel A's lift is significant, channel B's is not, so the deck concludes A outperforms B. But the <em>difference</em> between significant and non-significant is itself often not significant; the two intervals can overlap almost entirely.</p>
+            <p><strong>The remedy.</strong> Build models rather than choosing tests: constructing, criticizing, and revising an explicit generative model keeps the assumptions where you can see them. And when the question is a comparison, compute the comparison — the posterior contrast between the two effects — rather than comparing two verdicts about zero.</p>
+
+            <h2 id="model-checking">6. Skipping the Model Check</h2>
+            <p><strong>What it looks like.</strong> The model converges, the intervals are tight, the deck ships. Nobody asks whether the fitted model could plausibly have generated data resembling what it was fit to. Posterior predictive checking asks exactly that: simulate replicated datasets from the model and compare them to the observed one. If the replicas never show the seasonality spikes or the variance pattern the real series shows, the model is missing structure — however confident its intervals look. The same logic runs forward: prior predictive checks simulate data from the priors <em>before</em> fitting, catching priors that imply negative sales while they are still cheap to fix.</p>
+            <p><strong>Why it survives review.</strong> Checking is the only step of the workflow with no deliverable. A fitted model looks finished, criticism of it looks like delay, and the incentives all point toward shipping. It is also the step that requires taste: focus, as Gelman and colleagues advise, on <em>severe</em> tests — checks likely to fail if the model would mislead you on the questions you care about.</p>
+            <p><strong>The remedy.</strong> Make checking a loop, not a gate: find misfit, expand the model, check again, in the iterative spirit of the <a href="bayesian-workflow.html">Bayesian workflow</a>. Leave-one-out diagnostics round out the toolkit, flagging observations the model finds surprising and checking that nominal 90% intervals cover about 90% of the time.</p>
+
+            <h2 id="blaming-the-sampler">7. Blaming the Sampler</h2>
+            <p><strong>What it looks like.</strong> The chains diverge, mixing is glacial, and the response is mechanical: raise the target acceptance rate, run longer, switch samplers. The folk theorem of statistical computing — Gelman's phrase — says the diagnosis is usually elsewhere: <em>when you have computational problems, often there is a problem with your model.</em> The sampler is the messenger.</p>
+            <table>
+                <thead>
+                    <tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Divergent transitions</td><td>Funnel geometry in hierarchical models</td><td>Non-centered parameterization</td></tr>
+                    <tr><td>Slow mixing</td><td>Weakly informative data</td><td>Add reasonable prior information</td></tr>
+                    <tr><td>Label switching</td><td>Symmetric modes in mixtures</td><td>Constrain to identify one mode</td></tr>
+                    <tr><td>Multimodality</td><td>Substantively distinct explanations</td><td>Stacking, or stronger priors</td></tr>
+                </tbody>
+            </table>
+            <p><strong>Why it survives review.</strong> Because tuning sometimes silences the warning without touching the pathology, and a quiet sampler looks like a healthy model. A funnel that stops producing divergences after aggressive step-size tuning is still a funnel — explored badly, just less loudly.</p>
+            <p><strong>The remedy.</strong> Debug from both ends: simplify the failing model until it works, and build the trivial working model up until it fails. The pathology lives where the two meet — nearly always a modeling choice, not an algorithmic one.</p>
+
+            <h2 id="type-s-type-m">8. Significant, but the Wrong Sign and Size</h2>
+
+            <div class="definition">
+                <h4>Definition: Type S and Type M errors</h4>
+                <p>A <strong>Type S (sign) error</strong>: claiming an effect is positive when it is actually negative, or vice versa. A <strong>Type M (magnitude) error</strong>: an estimate whose exaggeration ratio is far from one. Gelman and colleagues proposed the pair as what matters once you stop asking whether an effect is exactly zero.</p>
+            </div>
+
+            <p><strong>What it looks like.</strong> An underpowered analysis produces a significant, impressive effect — and the impressiveness is the artifact. When the true effect is near zero, an estimator with a large standard error is <em>more</em> likely to produce large point estimates, and conditioning on significance selects precisely those exaggerated draws — inflated by construction, sometimes with the wrong sign outright. This is the winner's curse: the most impressive number in any set of comparisons — the standout channel in a noisy media mix model, the best cell in a sprawling test matrix — is likely the most exaggerated, not the most real.</p>
+            <p><strong>Why it survives review.</strong> Because the filter meant to protect against noise manufactures the error: in a low-power setting, significance functions as a selection effect for overestimates, not a certificate of reliability. The bigger the claimed effect, the more the room nods.</p>
+            <p><strong>The remedy.</strong> Frame questions as sign and magnitude, not "is it zero?" Use multilevel models: partial pooling shrinks noisy estimates toward the group, controlling Type S and Type M error rates automatically — the same property that dissolved the multiple-comparisons problem in pitfall 2. And cultivate the reflex: a large effect from a small sample is a reason for suspicion, not a press release.</p>
+
+            <h2 id="field-checklist">A Field Checklist</h2>
+            <p>The eight pitfalls compress into a discipline you can run in order:</p>
+            <ul>
+                <li><strong>Before modeling</strong> — draw the causal DAG, including the missingness mechanism; name the target estimand.</li>
+                <li><strong>Building</strong> — start simple and grow modularly; use regularizing priors; run prior predictive checks first.</li>
+                <li><strong>Fitting</strong> — watch the convergence diagnostics; when computation fails, suspect the model before the algorithm.</li>
+                <li><strong>Evaluating</strong> — posterior predictive checks aimed at severe tests; LOO cross-validation with its diagnostics; calibration.</li>
+                <li><strong>Comparing</strong> — score on estimated out-of-sample accuracy, never in-sample fit or p-values; consider averaging over plausible models rather than crowning one, and make <a href="variable-selection.html">the selection step part of the accounted-for procedure</a>.</li>
+                <li><strong>Reporting</strong> — full posterior uncertainty, contrasts computed directly, no verdicts laundered through significance stars.</li>
+            </ul>
+            <p>None of this is exotic either — that is the point. What separates teams that avoid these pitfalls is not sophistication; it is the willingness to run checks whose only possible output is bad news about your own model.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>The dangerous failures are silent: confounded, overfit, and specification-searched models all produce clean, significant, reviewable output.</li>
+                    <li>Identification is a property of the design, not the regression — draw the DAG and name the estimand; observational ad measurement has missed experimental truth by two orders of magnitude.</li>
+                    <li>Partial pooling is the workhorse remedy: it dissolves multiple comparisons, regularizes against overfitting, and controls sign and magnitude errors through the same shrinkage.</li>
+                    <li>Computational trouble is usually model trouble; treat sampler warnings as diagnostics, not nuisances to tune away.</li>
+                    <li>Budget time for the steps with no deliverable — prior predictive, posterior predictive, and calibration checks — they are where bad news can surface before the decision does.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>McElreath, R. (2020). <em>Statistical Rethinking: A Bayesian Course with Examples in R and Stan</em> (2nd ed.). CRC Press.</li>
+                <li>Gelman, A., &amp; Loken, E. (2013). <em>The Garden of Forking Paths: Why Multiple Comparisons Can Be a Problem, Even When There Is No "Fishing Expedition" or "p-Hacking" and the Research Hypothesis Was Posited Ahead of Time</em>. Department of Statistics, Columbia University.</li>
+                <li>Gelman, A., Hill, J., &amp; Yajima, M. (2012). <em>Why We (Usually) Don't Have to Worry About Multiple Comparisons</em>. Journal of Research on Educational Effectiveness, 5(2).</li>
+                <li>Simmons, J. P., Nelson, L. D., &amp; Simonsohn, U. (2011). <em>False-Positive Psychology: Undisclosed Flexibility in Data Collection and Analysis Allows Presenting Anything as Significant</em>. Psychological Science, 22(11).</li>
+                <li>Gelman, A., Carlin, J. B., Stern, H. S., Dunson, D. B., Vehtari, A., &amp; Rubin, D. B. (2013). <em>Bayesian Data Analysis</em> (3rd ed.). CRC Press.</li>
+                <li>Gelman, A., Vehtari, A., Simpson, D., Margossian, C. C., Carpenter, B., Yao, Y., Kennedy, L., Gabry, J., B&uuml;rkner, P.-C., &amp; Modr&aacute;k, M. (2020). <em>Bayesian Workflow</em>. arXiv:2011.01808.</li>
+                <li>Angrist, J. D., &amp; Pischke, J.-S. (2009). <em>Mostly Harmless Econometrics: An Empiricist's Companion</em>. Princeton University Press.</li>
+                <li>Lewis, R. A., Rao, J. M., &amp; Reiley, D. H. (2011). <em>Here, There, and Everywhere: Correlated Online Behaviors Can Lead to Overestimates of the Effects of Advertising</em>. Proceedings of WWW.</li>
+                <li>Vehtari, A., Gelman, A., &amp; Gabry, J. (2017). <em>Practical Bayesian Model Evaluation Using Leave-One-Out Cross-Validation and WAIC</em>. Statistics and Computing, 27(5).</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

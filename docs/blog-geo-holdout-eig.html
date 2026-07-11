@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Geo-Holdout Is a Bayesian Experimental Design: Computing Its EIG | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Encode a geo-holdout as a design vector, use the MMM posterior as the prior, and the value of the test becomes computable: expected information gain.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-geo-holdout-eig.html">
+    <meta property="og:title" content="A Geo-Holdout Is a Bayesian Experimental Design: Computing Its EIG">
+    <meta property="og:description" content="Encode a geo-holdout as a design vector, use the MMM posterior as the prior, and the value of the test becomes computable: expected information gain.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-geo-holdout-eig.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="A Geo-Holdout Is a Bayesian Experimental Design: Computing Its EIG">
+    <meta name="twitter:description" content="Encode a geo-holdout as a design vector, use the MMM posterior as the prior, and the value of the test becomes computable: expected information gain.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-geo-holdout-eig.html",
+          "name": "A Geo-Holdout Is a Bayesian Experimental Design: Computing Its EIG | MMM Framework",
+          "description": "Encode a geo-holdout as a design vector, use the MMM posterior as the prior, and the value of the test becomes computable: expected information gain.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-geo-holdout-eig.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-geo-holdout-eig.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "A Geo-Holdout Is a Bayesian Experimental Design: Computing Its EIG",
+          "datePublished": "2026-07-01",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-geo-holdout-eig.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-geo-holdout-eig.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "A Geo-Holdout Is a Bayesian Experimental Design: Computing Its EIG",
+              "item": "https://redam94.github.io/mmm-framework/blog-geo-holdout-eig.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#three-ingredients">The Three Ingredients</a></li>
+                <li><a href="#design-vector">The Holdout as a Design Vector</a></li>
+                <li><a href="#eig">What Is the Experiment Worth?</a></li>
+                <li><a href="#targeting">Aiming at What You Care About</a></li>
+                <li><a href="#computing">Computing the EIG</a></li>
+                <li><a href="#optimizing">Optimizing over Designs</a></li>
+                <li><a href="#closing-the-loop">Closing the Loop</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">A Geo-Holdout Is a Bayesian Experimental Design: Computing Its EIG</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-01">July 1, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Experimental design</span>
+            </p>
+            <p class="lead">Most teams choose geo tests by intuition: hold out a familiar set of markets, run for six weeks, hope the readout is clean. But once you have a fitted media mix model, the value of any proposed test is a computable quantity — the expected information gain. This post walks through the encoding that makes that possible, and the machinery that makes it tractable.</p>
+
+            <p>A geo-holdout looks like an operational decision — which markets go dark, for how long — but it is exactly the object that Bayesian experimental design (BED) was built to optimize. The trick is to notice that a fitted MMM already provides two of the three things BED needs, and that the holdout itself is just the third: a point in a design space. Once the pieces are named, "which test should we run?" stops being a debate and becomes an optimization problem.</p>
+
+            <h2 id="three-ingredients">The Three Ingredients</h2>
+            <p>Bayesian experimental design needs a prior over unknowns, a space of possible experiments, and a likelihood connecting the two. For a geo-holdout run on top of a media mix model, all three are already on the table:</p>
+            <ul>
+                <li><strong>The prior \( p(\theta) \)</strong> is the <em>current posterior</em> of your fitted MMM. Here \( \theta \) collects the parameters you are uncertain about: channel coefficients \( \beta_m \), <a href="math-02-saturation.html">saturation</a> shape parameters, <a href="math-01-adstock.html">adstock</a> retention rates \( \alpha_m \), and — often the real prize — cross-channel interaction terms the observational data cannot pin down.</li>
+                <li><strong>The design \( \xi \)</strong> is the experiment's controllable knobs: which geos, which channels, how large a spend change, over which window.</li>
+                <li><strong>The likelihood \( p(y \mid \theta, \xi) \)</strong> is the MMM's own predictive distribution for geo-week sales when spend is set by \( \xi \). Nothing new needs to be built: a holdout is a counterfactual spend pattern pushed through the model's adstock &rarr; saturation &rarr; regression pipeline, plus observation noise.</li>
+            </ul>
+
+            <div class="note">
+                <h4>💡 The MMM is the simulator</h4>
+                <p>This is the load-bearing observation. Estimating the value of an experiment requires simulating its outcomes, and a Bayesian MMM does that for free: draw parameters from the posterior, feed them the perturbed spend plan, and sample sales. No auxiliary model, no separate power-analysis tool — the same object you use for budget decisions scores your experiments.</p>
+            </div>
+
+            <h2 id="design-vector">The Holdout as a Design Vector</h2>
+            <p>A geo experiment partitions markets into treatment and control and imposes a spend change on the treated set. Written out as a vector:</p>
+            $$ \xi = \big(\, a_g \in \{0,1\},\; m,\; \Delta_g,\; [t_0, t_1] \,\big) $$
+            <p>with one component per decision the team actually makes:</p>
+            <ul>
+                <li><strong>Assignment \( a_g \)</strong> — which of the \( G \) geos are treated. This is the combinatorial heart of the design: with \( G \) markets there are \( 2^G \) possible assignments.</li>
+                <li><strong>Channel(s) \( m \)</strong> — perturbing a single channel isolates its main effect. Perturbing <em>two channels jointly</em> is what identifies their interaction; if interactions are the target, the design must vary both.</li>
+                <li><strong>Magnitude \( \Delta_g \)</strong> — a pure holdout cuts spend to zero; a softer test scales it to half. Larger perturbations move sales further and typically carry more information, traded against the revenue at risk.</li>
+                <li><strong>Window \( [t_0, t_1] \)</strong> — start and duration. The window must be long enough for carryover to play out, or the test measures a truncated effect.</li>
+            </ul>
+            <p>The observation \( y \) is then the vector of realized geo-week sales over the test and post-test periods. Classical geo methodology — the geo-based regression designs of Vaver and Koehler (2011) and the time-based regression estimator of Kerman, Wang, and Vaver (2017) — works with exactly this design object; the Bayesian treatment changes how the design is <em>chosen</em>, not what it is.</p>
+
+            <h2 id="eig">What Is the Experiment Worth?</h2>
+            <p>The currency of Bayesian experimental design is entropy reduction. For a particular hypothetical outcome \( y \), the information gained is the drop in Shannon entropy from prior to posterior. Since \( y \) is unknown at design time, we average over the outcomes the model itself predicts:</p>
+
+            <div class="definition">
+                <h4>Definition: Expected Information Gain</h4>
+                <p>With the marginal predictive \( p(y \mid \xi) = \mathbb{E}_{p(\theta)}[\, p(y \mid \theta, \xi) \,] \), the expected information gain of design \( \xi \) is</p>
+                $$ \mathrm{EIG}(\xi) \;=\; \mathbb{E}_{p(\theta)\,p(y \mid \theta, \xi)}\!\left[ \log p(y \mid \theta, \xi) - \log p(y \mid \xi) \right], $$
+                <p>the mutual information between parameters and outcome under design \( \xi \). The Bayesian optimal design is \( \xi^* = \arg\max_\xi \mathrm{EIG}(\xi) \) (Lindley, 1956; Rainforth et al., 2024).</p>
+            </div>
+
+            <p>The EIG has several equivalent forms — as a posterior-to-prior log ratio, as mutual information, as a likelihood-to-marginal log ratio — and each suggests a different estimator. The likelihood form above is the convenient one for MMMs, where the parameter vector is large but the outcome (a panel of geo-week sales) is comparatively low-dimensional.</p>
+
+            <h2 id="targeting">Aiming at What You Care About</h2>
+            <p>The plain EIG rewards information about <em>all</em> of \( \theta \) — including main effects the model has already learned well from observational variation. A test chosen that way spends budget re-confirming what you know. The fix is to name the decision-relevant subset \( \psi \subset \theta \) — say, the TV&times;search interaction and the marginal ROAS it implies — and target the <em>marginal</em> EIG:</p>
+            $$ \mathrm{EIG}_{\psi}(\xi) \;=\; \mathbb{E}_{p(\psi, y \mid \xi)}\!\left[ \log \frac{p(\psi \mid y, \xi)}{p(\psi)} \right], $$
+            <p>with nuisance parameters integrated out. Under this objective the optimizer routes the experiment's information budget toward the quantities the business decision actually turns on. In practice this is the difference between a test that tightens a headline ROAS you already trust and one that resolves the interaction term blocking a reallocation decision.</p>
+
+            <h2 id="computing">Computing the EIG</h2>
+            <p>The EIG is <em>doubly intractable</em>: the outer expectation is an integral, and the inner marginal \( p(y \mid \xi) \) is itself an intractable integral that changes with every simulated outcome. The baseline tool is the nested Monte Carlo (NMC) estimator:</p>
+
+            <pre><code># illustrative
+# Nested Monte Carlo estimate of EIG for one candidate design xi
+# theta ~ MMM posterior draws; simulate() pushes perturbed spend
+# through adstock -> saturation -> regression + noise
+eig = 0.0
+for n in range(N):                      # outer: joint draws
+    theta_n = posterior.draw()
+    y_n = simulate(theta_n, xi)
+    log_lik = log_p(y_n, theta_n, xi)
+    # inner: fresh prior draws to estimate the marginal p(y | xi)
+    marginal = mean(p(y_n, posterior.draw(), xi) for m in range(M))
+    eig += (log_lik - log(marginal)) / N</code></pre>
+
+            <p>NMC works, but slowly. It is biased for any finite inner sample size \( M \), its cost is \( C = NM \), and its error shrinks at only \( \mathcal{O}(C^{-1/3}) \) — markedly worse than the \( \mathcal{O}(C^{-1/2}) \) of ordinary Monte Carlo (Rainforth et al., 2018).</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Why NMC is biased, and the optimal inner/outer split</summary>
+                <div class="deep-dive-body">
+                    <p>For a fixed simulated outcome \( y_n \), the inner average \( \frac{1}{M}\sum_m p(y_n \mid \theta_m, \xi) \) is an unbiased estimate of the marginal \( p(y_n \mid \xi) \). But the estimator uses its logarithm, and by Jensen's inequality</p>
+                    $$ \mathbb{E}\big[ \log \hat{p} \big] \;\le\; \log \mathbb{E}\big[ \hat{p} \big] \;=\; \log p(y_n \mid \xi), $$
+                    <p>so the inner term is negatively biased in log space and the overall EIG estimate is biased <em>upward</em> — the estimator flatters every design, and flatters designs with noisier inner estimates the most. The bias is \( \mathcal{O}(1/M) \). Balancing the outer variance \( \mathcal{O}(1/N) \) against the squared bias \( \mathcal{O}(1/M^2) \) at fixed budget \( C = NM \) gives the optimal allocation \( M \propto \sqrt{N} \), and with it the overall \( \mathcal{O}(C^{-1/3}) \) convergence rate. Two escape routes exist: randomized multi-level Monte Carlo debiasing, which restores \( \mathcal{O}(C^{-1/2}) \) at higher per-sample cost (Goda et al., 2022), and the variational estimators discussed next.</p>
+                </div>
+            </details>
+
+            <p>The modern alternative is to make the inner problem <em>learned</em> rather than re-estimated: fit an amortized approximation to the posterior or the marginal once, and reuse it across simulated outcomes. The Barber&ndash;Agakov posterior bound, the variational marginal bound, and the contrastive bounds (ACE, PCE) all follow this pattern; they turn the EIG into a differentiable objective with \( \mathcal{O}(T^{-1/2}) \) convergence (Foster et al., 2019). For a measurement team the practical consequence is simple: scoring hundreds of candidate geo designs is feasible on the same hardware that fit the MMM.</p>
+
+            <h2 id="optimizing">Optimizing over Designs</h2>
+            <p>Scoring designs is half the problem; searching the design space is the other half.</p>
+
+            <div class="warning">
+                <h4>⚠️ Don't grid-search geo assignments</h4>
+                <p>With \( G \) geos the assignment space has \( 2^G \) elements — at fifty markets, a quadrillion candidate holdouts. Enumerating a handful of hand-picked designs and choosing the best-scoring one silently searches a vanishing fraction of the space.</p>
+            </div>
+
+            <p>Because the variational EIG bounds are differentiable in \( \xi \), the search can run by stochastic-gradient ascent on the design itself. Continuous knobs — the spend multiplier \( \Delta_g \), the window endpoints — take gradients directly. The binary assignment \( a_g \) needs a relaxation: optimize a per-geo inclusion probability, or use a Gumbel-softmax relaxation and anneal it. Gradient-based BED of this kind has been demonstrated on design spaces of several hundred dimensions (Foster et al., 2020), comfortably covering realistic geo counts. In a standing measurement program the design problem repeats each cycle, and the same machinery can be amortized into a design <em>policy</em> that maps the current posterior to the next experiment (Foster et al., 2021).</p>
+
+            <h2 id="closing-the-loop">Closing the Loop</h2>
+            <p>Running \( \xi^* \) produces data, and the readout is a counterfactual problem: what would the treated geos have sold without the change? Structural time-series methods — the CausalImpact machinery of Brodersen et al. (2015) — estimate exactly that posterior counterfactual. Feeding the measured lift back into the MMM as a calibration observation contracts the targeted parameters, and the next cycle's design is chosen against the updated posterior. That loop — fit, design, test, calibrate, refit — is the subject of the <a href="continuous-learning.html">continuous learning</a> methodology page, and the marginal-EIG targeting above is what keeps each cycle pointed at the decision that matters.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>A geo-holdout is a point in a design space: <em>(which geos, which channels, how much, how long)</em>. Perturb two channels jointly if an interaction is the target.</li>
+                    <li>A fitted MMM supplies both the prior and the outcome simulator — computing an experiment's expected information gain requires nothing you don't already have.</li>
+                    <li>Use the targeted (marginal) EIG so the test resolves decision-relevant parameters instead of re-confirming known main effects.</li>
+                    <li>Estimate with variational or contrastive bounds and optimize designs by stochastic gradients — nested Monte Carlo plus grid search does not scale to realistic geo counts.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Lindley, D. V. (1956). <em>On a Measure of the Information Provided by an Experiment</em>. Annals of Mathematical Statistics, 27(4).</li>
+                <li>Rainforth, T., Foster, A., Ivanova, D. R., &amp; Bickford Smith, F. (2024). <em>Modern Bayesian Experimental Design</em>. Statistical Science, 39(1).</li>
+                <li>Rainforth, T., Cornish, R., Yang, H., Warrington, A., &amp; Wood, F. (2018). <em>On Nesting Monte Carlo Estimators</em>. ICML.</li>
+                <li>Foster, A., Jankowiak, M., Bingham, E., Horsfall, P., Teh, Y. W., Rainforth, T., &amp; Goodman, N. (2019). <em>Variational Bayesian Optimal Experimental Design</em>. NeurIPS.</li>
+                <li>Foster, A., Jankowiak, M., O'Meara, M., Teh, Y. W., &amp; Rainforth, T. (2020). <em>A Unified Stochastic Gradient Approach to Designing Bayesian-Optimal Experiments</em>. AISTATS.</li>
+                <li>Foster, A., Ivanova, D. R., Malik, I., &amp; Rainforth, T. (2021). <em>Deep Adaptive Design: Amortizing Sequential Bayesian Experimental Design</em>. ICML.</li>
+                <li>Goda, T., Hironaka, T., Kitade, W., &amp; Foster, A. (2022). <em>Unbiased MLMC Stochastic Gradient-Based Optimization of Bayesian Experimental Designs</em>. SIAM Journal on Scientific Computing, 44(1).</li>
+                <li>Jin, Y., Wang, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). <em>Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects</em>. Google Research.</li>
+                <li>Vaver, J., &amp; Koehler, J. (2011). <em>Measuring Ad Effectiveness Using Geo Experiments</em>. Google Research.</li>
+                <li>Kerman, J., Wang, P., &amp; Vaver, J. (2017). <em>Estimating Ad Effectiveness Using Geo Experiments in a Time-Based Regression Framework</em>. Google Research.</li>
+                <li>Brodersen, K. H., Gallusser, F., Koehler, J., Remy, N., &amp; Scott, S. L. (2015). <em>Inferring Causal Impact Using Bayesian Structural Time-Series Models</em>. Annals of Applied Statistics, 9(1).</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

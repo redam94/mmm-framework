@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synthetic Control, Done Right | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Synthetic control for marketing incrementality: the convex-weights estimator, when it applies, the bias bound, placebo inference, and modern extensions.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-synthetic-control.html">
+    <meta property="og:title" content="Synthetic Control, Done Right">
+    <meta property="og:description" content="Synthetic control for marketing incrementality: the convex-weights estimator, when it applies, the bias bound, placebo inference, and modern extensions.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-synthetic-control.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Synthetic Control, Done Right">
+    <meta name="twitter:description" content="Synthetic control for marketing incrementality: the convex-weights estimator, when it applies, the bias bound, placebo inference, and modern extensions.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-synthetic-control.html",
+          "name": "Synthetic Control, Done Right | MMM Framework",
+          "description": "Synthetic control for marketing incrementality: the convex-weights estimator, when it applies, the bias bound, placebo inference, and modern extensions.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-synthetic-control.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-synthetic-control.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Synthetic Control, Done Right",
+          "datePublished": "2026-04-11",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-synthetic-control.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-synthetic-control.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Synthetic Control, Done Right",
+              "item": "https://redam94.github.io/mmm-framework/blog-synthetic-control.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#one-treated-market">One Treated Market, No Twin</a></li>
+                <li><a href="#the-estimator">The Estimator and Its Weights</a></li>
+                <li><a href="#when-it-applies">When the Method Applies</a></li>
+                <li><a href="#bias-theory">Why Pre-Period Fit Controls Bias</a></li>
+                <li><a href="#inference">Inference Without Standard Errors</a></li>
+                <li><a href="#extensions">Modern Extensions</a></li>
+                <li><a href="#playbook">A Launch-Market Playbook</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Synthetic Control, Done Right</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-04-11">April 11, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Causal inference</span>
+            </p>
+            <p class="lead">A brand launches in one big market, or goes dark in one region — and there is no second Chicago to compare against. Synthetic control stops searching for the twin and builds it: a convex weighted blend of untreated markets chosen to reproduce the treated market's own history. This post covers the estimator, when it is credible, the bias theory behind it, and the modern variants.</p>
+
+            <h2 id="one-treated-market">One Treated Market, No Twin</h2>
+            <p>The standard playbook for measuring incrementality with observational panel data is <a href="causal-inference.html">difference-in-differences</a>: compare the treated unit's change to a control group's change, leaning on parallel trends. That playbook breaks in exactly the setting marketing teams face most often. When a single aggregate unit is treated — one DMA gets the launch, one region gets the TV blackout — there is one treated observation per period, standard errors are undefined, and no individual control market is a plausible stand-in. Los Angeles is not a control for Chicago, and averaging all untreated markets equally imposes a comparison nobody would defend.</p>
+            <p>Abadie, Diamond, and Hainmueller's answer is to make the control-group construction itself the estimation problem: choose a <em>weighted combination</em> of untreated units — the <strong>donor pool</strong> — calibrated to track the treated unit's outcome trajectory before the intervention. Whatever mixture of markets reproduced Chicago's sales history for years is a defensible forecast of Chicago without the launch, and the post-launch gap between actual and synthetic Chicago is the treatment effect.</p>
+
+            <h2 id="the-estimator">The Estimator and Its Weights</h2>
+            <p>Index units \( j = 1, \ldots, J+1 \), with unit 1 treated and units \( 2, \ldots, J+1 \) forming the donor pool. Outcomes \( Y_{jt} \) are observed for \( T \) periods, of which \( T_0 \) precede the intervention.</p>
+
+            <div class="definition">
+                <h4>Definition: Synthetic control estimator</h4>
+                <p>The effect of treatment on the treated unit at time \( t > T_0 \) is \( \tau_{1t} = Y_{1t}^I - Y_{1t}^N \), the gap between the treated and untreated potential outcomes. The untreated outcome is estimated by a weighted average of donors,</p>
+                $$ \hat{Y}_{1t}^{N} \;=\; \sum_{j=2}^{J+1} w_j^{*}\, Y_{jt}, \qquad \hat{\tau}_{1t} \;=\; Y_{1t} - \hat{Y}_{1t}^{N}, $$
+                <p>with weights chosen to minimize the pre-intervention discrepancy between the treated unit's characteristics \( \mathbf{X}_1 \) (pre-period outcomes plus predictors) and the donor pool's \( \mathbf{X}_0 \):</p>
+                $$ \mathbf{W}^{*} = \arg\min_{\mathbf{W}} \left( \sum_{h=1}^{k} v_h \Big( X_{h1} - \sum_{j=2}^{J+1} w_j X_{hj} \Big)^{2} \right)^{1/2} \quad \text{s.t.}\quad w_j \ge 0,\;\; \sum_{j} w_j = 1. $$
+                <p>The \( v_h \) weight the relative importance of each predictor; Abadie (2021) recommends choosing them by cross-validation on held-out pre-intervention periods.</p>
+            </div>
+
+            <p>The constraint set is the whole method. Without it, the weight problem is just an upside-down regression — predict the treated series from the donor series — and with dozens of donors and a limited pre-period, ordinary least squares fits the pre-period essentially perfectly by giving every donor a weight, many of them negative. That perfect fit is overfitting: post-period, the unconstrained combination extrapolates wildly. Restricting to a <strong>convex combination</strong> — non-negative weights summing to one — confines the counterfactual to the convex hull of the donor pool. Interpolation, never extrapolation.</p>
+            <p>Convexity buys two more properties for free. First, <strong>sparsity</strong>: geometrically, the synthetic control is the projection of \( \mathbf{X}_1 \) onto the convex hull of the donors, and when the treated unit sits outside that hull the projection lands on a face with at most \( k \) vertices — at most \( k \) donors receive non-zero weight. Second, <strong>transparency</strong>: the counterfactual is a short, named recipe ("42% Austria, 22% United States, &hellip;") that reviewers can interrogate, unlike the dense, sign-flipping weights a regression implicitly assigns.</p>
+
+            <pre><code># illustrative
+from scipy.optimize import fmin_slsqp
+
+def sc_weights(X0, x1):
+    """X0: (T0 x J) donor pre-period matrix; x1: (T0,) treated series."""
+    J = X0.shape[1]
+    loss = lambda w: np.sqrt(np.mean((x1 - X0 @ w) ** 2))
+    return fmin_slsqp(loss, np.full(J, 1.0 / J),
+                      f_eqcons=lambda w: np.sum(w) - 1.0,   # sum to 1
+                      bounds=[(0.0, 1.0)] * J,              # non-negative
+                      disp=False)</code></pre>
+
+            <p>The canonical illustration is California's Proposition 99, a 1988 cigarette tax studied with state-level data from 1970 to 2000 and 38 donor states. The convex program puts non-zero weight on only five states, tracks California closely through 1988 without overfitting, then diverges: by 2000, actual California sits roughly 25 packs per capita per year below its synthetic counterpart, and the gap widens over time (Abadie, Diamond, &amp; Hainmueller, 2010).</p>
+
+            <h2 id="when-it-applies">When the Method Applies</h2>
+            <p>Synthetic control's transparency cuts both ways: a bad application is visible in a way a bad regression is not. Abadie (2021) catalogs the conditions a credible application must satisfy, and they translate directly into marketing terms.</p>
+            <ul>
+                <li><strong>The effect must be large relative to outcome volatility.</strong> Inference asks whether the treated unit's post-period gap is extreme relative to placebo gaps, so the signal-to-noise ratio \( |\tau_{1t}| / \mathrm{SD}(\varepsilon_{jt}) \) is the binding quantity — matching controls the common-factor component of the outcome, not transitory shocks. A campaign expected to lift sales 2% in a market whose weekly sales swing 15% will never separate from the placebos; filtering predictable volatility (seasonal adjustment, say) from treated and donor series alike helps.</li>
+                <li><strong>A clean donor pool must exist.</strong> Donors must be unexposed to the intervention, free of spillovers from it, structurally similar to the treated unit, and free of their own similar interventions during the window. For a launch market: exclude adjacent DMAs reached by media bleed or commuting, and markets that ran their own major promotions mid-window.</li>
+                <li><strong>No anticipation.</strong> If demand shifts before the official start — pre-launch PR, retailer stock-ups — the pre-period is contaminated. The remedy is to backdate the intervention to before anticipation plausibly began; the estimated effect then simply materializes after the true start date.</li>
+                <li><strong>No interference.</strong> The treated unit's effect must not leak into the donors. Where spillovers onto donors are unavoidable, the estimate becomes a bound on the effect rather than a point estimate.</li>
+                <li><strong>The treated unit must lie inside, or near, the convex hull.</strong> If no mixture of donors resembles the treated market — New York City is the usual offender — the fitted discrepancy \( \mathbf{X}_1 - \mathbf{X}_0\mathbf{W}^{*} \) is large and interpolation bias can dominate; Abadie, Diamond, and Hainmueller advise against using the method at all.</li>
+            </ul>
+            <p>On the data side, the method needs aggregate outcomes and predictors for all units, an extended pre-intervention window (more on why below), and enough post-period for slow-building effects to show. The more volatile the outcome, the longer the pre-window must be.</p>
+
+            <div class="warning">
+                <h4>⚠️ When not to use synthetic control</h4>
+                <p>Skip the method when no convex combination of donors can approximate the treated unit; when the usable donor pool has fewer than about five units (permutation inference becomes meaningless); when the expected effect is small relative to volatility and the post-window is short; or when anticipation contaminates the pre-period and backdating is implausible. Mechanical application produces confident, misleading numbers.</p>
+            </div>
+
+            <h2 id="bias-theory">Why Pre-Period Fit Controls Bias</h2>
+            <p>The formal justification rests on a <strong>linear factor model</strong> for the untreated outcome:</p>
+            $$ Y_{jt}^{N} \;=\; \delta_t \;+\; \boldsymbol{\theta}_t \mathbf{Z}_j \;+\; \boldsymbol{\lambda}_t \boldsymbol{\mu}_j \;+\; \varepsilon_{jt}, $$
+            <p>where \( \delta_t \) is a common trend, \( \mathbf{Z}_j \) are observed covariates with time-varying coefficients, \( \boldsymbol{\mu}_j \) are <em>unobserved</em> unit-specific factor loadings, \( \boldsymbol{\lambda}_t \) are time-varying common factors, and \( \varepsilon_{jt} \) is idiosyncratic noise. Difference-in-differences is the special case where \( \boldsymbol{\lambda}_t \) is constant — unobserved confounders shift every period identically, which is precisely parallel trends. The factor model relaxes it: each market can have its own sensitivity to macro conditions, category trends, or competitive dynamics that drift over time.</p>
+            <p>The central result of Abadie, Diamond, and Hainmueller (2010) is a bound on the bias of \( \hat{\tau}_{1t} \) under this model. Provided the synthetic control closely reproduces the treated unit's pre-period trajectory and characteristics, the bias is inversely proportional to \( T_0 \), increasing in the donor-pool size \( J \), and controlled by the fit discrepancy \( \mathbf{X}_1 - \mathbf{X}_0\mathbf{W}^{*} \). Three rules fall out. A long pre-treatment window is genuinely valuable, not decorative. An imperfect pre-period fit is a stop sign, not a caveat. And a larger donor pool is not automatically better — extra donors add flexibility to overfit noise, and scope for interpolating across markets that resemble the treated unit on average but not individually.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>A sketch of the bias bound</summary>
+                <div class="deep-dive-body">
+                    <p>Under the factor model, the post-period gap between the treated unit and any fixed-weight donor combination (the trend \( \delta_t \) cancels because weights sum to one) is</p>
+                    $$ \hat{\tau}_{1t} - \tau_{1t} \;=\; \boldsymbol{\theta}_t \Big( \mathbf{Z}_1 - \textstyle\sum_j w_j \mathbf{Z}_j \Big) \;+\; \boldsymbol{\lambda}_t \Big( \boldsymbol{\mu}_1 - \textstyle\sum_j w_j \boldsymbol{\mu}_j \Big) \;+\; \Big( \varepsilon_{1t} - \textstyle\sum_j w_j \varepsilon_{jt} \Big). $$
+                    <p>The covariate term is observable and small when the fit is good. The dangerous term is the second: the mismatch in <em>unobserved</em> loadings, amplified by whatever the common factors do post-period. A close pre-period fit disciplines exactly this term: matching the treated outcome in every one of \( T_0 \) pre-periods means matching \( \boldsymbol{\lambda}_t \boldsymbol{\mu} \)-combinations at \( T_0 \) different factor values, and if the factors vary enough, the only way to satisfy all those constraints is to genuinely match the loadings, \( \sum_j w_j \boldsymbol{\mu}_j \approx \boldsymbol{\mu}_1 \).</p>
+                    <p>The catch is noise: the weights could instead achieve fit by chasing the realized \( \varepsilon_{jt} \). The bound quantifies how much of the apparent fit can be spurious. At a fixed donor count, each additional pre-period adds a constraint without adding flexibility, so the expected spurious component shrinks — the bias bound scales inversely with \( T_0 \). Growing \( J \) at fixed \( T_0 \) does the opposite, which is why "throw every market into the donor pool" is counterproductive. Convexity is what keeps the residual bias <em>visible</em>: unable to extrapolate, the method reports any failure to match as an explicit discrepancy \( \mathbf{X}_1 - \mathbf{X}_0\mathbf{W}^{*} \), where an unconstrained regression hides the same problem behind extrapolation.</p>
+                </div>
+            </details>
+
+            <h2 id="inference">Inference Without Standard Errors</h2>
+            <p>With one treated unit and a donor pool of ten to fifty aggregate entities, asymptotic standard errors are unavailable and arguably meaningless — states and DMAs are not draws from a superpopulation. The canonical alternative is <strong>permutation (placebo) inference</strong>: pretend, in turn, that each donor was treated, fit its synthetic control from the remaining donors, and ask whether the actually-treated unit's result is extreme within this placebo distribution. The randomness modeled is treatment assignment, not sampling — a design-based test in Fisher's tradition.</p>
+            <p>The raw post-period gap is a poor test statistic: a donor whose synthetic control fit poorly pre-period shows a large post-period gap by construction. The recommended statistic normalizes by pre-period fit.</p>
+
+            <div class="definition">
+                <h4>Definition: RMSPE ratio</h4>
+                <p>For unit \( j \), let \( R_j(t_1, t_2) \) be the root mean squared prediction error of its synthetic control over periods \( t_1, \ldots, t_2 \). The test statistic is the ratio of post-intervention to pre-intervention RMSPE,</p>
+                $$ r_j \;=\; \frac{R_j(T_0 + 1,\, T)}{R_j(1,\, T_0)}, $$
+                <p>and the permutation p-value is the fraction of units — treated unit included — whose ratio is at least as large as the treated unit's:</p>
+                $$ p \;=\; \frac{1}{J+1} \sum_{j=1}^{J+1} \mathbf{1}\!\left\{ r_j \ge r_1 \right\}. $$
+            </div>
+
+            <p>Donors whose pre-period fit is hopeless are typically dropped from the placebo distribution before computing the p-value (a common screen keeps units whose pre-period RMSPE is within a small multiple of the treated unit's), and one-sided variants buy power when the direction of the effect is known in advance. In the Proposition 99 study, California's year-2000 effect of roughly &minus;25 packs per capita was more extreme than every one of the 34 surviving placebo runs — a permutation p-value near 0.03.</p>
+            <p>Two diagnostics belong in every application. <strong>Backdating</strong> (an in-time placebo) reruns the analysis with the intervention date moved earlier: a credible synthetic control should show near-zero "effects" in periods when nothing happened, as the West Germany reunification analysis does when backdated a decade. <strong>Leave-one-out</strong> refits the synthetic control dropping each positively-weighted donor in turn: if the conclusion flips when a single donor exits, that donor deserves scrutiny — it may have had its own idiosyncratic shock. Interval estimates exist too: test inversion over hypothesized effect sizes (Firpo &amp; Possebom, 2018) and prediction intervals (Cattaneo, Feng, &amp; Titiunik, 2021).</p>
+
+            <div class="note">
+                <h4>💡 Preregister the design</h4>
+                <p>Because weights, donor pool, and predictors are all functions of pre-intervention data, every design decision can be locked before the first post-launch data point arrives: fix the donor pool and predictors, fit and circulate the weights, then let the outcome data come in. This removes the specification-search degree of freedom that makes after-the-fact observational readouts easy to distrust — the closest observational work gets to a randomized trial's pre-analysis plan.</p>
+            </div>
+
+            <h2 id="extensions">Modern Extensions</h2>
+            <p>The canonical method assumes one treated unit, a decent hull, and complete data. Each assumption now has a well-developed relaxation.</p>
+
+            <h3 id="augmented-sc">Augmented and bias-corrected synthetic control</h3>
+            <p>When the hull condition is strained — the fit discrepancy is non-trivial but not disqualifying — a regression adjustment can absorb the residual imbalance: fit an outcome model \( \hat{\mu}_{0t}(\cdot) \) on the donors and apply the synthetic control to residuals,</p>
+            $$ \hat{\tau}_{1t} \;=\; \big( Y_{1t} - \hat{\mu}_{0t}(\mathbf{X}_1) \big) \;-\; \sum_{j} w_j^{*} \big( Y_{jt} - \hat{\mu}_{0t}(\mathbf{X}_j) \big). $$
+            <p>This is the augmented synthetic control of Ben-Michael, Feller, and Rothstein (2021) — a doubly-robust move: the weights handle what interpolation can reach, the outcome model corrects what it cannot, and the correction matters most exactly when the treated unit drifts outside the hull.</p>
+
+            <h3 id="penalized-and-relaxed">Penalized weights and relaxed constraints</h3>
+            <p>With several treated units, fitting one synthetic control per unit raises a uniqueness problem: many weight vectors can achieve the same fit. The penalized estimator of Abadie and L'Hour (2021) adds a term charging each donor for its distance from the treated unit, \( \lambda \sum_j w_j \| \mathbf{X}_1 - \mathbf{X}_j \|^2 \), restoring uniqueness and sparsity — interpolating between nearby donors rather than distant ones. At the other end, Doudchenko and Imbens (2016) drop convexity entirely: an elastic-net regression of the treated series on donor series, with an intercept to absorb level differences. That handles treated units outside the hull at the price of extrapolation and less interpretable weights — the trade the canonical method deliberately refuses.</p>
+
+            <h3 id="gsc">Generalized synthetic control: estimate the factor model directly</h3>
+            <p>Xu (2017) takes the linear factor model that justifies synthetic control and simply estimates it, as an <strong>interactive fixed effects</strong> model on the control units:</p>
+            $$ Y_{it} \;=\; \delta_{it} D_{it} \;+\; x_{it}'\boldsymbol{\beta} \;+\; \boldsymbol{\lambda}_i' \mathbf{f}_t \;+\; \varepsilon_{it}. $$
+            <p>The procedure has three steps: estimate the factors \( \mathbf{f}_t \) and coefficients on control data; project each treated unit's <em>pre-treatment</em> outcomes onto the estimated factor space to recover its loadings \( \hat{\boldsymbol{\lambda}}_i \); impute the counterfactual \( \hat{Y}_{it}(0) = x_{it}'\hat{\boldsymbol{\beta}} + \hat{\boldsymbol{\lambda}}_i'\hat{\mathbf{f}}_t \). Cross-validation on held-out pre-periods picks the number of factors, and a parametric bootstrap yields standard errors and confidence intervals — frequentist uncertainty the canonical method cannot offer. GSC handles many treated units with staggered timing in one run, and constant loadings recover difference-in-differences as a special case. Xu's voter-turnout application is a caution for anyone trusting two-way fixed effects by default: where DiD estimated an effect under one percentage point with visibly failing pre-trends, GSC with two factors estimated roughly five points with a near-perfect pre-period fit. His diagnostics carry over to marketing panels — plot the imputed counterfactuals, and check that treated units' factor loadings sit inside the hull of the control loadings, since loading-space extrapolation is the method's own bias source. Relatedly, matrix-completion estimators (Athey et al., 2021) treat the untreated-outcome matrix as low-rank and impute the missing entries directly, scaling to panels with many units, many periods, and missing data.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Method</th><th>Treated units</th><th>Key assumption</th><th>Inference</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Canonical SC (ADH 2010)</td><td>One</td><td>Convex hull, long pre-period</td><td>Permutation (RMSPE ratio)</td></tr>
+                    <tr><td>Augmented SC (2021)</td><td>One or few</td><td>Outcome model corrects hull failure</td><td>Permutation / jackknife variants</td></tr>
+                    <tr><td>Penalized SC (2021)</td><td>Multiple</td><td>Local interpolation (penalty \( \lambda \))</td><td>Permutation</td></tr>
+                    <tr><td>Elastic-net SC (2016)</td><td>One</td><td>Regularized regression; allows extrapolation</td><td>Cross-validation based</td></tr>
+                    <tr><td>GSC / IFE (Xu 2017)</td><td>Multiple, staggered</td><td>Factor model on controls; large \( N_{co}, T_0 \)</td><td>Parametric bootstrap SEs</td></tr>
+                    <tr><td>Matrix completion (2021)</td><td>Multiple</td><td>Low-rank outcome matrix</td><td>Bootstrap</td></tr>
+                </tbody>
+            </table>
+
+            <p>One sibling deserves mention because it competes for the same job: Bayesian structural time-series, the engine behind CausalImpact, forecasts the treated series from donor series inside a state-space model and reads the effect off a posterior rather than a permutation distribution. When the donor pool is thin but the treated series has rich temporal structure, it is often the better tool — the comparison is drawn out in <a href="blog-causalimpact-bsts.html">the companion post on CausalImpact and BSTS</a>.</p>
+
+            <h2 id="playbook">A Launch-Market Playbook</h2>
+            <p>Pulling the threads together for a single-market launch or blackout:</p>
+            <ol>
+                <li><strong>Before launch</strong>, assemble the donor pool: unexposed markets, no media bleed, no competing interventions, structurally similar to the treated market. Gather as long a pre-period as the data allow; deseasonalize if the outcome is volatile.</li>
+                <li><strong>Lock the design</strong>: predictors, donor pool, V-matrix procedure, and the weights themselves, all fixed before outcome data arrive. Inspect the fit discrepancy — if no convex combination of donors resembles the treated market, choose a different method.</li>
+                <li><strong>After the readout window</strong>, run the placebo battery: in-space permutation with the RMSPE ratio, backdating, leave-one-out. Report the effect alongside its placebo rank, not just the gap chart.</li>
+                <li><strong>Feed the result forward.</strong> A synthetic-control lift estimate is exactly the kind of experimental evidence that calibrates a media mix model's channel priors — one well-measured market can discipline a parameter the national time series never could.</li>
+            </ol>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Synthetic control replaces the search for a twin market with a construction: a convex, sparse, named weighted average of donors that reproduces the treated market's pre-period trajectory.</li>
+                    <li>Convexity is the point — interpolation only, visible fit discrepancies, weights that can be preregistered before outcomes exist.</li>
+                    <li>Bias is controlled by long pre-periods <em>and</em> close fit; imperfect pre-period fit is a stop sign, and bigger donor pools are not automatically better.</li>
+                    <li>Inference is by placebo permutation on the RMSPE ratio, backed by backdating and leave-one-out — not standard errors.</li>
+                    <li>When the assumptions strain, reach for the extensions: augmented SC for hull failures, penalized SC for multiple treated units, GSC for staggered treatment with bootstrap intervals.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Abadie, A., Diamond, A., &amp; Hainmueller, J. (2010). <em>Synthetic Control Methods for Comparative Case Studies: Estimating the Effect of California's Tobacco Control Program</em>. Journal of the American Statistical Association, 105(490).</li>
+                <li>Abadie, A., Diamond, A., &amp; Hainmueller, J. (2015). <em>Comparative Politics and the Synthetic Control Method</em>. American Journal of Political Science, 59(2).</li>
+                <li>Abadie, A. (2021). <em>Using Synthetic Controls: Feasibility, Data Requirements, and Methodological Aspects</em>. Journal of Economic Literature, 59(2).</li>
+                <li>Xu, Y. (2017). <em>Generalized Synthetic Control Method: Causal Inference with Interactive Fixed Effects Models</em>. Political Analysis, 25(1).</li>
+                <li>Abadie, A., &amp; L'Hour, J. (2021). <em>A Penalized Synthetic Control Estimator for Disaggregated Data</em>. Journal of the American Statistical Association, 116(536).</li>
+                <li>Ben-Michael, E., Feller, A., &amp; Rothstein, J. (2021). <em>The Augmented Synthetic Control Method</em>. Journal of the American Statistical Association, 116(536).</li>
+                <li>Doudchenko, N., &amp; Imbens, G. W. (2016). <em>Balancing, Regression, Difference-in-Differences and Synthetic Control Methods: A Synthesis</em>. NBER Working Paper 22791.</li>
+                <li>Athey, S., Bayati, M., Doudchenko, N., Imbens, G., &amp; Khosravi, K. (2021). <em>Matrix Completion Methods for Causal Panel Data Models</em>. Journal of the American Statistical Association, 116(536).</li>
+                <li>Firpo, S., &amp; Possebom, V. (2018). <em>Synthetic Control Method: Inference, Sensitivity Analysis and Confidence Sets</em>. Journal of Causal Inference, 6(2).</li>
+                <li>Cattaneo, M. D., Feng, Y., &amp; Titiunik, R. (2021). <em>Prediction Intervals for Synthetic Control Methods</em>. Journal of the American Statistical Association, 116(536).</li>
+                <li>Brodersen, K. H., Gallusser, F., Koehler, J., Remy, N., &amp; Scott, S. L. (2015). <em>Inferring Causal Impact Using Bayesian Structural Time-Series Models</em>. Annals of Applied Statistics, 9(1).</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
