@@ -1049,6 +1049,77 @@ INTERACTIVE_REPORT_JS = r"""
     });
   }
 
+  // ── LOO-PIT calibration (static, from facts) ───────────────────────────
+  function renderLooPit() {
+    var grid = document.getElementById('looPitGrid');
+    var d = (IR.ppc_stats || {}).loo_pit;
+    if (!grid || !d) return;
+    balanceGrid(grid, 2);
+    var col = d.calibrated ? (TH.accent || '#5a7a3a') : (TH.rust || '#a04535');
+    var bandCol = rgba(TH.muted || '#7a8a78', 0.18);
+
+    var c1 = document.createElement('div');
+    c1.className = 'sat-cell';
+    var d1 = document.createElement('div');
+    d1.id = 'looPitHist'; c1.appendChild(d1); grid.appendChild(c1);
+    var edges = d.hist.edges, counts = d.hist.counts;
+    var mids = [], w = [];
+    for (var j = 0; j < counts.length; j++) {
+      mids.push((edges[j] + edges[j + 1]) / 2);
+      w.push(edges[j + 1] - edges[j]);
+    }
+    var expected = d.n / counts.length;
+    var traces = [
+      { x: mids, y: d.band.lo, type: 'scatter', mode: 'lines', line: { width: 0 },
+        hoverinfo: 'skip', showlegend: false },
+      { x: mids, y: d.band.hi, type: 'scatter', mode: 'lines', line: { width: 0 },
+        fill: 'tonexty', fillcolor: bandCol, hoverinfo: 'skip', showlegend: false },
+      { x: mids, y: counts, type: 'bar', width: w,
+        marker: { color: rgba(col, 0.35), line: { color: rgba(col, 0.6), width: 0.5 } },
+        hovertemplate: 'PIT %{x:.2f}: %{y} observations<extra></extra>' }
+    ];
+    var ly = baseLayout({
+      title: {
+        text: 'PIT histogram — KS p = ' + d.ks_p.toFixed(3) + (d.calibrated ? '' : ' ⚠'),
+        font: { size: 11, color: col }, x: 0.02, y: 0.98
+      },
+      height: 250, margin: { l: 44, r: 8, t: 26, b: 36 }, bargap: 0.05,
+      xaxis: { title: { text: 'PIT value', font: { size: 10 } }, range: [0, 1] },
+      yaxis: { title: { text: 'observations', font: { size: 10 } } },
+      shapes: [{
+        type: 'line', x0: 0, x1: 1, y0: expected, y1: expected,
+        line: { color: TH.muted || '#7a8a78', width: 1, dash: 'dash' }
+      }]
+    });
+    Plotly.newPlot(d1.id, traces, ly, CFG);
+
+    var c2 = document.createElement('div');
+    c2.className = 'sat-cell';
+    var d2 = document.createElement('div');
+    d2.id = 'looPitEcdf'; c2.appendChild(d2); grid.appendChild(c2);
+    var e = d.ecdf;
+    var t2 = [
+      { x: e.z, y: e.lo, type: 'scatter', mode: 'lines', line: { width: 0 },
+        hoverinfo: 'skip', showlegend: false },
+      { x: e.z, y: e.hi, type: 'scatter', mode: 'lines', line: { width: 0 },
+        fill: 'tonexty', fillcolor: bandCol, hoverinfo: 'skip', showlegend: false },
+      { x: e.z, y: e.diff, type: 'scatter', mode: 'lines',
+        line: { color: col, width: 2 },
+        hovertemplate: 'PIT %{x:.2f}: ECDF − uniform = %{y:.3f}<extra></extra>' }
+    ];
+    var ly2 = baseLayout({
+      title: { text: 'PIT ECDF − uniform', font: { size: 11, color: col }, x: 0.02, y: 0.98 },
+      height: 250, margin: { l: 52, r: 8, t: 26, b: 36 },
+      xaxis: { title: { text: 'PIT value', font: { size: 10 } }, range: [0, 1] },
+      yaxis: { title: { text: 'ECDF difference', font: { size: 10 } } },
+      shapes: [{
+        type: 'line', x0: 0, x1: 1, y0: 0, y1: 0,
+        line: { color: TH.muted || '#7a8a78', width: 1, dash: 'dash' }
+      }]
+    });
+    Plotly.newPlot(d2.id, t2, ly2, CFG);
+  }
+
   // ── carryover + prior/posterior (static, from facts) ───────────────────
   function renderCarryover() {
     var grid = document.getElementById('carryoverGrid');
@@ -1330,6 +1401,7 @@ INTERACTIVE_REPORT_JS = r"""
     renderPathways();
     renderLatent();
     renderPpcStats();
+    renderLooPit();
     renderCarryover();
     var ppSel = document.getElementById('ppChannelSelect');
     if (ppSel) {

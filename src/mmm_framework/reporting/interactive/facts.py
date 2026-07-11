@@ -216,6 +216,13 @@ def _fit_facts(
     rep = (samples @ onehot)[:, covered]
     obs = (actual_obs @ onehot)[covered]
     ppc_stats = _ppc_stat_facts(rep, obs)
+    try:
+        pit = _loo_pit_facts(model, samples, actual_obs)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"interactive report: LOO-PIT facts failed: {e}")
+        pit = None
+    if pit is not None:
+        ppc_stats["loo_pit"] = pit
     return fit, ppc_stats
 
 
@@ -314,6 +321,154 @@ def _ppc_stat_facts(
         "stats": rows,
         "n_draws": int(rep.shape[0]),
         "series": "national period-summed KPI",
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOO-PIT predictive calibration
+# ─────────────────────────────────────────────────────────────────────────────
+def _pointwise_loglik(model: Any, n_samples: int) -> np.ndarray | None:
+    """Pointwise log-likelihood draws aligned with ``predict()``'s flat order.
+
+    ``predict()`` reshapes ``(chain, draw, obs) -> (chain*draw, obs)`` in C
+    order; ``pm.compute_log_likelihood`` returns the same layout over the same
+    trace, so row ``s`` here pairs exactly with predictive draw ``s``. Returns
+    ``(n_samples, n_obs)`` or ``None`` when the log-likelihood cannot be
+    computed (duck-typed models, graph/trace mismatch, non-scalar outcome).
+    """
+    trace = getattr(model, "_trace", None)
+    if trace is None:
+        return None
+    from ...utils.arviz_compat import has_group
+
+    ll_ds = None
+    try:
+        if has_group(trace, "log_likelihood"):
+            ll_ds = trace.log_likelihood
+    except Exception:  # noqa: BLE001
+        ll_ds = None
+    if ll_ds is None or not len(getattr(ll_ds, "data_vars", {})):
+        try:
+            import pymc as pm
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ll_ds = pm.compute_log_likelihood(
+                    trace,
+                    model=model.model,
+                    extend_inferencedata=False,
+                    progressbar=False,
+                )
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"interactive report: pointwise log-lik unavailable: {e}")
+            return None
+    try:
+        names = list(ll_ds.data_vars)
+        var = "y_obs" if "y_obs" in names else names[0]
+        arr = np.asarray(ll_ds[var].values, dtype=float)
+        if arr.ndim != 3:  # (chain, draw, obs) only — multi-dim outcomes bail
+            return None
+        ll = arr.reshape(-1, arr.shape[-1])
+    except Exception:  # noqa: BLE001
+        return None
+    if ll.shape[0] != n_samples:
+        return None
+    return ll
+
+
+def _pit_hist_band(n: int, n_bins: int, prob: float) -> tuple[np.ndarray, np.ndarray]:
+    """Simultaneous band for PIT-histogram bin counts under Uniform(0, 1).
+
+    Continuous PIT values make the null exactly ``Multinomial(n, 1/K)``; the
+    multiplicity-adjusted per-bin level comes from the SBC band machinery.
+    """
+    from scipy import stats as sps
+
+    from ...diagnostics.sbc import _simultaneous_gamma
+
+    probs = np.full(n_bins, 1.0 / n_bins)
+    g = _simultaneous_gamma(n, probs, prob)
+    lower = sps.binom.ppf((1.0 - g) / 2.0, n, probs)
+    upper = sps.binom.ppf((1.0 + g) / 2.0, n, probs)
+    return np.asarray(lower, dtype=float), np.asarray(upper, dtype=float)
+
+
+def _loo_pit_facts(
+    model: Any,
+    samples: np.ndarray,
+    actual_obs: np.ndarray,
+    n_bins: int = 20,
+    band_prob: float = 0.95,
+) -> dict[str, Any] | None:
+    """LOO-PIT calibration facts from the shared ``predict()`` pass.
+
+    ``PIT_i = Σ_s w_is · 1[y_rep_is ≤ y_i]`` with ``w`` the PSIS-smoothed
+    leave-one-out importance weights; under a calibrated predictive
+    distribution the PIT values are Uniform(0, 1). The weights need the
+    pointwise log-likelihood — when that is unavailable the check degrades to
+    ordinary posterior-predictive PIT (uniform weights) and ``weighting``
+    says so. Both the histogram band and the ECDF-difference band are
+    simultaneous (the whole curve stays inside ``band_prob`` of the time
+    under calibration). All panels are static — computed here, per
+    observation, not window-recomputed.
+    """
+    from ...diagnostics.sbc import ecdf_diff_band
+    from ...validation.calibration import loo_pit_check
+
+    samples = np.asarray(samples, dtype=float)
+    actual_obs = np.asarray(actual_obs, dtype=float).ravel()
+    n_samples = int(samples.shape[0]) if samples.ndim == 2 else 0
+    if samples.ndim != 2 or n_samples < 30 or actual_obs.size < 8:
+        return None
+
+    log_weights = None
+    weighting = "posterior-predictive"
+    khat_info: dict[str, Any] | None = None
+    ll = _pointwise_loglik(model, n_samples)
+    if ll is not None:
+        try:
+            from ...utils.arviz_compat import psis_log_weights
+
+            lw, khat = psis_log_weights(ll.T)  # (n_obs, S), (n_obs,)
+            log_weights = lw
+            weighting = "psis-loo"
+            khat = np.asarray(khat, dtype=float)
+            khat_info = {
+                "max": float(np.nanmax(khat)),
+                "n_high": int(np.sum(khat > 0.7)),
+                "n": int(khat.size),
+            }
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"interactive report: PSIS smoothing failed: {e}")
+
+    try:
+        res = loo_pit_check(y=actual_obs, y_hat=samples.T, log_weights=log_weights)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"interactive report: LOO-PIT unavailable: {e}")
+        return None
+
+    pit = np.clip(res.pit, 0.0, 1.0)
+    counts, edges = np.histogram(pit, bins=n_bins, range=(0.0, 1.0))
+    lo, hi = _pit_hist_band(int(pit.size), n_bins, band_prob)
+    z, elo, ehi = ecdf_diff_band(int(pit.size), prob=band_prob)
+    ediff = np.searchsorted(np.sort(pit), z, side="right") / pit.size - z
+
+    return {
+        "n": int(res.n),
+        "n_draws": n_samples,
+        "weighting": weighting,
+        "ks_stat": float(res.ks_stat),
+        "ks_p": float(res.ks_pvalue),
+        "calibrated": bool(res.calibrated),
+        "khat": khat_info,
+        "hist": {"edges": _jsafe(edges), "counts": [int(c) for c in counts]},
+        "band": {"lo": _jsafe(lo), "hi": _jsafe(hi), "prob": band_prob},
+        "ecdf": {
+            "z": _jsafe(z),
+            "diff": _jsafe(ediff),
+            "lo": _jsafe(elo),
+            "hi": _jsafe(ehi),
+        },
     }
 
 

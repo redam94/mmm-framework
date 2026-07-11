@@ -23,6 +23,7 @@ INTERACTIVE_INSIGHT_SLOTS = (
     "decomp_gloss",
     "fit_gloss",
     "ppc_stats_gloss",
+    "loo_pit_gloss",
     "roi_gloss",
     "yoy_gloss",
     "estimands_gloss",
@@ -210,6 +211,43 @@ def _fallback_insights(f: dict[str, Any]) -> dict[str, str]:
             "model cannot reproduce."
         )
 
+    pitf = (f.get("ppc_stats") or {}).get("loo_pit")
+    if pitf:
+        kind = (
+            "leave-one-out (PSIS-LOO) predictive"
+            if pitf.get("weighting") == "psis-loo"
+            else "posterior-predictive"
+        )
+        if pitf.get("calibrated"):
+            out["loo_pit_gloss"] = (
+                "A sharper calibration lens: the probability-integral "
+                "transform asks, for every single observation, where it fell "
+                f"within its {kind} distribution. Under honest uncertainty "
+                "those positions scatter uniformly on (0, 1) — and here they "
+                f"do (KS p = {pitf.get('ks_p', 0):.2f} across "
+                f"{pitf.get('n', 0)} observations), so the intervals are "
+                "trustworthy observation by observation, not just on average."
+            )
+        else:
+            out["loo_pit_gloss"] = (
+                "A sharper calibration lens: the probability-integral "
+                "transform asks, for every single observation, where it fell "
+                f"within its {kind} distribution. Under honest uncertainty "
+                "those positions scatter uniformly on (0, 1) — here they do "
+                f"not (KS p = {pitf.get('ks_p', 0):.3f} across "
+                f"{pitf.get('n', 0)} observations). The histogram's shape "
+                "says how: a ∪ shape means overconfident (too-narrow) "
+                "intervals, a ∩ shape too-wide ones, and a slope means "
+                "systematic bias."
+            )
+    else:
+        out["loo_pit_gloss"] = (
+            "The LOO-PIT check places every observation within its "
+            "leave-one-out predictive distribution; uniform positions on "
+            "(0, 1) mean calibrated predictive uncertainty. It was not "
+            "computed for this fit."
+        )
+
     rows = sorted(
         head.get("channels", []), key=lambda r: r.get("roi_mean") or 0, reverse=True
     )
@@ -349,6 +387,7 @@ _LLM_SLOT_LABELS = {
     "EXEC": "exec_gloss",
     "FIT": "fit_gloss",
     "PPC_STATS": "ppc_stats_gloss",
+    "LOO_PIT": "loo_pit_gloss",
     "DECOMPOSITION": "decomp_gloss",
     "ROI": "roi_gloss",
     "YOY": "yoy_gloss",
@@ -442,6 +481,20 @@ def _facts_blob(f: dict[str, Any]) -> str:
             + (" (EXTREME)" if s.get("extreme") else "")
             + "."
         )
+    pit = (f.get("ppc_stats") or {}).get("loo_pit")
+    if pit:
+        khat = pit.get("khat") or {}
+        lines.append(
+            f"LOO-PIT ({pit.get('weighting')}): KS p {pit.get('ks_p', 0):.3f} "
+            f"over {pit.get('n', 0)} observations — "
+            + ("calibrated" if pit.get("calibrated") else "MISCALIBRATED")
+            + (
+                f"; Pareto k-hat > 0.7 for {khat['n_high']} obs"
+                if khat.get("n_high")
+                else ""
+            )
+            + "."
+        )
     ppc = f.get("ppc_prior") or {}
     if ppc.get("coverage_90") is not None:
         lines.append(
@@ -488,6 +541,9 @@ def _enrich_with_llm(
         "PPC_STATS: interpret the posterior-predictive test-statistic "
         "p-values — which KPI properties (extremes, volatility, "
         "autocorrelation) the model reproduces or misses.\n"
+        "LOO_PIT: interpret the LOO-PIT calibration verdict — whether the "
+        "per-observation predictive intervals are honest, too narrow, or "
+        "too wide (only if LOO-PIT facts exist).\n"
         "DECOMPOSITION: the media-vs-baseline story and spend-vs-effect "
         "imbalances.\n"
         "ROI: which channels lead/trail and where uncertainty matters.\n"

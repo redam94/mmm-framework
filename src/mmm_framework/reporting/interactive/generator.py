@@ -347,68 +347,128 @@ class InteractiveReportGenerator:
         )
 
     def _section_ppc_stats(self) -> tuple[_NavEntry, str] | None:
-        stats = (self.facts.get("ppc_stats") or {}).get("stats") or []
-        if not stats:
+        ppc = self.facts.get("ppc_stats") or {}
+        stats = ppc.get("stats") or []
+        pit = ppc.get("loo_pit")
+        if not stats and not pit:
             return None
-        n_extreme = sum(1 for s in stats if s.get("extreme"))
-        trs = ""
-        for s in stats:
-            ok = not s.get("extreme")
-            chip = (
-                '<span class="tier-chip t-scale">Consistent</span>'
-                if ok
-                else '<span class="tier-chip t-reduce">Extreme</span>'
+        stats_html = ""
+        if stats:
+            n_extreme = sum(1 for s in stats if s.get("extreme"))
+            trs = ""
+            for s in stats:
+                ok = not s.get("extreme")
+                chip = (
+                    '<span class="tier-chip t-scale">Consistent</span>'
+                    if ok
+                    else '<span class="tier-chip t-reduce">Extreme</span>'
+                )
+                trs += (
+                    "<tr>"
+                    f'<td class="chname">{_esc(s["label"])}</td>'
+                    f"<td>{_esc(s['desc'])}</td>"
+                    f'<td class="mono">{_fmt(s["observed"], 2)}</td>'
+                    f'<td class="mono">{_fmt(s["rep_mean"], 2)}</td>'
+                    f'<td class="mono">{s["bayes_p"]:.2f}</td>'
+                    f"<td>{chip}</td></tr>"
+                )
+            n_draws = ppc.get("n_draws", 0)
+            verdict = (
+                "<p>All test statistics are consistent with the posterior "
+                "predictive — the model reproduces these properties of the KPI, "
+                "not just its week-by-week level.</p>"
+                if n_extreme == 0
+                else (
+                    f"<p><b>{n_extreme} of {len(stats)}</b> test statistics fall "
+                    "in the extreme tails (p &lt; 0.05 or &gt; 0.95): the model "
+                    "systematically fails to reproduce "
+                    f"{_esc(', '.join(s['label'] for s in stats if s['extreme']))}. "
+                    "Treat forecasts and counterfactuals that lean on those "
+                    "properties with caution.</p>"
+                )
             )
-            trs += (
-                "<tr>"
-                f'<td class="chname">{_esc(s["label"])}</td>'
-                f"<td>{_esc(s['desc'])}</td>"
-                f'<td class="mono">{_fmt(s["observed"], 2)}</td>'
-                f'<td class="mono">{_fmt(s["rep_mean"], 2)}</td>'
-                f'<td class="mono">{s["bayes_p"]:.2f}</td>'
-                f"<td>{chip}</td></tr>"
+            stats_html = (
+                '<table class="data-table"><thead><tr><th>Statistic</th>'
+                "<th>What it measures</th><th>Observed</th><th>Replicate mean</th>"
+                "<th>Bayes p</th><th>Verdict</th></tr></thead>"
+                f"<tbody>{trs}</tbody></table>"
+                f"{verdict}"
+                '<div class="sat-grid" id="ppcStatsGrid"></div>'
+                '<p class="chart-caption">Each panel: the distribution of a test '
+                f"statistic across {n_draws} replicated datasets drawn from the "
+                "posterior predictive, with the observed value as the vertical "
+                "line. The Bayesian p-value is P(T(y_rep) ≥ T(y_obs)); values "
+                "near 0 or 1 mean the observed data would be surprising if the "
+                "model were true. Computed on the national period-summed KPI.</p>"
             )
-        n_draws = (self.facts.get("ppc_stats") or {}).get("n_draws", 0)
-        verdict = (
-            "<p>All test statistics are consistent with the posterior "
-            "predictive — the model reproduces these properties of the KPI, "
-            "not just its week-by-week level.</p>"
-            if n_extreme == 0
-            else (
-                f"<p><b>{n_extreme} of {len(stats)}</b> test statistics fall "
-                "in the extreme tails (p &lt; 0.05 or &gt; 0.95): the model "
-                "systematically fails to reproduce "
-                f"{_esc(', '.join(s['label'] for s in stats if s['extreme']))}. "
-                "Treat forecasts and counterfactuals that lean on those "
-                "properties with caution.</p>"
-            )
-        )
         body = (
             f'<p class="lede">{self._insight("ppc_stats_gloss")}</p>'
-            '<table class="data-table"><thead><tr><th>Statistic</th>'
-            "<th>What it measures</th><th>Observed</th><th>Replicate mean</th>"
-            "<th>Bayes p</th><th>Verdict</th></tr></thead>"
-            f"<tbody>{trs}</tbody></table>"
-            f"{verdict}"
-            '<div class="sat-grid" id="ppcStatsGrid"></div>'
-            '<p class="chart-caption">Each panel: the distribution of a test '
-            f"statistic across {n_draws} replicated datasets drawn from the "
-            "posterior predictive, with the observed value as the vertical "
-            "line. The Bayesian p-value is P(T(y_rep) ≥ T(y_obs)); values "
-            "near 0 or 1 mean the observed data would be surprising if the "
-            "model were true. Computed on the national period-summed KPI.</p>"
+            f"{stats_html}"
             "<h3>Interval calibration</h3>"
             '<div class="chart-card"><div id="calibChart"></div></div>'
             '<p class="chart-caption">Empirical coverage of the 50 / 80 / 90 '
             "/ 95% predictive intervals against their nominal level "
             "(national series). Points on the diagonal mean the model's "
             "uncertainty is neither overstated nor understated.</p>"
+            f"{self._loo_pit_html(pit)}"
         )
         return _NavEntry("predictive-checks", "Predictive checks"), self._wrap(
             "predictive-checks",
             "Validation",
             "Does the model reproduce the KPI's character?",
             body,
+        )
+
+    def _loo_pit_html(self, pit: dict[str, Any] | None) -> str:
+        """LOO-PIT sub-block of the predictive-checks section."""
+        if not pit:
+            return ""
+        ok = bool(pit.get("calibrated"))
+        chip = (
+            '<span class="tier-chip t-scale">Calibrated</span>'
+            if ok
+            else '<span class="tier-chip t-reduce">Miscalibrated</span>'
+        )
+        loo = pit.get("weighting") == "psis-loo"
+        weighting = (
+            "Predictive draws are importance-reweighted to the leave-one-out "
+            "predictive distribution with PSIS."
+            if loo
+            else "PSIS weights were unavailable, so this is the ordinary "
+            "(non-LOO) posterior-predictive PIT — a slightly optimistic "
+            "variant of the same check."
+        )
+        khat = pit.get("khat") or {}
+        khat_note = ""
+        if loo and khat.get("n_high"):
+            khat_note = (
+                f" Pareto k̂ exceeds 0.7 for {int(khat['n_high'])} of "
+                f"{int(khat['n'])} observations, so the LOO weights are "
+                "unreliable there."
+            )
+        verdict = (
+            "each observation falls where the leave-one-out predictive "
+            "distribution says it should, so the predictive uncertainty is "
+            "neither too wide nor too narrow"
+            if ok
+            else "the predictive distribution is miscalibrated — a ∪-shaped "
+            "histogram means intervals are too narrow (overconfident), a "
+            "∩ shape too wide, and a slope means systematic bias"
+        )
+        return (
+            f"<h3>LOO-PIT calibration {chip}</h3>"
+            f'<p class="lede">{self._insight("loo_pit_gloss")}</p>'
+            f"<p>Across the {int(pit.get('n', 0))} observations, "
+            f"KS p = {pit.get('ks_p', 0):.3f}: "
+            f"{verdict}. {weighting}{khat_note}</p>"
+            '<div class="sat-grid" id="looPitGrid"></div>'
+            '<p class="chart-caption">Left: histogram of the per-observation '
+            "PIT values with a simultaneous "
+            f"{int(round(float(pit.get('band', {}).get('prob', 0.95)) * 100))}% "
+            "band under uniformity — bars escaping the shaded band indicate "
+            "miscalibration. Right: the PIT ECDF minus the uniform CDF with "
+            "the matching simultaneous band; a curve that leaves the band "
+            "tells you where in the distribution the model is off.</p>"
         )
 
     def _section_roi(self) -> tuple[_NavEntry, str]:

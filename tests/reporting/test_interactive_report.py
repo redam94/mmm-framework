@@ -25,6 +25,7 @@ from mmm_framework.reporting.interactive.facts import (
     _half_life_draws,
     _jsafe,
     _latent_facts,
+    _loo_pit_facts,
     _mediation_facts,
     _ppc_stat_facts,
     _series_stats,
@@ -129,6 +130,26 @@ def _canned_facts(*, approximate=False, channels=None) -> dict:
                     ("acf1", "Lag-1 autocorrelation", 0.44),
                 )
             ],
+            "loo_pit": {
+                "n": 216,
+                "n_draws": 400,
+                "weighting": "psis-loo",
+                "ks_stat": 0.041,
+                "ks_p": 0.62,
+                "calibrated": True,
+                "khat": {"max": 0.31, "n_high": 0, "n": 216},
+                "hist": {
+                    "edges": list(np.linspace(0.0, 1.0, 21)),
+                    "counts": [11] * 20,
+                },
+                "band": {"lo": [4.0] * 20, "hi": [19.0] * 20, "prob": 0.95},
+                "ecdf": {
+                    "z": list(np.linspace(0.01, 0.99, 25)),
+                    "diff": [0.0] * 25,
+                    "lo": [-0.05] * 25,
+                    "hi": [0.05] * 25,
+                },
+            },
         },
         "contrib": {
             "n_draws": D,
@@ -437,6 +458,44 @@ class TestFactsHelpers:
     def test_ppc_stat_facts_degrades_on_tiny_input(self):
         out = _ppc_stat_facts(np.zeros((5, 3)), np.zeros(3))
         assert out["stats"] == []
+
+    def test_loo_pit_facts_calibrated(self):
+        # Observed and predictive draws share a process → uniform PIT.
+        class _M:  # no _trace → uniform-weight (ordinary PIT) fallback
+            _trace = None
+
+        rng = np.random.default_rng(0)
+        mu = rng.normal(0, 1, 300)
+        y = mu + rng.normal(0, 1, 300)
+        yrep = mu[None, :] + rng.normal(0, 1, (400, 300))
+        out = _loo_pit_facts(_M(), yrep, y)
+        assert out["weighting"] == "posterior-predictive"
+        assert out["calibrated"]
+        assert out["ks_p"] > 0.05
+        assert out["n"] == 300
+        assert len(out["hist"]["counts"]) == 20
+        assert len(out["band"]["lo"]) == 20
+        assert len(out["ecdf"]["z"]) == len(out["ecdf"]["diff"])
+        # Payload is JSON-serializable (finite, plain floats/ints).
+        json.dumps(out)
+
+    def test_loo_pit_facts_flags_overconfident(self):
+        class _M:
+            _trace = None
+
+        rng = np.random.default_rng(1)
+        mu = rng.normal(0, 1, 300)
+        y = mu + rng.normal(0, 1, 300)
+        yrep = mu[None, :] + rng.normal(0, 0.3, (400, 300))  # too narrow
+        out = _loo_pit_facts(_M(), yrep, y)
+        assert not out["calibrated"]
+        assert out["ks_p"] < 0.05
+
+    def test_loo_pit_facts_degrades_on_tiny_input(self):
+        class _M:
+            _trace = None
+
+        assert _loo_pit_facts(_M(), np.zeros((10, 4)), np.zeros(4)) is None
 
     def test_yoy_facts_decomposition_closes(self):
         P, D = 104, 50
@@ -782,6 +841,44 @@ class TestGenerator:
         gloss = build_interactive_insights(facts)["ppc_stats_gloss"]
         assert "1 of 3" in gloss and "Maximum" in gloss
 
+    def test_loo_pit_section_renders(self):
+        html = InteractiveReportGenerator(facts=_canned_facts()).generate_report()
+        # Lives inside the predictive-checks section, calibrated (canned) chip.
+        assert "LOO-PIT calibration" in html
+        assert 'id="looPitGrid"' in html
+        assert "Calibrated" in html
+        # JS renderer + init hook are embedded.
+        assert "renderLooPit" in html
+        assert 'id="looPitHist"' not in html  # created client-side, not in shell
+
+    def test_loo_pit_miscalibrated_chip(self):
+        facts = _canned_facts()
+        facts["ppc_stats"]["loo_pit"]["calibrated"] = False
+        facts["ppc_stats"]["loo_pit"]["ks_p"] = 0.001
+        html = InteractiveReportGenerator(facts=facts).generate_report()
+        assert "Miscalibrated" in html
+        assert "too narrow (overconfident)" in html
+
+    def test_loo_pit_section_survives_without_ppc_stats(self):
+        # Only LOO-PIT present (no test-statistic table) still renders the
+        # predictive-checks section.
+        facts = _canned_facts()
+        loo = facts["ppc_stats"]["loo_pit"]
+        facts["ppc_stats"] = {"loo_pit": loo}
+        html = InteractiveReportGenerator(facts=facts).generate_report()
+        assert 'id="predictive-checks"' in html
+        assert "LOO-PIT calibration" in html
+        assert 'id="ppcStatsGrid"' not in html  # no stat table
+
+    def test_loo_pit_gloss_is_grounded(self):
+        gloss = build_interactive_insights(_canned_facts())["loo_pit_gloss"]
+        assert "leave-one-out" in gloss.lower()
+        facts = _canned_facts()
+        facts["ppc_stats"]["loo_pit"]["calibrated"] = False
+        facts["ppc_stats"]["loo_pit"]["ks_p"] = 0.002
+        bad = build_interactive_insights(facts)["loo_pit_gloss"]
+        assert "overconfident" in bad or "∪" in bad
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Slow: real fit → facts → report
@@ -882,6 +979,13 @@ class TestEndToEnd:
         assert {s["key"] for s in stats} >= {"mean", "sd", "min", "max", "acf1"}
         for s in stats:
             assert 0.0 <= s["bayes_p"] <= 1.0
+        # LOO-PIT calibration computed from the real trace (PSIS-LOO path)
+        pit = f["ppc_stats"]["loo_pit"]
+        assert pit["weighting"] == "psis-loo"
+        assert 0.0 <= pit["ks_p"] <= 1.0
+        assert pit["n"] == 110
+        assert len(pit["hist"]["counts"]) == 20
+        assert pit["khat"] is not None
         # approximate provenance surfaced
         assert f["meta"]["approximate"] is True
         out = tmp_path / "report.html"
@@ -890,6 +994,7 @@ class TestEndToEnd:
         for sid in _SECTION_IDS:
             assert f'id="{sid}"' in html
         assert "Approximate fit (ADVI)" in html
+        assert "LOO-PIT calibration" in html and 'id="looPitGrid"' in html
         # a plain MMM grows no structural sections
         assert f["mediation"] is None and f["latent"] is None
         assert 'href="#pathways"' not in html
