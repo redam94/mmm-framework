@@ -1404,7 +1404,7 @@ mff_config = (
 
             <h3 id="computational-scaling">Computational Scaling</h3>
             <p>
-                <strong>Measured (from the baked notebook <code>nbs/runtime_benchmark.ipynb</code>;
+                <strong>Measured (from the baked notebook <code>nbs/validation/runtime_benchmark.ipynb</code>;
                 Apple M3 laptop, 8 cores, 16&nbsp;GB)</strong> — wall-clock for the full
                 <code>fit()</code> call including compilation. The reference fit is the standard
                 national model (parametric adstock, logistic saturation, linear trend, yearly
@@ -1445,7 +1445,7 @@ mff_config = (
                 equal draws (104 weeks &times; 7 channels, 4 chains &times; 500 draws, sequential
                 PyMC chains vs NumPyro's vectorized chains — the end-to-end gap a notebook user
                 experiences; measured 2.6&ndash;3.3&times; across two PyMC&nbsp;6 runs in
-                <code>nbs/runtime_benchmark.ipynb</code>). PyMC&nbsp;6's faster native sampler narrowed
+                <code>nbs/validation/runtime_benchmark.ipynb</code>). PyMC&nbsp;6's faster native sampler narrowed
                 this gap from the ~6&times; measured under PyMC&nbsp;5; with parallel PyMC chains it
                 narrows further.</p>
             </div>

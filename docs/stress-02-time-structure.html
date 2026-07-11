@@ -289,7 +289,7 @@
             </div>
 
             <p>
-                This guide mirrors <code>nbs/stress_02_time_structure.ipynb</code>. The series doctrine is set in
+                This guide mirrors <code>nbs/stress/stress_02_time_structure.ipynb</code>. The series doctrine is set in
                 <a href="stress-00-rosy-picture.html">stress 00</a>: green diagnostics do not mean correct
                 attribution. This is the time-structure version of that failure. The model's default spec is a
                 linear trend, order-2 yearly Fourier seasonality, and constant positive betas; each act breaks
@@ -338,8 +338,8 @@
                 </ul>
                 <p>
                     <strong>Run it:</strong>
-                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_02_time_structure.ipynb"
-                       target="_blank" rel="noopener"><code>nbs/stress_02_time_structure.ipynb</code></a> on GitHub.
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress/stress_02_time_structure.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress/stress_02_time_structure.ipynb</code></a> on GitHub.
                 </p>
             </div>
 
@@ -646,8 +646,8 @@
                 <h4>💡 Run it yourself</h4>
                 <p>
                     Everything on this page is measured in
-                    <code>nbs/stress_02_time_structure.ipynb</code> (authored by
-                    <code>nbs/build_stress_02_time_structure.py</code>), backed by the scenario harness in
+                    <code>nbs/stress/stress_02_time_structure.ipynb</code> (authored by
+                    <code>nbs/builders/build_stress_02_time_structure.py</code>), backed by the scenario harness in
                     <code>tests/synth/</code> — the <code>trend_break</code> and
                     <code>seasonality_misspec</code> worlds were added to <code>src/mmm_framework/synth/dgp.py</code>
                     for this notebook, and it validates their internals before fitting anything. Every

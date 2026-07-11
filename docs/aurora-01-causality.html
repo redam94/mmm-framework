@@ -319,7 +319,7 @@
                 and anchors the model to a randomized geo-lift experiment that finally lands on the
                 truth. Because the Aurora world is synthetic with a known ground truth, every number
                 below is graded against the real answer. This page mirrors
-                <code>nbs/01_causality.ipynb</code>; all ROAS figures are measured from its baked outputs.
+                <code>nbs/aurora/01_causality.ipynb</code>; all ROAS figures are measured from its baked outputs.
             </p>
 
             <div class="stat-row">
@@ -355,8 +355,8 @@
                 </ul>
                 <p>
                     <strong>Run it:</strong>
-                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/01_causality.ipynb"
-                       target="_blank" rel="noopener"><code>nbs/01_causality.ipynb</code></a> on GitHub.
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/aurora/01_causality.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/aurora/01_causality.ipynb</code></a> on GitHub.
                 </p>
             </div>
 
@@ -482,7 +482,7 @@
             <div id="dagStatus"></div>
             <p class="chart-note">
                 ROAS readouts are <strong>measured</strong> — hardcoded from the baked outputs of
-                <code>nbs/01_causality.ipynb</code> (demand-blind 2.51, demand-controlled 1.04,
+                <code>nbs/aurora/01_causality.ipynb</code> (demand-blind 2.51, demand-controlled 1.04,
                 experiment-calibrated 0.66). The {Demand, Awareness} option has no number because the
                 framework <em>refuses to fit it</em> — see Step 3.
             </p>
@@ -593,7 +593,7 @@ Back-door paths found:
             </div>
             <p class="chart-note">
                 <strong>Measured</strong> — hardcoded from the baked outputs of
-                <code>nbs/01_causality.ipynb</code> (Step 5 table). Controlling for demand shrinks every
+                <code>nbs/aurora/01_causality.ipynb</code> (Step 5 table). Controlling for demand shrinks every
                 bar of bias, but Search's stays stubbornly positive: 2.51 → 1.04 against a truth of
                 0.66 (+0.38 of leftover bias). TV and Display are <em>understated</em> either way —
                 their value hides one step upstream, behind Awareness.
@@ -665,7 +665,7 @@ Social: observational 0.70  →  calibrated 0.48   (true 0.49)</code></pre>
             </div>
             <p class="chart-note">
                 <strong>Measured</strong> — every point is from the baked Step-5/Step-6 tables of
-                <code>nbs/01_causality.ipynb</code>; dashed lines are the known true ROAS. Search:
+                <code>nbs/aurora/01_causality.ipynb</code>; dashed lines are the known true ROAS. Search:
                 2.51 → 1.04 → 0.66 (truth 0.66). Social: 1.14 → 0.70 → 0.48 (truth 0.49). Switch to
                 "All four" and note that TV (truth 2.14) and Display (truth 2.11) stay
                 <em>understated</em> at every rung — calibrating Search/Social frees up a little credit
@@ -708,10 +708,10 @@ Social: observational 0.70  →  calibrated 0.48   (true 0.49)</code></pre>
             <div class="note">
                 <h4>Run it yourself</h4>
                 <p>
-                    The notebook is <code>nbs/01_causality.ipynb</code> (committed with baked outputs);
-                    regenerate it from source with <code>nbs/build_aurora_notebooks.py</code> and see
+                    The notebook is <code>nbs/aurora/01_causality.ipynb</code> (committed with baked outputs);
+                    regenerate it from source with <code>nbs/builders/build_aurora_notebooks.py</code> and see
                     <code>nbs/README_aurora.md</code> for the run order and the shared Aurora world
-                    (<code>nbs/aurora.py</code>). Repository:
+                    (<code>nbs/builders/aurora.py</code>). Repository:
                     <a href="https://github.com/redam94/mmm-framework">github.com/redam94/mmm-framework</a>.
                     Next in the story: <a href="aurora-02-base-mmm.html">02 · The Base MMM</a>.
                 </p>
@@ -773,7 +773,7 @@ Social: observational 0.70  →  calibrated 0.48   (true 0.49)</code></pre>
         void mulberry32;
 
         // ------------------------------------------------------------------
-        // MEASURED data — baked outputs of nbs/01_causality.ipynb.
+        // MEASURED data — baked outputs of nbs/aurora/01_causality.ipynb.
         // Step 5 table: true / demand-blind / demand-controlled ROAS.
         // Step 6 table: experiment-calibrated ROAS.
         // ------------------------------------------------------------------

@@ -195,10 +195,10 @@
                     <strong>Forecast accuracy backtest.</strong> Rolling-origin out-of-sample accuracy is measured, not asserted: <a href="workflow-forecasting.html#backtesting">forecasting workflow &mdash; backtesting</a>.
                 </li>
                 <li>
-                    <strong>Runtime benchmark.</strong> A production-size national fit (156 weeks &times; 7 channels, NumPyro, 4 chains &times; 500 draws) measures <strong>~15&nbsp;s</strong> wall-clock on an Apple M3 laptop (PyMC 6), including compilation. Source: <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/runtime_benchmark.ipynb" target="_blank" rel="noopener"><code>nbs/runtime_benchmark.ipynb</code></a>; full scaling table in the <a href="technical-guide.html#diagnostics">technical guide's Computational Scaling section</a>. Absolute seconds are machine-specific; treat the ratios as the transferable part.
+                    <strong>Runtime benchmark.</strong> A production-size national fit (156 weeks &times; 7 channels, NumPyro, 4 chains &times; 500 draws) measures <strong>~15&nbsp;s</strong> wall-clock on an Apple M3 laptop (PyMC 6), including compilation. Source: <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/validation/runtime_benchmark.ipynb" target="_blank" rel="noopener"><code>nbs/validation/runtime_benchmark.ipynb</code></a>; full scaling table in the <a href="technical-guide.html#diagnostics">technical guide's Computational Scaling section</a>. Absolute seconds are machine-specific; treat the ratios as the transferable part.
                 </li>
                 <li>
-                    <strong>Real-data test.</strong> The framework is run on the Lydia Pinkham advertising series (1907&ndash;1960), the most-studied real dataset in advertising econometrics, and graded against decades of published estimates: <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/pinkham_real_data.ipynb" target="_blank" rel="noopener"><code>nbs/pinkham_real_data.ipynb</code></a>.
+                    <strong>Real-data test.</strong> The framework is run on the Lydia Pinkham advertising series (1907&ndash;1960), the most-studied real dataset in advertising econometrics, and graded against decades of published estimates: <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/validation/pinkham_real_data.ipynb" target="_blank" rel="noopener"><code>nbs/validation/pinkham_real_data.ipynb</code></a>.
                 </li>
             </ul>
             <p>
@@ -265,7 +265,7 @@
             <div class="highlight-box">
                 <h4>120 minutes &mdash; hands on</h4>
                 <p style="margin-bottom: 0;">
-                    Do the 30-minute pass, then <code>pip install mmm-framework</code> and follow the <a href="getting-started.html">quickstart</a>: fit a first model on synthetic data with known ground truth, and check the estimates against the answer key yourself. If you want to stress the evidence, clone the repository and re-run <code>nbs/runtime_benchmark.ipynb</code> on your own hardware and compare.
+                    Do the 30-minute pass, then <code>pip install mmm-framework</code> and follow the <a href="getting-started.html">quickstart</a>: fit a first model on synthetic data with known ground truth, and check the estimates against the answer key yourself. If you want to stress the evidence, clone the repository and re-run <code>nbs/validation/runtime_benchmark.ipynb</code> on your own hardware and compare.
                 </p>
             </div>
             <div class="note">

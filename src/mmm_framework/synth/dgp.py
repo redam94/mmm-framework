@@ -1060,20 +1060,21 @@ def make_aurora_kitchen_sink(seed: int = 7) -> Scenario:
     import sys
     from pathlib import Path
 
-    # The aurora generator lives in the repo's nbs/ directory (not shipped
-    # with the installed package): search upward from this file for it.
+    # The aurora generator lives in the repo's nbs/builders/ directory (not
+    # shipped with the installed package): search upward from this file for it.
     nbs = next(
         (
-            str(p / "nbs")
+            str(d)
             for p in Path(__file__).resolve().parents
-            if (p / "nbs" / "aurora.py").exists()
+            for d in (p / "nbs" / "builders", p / "nbs")
+            if (d / "aurora.py").exists()
         ),
         None,
     )
     if nbs is None:
         raise RuntimeError(
-            "aurora_kitchen_sink requires the repo's nbs/aurora.py, which is "
-            "not available in this installation."
+            "aurora_kitchen_sink requires the repo's nbs/builders/aurora.py, "
+            "which is not available in this installation."
         )
     if nbs not in sys.path:
         sys.path.insert(0, nbs)
@@ -1093,7 +1094,10 @@ def make_aurora_kitchen_sink(seed: int = 7) -> Scenario:
         true_contribution=a.true_contribution.copy(),
         true_roas=a.true_roas.copy(),
         representable=False,
-        notes={"source": "nbs/aurora.py", "mediated_share": a.true_mediated_share},
+        notes={
+            "source": "nbs/builders/aurora.py",
+            "mediated_share": a.true_mediated_share,
+        },
     )
 
 

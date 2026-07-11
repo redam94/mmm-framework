@@ -12,7 +12,7 @@ which holds the formal contracts (R0.x cross-cutting requirements, acceptance ga
 **Status:** Not implemented. Specified as **DF-2** in
 [`deferred-causal-features.md`](./deferred-causal-features.md). Detection ships today
 (`validation/channel_diagnostics.py::_detect_collinear_clusters`, surfaced in §7 of
-`nbs/causal_features_showcase.ipynb`); *fitting* a grouped prior is deferred because it
+`nbs/demos/causal_features_showcase.ipynb`); *fitting* a grouped prior is deferred because it
 changes posteriors and must clear held-out experimental validation before it can be a
 default.
 

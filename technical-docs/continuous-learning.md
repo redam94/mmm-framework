@@ -167,20 +167,20 @@ pre/test split in; a real ingestion must provide it.
    truth-optimal profit (gap < 10%), and the ENBS rule fires before `max_waves`.
 
 Worked end-to-end demo: `examples/ex_continuous_learning.py` (terminal) and
-`nbs/continuous_learning.ipynb` — a baked, plot-rich visual walkthrough (the
+`nbs/continuous_learning/continuous_learning.ipynb` — a baked, plot-rich visual walkthrough (the
 response surface and its synergy contours, the central-composite design, β/γ
 recovery forests, fitted-vs-true response curves, the Thompson allocation
 posterior + funding line, the closed-loop regret/ENBS/convergence dashboard, the
 `gamma_scale` prior-sensitivity audit, the adstock/CUPED and Laplace-KG/pure-EIG
 sections, and the **acquisition & uncertainty surface**). Re-author + re-bake
-with `nbs/build_continuous_learning.py` (header has the exact commands).
+with `nbs/builders/build_continuous_learning.py` (header has the exact commands).
 
 The acquisition/uncertainty visualization also stands alone:
-`nbs/build_acquisition_viz.py` fits a posterior, evaluates the mean-profit,
+`nbs/builders/build_acquisition_viz.py` fits a posterior, evaluates the mean-profit,
 uncertainty (`value·SD[R]`), and UCB-acquisition surfaces over a 2-D allocation
 slice, marks the exploit vs acquisition optima (they differ — the acquisition
 point is pulled toward the under-probed region), and writes a PNG + standalone
-HTML to `nbs/artifacts/`. `nbs/build_acquisition_animation.py` runs the loop
+HTML to `nbs/artifacts/`. `nbs/builders/build_acquisition_animation.py` runs the loop
 wave by wave and stitches the per-wave surfaces into a GIF
 (`nbs/artifacts/continuous_learning_acquisition.gif`) — colour ranges held fixed
 so the **uncertainty surface shrinks** and the optima drift toward the truth as
@@ -262,7 +262,7 @@ tight-but-wrong), and treat R̂ / cross-section residuals as a misspecification
 alarm. Verified in `tests/test_continuous_learning.py`
 (`test_misspecified_single_hill_still_makes_a_near_optimal_decision`) and
 demonstrated in notebook §14 — including an animation
-(`nbs/build_misspecification_animation.py`) that runs the correct-mixture and
+(`nbs/builders/build_misspecification_animation.py`) that runs the correct-mixture and
 wrong-single-Hill loops side by side: the profit-gap trackers overlap and descend
 (the *decision* converges) while the wrong family's credible-interval width shrinks
 *below* the correct one and its coverage collapses (calibration stays confidently
@@ -324,7 +324,7 @@ gap ~1% — a near-optimal decision with no family knowledge. After ONE local
 wave the curve is honestly under-identified outside the probed range (wide,
 prior-shaped band); across the accumulating trust-region loop it **converges
 toward the true curve** — the convergence animation
-(`nbs/build_spline_animation.py` → `continuous_learning_spline.gif`, notebook
+(`nbs/builders/build_spline_animation.py` → `continuous_learning_spline.gif`, notebook
 §15) runs spline-vs-**logistic** (§14's severe misspecification) loops side by
 side: both profit gaps fall (spline 0.9% → 0.06%, logistic 1.4% → 0.7% — the
 decision was never the problem) and both bands shrink to a similar width
