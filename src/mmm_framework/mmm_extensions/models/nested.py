@@ -307,6 +307,29 @@ class NestedMMM(BaseExtendedMMM):
                         dims="obs",
                     )
 
+            # Per-channel TOTAL contribution to the outcome, original KPI units
+            # (obs, channel) — the surface the reporting / response-curve tooling
+            # reads via ``sample_channel_contributions``. The mediator is linear
+            # in the saturated media, so channel c's contribution to the outcome
+            # mean is ``(Σ_med gamma_med·beta_{c,med} + delta_c)·sat_c·y_std``:
+            # its mediated paths plus its direct path. A pure Deterministic of
+            # already-connected RVs — adds no free RV and re-evaluates under a
+            # counterfactual ``set_data("X_media")`` for response curves.
+            contrib_cols = []
+            for i, channel in enumerate(self.channel_names):
+                coef = pt.zeros(())
+                for med_name, med_map in channel_mediator_betas.items():
+                    if channel in med_map:
+                        coef = coef + gammas[med_name] * med_map[channel]
+                if channel in deltas:
+                    coef = coef + deltas[channel]
+                contrib_cols.append(coef * media_transformed[:, i])
+            pm.Deterministic(
+                "channel_contributions",
+                pt.stack(contrib_cols, axis=1) * self.y_std,
+                dims=("obs", "channel"),
+            )
+
             # Baseline dynamics (standardized scale): a trend and/or Fourier
             # seasonality when the spec provides them, so a real drift or
             # seasonal pattern is not absorbed into the media coefficients.

@@ -37,6 +37,13 @@ const DOC_KINDS: DocKind[] = [
     icon: <BookOpen size={18} />,
   },
   {
+    kind: 'results_report', dashKey: 'results_report_path',
+    label: 'Interactive results report',
+    desc: 'Self-recomputing readout: date/geo/estimand selectors, curves, reallocator.',
+    view: '/results-report', download: '/results-report/download', file: 'mmm_results_report.html',
+    icon: <FileText size={18} />,
+  },
+  {
     kind: 'prefit_report', dashKey: 'prefit_report_path',
     label: 'Model design readout (pre-fit)',
     desc: 'Pre-registered assumptions, priors, prior-predictive checks and SBC.',
