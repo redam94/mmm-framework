@@ -262,6 +262,12 @@ refits the model on perturbed data:
     code(r"""
 from mmm_framework.validation import ModelValidator, ValidationConfigBuilder
 
+# The refutation suite refits the model several times; silence the samplers'
+# advisory chatter (CRITICAL: pymc logs its convergence advisories at ERROR).
+for _n in ("pymc", "pymc.sampling", "pymc.sampling.mcmc", "pymc.stats",
+           "pymc.stats.convergence", "numpyro", "arviz"):
+    _lg = logging.getLogger(_n); _lg.setLevel(logging.CRITICAL); _lg.propagate = False
+
 vcfg = (
     ValidationConfigBuilder()
     .quick()
@@ -302,10 +308,11 @@ print(media_lrn[["parameter", "prior_mean", "post_mean", "contraction", "verdict
       .round(3).to_string(index=False))
 """),
     code(r"""
-# The diagnostic's headline here: beta_TV is flagged RELOCATED — the posterior
-# moved far from the prior without narrowing. That is the model waving a small
-# flag over exactly the channel we know (from the key) carries residual bias:
-# the data is pulling hard against the prior, somewhere off to the side.
+# The diagnostic's headline here: beta_TV carries the RELOCATION signature —
+# the lowest contraction of any media beta, paired with the largest
+# prior→posterior shift: the data pulled the coefficient far to one side
+# without narrowing it. That is the model waving a small flag over exactly
+# the channel we know (from the key) carries residual bias.
 tv_row = media_lrn.set_index("parameter").loc["beta_TV"]
 assert tv_row["contraction"] == media_lrn.set_index("parameter")["contraction"].min()
 print(f"beta_TV: contraction={tv_row['contraction']:.2f}, verdict={tv_row['verdict']!r}")

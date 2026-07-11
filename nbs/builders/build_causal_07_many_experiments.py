@@ -269,8 +269,8 @@ C.contraction_chart(ledger_w, title="What each piece of evidence bought (90% int
 """),
     code(r"""
 ledger = pd.DataFrame([
-    dict(name="radio_dark_2023", channel="Radio", estimand="avg ROAS (window)",
-         vintage="2023-10", value=round(rR["observed"], 2), se=0.10,
+    dict(name="radio_dark_2022", channel="Radio", estimand="avg ROAS (window)",
+         vintage=rR["period"][1][:7], value=round(rR["observed"], 2), se=0.10,
          status="merged", origin="pre-registered geo holdout (nb05 discipline)"),
     dict(name="display_offpanel_2024", channel="Display", estimand="avg ROAS (off-panel, cold start)",
          vintage="2024-04", value=round(float(obs), 2), se=0.08,

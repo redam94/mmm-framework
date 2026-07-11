@@ -89,7 +89,7 @@ and lays out the 12-month calendar.
 ## 1 — The priority grid
 
 Inputs: the current posterior (rung 2's fit), and the evidence ledger from
-rung 7 — Radio was tested (readout window ended 2023-10), Display's off-panel
+rung 7 — Radio was tested (readout window ended 2022-11), Display's off-panel
 test ended 2024-04. Planning date: 2024-07-01. The engine simulates a feasible
 national-pulse test per channel, computes EIG against each channel's current
 ROI posterior (decayed where evidence exists), and EVOI by re-optimizing the
@@ -102,7 +102,7 @@ mmm = base["model"]
 from mmm_framework.planning.priority import compute_experiment_priorities
 
 EVIDENCE = {
-    "Radio": {"end_date": "2023-10-30"},     # nb07's go-dark readout window
+    "Radio": {"end_date": "2022-11-28"},     # nb07's go-dark readout window
     "Display": {"end_date": "2024-04-22"},   # nb07's off-panel holdout
 }
 AS_OF = "2024-07-01"
@@ -200,7 +200,7 @@ from mmm_framework.planning.eig import (channel_half_life, decayed_sigma,
 
 weeks = np.arange(0, 105)
 fig = go.Figure()
-for ch, sigma0, tested_wks in [("Radio", 0.10, 35), ("Display", 0.15, 10)]:
+for ch, sigma0, tested_wks in [("Radio", 0.10, 84), ("Display", 0.15, 10)]:
     hl = channel_half_life(ch)
     sig = [decayed_sigma(sigma0, float(w), hl) for w in weeks]
     fig.add_trace(go.Scatter(x=weeks, y=sig, name=f"{ch} (half-life {hl:.0f}w)",
@@ -212,8 +212,8 @@ fig.update_yaxes(title="effective posterior sd of ROI")
 C.style(fig, title="Certainty on a half-life: post-experiment sd re-inflating",
         height=420)
 
-due_r, eig_r = reexperiment_due(0.10, 35, channel_half_life("Radio"), sigma_exp=0.10)
-print(f"Radio, 35 weeks on: a fresh test would buy {eig_r:.2f} nats -> "
+due_r, eig_r = reexperiment_due(0.10, 84, channel_half_life("Radio"), sigma_exp=0.10)
+print(f"Radio, 84 weeks on: a fresh test would buy {eig_r:.2f} nats -> "
       f"retest due: {due_r}")
 assert bool(tbl.set_index('channel').loc['Radio', 'retest_due'])
 """),
