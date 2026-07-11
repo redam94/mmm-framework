@@ -356,6 +356,30 @@ class CombinedMMM(BaseExtendedMMM):
                 dims=("obs", "outcome"),
             )
 
+            # Per-channel contribution to the PRIMARY outcome, original units
+            # (obs, channel) — the single-KPI report surface. Channel c's total
+            # effect on the primary outcome is its DIRECT path
+            # ``beta_direct[k0,c]`` plus its MEDIATED paths ``Σ_m gamma[k0,m]·
+            # beta_{c→m}`` over mediators routed to that outcome (mediators are
+            # linear in the saturated media), all × sat_c × std_k0.
+            k0 = self._primary_outcome_index()
+            outcome0 = self.config.multivariate.outcomes[k0].name
+            cc_cols = []
+            for i, ch in enumerate(self.channel_names):
+                coef = beta_direct[k0, i]
+                for m, med_name in enumerate(self.mediator_names):
+                    if outcome0 not in self._get_affected_outcomes(med_name):
+                        continue
+                    b = channel_mediator_betas.get(med_name, {}).get(ch)
+                    if b is not None:
+                        coef = coef + gamma[k0, m] * b
+                cc_cols.append(coef * media_transformed[:, i])
+            pm.Deterministic(
+                "channel_contributions",
+                pt.stack(cc_cols, axis=1) * stds[k0],
+                dims=("obs", "channel"),
+            )
+
             # Multivariate likelihood (standardized scale)
             build_multivariate_likelihood(
                 "Y_obs",

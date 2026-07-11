@@ -95,6 +95,28 @@ def _period_onehot(time_idx: np.ndarray, n_periods: int) -> np.ndarray:
     return m
 
 
+def _resolve_periods(model: Any) -> Any:
+    """Period index for the x-axis, tolerant of the model's data layout.
+
+    Core :class:`BayesianMMM` carries a ``panel`` with ``coords.periods``; the
+    extension models (:class:`BaseExtendedMMM` family) are single national
+    series that only carry a time ``index``. Fall back through both, then to a
+    plain integer range keyed off the outcome length so any fitted model with a
+    ``channel_contributions`` surface can be reported.
+    """
+    coords = getattr(getattr(model, "panel", None), "coords", None)
+    periods = getattr(coords, "periods", None)
+    if periods is not None:
+        return periods
+    index = getattr(model, "index", None)
+    if index is not None:
+        return index
+    y = getattr(model, "y_raw", None)
+    if y is None:
+        y = getattr(model, "y", [])
+    return np.arange(len(np.asarray(y)))
+
+
 def _eti(draws: np.ndarray, interval: float) -> tuple[float, float]:
     lo_q = (1.0 - interval) / 2.0 * 100.0
     return (
@@ -1197,7 +1219,7 @@ def interactive_report_facts(
 
     channels = [str(c) for c in getattr(model, "channel_names", [])]
     time_idx = np.asarray(model.time_idx, dtype=int)
-    periods_index = model.panel.coords.periods
+    periods_index = _resolve_periods(model)
     n_periods = len(periods_index)
     periods = [str(p)[:10] for p in periods_index]
     onehot = _period_onehot(time_idx, n_periods)
@@ -1348,6 +1370,17 @@ def interactive_report_facts(
         meta["kpi"] = str(model.mff_config.kpi.name)
     except Exception:  # noqa: BLE001
         pass
+    if meta["kpi"] is None:
+        # Extension models carry no MFF config; name the KPI from the primary
+        # outcome when the model is multi-outcome (Multivariate / Combined).
+        names = getattr(model, "outcome_names", None)
+        if names:
+            try:
+                idx = model._primary_outcome_index()
+            except Exception:  # noqa: BLE001
+                idx = 0
+            if 0 <= idx < len(names):
+                meta["kpi"] = str(names[idx])
 
     return {
         "meta": meta,

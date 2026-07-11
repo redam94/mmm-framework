@@ -810,6 +810,28 @@ class StructuralNestedMMM(BaseExtendedMMM):
                 model, med_betas, parent_lambdas, gammas, med_gain, med_signals
             )
 
+            # Per-channel TOTAL contribution to the outcome, original KPI units
+            # (obs, channel) — the surface ``sample_channel_contributions`` /
+            # the interactive report read. Channel c's contribution is
+            # ``(delta_c + linearized_mediated_c)·sat_c·y_std``: its direct path
+            # (exact) plus its LINEARIZED mediated path (the same first-order
+            # ``path_coefs`` the pathway table exposes — the mediated route runs
+            # through AR / sigmoid dynamics, so this is an approximation; the
+            # EXACT per-channel effects remain in ``get_mediation_effects()``).
+            cc_cols = []
+            for i, channel in enumerate(self.channel_names):
+                coef = pt.zeros(())
+                if channel in deltas:
+                    coef = coef + deltas[channel]
+                if channel in path_coefs:
+                    coef = coef + path_coefs[channel]
+                cc_cols.append(coef * sat[:, i])
+            pm.Deterministic(
+                "channel_contributions",
+                pt.stack(cc_cols, axis=1) * self.y_std,
+                dims=("obs", "channel"),
+            )
+
             # Experiment calibration. Handles are attached ONLY for channels
             # whose mediated paths are exact-linear (every node STATIC and
             # non-BINOMIAL, so the coefficient product is the true derivative);

@@ -3,7 +3,7 @@
 NestedMMM and StructuralNestedMMM gain the standard posterior-predictive
 surface — ``PredictionResults`` with per-draw samples, original-scale
 rescaling, and counterfactual media via the in-graph data swap. The joint
-multi-outcome models refuse loudly.
+multi-outcome models (Multivariate / Combined) predict their PRIMARY outcome.
 """
 
 from __future__ import annotations
@@ -159,8 +159,11 @@ class TestStructuralPredict:
         np.testing.assert_allclose(post.y_pred_mean, base.y_pred_mean, rtol=1e-6)
 
 
-class TestMultiOutcomeGuard:
-    def test_multivariate_refuses(self, media, idx):
+class TestMultiOutcomePredict:
+    def test_multivariate_predicts_primary_outcome(self, media, idx):
+        """Multi-outcome models predict their PRIMARY (first) outcome from the
+        joint ``Y_obs`` likelihood, so the single-KPI report / GoF tooling works.
+        """
         rng = np.random.default_rng(2)
         outcomes = {
             "A": 1000 + 2 * media[:, 0] + rng.normal(0, 30, N),
@@ -176,5 +179,12 @@ class TestMultiOutcomeGuard:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             m.fit(method="map", random_seed=0)
-        with pytest.raises(NotImplementedError, match="multi-outcome|y_obs"):
-            m.predict()
+            pred = m.predict(random_seed=0)
+        # (n_draws, n_obs) for the primary outcome, on the original scale.
+        assert pred.y_pred_samples.ndim == 2
+        assert pred.y_pred_samples.shape[1] == N
+        assert np.isfinite(pred.y_pred_samples).all()
+        # Primary outcome is "A": its raw mean (~1000s) sits inside the draws' range.
+        assert (
+            pred.y_pred_samples.min() < outcomes["A"].mean() < pred.y_pred_samples.max()
+        )
