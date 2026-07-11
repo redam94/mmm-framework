@@ -229,7 +229,7 @@
                 </div>
             </div>
             <p class="chart-note">
-                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                <strong>Measured</strong> (from the baked notebook <code>nbs/demos/real_data_onboarding.ipynb</code>)
                 — every number on this page comes from that notebook's executed run, recorded in
                 <code>nbs/artifacts/real_data_onboarding.json</code>. Nothing here is illustrative.
             </p>
@@ -255,8 +255,8 @@
                 </ul>
                 <p>
                     <strong>Run it:</strong>
-                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/real_data_onboarding.ipynb"
-                       target="_blank" rel="noopener"><code>nbs/real_data_onboarding.ipynb</code></a> on GitHub.
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/demos/real_data_onboarding.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/demos/real_data_onboarding.ipynb</code></a> on GitHub.
                 </p>
             </div>
 
@@ -294,7 +294,7 @@
                 </tbody>
             </table>
             <p class="chart-note">
-                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                <strong>Measured</strong> (from the baked notebook <code>nbs/demos/real_data_onboarding.ipynb</code>)
                 — the printed head of <code>artifacts/client_export_messy.csv</code>. Red cells are
                 defects pandas has already swallowed silently: dates in three formats, TV as
                 comma-separated <em>text</em> (and in dollars while every other channel is in $000s),
@@ -346,7 +346,7 @@
                 </tbody>
             </table>
             <p class="chart-note">
-                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                <strong>Measured</strong> (from the baked notebook <code>nbs/demos/real_data_onboarding.ipynb</code>)
                 — the cleaning ledger as recorded in <code>real_data_onboarding.json</code>. Exit
                 asserts: 156 unique, consecutive weekly rows; no NaNs; no negative spend.
             </p>
@@ -387,7 +387,7 @@
 )
 panel = load_mff(mff_df, mff_config)   # -> PanelDataset(156 obs, 7 channels, 6 controls)</code></pre>
             <p class="chart-note">
-                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                <strong>Measured</strong> (from the baked notebook <code>nbs/demos/real_data_onboarding.ipynb</code>)
                 — the reshape is lossless: 14 variables × 156 weeks = 2,184 MFF rows; the panel sees
                 7 channels + 6 controls + the KPI (mean 814, sd 137). <code>category_demand</code> and
                 <code>distribution</code> carry <code>CausalControlRole.CONFOUNDER</code>, which routes
@@ -436,7 +436,7 @@ panel = load_mff(mff_df, mff_config)   # -> PanelDataset(156 obs, 7 channels, 6 
                 </tbody>
             </table>
             <p class="chart-note">
-                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                <strong>Measured</strong> (from the baked notebook <code>nbs/demos/real_data_onboarding.ipynb</code>)
                 — <code>validate_dataset</code> / <code>missingness_matrix</code> /
                 <code>collinearity_analysis</code> / <code>detect_outliers</code> on the assembled MFF.
                 A gate you don't act on is decoration; each row's third column is the acting.
@@ -484,7 +484,7 @@ panel = load_mff(mff_df, mff_config)   # -> PanelDataset(156 obs, 7 channels, 6 
                 </tbody>
             </table>
             <p class="chart-note">
-                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                <strong>Measured</strong> (from the baked notebook <code>nbs/demos/real_data_onboarding.ipynb</code>)
                 — <code>compute_parameter_learning</code> (contraction/verdict) next to each channel's
                 relative contribution-interval width.
             </p>
@@ -517,7 +517,7 @@ panel = load_mff(mff_df, mff_config)   # -> PanelDataset(156 obs, 7 channels, 6 
                 </tbody>
             </table>
             <p class="chart-note">
-                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                <strong>Measured</strong> (from the baked notebook <code>nbs/demos/real_data_onboarding.ipynb</code>)
                 — all four refits converged (r-hat ≤ 1.008, 0 divergences). MASE&nbsp;&lt;&nbsp;1 means
                 the model beats "copy last year" where that baseline is computable; the 80% interval
                 covering 78.8% of 52 held-out weeks is calibration checked where it counts, out of
@@ -573,7 +573,7 @@ panel = load_mff(mff_df, mff_config)   # -> PanelDataset(156 obs, 7 channels, 6 
                 </tbody>
             </table>
             <p class="chart-note">
-                <strong>Measured</strong> (from the baked notebook <code>nbs/real_data_onboarding.ipynb</code>)
+                <strong>Measured</strong> (from the baked notebook <code>nbs/demos/real_data_onboarding.ipynb</code>)
                 — total media contribution 31,595 vs true 33,648 (<strong>−6.1%</strong>); the 90%
                 intervals covered truth on <strong>7/7 channels</strong>. The biggest point-estimate
                 misses (Radio −38%, TV −17%) are exactly where the battery had already withdrawn
@@ -630,9 +630,9 @@ panel = load_mff(mff_df, mff_config)   # -> PanelDataset(156 obs, 7 channels, 6 
                 <h4>📓 Run it yourself</h4>
                 <p>
                     This page mirrors
-                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/real_data_onboarding.ipynb"
-                       target="_blank" rel="noopener"><code>nbs/real_data_onboarding.ipynb</code></a>
-                    (authored by <code>nbs/build_real_data_onboarding.py</code>), built on
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/demos/real_data_onboarding.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/demos/real_data_onboarding.ipynb</code></a>
+                    (authored by <code>nbs/builders/build_real_data_onboarding.py</code>), built on
                     <code>mmm_framework.data_loader</code>, <code>mmm_framework.eda</code>,
                     <code>mmm_framework.validation.backtest</code>, and
                     <code>mmm_framework.reporting</code>. Every computational cell ends in a seeded

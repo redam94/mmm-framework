@@ -316,8 +316,8 @@
                 </ul>
                 <p>
                     <strong>Run it:</strong>
-                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress_00_the_rosy_picture.ipynb"
-                       target="_blank" rel="noopener"><code>nbs/stress_00_the_rosy_picture.ipynb</code></a> on GitHub.
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/stress/stress_00_the_rosy_picture.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/stress/stress_00_the_rosy_picture.ipynb</code></a> on GitHub.
                 </p>
             </div>
 
@@ -392,7 +392,7 @@
             <p class="chart-note">
                 <strong>Measured in the notebook (seeded run, current defaults)</strong> — true causal
                 contribution (dark bars) vs the model's estimate with 90% HDI whiskers, from
-                <code>nbs/stress_00_the_rosy_picture.ipynb</code>. Clean: median |error| 7%, coverage
+                <code>nbs/stress/stress_00_the_rosy_picture.ipynb</code>. Clean: median |error| 7%, coverage
                 100%. Confounded: Search <strong>+44%</strong> and Social <strong>+38%</strong> with the
                 truth <em>outside</em> the interval — not just wrong, confidently wrong — median |error|
                 32%, coverage 50%. The recorded harness run of the same world
@@ -708,8 +708,8 @@
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>
-                    This page mirrors <code>nbs/stress_00_the_rosy_picture.ipynb</code> (authored by
-                    <code>nbs/build_stress_00_rosy_picture.py</code>), backed by the scenario DGPs in
+                    This page mirrors <code>nbs/stress/stress_00_the_rosy_picture.ipynb</code> (authored by
+                    <code>nbs/builders/build_stress_00_rosy_picture.py</code>), backed by the scenario DGPs in
                     <code>mmm_framework.synth</code>, the scoring harness in <code>tests/synth/</code>, and the recorded scorecard in
                     <code>tests/synth/results/stress_matrix.md</code>. Every computational cell ends in a
                     seeded assert encoding the claim it demonstrates — if the notebook executes clean, the
@@ -788,7 +788,7 @@
 
         // ==================================================================
         // 1. Two worlds, one dashboard — MEASURED notebook numbers
-        //    (seeded run of nbs/stress_00_the_rosy_picture.ipynb,
+        //    (seeded run of nbs/stress/stress_00_the_rosy_picture.ipynb,
         //     current defaults, numpyro 500x2, parametric adstock).
         // ==================================================================
         const WORLDS = {

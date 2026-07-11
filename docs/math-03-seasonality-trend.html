@@ -267,7 +267,7 @@
                 This page derives the two basis expansions the framework uses for those motions —
                 Fourier harmonics for seasonality, and linear / piecewise / B-spline bases for trend —
                 with the same math, the same assert-encoded identities, and the same charts as
-                <code>nbs/math_03_seasonality_trend.ipynb</code>. If the model has no language for these
+                <code>nbs/math/math_03_seasonality_trend.ipynb</code>. If the model has no language for these
                 motions, they don't disappear — they <a href="#attribution">leak into the media
                 coefficients</a> and corrupt every ROI estimate.
             </p>
@@ -318,8 +318,8 @@
                 </ul>
                 <p>
                     <strong>Run it:</strong>
-                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math_03_seasonality_trend.ipynb"
-                       target="_blank" rel="noopener"><code>nbs/math_03_seasonality_trend.ipynb</code></a> on GitHub.
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/math/math_03_seasonality_trend.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/math/math_03_seasonality_trend.ipynb</code></a> on GitHub.
                 </p>
             </div>
 
@@ -856,8 +856,8 @@
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>
-                    This page mirrors <code>nbs/math_03_seasonality_trend.ipynb</code>, authored by
-                    <code>nbs/build_math_03_seasonality_trend.py</code> (pure numpy/scipy — it bakes in
+                    This page mirrors <code>nbs/math/math_03_seasonality_trend.ipynb</code>, authored by
+                    <code>nbs/builders/build_math_03_seasonality_trend.py</code> (pure numpy/scipy — it bakes in
                     seconds, no MCMC). Every plotted claim ends in an <code>assert</code> on the real
                     framework functions (<code>create_fourier_features</code>,
                     <code>create_piecewise_trend_matrix</code>, <code>create_bspline_basis</code>), so

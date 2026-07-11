@@ -97,4 +97,4 @@ touch any existing model.**
   (quadratic) trend + seasonal baseline; (4) tight direct-effect prior (truth: direct ≈ 0);
   (5) demand + price controls. All in PyMC, framework-compatible.
 
-Search harness: `nbs/_recovery/recovery.py` (candidates 1–5, reproducible).
+Search harness: `nbs/extensions/_recovery/recovery.py` (candidates 1–5, reproducible).

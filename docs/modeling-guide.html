@@ -808,13 +808,13 @@ print(result.coverage())    # nominal vs empirical interval coverage
             <div class="takeaway-box">
                 <h4>Measured reference points</h4>
                 <p>
-                    From the baked notebook <code>nbs/backtest_validation.ipynb</code> (realistic
+                    From the baked notebook <code>nbs/validation/backtest_validation.ipynb</code> (realistic
                     synthetic world, 4 refits, 52 graded weekly forecasts): out-of-time MAPE 3.0%
                     vs 13.8% for seasonal-naive (MASE 0.24), 80% interval covering 90% of held-out
                     weeks. On the trend-break stress world the same protocol degrades to 11.4% MAPE
                     with 58% coverage &mdash; the backtest detects misspecification a green
                     in-sample check misses. And on real data
-                    (<code>nbs/pinkham_real_data.ipynb</code>) the honest grade was <em>no skill
+                    (<code>nbs/validation/pinkham_real_data.ipynb</code>) the honest grade was <em>no skill
                     over persistence</em> &mdash; which is exactly the kind of finding this step
                     exists to surface before a client hears a forecast.
                 </p>

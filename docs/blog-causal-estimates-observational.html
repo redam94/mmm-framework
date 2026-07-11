@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uncovering Causal Estimates from Non-Experimental Data | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Causal inference from observational data: a decision guide to adjustment, DAGs, instrumental variables, DiD, regression discontinuity, and synthetic control.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-causal-estimates-observational.html">
+    <meta property="og:title" content="Uncovering Causal Estimates from Non-Experimental Data">
+    <meta property="og:description" content="Causal inference from observational data: a decision guide to adjustment, DAGs, instrumental variables, DiD, regression discontinuity, and synthetic control.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-causal-estimates-observational.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Uncovering Causal Estimates from Non-Experimental Data">
+    <meta name="twitter:description" content="Causal inference from observational data: a decision guide to adjustment, DAGs, instrumental variables, DiD, regression discontinuity, and synthetic control.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-causal-estimates-observational.html",
+          "name": "Uncovering Causal Estimates from Non-Experimental Data | MMM Framework",
+          "description": "Causal inference from observational data: a decision guide to adjustment, DAGs, instrumental variables, DiD, regression discontinuity, and synthetic control.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-causal-estimates-observational.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-causal-estimates-observational.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Uncovering Causal Estimates from Non-Experimental Data",
+          "datePublished": "2026-04-10",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-causal-estimates-observational.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-causal-estimates-observational.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Uncovering Causal Estimates from Non-Experimental Data",
+              "item": "https://redam94.github.io/mmm-framework/blog-causal-estimates-observational.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#selection-problem">The Selection Problem</a></li>
+                <li><a href="#selection-on-observables">Selection on Observables</a></li>
+                <li><a href="#dags-and-backdoor">DAGs and the Backdoor Criterion</a></li>
+                <li><a href="#instrumental-variables">Instrumental Variables</a></li>
+                <li><a href="#difference-in-differences">Difference-in-Differences</a></li>
+                <li><a href="#regression-discontinuity">Regression Discontinuity</a></li>
+                <li><a href="#synthetic-control">Synthetic Control</a></li>
+                <li><a href="#metalearners">Metalearners for Heterogeneous Effects</a></li>
+                <li><a href="#time-series-counterfactuals">Time-Series Counterfactuals</a></li>
+                <li><a href="#sensitivity-analysis">Sensitivity Analysis</a></li>
+                <li><a href="#choosing-a-strategy">Choosing a Strategy</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Uncovering Causal Estimates from Non-Experimental Data</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-04-10">April 10, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Causal inference</span>
+            </p>
+            <p class="lead">Randomize when you can — but most of the questions a measurement team actually faces (did the campaign move sales, did the price change cause the churn, what did the policy do) arrive after the fact, with no control group in sight. A century of statistics and econometrics has produced a toolkit for exactly this situation, and every tool in it purchases its causal claim with a different assumption. This post is a working tour: what each strategy assumes, when it breaks, and how to choose among them.</p>
+
+            <p>The strategies below look very different on the surface — reweighting individuals, differencing panels, exploiting eligibility cutoffs, constructing synthetic states — but they all attack one underlying problem, and naming it first makes the menu coherent.</p>
+
+            <h2 id="selection-problem">The Selection Problem</h2>
+            <p>In the potential-outcomes framework (Rubin, 1974), each unit \( i \) carries two outcomes — \( Y_{1i} \) if treated, \( Y_{0i} \) if not — and we observe only one of them: \( Y_i = Y_{0i} + (Y_{1i} - Y_{0i})D_i \). The naive move is to compare treated and untreated group means. That comparison decomposes as</p>
+            $$ \underbrace{E[Y_i \mid D_i = 1] - E[Y_i \mid D_i = 0]}_{\text{naive comparison}} \;=\; \underbrace{E[Y_{1i} - Y_{0i} \mid D_i = 1]}_{\text{ATT}} \;+\; \underbrace{E[Y_{0i} \mid D_i = 1] - E[Y_{0i} \mid D_i = 0]}_{\text{selection bias}}. $$
+            <p>The first term is the average treatment effect on the treated — the quantity we want. The second is selection bias: the systematic difference in <em>baseline</em> outcomes between the groups. People who take the treatment are rarely like people who don't, and the naive comparison mixes that pre-existing difference into the estimate (Angrist &amp; Pischke, 2009). Randomization solves the problem by force, making \( D_i \) independent of the potential outcomes so the second term is exactly zero. Every strategy below is a different way of zeroing it <em>without</em> randomizing. The potential-outcomes machinery itself, and its structural-causal-model counterpart, are developed at more length in the <a href="causal-inference.html">causal inference guide</a>.</p>
+
+            <h2 id="selection-on-observables">Selection on Observables</h2>
+            <p>The most direct route asserts that treatment looks random once you condition on the right observed covariates.</p>
+
+            <div class="definition">
+                <h4>Definition: Conditional Independence Assumption (CIA)</h4>
+                <p>Treatment is independent of the potential outcomes given covariates \( X_i \):</p>
+                $$ (Y_{1i}, Y_{0i}) \;\perp\!\!\!\perp\; D_i \mid X_i, $$
+                <p>together with overlap: \( 0 \lt P(D_i = 1 \mid X_i) \lt 1 \) for every covariate profile that occurs. Also called <em>unconfoundedness</em> or <em>ignorability</em>. It says that within a stratum of \( X \), who got treated is as good as a coin flip.</p>
+            </div>
+
+            <p>Under the CIA, several estimators recover the effect. <strong>Regression adjustment</strong> models the outcome in each arm and averages the difference in fitted values, \( \hat\tau = N^{-1}\sum_i [\hat\mu_1(X_i) - \hat\mu_0(X_i)] \). <strong>Propensity-score methods</strong> compress the covariates into a single score \( e(X_i) = P(D_i = 1 \mid X_i) \) and match or stratify on it (Rosenbaum &amp; Rubin, 1983a). <strong>Inverse probability weighting</strong> (IPW) reweights units by \( 1/e(X_i) \) or \( 1/(1 - e(X_i)) \) so the weighted groups have balanced covariates. <strong>Doubly-robust</strong> estimators combine an outcome model with a propensity model and remain consistent if <em>either</em> one is correctly specified — a genuinely useful insurance policy, sketched in the deep dive below.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Why the doubly-robust estimator forgives one wrong model</summary>
+                <div class="deep-dive-body">
+                    <p>The augmented IPW estimator starts from the regression prediction and corrects it with a weighted residual:</p>
+                    $$ \hat\tau_{\mathrm{DR}} = \frac{1}{N}\sum_{i=1}^{N}\left[ \hat\mu_1(X_i) - \hat\mu_0(X_i) + \frac{D_i\,(Y_i - \hat\mu_1(X_i))}{\hat e(X_i)} - \frac{(1 - D_i)\,(Y_i - \hat\mu_0(X_i))}{1 - \hat e(X_i)} \right]. $$
+                    <p>Its bias, worked out term by term, is an expectation of a <em>product</em> of the two model errors — schematically \( E\!\left[ \big(e(X) - \hat e(X)\big)\big(\mu(X) - \hat\mu(X)\big) \big/ \hat e(X) \right] \). If the outcome model is right, the residual corrections have mean zero within each stratum and the weighting error doesn't matter; if the propensity model is right, the weighted residuals correct whatever the outcome model got wrong. Either factor hitting zero kills the whole product. The price: when <em>both</em> models are misspecified, the errors multiply, and extreme propensity estimates near 0 or 1 blow up the weights — overlap is not a formality.</p>
+                </div>
+            </details>
+
+            <div class="warning">
+                <h4>⚠️ Bad controls</h4>
+                <p>Condition only on <strong>pre-treatment</strong> variables. A covariate that is itself affected by treatment either blocks part of the causal path you are trying to measure or opens a collider path and manufactures bias out of nothing. "Throw every column into the regression" is not a conservative default — it is a common way to turn an unbiased estimate into a biased one.</p>
+            </div>
+
+            <h2 id="dags-and-backdoor">DAGs and the Backdoor Criterion</h2>
+            <p>Which variables belong in the adjustment set? The CIA as stated gives no guidance. Pearl's directed acyclic graphs replace the vague instruction "control for confounders" with a checkable graphical rule (Pearl, 2009). Three junction types govern everything:</p>
+            <ul>
+                <li><strong>Fork</strong> \( A \leftarrow B \rightarrow C \): \( B \) is a common cause — condition on it to block the spurious association.</li>
+                <li><strong>Chain</strong> \( A \rightarrow B \rightarrow C \): \( B \) is a mediator — conditioning on it blocks the causal path itself. Leave it alone.</li>
+                <li><strong>Collider</strong> \( A \rightarrow B \leftarrow C \): the path is already blocked — conditioning on \( B \) <em>opens</em> it. Leave it alone.</li>
+            </ul>
+            <p>A set \( Z \) satisfying the backdoor criterion — it blocks every path from treatment into the outcome that enters the treatment through an arrow pointing at it, without touching mediators or colliders — licenses the adjustment formula</p>
+            $$ P(Y \mid \mathrm{do}(X = x)) \;=\; \sum_z P(Y \mid X = x, Z = z)\, P(Z = z). $$
+            <p>Just as valuable is the negative verdict: when no valid adjustment set exists among the variables you observe, the graph says so explicitly, and the honest conclusion is that selection-on-observables cannot work with your data. That is the cue to reach for one of the designs below, each of which imports exogenous variation from somewhere else.</p>
+
+            <h2 id="instrumental-variables">Instrumental Variables</h2>
+            <p>When a confounder is unobserved, no amount of conditioning helps. Instrumental variables replace "we measured every confounder" with a different bargain: find a variable \( z_i \) that moves treatment but has no other route to the outcome. Two requirements do all the work: <strong>relevance</strong> — the instrument actually shifts treatment, \( \mathrm{Cov}(D_i, z_i) \neq 0 \) — and the <strong>exclusion restriction</strong> — the instrument affects the outcome <em>only</em> through treatment. Relevance is testable; exclusion is an argument you must win on substantive grounds. With a binary instrument, the estimand is the Wald ratio:</p>
+            $$ \hat\rho_{\mathrm{IV}} \;=\; \frac{E[Y_i \mid z_i = 1] - E[Y_i \mid z_i = 0]}{E[D_i \mid z_i = 1] - E[D_i \mid z_i = 0]} \;=\; \frac{\text{reduced form}}{\text{first stage}}, $$
+            <p>and two-stage least squares generalizes it: regress treatment on the instrument, then regress the outcome on the fitted treatment. The classics illustrate what a credible instrument looks like — the Vietnam draft lottery for military service (Angrist, 1990), quarter of birth for years of schooling (Angrist &amp; Krueger, 1991), Maimonides' rule for class size (Angrist &amp; Lavy, 1999). Each is a rule or lottery that nobody chose in anticipation of the outcome.</p>
+
+            <div class="note">
+                <h4>💡 IV estimates LATE, not ATE</h4>
+                <p>When treatment effects vary across people, IV does not recover the population average effect. It identifies the <strong>local average treatment effect</strong> — the effect for <em>compliers</em>, the units whose treatment status the instrument actually changed (Imbens &amp; Angrist, 1994). Before running 2SLS, ask whether the complier subpopulation is the one your decision is about. A clean instrument answering the wrong population's question is still the wrong answer.</p>
+            </div>
+
+            <h2 id="difference-in-differences">Difference-in-Differences</h2>
+            <p>Panel data — units observed before and after some of them are treated — buys a different assumption. Difference the treated group's before/after change against the control group's, and anything constant within a group over time cancels out:</p>
+            $$ \hat\beta_{DD} \;=\; \big(\bar Y_{\mathrm{treat,\,after}} - \bar Y_{\mathrm{treat,\,before}}\big) - \big(\bar Y_{\mathrm{control,\,after}} - \bar Y_{\mathrm{control,\,before}}\big), $$
+            <p>equivalently a regression \( Y_{ist} = \gamma_s + \lambda_t + \beta D_{st} + \varepsilon_{ist} \) with group and time fixed effects. The identifying assumption is <strong>common trends</strong>: \( E[Y_{0ist} \mid s, t] = \gamma_s + \lambda_t \) — the groups may sit at different <em>levels</em>, but absent treatment they would have moved along the same <em>trend</em>. That assumption is untestable in the treatment period but has a testable shadow: plot the pre-treatment paths, and include leads of treatment in an event-study specification. Diverging pre-trends are disqualifying. The canonical application is Card and Krueger (1994), who compared fast-food employment in New Jersey and Pennsylvania around New Jersey's minimum-wage increase and found employment did not fall. A Bayesian formulation encodes parallel trends as a model constraint and returns a full posterior over the effect, which makes the uncertainty — and the sensitivity to the trend assumption — explicit rather than buried in a standard error.</p>
+
+            <h2 id="regression-discontinuity">Regression Discontinuity</h2>
+            <p>Sometimes a bureaucracy hands you an experiment: treatment is assigned by a rule — a test-score cutoff, an eligibility threshold, a vote-share margin — applied to a continuous running variable. Units just below and just above the cutoff are, in every respect except treatment, nearly identical, so the jump in outcomes at the threshold is a local causal effect. In a <strong>sharp</strong> design, treatment switches deterministically at the cutoff \( x_0 \), and the limit of the outcome difference across it identifies \( E[Y_{1i} - Y_{0i} \mid x_i = x_0] \). In a <strong>fuzzy</strong> design, only the <em>probability</em> of treatment jumps, and the estimator is exactly IV with the threshold indicator \( \mathbf{1}(x_i \ge x_0) \) as the instrument — yielding, again, a LATE at the cutoff. Two validity checks are standard: pre-treatment covariates should show no jump at the threshold, and the density of the running variable should be smooth there — a spike just above the cutoff (the McCrary test) is the signature of units manipulating their way in. Lee (2008) used bare-majority U.S. House elections this way to estimate incumbency advantage. The honest caveat mirrors IV's: you learn the effect <em>at the cutoff</em>, and extrapolating far from the threshold is an assumption, not a result.</p>
+
+            <h2 id="synthetic-control">Synthetic Control</h2>
+            <p>DiD needs enough units for group averages to mean something. When the treated unit is a single state or country, synthetic control builds its counterfactual explicitly: a weighted combination of untreated donor units, \( \hat Y^{N}_{1t} = \sum_j w_j Y_{jt} \) with \( w_j \ge 0 \) and \( \sum_j w_j = 1 \), where the weights are chosen to reproduce the treated unit's <em>pre-treatment</em> trajectory as closely as possible. The effect estimate is the post-treatment gap \( \hat\tau_{1t} = Y_{1t} - \hat Y^{N}_{1t} \). Because there is one treated unit, inference runs by permutation: apply the same procedure to every donor as a placebo and ask whether the real unit's gap is unusually large. In the canonical study, Abadie, Diamond, and Hainmueller (2010) estimated that California's Proposition 99 tobacco program reduced cigarette sales by roughly 25 packs per capita by 2000, with a placebo-based p-value near 0.029. The design's assumption is that a convex combination matching the pre-period continues to be the right counterfactual after it — which fails if the pre-fit is poor or the donors are hit by their own shocks. The generalized synthetic control method (Xu, 2017) unifies DiD and synthetic control under an interactive fixed-effects model, accommodating multiple treated units and time-varying confounding factors.</p>
+
+            <h2 id="metalearners">Metalearners for Heterogeneous Effects</h2>
+            <p>Everything so far targets an average. When the decision needs to know <em>for whom</em> the treatment works — which segments, which markets — the target becomes the conditional average treatment effect, \( \tau(x) = E[Y_{1i} - Y_{0i} \mid X_i = x] \), and machine learning supplies the flexible function approximation. The metalearner taxonomy (Künzel et al., 2019) organizes the options: the <strong>S-learner</strong> fits a single model with treatment as one more feature (fine when heterogeneity is weak, prone to shrinking the effect away); the <strong>T-learner</strong> fits separate outcome models per arm and differences them (fine when both arms are large); the <strong>X-learner</strong> cross-imputes individual effects — use the control-arm model to impute what treated units would have done, and vice versa — then regresses the imputed effects on covariates. The X-learner's advantage is sharpest in unbalanced designs: with a large control group and a small treated group, it estimates the CATE at the fast rate the big arm supports whenever the effect surface is smoother than the outcome surfaces. The crucial caveat: all of this lives <em>inside</em> the CIA. Metalearners buy flexibility in modeling heterogeneity, and nothing against unobserved confounding — no amount of ML sophistication compensates for a confounder you didn't measure.</p>
+
+            <h2 id="time-series-counterfactuals">Time-Series Counterfactuals</h2>
+            <p>When the intervention hits a single series — a national campaign launch, a platform change — and even donors are unavailable, the counterfactual can be extrapolated from the series' own history plus contemporaneous covariates. Bayesian structural time-series (the CausalImpact approach of Brodersen et al., 2015) fits a state-space model to the pre-intervention period — local linear trend, seasonality, and a spike-and-slab regression that selects among candidate control series — then projects the counterfactual path forward. The effect is the observed-minus-predicted gap, delivered as a posterior over pointwise, cumulative, and running-average impacts. The load-bearing assumptions are that the control series are not themselves touched by the intervention and that their pre-period relationship to the outcome persists — a national media launch that also lifts your "control" search category violates the first quietly.</p>
+
+            <h2 id="sensitivity-analysis">Sensitivity Analysis</h2>
+            <p>Every strategy above rests on at least one assumption the data cannot verify: unconfoundedness, exclusion, common trends, continuity, pre-period stability. Sensitivity analysis converts "assume it holds" into "here is how wrong it could be before the conclusion changes."</p>
+
+            <div class="definition">
+                <h4>Definition: E-value</h4>
+                <p>The E-value is the minimum strength of association, on the risk-ratio scale, that an unmeasured confounder would need with <em>both</em> treatment and outcome to fully explain away the observed effect (VanderWeele &amp; Ding, 2017). A large E-value means only an implausibly strong hidden confounder could account for the finding; an E-value barely above the observed association means the causal reading is fragile.</p>
+            </div>
+
+            <p>The idea predates the label: Rosenbaum and Rubin (1983b) modeled a hidden binary confounder and traced how the estimate moves as its assumed strength grows, and copula-based approaches (Franks, D'Amour &amp; Feller, 2020) parameterize the non-identified dependence directly, separating what the data constrain from what only assumptions do. Whatever the flavor, the practice belongs in the report, not the appendix. This framework applies the same discipline to its own outputs — an MMM is, at heart, a selection-on-observables design, and the <a href="identification-assumptions.html">identification contract</a> states each assumption it rests on and whether it is testable.</p>
+
+            <h2 id="choosing-a-strategy">Choosing a Strategy</h2>
+            <p>The decision guide is shorter than the menu suggests. Draw the causal graph first — it tells you whether your observables plausibly close every backdoor path. If they do, adjustment, weighting, or a doubly-robust estimator does the job, and metalearners extend it to heterogeneous effects. If an important confounder is unobserved, look for imported exogeneity: an instrument if a lottery or rule moves treatment; a threshold if assignment follows a cutoff; panel differencing if the groups share trends; a synthetic or extrapolated counterfactual if the treated unit is one aggregate series. Then match the estimand to the decision — IV and RD deliver local effects for compliers and near-threshold units, DiD and synthetic control deliver effects on the treated — and pressure-test whichever untestable assumption you bought. The same logic drives how this framework treats media measurement: observational MMM as the always-on adjustment estimate, experiments layered on top where the <a href="causal-inference.html">causal reading</a> is weakest.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Strategy</th>
+                        <th>Selection bias handled by</th>
+                        <th>Key assumption</th>
+                        <th>Estimand</th>
+                        <th>Typical failure</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Regression / IPW / doubly-robust</td>
+                        <td>Conditioning on covariates</td>
+                        <td>All confounders observed, overlap</td>
+                        <td>ATE / ATT</td>
+                        <td>Unmeasured confounder; bad controls</td>
+                    </tr>
+                    <tr>
+                        <td>DAG backdoor adjustment</td>
+                        <td>Graph-derived adjustment set</td>
+                        <td>The causal graph is correct</td>
+                        <td>ATE</td>
+                        <td>Wrong or incomplete graph</td>
+                    </tr>
+                    <tr>
+                        <td>Instrumental variables / 2SLS</td>
+                        <td>Exogenous instrument</td>
+                        <td>Exclusion restriction</td>
+                        <td>LATE (compliers)</td>
+                        <td>Weak instrument; side channels to outcome</td>
+                    </tr>
+                    <tr>
+                        <td>Difference-in-differences</td>
+                        <td>Panel differencing</td>
+                        <td>Common trends</td>
+                        <td>ATT</td>
+                        <td>Diverging pre-trends; anticipation</td>
+                    </tr>
+                    <tr>
+                        <td>Regression discontinuity</td>
+                        <td>Threshold comparison</td>
+                        <td>Continuity at the cutoff</td>
+                        <td>LATE at the cutoff</td>
+                        <td>Manipulation of the running variable</td>
+                    </tr>
+                    <tr>
+                        <td>Synthetic control</td>
+                        <td>Constructed donor counterfactual</td>
+                        <td>Pre-period match extrapolates</td>
+                        <td>ATT (single aggregate unit)</td>
+                        <td>Poor pre-fit; donor shocks</td>
+                    </tr>
+                    <tr>
+                        <td>Metalearners (S/T/X)</td>
+                        <td>ML under the CIA</td>
+                        <td>Unconfoundedness + overlap</td>
+                        <td>CATE</td>
+                        <td>Same as CIA — confounding is untouched</td>
+                    </tr>
+                    <tr>
+                        <td>BSTS / CausalImpact</td>
+                        <td>Time-series extrapolation</td>
+                        <td>Stable, unaffected control series</td>
+                        <td>ATT (over time)</td>
+                        <td>Spillover into controls; structural break</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Every quasi-experimental method targets the same selection-bias term; each replaces randomization with a different untestable assumption. Choose by which assumption you can defend, not by which method is fashionable.</li>
+                    <li>Draw the DAG before choosing an estimator — it decides whether adjustment can work at all and what a valid adjustment set is.</li>
+                    <li>Know the estimand you are buying: IV and RD deliver local effects for specific subpopulations; DiD and synthetic control deliver effects on the treated.</li>
+                    <li>Machine learning helps with effect heterogeneity, never with unmeasured confounding.</li>
+                    <li>Sensitivity analysis is part of the estimate. Report E-values or bounds; a causal claim that collapses under a modest hidden confounder should not be presented as causal.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Rubin, D. B. (1974). <em>Estimating Causal Effects of Treatments in Randomized and Nonrandomized Studies</em>. Journal of Educational Psychology, 66(5).</li>
+                <li>Angrist, J. D., &amp; Pischke, J.-S. (2009). <em>Mostly Harmless Econometrics: An Empiricist's Companion</em>. Princeton University Press.</li>
+                <li>Rosenbaum, P. R., &amp; Rubin, D. B. (1983a). <em>The Central Role of the Propensity Score in Observational Studies for Causal Effects</em>. Biometrika, 70(1).</li>
+                <li>Rosenbaum, P. R., &amp; Rubin, D. B. (1983b). <em>Assessing Sensitivity to an Unobserved Binary Covariate in an Observational Study with Binary Outcome</em>. Journal of the Royal Statistical Society, Series B, 45(2).</li>
+                <li>Pearl, J. (2009). <em>Causality: Models, Reasoning, and Inference</em> (2nd ed.). Cambridge University Press.</li>
+                <li>Imbens, G. W., &amp; Angrist, J. D. (1994). <em>Identification and Estimation of Local Average Treatment Effects</em>. Econometrica, 62(2).</li>
+                <li>Angrist, J. D. (1990). <em>Lifetime Earnings and the Vietnam Era Draft Lottery: Evidence from Social Security Administrative Records</em>. American Economic Review, 80(3).</li>
+                <li>Angrist, J. D., &amp; Krueger, A. B. (1991). <em>Does Compulsory School Attendance Affect Schooling and Earnings?</em> Quarterly Journal of Economics, 106(4).</li>
+                <li>Angrist, J. D., &amp; Lavy, V. (1999). <em>Using Maimonides' Rule to Estimate the Effect of Class Size on Scholastic Achievement</em>. Quarterly Journal of Economics, 114(2).</li>
+                <li>Card, D., &amp; Krueger, A. B. (1994). <em>Minimum Wages and Employment: A Case Study of the Fast-Food Industry in New Jersey and Pennsylvania</em>. American Economic Review, 84(4).</li>
+                <li>Lee, D. S. (2008). <em>Randomized Experiments from Non-random Selection in U.S. House Elections</em>. Journal of Econometrics, 142(2).</li>
+                <li>Abadie, A., Diamond, A., &amp; Hainmueller, J. (2010). <em>Synthetic Control Methods for Comparative Case Studies: Estimating the Effect of California's Tobacco Control Program</em>. Journal of the American Statistical Association, 105(490).</li>
+                <li>Xu, Y. (2017). <em>Generalized Synthetic Control Method: Causal Inference with Interactive Fixed Effects Models</em>. Political Analysis, 25(1).</li>
+                <li>K&uuml;nzel, S. R., Sekhon, J. S., Bickel, P. J., &amp; Yu, B. (2019). <em>Metalearners for Estimating Heterogeneous Treatment Effects Using Machine Learning</em>. PNAS, 116(10).</li>
+                <li>Brodersen, K. H., Gallusser, F., Koehler, J., Remy, N., &amp; Scott, S. L. (2015). <em>Inferring Causal Impact Using Bayesian Structural Time-Series Models</em>. Annals of Applied Statistics, 9(1).</li>
+                <li>VanderWeele, T. J., &amp; Ding, P. (2017). <em>Sensitivity Analysis in Observational Research: Introducing the E-Value</em>. Annals of Internal Medicine, 167(4).</li>
+                <li>Franks, A. M., D'Amour, A., &amp; Feller, A. (2020). <em>Flexible Sensitivity Analysis for Observational Studies Without Observable Implications</em>. Journal of the American Statistical Association, 115(532).</li>
+                <li>Li, F., Ding, P., &amp; Mealli, F. (2023). <em>Bayesian Causal Inference: A Critical Review</em>. Philosophical Transactions of the Royal Society A, 381(2247).</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

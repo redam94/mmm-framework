@@ -953,7 +953,7 @@ scenarios = {
             carryover is convolved across the cutoff correctly.
         </p>
         <p>
-            <strong>Measured (from the baked notebook <code>nbs/backtest_validation.ipynb</code>)</strong> —
+            <strong>Measured (from the baked notebook <code>nbs/validation/backtest_validation.ipynb</code>)</strong> —
             realistic synthetic world (156 weeks &times; 7 channels, confounded spend, low
             signal-to-noise), 4 refits at cutoffs {104, 117, 130, 143}, 13-week horizons,
             52 graded out-of-time weekly forecasts (NumPyro, 4 chains &times; 500 draws;
@@ -1024,8 +1024,8 @@ result.coverage()    <span class="comment"># nominal vs empirical interval cover
         <div class="success-box">
             <h4>Run it yourself</h4>
             <p>
-                This section mirrors <code>nbs/backtest_validation.ipynb</code> (authored by
-                <code>nbs/build_backtest_validation.py</code>). Every computational cell ends in a
+                This section mirrors <code>nbs/validation/backtest_validation.ipynb</code> (authored by
+                <code>nbs/builders/build_backtest_validation.py</code>). Every computational cell ends in a
                 seeded assert encoding the claim it demonstrates; the measured headlines above are
                 recorded in <code>nbs/artifacts/backtest_metrics.json</code> at bake time. If a
                 re-bake moves a number materially, this page is stale.

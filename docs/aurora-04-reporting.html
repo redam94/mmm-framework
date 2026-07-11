@@ -358,7 +358,7 @@
                 read trace plots. <code>mmm_framework</code> renders a <strong>self-contained, themed HTML
                 report</strong> straight from a fitted model: executive summary, ROAS with uncertainty,
                 additive decomposition, diagnostics, and a causal-assumptions section so stakeholders see
-                what the number rests on. This page mirrors <code>nbs/04_reporting.ipynb</code> — and
+                what the number rests on. This page mirrors <code>nbs/aurora/04_reporting.ipynb</code> — and
                 because Aurora's world has a known ground truth, we can grade the report's own numbers.
             </p>
 
@@ -386,8 +386,8 @@
                 </ul>
                 <p>
                     <strong>Run it:</strong>
-                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/04_reporting.ipynb"
-                       target="_blank" rel="noopener"><code>nbs/04_reporting.ipynb</code></a> on GitHub.
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/aurora/04_reporting.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/aurora/04_reporting.ipynb</code></a> on GitHub.
                 </p>
             </div>
 
@@ -548,7 +548,7 @@ exec_report.to_html("artifacts/aurora_exec_summary.html")</code></pre>
                 <strong>Measured</strong> — ROI means, 80% CIs and assessments extracted from the baked
                 report artifact (<code>nbs/artifacts/aurora_report.html</code>, the file
                 <code>04_reporting.ipynb</code> writes); ground-truth ROAS from the Aurora generator
-                (<code>nbs/aurora.py</code>). Toggle the views and watch what each one would make you decide.
+                (<code>nbs/builders/aurora.py</code>). Toggle the views and watch what each one would make you decide.
             </p>
 
             <p>
@@ -716,9 +716,9 @@ exec_report.to_html("artifacts/aurora_exec_summary.html")</code></pre>
             <div class="note">
                 <h4>💡 Run it yourself</h4>
                 <p>
-                    This page mirrors <code>nbs/04_reporting.ipynb</code> (committed with baked outputs),
-                    regenerated from <code>nbs/build_aurora_notebooks.py</code>; the shared Aurora world
-                    lives in <code>nbs/aurora.py</code> and the series guide in
+                    This page mirrors <code>nbs/aurora/04_reporting.ipynb</code> (committed with baked outputs),
+                    regenerated from <code>nbs/builders/build_aurora_notebooks.py</code>; the shared Aurora world
+                    lives in <code>nbs/builders/aurora.py</code> and the series guide in
                     <code>nbs/README_aurora.md</code>. Generated artifacts land in
                     <code>nbs/artifacts/</code>. Source:
                     <a href="https://github.com/redam94/mmm-framework" target="_blank">github.com/redam94/mmm-framework</a>.
@@ -785,9 +785,9 @@ exec_report.to_html("artifacts/aurora_exec_summary.html")</code></pre>
         // ------------------------------------------------------------------
         // MEASURED data
         // ROI table extracted from the baked report artifact written by
-        // nbs/04_reporting.ipynb (nbs/artifacts/aurora_report.html):
+        // nbs/aurora/04_reporting.ipynb (nbs/artifacts/aurora_report.html):
         // per-channel ROI mean, 80% CI, evidence assessment.
-        // trueRoas from the Aurora generator's oracle (nbs/aurora.py).
+        // trueRoas from the Aurora generator's oracle (nbs/builders/aurora.py).
         // ------------------------------------------------------------------
         const CHANNELS = [
             { name: 'TV',      color: PT.colors.tv,      roi: 0.33, lo: 0.05, hi: 0.78, assess: 'Underperforming', truth: 2.14 },
@@ -834,7 +834,7 @@ exec_report.to_html("artifacts/aurora_exec_summary.html")</code></pre>
                 'verdict (0.71 — below break-even, cut it) when the data is equally consistent with 0.09 and 1.69. ' +
                 'This view exists to show what the request costs.',
             graded: '<strong>Measured + oracle</strong> — report estimates (bars, 80% CI) against Aurora’s ' +
-                'known true ROAS (diamonds, from <code>nbs/aurora.py</code>). Search 1.04 vs truth 0.66 ' +
+                'known true ROAS (diamonds, from <code>nbs/builders/aurora.py</code>). Search 1.04 vs truth 0.66 ' +
                 '(demand-chasing, <a href="stress-03-confounding-selection.html">stress 03</a>); TV 0.33 vs 2.14 and ' +
                 'Display 0.67 vs 2.11 (mediated brand effects, <a href="aurora-03-extended-mmm.html">chapter 3</a>). ' +
                 'No report generator can see this from the fit — which is why the report ships its causal-assumptions section.'

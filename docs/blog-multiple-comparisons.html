@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hundreds of Models, One Winner: Multiple Comparisons and the Winner's Curse | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Select the best of hundreds of model runs and its performance is exaggerated: Type S/M errors, the winner's curse, and why partial pooling beats Bonferroni.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-multiple-comparisons.html">
+    <meta property="og:title" content="Hundreds of Models, One Winner: Multiple Comparisons and the Winner's Curse">
+    <meta property="og:description" content="Select the best of hundreds of model runs and its performance is exaggerated: Type S/M errors, the winner's curse, and why partial pooling beats Bonferroni.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-multiple-comparisons.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Hundreds of Models, One Winner: Multiple Comparisons and the Winner's Curse">
+    <meta name="twitter:description" content="Select the best of hundreds of model runs and its performance is exaggerated: Type S/M errors, the winner's curse, and why partial pooling beats Bonferroni.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-multiple-comparisons.html",
+          "name": "Hundreds of Models, One Winner: Multiple Comparisons and the Winner's Curse | MMM Framework",
+          "description": "Select the best of hundreds of model runs and its performance is exaggerated: Type S/M errors, the winner's curse, and why partial pooling beats Bonferroni.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-10",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-multiple-comparisons.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-multiple-comparisons.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Hundreds of Models, One Winner: Multiple Comparisons and the Winner's Curse",
+          "datePublished": "2026-04-09",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-multiple-comparisons.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-multiple-comparisons.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Hundreds of Models, One Winner: Multiple Comparisons and the Winner's Curse",
+              "item": "https://redam94.github.io/mmm-framework/blog-multiple-comparisons.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#winners-curse">The Winner's Curse</a></li>
+                <li><a href="#forking-paths">The Garden of Forking Paths</a></li>
+                <li><a href="#type-s-type-m">Type S and Type M Errors</a></li>
+                <li><a href="#classical-corrections">Treating the Symptom</a></li>
+                <li><a href="#partial-pooling">Correcting the Estimates</a></li>
+                <li><a href="#mmm-practice">Choosing Among Model Specifications</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Hundreds of Models, One Winner: Multiple Comparisons and the Winner's Curse</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-04-09">April 9, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Practice</span>
+            </p>
+            <p class="lead">Fit enough model variants and one of them will look spectacular. The uncomfortable part is that its measured performance — the tight fit, the significant channel effects, the flattering ROI — is inflated by the very act of selecting it. This post explains why that happens, why the classical p-value corrections don't really fix it, and why the durable answer is to shrink the estimates before you compare them.</p>
+
+            <p>The workflow is familiar to anyone who has built a media mix model under deadline: four adstock forms, three saturation curves, a handful of control sets, two trend specifications — a grid of hundreds of runs. Somebody scores them, sorts the table, and the top row becomes "the model." The same pattern recurs at every scale of measurement: the best creative out of forty test cells, the strongest lift out of twelve channels, the highest measured ROI out of two hundred geos.</p>
+
+            <p>In every case the selection operates on <em>noisy estimates</em>, and the maximum of a set of noisy estimates is biased upward as an estimate of the winner's true value. Auction theorists call this the winner's curse: the bidder who wins is, on average, the one who most overestimated the object's worth. Statistics has an exact analogue, worked out in detail by Gelman and collaborators; its pieces — the garden of forking paths, Type S and Type M errors, and partial pooling — assemble into a practical answer for model builders.</p>
+
+            <h2 id="winners-curse">The Winner's Curse</h2>
+            <p>Suppose each of \( m \) candidate models (or channels, or test cells) has some true quality \( \tau_j \), and the analysis produces an estimate \( \hat{\tau}_j = \tau_j + \varepsilon_j \) with noise \( \varepsilon_j \). Ranking by \( \hat{\tau}_j \) and taking the top row does not select the model with the largest \( \tau_j \); it selects the model with the largest <em>sum</em> of true quality and luck. Conditional on being the winner, the noise term is almost surely positive — and the more candidates you screened, the larger the winner's luck component is likely to be.</p>
+
+            <p>This is not a subtle bias. When the true qualities are close together — exactly the situation when comparing hundreds of minor variations on one model — the ranking is driven almost entirely by noise, and the winner's measured edge is close to pure artifact. Its performance will not replicate, its "significant" coefficients carry no evidential weight, and decisions calibrated to its point estimates are calibrated to luck.</p>
+
+            <p>Naming the problem "multiple comparisons" makes it sound like a technicality about p-values. It is better understood as a statement about estimation: <strong>selection converts honest estimates into dishonest ones</strong>. Any fix that leaves the estimates untouched and only adjusts the significance threshold is treating the symptom.</p>
+
+            <h2 id="forking-paths">The Garden of Forking Paths</h2>
+            <p>How much multiplicity does a model search actually contain? The raw arithmetic is bad enough: with \( m \) independent tests each run at level \( \alpha \),</p>
+            $$ P(\text{at least one false positive}) \;=\; 1 - (1 - \alpha)^m , $$
+            <p>which at \( \alpha = 0.05 \) reaches 99.4% for a hundred models and is effectively certain for a thousand. But Gelman and Loken (2013) argue the count of tests you <em>ran</em> understates the problem. They distinguish three levels of data-contingent analysis:</p>
+            <ol>
+                <li><strong>A pre-specified test</strong>, \( T(y; \phi) \) with the procedure \( \phi \) fixed before seeing data. Here the classical calibration holds.</li>
+                <li><strong>Researcher degrees of freedom</strong>, \( T(y; \phi(y)) \): one analysis is performed, but its choices — transformation, controls, outlier handling — were made after seeing the data. Different data would have produced a different test, so the multiplicity is real even though only one model was ever fit.</li>
+                <li><strong>Explicit search</strong>, \( T(y; \phi^{\text{best}}(y)) \): many analyses are run and the best is reported.</li>
+            </ol>
+            <p>Selecting specifications by fit or significance is structurally case 3, and no bad intent is required — it is what a diligent analyst does when the workflow is "iterate until it looks right." Worse, the effective model space is the <em>combinatorial</em> one: every variable, transformation, and interaction that could have been tried. The hundreds of models you fit sample a space of millions you implicitly searched. A p-value computed as if the winning specification had been pre-specified answers a question nobody asked.</p>
+
+            <h2 id="type-s-type-m">Type S and Type M Errors</h2>
+            <p>The classical error framework — Type 1 and Type 2 — is a poor lens for this problem, because it is organized around a null hypothesis that is rarely believed. In marketing measurement, no channel's true effect is exactly zero; the practical questions are whether we have the <em>direction</em> right and whether the <em>magnitude</em> is anywhere near the truth. Gelman and Tuerlinckx (2000) reframed the errors accordingly, and Gelman and Carlin (2014) built a design-analysis workflow around them:</p>
+
+            <div class="definition">
+                <h4>Definition: Type S and Type M errors</h4>
+                <p>A <strong>Type S (sign) error</strong> occurs when the analysis claims an effect is in one direction — \( \hat{\tau} \gt 0 \), or \( \hat{\tau}_j \gt \hat{\tau}_k \) for a comparison — when the true effect runs the other way.</p>
+                <p>A <strong>Type M (magnitude) error</strong> occurs when the estimated size is far from the true size. Its natural measure is the <strong>exaggeration ratio</strong></p>
+                $$ \text{exaggeration ratio} \;=\; \frac{|\hat{\tau}|}{|\tau|}, $$
+                <p>the factor by which the reported effect overstates (or understates) the real one.</p>
+            </div>
+
+            <p>The connection to low power is the key intuition. A result is declared significant when \( |\hat{\tau}| \gt 1.96\,\mathrm{se} \). If the true effect is small relative to the standard error, the only estimates that clear that bar are the ones that landed far from the truth — the significance filter <em>selects for</em> overestimates. Compare two estimators when the true effect is near zero: with a standard deviation of 1, the significant estimates are modest; with a standard deviation of 3, the estimates that clear the bar are far larger in absolute value, giving the impression of a big effect. Large significant estimates from noisy analyses are a byproduct of the noise, not evidence of large effects. And with a wide sampling distribution straddling zero, the sign of a significant estimate approaches a coin flip — Type S errors climb alongside Type M.</p>
+
+            <div class="warning">
+                <h4>⚠️ The winner is the biggest Type M error</h4>
+                <p>Combine the significance filter with a search over hundreds of specifications and the biases compound: the specification crowned "best" is disproportionately the one whose noise was most flattering. The most significant result from a heavily searched space is not the strongest finding — in expectation, it is the most exaggerated one.</p>
+            </div>
+
+            <p>This matters operationally because subgroup cuts are where MMM insight is supposed to come from. Splitting a national read into channel &times; region &times; audience cells shrinks the sample behind each estimate and inflates each standard error — raising Type S and Type M rates at exactly the granularity where reallocation decisions get made.</p>
+
+            <h2 id="classical-corrections">Treating the Symptom: Classical Corrections</h2>
+            <p>The textbook response to multiplicity is to adjust the significance threshold:</p>
+
+            <table>
+                <thead>
+                    <tr><th>Method</th><th>Rule at \( m = 100 \)</th><th>What it controls</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Bonferroni</td><td>test each at \( p \le 0.0005 \)</td><td>Familywise error rate (any false positive)</td></tr>
+                    <tr><td>Holm</td><td>step-down variant, slightly more powerful</td><td>Familywise error rate</td></tr>
+                    <tr><td>Benjamini&ndash;Hochberg</td><td>largest \( k \) with \( p_{(k)} \le (k/m)\,\alpha \)</td><td>False discovery rate (share of false positives)</td></tr>
+                </tbody>
+            </table>
+
+            <p>These procedures have legitimate homes — Bonferroni and Holm for a few high-stakes pre-specified tests, Benjamini&ndash;Hochberg (1995) for thousands of parallel tests with a follow-up screen, as in genomics — but for model selection they fail on three counts.</p>
+            <p>First, they are threshold adjustments only. The point estimates — the quantities the Type M framing says are the actual problem — pass through untouched. A Bonferroni-corrected analysis of the winning model reports the same exaggerated ROI, just with a wider interval around it. Second, they assume pre-specified tests — precisely what a model search violates; there is no honest \( m \) to plug in when the implicit space is combinatorial. Third, a stricter threshold cuts power further, and low power is the engine of Type S and Type M errors — a classical correction can make surviving estimates <em>less</em> trustworthy in sign and magnitude even as false positives get rarer. In the Infant Health and Development Program subgroup analysis discussed by Gelman, Hill and Yajima (2012), Bonferroni widening pushed four classical subgroup intervals to cover zero, while the multilevel intervals for the same subgroups sat stably away from it.</p>
+
+            <h2 id="partial-pooling">Correcting the Estimates: Partial Pooling</h2>
+            <p>The Bayesian move, argued at length by Gelman, Hill and Yajima (2012), is to change the estimates rather than the thresholds. Model the many quantities being compared — channel effects, geo ROIs, subgroup lifts — as draws from a common population:</p>
+            $$ \bar{y}_j \mid \theta_j \sim \mathrm{N}\!\left(\theta_j,\, \sigma_{\bar{y}}^2\right), \qquad \theta_j \sim \mathrm{N}\!\left(\mu,\, \sigma_\theta^2\right), \qquad j = 1, \dots, J. $$
+            <p>The posterior mean for each \( \theta_j \) is a precision-weighted compromise between that group's own data \( \bar{y}_j \) and the population mean \( \mu \) — partial pooling. Estimates measured noisily are pulled hard toward the center; estimates measured precisely barely move. The consequence for comparisons is the central algebraic fact of this literature: the posterior z-score of any pairwise comparison is the classical z-score times a shrinkage factor,</p>
+            $$ z_{\text{Bayes}} \;=\; \underbrace{\frac{\bar{y}_j - \bar{y}_k}{\sqrt{2}\,\sigma_{\bar{y}}}}_{\text{classical } z} \;\cdot\; \underbrace{\frac{1}{\sqrt{1 + \sigma_{\bar{y}}^2 / \sigma_\theta^2}}}_{\text{shrinkage factor}\; \lt\; 1}. $$
+            <p>The factor is always below one, and its size is governed by the variance ratio \( \sigma_\theta^2 / \sigma_{\bar{y}}^2 \). When the groups are genuinely similar (\( \sigma_\theta^2 \) small), shrinkage is strong and comparisons are aggressively damped — precisely the regime where the winner's curse bites hardest. When the groups genuinely differ (\( \sigma_\theta^2 \) large), the factor approaches one and inference approaches the classical answer — little correction was needed.</p>
+
+            <div class="note">
+                <h4>💡 The correction is data-adaptive — in both directions</h4>
+                <p>Bonferroni applies the same blunt penalty whether the effects are indistinguishable or wildly different. Partial pooling estimates \( \sigma_\theta \) from the data and corrects only as much as the data warrant. In Gelman, Hill and Yajima's analysis of state-level NAEP test scores, where true state differences are large, the multilevel model declared <em>more</em> confident comparisons than an FDR-corrected classical analysis — it refuses to over-correct when real differences are well supported.</p>
+            </div>
+
+            <p>The simulation evidence is stark. Using the eight-schools structure — eight effects drawn from \( \mathrm{N}(0, 5^2) \), standard errors from Rubin (1981), all 28 pairwise comparisons, 1,000 replications — the classical analysis finds at least one significant comparison in 47% of replications, and among the comparisons it declares significant only 63% have the correct sign: a 37% Type S rate on published claims. The hierarchical analysis declares far fewer comparisons (at least one in only 5% of replications), and the claims it does make have the right sign 89% of the time. Rerun with genuinely large effects, \( \mathrm{N}(0, 10^2) \), and the model adapts: shrinkage weakens, more comparisons survive, and sign accuracy rises to 96%. Fewer claims, better claims — and no explicit correction step anywhere in the procedure.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Property</th><th>Classical corrections (Bonferroni / FDR)</th><th>Multilevel model (partial pooling)</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>What is adjusted</td><td>Threshold or interval width</td><td>The point estimates themselves, plus intervals</td></tr>
+                    <tr><td>Point estimates</td><td>Unchanged (still exaggerated)</td><td>Shrunk toward the population mean</td></tr>
+                    <tr><td>Interval width</td><td>Always wider</td><td>Can be narrower than classical</td></tr>
+                    <tr><td>Adapts to the data</td><td>No — fixed penalty in \( m \)</td><td>Yes — via the variance ratio</td></tr>
+                    <tr><td>Type S / Type M errors</td><td>Not addressed; can worsen via power loss</td><td>Directly reduced by shrinkage</td></tr>
+                </tbody>
+            </table>
+
+            <p>Why does this count as a multiple-comparisons correction? Multiplicity is only a problem because the estimates are uncertain, and classical inference ignores what the estimates say about each other. A hierarchical model treats the \( J \) estimates as evidence about a shared population, so each borrows strength from the rest — and the noisiest estimates, precisely those most prone to sign and magnitude errors, are pulled hardest toward the center. Selection applied to shrunken estimates is selection applied to already-honest quantities. Greenland and Robins (1991) made the same argument in epidemiology, and the James&ndash;Stein result (Efron &amp; Morris, 1975) is its frequentist shadow: with three or more parallel estimates, pooling dominates outright.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Deriving the z-score shrinkage factor</summary>
+                <div class="deep-dive-body">
+                    <p>In the normal-normal model, standard conjugate algebra gives each group's posterior as normal with</p>
+                    $$ \mathbb{E}\left[\theta_j \mid \bar{y}\right] = \frac{\mu/\sigma_\theta^2 + \bar{y}_j/\sigma_{\bar{y}}^2}{1/\sigma_\theta^2 + 1/\sigma_{\bar{y}}^2}, \qquad \operatorname{sd}\left[\theta_j \mid \bar{y}\right] = \left(\frac{1}{\sigma_\theta^2} + \frac{1}{\sigma_{\bar{y}}^2}\right)^{-1/2}. $$
+                    <p>For the comparison \( \theta_j - \theta_k \), the shared prior mean \( \mu \) cancels and (treating the group posteriors as conditionally independent given the hyperparameters):</p>
+                    $$ \mathbb{E}\left[\theta_j - \theta_k \mid \bar{y}\right] = \frac{\sigma_\theta^2}{\sigma_\theta^2 + \sigma_{\bar{y}}^2}\,(\bar{y}_j - \bar{y}_k), \qquad \operatorname{sd}\left[\theta_j - \theta_k \mid \bar{y}\right] = \frac{\sqrt{2}\,\sigma_{\bar{y}}\,\sigma_\theta}{\sqrt{\sigma_\theta^2 + \sigma_{\bar{y}}^2}}. $$
+                    <p>Dividing mean by standard deviation and factoring out the classical z-score \( (\bar{y}_j - \bar{y}_k)/(\sqrt{2}\,\sigma_{\bar{y}}) \):</p>
+                    $$ z_{\text{Bayes}} = \frac{\bar{y}_j - \bar{y}_k}{\sqrt{2}\,\sigma_{\bar{y}}} \cdot \frac{\sigma_\theta}{\sqrt{\sigma_\theta^2 + \sigma_{\bar{y}}^2}} = z_{\text{classical}} \cdot \frac{1}{\sqrt{1 + \sigma_{\bar{y}}^2/\sigma_\theta^2}}. $$
+                    <p>The limits bracket the behavior: as \( \sigma_\theta \to 0 \) the factor goes to zero (identical groups — declare nothing); as \( \sigma_\theta \to \infty \) it goes to one (unrelated groups — classical inference returns). In practice \( \sigma_\theta \) is estimated from the data, which is what makes the correction adaptive. Note also that the posterior standard deviation of \( \theta_j \) is strictly smaller than the classical standard error: the model earns <em>narrower</em> intervals and fewer significant comparisons at once, because the point estimates moved.</p>
+                </div>
+            </details>
+
+            <h2 id="mmm-practice">Choosing Among Model Specifications</h2>
+            <p>Marketing mix modeling meets this problem in two distinct shapes, and it pays to treat them separately.</p>
+
+            <p><strong>Many parallel estimates inside one model.</strong> Channel effects across geos, ROIs across products, lifts across segments — these are the eight schools in different clothes, and the prescription transfers directly: give them hierarchical structure. A per-geo channel effect modeled with partial pooling toward the channel's national mean is a per-geo estimate that has already paid its multiple-comparisons tax. Ranking shrunken geo ROIs and reallocating toward the top of the list is a defensible operation; ranking unpooled ones is a winner's-curse generator.</p>
+
+            <p><strong>Many candidate specifications.</strong> The harder shape is the one this post opened with: hundreds of model variants, one winner. Here the honest answer is to stop framing it as a selection-by-significance problem at all.</p>
+            <ol>
+                <li><strong>Replace the search with one encompassing model.</strong> Most of what the grid searches over — which controls, which transformations — can live inside one larger model with regularizing priors that encode skepticism about extreme effects: ridge-like normal priors, or sparsity-inducing priors such as the horseshoe for large candidate sets. Shrinkage priors play the same role for specification uncertainty that partial pooling plays for group estimates; the <a href="variable-selection.html">variable selection</a> page covers the options in the MMM setting.</li>
+                <li><strong>If a smaller model is needed, project it out of the full one.</strong> Projection predictive selection (Piironen &amp; Vehtari, 2017) fits the full regularized model once, then finds the smallest submodel that preserves its predictive distribution. The selection is guided by one posterior rather than by hundreds of independent significance tests, which is what removes the overfitting-by-search.</li>
+                <li><strong>Compare models on out-of-sample prediction, not in-sample fit.</strong> Cross-validated predictive accuracy (in practice PSIS-LOO) measures something selection cannot trivially inflate — though comparing hundreds of candidates reintroduces selection noise, an argument for a few structurally distinct models rather than a dense grid of near-duplicates.</li>
+                <li><strong>When the comparison is uncertain, average instead of selecting.</strong> Stacking predictive distributions (Yao et al., 2018) sidesteps the winner's curse entirely: no single winner is crowned, so no winner's luck is baked into the reported numbers.</li>
+                <li><strong>If you do explore a grid, report the grid.</strong> A multiverse analysis (Steegen et al., 2016) fits all plausible specifications and shows how the conclusion moves across them. If the ROI ranking is stable across the model space, the specification choice was never the risk; if it swings, that instability <em>is</em> the finding.</li>
+            </ol>
+
+            <p>Underneath all five recommendations is a discipline point rather than a technique point: decide the analysis before the data decides it for you. Pre-specifying the model space, the priors, and the decision rule — and iterating transparently when the data forces a change — is the multiplicity control that no formula supplies. That discipline, and the diagnostics that support honest iteration, are the subject of the <a href="bayesian-workflow.html">Bayesian workflow</a> page; the forking-paths argument is ultimately an argument for workflow, not for a different correction factor.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Selecting the best of many noisy estimates inflates the winner's measured performance — and the bias grows with the number of candidates and the noise.</li>
+                    <li>Multiplicity is broader than the tests you ran: data-contingent choices (the garden of forking paths) create multiplicity even in a single fitted model.</li>
+                    <li>Think in Type S (sign) and Type M (magnitude) errors, not Type 1: under low power, the significance filter selects for exaggerated estimates, and searches select for the most exaggerated of all.</li>
+                    <li>Bonferroni and FDR adjust thresholds but leave the exaggerated point estimates untouched — and by cutting power they can make surviving claims worse in sign and magnitude.</li>
+                    <li>Partial pooling shrinks estimates toward each other adaptively, so selection operates on already-honest quantities; for specification search, prefer one regularized encompassing model, projection predictive selection, stacking, or a reported multiverse over crowning a single significant winner.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Gelman, A., &amp; Carlin, J. (2014). <em>Beyond Power Calculations: Assessing Type S (Sign) and Type M (Magnitude) Errors</em>. Perspectives on Psychological Science, 9(6).</li>
+                <li>Gelman, A., Hill, J., &amp; Yajima, M. (2012). <em>Why We (Usually) Don't Have to Worry About Multiple Comparisons</em>. Journal of Research on Educational Effectiveness, 5(2).</li>
+                <li>Gelman, A., &amp; Loken, E. (2013). <em>The Garden of Forking Paths: Why Multiple Comparisons Can Be a Problem, Even When There Is No "Fishing Expedition" or "p-Hacking" and the Research Hypothesis Was Posited Ahead of Time</em>. Department of Statistics, Columbia University.</li>
+                <li>Gelman, A., &amp; Tuerlinckx, F. (2000). <em>Type S Error Rates for Classical and Bayesian Single and Multiple Comparison Procedures</em>. Computational Statistics, 15(3).</li>
+                <li>Benjamini, Y., &amp; Hochberg, Y. (1995). <em>Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing</em>. Journal of the Royal Statistical Society, Series B, 57(1).</li>
+                <li>Rubin, D. B. (1981). <em>Estimation in Parallel Randomized Experiments</em>. Journal of Educational Statistics, 6(4).</li>
+                <li>Efron, B., &amp; Morris, C. (1975). <em>Data Analysis Using Stein's Estimator and Its Generalizations</em>. Journal of the American Statistical Association, 70(350).</li>
+                <li>Greenland, S., &amp; Robins, J. M. (1991). <em>Empirical-Bayes Adjustments for Multiple Comparisons Are Sometimes Useful</em>. Epidemiology, 2(4).</li>
+                <li>Piironen, J., &amp; Vehtari, A. (2017). <em>Comparison of Bayesian Predictive Methods for Model Selection</em>. Statistics and Computing, 27(3).</li>
+                <li>Yao, Y., Vehtari, A., Simpson, D., &amp; Gelman, A. (2018). <em>Using Stacking to Average Bayesian Predictive Distributions</em>. Bayesian Analysis, 13(3).</li>
+                <li>Steegen, S., Tuerlinckx, F., Gelman, A., &amp; Vanpaemel, W. (2016). <em>Increasing Transparency Through a Multiverse Analysis</em>. Perspectives on Psychological Science, 11(5).</li>
+                <li>Gelman, A., Vehtari, A., Simpson, D., Margossian, C. C., Carpenter, B., Yao, Y., Kennedy, L., Gabry, J., B&uuml;rkner, P.-C., &amp; Modr&aacute;k, M. (2020). <em>Bayesian Workflow</em>. arXiv:2011.01808.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
