@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Inference 09: The Measurement Program | MMM Framework</title>
+    <meta name="description" content="Print tops the EIG × EVOI grid (1.17 nats, 634 KPI units); Radio is retest-due 83 weeks on; EVPI 1,624 ≈ 4.4% of budget value caps the measurement program.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-09-measurement-program.html">
+    <meta property="og:title" content="Causal Inference 09: The Measurement Program | MMM Framework">
+    <meta property="og:description" content="A year of learning, budgeted like the investment it is: EIG and EVOI price every candidate test, EVPI caps the program, evidence decays on half-lives, and the calendar packs itself.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-09-measurement-program.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Causal Inference in Practice series
+           (same kit as the Pressure Tests pages — tokens only).
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .discipline-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .discipline-card ol { margin: 0.5rem 0 0 1.1rem; }
+        .discipline-card li { margin: 0.5rem 0; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Causal Inference 09: The Measurement Program | MMM Framework">
+    <meta name="twitter:description" content="A year of learning, budgeted like the investment it is: EIG and EVOI price every candidate test, EVPI caps the program, evidence decays on half-lives, and the calendar packs itself.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/causal-09-measurement-program.html",
+          "name": "Causal Inference 09: The Measurement Program | MMM Framework",
+          "description": "Print tops the EIG × EVOI grid (1.17 nats, 634 KPI units); Radio is retest-due 83 weeks on; EVPI 1,624 ≈ 4.4% of budget value caps the measurement program.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/causal-09-measurement-program.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/causal-09-measurement-program.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Causal Inference 09: The Measurement Program",
+          "datePublished": "2026-06-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/causal-09-measurement-program.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/causal-09-measurement-program.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Demos & Reports",
+              "item": "https://redam94.github.io/mmm-framework/demos.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Causal Inference 09: The Measurement Program",
+              "item": "https://redam94.github.io/mmm-framework/causal-09-measurement-program.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Two currencies</a></li>
+                <li><a href="#grid">The priority grid</a></li>
+                <li><a href="#asterisk">The honest asterisk</a></li>
+                <li><a href="#evpi">EVPI · the ceiling</a></li>
+                <li><a href="#decay">Evidence decays</a></li>
+                <li><a href="#calendar">The calendar</a></li>
+                <li><a href="#memory">The program's memory</a></li>
+                <li><a href="#rules">Operating rules</a></li>
+                <li><a href="#quiz">Check your understanding</a></li>
+                <li><a href="#run-it">Run it yourself</a></li>
+            </ul>
+
+            <h3>Causal Inference in Practice</h3>
+            <ul class="sidebar-nav">
+                <li><a href="causal-07-many-experiments.html">07 · Many Experiments</a></li>
+                <li><a href="causal-08-designing-next-experiment.html">08 · Designing the Next Experiment</a></li>
+                <li><a href="causal-09-measurement-program.html" class="active">09 · The Measurement Program</a></li>
+                <li><a href="causal-10-closed-loop.html">10 · The Closed Loop</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Causal Inference 09: The Measurement Program</h1>
+            <p class="lead">
+                A year of learning, budgeted like the investment it is.
+                <a href="causal-08-designing-next-experiment.html">Notebook&nbsp;08</a> chose one
+                experiment well. A measurement <strong>program</strong> is a different problem: seven
+                channels, finite testing capacity, cool-downs, seasons — and evidence that quietly
+                <em>expires</em> while you're busy elsewhere. This page mirrors
+                <code>nbs/causal/causal_09_planning_the_measurement_series.ipynb</code>: the framework
+                prices every candidate test in two currencies — <strong>EIG</strong> (expected
+                information gain, nats: what a feasible test would <em>teach</em>) and
+                <strong>EVOI</strong> (expected value of information, KPI units: what knowing is
+                <em>worth</em> to the budget decision) — under one ceiling, <strong>EVPI</strong>,
+                the value of perfect information about everything. A channel can be wildly uncertain
+                and still worth nothing to test — if no plausible answer would change the allocation.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">1.17 nats</div>
+                    <div class="stat-label">Print's EIG — top priority (EVOI 634 KPI units, quadrant test_now): the engine lands where rung 7 pointed</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">1,624</div>
+                    <div class="stat-label">EVPI in KPI units — 4.4% of the optimal-budget value (36,638): the rational ceiling of the entire measurement budget</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">0.70 nats</div>
+                    <div class="stat-label">what a fresh Radio test would buy, 84 weeks after its late-2022 readout (52-week half-life) — already RETEST-DUE</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">15.5</div>
+                    <div class="stat-label">TV's EVOI — "deprioritize". Correct for known unknowns, blind to the hidden bias rung 2 flagged: hence a validation track</div>
+                </div>
+            </div>
+
+            <h2 id="grid">1 — The priority grid</h2>
+            <p>
+                Inputs: the current posterior (the series' rung-2 fit on Veranda's seven-channel
+                history) and the evidence ledger from
+                <a href="causal-07-many-experiments.html">notebook&nbsp;07</a> — Radio's go-dark
+                readout window ended <strong>2022-11-28</strong>, Display's off-panel holdout ended
+                <strong>2024-04-22</strong>. Planning date: <strong>2024-07-01</strong>. Per channel,
+                the engine simulates a feasible national-pulse test, computes EIG against the
+                channel's current ROI posterior (decayed where evidence exists), and EVOI by
+                re-optimizing the budget across simulated readouts:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>channel</th>
+                        <th>spend share</th>
+                        <th>ROI posterior</th>
+                        <th>EIG (nats)</th>
+                        <th>EVOI (KPI)</th>
+                        <th>quadrant</th>
+                        <th>evidence</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Print</strong></td><td>5.2%</td><td>0.82 ± 0.57</td><td><strong>1.17</strong></td><td><strong>634</strong></td><td>test_now</td><td>—</td></tr>
+                    <tr><td>Radio</td><td>8.1%</td><td>0.66 ± 0.38</td><td>1.03</td><td>591</td><td>test_now</td><td>83 wk ago → <strong>retest due</strong></td></tr>
+                    <tr><td>Display</td><td>12.6%</td><td>0.76 ± 0.25</td><td>0.53</td><td>158</td><td>test_now</td><td>10 wk ago</td></tr>
+                    <tr><td>Social</td><td>15.5%</td><td>0.76 ± 0.18</td><td>0.37</td><td>31</td><td>learn_cheaply</td><td>—</td></tr>
+                    <tr><td>Search</td><td>19.6%</td><td>0.55 ± 0.11</td><td>0.25</td><td>42</td><td>monitor</td><td>—</td></tr>
+                    <tr><td>TV</td><td>28.2%</td><td>0.66 ± 0.08</td><td>0.10</td><td>15</td><td>deprioritize</td><td>—</td></tr>
+                    <tr><td>Video</td><td>10.7%</td><td>2.12 ± 0.39</td><td>0.25</td><td>0.6</td><td>deprioritize</td><td>—</td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured</strong> — <code>nbs/artifacts/causal_09_program.json</code> (grid
+                order = priority order). Print — the channel whose split the Radio test resolved onto
+                shaky ground in notebook&nbsp;07 — is the program's top priority, and the engine
+                found it <em>independently</em> of rung 7's narrative. Note Video: one of the widest
+                ROI posteriors on the board (2.12 ± 0.39), a respectable EIG of 0.25 nats — and an
+                EVOI of <strong>0.6</strong>. Knowing more about Video changes nothing the budget
+                would do.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.planning.priority import compute_experiment_priorities
+from mmm_framework.planning.eig import channel_half_life, decayed_sigma, reexperiment_due
+
+grid, portfolio = compute_experiment_priorities(
+    mmm,
+    evidence={"Radio": {"end_date": "2022-11-28"},
+              "Display": {"end_date": "2024-04-22"}},
+    as_of="2024-07-01", max_draws=150, random_seed=42,
+)
+# portfolio["evpi"] -> 1,624 KPI units (4.4% of the optimal-budget value)
+
+due, fresh_eig = reexperiment_due(0.10, 84, channel_half_life("Radio"),
+                                  sigma_exp=0.10)
+# -> a fresh Radio test would buy 0.70 nats: retest due</code></pre>
+            </div>
+
+            <div class="chart-container tall" id="quadrantChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the measurement quadrant. Bubble size = spend share,
+                color = the engine's verdict. The diagnostic corners: Print and Radio (high both —
+                test now), Video (informative but worthless — deprioritize), TV (neither — the tight
+                posterior of the biggest spend line). EIG says what a test would teach; EVOI says
+                whether anyone should pay for the lesson.
+            </p>
+
+            <h2 id="asterisk">2 — An honest asterisk the grid needs</h2>
+            <div class="warning">
+                <h4>⚠️ EVOI prices known unknowns</h4>
+                <p>
+                    TV sits in <em>deprioritize</em> — its ROI posterior is tight (0.66 ± 0.08), so a
+                    test teaches little and moves no budget. But
+                    <a href="causal-02-mmm-as-causal-model.html">rung&nbsp;2</a>'s sealed key showed TV
+                    carries a <strong>residual bias the model doesn't know about</strong> (its
+                    learning diagnostic flagged <code>beta_TV</code> as <em>relocated</em>). EVOI is
+                    computed from the posterior, so it cannot price a bias the posterior doesn't
+                    represent. A mature program runs <strong>two tracks</strong>: the EVOI track
+                    above, and a <strong>validation track</strong> that occasionally tests confident
+                    channels <em>precisely because</em> they're confident — triggered by diagnostics
+                    (relocation flags, refutation failures, tension checks), not by uncertainty.
+                    <a href="causal-10-closed-loop.html">Notebook&nbsp;10</a> shows a
+                    validation-track test paying off.
+                </p>
+            </div>
+
+            <h2 id="evpi">3 — EVPI: the ceiling on the learning budget</h2>
+            <p>
+                Summing what perfect information about everything would be worth gives the program its
+                budget ceiling: <strong>EVPI = 1,624 KPI units</strong>, against an optimal-budget
+                value under current knowledge of <strong>36,638</strong> — the program's rational
+                scale is <strong>4.4%</strong> of the value it protects. Any measurement plan costing
+                more than EVPI is, by construction, destroying value — no matter how scientific it
+                feels. And any plan costing far less is probably leaving correctable bias in the
+                allocation.
+            </p>
+
+            <h2 id="decay">4 — Evidence decays</h2>
+            <p>
+                A readout is a photograph, not a covenant. Markets drift — creative wears out,
+                auctions reprice, competitors move — so the information an experiment bought erodes on
+                a half-life. The framework re-inflates the posterior sd as
+                \( \sigma^2(t) = \sigma_0^2 \, e^{\lambda t} \) with
+                \( \lambda = \ln 2 / h \), and re-flags a channel for testing when a <em>new</em>
+                feasible test would again clear the EIG bar. Radio (half-life 52 weeks, tested 84
+                weeks before the planning date — its variance has roughly tripled since) has decayed
+                enough that a fresh test would buy <strong>0.70 nats</strong> — over the bar,
+                <strong>retest due</strong>. Display (half-life 26 weeks, tested 10 weeks ago) is
+                still fresh.
+            </p>
+
+            <div class="chart-container" id="decayChart"></div>
+            <p class="chart-note">
+                <strong>The framework's decay law, drawn exactly</strong> —
+                <code>decayed_sigma</code> from <code>planning/eig.py</code> with each channel's
+                default half-life (<code>channel_half_life</code>: Radio 52w, Display 26w) and the
+                notebook's post-experiment sds (Radio 0.10, Display 0.15). The dotted verticals mark
+                where each channel actually stands at the 2024-07-01 planning date. "We tested that
+                in 2022" is a date, not an excuse.
+            </p>
+
+            <h2 id="calendar">5 — The calendar</h2>
+            <p>
+                Scores in hand, the calendar is a constrained packing problem: a greedy
+                EVOI-per-week schedule under the program's real constraints — one national test at a
+                time, per-channel cool-downs
+                (<a href="causal-08-designing-next-experiment.html">rung&nbsp;8</a>), a Q4 freeze (no
+                experiments in the holiday quarter, program weeks 13–26), re-tests when decay
+                triggers. The TV validation test is scheduled by <em>policy</em>, not EVOI — it's
+                pinned to the last slot, using rung 8's 16-week design.
+            </p>
+
+            <div class="chart-container" id="calendarChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — <code>nbs/artifacts/causal_09_program.json</code>
+                (solid = test, faint = cool-down, shaded band = Q4 freeze). The Print geo holdout
+                starts immediately; the freeze pushes the Radio re-test to week 26; Display and
+                Social follow. The EVOI-track tests finish by week 56; the policy-pinned TV
+                validation runs weeks 57–73, spilling into the <em>next</em> cycle — cool-downs and
+                a frozen quarter stretch five tests across substantially more calendar than the
+                naive sum of their durations. Calendar is the scarcest thing the program has.
+            </p>
+
+            <h2 id="memory">6 — The program's memory</h2>
+            <p>
+                Every fitted model in the loop persists a per-run metrics snapshot — ROI posteriors,
+                response curves, the EIG/EVOI portfolio, allocation gaps — so next quarter's planning
+                starts from <em>recorded</em> state, not from whoever remembers the last deck.
+                <code>compute_run_metrics</code> is the same snapshot the platform stores per fit:
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.planning.history import compute_run_metrics
+
+snapshot = compute_run_metrics(mmm, max_draws=100, random_seed=42)
+# keys: approximate, channels, fit_method, n_draws, portfolio,
+#       response_curves, schema_version   (7 channels tracked; schema v2;
+#       fit method nuts, approximate False)</code></pre>
+            </div>
+
+            <h2 id="rules">7 — The program's operating rules</h2>
+            <div class="discipline-card">
+                <ol>
+                    <li><strong>Price tests in both currencies.</strong> EIG says what you'd learn;
+                        EVOI says whether learning changes any decision. Test where both are
+                        high.</li>
+                    <li><strong>EVPI is the budget.</strong> The whole program should cost a fraction
+                        of the value of perfect information — if it doesn't, you're doing science for
+                        sport.</li>
+                    <li><strong>Evidence expires.</strong> Half-lives and re-test triggers turn "we
+                        tested that in 2021" from an excuse into a date.</li>
+                    <li><strong>Keep a validation track.</strong> EVOI can't see biases the posterior
+                        doesn't know it has. Diagnostics-triggered tests on <em>confident</em>
+                        channels are the program's insurance policy.</li>
+                    <li><strong>Write the state down.</strong> Snapshots make the loop resumable by
+                        people who weren't in the room.</li>
+                </ol>
+            </div>
+
+            <div class="check-understanding" id="quiz">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>Video has one of the widest ROI posteriors on the board (2.12 ± 0.39) and a respectable EIG (0.25 nats). Why is its EVOI only 0.6 KPI units?</summary>
+                    <div class="quiz-answer">
+                        <p>Because EVOI doesn't price uncertainty — it prices <em>decision change</em>.
+                        The engine simulates plausible readouts from the current posterior and asks
+                        how much the re-optimized budget improves under each. For Video, essentially
+                        every plausible answer leaves the allocation where it already is, so knowing
+                        the true number is worth almost nothing <em>this year</em>. Uncertainty
+                        without decision leverage is epistemically interesting and economically
+                        worthless — which is exactly why the grid needs two axes. Test where both are
+                        high.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>TV is the biggest line on the media plan (28% of spend) and the CFO doubts it. The grid says "deprioritize". Who's right?</summary>
+                    <div class="quiz-answer">
+                        <p>Both — about different questions. On <em>known</em> unknowns the grid is
+                        right: TV's ROI posterior is the tightest on the board (0.66 ± 0.08), so a
+                        feasible test teaches little (EIG 0.10 nats) and moves almost no budget (EVOI
+                        15.5). But rung 2's sealed key showed TV carries a bias the posterior doesn't
+                        represent, and EVOI cannot price what the posterior can't see. That is the
+                        validation track's job: test confident channels on a diagnostics trigger
+                        (relocation flags, refutation failures), by policy — which is why the
+                        calendar still ends with a 16-week TV validation test despite its EVOI.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Radio was properly tested with a well-designed go-dark in late 2022. Why won't the engine just reuse that readout?</summary>
+                    <div class="quiz-answer">
+                        <p>Because the information is perishable even when the readout was perfect.
+                        Radio's post-experiment sd (0.10) re-inflates on a 52-week half-life —
+                        \( \sigma^2(t) = \sigma_0^2 e^{\lambda t} \) — and by the 2024-07-01
+                        planning date the readout is 84 weeks old: about 1.6 half-lives, so the
+                        variance has roughly tripled. A fresh feasible test would buy 0.70 nats,
+                        above the re-test bar, so the engine flags <code>retest_due</code>. The
+                        decay clock isn't cynicism about the old test; it's a model of a drifting
+                        market. A program that never re-tests is spending this year's budget on a
+                        2022 world.</p>
+                    </div>
+                </details>
+            </div>
+
+            <div class="note" id="run-it">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/causal/causal_09_planning_the_measurement_series.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/causal/causal_09_planning_the_measurement_series.ipynb</code></a>
+                    — notebook 9 of 11 in the <em>Causal Inference in Practice</em> series (brand:
+                    Veranda Home; synthetic worlds with sealed answer keys; every claim graded by an
+                    assert). All numbers from <code>nbs/artifacts/causal_09_program.json</code>,
+                    produced by <code>nbs/causal/causal_09_planning_the_measurement_series.ipynb</code>.
+                    Previous: <a href="causal-08-designing-next-experiment.html">08 · Designing the
+                    Next Experiment</a>. Next:
+                    <a href="causal-10-closed-loop.html">10 · The Closed Loop</a> — the capstone:
+                    three full cycles of fit → prioritize → design → measure → calibrate, graded
+                    against the sealed key at every step. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank"
+                       rel="noopener">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // Causal-series Plotly helpers (palette shared across the series).
+        const CI = {
+            colors: {
+                tv: '#3b6fb6', search: '#d98c3f', social: '#5a9e6f',
+                display: '#b15a7a', video: '#6f5aa0', radio: '#3f8f8f',
+                print: '#8a6d3b', truth: '#1a1a1a', danger: '#c0504d',
+                good: '#4a8d57', amber: '#c9a45a', muted: '#8a949e',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2b2f36', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // Quadrant verdict colors (the notebook's QCOLOR convention).
+        const QCOLOR = {
+            test_now: '#c0504d',
+            learn_cheaply: '#c9a45a',
+            monitor: '#3b6fb6',
+            deprioritize: '#8a949e'
+        };
+
+        // ==================================================================
+        // The measurement quadrant — EIG × EVOI, bubble = spend share
+        // (causal_09_program.json grid + the printed spend shares)
+        // ==================================================================
+        function drawQuadrant() {
+            const rows = [
+                { ch: 'Print',   eig: 1.169, evoi: 633.7, share: 0.052, q: 'test_now' },
+                { ch: 'Radio',   eig: 1.027, evoi: 591.3, share: 0.081, q: 'test_now' },
+                { ch: 'Display', eig: 0.528, evoi: 158.3, share: 0.126, q: 'test_now' },
+                { ch: 'Social',  eig: 0.370, evoi: 30.9,  share: 0.155, q: 'learn_cheaply' },
+                { ch: 'Search',  eig: 0.247, evoi: 42.3,  share: 0.196, q: 'monitor' },
+                { ch: 'TV',      eig: 0.104, evoi: 15.5,  share: 0.282, q: 'deprioritize' },
+                { ch: 'Video',   eig: 0.250, evoi: 0.6,   share: 0.107, q: 'deprioritize' }
+            ];
+
+            const traces = rows.map(function(r) {
+                return {
+                    type: 'scatter', mode: 'markers+text',
+                    x: [r.eig], y: [r.evoi],
+                    text: [r.ch],
+                    textposition: r.ch === 'Video' ? 'middle right' : 'top center',
+                    textfont: { size: 12, color: '#2b2f36' },
+                    marker: {
+                        size: 18 + 60 * r.share,
+                        color: CI.band(QCOLOR[r.q], 0.65),
+                        line: { color: QCOLOR[r.q], width: 1.5 }
+                    },
+                    customdata: [[r.q, r.share]],
+                    hovertemplate: r.ch + '<br>EIG %{x:.2f} nats · EVOI %{y:,.0f} KPI units' +
+                                   '<br>spend share %{customdata[0][1]:.0%} · %{customdata[0][0]}<extra></extra>',
+                    showlegend: false
+                };
+            });
+
+            // Legend-only entries for the four verdicts.
+            ['test_now', 'learn_cheaply', 'monitor', 'deprioritize'].forEach(function(q) {
+                traces.push({
+                    type: 'scatter', mode: 'markers', name: q,
+                    x: [null], y: [null],
+                    marker: { size: 11, color: CI.band(QCOLOR[q], 0.65),
+                              line: { color: QCOLOR[q], width: 1.5 } }
+                });
+            });
+
+            const layout = CI.layout({
+                xaxis: { title: 'EIG — what a test would teach (nats)', range: [0, 1.32] },
+                yaxis: { title: 'EVOI — what knowing is worth (KPI units)', range: [-40, 720] },
+                legend: { orientation: 'h', y: 1.1 },
+                margin: { l: 75, r: 30, t: 45, b: 60 }
+            });
+
+            Plotly.newPlot('quadrantChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // Certainty on a half-life — decayed_sigma drawn exactly
+        // (sigma(t) = sigma0 * exp(0.5 * ln2/h * t); planning/eig.py)
+        // ==================================================================
+        function drawDecay() {
+            const LN2 = Math.log(2);
+            function sig(s0, h, t) { return s0 * Math.exp(0.5 * (LN2 / h) * t); }
+
+            const weeks = [];
+            for (let w = 0; w <= 104; w++) weeks.push(w);
+
+            const chans = [
+                { ch: 'Radio',   s0: 0.10, h: 52, at: 84, color: CI.colors.radio },
+                { ch: 'Display', s0: 0.15, h: 26, at: 10, color: CI.colors.display }
+            ];
+
+            const traces = chans.map(function(c) {
+                return {
+                    type: 'scatter', mode: 'lines',
+                    name: c.ch + ' (half-life ' + c.h + 'w)',
+                    x: weeks, y: weeks.map(function(w) { return sig(c.s0, c.h, w); }),
+                    line: { color: c.color, width: 2.5 },
+                    hovertemplate: c.ch + ' · week %{x}: effective sd %{y:.3f}<extra></extra>'
+                };
+            });
+
+            chans.forEach(function(c) {
+                traces.push({
+                    type: 'scatter', mode: 'markers',
+                    name: c.ch + ' today (' + c.at + 'w on)',
+                    x: [c.at], y: [sig(c.s0, c.h, c.at)],
+                    marker: { size: 12, symbol: 'diamond', color: CI.band(c.color, 0.8),
+                              line: { color: CI.colors.truth, width: 1 } },
+                    showlegend: false,
+                    hovertemplate: c.ch + ': ' + c.at + ' weeks since the readout<extra></extra>'
+                });
+            });
+
+            const layout = CI.layout({
+                xaxis: { title: 'weeks since the experiment' },
+                yaxis: { title: 'effective posterior sd of ROI', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.12 },
+                margin: { l: 75, r: 30, t: 40, b: 55 },
+                shapes: chans.map(function(c) {
+                    return { type: 'line', x0: c.at, x1: c.at, y0: 0, y1: 1, yref: 'paper',
+                             line: { color: c.color, width: 1, dash: 'dot' } };
+                }),
+                annotations: [{
+                    x: 82, y: 0.085, xanchor: 'right',
+                    text: 'a fresh Radio test buys 0.70 nats → retest due',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }]
+            });
+
+            Plotly.newPlot('decayChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // The packed calendar (causal_09_program.json calendar + cool-downs)
+        // ==================================================================
+        function drawCalendar() {
+            const rows = [
+                { name: 'Print geo holdout',         ch: 'print',   start: 0,  end: 8,  cool: 3 },
+                { name: 'Radio re-test (flighting)', ch: 'radio',   start: 26, end: 38, cool: 3 },
+                { name: 'Display follow-up',         ch: 'display', start: 39, end: 47, cool: 7 },
+                { name: 'Social probe',              ch: 'social',  start: 48, end: 56, cool: 3 },
+                { name: 'TV validation test',        ch: 'tv',      start: 57, end: 73, cool: 4 }
+            ];
+
+            const traces = [];
+            rows.forEach(function(r) {
+                const col = CI.colors[r.ch];
+                traces.push({
+                    type: 'bar', orientation: 'h',
+                    y: [r.name], x: [r.end - r.start], base: [r.start],
+                    marker: { color: CI.band(col, 0.75), line: { color: col, width: 1.5 } },
+                    showlegend: false,
+                    hovertemplate: r.name + ': weeks ' + r.start + '–' + r.end + '<extra></extra>'
+                });
+                traces.push({
+                    type: 'bar', orientation: 'h',
+                    y: [r.name], x: [r.cool], base: [r.end],
+                    marker: { color: CI.band(col, 0.22), line: { width: 0 } },
+                    showlegend: false,
+                    hovertemplate: 'cool-down: ' + r.cool + ' wk<extra></extra>'
+                });
+            });
+
+            const layout = CI.layout({
+                barmode: 'overlay',
+                xaxis: { title: 'program week', range: [-1, 80] },
+                yaxis: { autorange: 'reversed', automargin: true },
+                margin: { l: 10, r: 30, t: 30, b: 55 },
+                shapes: [{
+                    type: 'rect', x0: 13, x1: 26, y0: -0.5, y1: 4.5,
+                    fillcolor: 'rgba(0,0,0,0.07)', line: { width: 0 }, layer: 'below'
+                }],
+                annotations: [{
+                    x: 19.5, y: -0.5, yanchor: 'bottom', yshift: 4,
+                    text: 'Q4 freeze', showarrow: false,
+                    font: { size: 11.5, color: '#5a6b5a' }
+                }]
+            });
+
+            Plotly.newPlot('calendarChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        function init() {
+            drawQuadrant();
+            drawDecay();
+            drawCalendar();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

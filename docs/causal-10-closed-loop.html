@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Inference 10: The Closed Loop | MMM Framework</title>
+    <meta name="description" content="Three fit → design → measure → calibrate cycles on a confounded world: attribution error 31.5% → 17.6%, EVPI 350 → 237, and a −923 KPI round-0 budget plan repaired by +788.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-10-closed-loop.html">
+    <meta property="og:title" content="Causal Inference 10: The Closed Loop | MMM Framework">
+    <meta property="og:description" content="The capstone: every rung of the ladder welded into one operating loop, run three full cycles against a sealed answer key — error falls, EVPI shrinks, and the budget decisions get measurably better.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-10-closed-loop.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Causal Inference in Practice series
+           (same kit as the Pressure Tests pages — tokens only).
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .discipline-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .discipline-card ol { margin: 0.5rem 0 0 1.1rem; }
+        .discipline-card li { margin: 0.5rem 0; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Causal Inference 10: The Closed Loop | MMM Framework">
+    <meta name="twitter:description" content="The capstone: every rung of the ladder welded into one operating loop, run three full cycles against a sealed answer key — error falls, EVPI shrinks, and the budget decisions get measurably better.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/causal-10-closed-loop.html",
+          "name": "Causal Inference 10: The Closed Loop | MMM Framework",
+          "description": "Three fit → design → measure → calibrate cycles on a confounded world: attribution error 31.5% → 17.6%, EVPI 350 → 237, and a −923 KPI round-0 budget plan repaired by +788.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/causal-10-closed-loop.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/causal-10-closed-loop.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Causal Inference 10: The Closed Loop",
+          "datePublished": "2026-06-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/causal-10-closed-loop.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/causal-10-closed-loop.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Demos & Reports",
+              "item": "https://redam94.github.io/mmm-framework/demos.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Causal Inference 10: The Closed Loop",
+              "item": "https://redam94.github.io/mmm-framework/causal-10-closed-loop.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Three times around</a></li>
+                <li><a href="#benchmarks">The sealed benchmarks</a></li>
+                <li><a href="#loop">The loop</a></li>
+                <li><a href="#error">Does error fall?</a></li>
+                <li><a href="#decisions">Do decisions improve?</a></li>
+                <li><a href="#self-limiting">Is it self-limiting?</a></li>
+                <li><a href="#ladder">The ladder, climbed</a></li>
+                <li><a href="#habits">Three habits</a></li>
+                <li><a href="#quiz">Check your understanding</a></li>
+                <li><a href="#run-it">Run it yourself</a></li>
+            </ul>
+
+            <h3>Causal Inference in Practice</h3>
+            <ul class="sidebar-nav">
+                <li><a href="causal-00-the-ladder.html">00 · The Ladder of Evidence</a></li>
+                <li><a href="causal-08-designing-next-experiment.html">08 · Designing the Next Experiment</a></li>
+                <li><a href="causal-09-measurement-program.html">09 · The Measurement Program</a></li>
+                <li><a href="causal-10-closed-loop.html" class="active">10 · The Closed Loop</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Causal Inference 10: The Closed Loop</h1>
+            <p class="lead">
+                The capstone. Every rung of the ladder, welded into one operating loop and run
+                <strong>three full cycles</strong> on the world where this series began —
+                <code>unobserved_confounding</code>, the history whose dashboard fooled the naive read
+                in <a href="causal-00-the-ladder.html">notebook&nbsp;00</a> and whose back-door no
+                control variable could fully close in notebook&nbsp;01. Per cycle:
+                <strong>fit</strong> on everything known so far → <strong>prioritize</strong> with the
+                EIG × EVOI grid → <strong>design</strong> the test window →
+                <strong>measure</strong> (the readout is generated from the <em>sealed truth plus
+                sampling noise at the design's SE</em> — an honest experiment, never an oracle) →
+                <strong>calibrate</strong> via the likelihood route, and go around again. The narrator
+                grades every cycle against the key; the analyst inside the loop never sees it. This
+                page mirrors <code>nbs/causal/causal_10_the_closed_loop.ipynb</code>.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">31.5% → 17.6%</div>
+                    <div class="stat-label">mean |attribution error| vs the sealed key, falling monotonically across three calibrated refits</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">−923</div>
+                    <div class="stat-label">true KPI value of round 0's "optimal" reallocation vs simply keeping the historical plan — confidently wrong</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">+788</div>
+                    <div class="stat-label">of that destroyed value recovered by round 3's plan — 68% of the way from the round-0 plan to the true optimum</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">350 → 237</div>
+                    <div class="stat-label">EVPI (KPI units) — the value of what's left to learn shrinks as the loop learns: self-limiting</div>
+                </div>
+            </div>
+
+            <h2 id="benchmarks">1 — The sealed benchmarks</h2>
+            <p>
+                Before the loop starts, the narrator computes three numbers the analyst never sees:
+                the true media value of the <strong>historical</strong> allocation
+                (<strong>14,885</strong> KPI units), the true value of the <strong>best
+                possible</strong> allocation, grid-searched on the true response curves
+                (<strong>15,122</strong>), and the gap between them — <strong>238 KPI units</strong>,
+                the most any reallocation of the same total budget could win. That headroom is the
+                yardstick every "optimal" plan below is graded against.
+            </p>
+
+            <h2 id="loop">2 — The loop</h2>
+            <p>
+                Three cycles. Each round's test is a <strong>10-week go-dark</strong> on the grid's
+                top <em>untested</em> channel, in the next free window — staggered, clear of the
+                previous test's cool-down (rungs 5 &amp; 8 discipline, compressed). Readout SE:
+                <strong>0.09</strong> — rung-5-grade precision.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>round</th>
+                        <th>priority ranking</th>
+                        <th>test</th>
+                        <th>window (weeks)</th>
+                        <th>readout (±0.09)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>0</td><td>Display · TV · Social · Search</td><td><strong>Display</strong> go-dark</td><td>96–106</td><td>0.67</td></tr>
+                    <tr><td>1</td><td>TV · Display · Social · Search</td><td><strong>TV</strong> go-dark</td><td>110–120</td><td>0.86</td></tr>
+                    <tr><td>2</td><td>Display · Search · Social · TV</td><td><strong>Search</strong> go-dark (top <em>untested</em>)</td><td>124–134</td><td>0.85</td></tr>
+                    <tr><td>3</td><td>Display · Social · TV · Search</td><td colspan="2">— final grading round</td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                <strong>Measured</strong> — the notebook's loop log. Note round 2: Display tops the
+                ranking again (its readout is a year old in loop time and the posterior still leans
+                on it), but the one-test-per-channel-per-year rule sends the budget to the top
+                <em>untested</em> channel, Search. Prioritization is a policy, not a reflex.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.planning.priority import compute_experiment_priorities
+from mmm_framework.planning.budget import optimize_budget
+
+# every round, on the current calibrated fit:
+grid, portfolio = compute_experiment_priorities(mmm, max_draws=120, random_seed=42)
+plan = optimize_budget(mmm, total_budget=annual_media_budget, random_seed=42)
+# portfolio["evpi"] is the loop's fuel gauge; the narrator grades `plan`
+# against the sealed true response curves the analyst never sees</code></pre>
+            </div>
+
+            <h2 id="error">3 — Unsealing: does the posterior converge on the truth?</h2>
+            <p>
+                The analyst saw posteriors tighten. The narrator can say something stronger: they
+                tightened <strong>toward the right answers</strong>. Mean |relative attribution
+                error| against the sealed key falls every round —
+                <strong>31.5% → 25.5% → 20.9% → 17.6%</strong> — as each go-dark readout enters the
+                model as an in-graph likelihood term
+                (<a href="causal-06-calibrating-the-model.html">rung&nbsp;6</a>'s route) and the
+                posterior re-negotiates the channels it could never separate from the confounder
+                observationally.
+            </p>
+
+            <div class="chart-container" id="errChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — <code>nbs/artifacts/causal_10_closed_loop.json</code>.
+                Three experiments walk the posterior onto the key: error falls monotonically and
+                lands at a bit over half its starting level. Not zero — three go-darks measured three
+                window responses, and the residual lives in the parts of the curves no test has
+                touched yet.
+            </p>
+
+            <h2 id="decisions">4 — Unsealing: do the <em>decisions</em> get better?</h2>
+            <p>
+                Parameters are means, not ends. Each round the analyst also asked the model for its
+                <strong>optimal reallocation</strong> of the same total budget. The narrator evaluates
+                every one of those plans on the <em>true</em> response curves — including the plan the
+                round-0 model would have shipped.
+            </p>
+
+            <div class="chart-container tall" id="decisionChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the round-0 trap: reallocating on the confounded model
+                would have shipped a plan <strong>worse than doing nothing</strong> — true value
+                13,962 vs the historical plan's 14,885, i.e. <strong>−923 KPI units</strong>, because
+                the "optimal" plan moves budget toward the over-credited demand chasers. Three
+                experiments later, round 3's plan is worth 14,750: <strong>+788 recovered</strong>,
+                within 0.9% of the status quo and 68% of the way from the round-0 plan to the true
+                optimum (15,122). Note the shape of the repair: the first readout (Display) barely
+                moves the plan (−923 → −928); the TV and Search readouts do the heavy lifting. The
+                loop's first job wasn't to squeeze out the 238-unit headroom — it was to stop a
+                confident 900-unit mistake.
+            </p>
+
+            <h2 id="self-limiting">5 — Unsealing: is the loop self-limiting?</h2>
+            <p>
+                A healthy measurement program spends less on learning as it learns. EVPI — the total
+                remaining value of perfect information, rung 9's ceiling — is the loop's own fuel
+                gauge: <strong>350 → 308 → 222 → 237</strong> KPI units across the three cycles. When
+                EVPI dips below the cost of the next test, the rational program pauses — until decay
+                (<a href="causal-09-measurement-program.html">rung&nbsp;9</a>) re-inflates it.
+            </p>
+
+            <div class="chart-container short" id="evpiChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the value of what's left to learn. The wobble between
+                rounds 2 and 3 (222 → 237) is Monte-Carlo noise on a simulated quantity plus a
+                decision problem that reshapes with each refit; the notebook's asserts gate the
+                trend, not strict monotonicity.
+            </p>
+
+            <h2 id="ladder">6 — The ladder, climbed</h2>
+            <p>
+                Eleven notebooks ago, Veranda Home's dashboard said everything works and the naive
+                read doubled Social's value. Here is what each rung contributed to the loop that just
+                ran:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>rung</th>
+                        <th>contribution to the loop</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><a href="causal-00-the-ladder.html">00</a>–<a href="causal-01-confounding-adjustment.html">01</a></td><td>knowing <em>why</em> the baseline is biased — and that no control fully fixes it</td></tr>
+                    <tr><td><a href="causal-02-mmm-as-causal-model.html">02</a></td><td>estimand discipline; trust checks; "I don't know" as a model output</td></tr>
+                    <tr><td><a href="causal-03-structural-mediation.html">03</a>–<a href="causal-04-latent-confounders.html">04</a></td><td>structure for what observational adjustment can't reach — funnels, latent factors</td></tr>
+                    <tr><td><a href="causal-05-measuring-one-experiment.html">05</a></td><td>readouts worth believing: calibrated estimators, honest SEs</td></tr>
+                    <tr><td><a href="causal-06-calibrating-the-model.html">06</a></td><td>the likelihood route — experiments that <em>commit</em>, filed under the right estimand</td></tr>
+                    <tr><td><a href="causal-07-many-experiments.html">07</a></td><td>portfolios: composition, off-panel windows, tension checks</td></tr>
+                    <tr><td><a href="causal-08-designing-next-experiment.html">08</a></td><td>tests chosen by anchored power and cost — including the ones <em>not</em> to run</td></tr>
+                    <tr><td><a href="causal-09-measurement-program.html">09</a></td><td>the program: EIG/EVOI, the EVPI ceiling, decay, the calendar</td></tr>
+                    <tr><td><strong>10</strong></td><td>the loop itself — error ↓, EVPI ↓, decisions ↑, all graded against a sealed key</td></tr>
+                </tbody>
+            </table>
+
+            <h2 id="habits">7 — Three habits are the whole method</h2>
+            <div class="discipline-card">
+                <ol>
+                    <li><strong>Name the estimand.</strong> Every number is an answer to a
+                        counterfactual question; say which one.</li>
+                    <li><strong>Buy information deliberately.</strong> Observational data is cheap and
+                        biased; experiments are costly and clean; the exchange rate is EVOI.</li>
+                    <li><strong>Grade yourself whenever the truth is available</strong> — in synthetic
+                        worlds always, in production whenever an experiment lands. A measurement
+                        system that never checks itself against ground truth isn't measuring; it's
+                        narrating.</li>
+                </ol>
+            </div>
+            <p>
+                <em>Where the loop re-enters:</em> evidence decays, the world drifts, and next
+                quarter's EVPI creeps back up. The loop doesn't end — that's the point. For the
+                platform's automated version of this cycle — the T₀–T₅ measurement loop with
+                experiment registries, calibration tracking and report generation — see the
+                <a href="platform-overview.html">platform overview</a> and the Experimental
+                Measurement Lifecycle notebook series in the repository.
+            </p>
+
+            <div class="check-understanding" id="quiz">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>The round-0 model had converged — green r-hat, clean sampling. How does a converged model ship a budget plan worth −923 KPI vs doing nothing?</summary>
+                    <div class="quiz-answer">
+                        <p>Because convergence certifies the arithmetic of the model you wrote, not
+                        the causal validity of what it learned. On the
+                        <code>unobserved_confounding</code> history, the latent demand wave makes the
+                        chaser channels look great, so the posterior is confidently wrong — and an
+                        optimizer <em>amplifies</em> exactly what the model is most wrong about,
+                        moving real dollars toward the over-credited channels. The narrator can price
+                        the damage only because this world has a sealed key. In production nobody
+                        hands you that number — which is why the loop grades its decisions every time
+                        an experiment lands, and why "reallocate confidently on an uncalibrated
+                        observational fit" is the single most expensive move in this series.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>EVPI falls 350 → 308 → 222, then ticks back up to 237 in round 3. Did the loop stop being self-limiting?</summary>
+                    <div class="quiz-answer">
+                        <p>No. EVPI is an estimate — a Monte-Carlo average over simulated perfect
+                        readouts (120 draws per round here) — and each refit also reshapes the
+                        decision problem it's computed on, so small non-monotonic wobbles are
+                        expected. The notebook's asserts encode exactly this honesty: they gate that
+                        EVPI ends well below where it started, not that every step falls. The
+                        operational signal is the level: the value of everything still unknown is
+                        down by roughly a third after three tests, and when it drops below the cost
+                        of the next test, the program pauses until decay re-inflates it.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>Why does the notebook generate readouts as "sealed truth + noise at the design's SE" instead of just handing the model the true value?</summary>
+                    <div class="quiz-answer">
+                        <p>Because the claim being graded is about the <em>procedure</em>, not about
+                        one lucky number. An oracle readout would make calibration look better than
+                        any real experiment can — real go-darks arrive with sampling error, and each
+                        one can mislead within its SE (the loop's readouts carry ±0.09). Showing
+                        error fall 31.5% → 17.6% <em>under honest noise</em> is the demonstration
+                        that matters: the likelihood route weighs each readout by its stated
+                        precision (rung 6), so noisy-but-honest evidence still walks the posterior
+                        toward the key. It's the same reason rung 5 obsessed over estimator
+                        calibration — garbage SEs would poison exactly this loop.</p>
+                    </div>
+                </details>
+            </div>
+
+            <div class="note" id="run-it">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/causal/causal_10_the_closed_loop.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/causal/causal_10_the_closed_loop.ipynb</code></a>
+                    — notebook 10 of 11 in the <em>Causal Inference in Practice</em> series (brand:
+                    Veranda Home; synthetic worlds with sealed answer keys; every claim graded by an
+                    assert). All numbers from <code>nbs/artifacts/causal_10_closed_loop.json</code>,
+                    produced by <code>nbs/causal/causal_10_the_closed_loop.ipynb</code>.
+                    Previous: <a href="causal-09-measurement-program.html">09 · The Measurement
+                    Program</a>. Series complete — back to where it began:
+                    <a href="causal-00-the-ladder.html">00 · The Ladder of Evidence</a>, the naive
+                    read this loop just un-fooled. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank"
+                       rel="noopener">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // Causal-series Plotly helpers (palette shared across the series).
+        const CI = {
+            colors: {
+                tv: '#3b6fb6', search: '#d98c3f', social: '#5a9e6f',
+                display: '#b15a7a', video: '#6f5aa0', radio: '#3f8f8f',
+                print: '#8a6d3b', truth: '#1a1a1a', danger: '#c0504d',
+                good: '#4a8d57', amber: '#c9a45a', muted: '#8a949e',
+                grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2b2f36', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // causal_10_closed_loop.json — the loop's graded trajectory.
+        const ROUNDS = [0, 1, 2, 3];
+        const ERR    = [0.3146, 0.2548, 0.2091, 0.1758];
+        const EVPI   = [349.6, 307.6, 222.0, 237.4];
+        const VALS   = [13961.865, 13956.698, 14583.039, 14750.348];
+        const V_HIST = 14884.757;
+        const V_STAR = 15122.438;
+
+        // ==================================================================
+        // Attribution error by round
+        // ==================================================================
+        function drawErr() {
+            const traces = [{
+                type: 'scatter', mode: 'lines+markers+text',
+                x: ROUNDS, y: ERR,
+                text: ERR.map(function(e) { return (e * 100).toFixed(1) + '%'; }),
+                textposition: 'top center',
+                textfont: { size: 12, color: '#2b2f36' },
+                line: { color: CI.colors.truth, width: 3 },
+                marker: { size: 11, color: CI.colors.truth },
+                hovertemplate: 'round %{x}: mean |rel err| %{y:.1%}<extra></extra>',
+                showlegend: false
+            }];
+
+            const layout = CI.layout({
+                xaxis: { title: 'round (experiments folded in)', dtick: 1 },
+                yaxis: { title: 'mean |relative error| vs sealed key',
+                         tickformat: '.0%', range: [0, 0.36] },
+                margin: { l: 80, r: 30, t: 30, b: 55 },
+                annotations: [{
+                    x: 2.05, y: 0.30,
+                    text: 'each round folds one more go-dark readout<br>into the likelihood (rung 6\'s route)',
+                    showarrow: false, font: { size: 11.5, color: '#5a6b5a' }
+                }]
+            });
+
+            Plotly.newPlot('errChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // What each round's "optimal" plan is worth in the real world
+        // ==================================================================
+        function drawDecision() {
+            const cols = [CI.colors.danger, CI.colors.amber, '#8fae5d', CI.colors.good];
+            const deltas = VALS.map(function(v) { return v - V_HIST; });
+            const traces = [{
+                type: 'bar',
+                x: ROUNDS.map(function(r) { return 'round ' + r; }),
+                y: deltas,
+                marker: { color: cols.map(function(c) { return CI.band(c, 0.65); }),
+                          line: { color: cols, width: 1.5 } },
+                text: deltas.map(function(d) {
+                    return (d >= 0 ? '+' : '−') + Math.round(Math.abs(d)).toLocaleString('en-US');
+                }),
+                textposition: 'outside',
+                customdata: VALS.map(function(v) { return [v]; }),
+                hovertemplate: '%{x}<br>vs keeping the historical plan: %{y:+,.0f} KPI' +
+                               '<br>true value of the plan: %{customdata[0]:,.0f}<extra></extra>',
+                showlegend: false
+            }];
+
+            const layout = CI.layout({
+                yaxis: { title: 'true KPI value of the plan − historical plan',
+                         range: [-1120, 420], zeroline: true,
+                         zerolinecolor: '#1a1a1a', zerolinewidth: 2 },
+                margin: { l: 85, r: 30, t: 30, b: 55 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 3.5,
+                    y0: V_STAR - V_HIST, y1: V_STAR - V_HIST,
+                    line: { color: CI.colors.truth, width: 1.5, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: 0.02, xref: 'paper', y: 0, yanchor: 'bottom', yshift: 3, xanchor: 'left',
+                    text: 'keep the historical plan (14,885)',
+                    showarrow: false, font: { size: 11.5, color: '#2b2f36' }
+                }, {
+                    x: 0.98, xref: 'paper', y: V_STAR - V_HIST, yanchor: 'bottom', yshift: 3, xanchor: 'right',
+                    text: 'true optimum: +238 (15,122)',
+                    showarrow: false, font: { size: 11.5, color: '#2b2f36' }
+                }, {
+                    x: 0, y: -923, yanchor: 'top', yshift: -24,
+                    text: 'confidently wrong:<br>the plan destroys value',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }, {
+                    x: 3, y: -134, yanchor: 'top', yshift: -24,
+                    text: '+788 recovered<br>by the loop',
+                    showarrow: false, font: { size: 11, color: '#3f7a58' }
+                }]
+            });
+
+            Plotly.newPlot('decisionChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // EVPI by round — the value of what's left to learn
+        // ==================================================================
+        function drawEvpi() {
+            const traces = [{
+                type: 'scatter', mode: 'lines+markers+text',
+                x: ROUNDS, y: EVPI,
+                text: EVPI.map(function(v) { return Math.round(v); }),
+                textposition: 'top center',
+                textfont: { size: 12, color: '#2b2f36' },
+                line: { color: CI.colors.truth, width: 3 },
+                marker: { size: 11, color: CI.colors.truth },
+                hovertemplate: 'round %{x}: EVPI %{y:.0f} KPI units<extra></extra>',
+                showlegend: false
+            }];
+
+            const layout = CI.layout({
+                xaxis: { title: 'round', dtick: 1 },
+                yaxis: { title: 'EVPI (KPI units)', rangemode: 'tozero',
+                         range: [0, 400] },
+                margin: { l: 75, r: 30, t: 30, b: 50 }
+            });
+
+            Plotly.newPlot('evpiChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        function init() {
+            drawErr();
+            drawDecision();
+            drawEvpi();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

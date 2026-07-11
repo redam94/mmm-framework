@@ -29,7 +29,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/aurora-03-extended-mmm.html</loc>
-        <lastmod>2026-07-04</lastmod>
+        <lastmod>2026-07-09</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -55,6 +55,61 @@
     <url>
         <loc>https://redam94.github.io/mmm-framework/business-stakeholders.html</loc>
         <lastmod>2026-07-04</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-00-the-ladder.html</loc>
+        <lastmod>2026-06-24</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-01-confounding-adjustment.html</loc>
+        <lastmod>2026-06-24</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-02-mmm-as-causal-model.html</loc>
+        <lastmod>2026-06-24</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-03-structural-mediation.html</loc>
+        <lastmod>2026-06-24</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-04-latent-confounders.html</loc>
+        <lastmod>2026-06-24</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-05-measuring-one-experiment.html</loc>
+        <lastmod>2026-06-24</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-06-calibrating-the-model.html</loc>
+        <lastmod>2026-06-24</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-07-many-experiments.html</loc>
+        <lastmod>2026-06-24</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-08-designing-next-experiment.html</loc>
+        <lastmod>2026-06-24</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-09-measurement-program.html</loc>
+        <lastmod>2026-06-24</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/causal-10-closed-loop.html</loc>
+        <lastmod>2026-06-24</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -259,7 +314,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/stress-04-extension-traps.html</loc>
-        <lastmod>2026-07-04</lastmod>
+        <lastmod>2026-07-09</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>

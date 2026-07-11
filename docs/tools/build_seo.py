@@ -50,8 +50,14 @@ DEMO_PAGES = {
     "math-00-overview.html", "math-01-adstock.html", "math-02-saturation.html",
     "math-03-seasonality-trend.html", "math-04-bayesian-model.html",
     "math-05-calibration.html", "math-06-extensions.html",
+    "causal-00-the-ladder.html", "causal-01-confounding-adjustment.html",
+    "causal-02-mmm-as-causal-model.html", "causal-03-structural-mediation.html",
+    "causal-04-latent-confounders.html", "causal-05-measuring-one-experiment.html",
+    "causal-06-calibrating-the-model.html", "causal-07-many-experiments.html",
+    "causal-08-designing-next-experiment.html", "causal-09-measurement-program.html",
+    "causal-10-closed-loop.html",
 }
-TECH_PREFIXES = ("math-", "stress-", "workshop-", "aurora-", "scientific-workflow-", "workflow-")
+TECH_PREFIXES = ("math-", "stress-", "workshop-", "aurora-", "causal-0", "causal-1", "scientific-workflow-", "workflow-")
 TECH_EXPLICIT = {
     "getting-started.html", "modeling-guide.html", "real-data-guide.html",
     "interpreting-results.html", "causal-inference.html", "bayesian-workflow.html",
@@ -324,6 +330,7 @@ SERIES = [
     ("Pressure-testing / stress series", ["stress-00-rosy-picture.html", "stress-01-carryover-shape.html", "stress-02-time-structure.html", "stress-03-confounding-selection.html", "stress-04-extension-traps.html", "stress-05-gauntlet.html", "stress-06-geo-hierarchy.html"]),
     ("Bayesian workshop series (beginner)", ["workshop-00-thinking-in-distributions.html", "workshop-01-priors.html", "workshop-02-sampling.html", "workshop-03-first-mmm.html", "workshop-04-reading-the-posterior.html", "workshop-05-from-draws-to-decisions.html"]),
     ("Aurora framework tour", ["aurora-00-overview.html", "aurora-01-causality.html", "aurora-02-base-mmm.html", "aurora-03-extended-mmm.html", "aurora-04-reporting.html", "aurora-05-unified-workflow.html"]),
+    ("Causal inference series", ["causal-00-the-ladder.html", "causal-01-confounding-adjustment.html", "causal-02-mmm-as-causal-model.html", "causal-03-structural-mediation.html", "causal-04-latent-confounders.html", "causal-05-measuring-one-experiment.html", "causal-06-calibrating-the-model.html", "causal-07-many-experiments.html", "causal-08-designing-next-experiment.html", "causal-09-measurement-program.html", "causal-10-closed-loop.html"]),
     ("Consultant artifacts (templates)", ["artifacts/index.html"]),
 ]
 

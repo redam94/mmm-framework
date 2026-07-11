@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Inference 01: Confounding &amp; Adjustment | MMM Framework</title>
+    <meta name="description" content="A demand-index control cuts Search bias +43%→+25% and Social +38%→+18% — half the door. Noisy proxies leave the rest; budget pacing has no door to close.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-01-confounding-adjustment.html">
+    <meta property="og:title" content="Causal Inference 01: Confounding &amp; Adjustment | MMM Framework">
+    <meta property="og:description" content="A demand-index control cuts Search bias +43%→+25% and Social +38%→+18% — half the door. Noisy proxies leave the rest; budget pacing has no door to close.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-01-confounding-adjustment.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Causal Inference in Practice series.
+           Same conventions as the Pressure Tests guides.
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .diag-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin: 0.75rem 0 0;
+        }
+        .diag-strip span {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            padding: 0.2rem 0.65rem;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+        }
+        .diag-strip span.green { border-color: rgba(106,191,138,0.6); color: #3f7a58; }
+        .diag-strip span.red   { border-color: rgba(201,112,103,0.6); color: #a44c43; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Causal Inference 01: Confounding &amp; Adjustment | MMM Framework">
+    <meta name="twitter:description" content="A demand-index control cuts Search bias +43%→+25% and Social +38%→+18% — half the door. Noisy proxies leave the rest; budget pacing has no door to close.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/causal-01-confounding-adjustment.html",
+          "name": "Causal Inference 01: Confounding & Adjustment | MMM Framework",
+          "description": "A demand-index control cuts Search bias +43%→+25% and Social +38%→+18% — half the door. Noisy proxies leave the rest; budget pacing has no door to close.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/causal-01-confounding-adjustment.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/causal-01-confounding-adjustment.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Causal Inference 01: Confounding & Adjustment",
+          "datePublished": "2026-06-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/causal-01-confounding-adjustment.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/causal-01-confounding-adjustment.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Demos & Reports",
+              "item": "https://redam94.github.io/mmm-framework/demos.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Causal Inference 01: Confounding & Adjustment",
+              "item": "https://redam94.github.io/mmm-framework/causal-01-confounding-adjustment.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Three hidden histories</a></li>
+                <li><a href="#dags">Three DAGs, one dashboard</a></li>
+                <li><a href="#fits">Fit all three histories</a></li>
+                <li><a href="#what-it-bought">What the control bought</a></li>
+                <li><a href="#marking">Does the CONFOUNDER marking matter?</a></li>
+                <li><a href="#pacing">The disease adjustment can't touch</a></li>
+                <li><a href="#scorecard">The adjustment scorecard</a></li>
+                <li><a href="#quiz">Check your understanding</a></li>
+                <li><a href="#run-it">Run it yourself</a></li>
+            </ul>
+
+            <h3>Causal Inference in Practice</h3>
+            <ul class="sidebar-nav">
+                <li><a href="causal-00-the-ladder.html">00 · The Ladder of Evidence</a></li>
+                <li><a href="causal-01-confounding-adjustment.html" class="active">01 · Confounding &amp; Adjustment</a></li>
+                <li><a href="causal-02-mmm-as-causal-model.html">02 · The MMM as a Causal Model</a></li>
+                <li><a href="causal-03-structural-mediation.html">03 · Structural Mediation</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Causal Inference 01: Confounding &amp; Adjustment</h1>
+            <p class="lead">
+                In <a href="causal-00-the-ladder.html">Causal Inference 00</a>, Veranda Home's
+                dashboard — and a genuinely good Bayesian MMM — over-credited the two channels whose
+                budgets chase demand. The disease was an open back-door: a common cause driving both
+                spend and sales. The classic prescription is <strong>adjustment</strong>: find a
+                variable that <em>measures</em> the common cause, condition on it, and the spurious
+                correlation is blocked. This page mirrors
+                <code>nbs/causal/causal_01_confounding_and_adjustment.ipynb</code>, which tests that
+                prescription the only way that settles anything — against sealed answer keys — across
+                <strong>three possible hidden histories</strong> of the same brand.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">+43% &rarr; +25%</div>
+                    <div class="stat-label">Search's bias, demand hidden &rarr; demand-index control added (History A &rarr; B)</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">+38% &rarr; +18%</div>
+                    <div class="stat-label">Social's bias under the same one-column change</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">40% &rarr; 22%</div>
+                    <div class="stat-label">mean |bias| over the demand-chasers — roughly half the door, not all of it</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">+15%</div>
+                    <div class="stat-label">Search over-read under budget pacing (History C) — no control variable can fix it</div>
+                </div>
+            </div>
+
+            <p>
+                Three rules to take away, each demonstrated below with measured numbers:
+                <strong>(1)</strong> conditioning on a real confounder closes the door — most of the
+                bias disappears; <strong>(2)</strong> the door only closes <em>as far as the proxy is
+                good</em> — a noisy measurement of demand leaves residual bias, and the model won't
+                warn you; <strong>(3)</strong> adjustment is powerless against <em>simultaneity</em> —
+                when spend responds to sales, there is no third variable to condition on.
+            </p>
+
+            <h2 id="dags">Three DAGs, one dashboard</h2>
+            <p>
+                The dashboards these worlds generate are statistically similar — positive spend–sales
+                correlations everywhere. The <em>graphs</em> are what differ, and the graph is what
+                decides whether adjustment can work:
+            </p>
+            <table>
+                <thead>
+                    <tr><th>history</th><th>hidden structure</th><th>the open path</th><th>can a control close it?</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>A — demand hidden</strong><br><code>unobserved_confounding</code></td>
+                        <td>Latent demand drives both spend and sales; nothing in the warehouse measures it</td>
+                        <td>spend &larr; demand &rarr; sales</td>
+                        <td>No — the confounder is unobserved</td>
+                    </tr>
+                    <tr>
+                        <td><strong>B — demand measured</strong><br><code>confounding_controlled</code></td>
+                        <td>Same world, but a syndicated <em>category demand index</em> — a noisy proxy — lands in the warehouse</td>
+                        <td>spend &larr; demand &rarr; sales</td>
+                        <td>Partly — as far as the proxy is good</td>
+                    </tr>
+                    <tr>
+                        <td><strong>C — budgets paced to sales</strong><br><code>reverse_causality</code></td>
+                        <td>No hidden third cause; finance sets next week's budgets as a share of recent revenue</td>
+                        <td>sales (last week) &rarr; spend (this week)</td>
+                        <td>No — the "confounder" is the KPI itself</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>
+                Adjustment's textbook logic, for the world where it applies: condition on the common
+                cause \( d \) and the interventional quantity becomes estimable from observational
+                strata,
+            </p>
+            <p>
+                \[ P\bigl(y \mid \operatorname{do}(s)\bigr) \;=\; \sum_{d} P(y \mid s, d)\, P(d). \]
+            </p>
+            <p>
+                The formula's fine print is the whole notebook: it requires \( d \) to be
+                <em>measured</em>, measured <em>well</em>, and to actually be a common cause rather
+                than the outcome wearing a disguise.
+            </p>
+
+            <h2 id="fits">Fit all three histories</h2>
+            <p>
+                Same model family for each — Bayesian MMM with geometric adstock, saturating response,
+                linear trend, NumPyro NUTS — graded against each world's sealed key. In History B the
+                demand index enters <strong>marked as a <code>CONFOUNDER</code></strong>: the framework
+                routes it to a wide, un-shrunk coefficient prior, because shrinking a confounder's
+                coefficient re-opens the very door you're trying to close.
+            </p>
+            <pre><code class="python">from mmm_framework.config import CausalControlRole
+
+# Declaring the control's causal role is part of the model spec:
+# CONFOUNDER -> wide, un-shrunk prior (closing a back-door);
+# unmarked   -> default precision-control prior (shrunk toward zero).
+role = CausalControlRole.CONFOUNDER
+</code></pre>
+            <table>
+                <thead>
+                    <tr><th>channel</th><th>A — demand hidden</th><th>B — demand measured</th><th>C — budget pacing</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>TV</strong></td><td>−18% (covered)</td><td>−8% (covered)</td><td>−15% (covered)</td></tr>
+                    <tr><td><strong>Search</strong></td><td>+43% <strong>(truth outside CI)</strong></td><td>+25% <strong>(truth outside CI)</strong></td><td>+15% (covered)</td></tr>
+                    <tr><td><strong>Social</strong></td><td>+38% <strong>(truth outside CI)</strong></td><td>+18% (covered)</td><td>−10% (covered)</td></tr>
+                    <tr><td><strong>Display</strong></td><td>−27% (covered)</td><td>−14% (covered)</td><td>+0% (covered)</td></tr>
+                </tbody>
+            </table>
+            <p class="chart-note">
+                Relative error of estimated counterfactual contribution vs each world's sealed key
+                (<code>nbs/artifacts/causal_01_adjustment_scorecard.json</code> and the notebook's
+                grade tables). Histories A and B are the <em>same world</em> — the only difference is
+                one column in the analyst's dataset.
+            </p>
+
+            <h2 id="what-it-bought">Grading: what the control bought</h2>
+            <p>
+                Because Histories A and B share the same latent demand, the same chasing budgets, and
+                the same true ROAS, the comparison is surgical: any improvement is attributable to
+                adjustment and nothing else.
+            </p>
+
+            <div class="chart-container" id="adjBiasChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — per-channel bias before and after the demand-index control.
+                The chasers' bias roughly halves: Search <strong>+43% &rarr; +25%</strong>, Social
+                <strong>+38% &rarr; +18%</strong>; Social's 90% interval now covers the truth (it
+                didn't in History A). But Search is <em>still</em> over-read by a quarter — the index
+                is a noisy proxy for true demand, so residual confounding survives, and
+                <strong>nothing inside the model announces it</strong>. A proxy closes the door only as
+                far as it is a good proxy.
+            </p>
+
+            <h2 id="marking">Aside — does the <code>CONFOUNDER</code> marking matter?</h2>
+            <p>
+                The framework asks you to <em>declare</em> a control's causal role, because unmarked
+                controls get the default precision-control prior (narrower, shrunk toward zero), and
+                shrinking a confounder can leave the door half-open. Here is the same History B fit
+                with the index left unmarked:
+            </p>
+            <table>
+                <thead>
+                    <tr><th>channel</th><th>A — no control</th><th>B — marked CONFOUNDER</th><th>B — unmarked (shrunk prior)</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>TV</strong></td><td>−18%</td><td>−8%</td><td>−8%</td></tr>
+                    <tr><td><strong>Search</strong></td><td>+43%</td><td>+25%</td><td>+25%</td></tr>
+                    <tr><td><strong>Social</strong></td><td>+38%</td><td>+18%</td><td>+18%</td></tr>
+                    <tr><td><strong>Display</strong></td><td>−27%</td><td>−14%</td><td>−15%</td></tr>
+                </tbody>
+            </table>
+            <p>
+                The honest aside: in <em>this</em> world the index's signal is strong enough to survive
+                the default shrinkage, so both variants close the door about equally (mean chaser bias
+                21.8% marked vs 21.5% unmarked). Marking the role is <strong>cheap insurance, not
+                magic</strong> — it exists for the worlds where the proxy is weaker and shrinkage
+                genuinely bites.
+            </p>
+
+            <div class="chart-container" id="chaserScoreChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — mean |relative error| over the demand-chasing channels
+                (Search &amp; Social), the channels confounding actually attacks:
+                <strong>40%</strong> with demand hidden, <strong>22%</strong> with the index marked as
+                a confounder, <strong>21%</strong> unmarked. Adjustment is real, cheap, and the first
+                thing to reach for — and it stops halfway because the proxy is noisy, not because the
+                method is wrong.
+            </p>
+
+            <h2 id="pacing">History C: the disease adjustment can't touch</h2>
+            <p>
+                In History C there is no hidden demand at all. Budgets are <strong>paced</strong>:
+                finance sets next week's spend partly from recent revenue, so spend and sales are
+                jointly determined — the arrow into spend starts at the KPI itself.
+            </p>
+            <p>
+                No control variable can fix this. Conditioning works by blocking a path through a
+                <em>third</em> variable; here the offending path runs through last week's
+                <strong>outcome</strong>. And conditioning on lagged sales does not rescue you either —
+                lagged sales carries the adstocked effect of last week's media, so it is a bad control
+                sitting on the causal path. The honest fixes live further up the ladder: model the
+                feedback structurally, or <strong>experiment</strong> — randomization severs the arrow
+                into spend by construction.
+            </p>
+
+            <div class="chart-container" id="pacingChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — Veranda paces gently (a fraction of each budget tracks
+                revenue: TV 0.6, Search 1.0, Social 0.8, Display 0.5), and the media calendar keeps its
+                identifying pulses, so the damage is moderate. But the pattern is diagnostic: the
+                hardest-paced channel (Search, pacing 1.0) is the most over-read at
+                <strong>+15%</strong> — the bias follows the pacing intensities, not the media plan.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ What the diagnostics said — in all three histories</h4>
+                <div class="diag-strip">
+                    <span class="green">History A: r-hat max 1.02 ✓</span>
+                    <span class="green">History B: r-hat max 1.01 ✓</span>
+                    <span class="green">History C: r-hat max 1.02 ✓</span>
+                </div>
+                <p>
+                    Every fit converged cleanly. The unmeasured confounder, the residual proxy bias,
+                    and the simultaneity bias are all <em>invisible from inside the model</em> — R-hat,
+                    fit quality, and intervals look healthy in every history. Both failure modes share
+                    a signature: the model is confident and wrong.
+                </p>
+            </div>
+
+            <h2 id="scorecard">What this rung bought — and what it can't</h2>
+            <p>
+                <strong>Bought:</strong> with a measured confounder, most of the chasers' bias
+                disappears. Adjustment is real, cheap, and the first thing to reach for. Declare causal
+                roles when you do it.
+            </p>
+            <p><strong>Can't:</strong></p>
+            <ul>
+                <li>an <strong>unmeasured</strong> confounder (History A) leaves you exactly where the
+                    dashboard left you — and nothing inside the model tells you;</li>
+                <li>a <strong>noisy proxy</strong> closes the door partway (Search +43% &rarr; +25%,
+                    not &rarr; 0%) and, again, doesn't tell you how far;</li>
+                <li><strong>simultaneity</strong> (History C) has no door to close.</li>
+            </ul>
+            <p>
+                The rest of the series is about earning confidence honestly — first by modeling more of
+                the structure we believe in
+                (<a href="causal-03-structural-mediation.html">03 · structural mediation</a> and the
+                latent-confounder notebook after it), then by buying ground truth with experiments
+                (notebooks 05–07).
+            </p>
+
+            <div class="check-understanding" id="quiz">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>The demand index cut Search's bias from +43% to +25%. Why didn't it go to zero — and what in the model's output warns you about the remainder?</summary>
+                    <div class="quiz-answer">
+                        <p>The index is a noisy <em>proxy</em> for latent demand, not demand itself. Conditioning on it blocks the back-door only to the extent the proxy captures the confounder; the unexplained slice of demand keeps leaking correlation into the demand-chasing channels. And nothing warns you: the History B fit converges cleanly (r-hat 1.01), the intervals look reasonable, and Search's 90% interval still excludes the truth. The residual is measurable here only because the answer key is unsealed — in production you'd need an experiment to see it.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>History C's budgets are paced to last week's revenue. Why can't you fix that by adding lagged sales as a control?</summary>
+                    <div class="quiz-answer">
+                        <p>Adjustment blocks paths through <em>third</em> variables; in History C the path into spend starts at the outcome itself. Worse, lagged sales is a <strong>bad control</strong>: it carries the adstocked effect of last week's media, so conditioning on it blocks part of the very causal effect you're estimating (the same amputation mechanism the mediator trap demonstrates in <a href="causal-02-mmm-as-causal-model.html">Causal 02</a>). The honest fixes are structural modeling of the feedback, or randomization — an experiment severs the arrow into spend by construction.</p>
+                    </div>
+                </details>
+            </div>
+
+            <div class="note" id="run-it">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/causal/causal_01_confounding_and_adjustment.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/causal/causal_01_confounding_and_adjustment.ipynb</code></a>
+                    on GitHub. All numbers from <code>nbs/artifacts/causal_01_adjustment_scorecard.json</code>,
+                    produced by <code>nbs/causal/causal_01_confounding_and_adjustment.ipynb</code>.
+                    Previous: <a href="causal-00-the-ladder.html">Causal Inference 00 — The Ladder of
+                    Evidence</a>. Next:
+                    <a href="causal-02-mmm-as-causal-model.html">Causal Inference 02 — The MMM as a
+                    Causal Model</a>: the realistic seven-channel world, what an MMM's numbers actually
+                    claim, the bad-control trap, and the model's most underrated skill — saying
+                    "I don't know."
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        const CI = {
+            colors: {
+                tv: '#3b6fb6', search: '#d98c3f', social: '#5a9e6f', display: '#b15a7a',
+                video: '#6f5aa0', radio: '#3f8f8f', print: '#8a6d3b',
+                truth: '#1a1a1a', danger: '#c0504d', good: '#4a8d57',
+                muted: '#9aa79a', grid: '#e3e9e3'
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2d3a2d', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        const CHANNELS = ['TV', 'Search', 'Social', 'Display'];
+        const CH_COLORS = [CI.colors.tv, CI.colors.search, CI.colors.social, CI.colors.display];
+
+        // ==================================================================
+        // History A vs History B — per-channel bias
+        // nbs/artifacts/causal_01_adjustment_scorecard.json + grade tables
+        // ==================================================================
+        function drawAdjBias() {
+            const errA = [-18, 43, 38, -27];   // demand hidden
+            const errB = [-8, 25, 18, -14];    // demand-index control, marked CONFOUNDER
+
+            const traces = [
+                { type: 'bar', name: 'A — demand hidden',
+                  x: CHANNELS, y: errA,
+                  marker: { color: CI.colors.danger, opacity: 0.88 },
+                  hovertemplate: '%{x}: %{y}% vs truth<extra>A — demand hidden</extra>' },
+                { type: 'bar', name: 'B — demand measured (index as CONFOUNDER)',
+                  x: CHANNELS, y: errB,
+                  marker: { color: CI.colors.good, opacity: 0.88 },
+                  hovertemplate: '%{x}: %{y}% vs truth<extra>B — demand measured</extra>' }
+            ];
+            const layout = CI.layout({
+                barmode: 'group',
+                yaxis: { title: 'relative error vs sealed key (%)', ticksuffix: '%',
+                         zerolinecolor: '#8b968b', zerolinewidth: 2 },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 80, r: 20, t: 40, b: 45 },
+                annotations: [
+                    { x: 1, y: 43, yanchor: 'bottom', text: '+43% → +25%',
+                      showarrow: false, font: { size: 11, color: '#a44c43' } },
+                    { x: 2, y: 38, yanchor: 'bottom', text: '+38% → +18%',
+                      showarrow: false, font: { size: 11, color: '#a44c43' } }
+                ]
+            });
+            Plotly.newPlot('adjBiasChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // The chaser scorecard — mean |rel err| over Search & Social
+        // ==================================================================
+        function drawChaserScore() {
+            const labels = ['A — demand hidden', 'B — index, marked', 'B — index, unmarked'];
+            const score = [40.3, 21.8, 21.5];
+            const colors = [CI.colors.danger, CI.colors.good, '#7fae8a'];
+
+            const traces = [
+                { type: 'bar',
+                  x: labels, y: score,
+                  marker: { color: colors, opacity: 0.9,
+                            line: { color: 'rgba(26,26,26,0.3)', width: 1 } },
+                  text: ['40%', '22%', '21%'], textposition: 'outside',
+                  textfont: { size: 13, color: '#2d3a2d' },
+                  hovertemplate: '%{x}: %{y:.1f}%<extra></extra>',
+                  showlegend: false }
+            ];
+            const layout = CI.layout({
+                yaxis: { title: 'mean |relative error|, Search & Social (%)',
+                         ticksuffix: '%', rangemode: 'tozero' },
+                margin: { l: 80, r: 20, t: 30, b: 55 }
+            });
+            Plotly.newPlot('chaserScoreChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // History C — bias per channel, labeled with pacing intensity
+        // ==================================================================
+        function drawPacing() {
+            const xLabels = ['TV<br>pacing 0.6', 'Search<br>pacing 1.0',
+                             'Social<br>pacing 0.8', 'Display<br>pacing 0.5'];
+            const err = [-15, 15, -10, 0];
+            const labels = ['−15%', '+15%', '−10%', '+0%'];
+
+            const traces = [
+                { type: 'bar',
+                  x: xLabels, y: err,
+                  marker: { color: CH_COLORS, opacity: 0.9,
+                            line: { color: 'rgba(26,26,26,0.3)', width: 1 } },
+                  hovertemplate: '%{x}: %{y}% vs truth<extra></extra>',
+                  showlegend: false }
+            ];
+            const layout = CI.layout({
+                yaxis: { title: 'relative error vs sealed key (%)', ticksuffix: '%',
+                         zerolinecolor: '#8b968b', zerolinewidth: 2 },
+                margin: { l: 80, r: 20, t: 30, b: 70 },
+                annotations: xLabels.map(function(x, i) {
+                    const over = err[i] >= 0;
+                    return { x: i, y: err[i], yanchor: over ? 'bottom' : 'top',
+                             text: labels[i], showarrow: false,
+                             font: { size: 12, color: '#5a6b5a' } };
+                }).concat([{
+                    x: 1, y: 17.5, yanchor: 'bottom',
+                    text: 'hardest-paced → most over-read',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }])
+            });
+            Plotly.newPlot('pacingChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        function init() {
+            drawAdjBias();
+            drawChaserScore();
+            drawPacing();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

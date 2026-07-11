@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causal Inference 07: Many Experiments | MMM Framework</title>
+    <meta name="description" content="Radio −36%→−10% with interval width −74% from one go-dark, Display width −54% from an off-panel holdout, and a z=2.8 legacy study that drags Search +8%→+26% — evidence as a portfolio.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/causal-07-many-experiments.html">
+    <meta property="og:title" content="Causal Inference 07: Many Experiments | MMM Framework">
+    <meta property="og:description" content="Evidence composes — and a portfolio needs bookkeeping. One test resolves a collinear pair's split but not its sum, off-panel calibration buys width with a stationarity assumption, and a confident wrong study poisons by injection.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/causal-07-many-experiments.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* ------------------------------------------------------------------
+           Page-local styles shared by the Causal Inference in Practice series
+           (same kit as the Pressure Tests pages — tokens only).
+           ------------------------------------------------------------------ */
+        .chart-container {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin: 1.5rem 0 0.5rem;
+            height: 380px;
+        }
+        .chart-container.tall { height: 460px; }
+        .chart-container.short { height: 300px; }
+
+        .chart-note {
+            font-size: 0.92rem;
+            color: var(--color-text-muted);
+            margin: 0.25rem 0 2rem;
+            padding-left: 0.75rem;
+            border-left: 3px solid var(--color-border);
+        }
+        .chart-note strong { color: var(--color-text); }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-callout {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-callout .stat-value {
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.2rem;
+            line-height: 1.1;
+            color: var(--color-primary-dark);
+        }
+        .stat-callout.danger .stat-value { color: var(--color-danger); }
+        .stat-callout .stat-label {
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            margin-top: 0.35rem;
+        }
+
+        .verdict-pill {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.1rem 0.6rem;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+        .verdict-pill.ok      { background: rgba(74, 141, 87, 0.16); color: #3f7a58; }
+        .verdict-pill.silent  { background: rgba(192, 80, 77, 0.14); color: #a44c43; }
+
+        .discipline-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--color-primary);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .discipline-card ol { margin: 0.5rem 0 0 1.1rem; }
+        .discipline-card li { margin: 0.5rem 0; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Causal Inference 07: Many Experiments | MMM Framework">
+    <meta name="twitter:description" content="Evidence composes — and a portfolio needs bookkeeping. One test resolves a collinear pair's split but not its sum, off-panel calibration buys width with a stationarity assumption, and a confident wrong study poisons by injection.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/causal-07-many-experiments.html",
+          "name": "Causal Inference 07: Many Experiments | MMM Framework",
+          "description": "Radio −36%→−10% with interval width −74% from one go-dark, Display width −54% from an off-panel holdout, and a z=2.8 legacy study that drags Search +8%→+26% — evidence as a portfolio.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-06-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/causal-07-many-experiments.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/causal-07-many-experiments.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Causal Inference 07: Many Experiments",
+          "datePublished": "2026-06-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/causal-07-many-experiments.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/causal-07-many-experiments.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Demos & Reports",
+              "item": "https://redam94.github.io/mmm-framework/demos.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Causal Inference 07: Many Experiments",
+              "item": "https://redam94.github.io/mmm-framework/causal-07-many-experiments.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">A portfolio, not a pile</a></li>
+                <li><a href="#baseline">The baseline's honest ignorance</a></li>
+                <li><a href="#radio">Exp 1 · the Radio go-dark</a></li>
+                <li><a href="#offpanel">Exp 2 · off-panel Display</a></li>
+                <li><a href="#conflict">Exp 3 · the wrong certificate</a></li>
+                <li><a href="#ledger">The portfolio ledger</a></li>
+                <li><a href="#rules">Portfolio discipline</a></li>
+                <li><a href="#quiz">Check your understanding</a></li>
+                <li><a href="#run-it">Run it yourself</a></li>
+            </ul>
+
+            <h3>Causal Inference in Practice</h3>
+            <ul class="sidebar-nav">
+                <li><a href="causal-04-latent-confounders.html">04 · Latent Confounders</a></li>
+                <li><a href="causal-05-measuring-one-experiment.html">05 · Measuring One Experiment</a></li>
+                <li><a href="causal-06-calibrating-the-model.html">06 · Calibrating the Model</a></li>
+                <li><a href="causal-07-many-experiments.html" class="active">07 · Many Experiments</a></li>
+                <li><a href="causal-08-designing-next-experiment.html">08 · Designing the Next Experiment</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Causal Inference 07: Many Experiments</h1>
+            <p class="lead">
+                Evidence composes — and a portfolio needs bookkeeping.
+                <a href="causal-06-calibrating-the-model.html">Notebook&nbsp;06</a> repaired one
+                channel with one experiment. A real measurement program accumulates a
+                <em>portfolio</em>: readouts of different channels, windows, designs and vintages —
+                plus the occasional inherited "study" of dubious provenance. This page mirrors
+                <code>nbs/causal/causal_07_many_experiments.ipynb</code>: three very different pieces
+                of evidence folded into Veranda Home's realistic <strong>seven-channel</strong> model,
+                each one graded against the sealed key. Three lessons: experiments compose; a test on
+                one twin of a collinear pair resolves the <em>split</em> but not the <em>sum</em>; and
+                the portfolio's most dangerous member is the confident wrong one.
+            </p>
+
+            <div class="stat-row">
+                <div class="stat-callout">
+                    <div class="stat-value">&minus;74%</div>
+                    <div class="stat-label">Radio 90% interval width after one go-dark; point error −36% → −10%</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">&minus;56%</div>
+                    <div class="stat-label">Print point error after the Radio test (was −16%) — the untested twin inherits the pair-sum's bias</div>
+                </div>
+                <div class="stat-callout">
+                    <div class="stat-value">&minus;54%</div>
+                    <div class="stat-label">Display interval width from an off-panel holdout the model's window never saw</div>
+                </div>
+                <div class="stat-callout danger">
+                    <div class="stat-value">z = 2.8</div>
+                    <div class="stat-label">tension between the legacy Search claim and the posterior — merged anyway, Search goes +8% → +26%</div>
+                </div>
+            </div>
+
+            <h2 id="baseline">1 — The baseline and its honest ignorance</h2>
+            <p>
+                The realistic seven-channel world's causal fit, reloaded from cache. The ridge: Radio
+                and Print flighted in lockstep (spend correlation ≈ 0.996), so the data pins their
+                <em>combined</em> effect while each channel's own interval stays enormous — 90%
+                interval widths of <strong>3,871</strong> (Radio) and <strong>4,034</strong> (Print)
+                KPI units, against true contributions of 3,301 and 2,097. Points: Radio −36%,
+                Print −16%, both covered by their wide intervals. And a detail that matters later:
+                the pair-<em>sum</em> itself is under-read — combined estimate 3,853 vs true 5,398,
+                <strong>−29%</strong>. The observational data got the total wrong, not just the split.
+            </p>
+
+            <h2 id="radio">2 — Experiment 1: the Radio go-dark</h2>
+            <p>
+                Ten dark weeks for Radio (window 2022-09-26 → 2022-11-28), read with
+                <a href="causal-05-measuring-one-experiment.html">notebook&nbsp;05</a>'s discipline:
+                <strong>window ROAS 0.94 ± 0.10</strong> (the world's true window ROAS: 0.94 — a
+                well-run test). Folded in via the likelihood route and re-graded:
+            </p>
+
+            <div class="chart-container" id="ridgeChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — <code>nbs/artifacts/causal_07_portfolio.json</code>. The
+                tested channel is repaired: Radio lands at <strong>−10%</strong> (from −36%) and its
+                interval collapses by <strong>74%</strong>. The twin moves too — Print's interval
+                shrinks <strong>43%</strong>, because resolving Radio resolves the <em>split</em> of
+                the pinned pair-sum. But the honest part most case studies omit: <strong>Print's
+                point estimate got worse</strong>, −16% → −56%. The data had pinned the pair-sum ~30%
+                low; the experiment fixed Radio's share of it, so the whole sum deficit now lands on
+                Print — with more confidence.
+            </p>
+
+            <div class="warning">
+                <h4>⚠️ One test resolves a collinear pair's SPLIT, not its SUM</h4>
+                <p>
+                    The pair-sum stays whatever the observational data said it was — here, ~30%
+                    under-read. The untested twin just became the program's top re-test priority.
+                    Budget the second test, or design one that moves both channels
+                    (<a href="causal-08-designing-next-experiment.html">notebook&nbsp;08</a>).
+                </p>
+            </div>
+
+            <h2 id="offpanel">3 — Experiment 2: off-panel Display</h2>
+            <p>
+                The Display holdout ran <strong>after</strong> the modeling window closed — spring
+                2024, while the panel ends in late 2023. Classic grounds for "sorry, the test doesn't
+                overlap the data, we can't use it." With off-panel calibration you can: declare the
+                test's <strong>spend level</strong> (<code>eval_spend</code>, per period), duration
+                (<code>eval_periods</code>), and adstock regime (<code>cold_start</code> — the channel
+                ramps from zero in the test markets), and the likelihood attaches to the channel's
+                <em>global response curve</em> evaluated at that spend. No training rows involved, so
+                window overlap is unnecessary.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework.calibration import ExperimentEstimand, ExperimentMeasurement
+
+radio_dark = ExperimentMeasurement(
+    channel="Radio", test_period=("2022-09-26", "2022-11-28"),
+    value=0.94, se=0.10,
+    estimand=ExperimentEstimand.ROAS, distribution="normal",
+    name="radio_dark_2022",
+)
+display_offpanel = ExperimentMeasurement(
+    channel="Display", test_period=("2024-03-04", "2024-04-22"),
+    value=0.59, se=0.08,
+    estimand=ExperimentEstimand.ROAS, distribution="normal",
+    eval_spend=45.0, eval_periods=8, eval_units=1,   # $45k/week, 8 weeks, 1 cell
+    adstock_state="cold_start",                      # ramps from zero in test markets
+    name="display_offpanel_2024",
+)
+model.add_experiment_calibration([radio_dark, display_offpanel])
+results = model.fit(draws=1000, tune=1000)</code></pre>
+            </div>
+
+            <p>
+                Measured: at $45k/week (cold start) the world's true off-panel ROAS is
+                <strong>0.56</strong>; the simulated readout comes in at <strong>0.59 ± 0.08</strong>.
+                After the merge, Display's interval width drops <strong>4,113 → 1,898</strong>
+                (−54%) and its point estimate doesn't degrade (+19% → +16%). The assumption you buy
+                it with, stated out loud: <strong>structural stationarity</strong> — the response
+                curve (saturation, carryover, effectiveness) is the same in spring 2024 as in the
+                fitted window. Time-varying worlds break this; pricing evidence decay is
+                notebook&nbsp;09's job.
+            </p>
+
+            <h2 id="conflict">4 — Experiment 3: the confident wrong certificate</h2>
+            <p>
+                An inherited deck claims Search ROAS <strong>0.95 ± 0.10</strong> ("agency lift study,
+                2021"). Before merging <em>anything</em>, run the tension check — compare the claimed
+                value against the current posterior for the same estimand, combining both
+                uncertainties:
+            </p>
+            <p>
+                \[ z \;=\; \frac{v_{\text{claim}} - \mu_{\text{model}}}
+                {\sqrt{\text{SE}_{\text{claim}}^2 + \sigma_{\text{model}}^2}}
+                \;=\; \frac{0.95 - 0.55}{\sqrt{0.10^2 + 0.11^2}} \;\approx\; 2.8 \]
+            </p>
+            <p>
+                A &gt;2σ gap <em>before</em> merging. Policy: investigate provenance — was the
+                estimand matched? the estimator calibrated? the market representative? Park it in the
+                ledger as <strong>disputed</strong>. The notebook merges it anyway, as narrator, to
+                price the mistake:
+            </p>
+
+            <div class="chart-container" id="poisonChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — the bad certificate drags a <em>healthy</em> estimate away
+                from truth: Search relative error <strong>+8% → +26%</strong>, truth pushed outside
+                the interval — and the interval <strong>tightens</strong> while it happens (width
+                2,752 → 1,741). Confidently wrong, by injection. A likelihood commits — including to
+                lies.
+            </p>
+
+            <h2 id="ledger">5 — The portfolio ledger</h2>
+            <p>
+                Every readout, its vintage, estimand, SE, and what it did to the posterior — the
+                bookkeeping a planning engine consumes. The legacy study is excluded from the final
+                model; it stays in the ledger as <em>disputed</em>.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>name</th>
+                        <th>channel</th>
+                        <th>estimand</th>
+                        <th>vintage</th>
+                        <th>value ± SE</th>
+                        <th>status</th>
+                        <th>origin</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>radio_dark_2022</code></td>
+                        <td>Radio</td>
+                        <td>avg ROAS (window)</td>
+                        <td>2022-11</td>
+                        <td>0.94 ± 0.10</td>
+                        <td><span class="verdict-pill ok">merged</span></td>
+                        <td>pre-registered geo holdout (nb05 discipline)</td>
+                    </tr>
+                    <tr>
+                        <td><code>display_offpanel_2024</code></td>
+                        <td>Display</td>
+                        <td>avg ROAS (off-panel, cold start)</td>
+                        <td>2024-04</td>
+                        <td>0.59 ± 0.08</td>
+                        <td><span class="verdict-pill ok">merged</span></td>
+                        <td>post-window national holdout</td>
+                    </tr>
+                    <tr>
+                        <td><code>legacy_search_2021</code></td>
+                        <td>Search</td>
+                        <td>avg ROAS (claimed)</td>
+                        <td>2021-08</td>
+                        <td>0.95 ± 0.10</td>
+                        <td><span class="verdict-pill silent">disputed (tension z = 2.8)</span></td>
+                        <td>inherited agency deck</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="chart-container" id="evidenceChart"></div>
+            <p class="chart-note">
+                <strong>Measured</strong> — what each honest piece of evidence bought, as 90% interval
+                width reduction: Radio <strong>−74%</strong> (its own go-dark), Print
+                <strong>−43%</strong> (spillover — resolving the twin resolves the split), Display
+                <strong>−54%</strong> (the off-panel holdout). Each merged readout repaired its target
+                and tightened its neighborhood.
+            </p>
+
+            <h2 id="rules">6 — Portfolio discipline</h2>
+            <div class="discipline-card">
+                <ol>
+                    <li><strong>Evidence composes</strong> through the likelihood — each honest
+                        readout repaired its target and tightened its neighborhood.</li>
+                    <li><strong>Collinear pairs need two answers.</strong> A test on one twin resolves
+                        the split; the pair-<em>sum</em> stays whatever the observational data said it
+                        was. Budget the second test, or design one that moves both.</li>
+                    <li><strong>Tension-check before merging.</strong> A &gt;2σ gap between a claim
+                        and the current posterior is a provenance investigation, not a data
+                        point.</li>
+                    <li><strong>Vintage matters.</strong> The 2021 study wouldn't be trustworthy even
+                        if honest — evidence decays as the world drifts. Pricing that decay is
+                        notebook&nbsp;09's job.</li>
+                </ol>
+            </div>
+
+            <div class="check-understanding" id="quiz">
+                <h3>Check your understanding</h3>
+                <p>Commit to an answer before opening each one.</p>
+                <details class="quiz-item">
+                    <summary>The Radio test was honest and accurate (readout 0.94, truth 0.94). Why did Print's point estimate get <em>worse</em> after merging it?</summary>
+                    <div class="quiz-answer">
+                        <p>Because the observational data had pinned two things: the Radio+Print
+                        <em>sum</em> (about 30% below truth) and almost nothing about the split. The
+                        experiment nailed Radio's share, so the posterior kept its beliefs about the
+                        sum and reassigned the entire deficit to the untested twin: Print went
+                        −16% → −56%, with a tighter interval. Nothing malfunctioned — the model
+                        combined its evidence correctly; the observational component of that evidence
+                        was simply wrong about the sum, and no Radio test can fix a Print bias. That
+                        is why the untested twin becomes the top re-test priority.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>What exactly does off-panel calibration attach the likelihood to, and what assumption does that purchase run on?</summary>
+                    <div class="quiz-answer">
+                        <p>Not to any training row — the test window doesn't overlap the panel. The
+                        likelihood evaluates the channel's <em>global response curve</em> (the fitted
+                        saturation and adstock machinery) at the declared spend level
+                        (<code>eval_spend</code>) over the declared duration
+                        (<code>eval_periods</code>), under the declared adstock regime
+                        (<code>cold_start</code>). The purchase price is structural stationarity: the
+                        curve must be the same in spring 2024 as in the fitted window. State it,
+                        and revisit it when the world drifts — evidence-decay pricing is
+                        notebook 09.</p>
+                    </div>
+                </details>
+                <details class="quiz-item">
+                    <summary>The legacy study made the Search interval <em>tighter</em>. Why is that the alarming part?</summary>
+                    <div class="quiz-answer">
+                        <p>Because width is the model's own statement of confidence. An honest merge
+                        buys narrower intervals around a better point; a poisoned merge buys narrower
+                        intervals around a worse one — Search moved +8% → +26% while its width fell
+                        2,752 → 1,741, so the model became more sure of a more wrong number, and the
+                        truth left the interval. A likelihood commits, including to lies. The z = 2.8
+                        tension check was the smoke detector: fired before the merge, it routes the
+                        claim to provenance review instead of the graph.</p>
+                    </div>
+                </details>
+            </div>
+
+            <div class="note" id="run-it">
+                <h4>💡 Run it yourself</h4>
+                <p>
+                    This page mirrors
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/nbs/causal/causal_07_many_experiments.ipynb"
+                       target="_blank" rel="noopener"><code>nbs/causal/causal_07_many_experiments.ipynb</code></a>
+                    — notebook 7 of 11 in the <em>Causal Inference in Practice</em> series (brand:
+                    Veranda Home; synthetic worlds with sealed answer keys; every claim graded by an
+                    assert). All numbers from <code>nbs/artifacts/causal_07_portfolio.json</code>,
+                    produced by <code>nbs/causal/causal_07_many_experiments.ipynb</code>.
+                    Previous: <a href="causal-06-calibrating-the-model.html">06 · Calibrating the
+                    Model</a>. Next:
+                    <a href="causal-08-designing-next-experiment.html">08 · Designing the Next
+                    Experiment</a> — stop reading tests and start <em>choosing</em> them:
+                    model-anchored power, the short-term cost of learning, and a Pareto frontier of
+                    designs. Source:
+                    <a href="https://github.com/redam94/mmm-framework" target="_blank"
+                       rel="noopener">github.com/redam94/mmm-framework</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // Causal-series Plotly helpers (palette shared across the series).
+        const CI = {
+            colors: {
+                tv: '#3b6fb6', search: '#d98c3f', social: '#5a9e6f',
+                display: '#b15a7a', radio: '#3f8f8f', print: '#8a6d3b',
+                truth: '#1a1a1a', danger: '#c0504d', good: '#4a8d57',
+                muted: '#8a949e', grid: '#e3e9e3'
+            },
+            band: function(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16),
+                      g = parseInt(hex.slice(3, 5), 16),
+                      b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.18 : alpha) + ')';
+            },
+            layout: function(overrides) {
+                const base = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { family: "'Source Sans 3', sans-serif", color: '#2b2f36', size: 13 },
+                    margin: { l: 70, r: 30, t: 30, b: 60 },
+                    xaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    yaxis: { gridcolor: '#e3e9e3', zerolinecolor: '#d4ddd4' },
+                    hoverlabel: { font: { family: "'Source Sans 3', sans-serif" } }
+                };
+                const out = Object.assign({}, base, overrides || {});
+                out.xaxis = Object.assign({}, base.xaxis, (overrides || {}).xaxis || {});
+                out.yaxis = Object.assign({}, base.yaxis, (overrides || {}).yaxis || {});
+                return out;
+            },
+            config: { responsive: true, displayModeBar: false }
+        };
+
+        // ==================================================================
+        // The ridge snaps — onto the tested channel
+        // (causal_07_portfolio.json: ridge.radio_err / ridge.print_err)
+        // ==================================================================
+        function drawRidge() {
+            const chans  = ['Radio (tested)', 'Print (untested twin)'];
+            const before = [-0.3645, -0.1628];
+            const after  = [-0.0995, -0.5592];
+
+            const traces = [
+                {
+                    type: 'bar', name: 'before the Radio test',
+                    x: chans, y: before,
+                    marker: { color: CI.band(CI.colors.muted, 0.55),
+                              line: { color: CI.colors.muted, width: 1.5 } },
+                    hovertemplate: '%{x}<br>before: %{y:+.0%}<extra></extra>'
+                },
+                {
+                    type: 'bar', name: 'after the Radio go-dark',
+                    x: chans, y: after,
+                    marker: { color: [CI.band(CI.colors.radio, 0.7), CI.band(CI.colors.danger, 0.55)],
+                              line: { color: [CI.colors.radio, CI.colors.danger], width: 1.5 } },
+                    hovertemplate: '%{x}<br>after: %{y:+.0%}<extra></extra>'
+                }
+            ];
+
+            const layout = CI.layout({
+                barmode: 'group',
+                yaxis: { title: 'relative error vs sealed truth', tickformat: '+.0%',
+                         range: [-0.65, 0.08] },
+                legend: { orientation: 'h', y: 1.13 },
+                margin: { l: 80, r: 20, t: 40, b: 55 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 1.5, y0: 0, y1: 0,
+                    line: { color: CI.colors.truth, width: 1.5 }
+                }],
+                annotations: [{
+                    x: 0.22, y: -0.0995, yanchor: 'top', yshift: -4,
+                    text: '−36% → −10%<br>interval width −74%',
+                    showarrow: false, font: { size: 11, color: '#3f7a58' }
+                }, {
+                    x: 1.22, y: -0.5592, yanchor: 'top', yshift: -4,
+                    text: '−16% → −56%<br>inherits the pair-sum bias',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }]
+            });
+
+            Plotly.newPlot('ridgeChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // The poisoned merge — Search vs the legacy certificate
+        // (causal_07_portfolio.json: conflict)
+        // ==================================================================
+        function drawPoison() {
+            const labels = ['clean portfolio<br>(Radio + Display merged)', '+ legacy study<br>(z = 2.8, merged anyway)'];
+            const errs   = [0.0769, 0.2649];
+            const widths = [2752, 1741];
+            const cols   = [CI.colors.good, CI.colors.danger];
+
+            const traces = [{
+                type: 'bar',
+                x: labels, y: errs,
+                marker: { color: cols.map(function(c) { return CI.band(c, 0.6); }),
+                          line: { color: cols, width: 1.5 } },
+                customdata: widths,
+                text: ['+8%', '+26%'],
+                textposition: 'outside',
+                hovertemplate: '%{x}<br>Search error: %{y:+.0%}<br>90% width: %{customdata:,}<extra></extra>',
+                showlegend: false
+            }];
+
+            const layout = CI.layout({
+                yaxis: { title: 'Search relative error vs sealed truth', tickformat: '+.0%',
+                         range: [0, 0.34] },
+                margin: { l: 80, r: 20, t: 30, b: 70 },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: 1.5, y0: 0, y1: 0,
+                    line: { color: CI.colors.truth, width: 1.5 }
+                }],
+                annotations: [{
+                    x: 0, y: 0.0769, yanchor: 'bottom', yshift: 24,
+                    text: 'width 2,752 · covered',
+                    showarrow: false, font: { size: 11, color: '#3f7a58' }
+                }, {
+                    x: 1, y: 0.2649, yanchor: 'bottom', yshift: 24,
+                    text: 'width 1,741 · truth outside —<br>more wrong AND more confident',
+                    showarrow: false, font: { size: 11, color: '#a44c43' }
+                }]
+            });
+
+            Plotly.newPlot('poisonChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        // What each piece of evidence bought — 90% interval width reduction
+        // (causal_07_portfolio.json: ridge.width_shrink, offpanel.width_shrink)
+        // ==================================================================
+        function drawEvidence() {
+            const labels = ['Radio<br>(own go-dark)', 'Print<br>(spillover from the Radio test)', 'Display<br>(off-panel holdout)'];
+            const shrink = [0.738, 0.434, 0.539];
+            const cols   = [CI.colors.radio, CI.colors.print, CI.colors.display];
+
+            const traces = [{
+                type: 'bar',
+                x: labels, y: shrink,
+                marker: { color: cols.map(function(c) { return CI.band(c, 0.65); }),
+                          line: { color: cols, width: 1.5 } },
+                text: shrink.map(function(s) { return '−' + Math.round(s * 100) + '%'; }),
+                textposition: 'outside',
+                hovertemplate: '%{x}<br>interval width reduction: %{y:.0%}<extra></extra>',
+                showlegend: false
+            }];
+
+            const layout = CI.layout({
+                yaxis: { title: '90% interval width reduction', tickformat: '.0%',
+                         range: [0, 0.85] },
+                margin: { l: 80, r: 20, t: 30, b: 70 }
+            });
+
+            Plotly.newPlot('evidenceChart', traces, layout, CI.config);
+        }
+
+        // ==================================================================
+        function init() {
+            drawRidge();
+            drawPoison();
+            drawEvidence();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+
+    <!-- Initialize KaTeX -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
