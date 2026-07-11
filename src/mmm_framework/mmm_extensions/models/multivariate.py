@@ -266,6 +266,19 @@ class MultivariateMMM(BaseExtendedMMM):
                 dims=("obs", "outcome"),
             )
 
+            # Per-channel contribution to the PRIMARY outcome, original units
+            # (obs, channel) — the single-KPI report surface. The joint model
+            # is additive in the media per outcome (mu_k gains
+            # ``Σ_c beta_media[k,c]·sat_c``), so the primary outcome's per-channel
+            # contribution is ``beta_media[k0,c]·sat_c·std_k0``. Cross-effects
+            # are outcome→outcome (not media) and are excluded.
+            k0 = self._primary_outcome_index()
+            pm.Deterministic(
+                "channel_contributions",
+                media_transformed * beta_media[k0, :] * stds[k0],
+                dims=("obs", "channel"),
+            )
+
             # Multivariate likelihood (standardized scale)
             build_multivariate_likelihood(
                 "Y_obs",

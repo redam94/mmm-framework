@@ -250,3 +250,31 @@ def point_to_idata(point: dict):
             if not name.endswith("__")
         }
     )
+
+
+def psis_log_weights(log_lik: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """PSIS-smoothed LOO log-weights from pointwise log-likelihood draws.
+
+    ``log_lik`` is ``(n_obs, n_samples)`` (draws on the last axis). Returns
+    ``(log_weights, khat)`` with ``log_weights`` the same shape (normalized so
+    ``logsumexp == 0`` per observation) and ``khat`` of shape ``(n_obs,)`` —
+    the Pareto shape diagnostic (``khat > 0.7`` means the weights for that
+    observation are unreliable).
+
+    arviz 1.x removed the top-level ``az.psislw``; the smoother now lives on
+    ``arviz_stats.base.array_stats``. The legacy ``az.psislw`` (draws on the
+    FIRST axis) is the fallback for pre-1.x environments.
+    """
+    ll = np.asarray(log_lik, dtype=float)
+    if ll.ndim != 2:
+        raise ValueError(f"log_lik must be 2-D (n_obs, n_samples), got {ll.shape}")
+    try:
+        from arviz_stats.base import array_stats
+
+        lw, khat = array_stats.psislw(-ll, r_eff=1.0, axis=-1)
+        return np.asarray(lw), np.asarray(khat)
+    except ImportError:  # pragma: no cover - legacy arviz (<1.x) fallback
+        import arviz as az
+
+        lw, khat = az.psislw(-ll.T)
+        return np.asarray(lw).T, np.asarray(khat)

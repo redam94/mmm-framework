@@ -20,6 +20,12 @@ from .prefit import (
     prefit_facts,
     PREFIT_INSIGHT_SLOTS,
 )
+from .interactive import (
+    InteractiveReportGenerator,
+    interactive_report_facts,
+    build_interactive_insights,
+    INTERACTIVE_INSIGHT_SLOTS,
+)
 from .consultant_artifacts import ARTIFACTS, ArtifactSpec, render_artifact, write_all
 from .data_extractors import (
     MMMDataBundle,
@@ -96,6 +102,10 @@ __all__ = [
     "PrefitReadoutGenerator",
     "build_prefit_insights",
     "prefit_facts",
+    "InteractiveReportGenerator",
+    "interactive_report_facts",
+    "build_interactive_insights",
+    "INTERACTIVE_INSIGHT_SLOTS",
     "PREFIT_INSIGHT_SLOTS",
     # Model-defense (causal-rigor) report
     "build_model_defense",

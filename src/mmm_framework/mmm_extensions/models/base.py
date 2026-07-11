@@ -7,6 +7,7 @@ Provides common functionality for NestedMMM, MultivariateMMM, and CombinedMMM.
 from __future__ import annotations
 
 import warnings
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Sequence
 
@@ -589,6 +590,230 @@ class BaseExtendedMMM:
         """Get the fitted trace."""
         self._check_fitted()
         return self._trace
+
+    # -- posterior-predictive outcome (BayesianMMM.predict parity) ------------
+
+    @contextmanager
+    def _swapped_data(
+        self,
+        X_media: np.ndarray | None = None,
+        X_controls: np.ndarray | None = None,
+    ):
+        """Temporarily swap the graph's ``pm.Data`` containers for a
+        counterfactual pass, restoring the training data afterwards — the same
+        in-graph pattern :class:`StructuralNestedMMM` uses for its exact
+        counterfactual mediation effects. ``X_media`` is raw-scale (the graph
+        normalizes internally); ``X_controls`` is raw-scale and re-standardized
+        with the training moments when the model standardizes controls."""
+        model = self.model
+        updates: dict[str, np.ndarray] = {}
+        restores: dict[str, np.ndarray] = {}
+        if X_media is not None:
+            if "X_media" not in model.named_vars:
+                raise ValueError(
+                    "This model's graph has no 'X_media' data container; "
+                    "counterfactual media prediction is not supported."
+                )
+            updates["X_media"] = np.asarray(X_media, dtype=float)
+            restores["X_media"] = np.asarray(self.X_media, dtype=float)
+        if X_controls is not None:
+            if "X_controls" not in model.named_vars:
+                raise ValueError("This model has no control-variable data container.")
+            xc = np.asarray(X_controls, dtype=float)
+            c_mean = getattr(self, "_controls_mean", None)
+            c_std = getattr(self, "_controls_std", None)
+            if c_mean is not None and c_std is not None:
+                xc = (xc - c_mean) / c_std
+            updates["X_controls"] = xc
+            restores["X_controls"] = np.asarray(self.X_controls, dtype=float)
+        if not updates:
+            yield
+            return
+        with model:
+            try:
+                pm.set_data(updates)
+                yield
+            finally:
+                pm.set_data(restores)
+
+    def predict(
+        self,
+        X_media: np.ndarray | None = None,
+        X_controls: np.ndarray | None = None,
+        return_original_scale: bool = True,
+        hdi_prob: float = 0.94,
+        random_seed: int | None = None,
+    ):
+        """Posterior-predictive outcome draws, mirroring
+        :meth:`mmm_framework.model.base.BayesianMMM.predict`.
+
+        Resamples the outcome likelihood (``y_obs``) under the posterior —
+        optionally with counterfactual raw-scale ``X_media`` / ``X_controls``
+        swapped into the graph — and returns a
+        :class:`~mmm_framework.model.results.PredictionResults` whose
+        ``y_pred_samples`` has shape ``(n_draws, n_obs)``. Latent states
+        (mediators, factors) keep their posterior draws, so counterfactuals
+        are structure-preserving.
+
+        Single-outcome models (:class:`NestedMMM`,
+        :class:`StructuralNestedMMM`) predict their one outcome; the
+        multi-outcome models (:class:`MultivariateMMM`, :class:`CombinedMMM`)
+        predict their **primary** outcome (see :meth:`_primary_outcome_index`)
+        from the joint ``Y_obs`` likelihood, so the single-KPI reporting and
+        goodness-of-fit tooling work on them too.
+        """
+        self._check_fitted()
+        model = self.model
+        # Single-outcome models expose a 1-D ``y_obs``; the multi-outcome models
+        # a joint ``Y_obs`` of shape (obs, outcome) from which we take the
+        # primary outcome column.
+        if "y_obs" in model.named_vars and model.named_vars["y_obs"].ndim == 1:
+            outcome_var, multi = "y_obs", False
+        elif "Y_obs" in model.named_vars:
+            outcome_var, multi = "Y_obs", True
+        else:
+            raise NotImplementedError(
+                f"{type(self).__name__} has no recognized outcome node "
+                "('y_obs' or 'Y_obs')."
+            )
+
+        with self._swapped_data(X_media, X_controls):
+            with model:
+                with warnings.catch_warnings():
+                    # Multi-outcome graphs carry coord-bearing params; freezing
+                    # them at their posterior draws while resampling only the
+                    # likelihood is exactly what a predictive pass wants.
+                    warnings.filterwarnings("ignore", message="The following trace")
+                    pp = pm.sample_posterior_predictive(
+                        self._trace,
+                        var_names=[outcome_var],
+                        random_seed=random_seed,
+                        progressbar=False,
+                    )
+
+        y_samples = pp.posterior_predictive[outcome_var].values
+        if multi:
+            # (chain, draw, obs, outcome) -> primary outcome (chain, draw, obs).
+            y_samples = y_samples[..., self._primary_outcome_index()]
+        y_samples = y_samples.reshape(-1, y_samples.shape[-1]).astype(float)
+        # The extension likelihoods observe the STANDARDIZED outcome; bridge
+        # back to the caller's units exactly as the base model does. For the
+        # multi-outcome models ``self.y_std``/``y_mean`` are the primary
+        # outcome's moments (the first outcome), matching the selected column.
+        if return_original_scale:
+            y_samples = y_samples * self.y_std + self.y_mean
+
+        from ...model.results import PredictionResults
+        from ...utils import compute_hdi_bounds
+
+        y_hdi_low, y_hdi_high = compute_hdi_bounds(y_samples, hdi_prob=hdi_prob, axis=0)
+        return PredictionResults(
+            posterior_predictive=pp,
+            y_pred_mean=y_samples.mean(axis=0),
+            y_pred_std=y_samples.std(axis=0),
+            y_pred_hdi_low=y_hdi_low,
+            y_pred_hdi_high=y_hdi_high,
+            y_pred_samples=y_samples,
+        )
+
+    # -- interactive-report / response-curve surface (BayesianMMM parity) -----
+    #
+    # The reporting pipeline (``reporting.interactive`` /
+    # ``reporting.helpers.measurement``) reads a small, duck-typed surface off
+    # any fitted model: the raw media/outcome arrays, a period ``time_idx``, and
+    # ``sample_channel_contributions``. The extension family stores its data as
+    # ``self.X_media`` / ``self.y`` (raw) with one observation per period, so the
+    # aliases below expose it under the names the report expects without
+    # duplicating storage.
+
+    @property
+    def X_media_raw(self) -> np.ndarray:
+        """Raw (pre-transform) media matrix ``(n_obs, n_channels)``."""
+        return np.asarray(self.X_media, dtype=float)
+
+    @property
+    def y_raw(self) -> np.ndarray:
+        """Observed outcome on the caller's original scale ``(n_obs,)``.
+
+        Multi-outcome models (:class:`MultivariateMMM` / :class:`CombinedMMM`)
+        report the **primary** outcome (see :meth:`_primary_outcome_index`); a
+        2-D ``self.y`` is sliced to that column.
+        """
+        y = np.asarray(self.y, dtype=float)
+        if y.ndim == 2:
+            return y[:, self._primary_outcome_index()]
+        return y
+
+    @property
+    def time_idx(self) -> np.ndarray:
+        """Period index per observation. Extension models are a single national
+        series (one obs per period), so this is a plain ``0..n_obs-1`` range."""
+        return np.arange(self.n_obs)
+
+    def _primary_outcome_index(self) -> int:
+        """Index of the outcome the single-KPI report is built for.
+
+        Single-outcome models (Nested / Structural) have exactly one, so this is
+        0. Multi-outcome models override / honor a configured primary outcome.
+        """
+        return 0
+
+    def sample_channel_contributions(
+        self,
+        X_media: np.ndarray | None = None,
+        max_draws: int | None = None,
+        random_seed: int | None = None,
+    ) -> np.ndarray:
+        """Posterior draws of per-channel contributions to the (primary) outcome.
+
+        Evaluates the graph's ``channel_contributions`` deterministic — which
+        each extension registers in ORIGINAL KPI units — with ``X_media`` (raw
+        scale) optionally swapped in for a counterfactual scenario, returning
+        ``(n_draws, n_obs, n_channels)``. Mirrors
+        :meth:`mmm_framework.model.base.BayesianMMM.sample_channel_contributions`
+        so the interactive report and response-curve tooling work unchanged.
+
+        For the mediation / structural models the contribution is the channel's
+        total (direct + mediated) linear effect on the outcome (linearized for
+        the nonlinear structural paths, consistent with the pathway table); for
+        the multi-outcome models it is the contribution to the primary outcome.
+        Unlike the base model this returns ORIGINAL-scale contributions directly
+        (the deterministic already carries ``y_std``), so callers must NOT
+        rescale.
+        """
+        self._check_fitted()
+        model = self.model
+        if "channel_contributions" not in model.named_vars:
+            raise NotImplementedError(
+                f"{type(self).__name__} does not register a "
+                "'channel_contributions' deterministic; per-channel report "
+                "facts are unavailable for this model."
+            )
+        trace = self._trace
+        if max_draws is not None:
+            n_chains = trace.posterior.sizes["chain"]
+            per_chain = max(1, int(np.ceil(max_draws / n_chains)))
+            step = max(1, trace.posterior.sizes["draw"] // per_chain)
+            trace = trace.sel(draw=slice(None, None, step))
+
+        with self._swapped_data(X_media):
+            with model:
+                with warnings.catch_warnings():
+                    # Posterior params are (correctly) held at their posterior
+                    # draws while only the deterministic is re-evaluated under
+                    # the swapped media — the "implicitly frozen" note is the
+                    # intended behavior here, not a problem.
+                    warnings.filterwarnings("ignore", message="The following trace")
+                    pp = pm.sample_posterior_predictive(
+                        trace,
+                        var_names=["channel_contributions"],
+                        random_seed=random_seed,
+                        progressbar=False,
+                    )
+        contrib = pp.posterior_predictive["channel_contributions"].values
+        # (chain, draw, obs, channel) -> (draws, obs, channel); already original
+        # units (the deterministic carries y_std), so no rescale here.
+        return contrib.reshape(-1, *contrib.shape[2:])
 
     def summary(self, var_names: list[str] | None = None) -> pd.DataFrame:
         """Get posterior summary statistics."""
