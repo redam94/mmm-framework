@@ -184,7 +184,9 @@ def _fit_facts(
     time_idx: np.ndarray,
     n_periods: int,
     random_seed: int | None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Fit-plot facts per series + posterior-predictive test-statistic facts
+    (both derive from the same, single ``predict()`` pass)."""
     pred = model.predict(return_original_scale=True, random_seed=random_seed)
     samples = np.asarray(pred.y_pred_samples, dtype=float)
     actual_obs = np.asarray(model.y_raw, dtype=float)
@@ -206,7 +208,112 @@ def _fit_facts(
             if entry is not None:
                 series[str(name)] = entry
                 order.append(str(name))
-    return {"series": series, "order": order, "band_levels": list(FIT_BAND_LEVELS)}
+    fit = {"series": series, "order": order, "band_levels": list(FIT_BAND_LEVELS)}
+
+    onehot = _period_onehot(time_idx, n_periods)
+    covered = onehot.sum(axis=0) > 0
+    rep = (samples @ onehot)[:, covered]
+    obs = (actual_obs @ onehot)[covered]
+    ppc_stats = _ppc_stat_facts(rep, obs)
+    return fit, ppc_stats
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Posterior-predictive test statistics (Bayesian p-values)
+# ─────────────────────────────────────────────────────────────────────────────
+#: Test statistics compared between replicated and observed national KPI
+#: series. Each is T(y): the Bayesian p-value is P(T(y_rep) >= T(y_obs)).
+PPC_TEST_STATS = (
+    ("mean", "Mean", "average level"),
+    ("sd", "Std. deviation", "period-to-period variability"),
+    ("min", "Minimum", "the worst period"),
+    ("max", "Maximum", "the best period"),
+    ("acf1", "Lag-1 autocorrelation", "week-to-week persistence (AR(1))"),
+    ("skew", "Skewness", "asymmetry of the KPI distribution"),
+)
+
+
+def _stat_over_rows(key: str, x: np.ndarray) -> np.ndarray:
+    """One test statistic per row of ``x`` (rows = replicated series).
+
+    NaN periods are ignored; for ``acf1`` the series is treated as contiguous
+    across any gap (national series are normally gap-free).
+    """
+    with np.errstate(invalid="ignore", divide="ignore"):
+        if key == "mean":
+            return np.nanmean(x, axis=1)
+        if key == "sd":
+            return np.nanstd(x, axis=1)
+        if key == "min":
+            return np.nanmin(x, axis=1)
+        if key == "max":
+            return np.nanmax(x, axis=1)
+        if key == "skew":
+            mu = np.nanmean(x, axis=1, keepdims=True)
+            sd = np.nanstd(x, axis=1, keepdims=True)
+            sd = np.where(sd < 1e-12, np.nan, sd)
+            return np.nanmean(((x - mu) / sd) ** 3, axis=1)
+        if key == "acf1":
+            a, b = x[:, :-1], x[:, 1:]
+            ok = np.isfinite(a) & np.isfinite(b)
+            a = np.where(ok, a, np.nan)
+            b = np.where(ok, b, np.nan)
+            ma = np.nanmean(a, axis=1, keepdims=True)
+            mb = np.nanmean(b, axis=1, keepdims=True)
+            cov = np.nanmean((a - ma) * (b - mb), axis=1)
+            sa = np.sqrt(np.nanmean((a - ma) ** 2, axis=1))
+            sb = np.sqrt(np.nanmean((b - mb) ** 2, axis=1))
+            den = sa * sb
+            return np.where(den < 1e-12, np.nan, cov / den)
+    return np.full(x.shape[0], np.nan)
+
+
+def _ppc_stat_facts(
+    rep: np.ndarray, obs: np.ndarray, n_bins: int = 27
+) -> dict[str, Any]:
+    """Replicated-vs-observed test statistics with Bayesian p-values.
+
+    ``rep``: ``(n_draws, P)`` replicated national KPI series; ``obs``: ``(P,)``
+    observed. A p-value near 0 or 1 means the model systematically fails to
+    reproduce that property of the data.
+    """
+    rows: list[dict[str, Any]] = []
+    if rep.ndim != 2 or rep.shape[0] < 20 or obs.size < 4:
+        return {"stats": rows, "n_draws": int(rep.shape[0]) if rep.ndim == 2 else 0}
+    for key, label, desc in PPC_TEST_STATS:
+        obs_val = _stat_over_rows(key, obs[None, :])[0]
+        if not np.isfinite(obs_val):
+            continue
+        vals = _stat_over_rows(key, rep)
+        vals = vals[np.isfinite(vals)]
+        if vals.size < 20:
+            continue
+        p = float(np.mean(vals >= obs_val))
+        lo = float(min(vals.min(), obs_val))
+        hi = float(max(vals.max(), obs_val))
+        pad = 0.02 * (hi - lo) if hi > lo else max(abs(obs_val), 1.0) * 0.05
+        edges = np.linspace(lo - pad, hi + pad, n_bins + 1)
+        counts, _ = np.histogram(vals, bins=edges)
+        rows.append(
+            {
+                "key": key,
+                "label": label,
+                "desc": desc,
+                "observed": float(obs_val),
+                "rep_mean": float(vals.mean()),
+                "bayes_p": p,
+                "extreme": bool(p < 0.05 or p > 0.95),
+                "hist": {
+                    "edges": _jsafe(edges),
+                    "counts": [int(c) for c in counts],
+                },
+            }
+        )
+    return {
+        "stats": rows,
+        "n_draws": int(rep.shape[0]),
+        "series": "national period-summed KPI",
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -633,8 +740,9 @@ def interactive_report_facts(
 
     actual_national = np.asarray(model.y_raw, dtype=float) @ onehot
 
-    # Posterior-predictive fit (bands + stats, per geo + national).
-    fit = _fit_facts(model, time_idx, n_periods, random_seed)
+    # Posterior-predictive fit (bands + stats, per geo + national) and the
+    # replicated-vs-observed test statistics (one shared predict() pass).
+    fit, ppc_stats = _fit_facts(model, time_idx, n_periods, random_seed)
 
     # Per-draw per-period contributions in KPI units (base + paired bump).
     contrib_doc = model.sample_channel_contributions(
@@ -777,6 +885,7 @@ def interactive_report_facts(
         "periods": periods,
         "actual_national": _jsafe(actual_national),
         "fit": fit,
+        "ppc_stats": ppc_stats,
         "contrib": {
             "n_draws": n_draws,
             "draws_b64": {ch: _b64_f32(contrib_dp[ch]) for ch in channels},

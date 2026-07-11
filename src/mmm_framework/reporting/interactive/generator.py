@@ -67,6 +67,7 @@ _PAYLOAD_KEYS = (
     "periods",
     "actual_national",
     "fit",
+    "ppc_stats",
     "contrib",
     "marginal",
     "spend",
@@ -161,6 +162,7 @@ class InteractiveReportGenerator:
             self._section_insights,
             self._section_exec,
             self._section_fit,
+            self._section_ppc_stats,
             self._section_roi,
             self._section_estimands,
             self._section_curves,
@@ -309,6 +311,65 @@ class InteractiveReportGenerator:
         )
         return _NavEntry("model-fit", "Model fit"), self._wrap(
             "model-fit", "Model fit", "Does the model track the business?", body
+        )
+
+    def _section_ppc_stats(self) -> tuple[_NavEntry, str] | None:
+        stats = (self.facts.get("ppc_stats") or {}).get("stats") or []
+        if not stats:
+            return None
+        n_extreme = sum(1 for s in stats if s.get("extreme"))
+        trs = ""
+        for s in stats:
+            ok = not s.get("extreme")
+            chip = (
+                '<span class="tier-chip t-scale">Consistent</span>'
+                if ok
+                else '<span class="tier-chip t-reduce">Extreme</span>'
+            )
+            trs += (
+                "<tr>"
+                f'<td class="chname">{_esc(s["label"])}</td>'
+                f"<td>{_esc(s['desc'])}</td>"
+                f'<td class="mono">{_fmt(s["observed"], 2)}</td>'
+                f'<td class="mono">{_fmt(s["rep_mean"], 2)}</td>'
+                f'<td class="mono">{s["bayes_p"]:.2f}</td>'
+                f"<td>{chip}</td></tr>"
+            )
+        n_draws = (self.facts.get("ppc_stats") or {}).get("n_draws", 0)
+        verdict = (
+            "<p>All test statistics are consistent with the posterior "
+            "predictive — the model reproduces these properties of the KPI, "
+            "not just its week-by-week level.</p>"
+            if n_extreme == 0
+            else (
+                f"<p><b>{n_extreme} of {len(stats)}</b> test statistics fall "
+                "in the extreme tails (p &lt; 0.05 or &gt; 0.95): the model "
+                "systematically fails to reproduce "
+                f"{_esc(', '.join(s['label'] for s in stats if s['extreme']))}. "
+                "Treat forecasts and counterfactuals that lean on those "
+                "properties with caution.</p>"
+            )
+        )
+        body = (
+            f'<p class="lede">{self._insight("ppc_stats_gloss")}</p>'
+            '<table class="data-table"><thead><tr><th>Statistic</th>'
+            "<th>What it measures</th><th>Observed</th><th>Replicate mean</th>"
+            "<th>Bayes p</th><th>Verdict</th></tr></thead>"
+            f"<tbody>{trs}</tbody></table>"
+            f"{verdict}"
+            '<div class="sat-grid" id="ppcStatsGrid"></div>'
+            '<p class="chart-caption">Each panel: the distribution of a test '
+            f"statistic across {n_draws} replicated datasets drawn from the "
+            "posterior predictive, with the observed value as the vertical "
+            "line. The Bayesian p-value is P(T(y_rep) ≥ T(y_obs)); values "
+            "near 0 or 1 mean the observed data would be surprising if the "
+            "model were true. Computed on the national period-summed KPI.</p>"
+        )
+        return _NavEntry("predictive-checks", "Predictive checks"), self._wrap(
+            "predictive-checks",
+            "Validation",
+            "Does the model reproduce the KPI's character?",
+            body,
         )
 
     def _section_roi(self) -> tuple[_NavEntry, str]:

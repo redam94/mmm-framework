@@ -21,6 +21,7 @@ INTERACTIVE_INSIGHT_SLOTS = (
     "standfirst",
     "exec_gloss",
     "fit_gloss",
+    "ppc_stats_gloss",
     "roi_gloss",
     "estimands_gloss",
     "curves_gloss",
@@ -123,6 +124,36 @@ def _fallback_insights(f: dict[str, Any]) -> dict[str, str]:
             else "Fit statistics are shown per series."
         )
     )
+
+    stats = (f.get("ppc_stats") or {}).get("stats") or []
+    extreme = [s["label"] for s in stats if s.get("extreme")]
+    if stats and not extreme:
+        out["ppc_stats_gloss"] = (
+            "A model can track the weekly series and still be the wrong "
+            "model. These checks ask whether datasets simulated from the "
+            "fitted posterior share the KPI's character — its extremes, "
+            "volatility and week-to-week persistence. All "
+            f"{len(stats)} test statistics here sit comfortably inside their "
+            "replicated distributions, so the model is reproducing the data's "
+            "properties, not just interpolating it."
+        )
+    elif stats:
+        out["ppc_stats_gloss"] = (
+            "A model can track the weekly series and still be the wrong "
+            "model. These checks ask whether datasets simulated from the "
+            "fitted posterior share the KPI's character. "
+            f"{len(extreme)} of {len(stats)} statistics — "
+            f"{', '.join(extreme[:4])} — fall in the extreme tails, meaning "
+            "the model systematically misses that property of the data; "
+            "conclusions that lean on it deserve extra scrutiny."
+        )
+    else:
+        out["ppc_stats_gloss"] = (
+            "Posterior-predictive test statistics compare properties of "
+            "replicated datasets (extremes, volatility, persistence) to the "
+            "observed KPI; Bayesian p-values near 0 or 1 flag properties the "
+            "model cannot reproduce."
+        )
 
     rows = sorted(
         head.get("channels", []), key=lambda r: r.get("roi_mean") or 0, reverse=True
@@ -232,6 +263,7 @@ _LLM_SLOT_LABELS = {
     "STANDFIRST": "standfirst",
     "EXEC": "exec_gloss",
     "FIT": "fit_gloss",
+    "PPC_STATS": "ppc_stats_gloss",
     "ROI": "roi_gloss",
     "ESTIMANDS": "estimands_gloss",
     "CURVES": "curves_gloss",
@@ -289,6 +321,13 @@ def _facts_blob(f: dict[str, Any]) -> str:
             )
     for ch, lo, hi in _sensitivity_spread(f):
         lines.append(f"Sensitivity {ch}: ROI ranges {lo:.2f}–{hi:.2f} across specs.")
+    for s in (f.get("ppc_stats") or {}).get("stats") or []:
+        lines.append(
+            f"PPC stat {s['label']}: observed {s['observed']:.3g}, replicate "
+            f"mean {s['rep_mean']:.3g}, Bayes p {s['bayes_p']:.2f}"
+            + (" (EXTREME)" if s.get("extreme") else "")
+            + "."
+        )
     ppc = f.get("ppc_prior") or {}
     if ppc.get("coverage_90") is not None:
         lines.append(
@@ -332,6 +371,9 @@ def _enrich_with_llm(
         "STANDFIRST: the one-paragraph story of what this model found.\n"
         "EXEC: interpret the headline attribution / share / blended ROI.\n"
         "FIT: how well the model tracks the data, and any caveat.\n"
+        "PPC_STATS: interpret the posterior-predictive test-statistic "
+        "p-values — which KPI properties (extremes, volatility, "
+        "autocorrelation) the model reproduces or misses.\n"
         "ROI: which channels lead/trail and where uncertainty matters.\n"
         "ESTIMANDS: average vs marginal returns — where they disagree here.\n"
         "CURVES: what the response curves imply about headroom/saturation.\n"

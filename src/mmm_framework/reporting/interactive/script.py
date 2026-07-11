@@ -673,6 +673,49 @@ INTERACTIVE_REPORT_JS = r"""
     });
   }
 
+  // ── posterior-predictive test statistics (static, from facts) ──────────
+  function renderPpcStats() {
+    var grid = document.getElementById('ppcStatsGrid');
+    var stats = (IR.ppc_stats || {}).stats || [];
+    if (!grid || !stats.length) return;
+    stats.forEach(function (s, i) {
+      var cell = document.createElement('div');
+      cell.className = 'sat-cell';
+      var div = document.createElement('div');
+      div.id = 'ppcstat_' + i; cell.appendChild(div); grid.appendChild(cell);
+      var edges = s.hist.edges, counts = s.hist.counts;
+      var mids = [], w = [];
+      for (var j = 0; j < counts.length; j++) {
+        mids.push((edges[j] + edges[j + 1]) / 2);
+        w.push(edges[j + 1] - edges[j]);
+      }
+      var col = s.extreme ? (TH.rust || '#a04535') : (TH.accent || '#5a7a3a');
+      var traces = [{
+        x: mids, y: counts, type: 'bar', width: w,
+        marker: { color: rgba(TH.accent || '#5a7a3a', 0.35),
+          line: { color: rgba(TH.accent || '#5a7a3a', 0.6), width: 0.5 } },
+        hovertemplate: '%{x:.3g}: %{y} replicates<extra></extra>'
+      }];
+      var ly = baseLayout({
+        title: {
+          text: esc(s.label) + ' — p = ' + s.bayes_p.toFixed(2) +
+            (s.extreme ? ' ⚠' : ''),
+          font: { size: 11, color: col }, x: 0.02, y: 0.98
+        },
+        height: 210, margin: { l: 36, r: 8, t: 26, b: 34 },
+        bargap: 0.05,
+        xaxis: { title: { text: esc(s.desc), font: { size: 9 } } },
+        yaxis: { showticklabels: false },
+        shapes: [{
+          type: 'line', x0: s.observed, x1: s.observed,
+          yref: 'paper', y0: 0, y1: 1,
+          line: { color: col, width: 2 }
+        }]
+      });
+      Plotly.newPlot(div.id, traces, ly, CFG);
+    });
+  }
+
   // ── carryover + prior/posterior (static, from facts) ───────────────────
   function renderCarryover() {
     var grid = document.getElementById('carryoverGrid');
@@ -784,6 +827,7 @@ INTERACTIVE_REPORT_JS = r"""
       });
     });
     renderCurves();
+    renderPpcStats();
     renderCarryover();
     renderPriorPosterior();
     renderRealloc();

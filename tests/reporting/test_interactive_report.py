@@ -24,7 +24,9 @@ from mmm_framework.reporting.interactive.facts import (
     _eti,
     _half_life_draws,
     _jsafe,
+    _ppc_stat_facts,
     _series_stats,
+    _stat_over_rows,
     _window_specs,
 )
 
@@ -34,6 +36,7 @@ _SECTION_IDS = (
     "insights",
     "executive-summary",
     "model-fit",
+    "predictive-checks",
     "channel-roi",
     "estimands",
     "response-curves",
@@ -95,6 +98,30 @@ def _canned_facts(*, approximate=False, channels=None) -> dict:
             },
             "order": ["National"],
             "band_levels": [0.5, 0.8, 0.9, 0.95],
+        },
+        "ppc_stats": {
+            "n_draws": 100,
+            "series": "national period-summed KPI",
+            "stats": [
+                {
+                    "key": k,
+                    "label": lbl,
+                    "desc": "a property",
+                    "observed": 1.0,
+                    "rep_mean": 1.02,
+                    "bayes_p": p,
+                    "extreme": bool(p < 0.05 or p > 0.95),
+                    "hist": {
+                        "edges": list(np.linspace(0, 2, 11)),
+                        "counts": [1, 2, 5, 9, 14, 18, 14, 9, 5, 2],
+                    },
+                }
+                for k, lbl, p in (
+                    ("mean", "Mean", 0.48),
+                    ("max", "Maximum", 0.61),
+                    ("acf1", "Lag-1 autocorrelation", 0.44),
+                )
+            ],
         },
         "contrib": {
             "n_draws": D,
@@ -273,6 +300,50 @@ class TestFactsHelpers:
         fast = np.power(0.2, lags)[None, :]
         assert _half_life_draws(slow)[0] > _half_life_draws(fast)[0]
 
+    def test_stat_over_rows_acf1_detects_persistence(self):
+        rng = np.random.default_rng(3)
+        n = 200
+        ar = np.zeros(n)
+        for t in range(1, n):
+            ar[t] = 0.9 * ar[t - 1] + rng.standard_normal()
+        white = rng.standard_normal((1, n))
+        acf_ar = _stat_over_rows("acf1", ar[None, :])[0]
+        acf_white = _stat_over_rows("acf1", white)[0]
+        assert acf_ar > 0.7
+        assert abs(acf_white) < 0.3
+
+    def test_ppc_stat_facts_calibrated_replicates(self):
+        # Replicates drawn from the SAME process as the observed series →
+        # every Bayesian p-value should be non-extreme.
+        rng = np.random.default_rng(0)
+        rep = rng.normal(100, 10, size=(400, 120))
+        obs = rng.normal(100, 10, size=120)
+        out = _ppc_stat_facts(rep, obs)
+        keys = {s["key"] for s in out["stats"]}
+        assert {"mean", "sd", "min", "max", "acf1", "skew"} <= keys
+        for s in out["stats"]:
+            assert 0.0 <= s["bayes_p"] <= 1.0
+            assert not s["extreme"], f"{s['key']} unexpectedly extreme"
+            assert sum(s["hist"]["counts"]) > 0
+
+    def test_ppc_stat_facts_flags_missing_autocorrelation(self):
+        # Observed series is strongly AR(1); replicates are white noise →
+        # the acf1 statistic must be flagged extreme.
+        rng = np.random.default_rng(1)
+        n = 150
+        obs = np.zeros(n)
+        for t in range(1, n):
+            obs[t] = 0.9 * obs[t - 1] + rng.standard_normal()
+        rep = rng.standard_normal((300, n)) * obs.std()
+        out = _ppc_stat_facts(rep, obs)
+        acf = [s for s in out["stats"] if s["key"] == "acf1"][0]
+        assert acf["extreme"]
+        assert acf["bayes_p"] < 0.05
+
+    def test_ppc_stat_facts_degrades_on_tiny_input(self):
+        out = _ppc_stat_facts(np.zeros((5, 3)), np.zeros(3))
+        assert out["stats"] == []
+
     def test_window_specs_shapes(self):
         P = 120
         periods = [
@@ -386,11 +457,36 @@ class TestGenerator:
         facts["carryover"] = {}
         facts["prior_posterior"]["rows"] = []
         facts["ppc_prior"] = None
+        facts["ppc_stats"] = {"stats": []}
         html = InteractiveReportGenerator(facts=facts).generate_report()
-        for sid in ("carryover", "prior-posterior", "prior-predictive"):
+        for sid in (
+            "carryover",
+            "prior-posterior",
+            "prior-predictive",
+            "predictive-checks",
+        ):
             assert f'href="#{sid}"' not in html
         for sid in ("insights", "channel-roi", "reallocation"):
             assert f'id="{sid}"' in html
+
+    def test_ppc_stats_table_and_verdicts(self):
+        html = InteractiveReportGenerator(facts=_canned_facts()).generate_report()
+        assert 'id="predictive-checks"' in html
+        assert 'id="ppcStatsGrid"' in html
+        assert "Lag-1 autocorrelation" in html
+        assert html.count("t-scale") >= 3  # all canned stats consistent
+        assert "All test statistics are consistent" in html
+
+    def test_ppc_stats_extreme_flagged(self):
+        facts = _canned_facts()
+        facts["ppc_stats"]["stats"][1]["bayes_p"] = 0.99
+        facts["ppc_stats"]["stats"][1]["extreme"] = True
+        insights_html = InteractiveReportGenerator(facts=facts).generate_report()
+        assert "t-reduce" in insights_html
+        assert "systematically fails to reproduce" in insights_html
+        assert "Maximum" in insights_html
+        gloss = build_interactive_insights(facts)["ppc_stats_gloss"]
+        assert "1 of 3" in gloss and "Maximum" in gloss
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -482,6 +578,11 @@ class TestEndToEnd:
             assert r["roi_lower"] <= r["roi_mean"] <= r["roi_upper"]
         # sensitivity includes the counterfactual estimator spec
         assert "Zero-out counterfactual" in f["sensitivity"]["specs"]
+        # posterior-predictive test statistics carry valid Bayesian p-values
+        stats = f["ppc_stats"]["stats"]
+        assert {s["key"] for s in stats} >= {"mean", "sd", "min", "max", "acf1"}
+        for s in stats:
+            assert 0.0 <= s["bayes_p"] <= 1.0
         # approximate provenance surfaced
         assert f["meta"]["approximate"] is True
         out = tmp_path / "report.html"
