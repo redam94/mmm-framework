@@ -748,6 +748,7 @@ INTERACTIVE_REPORT_JS = r"""
     var grid = document.getElementById('ppcStatsGrid');
     var stats = (IR.ppc_stats || {}).stats || [];
     if (!grid || !stats.length) return;
+    balanceGrid(grid, stats.length);
     stats.forEach(function (s, i) {
       var cell = document.createElement('div');
       cell.className = 'sat-cell';
@@ -790,6 +791,7 @@ INTERACTIVE_REPORT_JS = r"""
   function renderCarryover() {
     var grid = document.getElementById('carryoverGrid');
     if (!grid) return;
+    balanceGrid(grid, Object.keys(IR.carryover || {}).length);
     Object.keys(IR.carryover || {}).forEach(function (ch, i) {
       var c = IR.carryover[ch], col = chColor(ch);
       var cell = document.createElement('div');
@@ -1008,10 +1010,14 @@ INTERACTIVE_REPORT_JS = r"""
     var note = document.getElementById('yoyNote');
     if (note) {
       var pct = totA !== 0 ? ' (' + (((totB - totA) / Math.abs(totA)) * 100).toFixed(1) + '%)' : '';
+      var wks = ia.length !== ib.length
+        ? ' Note: ' + ya + ' has ' + ia.length + ' weeks of data vs ' +
+          ib.length + ' for ' + yb + '.'
+        : '';
       note.textContent = ya + ' → ' + yb + ': ' + (totB - totA >= 0 ? '+' : '') +
         fmt(totB - totA) + pct + '. Media driver bars carry ' + ivPct +
         '% credible intervals; "Baseline & other" is the residual (trend, ' +
-        'seasonality, controls, intercept) that closes to the observed change.';
+        'seasonality, controls, intercept) that closes to the observed change.' + wks;
     }
   }
 

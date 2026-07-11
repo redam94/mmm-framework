@@ -525,7 +525,10 @@ def _yoy_facts(
     year_idx: dict[str, list[int]] = {}
     for i, p in enumerate(periods):
         year_idx.setdefault(p[:4], []).append(i)
-    qual = [y for y in sorted(year_idx) if len(year_idx[y]) >= 26]
+    # Only (near-)complete calendar years qualify: totals from a partial year
+    # are not comparable to a full one, so a 26-week year would make the
+    # bridge read as a collapse that is really just missing data.
+    qual = [y for y in sorted(year_idx) if len(year_idx[y]) >= 50]
     if len(qual) < 2:
         return None
     ya, yb = qual[-2], qual[-1]
