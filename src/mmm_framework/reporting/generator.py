@@ -29,6 +29,7 @@ from .sections import (
     DecompositionSection,
     SaturationSection,
     SensitivitySection,
+    LongTermSection,
     CausalAssumptionsSection,
     MethodologySection,
     DiagnosticsSection,
@@ -205,6 +206,7 @@ class MMMReportGenerator:
             ),
             ("saturation", SaturationSection, _mmm(self.config.saturation)),
             ("sensitivity", SensitivitySection, _mmm(self.config.sensitivity)),
+            ("long_term", LongTermSection, _mmm(self.config.long_term)),
             (
                 "causal_assumptions",
                 CausalAssumptionsSection,

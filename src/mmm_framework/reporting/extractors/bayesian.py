@@ -122,6 +122,8 @@ class BayesianMMMExtractor(
             # Both are best-effort so a report never fails on them.
             bundle = self._extract_estimands(bundle)
             bundle = self._extract_posterior_predictive(bundle)
+            # Short-term vs long-term / brand split (issue #106).
+            bundle = self._extract_long_term(bundle)
 
             bundle = self._extract_aggregated_fit_data(bundle)
             bundle = self._extract_aggregated_decomposition(bundle)

@@ -176,6 +176,14 @@ class MMMDataBundle:
     # Sensitivity analysis
     sensitivity_results: dict[str, Any] | None = None
 
+    # Short-term vs long-term / brand effect (issue #106). A
+    # ``build_long_term_facts`` payload: per-channel immediate-vs-carryover split
+    # (what the weekly model measures), whether a structural brand funnel exists,
+    # and an optional assumption-driven long-term-multiplier scenario. The
+    # LongTermSection renders it with a prominent caveat that true long-term
+    # brand equity beyond the adstock window is NOT measured by a weekly MMM.
+    long_term: dict[str, Any] | None = None
+
     # Causal assumptions / identification + unobserved-confounding robustness.
     # Keys (all optional): "identification_strategy" (str), "assumed_confounders"
     # (list[str]), "robustness" (UnobservedConfoundingSensitivity.to_dict()).

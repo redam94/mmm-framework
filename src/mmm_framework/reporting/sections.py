@@ -896,6 +896,190 @@ class SensitivitySection(Section):
         return self._render_section_wrapper("\n".join(content_parts))
 
 
+class LongTermSection(Section):
+    """Short-term vs long-term / brand effect (issue #106).
+
+    A weekly MMM measures activation + within-window carryover; it does NOT
+    measure true long-term brand equity. This section surfaces the estimable
+    immediate-vs-carryover split, states the long-term caveat plainly (so the
+    report can't be read as having measured brand), optionally shows an
+    assumption-driven long-term-multiplier scenario, and lists the data needed to
+    measure long-term properly. Data-gated on ``bundle.long_term``.
+    """
+
+    section_id: str = "long-term"
+    default_title: str = "Short-term vs long-term (brand)"
+
+    def render(self) -> str:
+        if not self.is_enabled or not self.data.long_term:
+            return ""
+        lt = self.data.long_term
+        rows = list(lt.get("channels") or [])
+        has_funnel = bool(lt.get("has_structural_funnel"))
+
+        intro = """
+            <p>
+                A weekly marketing-mix model measures two things well:
+                <strong>activation</strong> (the response the week spend lands)
+                and <strong>carryover</strong> (the adstock tail — how long that
+                response keeps working). It does <strong>not</strong> measure
+                <strong>long-term brand equity</strong>: the multi-quarter lift
+                brand-building creates through mental availability and base-demand
+                growth, which decays far more slowly than any adstock window.
+            </p>
+        """
+        caveat = self._render_caveat(has_funnel, bool(rows))
+        split = self._render_split(rows, lt.get("blended")) if rows else ""
+        scenario = self._render_scenario(rows, lt)
+        guidance = self._render_guidance()
+        parts = [intro, caveat, split, scenario, guidance]
+        return self._render_section_wrapper("\n".join(p for p in parts if p))
+
+    def _render_caveat(self, has_funnel: bool, has_split: bool) -> str:
+        if has_funnel:
+            body = (
+                "This model includes a <strong>survey/brand funnel</strong>, so "
+                "part of the longer-horizon brand path (awareness → consideration "
+                "→ sales) is captured. Even so, effects beyond the funnel's "
+                "measurement window are not — treat the split below as a lower "
+                "bound on brand's true contribution."
+            )
+        elif has_split:
+            body = (
+                "The split below is a <strong>within-window</strong> decomposition "
+                "of each channel's <em>measured</em> effect — it is <strong>not</strong> "
+                "brand equity. Long-term brand effects beyond the adstock window "
+                "are <strong>not measured here</strong>, which systematically "
+                "<strong>under-credits brand-building channels</strong> (TV, video, "
+                "sponsorships) and over-credits lower-funnel performance channels. "
+                "Do not conclude a brand channel is inefficient from this model "
+                "alone."
+            )
+        else:
+            body = (
+                "Only <strong>short-term</strong> effects are measured here. This "
+                "model does not estimate long-term brand equity, so it "
+                "systematically under-credits brand-building channels. Read the "
+                "channel ROIs as short-term returns only."
+            )
+        return f'<div class="callout uncertain"><h4>What this model does and does not measure</h4><p>{body}</p></div>'
+
+    @staticmethod
+    def _bar(immediate: float, carryover: float) -> str:
+        ip = max(0.0, min(1.0, immediate)) * 100
+        cp = max(0.0, min(1.0, carryover)) * 100
+        return (
+            '<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;'
+            'min-width:120px;background:var(--color-border,#eee)">'
+            f'<div style="width:{ip:.0f}%;background:var(--color-primary,#5a7a3a)" '
+            f'title="Immediate {ip:.0f}%"></div>'
+            f'<div style="width:{cp:.0f}%;background:var(--color-accent,#4a6d8a)" '
+            f'title="Carryover {cp:.0f}%"></div></div>'
+        )
+
+    def _render_split(self, rows: list[dict], blended: dict | None) -> str:
+        body = []
+        show_contrib = any("contribution" in r for r in rows)
+        for r in rows:
+            ch = html.escape(str(r.get("channel", "")))
+            imm = float(r.get("immediate_pct", 0.0))
+            car = float(r.get("carryover_pct", 0.0))
+            weeks = r.get("effective_weeks")
+            weeks_str = f"{int(weeks)}w" if weeks is not None else "—"
+            contrib_cell = ""
+            if show_contrib:
+                ic = r.get("immediate_contribution")
+                cc = r.get("carryover_contribution")
+                contrib_cell = (
+                    f'<td class="mono">{self._format_currency(float(ic))} / '
+                    f"{self._format_currency(float(cc))}</td>"
+                    if ic is not None and cc is not None
+                    else "<td>—</td>"
+                )
+            body.append(
+                f"<tr><td>{ch}</td>"
+                f"<td>{self._bar(imm, car)}</td>"
+                f'<td class="mono">{imm:.0%}</td>'
+                f'<td class="mono">{car:.0%}</td>'
+                f'<td class="mono">{weeks_str}</td>{contrib_cell}</tr>'
+            )
+        contrib_head = "<th>Immediate / Carryover (KPI)</th>" if show_contrib else ""
+        blended_note = ""
+        if blended:
+            blended_note = (
+                f'<p class="chart-caption">Portfolio blend: '
+                f'{blended["immediate_pct"]:.0%} of measured effect lands '
+                f'immediately, {blended["carryover_pct"]:.0%} carries over.</p>'
+            )
+        return f"""
+            <h3>Immediate vs carryover (what the model measures)</h3>
+            <table class="data-table">
+                <thead><tr><th>Channel</th><th>Split</th><th>Immediate</th>
+                    <th>Carryover</th><th>Works for</th>{contrib_head}</tr></thead>
+                <tbody>{"".join(body)}</tbody>
+            </table>
+            {blended_note}
+        """
+
+    def _render_scenario(self, rows: list[dict], lt: dict) -> str:
+        mult = getattr(self.config, "long_term_multiplier", None) or lt.get(
+            "multiplier"
+        )
+        if not mult:
+            return ""
+        mult = float(mult)
+        contrib_rows = [r for r in rows if r.get("contribution") is not None]
+        if not contrib_rows:
+            return ""
+        body = []
+        for r in contrib_rows:
+            ch = html.escape(str(r.get("channel", "")))
+            st = float(r["contribution"])
+            body.append(
+                f"<tr><td>{ch}</td>"
+                f'<td class="mono">{self._format_currency(st)}</td>'
+                f'<td class="mono">{self._format_currency(st * mult)}</td>'
+                f'<td class="positive">+{self._format_currency(st * (mult - 1))}</td></tr>'
+            )
+        return f"""
+            <h3>Long-term scenario (assumption, not a model estimate)</h3>
+            <div class="callout"><p>The table below applies an
+            <strong>external assumption</strong> — total effect ≈
+            <strong>{mult:g}×</strong> the measured short-term effect — to
+            illustrate how the picture shifts if long-term brand effects are
+            credited. This multiplier is a placeholder from published brand
+            meta-analyses; replace it with your own evidence. It is
+            <strong>not</strong> estimated by this model.</p></div>
+            <table class="data-table">
+                <thead><tr><th>Channel</th><th>Measured (short-term)</th>
+                    <th>With {mult:g}× long-term</th><th>Added</th></tr></thead>
+                <tbody>{"".join(body)}</tbody>
+            </table>
+        """
+
+    @staticmethod
+    def _render_guidance() -> str:
+        return """
+            <h3>Measuring long-term effects properly</h3>
+            <p>To move beyond short-term measurement, the model needs data that
+            spans the horizon on which brand actually works:</p>
+            <ul>
+                <li><strong>A long history</strong> (2–3+ years) so slow base-demand
+                    trends attributable to brand can be separated from noise.</li>
+                <li><strong>Brand-tracker surveys</strong> (awareness, consideration,
+                    preference) — these feed the structural funnel, letting the model
+                    route media through a measured brand path rather than only
+                    same-quarter sales.</li>
+                <li><strong>Long-window experiments</strong> — geo lift tests measured
+                    for two–four quarters after the flight, which capture persistence
+                    a two-week readout misses.</li>
+                <li><strong>A brand-equity latent</strong> or a documented long-term
+                    multiplier calibrated to that evidence — used as a stated
+                    assumption, never a silent one.</li>
+            </ul>
+        """
+
+
 class MethodologySection(Section):
     """Model methodology documentation."""
 
@@ -2169,6 +2353,7 @@ SECTION_REGISTRY: dict[str, type[Section]] = {
     "decomposition": DecompositionSection,
     "saturation": SaturationSection,
     "sensitivity": SensitivitySection,
+    "long_term": LongTermSection,
     "causal_assumptions": CausalAssumptionsSection,
     "methodology": MethodologySection,
     "diagnostics": DiagnosticsSection,
