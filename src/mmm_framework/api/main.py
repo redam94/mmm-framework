@@ -2927,6 +2927,66 @@ async def project_estimands_endpoint(project_id: str):
     )
 
 
+class SignoffRequest(BaseModel):
+    approver: str
+    role: str | None = None
+    note: str = ""
+
+
+def _project_assumption_snapshot(project_id: str) -> Any:
+    """The assumption set a sign-off approves: the latest fitted run's spec +
+    every versioned assumption logged across the project's sessions."""
+    from mmm_framework.api.history import latest_model_run_payload
+
+    run = latest_model_run_payload(project_id)
+    snapshot: dict[str, Any] = {"spec": (run or {}).get("spec")}
+    assumptions: list[Any] = []
+    for s in sessions_store.list_sessions(project_id=project_id):
+        try:
+            assumptions.extend(sessions_store.list_assumptions(s["thread_id"]))
+        except Exception:
+            pass
+    snapshot["assumptions"] = assumptions
+    return snapshot
+
+
+@app.post("/projects/{project_id}/signoff", dependencies=[_proj_write])
+async def create_signoff_endpoint(project_id: str, body: SignoffRequest):
+    """Record a formal sign-off approving the model's current assumptions/priors
+    (issue #110): who approved, when, and a hash-chained, tamper-evident audit
+    entry over the assumption snapshot. The accountability chain a procurement /
+    audit reviewer asks for ('who approved these priors?')."""
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    if not (body.approver or "").strip():
+        raise HTTPException(status_code=400, detail="An approver name is required.")
+    snapshot = _project_assumption_snapshot(project_id)
+    rec = sessions_store.record_signoff(
+        project_id,
+        body.approver.strip(),
+        role=body.role,
+        note=body.note,
+        assumptions=snapshot,
+    )
+    return JSONResponse(status_code=201, content=safe_json_dumps_load(rec))
+
+
+@app.get("/projects/{project_id}/signoffs", dependencies=[_proj_read])
+async def list_signoffs_endpoint(project_id: str):
+    """The project's sign-off audit trail (newest first) + a chain-integrity
+    check (``verification.intact`` is false if a past record was tampered with)."""
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            {
+                "signoffs": sessions_store.list_signoffs(project_id),
+                "verification": sessions_store.verify_signoff_chain(project_id),
+            }
+        )
+    )
+
+
 @app.get("/projects/{project_id}/scorecard", dependencies=[_proj_read])
 async def project_scorecard_endpoint(project_id: str):
     """Recommendation scorecard (issue #109): each channel's realized experiment

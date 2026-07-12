@@ -3646,6 +3646,18 @@ def generate_model_design_readout(
     except Exception:
         pass
 
+    # Sign-off audit trail (issue #110): who approved these assumptions/priors.
+    signoffs: list[dict] = []
+    try:
+        from mmm_framework.api import sessions as _sessions
+
+        _sess = _sessions.get_session(tid) if tid else None
+        _pid = (_sess or {}).get("project_id")
+        if _pid:
+            signoffs = _sessions.list_signoffs(_pid)
+    except Exception:
+        pass
+
     from mmm_framework.agents.branding import resolve_branding
 
     branding = resolve_branding(get_current_thread())
@@ -3680,6 +3692,7 @@ def generate_model_design_readout(
             ),
             sbc=sbc,
             revisions=revisions,
+            signoffs=signoffs,
             llm=llm,
             n_prior_samples=int(n_prior_samples),
             run_sbc=bool(run_sbc),
@@ -5048,6 +5061,83 @@ def generate_cfo_onepager(
         {"margin": margin, "kpi_name": kpi_name, "currency": currency},
     )
     return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def check_endogeneity(
+    state: Annotated[dict, InjectedState],
+    max_lag: int = 8,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Screen for **endogeneity of spend** — media budgets that respond to expected
+    demand rather than driving it.
+
+    The MMM's load-bearing assumption is no unobserved confounders; the most common
+    violation is spend chasing demand (raise budgets ahead of a strong season),
+    which opens the back-door demand→spend→sales and makes the model over-credit
+    those channels. This runs a Granger-style lead/lag screen on the raw media +
+    KPI series and flags channels where past demand leads spend, with the
+    plain-language confounding statement and a pointer to confirm with a randomized
+    experiment. Works on the built model (no posterior needed).
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "endogeneity", {"max_lag": int(max_lag)}
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
+def sign_off_model(
+    approver: str,
+    state: Annotated[dict, InjectedState],
+    role: str = None,
+    note: str = "",
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Record a formal **sign-off** approving the model's current assumptions and
+    priors — the accountability step an enterprise / audit reviewer asks for.
+
+    Appends a tamper-evident (hash-chained) audit entry naming who approved
+    (`approver`, optional `role`), when, an optional `note`, and a digest of the
+    approved assumption snapshot. Use once the assumptions/priors are settled and
+    a named person is accountable for them. The trail is append-only; a later
+    edit to any past record is detectable.
+    """
+    from mmm_framework.api import sessions as _sessions
+
+    tid = get_current_thread() if config is None else _activate_thread(config)
+    project_id = None
+    try:
+        sess = _sessions.get_session(tid) if tid else None
+        project_id = (sess or {}).get("project_id")
+    except Exception:  # noqa: BLE001
+        pass
+    if not project_id:
+        return _simple_msg(
+            "No active project — open a project before recording a sign-off.",
+            tool_call_id,
+        )
+    if not (approver or "").strip():
+        return _simple_msg("An approver name is required to sign off.", tool_call_id)
+    snapshot = {
+        "spec": _normalized_spec(state.get("model_spec")),
+        "assumptions": (_sessions.list_assumptions(tid) if tid else []),
+    }
+    rec = _sessions.record_signoff(
+        project_id, approver.strip(), role=role, note=note, assumptions=snapshot
+    )
+    verify = _sessions.verify_signoff_chain(project_id)
+    chain = "intact" if verify.get("intact") else "BROKEN"
+    who = f"{approver.strip()}" + (f" ({role})" if role else "")
+    return _simple_msg(
+        f"Sign-off recorded: **{who}** approved the model's assumptions "
+        f"(audit hash `{rec['hash'][:12]}`, chain {chain}, "
+        f"{verify.get('n', 0)} sign-off(s) on record).",
+        tool_call_id,
+    )
 
 
 @tool
@@ -7287,6 +7377,8 @@ TOOLS = [
     record_platform_figure,
     run_spec_curve,
     generate_cfo_onepager,
+    check_endogeneity,
+    sign_off_model,
     get_run_history,
     # Continuous learning programs — model-free geo bandit (no MMM required)
     *LEARNING_TOOLS,
@@ -7399,6 +7491,7 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "record_platform_figure",
         "run_spec_curve",
         "generate_cfo_onepager",
+        "check_endogeneity",
         # validation tools that need media channels / the MMM forward pass
         "run_channel_diagnostics",
         "run_refutation_suite",

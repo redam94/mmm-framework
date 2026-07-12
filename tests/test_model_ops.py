@@ -19,6 +19,7 @@ def test_ops_registry_complete():
         "triangulation",
         "spec_curve",
         "cfo_summary",
+        "endogeneity",
         "garden_compat",
         "garden_tune_suggestions",
         "component_decomposition",

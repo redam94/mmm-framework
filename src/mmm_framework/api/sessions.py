@@ -502,6 +502,27 @@ def init_db() -> None:
             " ON platform_figures(project_id, updated_at)"
         )
 
+        # Assumption sign-off audit (issue #110): a named approval of the model's
+        # assumptions/priors, hash-chained so any tampering with a past record is
+        # detectable (each row's hash covers the prior row's hash). Append-only.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS signoffs (
+                id                 TEXT PRIMARY KEY,
+                project_id         TEXT NOT NULL,
+                approver           TEXT NOT NULL,
+                role               TEXT,
+                note               TEXT,
+                assumptions_digest TEXT NOT NULL,
+                prev_hash          TEXT NOT NULL,
+                hash               TEXT NOT NULL,
+                created_at         REAL NOT NULL
+            )
+            """)
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_signoffs_project"
+            " ON signoffs(project_id, created_at)"
+        )
+
         # Continuous-learning programs (model-free geo response-surface bandit).
         # A program is a statused, project-scoped, longitudinal entity; heavy
         # state (posterior draws + the accumulated panel) lives on disk at
@@ -2350,6 +2371,105 @@ def delete_platform_figures(
     with _conn() as c:
         cur = c.execute(q, params)
         return cur.rowcount
+
+
+# ── Assumption sign-off audit (hash-chained, issue #110) ─────────────────────
+
+
+def _signoff_digest(assumptions: Any) -> str:
+    """A stable digest of the assumption set a sign-off approves."""
+    import hashlib
+
+    payload = json.dumps(assumptions or [], sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _signoff_hash(
+    prev_hash: str, approver: str, note: str, digest: str, created_at: float
+) -> str:
+    """Tamper-evident chain hash: covers the prior row's hash + this record."""
+    import hashlib
+
+    payload = f"{prev_hash}|{approver}|{note or ''}|{digest}|{created_at!r}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _signoff_row_to_dict(r: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": r["id"],
+        "project_id": r["project_id"],
+        "approver": r["approver"],
+        "role": r["role"],
+        "note": r["note"],
+        "assumptions_digest": r["assumptions_digest"],
+        "prev_hash": r["prev_hash"],
+        "hash": r["hash"],
+        "created_at": r["created_at"],
+    }
+
+
+def record_signoff(
+    project_id: str,
+    approver: str,
+    *,
+    role: str | None = None,
+    note: str = "",
+    assumptions: Any = None,
+) -> dict[str, Any]:
+    """Append a sign-off approving the current assumption set (issue #110).
+
+    Records who approved (``approver``/``role``), when, a digest of the
+    ``assumptions`` snapshot approved, and a chain hash over the prior record — so
+    the audit trail is append-only and tamper-evident (see
+    :func:`verify_signoff_chain`)."""
+    now = _now()
+    digest = _signoff_digest(assumptions)
+    with _conn() as c:
+        prev = c.execute(
+            "SELECT hash FROM signoffs WHERE project_id = ?"
+            " ORDER BY created_at DESC, id DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        prev_hash = prev["hash"] if prev else ""
+        h = _signoff_hash(prev_hash, approver, note, digest, now)
+        sid = uuid.uuid4().hex
+        c.execute(
+            "INSERT INTO signoffs (id, project_id, approver, role, note,"
+            " assumptions_digest, prev_hash, hash, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (sid, project_id, approver, role, note, digest, prev_hash, h, now),
+        )
+        row = c.execute("SELECT * FROM signoffs WHERE id = ?", (sid,)).fetchone()
+    return _signoff_row_to_dict(row)
+
+
+def list_signoffs(project_id: str) -> list[dict[str, Any]]:
+    """A project's sign-offs, newest first."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM signoffs WHERE project_id = ? ORDER BY created_at DESC, id DESC",
+            (project_id,),
+        ).fetchall()
+    return [_signoff_row_to_dict(r) for r in rows]
+
+
+def verify_signoff_chain(project_id: str) -> dict[str, Any]:
+    """Re-derive the hash chain oldest→newest: ``{intact, n, broken_at?}``. A
+    ``False`` means a record was altered or removed after the fact."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM signoffs WHERE project_id = ? ORDER BY created_at ASC, id ASC",
+            (project_id,),
+        ).fetchall()
+    prev = ""
+    for r in rows:
+        expected = _signoff_hash(
+            prev, r["approver"], r["note"], r["assumptions_digest"], r["created_at"]
+        )
+        if r["prev_hash"] != prev or r["hash"] != expected:
+            return {"intact": False, "n": len(rows), "broken_at": r["id"]}
+        prev = r["hash"]
+    return {"intact": True, "n": len(rows)}
 
 
 # ── Model Garden registry ────────────────────────────────────────────────────
