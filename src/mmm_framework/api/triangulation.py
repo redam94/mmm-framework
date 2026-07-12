@@ -121,6 +121,89 @@ def project_triangulation_sources(
     return payload
 
 
+def parse_platform_records(raw: bytes, filename: str = "") -> list[dict[str, Any]]:
+    """Parse an uploaded platform-figures file (CSV/TSV or JSON) into
+    ``{channel, value, source?, period?, metric?, attribution_window?,
+    incremental?}`` records (issue #120). Format is chosen by extension, falling
+    back to sniffing the first non-space char. A CSV is a table with a
+    ``channel`` + ``value`` column (+ optional ``source``/``metric``/
+    ``attribution_window``/``incremental``/``period``); JSON may be a list of such
+    records or a ``{channel: value}`` / ``{channel: {value, ...}}`` map."""
+    name = (filename or "").lower()
+    text = raw.decode("utf-8", errors="replace")
+    stripped = text.lstrip()
+    is_json = name.endswith(".json") or (
+        not name.endswith((".csv", ".tsv", ".txt")) and stripped[:1] in "[{"
+    )
+    if is_json:
+        import json as _json
+
+        data = _json.loads(text)
+        out: list[dict[str, Any]] = []
+        if isinstance(data, list):
+            for d in data:
+                if isinstance(d, dict) and d.get("channel") is not None:
+                    out.append(d)
+        elif isinstance(data, dict):
+            for ch, v in data.items():
+                if isinstance(v, dict):
+                    out.append({"channel": ch, **v})
+                else:
+                    out.append({"channel": ch, "value": v})
+        return out
+    import io as _io
+
+    import pandas as pd
+
+    sep = "\t" if name.endswith(".tsv") else ","
+    df = pd.read_csv(_io.StringIO(text), sep=sep)
+    cols = {str(c).lower(): c for c in df.columns}
+    recs: list[dict[str, Any]] = []
+    for _, r in df.iterrows():
+        rec: dict[str, Any] = {}
+        for key in (
+            "channel",
+            "value",
+            "source",
+            "period",
+            "metric",
+            "attribution_window",
+            "incremental",
+        ):
+            if key in cols:
+                val = r[cols[key]]
+                if pd.isna(val):
+                    continue
+                rec[key] = bool(val) if key == "incremental" else val
+        if rec.get("channel") is not None:
+            recs.append(rec)
+    return recs
+
+
+def platform_dict_for_project(project_id: str | None) -> dict[str, Any]:
+    """Reduce a project's stored platform figures to the one-per-channel
+    ``{channel: {value, metric, attribution_window, incremental}}`` dict the
+    triangulation engine's ``platform`` input expects (issue #120).
+
+    Platform figures are return ratios (ROAS), not additive spend, so they are
+    NOT summed; the most-recently-updated figure per channel wins (rows arrive
+    newest-first from :func:`list_platform_figures`)."""
+    from . import sessions as sessions_store
+
+    out: dict[str, Any] = {}
+    for row in sessions_store.list_platform_figures(project_id) if project_id else []:
+        ch = row.get("channel")
+        if ch is None or ch in out:
+            continue  # newest-first → first seen per channel wins
+        out[str(ch)] = {
+            "value": row.get("value"),
+            "metric": row.get("metric", "roas"),
+            "attribution_window": row.get("attribution_window"),
+            "incremental": bool(row.get("incremental")),
+        }
+    return out
+
+
 def build_project_triangulation(
     project_id: str | None,
     *,
@@ -131,8 +214,10 @@ def build_project_triangulation(
     """Triangulation panel for a project, joined from persisted data only.
 
     Reads the project's persisted MMM ``contribution_roi`` estimands + the
-    experiment registry and reconciles them channel-by-channel. No model is
-    loaded, so this is cheap enough to serve from a request.
+    experiment registry + the stored platform-attribution figures (issue #120)
+    and reconciles them channel-by-channel. No model is loaded, so this is cheap
+    enough to serve from a request. An explicit ``platform`` dict overrides the
+    stored figures.
     """
     from . import sessions as sessions_store
     from .estimands import build_project_estimands
@@ -143,6 +228,8 @@ def build_project_triangulation(
         experiments.extend(
             sessions_store.list_experiments(project_id=project_id, status=status)
         )
+    if platform is None:
+        platform = platform_dict_for_project(project_id) or None
     return project_triangulation_sources(
         estimands, experiments, kpi=kpi, run_id=run_id, platform=platform
     )

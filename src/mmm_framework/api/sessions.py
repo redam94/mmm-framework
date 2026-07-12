@@ -476,6 +476,32 @@ def init_db() -> None:
             " ON delivery(project_id, updated_at)"
         )
 
+        # Platform-reported attribution figures (issue #120): a channel's return
+        # as reported by an ad platform (usually last-touch / correlational, so
+        # NON-incremental by default). One row per (project, channel, source,
+        # period); triangulation reduces to one figure per channel. Stored once,
+        # re-used by the triangulation panel + endpoint.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS platform_figures (
+                id                 TEXT PRIMARY KEY,
+                project_id         TEXT NOT NULL,
+                channel            TEXT NOT NULL,
+                source             TEXT NOT NULL DEFAULT '',
+                period             TEXT NOT NULL DEFAULT '',
+                value              REAL NOT NULL,
+                metric             TEXT NOT NULL DEFAULT 'roas',
+                attribution_window TEXT,
+                incremental        INTEGER NOT NULL DEFAULT 0,
+                created_at         REAL NOT NULL,
+                updated_at         REAL NOT NULL,
+                UNIQUE(project_id, channel, source, period)
+            )
+            """)
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_platform_figures_project"
+            " ON platform_figures(project_id, updated_at)"
+        )
+
         # Continuous-learning programs (model-free geo response-surface bandit).
         # A program is a statused, project-scoped, longitudinal entity; heavy
         # state (posterior draws + the accumulated panel) lives on disk at
@@ -2215,6 +2241,112 @@ def delete_delivery(
     if period is not None:
         q += " AND period = ?"
         params.append(period)
+    with _conn() as c:
+        cur = c.execute(q, params)
+        return cur.rowcount
+
+
+# ── Platform-reported attribution registry (issue #120) ──────────────────────
+
+
+def _platform_figure_row_to_dict(r: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": r["id"],
+        "project_id": r["project_id"],
+        "channel": r["channel"],
+        "source": r["source"],
+        "period": r["period"],
+        "value": r["value"],
+        "metric": r["metric"],
+        "attribution_window": r["attribution_window"],
+        "incremental": bool(r["incremental"]),
+        "created_at": r["created_at"],
+        "updated_at": r["updated_at"],
+    }
+
+
+def upsert_platform_figures(
+    project_id: str,
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Upsert platform-reported attribution figures for a project (issue #120).
+
+    Each record is ``{channel, value, source?, period?, metric?,
+    attribution_window?, incremental?}``; a row is keyed by
+    ``(project_id, channel, source, period)`` so re-uploading overwrites it.
+    Platform figures default to **non-incremental** (last-touch) unless a record
+    sets ``incremental=True`` (a genuine platform geo-lift). Records without a
+    numeric value / a channel are skipped. Returns all of the project's figures.
+    """
+    now = _now()
+    with _conn() as c:
+        for rec in records or []:
+            ch = rec.get("channel")
+            if ch is None:
+                continue
+            try:
+                value = float(rec.get("value"))
+            except (TypeError, ValueError):
+                continue
+            source = str(rec.get("source", "") or "")
+            period = str(rec.get("period", "") or "")
+            metric = str(rec.get("metric", "roas") or "roas")
+            window = rec.get("attribution_window")
+            incremental = 1 if rec.get("incremental") else 0
+            c.execute(
+                """
+                INSERT INTO platform_figures
+                    (id, project_id, channel, source, period, value, metric,
+                     attribution_window, incremental, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(project_id, channel, source, period) DO UPDATE SET
+                    value = excluded.value,
+                    metric = excluded.metric,
+                    attribution_window = excluded.attribution_window,
+                    incremental = excluded.incremental,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    uuid.uuid4().hex,
+                    project_id,
+                    str(ch),
+                    source,
+                    period,
+                    value,
+                    metric,
+                    window,
+                    incremental,
+                    now,
+                    now,
+                ),
+            )
+    return list_platform_figures(project_id)
+
+
+def list_platform_figures(project_id: str) -> list[dict[str, Any]]:
+    """A project's platform-reported attribution figures, newest-updated first."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM platform_figures WHERE project_id = ?"
+            " ORDER BY updated_at DESC",
+            (project_id,),
+        ).fetchall()
+    return [_platform_figure_row_to_dict(r) for r in rows]
+
+
+def delete_platform_figures(
+    project_id: str, *, channel: str | None = None, source: str | None = None
+) -> int:
+    """Delete platform figures for a project (optionally one channel / source).
+    Returns the number of rows removed."""
+    q = "DELETE FROM platform_figures WHERE project_id = ?"
+    params: list[Any] = [project_id]
+    if channel is not None:
+        q += " AND channel = ?"
+        params.append(channel)
+    if source is not None:
+        q += " AND source = ?"
+        params.append(source)
     with _conn() as c:
         cur = c.execute(q, params)
         return cur.rowcount
