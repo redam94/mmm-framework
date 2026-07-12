@@ -3457,6 +3457,117 @@ async def get_experiment_simulation(project_id: str, job_id: str):
     return JSONResponse(content=safe_json_dumps_load(art["payload"]))
 
 
+# ── Spec-curve / model-averaging (async; multi-fit sweep) — issue #118 ─────────
+
+
+class SpecCurveRequest(BaseModel):
+    # Each variant is a SpecVariant dict (name, adstock, saturation, controls,
+    # kpi_level, media_prior_mode, trend, seasonality, overrides, primary,
+    # description); omit/None → the default adstock × saturation grid.
+    variants: list[dict] | None = None
+    rationale: str = ""
+    max_draws: int = 400
+    compute_loo: bool = True
+
+
+async def _run_spec_curve_job(
+    job_id: str, synthetic_tid: str, run: dict | None, op_kwargs: dict
+) -> None:
+    await _run_model_op_job(
+        job_id, synthetic_tid, run, "spec_curve", op_kwargs, "spec_curve"
+    )
+
+
+@app.post("/projects/{project_id}/spec-curve", dependencies=[_proj_write, _rl_heavy])
+async def start_spec_curve(project_id: str, body: SpecCurveRequest):
+    """Start a NON-BLOCKING spec-curve / model-averaging sweep (issue #118): fit a
+    pre-registered set of defensible specs against the project's dataset and
+    LOO-stack them, so the robustness of each channel's ROI to the modelling
+    choices is auditable. The declared spec set is pre-registered to the
+    assumption log BEFORE the sweep so it provably was not chosen after seeing the
+    answers. Multi-fit NUTS — poll the returned job_id for the result."""
+    from datetime import datetime, timezone
+
+    from mmm_framework.api.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    run = latest_model_run_payload(project_id)
+    if not run or not run.get("spec") or not run.get("dataset_path"):
+        raise HTTPException(
+            status_code=404,
+            detail="No fitted model run for this project — fit a baseline first.",
+        )
+
+    synthetic_tid = f"__speccurve__{project_id}"
+
+    # Pre-register the declared spec set to the assumption log (issue #118) so the
+    # sweep provably matches a set fixed in advance, not chosen after the fact.
+    try:
+        from mmm_framework.validation.spec_curve import (
+            SpecSet,
+            SpecVariant,
+            default_spec_variants,
+        )
+
+        if body.variants:
+            variant_objs = [SpecVariant(**v) for v in body.variants]
+        else:
+            variant_objs = default_spec_variants(run["spec"])
+        spec_set = SpecSet(
+            variants=variant_objs,
+            rationale=body.rationale,
+            registered_at=datetime.now(timezone.utc).isoformat(),
+        )
+        sessions_store.record_assumption(
+            synthetic_tid,
+            "spec_curve_set",
+            spec_set.model_dump(),
+            rationale=body.rationale or "Pre-registered spec-curve set (robustness).",
+            category="other",
+        )
+        variant_payload = [v.model_dump() for v in variant_objs]
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Invalid spec set: {exc}")
+
+    op_kwargs = {
+        "base_spec": run["spec"],
+        "dataset_path": run["dataset_path"],
+        "variants": variant_payload,
+        "max_draws": int(body.max_draws),
+        "compute_loo": bool(body.compute_loo),
+    }
+    job = sessions_store.add_artifact(
+        synthetic_tid,
+        "spec_curve",
+        {
+            "status": "pending",
+            "project_id": project_id,
+            "n_specs": len(variant_payload),
+            "result": None,
+            "error": None,
+        },
+    )
+    _spawn_job_task(_run_spec_curve_job(job["id"], synthetic_tid, run, op_kwargs))
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": job["id"],
+            "status": "pending",
+            "n_specs": len(variant_payload),
+        },
+    )
+
+
+@app.get("/projects/{project_id}/spec-curve/{job_id}", dependencies=[_proj_read])
+async def get_spec_curve(project_id: str, job_id: str):
+    """Poll a spec-curve job: {status, result|null, error|null, n_specs}."""
+    art = sessions_store.get_artifact(job_id)
+    if art is None or (art.get("payload") or {}).get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Spec-curve job not found.")
+    return JSONResponse(content=safe_json_dumps_load(art["payload"]))
+
+
 # ── Slide-deck generation (PowerPoint) ───────────────────────────────────────
 # Non-blocking, model-anchored deck build with an agentic insight layer:
 #   1. (to_thread) load the model + build the deterministic deck outline,

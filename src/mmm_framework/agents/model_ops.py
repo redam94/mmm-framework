@@ -539,6 +539,135 @@ def triangulation(
         return _err(f"Error building triangulation: {e}")
 
 
+def _spec_curve_verdict(rob: dict) -> str:
+    """Robust vs spec-fragile from a channel's robustness row: the sign must hold
+    and the point-ROI spread stay contained across the defensible specs."""
+    if not rob.get("sign_stable"):
+        return "spec-fragile"
+    spread = rob.get("spread_pct")
+    return "spec-fragile" if (spread is not None and spread > 50) else "robust"
+
+
+def spec_curve(
+    mmm: Any,
+    results: Any = None,
+    *,
+    base_spec: dict | None = None,
+    dataset_path: str | None = None,
+    variants: list | None = None,
+    max_draws: int = 400,
+    compute_loo: bool = True,
+    random_seed: int = 42,
+    hdi_prob: float = 0.94,
+) -> dict:
+    """Fit a pre-registered set of defensible specs and model-average via LOO
+    stacking — the multiverse / robustness check (issue #103/#118).
+
+    Reports, per channel, the model-averaged (BMA) ROI, the primary spec's ROI,
+    the spread across specs, whether the sign holds, and a robust / spec-fragile
+    verdict. Fits N models itself (it does NOT use the loaded ``mmm``), so it needs
+    the base spec + dataset it sweeps over. Minutes of NUTS — the endpoint runs it
+    as a background job; the agent tool runs it synchronously like cross_validation.
+    """
+    try:
+        from mmm_framework.validation.spec_curve import SpecVariant, run_spec_curve
+
+        if not base_spec or not dataset_path:
+            return _err(
+                "spec_curve needs base_spec + dataset_path — the project's fitted "
+                "spec and its dataset file — to sweep the defensible spec set."
+            )
+        variant_objs = None
+        if variants:
+            variant_objs = [
+                v if isinstance(v, SpecVariant) else SpecVariant(**v) for v in variants
+            ]
+        result = run_spec_curve(
+            base_spec,
+            dataset_path,
+            variants=variant_objs,
+            max_draws=int(max_draws),
+            compute_loo=bool(compute_loo),
+            random_seed=int(random_seed),
+            hdi_prob=float(hdi_prob),
+        )
+        payload = result.to_dict()
+        channels = payload.get("channels") or []
+        rob = payload.get("robustness") or {}
+        bma = payload.get("bma") or {}
+
+        def _f2(v):
+            return f"{v:.2f}" if isinstance(v, (int, float)) else "—"
+
+        content = (
+            "### Spec-curve — robustness across defensible specifications\n\n"
+            f"Fit {len(payload.get('specs') or [])} spec(s); primary "
+            f"**{payload.get('primary')}**. Below is each channel's model-averaged "
+            "(BMA) ROI and how much it depends on the modelling choices.\n\n"
+            "| Channel | BMA ROI | Primary | Range | Sign-stable | Verdict |\n"
+            "|---|---|---|---|---|---|\n"
+        )
+        rows: list[dict] = []
+        for ch in channels:
+            r = rob.get(ch) or {}
+            b = bma.get(ch) or {}
+            verdict = _spec_curve_verdict(r)
+            content += (
+                f"| {ch} | {_f2(b.get('mean'))} | {_f2(r.get('primary'))} | "
+                f"{_f2(r.get('min'))}–{_f2(r.get('max'))} | "
+                f"{'yes' if r.get('sign_stable') else 'NO'} | {verdict} |\n"
+            )
+            rows.append(
+                {
+                    "channel": ch,
+                    "bma_roi": b.get("mean"),
+                    "primary_roi": r.get("primary"),
+                    "roi_min": r.get("min"),
+                    "roi_max": r.get("max"),
+                    "spread_pct": r.get("spread_pct"),
+                    "sign_stable": r.get("sign_stable"),
+                    "verdict": verdict,
+                }
+            )
+        fragile = [row["channel"] for row in rows if row["verdict"] == "spec-fragile"]
+        if fragile:
+            content += (
+                f"\n⚠ **Spec-fragile:** {', '.join(fragile)} — the estimate flips "
+                "sign or swings widely across defensible specs; don't over-trust "
+                "the point value there."
+            )
+        else:
+            content += (
+                "\nAll channels are **robust** across the spec set — the sign holds "
+                "and the spread is contained."
+            )
+
+        res = _ok(content, {"spec_curve": payload})
+        res["tables"] = [
+            records_to_table_json(
+                rows,
+                title="Spec-curve robustness",
+                source="spec_curve",
+                group="validation",
+                columns=[
+                    {"key": "channel", "label": "Channel", "type": "string"},
+                    {"key": "bma_roi", "label": "BMA ROI", "type": "number"},
+                    {"key": "primary_roi", "label": "Primary ROI", "type": "number"},
+                    {"key": "roi_min", "label": "Min", "type": "number"},
+                    {"key": "roi_max", "label": "Max", "type": "number"},
+                    {"key": "spread_pct", "label": "Spread %", "type": "number"},
+                    {"key": "verdict", "label": "Verdict", "type": "string"},
+                ],
+            )
+        ]
+        return res
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Error running spec-curve: {e}")
+
+
+spec_curve.allow_unfitted = True
+
+
 def prior_predictive_check(
     mmm: Any,
     results: Any = None,
@@ -3284,6 +3413,7 @@ OPS = {
     "validate_model": validate_model,
     "compute_estimands": compute_estimands,
     "triangulation": triangulation,
+    "spec_curve": spec_curve,
     "garden_compat": garden_compat,
     "garden_tune_suggestions": garden_tune_suggestions,
     "component_decomposition": component_decomposition,

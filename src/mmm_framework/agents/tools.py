@@ -4963,6 +4963,66 @@ def record_platform_figure(
 
 
 @tool
+def run_spec_curve(
+    state: Annotated[dict, InjectedState],
+    max_draws: int = 300,
+    compute_loo: bool = True,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Run a spec-curve / model-averaging **robustness** check across a
+    pre-registered set of defensible specifications.
+
+    Refits the model under the standard grid of modelling choices (adstock ×
+    saturation form) against the active dataset, LOO-stacks them into a
+    model-averaged (BMA) ROI, and reports how much each channel's estimate
+    depends on those choices — a robust channel keeps its sign and a contained
+    spread; a spec-fragile one flips or swings, so its point value shouldn't be
+    over-trusted. The declared spec set is pre-registered to the assumption log
+    first, so the sweep provably was not chosen after seeing the answers.
+
+    This fits several models with NUTS, so it BLOCKS for a few minutes (like
+    cross-validation). For a non-blocking sweep the FE Robustness panel runs it as
+    a background job. Requires an active model spec + dataset.
+    """
+    _activate_thread(config)
+    base_spec = _normalized_spec(state.get("model_spec"))
+    dataset_path = state.get("dataset_path")
+    if not base_spec or not dataset_path:
+        return _simple_msg(
+            "A spec-curve needs an active model spec + a loaded dataset — "
+            "configure a model and load data first.",
+            tool_call_id,
+        )
+    # Pre-register the default spec set to the assumption log (issue #118).
+    try:
+        from mmm_framework.api import sessions as _sessions
+        from mmm_framework.validation.spec_curve import SpecSet, default_spec_variants
+
+        tid = get_current_thread()
+        if tid:
+            _sessions.record_assumption(
+                tid,
+                "spec_curve_set",
+                SpecSet(variants=default_spec_variants(base_spec)).model_dump(),
+                rationale="Pre-registered spec-curve set (robustness check).",
+                category="other",
+            )
+    except Exception:  # noqa: BLE001
+        pass
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "spec_curve",
+        {
+            "base_spec": base_spec,
+            "dataset_path": dataset_path,
+            "max_draws": int(max_draws),
+            "compute_loo": bool(compute_loo),
+        },
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
 def plan_experiment(
     channel: str,
     state: Annotated[dict, InjectedState],
@@ -7197,6 +7257,7 @@ TOOLS = [
     log_experiment,
     list_experiment_log,
     record_platform_figure,
+    run_spec_curve,
     get_run_history,
     # Continuous learning programs — model-free geo bandit (no MMM required)
     *LEARNING_TOOLS,
@@ -7307,6 +7368,7 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "list_experiment_log",
         "triangulate_channel_effects",
         "record_platform_figure",
+        "run_spec_curve",
         # validation tools that need media channels / the MMM forward pass
         "run_channel_diagnostics",
         "run_refutation_suite",
