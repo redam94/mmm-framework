@@ -390,7 +390,7 @@ The agent fit path reaches `StructuralNestedMMM`:
   `spec["latent_factors"]` is a validated top-level key (structural specs only);
   `_build_extension_model` stamps `metadata["model_type"]` + copies
   `spec["latent_factors"]` into the DAG metadata before validation.
-- **Data** (`synth/mff.py::brand_funnel_mff`): the brand-funnel world as an MFF long
+- **Data** (`src/mmm_framework/synth/mff.py::brand_funnel_mff`): the brand-funnel world as an MFF long
   table INCLUDING `awareness_count`/`awareness_trials` + `consideration_cat_1..5`
   blocks (unobserved weeks omitted → NaN on load), + answer key with the survey
   variable names. Tests: `tests/test_structural_fit_path.py` (resolver rules,

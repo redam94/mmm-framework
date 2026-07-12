@@ -74,7 +74,7 @@ were considered (analysis in the wiring contract's Phase A):
   express "within-parent only".) Crucially, the CCD's *designed* variation
   manufactures exactly the independent sub-stream variation whose absence
   makes the observational breakout mix unidentifiable (the
-  `breakout_collinear` lesson, `synth/dgp.py:1639`). The flatten-to-named-arms
+  `breakout_collinear` lesson, `src/mmm_framework/synth/dgp.py:1643`). The flatten-to-named-arms
   pattern is precedented by `planning/budget.py:370-490` (`GEO_ARM_SEP`,
   per-(geo,channel) arms into the unchanged channel-generic optimizer).
 * **(b) Nested activation (weighted aggregate inside one curve)** — the

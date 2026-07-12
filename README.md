@@ -220,9 +220,9 @@ results = model.fit(
 )
 
 # Get contributions with uncertainty
-contributions = model.compute_contributions()
-print(contributions.mean_contributions)
-print(contributions.hdi_contributions)  # 94% credible intervals
+contributions = model.compute_counterfactual_contributions()
+print(contributions.total_contributions)
+print(contributions.contribution_hdi_low)  # Lower 94% credible interval
 ```
 
 ### Fluent Configuration API
@@ -470,7 +470,7 @@ model = MultivariateMMM(
 results = model.fit()
 
 # Analyze cross-effects
-cross_effects = model.get_cross_effect_summary()
+cross_effects = model.get_cross_effects_summary()
 print(cross_effects)
 
 # Get correlation matrix
@@ -823,7 +823,7 @@ for name, k in zip(precision_controls, kappa):
 ```
 
 ### Mathematical Specification
-This section provides the formal mathematical specification for the variable selection priors available in `mmm_extensions`. For the complete technical document with proofs and implementation details, see `variable_selection_specification.pdf`.
+This section provides the formal mathematical specification for the variable selection priors available in `mmm_extensions`.
 
 ### Causal Constraints
 
@@ -1214,7 +1214,7 @@ For complex models, use `nuts_sampler="numpyro"` for 4-10x speedup.
 
 ## Mathematical Specification: Variable Selection Priors
 
-This section provides the formal mathematical specification for the variable selection priors available in `mmm_extensions`. For the complete technical document with proofs and implementation details, see `variable_selection_specification.pdf`.
+This section provides the formal mathematical specification for the variable selection priors available in `mmm_extensions`.
 
 ### Causal Constraints
 

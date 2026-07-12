@@ -56,20 +56,20 @@ All of this exists today. The plan composes it; it does not rebuild it.
 
 | Scenario | Factory | Known truth it exposes | Which feature |
 |---|---|---|---|
-| `geo_heterogeneous` | `synth/dgp_geo.py:430-477` (`make_geo_heterogeneous`) | Per-geo channel effectiveness multipliers (0.3–1.8×), performance-chasing budgets; `true_contribution_by_geo`, `true_roas_by_geo`. **Pooled β cannot represent this** → the discriminating world for DF-1. | DF-1 |
-| `geo_clean` | `synth/dgp_geo.py` (`make_geo_clean`) | Geo differences are **level shifts only**, exact model family. | DF-1 positive control |
-| geo×product | `synth/dgp_geo.py:493-525` | Additive geo + product offsets, **shared β**, per-cell truth. | DF-1 positive control |
-| `multicollinearity` | `synth/dgp.py:450-487` (`make_multicollinearity`) | Synchronized flighting, mean pairwise \|r\| ≈ 0.85; `true_contribution` per channel via counterfactual zero-out on the noiseless mean. | DF-2 |
-| `dense_controls` | `synth/dgp.py:953-1051` | 1 confounder + 2 precision + 18 noise + 4 decoys; `true_control_effects`, `latent_demand`. | DF-2 confounder-interaction |
+| `geo_heterogeneous` | `src/mmm_framework/synth/dgp_geo.py:430-477` (`make_geo_heterogeneous`) | Per-geo channel effectiveness multipliers (0.3–1.8×), performance-chasing budgets; `true_contribution_by_geo`, `true_roas_by_geo`. **Pooled β cannot represent this** → the discriminating world for DF-1. | DF-1 |
+| `geo_clean` | `src/mmm_framework/synth/dgp_geo.py` (`make_geo_clean`) | Geo differences are **level shifts only**, exact model family. | DF-1 positive control |
+| geo×product | `src/mmm_framework/synth/dgp_geo.py:493-525` | Additive geo + product offsets, **shared β**, per-cell truth. | DF-1 positive control |
+| `multicollinearity` | `src/mmm_framework/synth/dgp.py:450-487` (`make_multicollinearity`) | Synchronized flighting, mean pairwise \|r\| ≈ 0.85; `true_contribution` per channel via counterfactual zero-out on the noiseless mean. | DF-2 |
+| `dense_controls` | `src/mmm_framework/synth/dgp.py:953-1051` | 1 confounder + 2 precision + 18 noise + 4 decoys; `true_control_effects`, `latent_demand`. | DF-2 confounder-interaction |
 
 **Two substrate gaps this plan must add** (small, scoped):
 1. `make_geo_heterogeneous` already carries per-geo truth but **no geo-lift answer
    key** — add a derived per-geo lift fixture (treat the known per-geo incremental
    contribution over a test window as a synthetic lift test) so DF-1 A3 can run the
-   `CalibrationResults` path, not just point-recovery. *(One helper in `synth/mff.py`.)*
+   `CalibrationResults` path, not just point-recovery. *(One helper in `src/mmm_framework/synth/mff.py`.)*
 2. DF-2 A2 needs an **asymmetric-collinearity** world: two collinear channels where
    one *also* has independent spend variation (so it is strongly identified and the
-   other is not). Add `make_multicollinearity_asymmetric` to `synth/dgp.py`. Today's
+   other is not). Add `make_multicollinearity_asymmetric` to `src/mmm_framework/synth/dgp.py`. Today's
    `multicollinearity` makes both channels equally weak, which cannot test "the strong
    channel escapes the pool."
 
@@ -353,7 +353,7 @@ It is **rung-2 done** (recommendable as default) when additionally:
 *Anchored to the tree as of 2026-06-20. Code references
 (`model/base.py:1294-1308` media block, `:1236-1243` geo intercept,
 `validation/geo_identification.py:74-123`, `validation/channel_diagnostics.py:26-85`,
-`synth/dgp_geo.py`, `synth/dgp.py:450-487`, `tests/synth/harness.py:107-150`) were
+`src/mmm_framework/synth/dgp_geo.py`, `src/mmm_framework/synth/dgp.py:450-487`, `tests/synth/harness.py:107-150`) were
 verified against source; thresholds are initial values to calibrate on the first
 nightly run and are deliberately stated as inequalities so they self-document when
 tightened.*

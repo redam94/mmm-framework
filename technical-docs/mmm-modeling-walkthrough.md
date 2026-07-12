@@ -8,7 +8,7 @@ answer from the first fit. Diagnostics, causal reasoning, and experiments drive
 successive revisions.
 
 Everything below is **executed, not narrated**: the data is
-`tests/synth/dgp.make_realistic`, the iterations are
+`src/mmm_framework/synth/dgp.make_realistic`, the iterations are
 `tests/synth/realistic_walkthrough.py`, and every number comes from
 `tests/synth/results/walkthrough.json` (156 weeks, numpyro, 700 draws × 4
 chains). Because it is synthetic we know the **true** causal contribution of each
