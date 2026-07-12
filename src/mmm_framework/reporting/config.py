@@ -232,6 +232,9 @@ class ReportConfig:
     decomposition: SectionConfig = field(default_factory=SectionConfig)
     saturation: SectionConfig = field(default_factory=SectionConfig)
     sensitivity: SectionConfig = field(default_factory=SectionConfig)
+    # Spec-curve / model-averaging robustness (issue #103). Data-gated: renders
+    # only when a spec-curve payload is attached to the bundle.
+    spec_curve: SectionConfig = field(default_factory=SectionConfig)
     causal_assumptions: SectionConfig = field(default_factory=SectionConfig)
     methodology: SectionConfig = field(default_factory=SectionConfig)
     diagnostics: SectionConfig = field(default_factory=SectionConfig)

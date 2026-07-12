@@ -920,6 +920,145 @@ class SensitivitySection(Section):
         return self._render_section_wrapper("\n".join(content_parts))
 
 
+class SpecCurveSection(Section):
+    """Spec-curve / model-averaging robustness (issue #103).
+
+    Renders how each channel's ROI moves across a pre-registered set of
+    defensible specs, plus the LOO-stacking model-averaged (BMA) estimate — so
+    robustness across specs is itself a reported result and fragility can't hide
+    behind one hand-picked number. Data-gated on ``bundle.spec_curve``.
+    """
+
+    section_id: str = "spec-curve"
+    default_title: str = "Specification robustness"
+
+    def render(self) -> str:
+        if not self.is_enabled or not self.data.spec_curve:
+            return ""
+        sc = self.data.spec_curve
+        channels = list(sc.get("channels") or [])
+        specs = list(sc.get("specs") or [])
+        if not channels or not specs:
+            return ""
+
+        parts = [
+            f"""
+            <p>
+                A single MMM specification is one defensible choice among many
+                (adstock form, saturation form, control set, pooling). This panel
+                re-fits a <strong>pre-registered set of {len(specs)}
+                specifications</strong> and shows how each channel's ROI moves
+                across all of them. A tight cluster is a robust finding; a wide
+                spread — especially one that straddles break-even — is a warning a
+                single-spec report would have hidden. The
+                <strong>model-averaged (BMA)</strong> estimate blends the specs by
+                their LOO-stacking weight (out-of-sample predictive skill), so no
+                one spec is privileged.
+            </p>
+            """,
+            charts.create_spec_curve_plot(sc, self.config),
+            self._render_robustness_table(sc, channels),
+            self._render_weights_table(sc, specs),
+        ]
+        return self._render_section_wrapper("\n".join(p for p in parts if p))
+
+    def _render_robustness_table(self, sc: dict, channels: list[str]) -> str:
+        bma = sc.get("bma") or {}
+        robustness = sc.get("robustness") or {}
+        rows = []
+        for ch in channels:
+            rob = robustness.get(ch) or {}
+            b = bma.get(ch) or {}
+            primary = rob.get("primary")
+            primary_str = f"{primary:.2f}" if isinstance(primary, (int, float)) else "—"
+            bma_str = f"{b['mean']:.2f}" if b.get("mean") is not None else "—"
+            bma_ci = (
+                f"[{b['lower']:.2f}, {b['upper']:.2f}]"
+                if b.get("lower") is not None and b.get("upper") is not None
+                else "—"
+            )
+            rng = rob.get("range")
+            range_str = f"{rng:.2f}" if isinstance(rng, (int, float)) else "—"
+            span = (
+                f"{rob['min']:.2f} – {rob['max']:.2f}"
+                if rob.get("min") is not None and rob.get("max") is not None
+                else "—"
+            )
+            stable = rob.get("sign_stable")
+            verdict_cls, verdict = (
+                ("positive", "Robust") if stable else ("uncertain", "Spec-fragile")
+            )
+            rows.append(f"""
+                <tr>
+                    <td>{html.escape(ch)}</td>
+                    <td class="mono">{primary_str}</td>
+                    <td class="mono">{bma_str}</td>
+                    <td class="mono">{bma_ci}</td>
+                    <td class="mono">{span}</td>
+                    <td class="mono">{range_str}</td>
+                    <td class="{verdict_cls}">{verdict}</td>
+                </tr>
+                """)
+        return f"""
+            <h3>Per-channel robustness across specifications</h3>
+            <table class="data-table">
+                <thead><tr>
+                    <th>Channel</th><th>Primary ROI</th><th>BMA ROI</th>
+                    <th>BMA CI</th><th>Range across specs</th><th>Spread</th>
+                    <th>Verdict</th>
+                </tr></thead>
+                <tbody>{''.join(rows)}</tbody>
+            </table>
+            <p class="chart-caption">"Spec-fragile" means the sign of the ROI's
+            relation to break-even is not stable across the spec set — treat that
+            channel's individual number with caution and confirm with an
+            experiment.</p>
+        """
+
+    def _render_weights_table(self, sc: dict, specs: list[str]) -> str:
+        weights = sc.get("weights") or {}
+        per_spec = sc.get("per_spec") or {}
+        primary = sc.get("primary")
+        # Only show the LOO/weights table when stacking actually ran (some weight
+        # differs from a flat 1/N) or LOO is present.
+        any_loo = any((per_spec.get(s) or {}).get("loo") for s in specs)
+        rows = []
+        for s in specs:
+            entry = per_spec.get(s) or {}
+            w = weights.get(s, 0.0)
+            loo = entry.get("loo") or {}
+            elpd = loo.get("elpd_loo")
+            elpd_str = f"{elpd:.1f}" if isinstance(elpd, (int, float)) else "—"
+            err = entry.get("error")
+            name = html.escape(s) + (" ★" if s == primary else "")
+            status = "failed" if err else f"{w * 100:.0f}%"
+            rows.append(f"""
+                <tr>
+                    <td>{name}</td>
+                    <td class="mono">{status}</td>
+                    <td class="mono">{elpd_str}</td>
+                </tr>
+                """)
+        note = (
+            "LOO-stacking weight = each spec's contribution to the best "
+            "out-of-sample predictive mixture (Yao et al. 2018); ELPD is the "
+            "expected log pointwise predictive density (higher is better). ★ marks "
+            "the pre-registered primary spec."
+            if any_loo
+            else "Weights are equal (LOO stacking not computed); the model-average "
+            "is a plain mean across specs. ★ marks the pre-registered primary spec."
+        )
+        return f"""
+            <h3>Specification weights</h3>
+            <table class="data-table">
+                <thead><tr><th>Specification</th><th>Stacking weight</th>
+                    <th>ELPD (LOO)</th></tr></thead>
+                <tbody>{''.join(rows)}</tbody>
+            </table>
+            <p class="chart-caption">{note}</p>
+        """
+
+
 class MethodologySection(Section):
     """Model methodology documentation."""
 
@@ -2209,6 +2348,7 @@ SECTION_REGISTRY: dict[str, type[Section]] = {
     "decomposition": DecompositionSection,
     "saturation": SaturationSection,
     "sensitivity": SensitivitySection,
+    "spec_curve": SpecCurveSection,
     "causal_assumptions": CausalAssumptionsSection,
     "methodology": MethodologySection,
     "diagnostics": DiagnosticsSection,

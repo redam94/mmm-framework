@@ -48,6 +48,11 @@ from .roi import (
     create_roi_forest_plot,
 )
 
+# Spec-curve / model-averaging robustness chart (issue #103)
+from .spec_curve import (
+    create_spec_curve_plot,
+)
+
 # Diagnostic charts
 from .diagnostic import (
     create_saturation_curves,
@@ -118,6 +123,7 @@ __all__ = [
     "create_waterfall_chart_with_geo_selector",
     # ROI charts
     "create_roi_forest_plot",
+    "create_spec_curve_plot",
     # Diagnostic charts
     "create_saturation_curves",
     "create_adstock_chart",
