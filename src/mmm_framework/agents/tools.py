@@ -3491,6 +3491,22 @@ def generate_interactive_report(
             color_scheme=ColorScheme.from_palette(ColorPalette.AUGUR),
             confidential=True,
         )
+        # In-flight pacing (issue #123): fold the project's plan-vs-actual pacing
+        # into the interactive report when a saved plan + delivery exist.
+        pacing_facts = None
+        try:
+            from mmm_framework.api import sessions as _sessions
+            from mmm_framework.api.pacing import build_project_pacing
+
+            _sess = _sessions.get_session(get_current_thread())
+            _pid = (_sess or {}).get("project_id")
+            if _pid:
+                _pac = build_project_pacing(_pid)
+                if _pac.get("available"):
+                    pacing_facts = _pac
+        except Exception:  # noqa: BLE001
+            pacing_facts = None
+
         gen = InteractiveReportGenerator(
             mmm,
             results,
@@ -3498,6 +3514,7 @@ def generate_interactive_report(
             llm=llm,
             channel_colors=channel_colors,
             max_draws=max_draws,
+            pacing=pacing_facts,
         )
         gen.save_report(report_path)
         summary = (

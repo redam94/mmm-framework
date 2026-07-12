@@ -1091,6 +1091,62 @@ INTERACTIVE_REPORT_JS = r"""
     panel.innerHTML = '<table><thead><tr><th>Channel</th><th>Agreement</th><th>Reconciled</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
+  function renderPacing() {
+    var pac = IR.pacing;
+    if (!pac || !pac.available || !pac.channels || !pac.channels.length) return;
+    var panel = document.getElementById('pacingPanel');
+    if (!panel) return;
+    var ST = { 'on-track': ['t-scale', 'On track'], 'over-pacing': ['t-reduce', 'Over-pacing'], 'under-pacing': ['t-hold', 'Under-pacing'], 'not-started': ['t-hold', 'Not started'] };
+    var alert = pac.alert || {};
+    var thr = Math.round((pac.threshold || 0.1) * 100);
+    var head;
+    if (alert.off_pace) {
+      head = '<div class="callout" style="background:' + (TH.rust || '#a04535') + '18;color:' + (TH.rust || '#a04535') + ';padding:.7rem 1rem;border-radius:8px;margin-bottom:1rem"><strong>Off-pace: ' + (alert.n_flagged || 0) + ' channel(s)</strong> — ' + esc((alert.flagged || []).join(', ')) + ' diverged more than ' + thr + '% from plan.</div>';
+    } else {
+      head = '<div class="callout" style="background:' + (TH.accent || '#5a7a3a') + '18;color:' + (TH.accent || '#5a7a3a') + ';padding:.7rem 1rem;border-radius:8px;margin-bottom:1rem">All channels are pacing within ' + thr + '% of plan.</div>';
+    }
+    var rows = pac.channels.map(function (c) {
+      var st = ST[c.status] || ['t-hold', c.status];
+      var d = c.divergence_pct;
+      var dstr = (d == null || !isFinite(d)) ? '—' : ((d >= 0 ? '+' : '') + Math.round(d * 100) + '%');
+      return '<tr><td>' + esc(c.channel) + '</td>' +
+        '<td class="mono">' + fmt(c.planned) + '</td>' +
+        '<td class="mono">' + fmt(c.actual) + '</td>' +
+        '<td class="mono">' + dstr + '</td>' +
+        '<td><span class="tier-chip ' + st[0] + '">' + esc(st[1]) + '</span></td></tr>';
+    }).join('');
+    panel.innerHTML = head + '<table><thead><tr><th>Channel</th><th>Planned</th><th>Actual</th><th>Divergence</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  // ── estimated long-term (brand) split (issues #106/#122) ────────────────
+  function renderLongTerm() {
+    var lt = IR.long_term;
+    if (!lt || !lt.long_term_fraction) return;
+    var panel = document.getElementById('longTermPanel');
+    if (!panel) return;
+    var f = lt.long_term_fraction;
+    var mean = Math.round((f.mean || 0) * 100);
+    var lo = Math.round((f.lower || 0) * 100);
+    var hi = Math.round((f.upper || 0) * 100);
+    var head = '<div class="callout" style="background:' + (TH.accent || '#5a7a3a') + '18;color:' + (TH.accent || '#5a7a3a') + ';padding:.7rem 1rem;border-radius:8px;margin-bottom:1rem"><strong>Estimated ' + mean + '% long-term (brand)</strong> — 90% credible interval [' + lo + '%, ' + hi + '%] of the total media effect; the rest is short-term activation.</div>';
+    var chans = lt.channels || [];
+    var body = '';
+    if (chans.length) {
+      var rows = chans.map(function (c) {
+        var st = Math.max(0, Math.min(1, c.short_term_pct || 0)) * 100;
+        var lg = Math.max(0, Math.min(1, c.long_term_pct || 0)) * 100;
+        var bar = '<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;min-width:120px;background:' + rgba(TH.ink || '#3a4838', 0.12) + '">' +
+          '<div style="width:' + st.toFixed(0) + '%;background:' + (TH.accent || '#5a7a3a') + '" title="Short-term ' + st.toFixed(0) + '%"></div>' +
+          '<div style="width:' + lg.toFixed(0) + '%;background:' + (TH.gold || TH.rust || '#b8912f') + '" title="Long-term ' + lg.toFixed(0) + '%"></div></div>';
+        return '<tr><td>' + esc(c.channel) + '</td><td>' + bar + '</td>' +
+          '<td class="mono">' + st.toFixed(0) + '%</td>' +
+          '<td class="mono">' + lg.toFixed(0) + '%</td></tr>';
+      }).join('');
+      body = '<table><thead><tr><th>Channel</th><th>Split</th><th>Short-term (activation)</th><th>Long-term (brand)</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+    panel.innerHTML = head + body;
+  }
+
   // ── latent structure (loadings + trajectories) ─────────────────────────
   function renderLatent() {
     var lat = IR.latent;
@@ -1550,6 +1606,8 @@ INTERACTIVE_REPORT_JS = r"""
     renderCalibration();
     renderPathways();
     renderTriangulation();
+    renderPacing();
+    renderLongTerm();
     renderLatent();
     renderPpcStats();
     renderLooPit();

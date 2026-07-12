@@ -259,3 +259,87 @@ class TestEndpoints:
 
     def test_pacing_404_unknown_project(self, client):
         assert client.get("/projects/nope/pacing").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# proactive off-pace alerting sweep (issue #123)
+# ---------------------------------------------------------------------------
+class TestPacingAlertSweep:
+    def _seed_offpace(self, store):
+        pid = store.create_project("P")["project_id"]
+        store.upsert_budget_plan(
+            project_id=pid, org_id="o", name="Plan", plan_payload=_PLAN
+        )
+        store.upsert_delivery(pid, _DELIVERY)  # TV 250 vs 200 planned → over-pace
+        return pid
+
+    def test_sweep_persists_offpace_alert(self, store):
+        pid = self._seed_offpace(store)
+        digest = P.sweep_pacing_alerts(now=123.0)
+        assert digest["off_pace"] >= 1 and digest["persisted"] >= 1
+
+        alert = P.latest_pacing_alert(pid)
+        assert alert is not None
+        assert alert["project_id"] == pid
+        assert alert["alert"]["off_pace"] is True
+        assert alert["alert"]["worst"]["channel"] == "TV"
+        assert alert["computed_at"] == 123.0
+
+    def test_sweep_upserts_in_place(self, store):
+        pid = self._seed_offpace(store)
+        P.sweep_pacing_alerts(now=1.0)
+        P.sweep_pacing_alerts(now=2.0)
+        tid = P._pacing_alert_thread(pid)
+        alerts = [a for a in store.list_artifacts(tid) if a["kind"] == "pacing_alert"]
+        assert len(alerts) == 1  # upsert, not append
+        assert alerts[0]["payload"]["computed_at"] == 2.0
+
+    def test_sweep_clears_recovered_project(self, store):
+        pid = self._seed_offpace(store)
+        P.sweep_pacing_alerts(now=1.0)
+        assert P.latest_pacing_alert(pid)["alert"] is not None
+        # deliver on track → the next sweep clears the stale alert
+        store.delete_delivery(pid)
+        store.upsert_delivery(
+            pid,
+            [
+                {"channel": "TV", "period": "W1", "spend": 100},
+                {"channel": "TV", "period": "W2", "spend": 100},
+                {"channel": "Search", "period": "W1", "spend": 50},
+                {"channel": "Search", "period": "W2", "spend": 50},
+            ],
+        )
+        digest = P.sweep_pacing_alerts(now=2.0)
+        assert digest["cleared"] >= 1
+        assert P.latest_pacing_alert(pid)["alert"] is None
+
+    def test_sweep_ignores_projects_without_a_plan(self, store):
+        # a project with no plan is skipped (no artifact written)
+        pid = store.create_project("NoPlan")["project_id"]
+        P.sweep_pacing_alerts(now=1.0)
+        assert P.latest_pacing_alert(pid) is None
+
+
+class TestPacingAlertEndpoint:
+    def test_alert_endpoint_reads_persisted_sweep(self, client, project):
+        client.post(
+            f"/projects/{project}/delivery",
+            files={
+                "file": (
+                    "d.csv",
+                    b"period,TV,Search\nW1,130,48\nW2,120,52\n",
+                    "text/csv",
+                )
+            },
+        )
+        _seed_plan(client, project)
+        # before the sweep runs → no alert
+        assert client.get(f"/projects/{project}/pacing/alert").json()["alert"] is None
+        # run the sweep, then the endpoint surfaces the persisted alert
+        P.sweep_pacing_alerts(now=5.0)
+        body = client.get(f"/projects/{project}/pacing/alert").json()
+        assert body["alert"]["off_pace"] is True
+        assert body["alert"]["worst"]["channel"] == "TV"
+
+    def test_alert_endpoint_404_unknown_project(self, client):
+        assert client.get("/projects/nope/pacing/alert").status_code == 404

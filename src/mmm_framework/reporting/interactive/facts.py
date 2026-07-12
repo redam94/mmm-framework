@@ -1254,6 +1254,7 @@ def interactive_report_facts(
     random_seed: int = 42,
     triangulation: dict[str, Any] | None = None,
     platform_figures: dict[str, Any] | None = None,
+    pacing: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compute every fact the interactive MMM Results Report embeds.
 
@@ -1427,6 +1428,20 @@ def interactive_report_facts(
     mediation = _mediation_facts(model, trace, channels, interval)
     latent = _latent_facts(model, trace, time_idx, n_periods, interval)
 
+    # Estimated long-term (brand) split (issues #106/#122): when the model fits a
+    # slow brand-equity stock it exposes a scale-free ``long_term_fraction`` +
+    # per-channel brand/activation deterministics — surface the genuine ESTIMATE
+    # (not the assumption-driven scenario). Absent for a plain MMM.
+    long_term = None
+    try:
+        from ..helpers.longterm import estimated_long_term_split
+
+        est = estimated_long_term_split(model)
+        if est and est.get("long_term_fraction"):
+            long_term = est
+    except Exception:  # noqa: BLE001 — report renders fine without it
+        long_term = None
+
     assumptions = [r.to_dict() for r in model_assumptions(model)]
 
     # Triangulation panel (issue #104): MMM × experiment × platform. Use a
@@ -1502,6 +1517,8 @@ def interactive_report_facts(
         "ppc_prior": ppc_prior,
         "headline": headline,
         "triangulation": _jsafe(tri_facts) if tri_facts else None,
+        "pacing": _jsafe(pacing) if pacing else None,
+        "long_term": _jsafe(long_term) if long_term else None,
         "evidence": _jsafe(evidence),
         "yoy": yoy,
         "mediation": mediation,

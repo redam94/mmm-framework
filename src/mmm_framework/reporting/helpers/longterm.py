@@ -96,6 +96,62 @@ def long_term_scenario(
     return {"multiplier": m, "long_term": lt, "uplift": lt - float(short_term)}
 
 
+def estimated_long_term_split(model: Any) -> dict[str, Any] | None:
+    """The **measured** short-vs-long split from a model that estimates a slow
+    brand-equity stock (issue #122). A model like ``LongTermBrandMMM`` registers a
+    scale-free ``long_term_fraction`` deterministic + per-channel
+    ``brand_contributions`` / ``activation_contributions``; this reads them
+    straight off the posterior trace (the fraction is scale-free, so no rescaling
+    is needed). ``None`` when the model has no such long-term term.
+
+    Unlike the within-window carryover split (which is short-term only) and the
+    long-term *scenario* (an assumption), this is a genuine ESTIMATE with
+    uncertainty — the long-term (brand) share of the media effect.
+    """
+    trace = getattr(model, "_trace", None)
+    post = getattr(trace, "posterior", None) if trace is not None else None
+    if post is None or "long_term_fraction" not in post:
+        return None
+    frac = np.asarray(post["long_term_fraction"].values).reshape(-1)
+    frac = frac[np.isfinite(frac)]
+    if not frac.size:
+        return None
+    out: dict[str, Any] = {
+        "long_term_fraction": {
+            "mean": float(frac.mean()),
+            "lower": float(np.percentile(frac, 5)),
+            "upper": float(np.percentile(frac, 95)),
+        },
+        "channels": [],
+    }
+    if "brand_contributions" in post and "activation_contributions" in post:
+        brand = np.asarray(post["brand_contributions"].values)
+        act = np.asarray(post["activation_contributions"].values)
+        # collapse (chain, draw) → draws, sum over obs → (draws, channel)
+        brand_s = brand.reshape(-1, *brand.shape[2:]).sum(axis=1)
+        act_s = act.reshape(-1, *act.shape[2:]).sum(axis=1)
+        try:
+            chans = [str(c) for c in post["brand_contributions"].coords["channel"].values]
+        except Exception:  # noqa: BLE001
+            chans = [str(i) for i in range(brand_s.shape[1])]
+        for i, ch in enumerate(chans):
+            b, a = brand_s[:, i], act_s[:, i]
+            lt = b / (a + b + 1e-9)
+            lt = lt[np.isfinite(lt)]
+            if not lt.size:
+                continue
+            out["channels"].append(
+                {
+                    "channel": ch,
+                    "long_term_pct": float(np.mean(lt)),
+                    "short_term_pct": float(1.0 - np.mean(lt)),
+                    "brand_contribution": float(np.mean(b)),
+                    "activation_contribution": float(np.mean(a)),
+                }
+            )
+    return out
+
+
 def build_long_term_facts(
     channels: Sequence[str],
     adstock_curves: Mapping[str, Any] | None,
@@ -104,6 +160,7 @@ def build_long_term_facts(
     half_lives: Mapping[str, float] | None = None,
     multiplier: float | None = None,
     has_structural_funnel: bool = False,
+    estimated: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Assemble the ``bundle.long_term`` payload.
 
@@ -152,9 +209,10 @@ def build_long_term_facts(
                 row["scenario_uplift"] = sc["uplift"]
         rows.append(row)
 
-    if not rows and not has_structural_funnel:
-        # Nothing estimable AND no brand funnel — still return so the section can
-        # render the "only short-term is measured" caveat.
+    has_estimate = bool(estimated and estimated.get("long_term_fraction"))
+    if not rows and not has_structural_funnel and not has_estimate:
+        # Nothing estimable AND no brand funnel/estimate — still return so the
+        # section can render the "only short-term is measured" caveat.
         return {
             "channels": [],
             "has_structural_funnel": False,
@@ -162,12 +220,16 @@ def build_long_term_facts(
             "measured": "none",
         }
 
+    # "estimated" (a genuine long-term measurement) outranks "carryover"/"funnel".
+    measured = "estimated" if has_estimate else ("carryover" if rows else "funnel")
     facts: dict[str, Any] = {
         "channels": rows,
         "has_structural_funnel": bool(has_structural_funnel),
         "multiplier": multiplier,
-        "measured": "carryover" if rows else "funnel",
+        "measured": measured,
     }
+    if has_estimate:
+        facts["estimated"] = estimated
     # Blended (contribution-weighted) split, when contributions are available.
     contribs = [r.get("contribution") for r in rows if r.get("contribution")]
     if contribs:

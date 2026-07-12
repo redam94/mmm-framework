@@ -525,7 +525,10 @@ class EstimandPPCMixin:
         long-term multiplier scenario is added only when the report config
         requests one (``config.long_term_multiplier``)."""
         try:
-            from ..helpers.longterm import build_long_term_facts
+            from ..helpers.longterm import (
+                build_long_term_facts,
+                estimated_long_term_split,
+            )
 
             channels = list(bundle.channel_names or [])
             if not channels:
@@ -535,7 +538,11 @@ class EstimandPPCMixin:
                 getattr(model, "mediator_names", None)
                 or getattr(model, "__garden_model_kind__", "") == "structural"
             )
-            # Caveat-only here (no multiplier); the LongTermSection applies the
+            # A model that estimates a slow brand-equity stock (e.g.
+            # LongTermBrandMMM) yields a genuine long-term split — an ESTIMATE, not
+            # the assumption-driven scenario (issue #122). None for a plain MMM.
+            estimated = estimated_long_term_split(model)
+            # Caveat-only otherwise (no multiplier); the LongTermSection applies the
             # optional long-term-multiplier scenario from the report config.
             facts = build_long_term_facts(
                 channels,
@@ -543,6 +550,7 @@ class EstimandPPCMixin:
                 contribution=bundle.component_totals,
                 multiplier=None,
                 has_structural_funnel=has_funnel,
+                estimated=estimated,
             )
             if facts is not None:
                 bundle.long_term = facts

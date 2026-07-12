@@ -167,6 +167,7 @@ memory: AsyncSqliteSaver | None = None
 _aiosqlite_conn: aiosqlite.Connection | None = None
 _ship_task: "asyncio.Task | None" = None
 _sync_task: "asyncio.Task | None" = None
+_pacing_alert_task: "asyncio.Task | None" = None
 
 
 async def _audit_ship_loop(interval: float) -> None:
@@ -197,6 +198,24 @@ async def _connection_sync_loop(interval: float) -> None:
             break
         except Exception:  # pragma: no cover - never let the loop die
             logger.exception("scheduled connection sync failed")
+
+
+async def _pacing_alert_loop(interval: float) -> None:
+    """Periodically recompute in-flight pacing for every project and persist an
+    off-pace alert artifact (issue #123) — the proactive cadence, so a planner is
+    flagged between fits without opening the panel."""
+    import time as _time
+
+    from mmm_framework.api import pacing as _pacing
+
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            await asyncio.to_thread(_pacing.sweep_pacing_alerts, _time.time())
+        except asyncio.CancelledError:
+            break
+        except Exception:  # pragma: no cover - never let the loop die
+            logger.exception("scheduled pacing-alert sweep failed")
 
 
 @asynccontextmanager
@@ -267,11 +286,27 @@ async def lifespan(app: FastAPI):
             logger.info("scheduled connection sync enabled (every %ss)", sync_interval)
     except Exception:
         logger.exception("connection sync start failed")
+    # Scheduled off-pace alerting (issue #123): recompute pacing for every project
+    # on a cadence and persist an alert artifact. Opt-in — inert when interval 0.
+    global _pacing_alert_task
+    try:
+        _alert_interval = float(os.environ.get("MMM_PACING_ALERT_INTERVAL", "0") or 0)
+        if _alert_interval > 0:
+            _pacing_alert_task = asyncio.create_task(
+                _pacing_alert_loop(_alert_interval)
+            )
+            logger.info(
+                "scheduled pacing-alert sweep enabled (every %ss)", _alert_interval
+            )
+    except Exception:
+        logger.exception("pacing-alert sweep start failed")
     yield
     if _ship_task is not None:
         _ship_task.cancel()
     if _sync_task is not None:
         _sync_task.cancel()
+    if _pacing_alert_task is not None:
+        _pacing_alert_task.cancel()
     try:  # reap any per-session subprocess kernels on graceful shutdown
         from mmm_framework.agents.tools import _KERNELS
 
@@ -3146,6 +3181,20 @@ async def project_pacing_endpoint(project_id: str, threshold: float | None = Non
     return JSONResponse(
         content=safe_json_dumps_load(build_project_pacing(project_id, **kw))
     )
+
+
+@app.get("/projects/{project_id}/pacing/alert", dependencies=[_proj_read])
+async def project_pacing_alert_endpoint(project_id: str):
+    """The most recently persisted off-pace alert for the project (issue #123),
+    written by the background pacing-alert sweep. Returns ``{alert: null}`` when
+    the project is on pace or the sweep has never run — a cheap poll the FE can
+    use to badge the Pacing tab without recomputing on every page load."""
+    from mmm_framework.api.pacing import latest_pacing_alert
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    payload = latest_pacing_alert(project_id) or {"alert": None}
+    return JSONResponse(content=safe_json_dumps_load(payload))
 
 
 @app.get("/projects/{project_id}/calibration-coverage", dependencies=[_proj_read])

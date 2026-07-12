@@ -246,3 +246,79 @@ def build_project_pacing(
     payload["plan_id"] = (plan or {}).get("plan_id")
     payload["plan_name"] = (plan or {}).get("name")
     return payload
+
+
+#: Synthetic per-project thread holding the persisted pacing-alert artifact.
+def _pacing_alert_thread(project_id: str) -> str:
+    return f"__pacingalerts__{project_id}"
+
+
+def latest_pacing_alert(project_id: str) -> dict[str, Any] | None:
+    """The most recently persisted off-pace alert for a project (issue #123), or
+    ``None``. Written by the background sweep so a planner is alerted without
+    opening the pacing panel."""
+    from . import sessions as sessions_store
+
+    for art in sessions_store.list_artifacts(_pacing_alert_thread(project_id)):
+        if art.get("kind") == "pacing_alert":
+            return art.get("payload")
+    return None
+
+
+def sweep_pacing_alerts(now: float | None = None) -> dict[str, int]:
+    """Recompute pacing for every project and persist an off-pace alert artifact
+    (issue #123) — the proactive cadence, so a planner is flagged between fits
+    without opening the panel. Off-pace projects get an upserted ``pacing_alert``
+    artifact; projects that recover have theirs cleared. Returns a digest
+    ``{scanned, off_pace, persisted, cleared}``."""
+    from . import sessions as sessions_store
+
+    scanned = off_pace = persisted = cleared = 0
+    for p in sessions_store.list_projects():
+        pid = p.get("project_id")
+        if not pid:
+            continue
+        scanned += 1
+        try:
+            pac = build_project_pacing(pid)
+        except Exception:  # noqa: BLE001 — one bad project must not sink the sweep
+            continue
+        alert = (pac.get("alert") or {}) if pac.get("available") else {}
+        tid = _pacing_alert_thread(pid)
+        existing = [
+            a
+            for a in sessions_store.list_artifacts(tid)
+            if a.get("kind") == "pacing_alert"
+        ]
+        if alert.get("off_pace"):
+            off_pace += 1
+            payload = {
+                "project_id": pid,
+                "alert": alert,
+                "plan_name": pac.get("plan_name"),
+                "computed_at": now,
+            }
+            try:
+                if existing:
+                    sessions_store.update_artifact_payload(existing[0]["id"], payload)
+                else:
+                    sessions_store.add_artifact(tid, "pacing_alert", payload)
+                persisted += 1
+            except Exception:  # noqa: BLE001
+                pass
+        elif existing:
+            # Recovered — clear the stale alert.
+            try:
+                sessions_store.update_artifact_payload(
+                    existing[0]["id"],
+                    {"project_id": pid, "alert": None, "computed_at": now},
+                )
+                cleared += 1
+            except Exception:  # noqa: BLE001
+                pass
+    return {
+        "scanned": scanned,
+        "off_pace": off_pace,
+        "persisted": persisted,
+        "cleared": cleared,
+    }
