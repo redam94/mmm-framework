@@ -1128,6 +1128,72 @@ def check_pacing(
     return _modelop_command(res, state, tool_call_id)
 
 
+def _project_experiment_readouts(config) -> list[dict]:
+    """Calibrated/completed experiment readouts for the active session's project,
+    slimmed to the fields triangulation needs and JSON-clean for the kernel
+    boundary. ONE readout per channel — calibrated preferred over completed, and
+    the newest within a status wins — so the panel never double-counts a channel
+    or lets a stale readout shadow a fresh calibration. Host-side registry read
+    (like ``list_experiment_log``)."""
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = get_current_thread() if config is None else _activate_thread(config)
+    out: list[dict] = []
+    try:
+        sess = sessions_store.get_session(tid) if tid else None
+        project_id = (sess or {}).get("project_id")
+        if not project_id:
+            return out
+        seen: set = set()
+        # calibrated first (higher priority); list_experiments is newest-first.
+        for status in ("calibrated", "completed"):
+            for e in sessions_store.list_experiments(
+                project_id=project_id, status=status
+            ):
+                ch = e.get("channel")
+                if ch is None or ch in seen or e.get("value") is None:
+                    continue
+                seen.add(ch)
+                out.append(
+                    {
+                        "channel": ch,
+                        "value": e.get("value"),
+                        "se": e.get("se"),
+                        "estimand": e.get("estimand"),
+                        "status": e.get("status"),
+                    }
+                )
+    except Exception:  # noqa: BLE001 — a registry hiccup just drops experiment sources
+        pass
+    return out
+
+
+@tool
+def triangulate_channel_effects(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Reconcile each channel's MMM effect against the experiment readouts in the
+    project registry, classifying channels convergent / divergent /
+    platform-inflated / single-source.
+
+    Call this when the user asks to triangulate, cross-check, reconcile, or
+    validate the model against experiments — "do the MMM and the experiment
+    agree?", "is this ROI backed by a test?". It puts the model-identified
+    incremental ROI next to the directly-measured experiment lift; the experiment
+    anchors the reconciled number when present (the causal gold standard). Uses
+    the calibrated/completed experiment readouts already in the registry — no
+    re-fit. Requires a fitted model.
+    """
+    _activate_thread(config)
+    experiments = _project_experiment_readouts(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "triangulation", {"experiments": experiments}
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
 @tool
 def generate_slide_deck(
     state: Annotated[dict, InjectedState],
@@ -7024,6 +7090,7 @@ TOOLS = [
     # Analysis
     get_roi_metrics,
     check_pacing,
+    triangulate_channel_effects,
     get_estimands,
     get_component_decomposition,
     get_model_diagnostics,
@@ -7162,6 +7229,7 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "apply_experiment_calibration",
         "log_experiment",
         "list_experiment_log",
+        "triangulate_channel_effects",
         # validation tools that need media channels / the MMM forward pass
         "run_channel_diagnostics",
         "run_refutation_suite",

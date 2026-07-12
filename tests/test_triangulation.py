@@ -11,6 +11,7 @@ from mmm_framework.reporting.triangulation import (
     build_triangulation,
     reconcile_channel,
     triangulation_from_model,
+    triangulation_from_records,
 )
 
 
@@ -178,6 +179,68 @@ class TestBuilder:
 
 
 # ---------------------------------------------------------------------------
+# Data-only builder (persisted estimands + registry dicts — no model) — issue #119
+# ---------------------------------------------------------------------------
+class TestFromRecords:
+    def test_persisted_rows_and_registry_dicts_join(self):
+        # MMM rows as persisted estimand cells (mean/lower/upper) + experiment
+        # registry dicts — no live model needed.
+        tri = triangulation_from_records(
+            [
+                {"channel": "TV", "mean": 2.1, "lower": 1.7, "upper": 2.6},
+                {"channel": "Search", "mean": 4.0, "lower": 3.0, "upper": 5.0},
+            ],
+            experiments=[
+                {"channel": "TV", "value": 2.0, "se": 0.15, "estimand": "roas"},
+            ],
+            platform={"Search": {"value": 9.0}},
+        )
+        by = {c.channel: c for c in tri.channels}
+        assert by["TV"].agreement == "convergent"  # MMM + experiment agree
+        assert by["TV"].reconciled["basis"] == "experiment"
+        assert by["Search"].agreement == "platform-inflated"  # 9.0 >> 4.0
+        assert by["Search"].reconciled["basis"] == "mmm"  # platform never anchors
+
+    def test_hdi_low_high_keys_accepted(self):
+        # Rows straight off evaluate_estimand_rows use hdi_low/hdi_high.
+        tri = triangulation_from_records(
+            [{"channel": "TV", "mean": 2.0, "hdi_low": 1.5, "hdi_high": 2.5}]
+        )
+        tv = next(c for c in tri.channels if c.channel == "TV")
+        mmm = next(s for s in tv.sources if s.source == "mmm")
+        assert mmm.lower == 1.5 and mmm.upper == 2.5
+
+    def test_matches_model_builder(self):
+        # The data-only path yields the same reconciliation as the model path.
+        model = _FakeModel(
+            estimands={
+                "contribution_roi:TV": _FakeEstimandResult(2.0, 1.6, 2.4),
+                "contribution_roi:Search": _FakeEstimandResult(1.8, 1.4, 2.2),
+            },
+            experiments=[_FakeExp("Search", 1.9, 0.15, "roas")],
+        )
+        from_model = triangulation_from_model(model).to_dict()
+        from_records = triangulation_from_records(
+            [
+                {"channel": "TV", "mean": 2.0, "lower": 1.6, "upper": 2.4},
+                {"channel": "Search", "mean": 1.8, "lower": 1.4, "upper": 2.2},
+            ],
+            experiments=[
+                {"channel": "Search", "value": 1.9, "se": 0.15, "estimand": "roas"}
+            ],
+        ).to_dict()
+        assert from_model["summary"] == from_records["summary"]
+        agree = lambda d: {
+            c["channel"]: c["agreement"] for c in d["channels"]
+        }  # noqa: E731
+        assert agree(from_model) == agree(from_records)
+
+    def test_empty_inputs_yield_no_channels(self):
+        tri = triangulation_from_records([], experiments=[])
+        assert tri.channels == []
+
+
+# ---------------------------------------------------------------------------
 # Report rendering
 # ---------------------------------------------------------------------------
 def _tri_payload():
@@ -241,6 +304,52 @@ class TestReportSection:
 
         div = create_triangulation_chart(_tri_payload(), ReportConfig())
         assert "Plotly.newPlot" in div or "plotly" in div.lower()
+
+
+class TestAugurSection:
+    """The augur client deck now carries the triangulation panel too (issue #119)."""
+
+    def test_augur_section_renders(self):
+        import dataclasses
+
+        from mmm_framework.reporting import MMMReportGenerator, ReportConfig
+        from mmm_framework.reporting.extractors.bundle import MMMDataBundle
+
+        cfg = dataclasses.replace(ReportConfig(), shell="augur")
+        html = MMMReportGenerator(
+            data=MMMDataBundle(channel_names=["Search", "TV", "Radio"]),
+            config=cfg,
+            triangulation=_tri_payload(),
+        ).render()
+        assert "Triangulation — MMM" in html
+        assert "Platform-inflated" in html
+        assert "Divergent" in html
+
+    def test_augur_section_absent_without_data(self):
+        import dataclasses
+
+        from mmm_framework.reporting import MMMReportGenerator, ReportConfig
+        from mmm_framework.reporting.extractors.bundle import MMMDataBundle
+
+        cfg = dataclasses.replace(ReportConfig(), shell="augur")
+        html = MMMReportGenerator(
+            data=MMMDataBundle(channel_names=["TV"]), config=cfg
+        ).render()
+        assert "Triangulation — MMM" not in html
+
+    def test_augur_section_escapes_channel_names(self):
+        import dataclasses
+
+        from mmm_framework.reporting import MMMReportGenerator, ReportConfig
+        from mmm_framework.reporting.extractors.bundle import MMMDataBundle
+
+        tri = build_triangulation({"<b>X</b>": [S("mmm", 2.0, 1.5, 2.5)]}).to_dict()
+        cfg = dataclasses.replace(ReportConfig(), shell="augur")
+        html = MMMReportGenerator(
+            data=MMMDataBundle(), config=cfg, triangulation=tri
+        ).render()
+        assert "&lt;b&gt;X&lt;/b&gt;" in html
+        assert "<b>X</b>" not in html
 
 
 # ---------------------------------------------------------------------------

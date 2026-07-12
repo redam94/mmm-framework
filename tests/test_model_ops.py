@@ -16,6 +16,7 @@ def test_ops_registry_complete():
         "roi_metrics",
         "check_pacing",
         "compute_estimands",
+        "triangulation",
         "garden_compat",
         "garden_tune_suggestions",
         "component_decomposition",
@@ -602,6 +603,8 @@ def test_state_dropped_keys_have_no_state_readers():
     src = inspect.getsource(M2)
     for key in _STATE_DROPPED_DASHBOARD_KEYS:
         assert f'"{key}"' in src, f"drop-list entry '{key}' no longer produced"
+
+
 # ── get_estimands call-time estimand selection (pass-through) ────────────────
 
 

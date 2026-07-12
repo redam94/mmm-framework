@@ -2927,6 +2927,28 @@ async def project_estimands_endpoint(project_id: str):
     )
 
 
+@app.get("/projects/{project_id}/triangulation", dependencies=[_proj_read])
+async def project_triangulation_endpoint(
+    project_id: str, kpi: str | None = None, run_id: str | None = None
+):
+    """Triangulation panel — MMM × experiment (× platform) — for the project's
+    channels, reconciled server-side from persisted data (issue #119). Joins the
+    per-channel ``contribution_roi`` estimands persisted at fit time with the
+    calibrated/completed experiment readouts in the registry; no model loads.
+    ``kpi``/``run_id`` pin which fitted model's MMM numbers are used (default: the
+    latest ``contribution_roi`` model). Platform figures are not yet persisted
+    (follow-up #120), so the platform source is omitted here."""
+    from mmm_framework.api.triangulation import build_project_triangulation
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            build_project_triangulation(project_id, kpi=kpi, run_id=run_id)
+        )
+    )
+
+
 @app.get("/projects/{project_id}/calibration-coverage", dependencies=[_proj_read])
 async def calibration_coverage_endpoint(project_id: str, as_of: str | None = None):
     """Channels × evidence tier (calibrated / stale / model_only) with

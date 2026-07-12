@@ -43,6 +43,7 @@ __all__ = [
     "reconcile_channel",
     "build_triangulation",
     "triangulation_from_model",
+    "triangulation_from_records",
 ]
 
 #: How the three sources display (label + a stable css class for the chip/marker).
@@ -351,6 +352,36 @@ def _mmm_roi_sources(model: Any, hdi_prob: float) -> dict[str, TriangulationSour
     return out
 
 
+def _mmm_sources_from_rows(
+    rows: Iterable[dict[str, Any]],
+) -> dict[str, TriangulationSource]:
+    """MMM contribution-ROI sources from ALREADY-EXTRACTED per-channel rows.
+
+    The data-only sibling of :func:`_mmm_roi_sources` (which needs a live model):
+    it reads the ``contribution_roi`` cells persisted on a ``model_run`` artifact
+    (``{channel, mean, lower/hdi_low, upper/hdi_high}``) so the panel can be built
+    server-side WITHOUT reloading the fit (issue #119).
+    """
+    out: dict[str, TriangulationSource] = {}
+    for row in rows or []:
+        ch = row.get("channel")
+        mean = _f(row.get("mean") if row.get("mean") is not None else row.get("value"))
+        if ch is None or mean is None:
+            continue
+        lower = row.get("lower")
+        upper = row.get("upper")
+        out[str(ch)] = TriangulationSource(
+            source="mmm",
+            value=mean,
+            lower=_f(lower if lower is not None else row.get("hdi_low")),
+            upper=_f(upper if upper is not None else row.get("hdi_high")),
+            metric="roi",
+            incremental=True,
+            note="Model-identified incremental return.",
+        )
+    return out
+
+
 def _experiment_sources(
     experiments: Iterable[Any],
 ) -> dict[str, TriangulationSource]:
@@ -454,6 +485,40 @@ def triangulation_from_model(
     sources_by_channel: dict[str, list[TriangulationSource]] = {}
     for ch in channels:
         # Display order: experiment (the anchor) → MMM → platform.
+        srcs = [g[ch] for g in (experiment, mmm, plat) if ch in g]
+        sources_by_channel[ch] = srcs
+    return build_triangulation(sources_by_channel, tol=_AGREE_TOL)
+
+
+def triangulation_from_records(
+    mmm_rows: Iterable[dict[str, Any]] | None = None,
+    *,
+    experiments: Iterable[Any] | None = None,
+    platform: dict[str, Any] | None = None,
+) -> TriangulationResult:
+    """Assemble a triangulation panel from ALREADY-PERSISTED data — no fit needed.
+
+    The data-only sibling of :func:`triangulation_from_model`, for the server-side
+    endpoint / agent tool (issue #119): it joins per-channel MMM ``contribution_roi``
+    rows (from ``build_project_estimands`` — no model load), registry experiment
+    readouts (``sessions.list_experiments`` dicts), and optional platform figures.
+
+    Channels are the union across all three sources so a channel measured only by
+    an experiment or only by the platform still appears; display order per channel
+    is experiment (the anchor) → MMM → platform, matching the model-based builder.
+    """
+    mmm = _mmm_sources_from_rows(mmm_rows or [])
+    experiment = _experiment_sources(experiments or [])
+    plat = _platform_sources(platform)
+
+    channels: list[str] = []
+    for group in (mmm, experiment, plat):
+        for ch in group:
+            if ch not in channels:
+                channels.append(ch)
+
+    sources_by_channel: dict[str, list[TriangulationSource]] = {}
+    for ch in channels:
         srcs = [g[ch] for g in (experiment, mmm, plat) if ch in g]
         sources_by_channel[ch] = srcs
     return build_triangulation(sources_by_channel, tol=_AGREE_TOL)
