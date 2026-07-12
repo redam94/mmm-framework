@@ -2927,6 +2927,23 @@ async def project_estimands_endpoint(project_id: str):
     )
 
 
+@app.get("/projects/{project_id}/scorecard", dependencies=[_proj_read])
+async def project_scorecard_endpoint(project_id: str):
+    """Recommendation scorecard (issue #109): each channel's realized experiment
+    readout joined to the ROI the model predicted for it (with its credible
+    interval), the error, and whether the realized value landed inside the
+    predicted interval — the model's interval calibration over time. Joined
+    server-side from persisted estimands + the experiment registry; no model
+    loads."""
+    from mmm_framework.api.scorecard import build_project_scorecard
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(
+        content=safe_json_dumps_load(build_project_scorecard(project_id))
+    )
+
+
 @app.get("/projects/{project_id}/triangulation", dependencies=[_proj_read])
 async def project_triangulation_endpoint(
     project_id: str, kpi: str | None = None, run_id: str | None = None

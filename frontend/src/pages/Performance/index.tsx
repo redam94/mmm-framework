@@ -11,6 +11,7 @@ import { ResponseCurvesPanel } from './ResponseCurvesPanel';
 import { EstimandsPanel } from './EstimandsPanel';
 import { PacingPanel } from './PacingPanel';
 import { RobustnessPanel } from './RobustnessPanel';
+import { ScorecardPanel } from './ScorecardPanel';
 
 type TabId =
   | 'trajectories'
@@ -18,6 +19,7 @@ type TabId =
   | 'saturation'
   | 'pacing'
   | 'robustness'
+  | 'scorecard'
   | 'agreement'
   | 'health'
   | 'runs';
@@ -28,6 +30,7 @@ const TABS = [
   { id: 'saturation', label: 'Saturation & ROAS' },
   { id: 'pacing', label: 'Pacing' },
   { id: 'robustness', label: 'Robustness' },
+  { id: 'scorecard', label: 'Scorecard' },
   { id: 'agreement', label: 'Agreement' },
   { id: 'health', label: 'Model health' },
   { id: 'runs', label: 'Runs' },
@@ -38,6 +41,7 @@ function tabFromPath(pathname: string): TabId {
   if (pathname.endsWith('/saturation')) return 'saturation';
   if (pathname.endsWith('/pacing')) return 'pacing';
   if (pathname.endsWith('/robustness')) return 'robustness';
+  if (pathname.endsWith('/scorecard')) return 'scorecard';
   if (pathname.endsWith('/agreement')) return 'agreement';
   if (pathname.endsWith('/health')) return 'health';
   if (pathname.endsWith('/runs')) return 'runs';
@@ -90,6 +94,9 @@ export function PerformancePage() {
       ) : active === 'robustness' ? (
         // Spec-curve runs its own (background) sweep + polls; own empty/loading.
         <RobustnessPanel projectId={currentProjectId} />
+      ) : active === 'scorecard' ? (
+        // Predicted-vs-realized scorecard reads its own endpoint (own states).
+        <ScorecardPanel projectId={currentProjectId} />
       ) : active === 'estimands' ? (
         // Estimands read their own endpoint (own loading/empty states) and are
         // not gated behind run_metrics history.
