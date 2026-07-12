@@ -235,6 +235,16 @@ class ReportConfig:
     # In-flight pacing — planned vs actual delivery (issue #107). Data-gated on
     # the bundle's pacing payload.
     pacing: SectionConfig = field(default_factory=SectionConfig)
+    # Short-term vs long-term / brand effect (issue #106). Data-gated on the
+    # bundle's adstock split; ``long_term_multiplier`` (below) opts into the
+    # assumption-driven long-term scenario.
+    long_term: SectionConfig = field(default_factory=SectionConfig)
+    # Triangulation panel — MMM × experiment × platform (issue #104). Data-gated:
+    # renders only when a triangulation payload is attached to the bundle.
+    triangulation: SectionConfig = field(default_factory=SectionConfig)
+    # Spec-curve / model-averaging robustness (issue #103). Data-gated: renders
+    # only when a spec-curve payload is attached to the bundle.
+    spec_curve: SectionConfig = field(default_factory=SectionConfig)
     causal_assumptions: SectionConfig = field(default_factory=SectionConfig)
     methodology: SectionConfig = field(default_factory=SectionConfig)
     diagnostics: SectionConfig = field(default_factory=SectionConfig)
@@ -275,6 +285,12 @@ class ReportConfig:
     # Uncertainty messaging
     uncertainty_callout: bool = True
     methodology_note: bool = True
+
+    # Long-term / brand scenario (issue #106). When set, the LongTermSection adds
+    # an ASSUMPTION-driven scenario: total effect = measured short-term ×
+    # multiplier (e.g. 2.0 from published brand meta-analyses). ``None`` keeps the
+    # section to the estimable within-window carryover split + the honest caveat.
+    long_term_multiplier: float | None = None
 
     # Client presentation options
     show_nav: bool = False  # Sticky side-nav for multi-section reports

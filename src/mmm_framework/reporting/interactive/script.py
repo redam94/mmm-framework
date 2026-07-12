@@ -349,6 +349,49 @@ INTERACTIVE_REPORT_JS = r"""
     Plotly.react(divId, traces, ly, CFG);
   }
 
+  // ── evidence tier + identifiability (issue #102) ───────────────────────
+  var EV_CLASS = {
+    'experiment-validated': 't-scale',
+    'model-identified': 't-hold',
+    'prior-dominated': 't-reduce'
+  };
+  function evChip(ev) {
+    if (!ev) return '';
+    var cls = EV_CLASS[ev.tier] || 't-hold';
+    var chip = '<span class="tier-chip ' + cls + '" title="' + esc(ev.gloss || '') +
+      '">' + esc(ev.short_label || ev.tier) + '</span>';
+    if (ev.caveat) {
+      chip += ' <span class="tier-chip t-test" title="' + esc(ev.caveat) +
+        '">not separately identified</span>';
+    }
+    return chip;
+  }
+  function renderEvidence() {
+    var el = document.getElementById('roiEvidence');
+    if (!el) return;
+    var evMap = IR.evidence || {};
+    var chs = CH.filter(function (ch) { return evMap[ch]; });
+    if (!chs.length) { el.innerHTML = ''; return; }
+    var body = chs.map(function (ch) {
+      var ev = evMap[ch];
+      var cav = ev.caveat ? '<div class="ev-caveat">' + esc(ev.caveat) + '</div>' : '';
+      return '<tr><td' + (ev.gated ? ' class="gated"' : '') + '>' + esc(ch) +
+        '</td><td>' + evChip(ev) + cav + '</td></tr>';
+    }).join('');
+    var legend = [
+      ['t-scale', 'Experiment-validated', 'Calibrated against a randomized experiment folded into this fit — the strongest causal anchor.'],
+      ['t-hold', 'Model-identified', 'The data moved this effect off its prior and the channel is separately identifiable — a genuine model finding, not yet experimentally confirmed.'],
+      ['t-reduce', 'Prior-dominated', 'The posterior barely moved off its prior — this number reflects the assumed prior more than the data. Treat it as a placeholder until confirmed.']
+    ].map(function (t) {
+      return '<div class="row"><span class="tier-chip ' + t[0] + '">' + esc(t[1]) +
+        '</span><span class="gloss">' + esc(t[2]) + '</span></div>';
+    }).join('');
+    el.innerHTML =
+      '<h4 style="margin:.4rem 0 .2rem">How much to trust each number</h4>' +
+      '<table><thead><tr><th>Channel</th><th>Evidence</th></tr></thead><tbody>' +
+      body + '</tbody></table><div class="ir-ev-legend">' + legend + '</div>';
+  }
+
   // ── channel ROI section ────────────────────────────────────────────────
   var roiYoY = false;
   function yearsInWindow(s, e) {
@@ -495,7 +538,26 @@ INTERACTIVE_REPORT_JS = r"""
         line: { color: c, width: 2 },
         hovertemplate: 'spend/wk %{x:.3g} → %{y:.3g}<extra>' + esc(ch) + '</extra>' }
     ];
-    var shapes = [];
+    var shapes = [], annos = [];
+    // Extrapolation shading (issue #105): beyond the largest weekly spend the
+    // model actually saw, the curve is the saturation form guessing — mark it.
+    var obsMax = (IR.curves.obs_max_weekly || {})[ch];
+    var xMax = cs.xs[cs.xs.length - 1];
+    if (obsMax != null && obsMax < xMax) {
+      shapes.push({
+        type: 'rect', xref: 'x', yref: 'paper', x0: obsMax, x1: xMax, y0: 0, y1: 1,
+        fillcolor: rgba(TH.muted || '#7a8a78', 0.13), line: { width: 0 }, layer: 'below'
+      });
+      shapes.push({
+        type: 'line', xref: 'x', yref: 'paper', x0: obsMax, x1: obsMax, y0: 0, y1: 1,
+        line: { color: TH.muted || '#7a8a78', width: 1, dash: 'dot' }
+      });
+      annos.push({
+        x: obsMax + (xMax - obsMax) / 2, xref: 'x', y: 0.97, yref: 'paper',
+        text: 'extrapolated', showarrow: false,
+        font: { size: 9, color: TH.muted || '#7a8a78' }
+      });
+    }
     if (mode !== 'mroi' || (cs.avgWeekly >= cs.xs[0] && cs.avgWeekly <= cs.xs[cs.xs.length - 1])) {
       shapes.push({
         type: 'line', x0: cs.avgWeekly, x1: cs.avgWeekly, yref: 'paper', y0: 0, y1: 1,
@@ -513,7 +575,7 @@ INTERACTIVE_REPORT_JS = r"""
       height: height, margin: { l: 48, r: 8, t: 26, b: 34 },
       xaxis: { title: { text: 'avg weekly ' + ((meta[ch] || {}).divisor_units || 'spend'), font: { size: 10 } } },
       yaxis: { title: { text: yTitle, font: { size: 10 } } },
-      shapes: shapes
+      shapes: shapes, annotations: annos
     });
     Plotly.newPlot(divId, traces, ly, CFG);
     return true;
@@ -615,15 +677,34 @@ INTERACTIVE_REPORT_JS = r"""
       newSpend += (IR.curves.spend_total[ch] || 0) * reallocState[ch];
     });
     var dSum = summar(delta);
+    // Decision confidence (issue #105): P(plan beats today) + expected downside.
+    var pBeats = 0, downside = 0, nd = delta.length;
+    for (var di = 0; di < nd; di++) {
+      if (delta[di] > 0) pBeats++;
+      if (delta[di] < 0) downside += -delta[di];
+    }
+    pBeats = nd ? pBeats / nd : 0;
+    downside = nd ? downside / nd : 0;
+    // Channels pushed beyond their observed spend range → extrapolated.
+    var nP = IR.curves.n_periods || P;
+    var extrapCh = chs.filter(function (ch) {
+      var aw = (IR.curves.spend_total[ch] || 0) / nP;
+      var om = (IR.curves.obs_max_weekly || {})[ch];
+      return om != null && aw * reallocState[ch] > om * 1.02;
+    });
+    var moved = chs.filter(function (c) { return Math.abs(reallocState[c] - 1) > 0.011; }).length;
     cardsEl.innerHTML =
+      kpiCard('Chance this beats today', Math.round(pBeats * 100) + '%',
+        'expected downside if wrong: ' + fmt(downside) + ' ' + (IR.meta.kpi || 'KPI')) +
       kpiCard('Expected incremental ' + (IR.meta.kpi || 'KPI'),
         (dSum && dSum.mean >= 0 ? '+' : '') + fmt(dSum ? dSum.mean : null),
         ivPct + '% CI: ' + ciTxt(dSum) + ' · approximate') +
       kpiCard('Budget change', (newSpend - curSpend >= 0 ? '+' : '') + fmt(newSpend - curSpend),
         fmt(curSpend) + ' → ' + fmt(newSpend)) +
-      kpiCard('Channels moved',
-        String(chs.filter(function (c) { return Math.abs(reallocState[c] - 1) > 0.011; }).length),
-        'of ' + chs.length + ' reallocatable');
+      kpiCard('Channels moved', String(moved),
+        extrapCh.length
+          ? '⚠ ' + extrapCh.length + ' beyond observed spend'
+          : 'of ' + chs.length + ' reallocatable');
     if (!rowsEl.dataset.built) {
       rowsEl.dataset.built = '1';
       rowsEl.innerHTML = '';
@@ -655,9 +736,14 @@ INTERACTIVE_REPORT_JS = r"""
     chs.forEach(function (ch) {
       var el = document.getElementById('rv_' + ch);
       if (el) {
-        var st = IR.curves.spend_total[ch] || 0, nP = IR.curves.n_periods || P;
-        el.textContent = '×' + reallocState[ch].toFixed(2) +
-          ' (' + fmt(st * reallocState[ch] / nP) + '/wk)';
+        var st = IR.curves.spend_total[ch] || 0, nPP = IR.curves.n_periods || P;
+        var wk = st * reallocState[ch] / nPP;
+        var om = (IR.curves.obs_max_weekly || {})[ch];
+        var isExtrap = om != null && wk > om * 1.02;
+        el.textContent = '×' + reallocState[ch].toFixed(2) + ' (' + fmt(wk) + '/wk)' +
+          (isExtrap ? ' ⚠' : '');
+        el.style.color = isExtrap ? (TH.rust || '#a04535') : '';
+        el.title = isExtrap ? 'Beyond the observed weekly spend range — extrapolated' : '';
       }
     });
   }
@@ -940,6 +1026,69 @@ INTERACTIVE_REPORT_JS = r"""
     };
     var ly = baseLayout({ height: 380, margin: { l: 10, r: 10, t: 16, b: 16 } });
     Plotly.newPlot('pathwaysChart', [trace], ly, CFG);
+  }
+
+  // ── triangulation (MMM × experiment × platform, issue #104) ────────────
+  function renderTriangulation() {
+    var tri = IR.triangulation;
+    if (!tri || !tri.channels || !tri.channels.length) return;
+    if (!document.getElementById('triangulationChart')) return;
+    var chans = tri.channels;
+    var names = chans.map(function (c) { return c.channel; });
+    var colors = { experiment: TH.accent || '#5a7a3a', mmm: '#4a6d8a', platform: TH.gold || '#b8860b' };
+    var order = ['experiment', 'mmm', 'platform'];
+    var traces = [];
+    order.forEach(function (stype, si) {
+      var xs = [], ys = [], ep = [], em = [], cd = [];
+      chans.forEach(function (c, ci) {
+        var s = (c.sources || []).filter(function (x) { return x.source === stype; })[0];
+        if (!s || s.value == null) return;
+        xs.push(s.value); ys.push(ci + (si - 1) * 0.16);
+        ep.push(s.upper != null ? s.upper - s.value : 0);
+        em.push(s.lower != null ? s.value - s.lower : 0);
+        cd.push([s.label, s.attribution_window || '—']);
+      });
+      if (!xs.length) return;
+      traces.push({
+        type: 'scatter', x: xs, y: ys, mode: 'markers',
+        name: stype.charAt(0).toUpperCase() + stype.slice(1),
+        error_x: { type: 'data', symmetric: false, array: ep, arrayminus: em, color: TH.muted || '#7a8a78', thickness: 1.5, width: 6 },
+        marker: { color: colors[stype], size: 12, symbol: stype === 'platform' ? 'diamond' : 'circle', line: { color: '#fff', width: 1 } },
+        customdata: cd,
+        hovertemplate: '%{customdata[0]}<br>Return: %{x:.2f}×<br>Window: %{customdata[1]}<extra></extra>'
+      });
+    });
+    var rx = [], ry = [];
+    chans.forEach(function (c, ci) { if (c.reconciled && c.reconciled.value != null) { rx.push(c.reconciled.value); ry.push(ci); } });
+    if (rx.length) traces.push({
+      type: 'scatter', x: rx, y: ry, mode: 'markers', name: 'Reconciled',
+      marker: { color: 'rgba(0,0,0,0)', size: 20, symbol: 'circle-open', line: { color: TH.ink || '#3a4838', width: 2.2 } },
+      hovertemplate: 'Reconciled: %{x:.2f}×<extra></extra>'
+    });
+    var ly = baseLayout({
+      height: Math.max(280, 66 * names.length + 60),
+      margin: { l: 10, r: 20, t: 10, b: 50 },
+      yaxis: { tickmode: 'array', tickvals: names.map(function (_, i) { return i; }), ticktext: names, automargin: true, autorange: 'reversed', range: [-0.6, names.length - 0.4], gridcolor: 'rgba(0,0,0,0)' },
+      xaxis: { title: { text: 'Return per $ (incremental unless noted)', font: { size: 11 } } },
+      legend: { orientation: 'h', y: -0.16, font: { size: 10 } },
+      shapes: [{ type: 'line', x0: 1, x1: 1, y0: -0.6, y1: names.length - 0.4, line: { color: TH.rust || '#a04535', width: 1, dash: 'dash' } }]
+    });
+    Plotly.newPlot('triangulationChart', traces, ly, CFG);
+
+    var panel = document.getElementById('triangulationPanel');
+    if (!panel) return;
+    var AG = { convergent: ['t-scale', 'Convergent'], divergent: ['t-reduce', 'Divergent'], 'platform-inflated': ['t-test', 'Platform-inflated'], 'single-source': ['t-hold', 'Single-source'] };
+    var rows = chans.map(function (c) {
+      var ag = AG[c.agreement] || ['t-hold', c.agreement];
+      var rec = c.reconciled || {};
+      var recStr = rec.value != null ? fmt(rec.value) + '× <span class="mono" style="opacity:.7">(' + esc(rec.basis || '—') + ')</span>' : '—';
+      var notes = (c.notes || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('');
+      return '<tr><td>' + esc(c.channel) + '</td>' +
+        '<td><span class="tier-chip ' + ag[0] + '">' + esc(ag[1]) + '</span></td>' +
+        '<td class="mono">' + recStr + '</td></tr>' +
+        (notes ? '<tr class="tri-note-row"><td colspan="3"><ul class="tri-notes">' + notes + '</ul></td></tr>' : '');
+    }).join('');
+    panel.innerHTML = '<table><thead><tr><th>Channel</th><th>Agreement</th><th>Reconciled</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   // ── latent structure (loadings + trajectories) ─────────────────────────
@@ -1370,6 +1519,7 @@ INTERACTIVE_REPORT_JS = r"""
     var yoy = document.getElementById('roiYoY');
     if (yoy) yoy.onchange = function () { roiYoY = yoy.checked; renderRoi(roiWin.s, roiWin.e); };
     renderRoi(0, P - 1);
+    renderEvidence();
 
     var estWin = windowControl('estimandWindow', renderEstimand);
     var estSel = document.getElementById('estimandSelect');
@@ -1399,6 +1549,7 @@ INTERACTIVE_REPORT_JS = r"""
     renderShares();
     renderCalibration();
     renderPathways();
+    renderTriangulation();
     renderLatent();
     renderPpcStats();
     renderLooPit();

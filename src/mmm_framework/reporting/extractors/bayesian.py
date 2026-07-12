@@ -122,6 +122,13 @@ class BayesianMMMExtractor(
             # Both are best-effort so a report never fails on them.
             bundle = self._extract_estimands(bundle)
             bundle = self._extract_posterior_predictive(bundle)
+            # Short-term vs long-term / brand split (issue #106).
+            bundle = self._extract_long_term(bundle)
+
+            # Evidence tier + identifiability gate on every channel number
+            # (issue #102) — runs after channel_roi + estimands are populated so
+            # it can stamp them.
+            bundle = self._extract_channel_evidence(bundle)
 
             bundle = self._extract_aggregated_fit_data(bundle)
             bundle = self._extract_aggregated_decomposition(bundle)

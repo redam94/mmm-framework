@@ -20,6 +20,15 @@ import pandas as pd
 
 DEFAULT_MULTIPLIERS = (0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5)
 
+#: A recommendation may exceed ``max_obs_multiplier`` by this fraction before it
+#: is flagged as extrapolating beyond observed spend (issue #105).
+_EXTRAP_TOL = 0.02
+#: Epistemic honesty margin: the recommended-spend credible interval is widened
+#: by ``1 + k·(mult − max_obs_multiplier)`` beyond observed support, because the
+#: posterior parameter spread there understates true (model-form) uncertainty —
+#: the saturation FORM itself may be wrong past the data.
+_EXTRAP_INFLATION_K = 0.6
+
 #: Default per-channel deviation cap for a *default reallocation* (the plan shown
 #: in a client report when the user has not run the Planner studio). Each
 #: channel may move at most ±20% from its current spend so no channel is turned
@@ -40,11 +49,34 @@ class ResponseCurves:
     multipliers: np.ndarray  # (G,)
     base_spend: np.ndarray  # (C,) current total spend per channel
     contributions: np.ndarray  # (D, C, G)
+    # Per-channel observed per-observation spend range (issue #105). The response
+    # curve is data-supported only up to the largest single-period spend the
+    # model actually saw; a recommendation that scales current spend past
+    # ``max_obs_multiplier`` pushes the AVERAGE period beyond any observed level
+    # → extrapolation. ``None`` for curves built without a model (back-compat).
+    obs_max_spend: np.ndarray | None = None  # (C,) max spend at any observation
+    n_obs: int | None = None  # number of observations behind base_spend
 
     @property
     def spend_grid(self) -> np.ndarray:
         """(C, G) actual spend per channel at each multiplier."""
         return self.base_spend[:, None] * self.multipliers[None, :]
+
+    @property
+    def max_obs_multiplier(self) -> np.ndarray | None:
+        """(C,) the largest CURRENT-spend multiple that stays within observed
+        support: ``max_per_obs_spend / mean_per_obs_spend``. Scaling current
+        spend past this pushes the average period beyond anything observed, so
+        the response there is the saturation FORM extrapolating. ``None`` when
+        the observed range was not captured."""
+        if self.obs_max_spend is None or self.n_obs is None:
+            return None
+        mean_per_obs = self.base_spend / max(self.n_obs, 1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            m = self.obs_max_spend / np.where(mean_per_obs > 0, mean_per_obs, np.nan)
+        # A channel run at a perfectly constant level has max==mean → 1.0 (any
+        # scale-up is extrapolation); a spiky channel earns more headroom.
+        return np.where(np.isfinite(m), np.maximum(m, 1.0), 1.0)
 
     def mean_curves(self) -> np.ndarray:
         """(C, G) posterior-mean contribution curves."""
@@ -67,8 +99,10 @@ def compute_response_curves(
     if 1.0 not in mults:
         mults = np.sort(np.append(mults, 1.0))
 
-    X = mmm.X_media_raw
+    X = np.asarray(mmm.X_media_raw, dtype=float)
     base_spend = X.sum(axis=0)
+    obs_max_spend = X.max(axis=0) if X.ndim == 2 and X.shape[0] else None
+    n_obs = int(X.shape[0]) if X.ndim == 2 else None
 
     per_mult = []
     for i, m in enumerate(mults):
@@ -86,6 +120,8 @@ def compute_response_curves(
         multipliers=mults,
         base_spend=base_spend,
         contributions=contributions,
+        obs_max_spend=obs_max_spend,
+        n_obs=n_obs,
     )
 
 
@@ -154,6 +190,12 @@ class BudgetOptimizationResult:
     per_draw_alloc: np.ndarray | None = None
     # (C,) the recommended allocation on the mean curves.
     optimal_alloc: np.ndarray | None = None
+    # Expected KPI left on the table by committing to this single plan under
+    # parameter uncertainty (mean over draws of each draw's own-optimal minus the
+    # recommended plan, floored at 0) — the "expected regret" headline (issue #105).
+    expected_regret: float = 0.0
+    # Number of channels whose recommendation extrapolates past observed spend.
+    n_extrapolated: int = 0
 
 
 def optimize_budget(
@@ -234,19 +276,47 @@ def optimize_budget(
     D = curves.contributions.shape[0]
     per_draw_alloc = np.empty((D, len(names)))
     uplift = np.empty(D)
+    # For expected regret: the value of the recommended (point) plan vs the value
+    # of THIS draw's own optimal, both under the draw's curves. Their gap is the
+    # KPI left on the table by committing to one plan under parameter uncertainty.
+    v_plan = np.empty(D)
+    v_perfect = np.empty(D)
     current_alloc = base.astype(float)
     for d in range(D):
         cd = curves.contributions[d]
         per_draw_alloc[d] = _greedy_allocate(
             cd, spend_grid, total_budget, lo_spend, hi_spend, n_steps
         )
-        uplift[d] = _eval_allocation(optimal, cd, spend_grid) - _eval_allocation(
-            current_alloc, cd, spend_grid
-        )
+        v_plan[d] = _eval_allocation(optimal, cd, spend_grid)
+        v_perfect[d] = _eval_allocation(per_draw_alloc[d], cd, spend_grid)
+        uplift[d] = v_plan[d] - _eval_allocation(current_alloc, cd, spend_grid)
 
-    share = per_draw_alloc / max(total_budget, 1e-12)
+    # Observed-support boundary per channel (issue #105): scale-up beyond this
+    # multiple of current spend pushes the average period past anything observed.
+    max_obs_mult = curves.max_obs_multiplier  # (C,) or None
+    n_extrapolated = 0
+
     rows = []
     for c, name in enumerate(names):
+        alloc_c = per_draw_alloc[:, c]
+        share_c = alloc_c / max(total_budget, 1e-12)
+        spend_p5 = float(np.percentile(alloc_c, 5))
+        spend_p95 = float(np.percentile(alloc_c, 95))
+        opt_mult = float(optimal[c] / max(base[c], 1e-12))
+        m_obs = (
+            float(max_obs_mult[c])
+            if max_obs_mult is not None and np.isfinite(max_obs_mult[c])
+            else None
+        )
+        within = True if m_obs is None else opt_mult <= m_obs * (1.0 + _EXTRAP_TOL)
+        if not within:
+            n_extrapolated += 1
+            # Widen the recommended-spend CI to reflect the extra (model-form)
+            # uncertainty of extrapolating past observed spend.
+            infl = 1.0 + _EXTRAP_INFLATION_K * max(0.0, opt_mult - (m_obs or opt_mult))
+            med = float(optimal[c])
+            spend_p5 = med - (med - spend_p5) * infl
+            spend_p95 = med + (spend_p95 - med) * infl
         rows.append(
             {
                 "channel": name,
@@ -255,14 +325,29 @@ def optimize_budget(
                 "optimal_spend": float(optimal[c]),
                 "optimal_share_pct": 100 * optimal[c] / max(total_budget, 1e-12),
                 "change_pct": 100 * (optimal[c] - base[c]) / max(base[c], 1e-12),
-                "optimal_share_p5": float(100 * np.percentile(share[:, c], 5)),
-                "optimal_share_p95": float(100 * np.percentile(share[:, c], 95)),
+                "optimal_spend_p5": spend_p5,
+                "optimal_spend_p95": spend_p95,
+                "optimal_share_p5": float(100 * np.percentile(share_c, 5)),
+                "optimal_share_p95": float(100 * np.percentile(share_c, 95)),
                 "allocation_instability": float(
-                    np.percentile(share[:, c], 95) - np.percentile(share[:, c], 5)
+                    np.percentile(share_c, 95) - np.percentile(share_c, 5)
                 ),
+                "within_observed_range": bool(within),
+                "max_obs_multiplier": m_obs,
+                "recommended_multiplier": opt_mult,
             }
         )
     table = pd.DataFrame(rows)
+
+    if n_extrapolated:
+        notes.append(
+            f"{n_extrapolated} channel(s) are recommended beyond the spend range "
+            "the model has observed; those figures extrapolate the response curve "
+            "(their intervals are widened accordingly). Confirm with a test before "
+            "committing large scale-ups."
+        )
+
+    expected_regret = float(np.mean(np.maximum(v_perfect - v_plan, 0.0)))
 
     return BudgetOptimizationResult(
         table=table,
@@ -274,6 +359,8 @@ def optimize_budget(
         notes=notes,
         per_draw_alloc=per_draw_alloc,
         optimal_alloc=optimal,
+        expected_regret=expected_regret,
+        n_extrapolated=n_extrapolated,
     )
 
 
@@ -284,21 +371,35 @@ def _result_to_report_dict(
     ``AllocationSection`` / ``AugurAllocationSection`` / ``plan_budget`` op all
     consume (``allocation`` rows + headline uplift fields)."""
     t = res.table
-    allocation = [
-        {
+    has_range = "within_observed_range" in t.columns
+
+    def _row(r: "pd.Series") -> dict[str, Any]:
+        out = {
             "channel": str(r["channel"]),
             "current_spend": float(r["current_spend"]),
             "optimal_spend": float(r["optimal_spend"]),
             "change_pct": float(r["change_pct"]),
         }
-        for _, r in t.iterrows()
-    ]
+        # Extrapolation flag + recommended-spend CI (issue #105).
+        if has_range:
+            out["within_observed_range"] = bool(r["within_observed_range"])
+            out["recommended_multiplier"] = float(r["recommended_multiplier"])
+            mo = r.get("max_obs_multiplier")
+            out["max_obs_multiplier"] = None if mo is None else float(mo)
+            if "optimal_spend_p5" in t.columns:
+                out["optimal_spend_p5"] = float(r["optimal_spend_p5"])
+                out["optimal_spend_p95"] = float(r["optimal_spend_p95"])
+        return out
+
+    allocation = [_row(r) for _, r in t.iterrows()]
     plan: dict[str, Any] = {
         "total_budget": float(res.total_budget),
         "current_total": float(t["current_spend"].sum()),
         "expected_uplift": float(res.expected_uplift),
         "uplift_hdi": [float(res.uplift_hdi[0]), float(res.uplift_hdi[1])],
         "prob_positive_uplift": float(res.prob_positive_uplift),
+        "expected_regret": float(res.expected_regret),
+        "n_extrapolated": int(res.n_extrapolated),
         "n_draws": int(res.n_draws),
         "allocation": allocation,
         "notes": list(res.notes),

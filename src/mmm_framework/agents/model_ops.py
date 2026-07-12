@@ -975,6 +975,8 @@ def plan_budget(
         "expected_uplift": float(res.expected_uplift),
         "uplift_hdi": [float(res.uplift_hdi[0]), float(res.uplift_hdi[1])],
         "prob_positive_uplift": float(res.prob_positive_uplift),
+        "expected_regret": float(getattr(res, "expected_regret", 0.0)),
+        "n_extrapolated": int(getattr(res, "n_extrapolated", 0)),
         "n_draws": int(res.n_draws),
         "allocation": national.round(2).to_dict(orient="records"),
         "notes": list(res.notes),
@@ -1000,6 +1002,18 @@ def plan_budget(
             plan["notes"].append(f"Flighting skipped: {e}")
 
     lines = ["### Budget Plan", ""]
+    # Lead with the decision confidence, not the allocation (issue #105).
+    _regret = float(getattr(res, "expected_regret", 0.0))
+    _nx = int(getattr(res, "n_extrapolated", 0))
+    lines.append(
+        f"- **{res.prob_positive_uplift:.0%} chance this plan beats the current "
+        f"allocation** (expected regret {_regret:,.0f} vs a perfectly-informed plan)."
+    )
+    if _nx:
+        lines.append(
+            f"- ⚠ {_nx} channel(s) recommended beyond observed spend — extrapolated "
+            "(see the Range column); confirm with a test before large scale-ups."
+        )
     lines.append(
         f"- Budget allocated: {res.total_budget:,.0f} (current {current_total:,.0f})"
     )
