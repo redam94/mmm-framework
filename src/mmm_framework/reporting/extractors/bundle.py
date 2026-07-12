@@ -187,6 +187,14 @@ class MMMDataBundle:
     # Sensitivity analysis
     sensitivity_results: dict[str, Any] | None = None
 
+    # Triangulation panel — MMM × experiment × platform (issue #104). A
+    # ``TriangulationResult.to_dict()`` payload: per channel, the MMM /
+    # experiment / platform estimates side by side, an agreement classification
+    # (convergent / divergent / platform-inflated / single-source), the
+    # reconciled recommendation, and plain-language notes on any disagreement.
+    # Data-gated: the TriangulationSection renders only when attached (the
+    # generator's ``triangulation=`` param sets it).
+    triangulation: dict[str, Any] | None = None
     # Spec-curve / model-averaging robustness (issue #103). A
     # ``SpecCurveResult.to_dict()`` payload: how each channel's ROI moves across a
     # pre-registered set of defensible specifications, the LOO-stacking weights,

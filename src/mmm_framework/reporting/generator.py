@@ -29,6 +29,7 @@ from .sections import (
     DecompositionSection,
     SaturationSection,
     SensitivitySection,
+    TriangulationSection,
     SpecCurveSection,
     CausalAssumptionsSection,
     MethodologySection,
@@ -93,6 +94,7 @@ class MMMReportGenerator:
         sensitivity: dict | None = None,
         llm: Any | None = None,
         allocation: dict | None = None,
+        triangulation: dict | None = None,
         spec_curve: dict | None = None,
     ):
         self.config = config or ReportConfig()
@@ -111,6 +113,10 @@ class MMMReportGenerator:
         if sensitivity is not None:
             self.data.sensitivity_results = sensitivity
 
+        # Triangulation panel — MMM × experiment × platform (issue #104).
+        # Data-gated: the TriangulationSection renders only when attached.
+        if triangulation is not None:
+            self.data.triangulation = triangulation
         # Spec-curve / model-averaging robustness (issue #103). Attach the
         # SpecCurveResult payload; the SpecCurveSection is data-gated so it only
         # appears when a sweep was actually run.
@@ -214,6 +220,7 @@ class MMMReportGenerator:
             ),
             ("saturation", SaturationSection, _mmm(self.config.saturation)),
             ("sensitivity", SensitivitySection, _mmm(self.config.sensitivity)),
+            ("triangulation", TriangulationSection, _mmm(self.config.triangulation)),
             ("spec_curve", SpecCurveSection, _mmm(self.config.spec_curve)),
             (
                 "causal_assumptions",

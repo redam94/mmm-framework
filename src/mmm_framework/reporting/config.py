@@ -232,6 +232,9 @@ class ReportConfig:
     decomposition: SectionConfig = field(default_factory=SectionConfig)
     saturation: SectionConfig = field(default_factory=SectionConfig)
     sensitivity: SectionConfig = field(default_factory=SectionConfig)
+    # Triangulation panel — MMM × experiment × platform (issue #104). Data-gated:
+    # renders only when a triangulation payload is attached to the bundle.
+    triangulation: SectionConfig = field(default_factory=SectionConfig)
     # Spec-curve / model-averaging robustness (issue #103). Data-gated: renders
     # only when a spec-curve payload is attached to the bundle.
     spec_curve: SectionConfig = field(default_factory=SectionConfig)

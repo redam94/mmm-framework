@@ -79,6 +79,7 @@ _PAYLOAD_KEYS = (
     "yoy",
     "mediation",
     "latent",
+    "triangulation",
     "evidence",
 )
 
@@ -102,6 +103,14 @@ _EXTRA_CSS = r"""
 .ir-slider-val{font-size:.78rem;color:var(--ink-400);text-align:right;}
 .mono{font-family:var(--font-mono);}
 .chip-approx{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-700);background:var(--gold-100);border:1px solid var(--gold-300);border-radius:999px;padding:.15rem .6rem;margin-left:.5rem;vertical-align:middle;}
+/* Triangulation panel (issue #104) */
+.ir-triangulation{margin-top:1rem;}
+.ir-triangulation table{width:100%;border-collapse:collapse;font-size:.85rem;}
+.ir-triangulation th,.ir-triangulation td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--line-200,#e7e1d6);vertical-align:top;}
+.ir-triangulation th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-400);}
+.ir-triangulation .tri-note-row td{border-bottom:1px solid var(--line-200,#e7e1d6);}
+.ir-triangulation .tri-notes{margin:0 0 0 1rem;color:var(--ink-500,#5a5148);}
+.ir-triangulation .tri-notes li{margin:.2rem 0;}
 /* Evidence tier + identifiability (issue #102) */
 .ir-evidence{margin-top:1.1rem;}
 .ir-evidence table{width:100%;border-collapse:collapse;font-size:.85rem;}
@@ -186,6 +195,7 @@ class InteractiveReportGenerator:
             self._section_estimands,
             self._section_curves,
             self._section_carryover,
+            self._section_triangulation,
             self._section_pathways,
             self._section_latent,
             self._section_prior_posterior,
@@ -586,6 +596,27 @@ class InteractiveReportGenerator:
         )
         return _NavEntry("carryover", "Carryover"), self._wrap(
             "carryover", "Carryover effects", "How long each channel echoes", body
+        )
+
+    def _section_triangulation(self) -> tuple[_NavEntry, str] | None:
+        tri = self.facts.get("triangulation")
+        if not tri or not tri.get("channels"):
+            return None
+        body = (
+            f'<p class="lede">{self._insight("triangulation_gloss")}</p>'
+            '<div class="chart-card"><div id="triangulationChart"></div></div>'
+            '<p class="chart-caption">Each channel\'s return estimated three '
+            "ways — experiment (a direct causal measurement), MMM "
+            "(model-identified), and platform (usually last-touch). The ringed "
+            "marker is the reconciled recommendation; a platform point far to "
+            "the right of the incremental estimates is last-touch inflation.</p>"
+            '<div class="ir-triangulation" id="triangulationPanel"></div>'
+        )
+        return _NavEntry("triangulation", "Triangulation"), self._wrap(
+            "triangulation",
+            "MMM × experiment × platform",
+            "Triangulating the evidence",
+            body,
         )
 
     def _section_pathways(self) -> tuple[_NavEntry, str] | None:

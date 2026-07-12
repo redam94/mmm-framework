@@ -48,6 +48,9 @@ from .roi import (
     create_roi_forest_plot,
 )
 
+# Triangulation chart — MMM × experiment × platform (issue #104)
+from .triangulation import (
+    create_triangulation_chart,
 # Spec-curve / model-averaging robustness chart (issue #103)
 from .spec_curve import (
     create_spec_curve_plot,
@@ -123,6 +126,7 @@ __all__ = [
     "create_waterfall_chart_with_geo_selector",
     # ROI charts
     "create_roi_forest_plot",
+    "create_triangulation_chart",
     "create_spec_curve_plot",
     # Diagnostic charts
     "create_saturation_curves",

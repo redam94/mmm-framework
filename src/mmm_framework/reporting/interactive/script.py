@@ -985,6 +985,69 @@ INTERACTIVE_REPORT_JS = r"""
     Plotly.newPlot('pathwaysChart', [trace], ly, CFG);
   }
 
+  // ── triangulation (MMM × experiment × platform, issue #104) ────────────
+  function renderTriangulation() {
+    var tri = IR.triangulation;
+    if (!tri || !tri.channels || !tri.channels.length) return;
+    if (!document.getElementById('triangulationChart')) return;
+    var chans = tri.channels;
+    var names = chans.map(function (c) { return c.channel; });
+    var colors = { experiment: TH.accent || '#5a7a3a', mmm: '#4a6d8a', platform: TH.gold || '#b8860b' };
+    var order = ['experiment', 'mmm', 'platform'];
+    var traces = [];
+    order.forEach(function (stype, si) {
+      var xs = [], ys = [], ep = [], em = [], cd = [];
+      chans.forEach(function (c, ci) {
+        var s = (c.sources || []).filter(function (x) { return x.source === stype; })[0];
+        if (!s || s.value == null) return;
+        xs.push(s.value); ys.push(ci + (si - 1) * 0.16);
+        ep.push(s.upper != null ? s.upper - s.value : 0);
+        em.push(s.lower != null ? s.value - s.lower : 0);
+        cd.push([s.label, s.attribution_window || '—']);
+      });
+      if (!xs.length) return;
+      traces.push({
+        type: 'scatter', x: xs, y: ys, mode: 'markers',
+        name: stype.charAt(0).toUpperCase() + stype.slice(1),
+        error_x: { type: 'data', symmetric: false, array: ep, arrayminus: em, color: TH.muted || '#7a8a78', thickness: 1.5, width: 6 },
+        marker: { color: colors[stype], size: 12, symbol: stype === 'platform' ? 'diamond' : 'circle', line: { color: '#fff', width: 1 } },
+        customdata: cd,
+        hovertemplate: '%{customdata[0]}<br>Return: %{x:.2f}×<br>Window: %{customdata[1]}<extra></extra>'
+      });
+    });
+    var rx = [], ry = [];
+    chans.forEach(function (c, ci) { if (c.reconciled && c.reconciled.value != null) { rx.push(c.reconciled.value); ry.push(ci); } });
+    if (rx.length) traces.push({
+      type: 'scatter', x: rx, y: ry, mode: 'markers', name: 'Reconciled',
+      marker: { color: 'rgba(0,0,0,0)', size: 20, symbol: 'circle-open', line: { color: TH.ink || '#3a4838', width: 2.2 } },
+      hovertemplate: 'Reconciled: %{x:.2f}×<extra></extra>'
+    });
+    var ly = baseLayout({
+      height: Math.max(280, 66 * names.length + 60),
+      margin: { l: 10, r: 20, t: 10, b: 50 },
+      yaxis: { tickmode: 'array', tickvals: names.map(function (_, i) { return i; }), ticktext: names, automargin: true, autorange: 'reversed', range: [-0.6, names.length - 0.4], gridcolor: 'rgba(0,0,0,0)' },
+      xaxis: { title: { text: 'Return per $ (incremental unless noted)', font: { size: 11 } } },
+      legend: { orientation: 'h', y: -0.16, font: { size: 10 } },
+      shapes: [{ type: 'line', x0: 1, x1: 1, y0: -0.6, y1: names.length - 0.4, line: { color: TH.rust || '#a04535', width: 1, dash: 'dash' } }]
+    });
+    Plotly.newPlot('triangulationChart', traces, ly, CFG);
+
+    var panel = document.getElementById('triangulationPanel');
+    if (!panel) return;
+    var AG = { convergent: ['t-scale', 'Convergent'], divergent: ['t-reduce', 'Divergent'], 'platform-inflated': ['t-test', 'Platform-inflated'], 'single-source': ['t-hold', 'Single-source'] };
+    var rows = chans.map(function (c) {
+      var ag = AG[c.agreement] || ['t-hold', c.agreement];
+      var rec = c.reconciled || {};
+      var recStr = rec.value != null ? fmt(rec.value) + '× <span class="mono" style="opacity:.7">(' + esc(rec.basis || '—') + ')</span>' : '—';
+      var notes = (c.notes || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('');
+      return '<tr><td>' + esc(c.channel) + '</td>' +
+        '<td><span class="tier-chip ' + ag[0] + '">' + esc(ag[1]) + '</span></td>' +
+        '<td class="mono">' + recStr + '</td></tr>' +
+        (notes ? '<tr class="tri-note-row"><td colspan="3"><ul class="tri-notes">' + notes + '</ul></td></tr>' : '');
+    }).join('');
+    panel.innerHTML = '<table><thead><tr><th>Channel</th><th>Agreement</th><th>Reconciled</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
   // ── latent structure (loadings + trajectories) ─────────────────────────
   function renderLatent() {
     var lat = IR.latent;
@@ -1443,6 +1506,7 @@ INTERACTIVE_REPORT_JS = r"""
     renderShares();
     renderCalibration();
     renderPathways();
+    renderTriangulation();
     renderLatent();
     renderPpcStats();
     renderLooPit();
