@@ -1,0 +1,562 @@
+<title>The Last Mile — A Three-Lens Review of the MMM Platform</title>
+<style>
+  :root {
+    --paper:#EEF1F2; --surface:#FBFCFC; --surface-2:#F4F6F7;
+    --ink:#17242E; --ink-soft:#38464F; --muted:#647079;
+    --line:#D7DDE0; --line-soft:#E4E9EB;
+    --accent:#1D5B79; --accent-ink:#123f56; --accent-soft:#E2ECF1;
+    --good:#2E7D5B; --good-soft:#E1EFE8;
+    --warn:#A9701F; --warn-soft:#F2E9D8;
+    --crit:#A34237; --crit-soft:#F1E0DC;
+    --shadow:0 1px 2px rgba(23,36,46,.05), 0 6px 20px rgba(23,36,46,.06);
+    --serif:"Charter","Iowan Old Style","Palatino Linotype","Book Antiqua",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono","Menlo",Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:#0E1920; --surface:#16232B; --surface-2:#1B2A33;
+      --ink:#E7EDEF; --ink-soft:#BAC5CB; --muted:#8B99A1;
+      --line:#28373F; --line-soft:#22313A;
+      --accent:#6FB2CE; --accent-ink:#9CCBE0; --accent-soft:#15303C;
+      --good:#6ABF94; --good-soft:#123227;
+      --warn:#D8A65E; --warn-soft:#2E2617;
+      --crit:#DA8B7E; --crit-soft:#331d1a;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper:#EEF1F2; --surface:#FBFCFC; --surface-2:#F4F6F7;
+    --ink:#17242E; --ink-soft:#38464F; --muted:#647079;
+    --line:#D7DDE0; --line-soft:#E4E9EB;
+    --accent:#1D5B79; --accent-ink:#123f56; --accent-soft:#E2ECF1;
+    --good:#2E7D5B; --good-soft:#E1EFE8;
+    --warn:#A9701F; --warn-soft:#F2E9D8;
+    --crit:#A34237; --crit-soft:#F1E0DC;
+    --shadow:0 1px 2px rgba(23,36,46,.05), 0 6px 20px rgba(23,36,46,.06);
+  }
+  :root[data-theme="dark"] {
+    --paper:#0E1920; --surface:#16232B; --surface-2:#1B2A33;
+    --ink:#E7EDEF; --ink-soft:#BAC5CB; --muted:#8B99A1;
+    --line:#28373F; --line-soft:#22313A;
+    --accent:#6FB2CE; --accent-ink:#9CCBE0; --accent-soft:#15303C;
+    --good:#6ABF94; --good-soft:#123227;
+    --warn:#D8A65E; --warn-soft:#2E2617;
+    --crit:#DA8B7E; --crit-soft:#331d1a;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .wrap { max-width:920px; margin:0 auto; padding:0 24px; }
+  ::selection { background:var(--accent-soft); }
+
+  a { color:var(--accent); text-decoration-thickness:1px; text-underline-offset:2px; }
+  a:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+  .eyebrow {
+    font-family:var(--mono); font-size:12px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--muted); font-weight:500;
+  }
+
+  /* ---------- Masthead ---------- */
+  header.mast { border-bottom:1px solid var(--line); background:linear-gradient(180deg,var(--surface-2),var(--paper)); }
+  .mast-meta {
+    display:flex; flex-wrap:wrap; gap:10px 22px; align-items:center;
+    font-family:var(--mono); font-size:12px; letter-spacing:.08em; color:var(--muted);
+    padding:14px 0; border-bottom:1px solid var(--line-soft);
+  }
+  .mast-meta .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); display:inline-block; margin-right:7px; vertical-align:middle; }
+  .mast-body { padding:44px 0 40px; }
+  h1 {
+    font-family:var(--serif); font-weight:600; letter-spacing:-.01em;
+    font-size:clamp(2.1rem,5.4vw,3.5rem); line-height:1.06; margin:.35em 0 .28em;
+    text-wrap:balance;
+  }
+  h1 em { font-style:italic; color:var(--accent-ink); }
+  .standfirst { font-size:clamp(1.02rem,2.3vw,1.22rem); color:var(--ink-soft); max-width:60ch; margin:0 0 4px; }
+  .standfirst strong { color:var(--ink); font-weight:600; }
+
+  /* posterior-band hero motif */
+  .band-motif { margin:26px 0 4px; }
+  .band-motif svg { display:block; width:100%; height:38px; }
+
+  /* ---------- Strength ledger ---------- */
+  .ledger { padding:30px 0 6px; }
+  .ledger-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-top:16px; }
+  .chip-stat {
+    background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px 16px; box-shadow:var(--shadow);
+  }
+  .chip-stat .k { font-family:var(--mono); font-size:11.5px; letter-spacing:.05em; color:var(--muted); text-transform:uppercase; }
+  .chip-stat .v { font-family:var(--serif); font-size:1.06rem; color:var(--ink); margin-top:4px; line-height:1.3; }
+
+  /* ---------- Sections ---------- */
+  section { padding:52px 0; border-top:1px solid var(--line); }
+  .sec-head { display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; margin-bottom:6px; }
+  .sec-num { font-family:var(--mono); font-size:13px; color:var(--accent); letter-spacing:.1em; }
+  h2 { font-family:var(--serif); font-weight:600; font-size:clamp(1.5rem,3.4vw,2.1rem); margin:0; letter-spacing:-.01em; text-wrap:balance; }
+  .lens-tag {
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.12em;
+    padding:4px 9px; border-radius:999px; border:1px solid var(--line); color:var(--muted); background:var(--surface-2);
+  }
+  .sec-intro { color:var(--ink-soft); max-width:66ch; margin:14px 0 26px; }
+
+  /* ---------- Issue cards ---------- */
+  .cards { display:grid; grid-template-columns:1fr; gap:16px; }
+  @media (min-width:720px){ .cards { grid-template-columns:1fr 1fr; } }
+  .card {
+    background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:20px 20px 18px;
+    box-shadow:var(--shadow); display:flex; flex-direction:column; gap:11px;
+    position:relative; overflow:hidden;
+  }
+  .card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--sev,var(--accent)); opacity:.85; }
+  .card.crit { --sev:var(--crit); } .card.warn { --sev:var(--warn); } .card.info { --sev:var(--accent); }
+  .card-top { display:flex; align-items:center; gap:10px; }
+  .id { font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent); letter-spacing:.06em; }
+  .sev {
+    margin-left:auto; font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.1em;
+    padding:3px 8px; border-radius:999px; font-weight:600;
+  }
+  .sev.crit { background:var(--crit-soft); color:var(--crit); }
+  .sev.warn { background:var(--warn-soft); color:var(--warn); }
+  .sev.info { background:var(--accent-soft); color:var(--accent-ink); }
+  .card h3 { font-family:var(--sans); font-weight:650; font-size:1.06rem; margin:0; line-height:1.3; letter-spacing:-.005em; }
+  .card p { margin:0; font-size:.95rem; line-height:1.55; color:var(--ink-soft); }
+  .card .today { color:var(--muted); }
+  .card .klabel { font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:2px; }
+  .card .gap strong { color:var(--ink); font-weight:650; }
+
+  /* ---------- Presentation principles ---------- */
+  .principles { display:grid; grid-template-columns:1fr; gap:2px; margin-top:8px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--line); }
+  .principle { background:var(--surface); padding:20px 22px; display:grid; grid-template-columns:auto 1fr; gap:18px; align-items:start; }
+  .principle .pn { font-family:var(--mono); font-size:13px; color:var(--accent); font-weight:600; padding-top:2px; }
+  .principle h4 { margin:0 0 6px; font-size:1.02rem; font-weight:650; font-family:var(--sans); letter-spacing:-.005em; }
+  .principle p { margin:0; color:var(--ink-soft); font-size:.95rem; }
+  .principle .dodont { margin-top:9px; display:flex; flex-direction:column; gap:5px; font-size:.88rem; }
+  .principle .do, .principle .dont { display:flex; gap:9px; align-items:baseline; }
+  .principle .do .m { color:var(--good); font-family:var(--mono); font-weight:700; }
+  .principle .dont .m { color:var(--crit); font-family:var(--mono); font-weight:700; }
+  .principle .do span:last-child, .principle .dont span:last-child { color:var(--ink-soft); }
+
+  /* evidence chips motif */
+  .evidence-strip { display:flex; flex-wrap:wrap; gap:10px; margin:22px 0 4px; }
+  .ev { font-family:var(--mono); font-size:12px; padding:7px 12px; border-radius:8px; border:1px solid var(--line); display:flex; align-items:center; gap:8px; }
+  .ev .swatch { width:10px; height:10px; border-radius:2px; }
+  .ev.g .swatch{ background:var(--good);} .ev.g{ background:var(--good-soft);}
+  .ev.a .swatch{ background:var(--warn);} .ev.a{ background:var(--warn-soft);}
+  .ev.p .swatch{ background:var(--muted);} .ev.p{ background:var(--surface-2);}
+
+  .callout {
+    margin-top:24px; border:1px solid var(--accent); background:var(--accent-soft);
+    border-radius:12px; padding:22px 24px;
+  }
+  .callout .eyebrow { color:var(--accent-ink); }
+  .callout p { margin:8px 0 0; color:var(--ink); }
+  .callout .quote { font-family:var(--serif); font-size:1.12rem; line-height:1.5; color:var(--ink); }
+  .callout .quote .num { font-variant-numeric:tabular-nums; }
+
+  /* ---------- Roadmap table ---------- */
+  .table-scroll { overflow-x:auto; margin-top:20px; border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); }
+  table { border-collapse:collapse; width:100%; min-width:640px; background:var(--surface); font-size:.93rem; }
+  thead th {
+    text-align:left; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+    padding:14px 16px; border-bottom:1px solid var(--line); background:var(--surface-2); font-weight:600;
+  }
+  tbody td { padding:14px 16px; border-bottom:1px solid var(--line-soft); vertical-align:top; color:var(--ink-soft); }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody td:first-child { white-space:nowrap; }
+  .pri { font-family:var(--mono); font-weight:700; font-size:.85rem; padding:4px 9px; border-radius:6px; }
+  .pri.p0 { background:var(--crit-soft); color:var(--crit); }
+  .pri.p1 { background:var(--warn-soft); color:var(--warn); }
+  .pri.p2 { background:var(--accent-soft); color:var(--accent-ink); }
+  td .ask { color:var(--ink); font-weight:600; }
+  .tags { font-family:var(--mono); font-size:11px; color:var(--muted); }
+
+  footer { border-top:1px solid var(--line); padding:34px 0 60px; color:var(--muted); font-size:.86rem; }
+  footer .eyebrow { margin-bottom:8px; }
+
+  @media (prefers-reduced-motion:no-preference){
+    .card, .chip-stat { transition:transform .18s ease, box-shadow .18s ease; }
+    .card:hover { transform:translateY(-2px); }
+  }
+</style>
+
+<header class="mast">
+  <div class="wrap">
+    <div class="mast-meta">
+      <span><span class="dot"></span>EXPERT REVIEW</span>
+      <span>MMM FRAMEWORK · v0.2.0</span>
+      <span>LENSES: STATISTICIAN · PLANNER · CMO</span>
+      <span>2026·07·11</span>
+    </div>
+    <div class="mast-body">
+      <p class="eyebrow">The gap between rigorous and adopted</p>
+      <h1>The Last Mile:<br>making a rigorous model <em>trusted</em>.</h1>
+      <p class="standfirst">This platform is already in the methodological top tier — a standalone Bayesian engine with pre-registration, simulation-based calibration, experiment calibration, EIG/EVOI experiment design, and genuinely honest uncertainty. <strong>So the remaining work is not more Bayesian machinery.</strong> It is the last mile: causal-validity guardrails, fitting how planners actually work, and letting a CMO defend the number to a CFO.</p>
+      <div class="band-motif" aria-hidden="true">
+        <svg viewBox="0 0 920 38" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="bandg" x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0" stop-color="var(--accent)" stop-opacity="0"/>
+              <stop offset="0.5" stop-color="var(--accent)" stop-opacity="0.22"/>
+              <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <rect x="150" y="12" width="620" height="14" rx="7" fill="url(#bandg)"/>
+          <line x1="0" y1="19" x2="920" y2="19" stroke="var(--line)" stroke-width="1"/>
+          <line x1="460" y1="6" x2="460" y2="32" stroke="var(--accent)" stroke-width="2"/>
+          <circle cx="460" cy="19" r="4.5" fill="var(--accent)"/>
+          <text x="150" y="9" font-family="ui-monospace,monospace" font-size="9" fill="var(--muted)">HDI lower</text>
+          <text x="726" y="9" font-family="ui-monospace,monospace" font-size="9" fill="var(--muted)">HDI upper</text>
+          <text x="446" y="9" font-family="ui-monospace,monospace" font-size="9" fill="var(--accent-ink)">point est.</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="ledger">
+    <p class="eyebrow">Credit where it's due — the critique below assumes all of this already works</p>
+    <div class="ledger-grid">
+      <div class="chip-stat"><div class="k">Inference</div><div class="v">Full Bayesian posterior, NUTS + fast approximate fits</div></div>
+      <div class="chip-stat"><div class="k">Honesty</div><div class="v">SBC, prior→posterior contraction, PPC goodness-of-fit</div></div>
+      <div class="chip-stat"><div class="k">Causal</div><div class="v">Declarative estimands + in-graph experiment calibration</div></div>
+      <div class="chip-stat"><div class="k">Decisions</div><div class="v">EIG / EVOI, expected regret, Pareto budget optimizer</div></div>
+      <div class="chip-stat"><div class="k">Governance</div><div class="v">Pre-registered design readout, versioned assumptions</div></div>
+      <div class="chip-stat"><div class="k">Delivery</div><div class="v">Recompute-in-browser interactive client report</div></div>
+    </div>
+  </div>
+
+  <!-- ============ STATISTICIAN ============ -->
+  <section id="statistician">
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <h2>The statistician's lens</h2>
+      <span class="lens-tag">Is the number identified & causal?</span>
+    </div>
+    <p class="sec-intro">Your validation stack proves the model <em>samples correctly</em> and <em>predicts well</em>. Neither of those is the same as proving a channel's ROI is its true incremental effect. Every issue below is about closing that specific gap — and about refusing to let a prior masquerade as a finding.</p>
+
+    <div class="cards">
+      <div class="card crit">
+        <div class="card-top"><span class="id">S1</span><span class="sev crit">Identification</span></div>
+        <h3>Weakly-identified individual ROIs behind a well-fit total</h3>
+        <p class="today"><span class="klabel">Today</span>Adstock × saturation × collinear, always-on channels make per-channel effects fragile even when total contribution is solid. You already compute contraction diagnostics and an identification module.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Make identifiability a hard gate on every reported number.</strong> If a channel's posterior barely moved off its prior, or it's collinear with another, the client-facing ROI should say so — even print "we cannot separate Search and Shopping in this data" rather than two confident, invented numbers.</p>
+      </div>
+
+      <div class="card crit">
+        <div class="card-top"><span class="id">S2</span><span class="sev crit">Spec search</span></div>
+        <h3>Specification uncertainty — the garden of forking paths</h3>
+        <p class="today"><span class="klabel">Today</span>LOO/WAIC exist per model. But there are dozens of defensible specs (adstock form, saturation form, control set, pooling) and nothing stops an analyst from landing on the one that gives the "nice" answer.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>A spec-curve / Bayesian model-average over a pre-registered set of specs.</strong> Report how each ROI moves across all defensible specifications, not a single hand-picked one. Robustness across specs is itself a headline result.</p>
+      </div>
+
+      <div class="card crit">
+        <div class="card-top"><span class="id">S3</span><span class="sev crit">Endogeneity</span></div>
+        <h3>Spend responds to expected demand</h3>
+        <p class="today"><span class="klabel">Today</span>The latent-factor confounder model is exactly the right idea for the back-door <span style="font-family:var(--mono);font-size:.85em">spend ← demand → sales</span>. But it needs confounder <em>indicators</em> (macro, seasonality proxies) that most clients don't have.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Surface the load-bearing assumption plainly: MMM ROI is causal only under no-unobserved-confounding.</strong> Add endogeneity diagnostics (does spend lead demand?) and route the honest answer to "confirm with an experiment."</p>
+      </div>
+
+      <div class="card warn">
+        <div class="card-top"><span class="id">S4</span><span class="sev warn">Validation</span></div>
+        <h3>Predictive accuracy ≠ causal validity</h3>
+        <p class="today"><span class="klabel">Today</span>Backtest MAPE, PPC and LOO-PIT show the model reproduces and forecasts the data. Experiment calibration is your one true causal anchor.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Promote "has this channel's effect ever been experimentally confirmed?" to a first-class, per-channel trust signal.</strong> You already track calibration coverage — make it the badge that outranks fit statistics in the client view.</p>
+      </div>
+
+      <div class="card warn">
+        <div class="card-top"><span class="id">S5</span><span class="sev warn">Multiplicity</span></div>
+        <h3>Many simultaneous estimands, treated independently</h3>
+        <p class="today"><span class="klabel">Today</span>Channels × geos × products yield dozens of ROIs at once. Hierarchical partial pooling shrinks them, which helps.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Report joint, shrinkage-aware uncertainty, not a grid of independent CIs.</strong> "Which of these effects are actually distinguishable from zero — and from each other?" is the question a statistician will ask, and independent intervals overstate how much you know.</p>
+      </div>
+
+      <div class="card info">
+        <div class="card-top"><span class="id">S6</span><span class="sev info">Stationarity</span></div>
+        <h3>Structural breaks inside the training window</h3>
+        <p class="today"><span class="klabel">Today</span>Synthetic trend-break worlds exist; the continuous-learning side has drift discounting.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>A standard "is there a regime change in this window?" diagnostic</strong> (COVID, a pricing reset, a creative overhaul) with guidance, so a response curve fit across two different worlds is flagged before it's trusted.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MEDIA PLANNER ============ -->
+  <section id="planner">
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <h2>The media planner's lens</h2>
+      <span class="lens-tag">Can I build & defend a plan from this?</span>
+    </div>
+    <p class="sec-intro">Your optimizer, flighting calendar, and decision-value tools (regret, EVOI) are genuinely ahead of the market. The planner's objections are about the boundary of what MMM can see, extrapolation risk, and the daily rhythm of buying — the places where a model recommendation meets a media plan.</p>
+
+    <div class="cards">
+      <div class="card warn">
+        <div class="card-top"><span class="id">P1</span><span class="sev warn">Resolution</span></div>
+        <h3>From "allocation" to an actual media plan</h3>
+        <p class="today"><span class="klabel">Today</span>The optimizer returns channel dollars and a flighting calendar; sub-channel share exists.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Reach/frequency curves and creative/audience/daypart live below MMM resolution — say so, and fill them with experiment and platform data.</strong> A planner needs "at what frequency does this saturate," not just "spend $2M on Social."</p>
+      </div>
+
+      <div class="card crit">
+        <div class="card-top"><span class="id">P2</span><span class="sev crit">Extrapolation</span></div>
+        <h3>Recommendations that step outside observed spend</h3>
+        <p class="today"><span class="klabel">Today</span>Response curves are estimated over roughly 0–2× historical spend; the optimizer can propose large moves.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Hard extrapolation flags with widened uncertainty on any recommended spend beyond the observed range.</strong> "+150% on a channel we've only ever run at one level" is a guess dressed as a curve — mark it as such.</p>
+      </div>
+
+      <div class="card info">
+        <div class="card-top"><span class="id">P3</span><span class="sev info">Confidence</span></div>
+        <h3>Lead with decision confidence, not the allocation</h3>
+        <p class="today"><span class="klabel">Today</span>You compute expected regret, EVOI and probability-of-improvement — better than most tools ship.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Make "78% chance this plan beats last year's" the headline of every recommendation,</strong> not a deep-dive metric. Planners defend decisions upward; hand them the confidence statement first.</p>
+      </div>
+
+      <div class="card warn">
+        <div class="card-top"><span class="id">P4</span><span class="sev warn">In-flight</span></div>
+        <h3>No pacing / actual-vs-plan loop</h3>
+        <p class="today"><span class="klabel">Today</span>MMM is retrospective; the measurement loop re-tests on a decay cadence.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Close the loop between the recommended plan and live delivery.</strong> Flag when actual spend diverges from plan, and what that does to the expected outcome. This is where planners live day-to-day, and it's currently a blind spot.</p>
+      </div>
+
+      <div class="card info">
+        <div class="card-top"><span class="id">P5</span><span class="sev info">Context</span></div>
+        <h3>Competitive activity / share of voice isn't a driver</h3>
+        <p class="today"><span class="klabel">Today</span>Own-channel cannibalization/cross-effects are modeled; external competitor spend is not.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Either ingest competitive spend / SOV as a control (with an explicit confounding caveat) or scope it out loudly.</strong> Planners reason in SOV; a silent omission reads as a blind model.</p>
+      </div>
+
+      <div class="card info">
+        <div class="card-top"><span class="id">P6</span><span class="sev info">Cadence</span></div>
+        <h3>Match the answer's speed to the question</h3>
+        <p class="today"><span class="klabel">Today</span>Weekly MMM + NUTS is slow; approximate fits and the continuous-learning bandit exist for fast questions.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Make the "fast in-flight question vs slow strategic question" routing explicit,</strong> and default to the sub-channel taxonomy wherever the data supports it — planners will (rightly) reject "Social" as too coarse.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CMO ============ -->
+  <section id="cmo">
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <h2>The CMO's lens</h2>
+      <span class="lens-tag">Can I defend this to the CFO & board?</span>
+    </div>
+    <p class="sec-intro">The CMO carries the number into rooms where the audience is skeptical and speaks P&L, not posteriors. Your model-defense deck and augur readouts are strong raw material. The gaps are about translation to the business, long-term brand, and an accountability trail that survives contact with a CFO.</p>
+
+    <div class="cards">
+      <div class="card warn">
+        <div class="card-top"><span class="id">C1</span><span class="sev warn">P&amp;L</span></div>
+        <h3>Speak the CFO's language</h3>
+        <p class="today"><span class="klabel">Today</span>ROI in revenue, margin-aware net, counterfactual and opportunity-cost all exist as pieces.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>A CFO-grade one-pager: total marketing contribution to the P&L, and "cut marketing X% → this much revenue/profit at risk, with uncertainty."</strong> The components are there; they need to roll up into one defensible statement.</p>
+      </div>
+
+      <div class="card crit">
+        <div class="card-top"><span class="id">C2</span><span class="sev crit">Long-term</span></div>
+        <h3>Weekly MMM under-credits brand</h3>
+        <p class="today"><span class="klabel">Today</span>Adstock carryover and the structural survey-funnel extension capture some persistence.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>An explicit short-term-activation vs long-term-brand treatment, with a caveat.</strong> Left unaddressed, MMM systematically over-rotates budget to performance channels and starves brand — the single most consequential way an MMM misleads a CMO.</p>
+      </div>
+
+      <div class="card info">
+        <div class="card-top"><span class="id">C3</span><span class="sev info">Credibility</span></div>
+        <h3>"Prove it" — the incrementality challenge</h3>
+        <p class="today"><span class="klabel">Today</span>The whole T0→T5 loop (experiments → calibration) is the answer, and the model-defense deck is a real asset.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Make experiment-validated vs modeled the single most prominent label on every number the CMO presents.</strong> The CFO's trust is bought one confirmed channel at a time; show that ledger explicitly.</p>
+      </div>
+
+      <div class="card info">
+        <div class="card-top"><span class="id">C4</span><span class="sev info">Benchmark</span></div>
+        <h3>"Is 3× ROAS good?"</h3>
+        <p class="today"><span class="klabel">Today</span>No external category benchmarks (credibly hard to source).</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>At minimum, frame every result against internal trend and the break-even line</strong> so a number has context. A ROAS with no reference point invites the wrong argument.</p>
+      </div>
+
+      <div class="card info">
+        <div class="card-top"><span class="id">C5</span><span class="sev info">Governance</span></div>
+        <h3>Sign-off & audit trail</h3>
+        <p class="today"><span class="klabel">Today</span>Versioned assumptions and pre-registration are strong foundations.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>Formalize a named approval step — "who signed off on these priors" — and an immutable record for the auditor.</strong> Enterprise adoption stalls without a clear accountability chain.</p>
+      </div>
+
+      <div class="card warn">
+        <div class="card-top"><span class="id">C6</span><span class="sev warn">Accountability</span></div>
+        <h3>Did last quarter's recommendation actually pay off?</h3>
+        <p class="today"><span class="klabel">Today</span>Run-history metrics and T5 re-evaluation persist the raw material.</p>
+        <p class="gap"><span class="klabel">Gap</span><strong>A recommendation scorecard: predicted lift vs realized lift over time.</strong> Nothing builds a CMO's trust in a model faster than watching its past calls come true — or seeing it honestly own the misses.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRESENTATION ============ -->
+  <section id="present">
+    <div class="sec-head">
+      <span class="sec-num">04</span>
+      <h2>Presenting results so they stay statistically sound</h2>
+      <span class="lens-tag">The client-facing discipline</span>
+    </div>
+    <p class="sec-intro">The failure mode isn't bad math — it's a sound model communicated in a way that invites over-confident decisions. The remedy is a small set of non-negotiable presentation habits. Your interactive report already delivers several of these; the point is to make them the standard, not the option.</p>
+
+    <div class="evidence-strip" aria-label="Evidence-strength labels used throughout">
+      <span class="ev g"><span class="swatch"></span>Experiment-validated</span>
+      <span class="ev a"><span class="swatch"></span>Model-identified</span>
+      <span class="ev p"><span class="swatch"></span>Prior-dominated</span>
+    </div>
+    <p class="sec-intro" style="margin-top:10px">Adopt one visual language for evidence strength and apply it to <em>every</em> number, everywhere — the same three-way coding your augur readouts already hint at. A client should never have to ask "how much of this is data?"</p>
+
+    <div class="principles">
+      <div class="principle">
+        <span class="pn">01</span>
+        <div>
+          <h4>Lead with the decision and its confidence, not the parameter</h4>
+          <p>The audience acts on outcomes, not coefficients. Translate every finding into a move and a probability.</p>
+          <div class="dodont">
+            <div class="do"><span class="m">DO</span><span>"Shift $2M from A to B → +$3.1M revenue (80% CI $0.4M–$6.0M); 78% chance it beats status quo."</span></div>
+            <div class="dont"><span class="m">NO</span><span>"β<sub>B</sub> = 0.42, posterior sd 0.11."</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="principle">
+        <span class="pn">02</span>
+        <div>
+          <h4>Every number carries an interval and an evidence label</h4>
+          <p>A point estimate with no uncertainty is a lie of omission; an interval with no provenance hides whether it's data or assumption. Show both, always.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <span class="pn">03</span>
+        <div>
+          <h4>Separate average ROI from marginal (next-dollar) ROI</h4>
+          <p>Clients reallocate on the wrong metric constantly. Historical efficiency (average) and what the next dollar buys (marginal) diverge under saturation — and only the marginal one governs a budget move. Never let a plan optimize on average ROAS.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <span class="pn">04</span>
+        <div>
+          <h4>Put the causal assumptions on the same page as the numbers</h4>
+          <p>No unobserved confounders; response curves stable over the horizon; experiment-validated where noted. Stated plainly and up front — not buried in an appendix — this is what makes the result honest rather than merely persuasive.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <span class="pn">05</span>
+        <div>
+          <h4>Decompose base vs incremental — and show how little marketing usually moves</h4>
+          <p>Most sales are base. Showing that marketing drives a minority of the total, honestly, is what keeps the incremental claims credible when the CFO pressure-tests them.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <span class="pn">06</span>
+        <div>
+          <h4>Pre-register, and show that you did</h4>
+          <p>"We committed to these channels, priors and estimands before seeing the results." Your pre-fit design readout <em>is</em> this — make it a client deliverable, because it pre-empts the p-hacking objection before it's raised.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <span class="pn">07</span>
+        <div>
+          <h4>Refuse false precision; reconcile with other evidence</h4>
+          <p>A "3.24× ROAS" with a 1.1–6.2× interval should read "≈3×, wide uncertainty." And add a triangulation panel — MMM vs experiment vs platform-reported — with a reconciled recommendation and an explanation of any disagreement. Convergence across methods is the most persuasive slide you can show.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <span class="pn">08</span>
+        <div>
+          <h4>Let the client stress it themselves</h4>
+          <p>Fan charts instead of single lines; response curves with the observed-spend range shaded and extrapolation greyed; PPC shown as "does the model reproduce reality." Your recompute-in-browser report already lets a client change the window and watch the number move — that interactivity is one of the strongest trust-builders you have. Lean into it.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p class="eyebrow">Anatomy of a sound client recommendation</p>
+      <p class="quote">"Move <span class="num">$2.0M</span> from Display to Connected TV. Expected gain <span class="num">+$3.1M</span> revenue <span style="color:var(--muted);font-size:.85em">(80% CI $0.4M–$6.0M)</span> · <span class="num">78%</span> chance it beats the current plan · CTV effect is <strong style="color:var(--good)">experiment-validated</strong>, Display is <strong style="color:var(--warn)">model-identified only</strong>. Assumes no major demand shock and spend stays within tested range. Recommend a confirmatory geo test before committing beyond <span class="num">$1.2M</span>."</p>
+    </div>
+  </section>
+
+  <!-- ============ ROADMAP ============ -->
+  <section id="roadmap">
+    <div class="sec-head">
+      <span class="sec-num">05</span>
+      <h2>Where I'd start</h2>
+      <span class="lens-tag">Priced by trust bought, not effort spent</span>
+    </div>
+    <p class="sec-intro">Ordered by how much organizational trust each unlocks. The P0 items are the ones that keep a sophisticated buyer from walking; they're also, tellingly, the cheapest — most are about surfacing what the model already knows rather than new modeling.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Priority</th><th>The ask</th><th>Why it moves the needle</th><th>Refs</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pri p0">P0</span></td>
+            <td><span class="ask">Evidence-label + identifiability gate on every reported number</span></td>
+            <td>Stops the platform from presenting a prior as a finding — the fastest way to lose a statistician's trust.</td>
+            <td class="tags">S1 · S4 · C3</td>
+          </tr>
+          <tr>
+            <td><span class="pri p0">P0</span></td>
+            <td><span class="ask">Spec-curve / model-average over a pre-registered spec set</span></td>
+            <td>Neutralizes the "you picked the spec that flatters the answer" objection with robustness as a headline.</td>
+            <td class="tags">S2</td>
+          </tr>
+          <tr>
+            <td><span class="pri p0">P0</span></td>
+            <td><span class="ask">Triangulation / reconciliation panel (MMM × experiment × platform)</span></td>
+            <td>Convergent evidence is the single most persuasive artifact you can put in front of a skeptical CFO.</td>
+            <td class="tags">S4 · C3 · Present.07</td>
+          </tr>
+          <tr>
+            <td><span class="pri p1">P1</span></td>
+            <td><span class="ask">Extrapolation flags + decision-confidence as the headline</span></td>
+            <td>Makes recommendations safe to act on and easy to defend upward — the planner's daily need.</td>
+            <td class="tags">P2 · P3</td>
+          </tr>
+          <tr>
+            <td><span class="pri p1">P1</span></td>
+            <td><span class="ask">Long-term / brand-effect treatment with a caveat</span></td>
+            <td>Prevents the most consequential MMM error: starving brand to feed performance.</td>
+            <td class="tags">C2</td>
+          </tr>
+          <tr>
+            <td><span class="pri p1">P1</span></td>
+            <td><span class="ask">In-flight pacing / actual-vs-plan loop</span></td>
+            <td>Turns a retrospective study into a living planning tool planners open weekly.</td>
+            <td class="tags">P4</td>
+          </tr>
+          <tr>
+            <td><span class="pri p2">P2</span></td>
+            <td><span class="ask">CFO one-pager (revenue-at-risk, P&L rollup)</span></td>
+            <td>Translates the posterior into the board's language; assembles pieces you already have.</td>
+            <td class="tags">C1</td>
+          </tr>
+          <tr>
+            <td><span class="pri p2">P2</span></td>
+            <td><span class="ask">Recommendation scorecard — predicted vs realized</span></td>
+            <td>Compounds trust every quarter the model's calls are shown to have landed.</td>
+            <td class="tags">C6</td>
+          </tr>
+          <tr>
+            <td><span class="pri p2">P2</span></td>
+            <td><span class="ask">Formal sign-off / audit workflow + endogeneity diagnostics</span></td>
+            <td>Clears the enterprise-governance and endogeneity bars that gate procurement.</td>
+            <td class="tags">C5 · S3</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p class="eyebrow">Bottom line</p>
+    <p>The modeling is not the risk — this platform is already more rigorous than most of what ships in the category. The risk is a sophisticated buyer who can't tell which numbers to trust, a planner who can't turn an allocation into a plan, and a CMO who can't defend either to a CFO. The last mile is disclosure, translation, and accountability — mostly surfacing what the model already knows, in the language each of the three readers speaks.</p>
+  </footer>
+
+</div>
