@@ -232,6 +232,9 @@ class ReportConfig:
     decomposition: SectionConfig = field(default_factory=SectionConfig)
     saturation: SectionConfig = field(default_factory=SectionConfig)
     sensitivity: SectionConfig = field(default_factory=SectionConfig)
+    # In-flight pacing — planned vs actual delivery (issue #107). Data-gated on
+    # the bundle's pacing payload.
+    pacing: SectionConfig = field(default_factory=SectionConfig)
     causal_assumptions: SectionConfig = field(default_factory=SectionConfig)
     methodology: SectionConfig = field(default_factory=SectionConfig)
     diagnostics: SectionConfig = field(default_factory=SectionConfig)

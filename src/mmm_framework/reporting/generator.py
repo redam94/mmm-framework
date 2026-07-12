@@ -29,6 +29,7 @@ from .sections import (
     DecompositionSection,
     SaturationSection,
     SensitivitySection,
+    PacingSection,
     CausalAssumptionsSection,
     MethodologySection,
     DiagnosticsSection,
@@ -91,6 +92,7 @@ class MMMReportGenerator:
         sensitivity: dict | None = None,
         llm: Any | None = None,
         allocation: dict | None = None,
+        pacing: dict | None = None,
     ):
         self.config = config or ReportConfig()
         self._llm = llm
@@ -107,6 +109,11 @@ class MMMReportGenerator:
         # Add sensitivity results if provided
         if sensitivity is not None:
             self.data.sensitivity_results = sensitivity
+
+        # In-flight pacing — planned vs actual (issue #107). Data-gated: the
+        # PacingSection renders only when a pacing payload is attached.
+        if pacing is not None:
+            self.data.pacing = pacing
 
         # Budget-allocation plan (a default reallocation, or a saved Planner plan).
         # When attached, expose it on the bundle and turn the allocation section ON
@@ -205,6 +212,7 @@ class MMMReportGenerator:
             ),
             ("saturation", SaturationSection, _mmm(self.config.saturation)),
             ("sensitivity", SensitivitySection, _mmm(self.config.sensitivity)),
+            ("pacing", PacingSection, _mmm(self.config.pacing)),
             (
                 "causal_assumptions",
                 CausalAssumptionsSection,

@@ -896,6 +896,119 @@ class SensitivitySection(Section):
         return self._render_section_wrapper("\n".join(content_parts))
 
 
+class PacingSection(Section):
+    """In-flight pacing — planned vs actual delivery (issue #107).
+
+    Closes the loop between the recommended plan and live delivery: planned vs
+    actual spend by channel, divergence flags, and the expected effect on the
+    outcome. Data-gated on ``bundle.pacing``.
+    """
+
+    section_id: str = "pacing"
+    default_title: str = "In-flight pacing (plan vs actual)"
+
+    _STATUS_META = {
+        "on-track": ("positive", "On track"),
+        "over-pacing": ("negative", "Over-pacing"),
+        "under-pacing": ("uncertain", "Under-pacing"),
+        "not-started": ("uncertain", "Not started"),
+    }
+
+    def render(self) -> str:
+        if not self.is_enabled or not self.data.pacing:
+            return ""
+        pac = self.data.pacing
+        channels = list(pac.get("channels") or [])
+        if not channels:
+            return ""
+        parts = [
+            self._render_headline(pac),
+            self._render_alert(pac),
+            self._render_table(channels),
+        ]
+        return self._render_section_wrapper("\n".join(p for p in parts if p))
+
+    def _render_headline(self, pac: dict) -> str:
+        p = float(pac.get("planned_total", 0.0))
+        a = float(pac.get("actual_total", 0.0))
+        div = float(pac.get("divergence_pct", 0.0))
+        div_cls = (
+            "positive" if abs(div) <= float(pac.get("threshold", 0.1)) else "negative"
+        )
+        delta = pac.get("outcome_delta") or {}
+        delta_card = ""
+        if delta.get("mean") is not None:
+            dm = float(delta["mean"])
+            sign = "+" if dm >= 0 else ""
+            ci = (
+                f'<div class="ci">90% [{self._format_currency(float(delta.get("lower", dm)))}, '
+                f'{self._format_currency(float(delta.get("upper", dm)))}]</div>'
+                if delta.get("lower") is not None
+                else ""
+            )
+            delta_card = f"""
+                <div class="metric-card">
+                    <div class="value">{sign}{self._format_currency(dm)}</div>
+                    <div class="label">Expected KPI impact of the divergence</div>
+                    {ci}
+                </div>"""
+        return f"""
+            <p>Where actual delivery has diverged from the recommended plan, and
+            what that divergence is expected to do to the outcome (read off the
+            fitted response curves).</p>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="value {div_cls}">{div:+.0%}</div>
+                    <div class="label">Portfolio pacing vs plan</div>
+                    <div class="ci">{self._format_currency(a)} spent of {self._format_currency(p)} planned</div>
+                </div>
+                {delta_card}
+            </div>
+        """
+
+    def _render_alert(self, pac: dict) -> str:
+        flagged = list(pac.get("flagged") or [])
+        if not flagged:
+            return (
+                '<div class="callout positive"><p>All channels are pacing within '
+                f'{float(pac.get("threshold", 0.1)):.0%} of plan.</p></div>'
+            )
+        names = ", ".join(html.escape(str(f)) for f in flagged)
+        return (
+            f'<div class="callout negative"><h4>Off-pace: {len(flagged)} channel(s)</h4>'
+            f"<p><strong>{names}</strong> have diverged more than "
+            f'{float(pac.get("threshold", 0.1)):.0%} from plan — review before the '
+            f"divergence compounds.</p></div>"
+        )
+
+    def _render_table(self, channels: list[dict]) -> str:
+        rows = []
+        for c in channels:
+            ch = html.escape(str(c.get("channel", "")))
+            planned = float(c.get("planned", 0.0))
+            actual = float(c.get("actual", 0.0))
+            div = float(c.get("divergence_pct", 0.0))
+            cls, label = self._STATUS_META.get(
+                c.get("status", ""), ("uncertain", c.get("status", "—"))
+            )
+            div_str = "—" if not np.isfinite(div) else f"{div:+.0%}"
+            rows.append(
+                f"<tr><td>{ch}</td>"
+                f'<td class="mono">{self._format_currency(planned)}</td>'
+                f'<td class="mono">{self._format_currency(actual)}</td>'
+                f'<td class="mono">{div_str}</td>'
+                f'<td class="{cls}">{label}</td></tr>'
+            )
+        return f"""
+            <h3>Pacing by channel</h3>
+            <table class="data-table">
+                <thead><tr><th>Channel</th><th>Planned (to date)</th>
+                    <th>Actual</th><th>Divergence</th><th>Status</th></tr></thead>
+                <tbody>{"".join(rows)}</tbody>
+            </table>
+        """
+
+
 class MethodologySection(Section):
     """Model methodology documentation."""
 
@@ -2169,6 +2282,7 @@ SECTION_REGISTRY: dict[str, type[Section]] = {
     "decomposition": DecompositionSection,
     "saturation": SaturationSection,
     "sensitivity": SensitivitySection,
+    "pacing": PacingSection,
     "causal_assumptions": CausalAssumptionsSection,
     "methodology": MethodologySection,
     "diagnostics": DiagnosticsSection,

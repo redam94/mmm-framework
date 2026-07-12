@@ -3069,8 +3069,103 @@ def render_slide_deck(
         return _err(f"Error rendering slide deck: {e}")
 
 
+def check_pacing(
+    mmm: Any,
+    results: Any = None,
+    *,
+    planned: Any = None,
+    actual: Any = None,
+    threshold: float = 0.10,
+    max_draws: int = 200,
+) -> dict:
+    """In-flight pacing (issue #107): compare a plan against actual delivery.
+
+    ``planned`` and ``actual`` are per-channel spend by period (a flighting
+    schedule, a list of period rows, ``{channel: [per-period]}``, or
+    ``{channel: total}``). Computes per-channel divergence + off-pace flags and,
+    when a fitted model is available, the expected KPI impact of the divergence
+    off the response curves. Returns a ``pacing`` dashboard payload the report /
+    FE render, plus a per-channel table."""
+    from ..planning.pacing import pacing_report
+
+    if not planned or not actual:
+        return _err(
+            "check_pacing needs both a 'planned' schedule and 'actual' delivery "
+            "(spend by channel/period)."
+        )
+    curves = None
+    if mmm is not None and getattr(mmm, "_trace", None) is not None:
+        try:
+            from ..planning.budget import compute_response_curves
+
+            curves = compute_response_curves(mmm, max_draws=max_draws)
+        except Exception:  # noqa: BLE001 — pacing still works without the delta
+            curves = None
+    try:
+        res = pacing_report(planned, actual, curves=curves, threshold=float(threshold))
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Error computing pacing: {e}")
+
+    d = res.to_dict()
+    lines = ["### In-flight pacing", ""]
+    lines.append(
+        f"- Portfolio pacing: {res.divergence_pct:+.0%} vs plan "
+        f"({res.actual_total:,.0f} spent of {res.planned_total:,.0f} planned)."
+    )
+    if res.flagged:
+        lines.append(
+            f"- ⚠ Off-pace ({len(res.flagged)}): {', '.join(res.flagged)} — "
+            f"beyond {float(threshold):.0%} of plan."
+        )
+    else:
+        lines.append(f"- All channels within {float(threshold):.0%} of plan.")
+    if res.outcome_delta and res.outcome_delta.get("mean") is not None:
+        od = res.outcome_delta
+        lines.append(
+            f"- Expected KPI impact of the divergence: {od['mean']:+,.0f} "
+            f"(90% [{od.get('lower', od['mean']):,.0f}, {od.get('upper', od['mean']):,.0f}])."
+        )
+    table = [
+        {
+            "channel": c.channel,
+            "planned": round(c.planned, 2),
+            "actual": round(c.actual, 2),
+            "divergence_pct": round(c.divergence_pct * 100, 1),
+            "status": c.status,
+        }
+        for c in res.channels
+    ]
+    out = _ok("\n".join(lines), {"pacing": d})
+    try:
+        out["tables"] = [
+            records_to_table_json(
+                table,
+                title="In-flight pacing",
+                source="check_pacing",
+                columns=[
+                    {"key": "channel", "label": "Channel", "type": "string"},
+                    {"key": "planned", "label": "Planned", "type": "number"},
+                    {"key": "actual", "label": "Actual", "type": "number"},
+                    {
+                        "key": "divergence_pct",
+                        "label": "Divergence %",
+                        "type": "number",
+                    },
+                    {"key": "status", "label": "Status", "type": "string"},
+                ],
+            )
+        ]
+    except Exception:  # noqa: BLE001 — table is best-effort
+        pass
+    return out
+
+
+check_pacing.allow_unfitted = True  # pacing works without a fit (no outcome delta)
+
+
 OPS = {
     "roi_metrics": roi_metrics,
+    "check_pacing": check_pacing,
     "posterior_predictive_checks": posterior_predictive_checks,
     "simulation_based_calibration": simulation_based_calibration,
     "residual_diagnostics": residual_diagnostics,

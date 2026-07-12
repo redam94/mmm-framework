@@ -18,6 +18,14 @@ from .budget import (
     optimize_budget_by_geo,
 )
 from .flighting import FLIGHTING_PATTERNS, build_flighting_schedule
+from .pacing import (
+    DEFAULT_PACING_THRESHOLD,
+    PacingChannel,
+    PacingResult,
+    compute_pacing,
+    expected_outcome_delta,
+    pacing_report,
+)
 from .eig import (
     DEFAULT_HALF_LIVES_WEEKS,
     DESIGN_PRECISION,
@@ -73,6 +81,12 @@ __all__ = [
     "compute_response_curves_per_geo",
     "combine_geo_curves",
     "optimize_budget_by_geo",
+    "PacingChannel",
+    "PacingResult",
+    "compute_pacing",
+    "expected_outcome_delta",
+    "pacing_report",
+    "DEFAULT_PACING_THRESHOLD",
     "FLIGHTING_PATTERNS",
     "build_flighting_schedule",
     "recommend_experiments",

@@ -1101,6 +1101,34 @@ def get_roi_metrics(
 
 
 @tool
+def check_pacing(
+    planned: dict,
+    actual: dict,
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    threshold: float = 0.10,
+    config: InjectedConfig = None,
+) -> Command:
+    """Compare a recommended media plan against ACTUAL in-flight delivery.
+
+    Call this when the user shares actual spend-to-date and wants to know how it
+    is pacing against the plan and what the divergence does to the outcome.
+    ``planned`` and ``actual`` are per-channel spend by period — a flighting
+    schedule (``{"schedule": [{"period": ..., "<channel>": spend}]}``), a list of
+    period rows, ``{channel: [per-period spends]}``, or ``{channel: total}``.
+    ``threshold`` is the divergence fraction (default 0.10) that flags a channel
+    as off-pace. Returns per-channel pacing, off-pace flags, and the expected KPI
+    impact of the divergence.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "check_pacing",
+        {"planned": planned, "actual": actual, "threshold": float(threshold)},
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
 def generate_slide_deck(
     state: Annotated[dict, InjectedState],
     client_name: Optional[str] = None,
@@ -6995,6 +7023,7 @@ TOOLS = [
     list_saved_models,
     # Analysis
     get_roi_metrics,
+    check_pacing,
     get_estimands,
     get_component_decomposition,
     get_model_diagnostics,
