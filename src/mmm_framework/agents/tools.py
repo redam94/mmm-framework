@@ -1181,15 +1181,28 @@ def triangulate_channel_effects(
     Call this when the user asks to triangulate, cross-check, reconcile, or
     validate the model against experiments — "do the MMM and the experiment
     agree?", "is this ROI backed by a test?". It puts the model-identified
-    incremental ROI next to the directly-measured experiment lift; the experiment
-    anchors the reconciled number when present (the causal gold standard). Uses
-    the calibrated/completed experiment readouts already in the registry — no
-    re-fit. Requires a fitted model.
+    incremental ROI next to the directly-measured experiment lift AND any
+    platform-reported figures recorded for the project (record_platform_figure);
+    the experiment anchors the reconciled number when present (the causal gold
+    standard). Uses the calibrated/completed experiment readouts + stored platform
+    figures already in the registry — no re-fit. Requires a fitted model.
     """
+    from mmm_framework.api.triangulation import platform_dict_for_project
+
     _activate_thread(config)
     experiments = _project_experiment_readouts(config)
+    project_id = None
+    try:
+        from mmm_framework.api import sessions as _sessions
+
+        tid = get_current_thread()
+        sess = _sessions.get_session(tid) if tid else None
+        project_id = (sess or {}).get("project_id")
+    except Exception:  # noqa: BLE001
+        pass
+    platform = platform_dict_for_project(project_id) or None
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
-        "triangulation", {"experiments": experiments}
+        "triangulation", {"experiments": experiments, "platform": platform}
     )
     return _modelop_command(res, state, tool_call_id)
 
@@ -4888,6 +4901,68 @@ def _simple_msg(text: str, tool_call_id) -> Command:
 
 
 @tool
+def record_platform_figure(
+    channel: str,
+    value: float,
+    source: str = None,
+    metric: str = "roas",
+    attribution_window: str = None,
+    incremental: bool = False,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Record a platform-reported attribution figure for a channel into the
+    project registry (issue #120), so it is stored once and re-used by the
+    triangulation panel + endpoint.
+
+    A platform figure is a channel's return as an ad platform reports it (e.g.
+    Meta/Google's ROAS), which is usually **last-touch / correlational** — NOT the
+    incremental return an MMM or experiment measures. It is therefore stored as
+    non-incremental by default; pass `incremental=True` ONLY for a genuine
+    platform-run geo-lift. `source` names the platform (e.g. "Meta"),
+    `attribution_window` its window (e.g. "7-day click"). Recording a figure for a
+    channel/source overwrites the prior one. Use `triangulate_channel_effects` to
+    see it next to the MMM and experiment estimates.
+    """
+    from mmm_framework.api import sessions as sessions_store
+
+    tid = get_current_thread() if config is None else _activate_thread(config)
+    project_id = None
+    try:
+        sess = sessions_store.get_session(tid) if tid else None
+        project_id = (sess or {}).get("project_id")
+    except Exception:  # noqa: BLE001
+        pass
+    if not project_id:
+        return _simple_msg(
+            "No active project — open a project before recording platform figures.",
+            tool_call_id,
+        )
+    figures = sessions_store.upsert_platform_figures(
+        project_id,
+        [
+            {
+                "channel": channel,
+                "value": value,
+                "source": source or "",
+                "metric": metric or "roas",
+                "attribution_window": attribution_window,
+                "incremental": bool(incremental),
+            }
+        ],
+    )
+    kind = "incremental" if incremental else "last-touch (non-incremental)"
+    src = f" from {source}" if source else ""
+    return _simple_msg(
+        f"Platform figure recorded: **{channel}** {value:g} {metric}{src} "
+        f"({kind}). {len(figures)} figure(s) stored for this project — "
+        "run `triangulate_channel_effects` to reconcile it against the MMM "
+        "and any experiment readouts.",
+        tool_call_id,
+    )
+
+
+@tool
 def plan_experiment(
     channel: str,
     state: Annotated[dict, InjectedState],
@@ -7121,6 +7196,7 @@ TOOLS = [
     apply_experiment_calibration,
     log_experiment,
     list_experiment_log,
+    record_platform_figure,
     get_run_history,
     # Continuous learning programs — model-free geo bandit (no MMM required)
     *LEARNING_TOOLS,
@@ -7230,6 +7306,7 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "log_experiment",
         "list_experiment_log",
         "triangulate_channel_effects",
+        "record_platform_figure",
         # validation tools that need media channels / the MMM forward pass
         "run_channel_diagnostics",
         "run_refutation_suite",

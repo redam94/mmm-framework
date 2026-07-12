@@ -2936,8 +2936,8 @@ async def project_triangulation_endpoint(
     per-channel ``contribution_roi`` estimands persisted at fit time with the
     calibrated/completed experiment readouts in the registry; no model loads.
     ``kpi``/``run_id`` pin which fitted model's MMM numbers are used (default: the
-    latest ``contribution_roi`` model). Platform figures are not yet persisted
-    (follow-up #120), so the platform source is omitted here."""
+    latest ``contribution_roi`` model). Any platform-attribution figures ingested
+    for the project (issue #120) are folded in as the third source."""
     from mmm_framework.api.triangulation import build_project_triangulation
 
     if sessions_store.get_project(project_id) is None:
@@ -2947,6 +2947,59 @@ async def project_triangulation_endpoint(
             build_project_triangulation(project_id, kpi=kpi, run_id=run_id)
         )
     )
+
+
+@app.get("/projects/{project_id}/platform-figures", dependencies=[_proj_read])
+async def list_platform_figures_endpoint(project_id: str):
+    """Platform-reported attribution figures stored for the project (issue #120)."""
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            {"figures": sessions_store.list_platform_figures(project_id)}
+        )
+    )
+
+
+@app.post(
+    "/projects/{project_id}/platform-figures", dependencies=[_proj_write, _rl_heavy]
+)
+async def upload_platform_figures_endpoint(
+    project_id: str, file: UploadFile = File(...)
+):
+    """Ingest platform-reported attribution (CSV/TSV or JSON) into the registry
+    (issue #120), so triangulation re-uses it without an inline dict. A CSV has a
+    ``channel`` + ``value`` column (+ optional ``source``/``metric``/
+    ``attribution_window``/``incremental``/``period``). Figures are stored
+    **non-incremental** (last-touch) unless a row sets ``incremental`` true."""
+    from mmm_framework.api.triangulation import parse_platform_records
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    raw = await file.read()
+    try:
+        records = parse_platform_records(raw, file.filename or "")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=400, detail=f"Could not parse platform-figures file: {exc}"
+        )
+    if not records:
+        raise HTTPException(
+            status_code=400, detail="No platform figures parsed from the upload."
+        )
+    figures = sessions_store.upsert_platform_figures(project_id, records)
+    return JSONResponse(
+        content=safe_json_dumps_load({"figures": figures, "ingested": len(figures)})
+    )
+
+
+@app.delete("/projects/{project_id}/platform-figures", dependencies=[_proj_write])
+async def delete_platform_figures_endpoint(project_id: str, channel: str | None = None):
+    """Clear stored platform figures for the project (optionally one channel)."""
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    n = sessions_store.delete_platform_figures(project_id, channel=channel)
+    return JSONResponse(content=safe_json_dumps_load({"deleted": n}))
 
 
 @app.get("/projects/{project_id}/delivery", dependencies=[_proj_read])
