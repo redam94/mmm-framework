@@ -17,6 +17,7 @@ def test_ops_registry_complete():
         "check_pacing",
         "compute_estimands",
         "triangulation",
+        "spec_curve",
         "garden_compat",
         "garden_tune_suggestions",
         "component_decomposition",
