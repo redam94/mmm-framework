@@ -444,6 +444,101 @@ def compute_estimands(
         return _err(f"Error computing estimands: {e}")
 
 
+def triangulation(
+    mmm: Any,
+    results: Any = None,
+    *,
+    experiments: list | None = None,
+    platform: dict | None = None,
+    hdi_prob: float = 0.94,
+) -> dict:
+    """Reconcile each channel's MMM effect against experiment readouts (+ platform).
+
+    Puts the model-identified incremental ROI next to the directly-measured
+    experiment lift and any platform-reported figure, then classifies each channel
+    convergent / divergent / platform-inflated / single-source. The experiment
+    readouts are the calibrated/completed registry rows the host tool passes in;
+    no re-fit. Emits ``dashboard['triangulation']`` (the panel the report renders)
+    + a per-channel table.
+    """
+    try:
+        from ..reporting.triangulation import triangulation_from_model
+
+        result = triangulation_from_model(
+            mmm, experiments=experiments or [], platform=platform, hdi_prob=hdi_prob
+        )
+        payload = result.to_dict()
+        channels = payload.get("channels") or []
+        if not channels:
+            return _err(
+                "Nothing to triangulate — the model exposes no contribution_roi "
+                "and there are no calibrated/completed experiment readouts yet."
+            )
+
+        def _fmt(v):
+            return f"{v:.2f}" if isinstance(v, (int, float)) else "—"
+
+        content = (
+            "### Triangulation — MMM × experiment × platform\n\n"
+            "| Channel | Agreement | MMM | Experiment | Platform | Reconciled | Basis |\n"
+            "|---|---|---|---|---|---|---|\n"
+        )
+        rows: list[dict] = []
+        for c in channels:
+            by = {s["source"]: s for s in c.get("sources") or []}
+            rec = c.get("reconciled") or {}
+            mmm_v = (by.get("mmm") or {}).get("value")
+            exp_v = (by.get("experiment") or {}).get("value")
+            plat_v = (by.get("platform") or {}).get("value")
+            content += (
+                f"| {c['channel']} | {c['agreement']} | {_fmt(mmm_v)} | "
+                f"{_fmt(exp_v)} | {_fmt(plat_v)} | {_fmt(rec.get('value'))} | "
+                f"{rec.get('basis') or '—'} |\n"
+            )
+            rows.append(
+                {
+                    "channel": c["channel"],
+                    "agreement": c["agreement"],
+                    "mmm": mmm_v,
+                    "experiment": exp_v,
+                    "platform": plat_v,
+                    "reconciled": rec.get("value"),
+                    "basis": rec.get("basis"),
+                }
+            )
+        agg = (payload.get("summary") or {}).get("by_agreement") or {}
+        content += (
+            f"\n**{len(channels)} channel(s):** {agg.get('convergent', 0)} convergent, "
+            f"{agg.get('divergent', 0)} divergent, "
+            f"{agg.get('platform-inflated', 0)} platform-inflated, "
+            f"{agg.get('single-source', 0)} single-source. The experiment anchors "
+            "the reconciled number when present (the causal gold standard); the "
+            "platform figure is context, never the recommendation."
+        )
+
+        res = _ok(content, {"triangulation": payload})
+        res["tables"] = [
+            records_to_table_json(
+                rows,
+                title="Triangulation",
+                source="triangulation",
+                group="validation",
+                columns=[
+                    {"key": "channel", "label": "Channel", "type": "string"},
+                    {"key": "agreement", "label": "Agreement", "type": "string"},
+                    {"key": "mmm", "label": "MMM", "type": "number"},
+                    {"key": "experiment", "label": "Experiment", "type": "number"},
+                    {"key": "platform", "label": "Platform", "type": "number"},
+                    {"key": "reconciled", "label": "Reconciled", "type": "number"},
+                    {"key": "basis", "label": "Basis", "type": "string"},
+                ],
+            )
+        ]
+        return res
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Error building triangulation: {e}")
+
+
 def prior_predictive_check(
     mmm: Any,
     results: Any = None,
@@ -3188,6 +3283,7 @@ OPS = {
     "cross_validation": cross_validation,
     "validate_model": validate_model,
     "compute_estimands": compute_estimands,
+    "triangulation": triangulation,
     "garden_compat": garden_compat,
     "garden_tune_suggestions": garden_tune_suggestions,
     "component_decomposition": component_decomposition,
