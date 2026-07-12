@@ -29,6 +29,7 @@ from .sections import (
     DecompositionSection,
     SaturationSection,
     SensitivitySection,
+    LongTermSection,
     TriangulationSection,
     SpecCurveSection,
     CausalAssumptionsSection,
@@ -220,6 +221,7 @@ class MMMReportGenerator:
             ),
             ("saturation", SaturationSection, _mmm(self.config.saturation)),
             ("sensitivity", SensitivitySection, _mmm(self.config.sensitivity)),
+            ("long_term", LongTermSection, _mmm(self.config.long_term)),
             ("triangulation", TriangulationSection, _mmm(self.config.triangulation)),
             ("spec_curve", SpecCurveSection, _mmm(self.config.spec_curve)),
             (

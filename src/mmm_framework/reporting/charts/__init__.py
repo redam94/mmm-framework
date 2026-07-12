@@ -51,6 +51,8 @@ from .roi import (
 # Triangulation chart — MMM × experiment × platform (issue #104)
 from .triangulation import (
     create_triangulation_chart,
+)
+
 # Spec-curve / model-averaging robustness chart (issue #103)
 from .spec_curve import (
     create_spec_curve_plot,
