@@ -29,6 +29,7 @@ from .sections import (
     DecompositionSection,
     SaturationSection,
     SensitivitySection,
+    PacingSection,
     LongTermSection,
     TriangulationSection,
     SpecCurveSection,
@@ -95,6 +96,7 @@ class MMMReportGenerator:
         sensitivity: dict | None = None,
         llm: Any | None = None,
         allocation: dict | None = None,
+        pacing: dict | None = None,
         triangulation: dict | None = None,
         spec_curve: dict | None = None,
     ):
@@ -114,6 +116,10 @@ class MMMReportGenerator:
         if sensitivity is not None:
             self.data.sensitivity_results = sensitivity
 
+        # In-flight pacing — planned vs actual (issue #107). Data-gated: the
+        # PacingSection renders only when a pacing payload is attached.
+        if pacing is not None:
+            self.data.pacing = pacing
         # Triangulation panel — MMM × experiment × platform (issue #104).
         # Data-gated: the TriangulationSection renders only when attached.
         if triangulation is not None:
@@ -221,6 +227,7 @@ class MMMReportGenerator:
             ),
             ("saturation", SaturationSection, _mmm(self.config.saturation)),
             ("sensitivity", SensitivitySection, _mmm(self.config.sensitivity)),
+            ("pacing", PacingSection, _mmm(self.config.pacing)),
             ("long_term", LongTermSection, _mmm(self.config.long_term)),
             ("triangulation", TriangulationSection, _mmm(self.config.triangulation)),
             ("spec_curve", SpecCurveSection, _mmm(self.config.spec_curve)),

@@ -232,6 +232,9 @@ class ReportConfig:
     decomposition: SectionConfig = field(default_factory=SectionConfig)
     saturation: SectionConfig = field(default_factory=SectionConfig)
     sensitivity: SectionConfig = field(default_factory=SectionConfig)
+    # In-flight pacing — planned vs actual delivery (issue #107). Data-gated on
+    # the bundle's pacing payload.
+    pacing: SectionConfig = field(default_factory=SectionConfig)
     # Short-term vs long-term / brand effect (issue #106). Data-gated on the
     # bundle's adstock split; ``long_term_multiplier`` (below) opts into the
     # assumption-driven long-term scenario.

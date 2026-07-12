@@ -187,6 +187,12 @@ class MMMDataBundle:
     # Sensitivity analysis
     sensitivity_results: dict[str, Any] | None = None
 
+    # In-flight pacing — planned vs actual delivery (issue #107). A
+    # ``PacingResult.to_dict()`` payload: per-channel planned/actual/divergence +
+    # status, the flagged (off-pace) channels, and the expected-outcome delta from
+    # the divergence. Data-gated: the PacingSection renders only when attached
+    # (the generator's ``pacing=`` param sets it).
+    pacing: dict[str, Any] | None = None
     # Short-term vs long-term / brand effect (issue #106). A
     # ``build_long_term_facts`` payload: per-channel immediate-vs-carryover split
     # (what the weekly model measures), whether a structural brand funnel exists,
