@@ -30,6 +30,8 @@ from .sections import (
     SaturationSection,
     SensitivitySection,
     LongTermSection,
+    TriangulationSection,
+    SpecCurveSection,
     CausalAssumptionsSection,
     MethodologySection,
     DiagnosticsSection,
@@ -40,6 +42,7 @@ from .sections import (
 )
 from .augur_sections import AUGUR_SECTIONS
 from .augur_theme import augur_css, MASTHEAD_LOGO_SVG, AUGUR_FONTS_LINK
+from .evidence import EVIDENCE_CHIP_CSS
 
 
 class MMMReportGenerator:
@@ -92,6 +95,8 @@ class MMMReportGenerator:
         sensitivity: dict | None = None,
         llm: Any | None = None,
         allocation: dict | None = None,
+        triangulation: dict | None = None,
+        spec_curve: dict | None = None,
     ):
         self.config = config or ReportConfig()
         self._llm = llm
@@ -108,6 +113,16 @@ class MMMReportGenerator:
         # Add sensitivity results if provided
         if sensitivity is not None:
             self.data.sensitivity_results = sensitivity
+
+        # Triangulation panel — MMM × experiment × platform (issue #104).
+        # Data-gated: the TriangulationSection renders only when attached.
+        if triangulation is not None:
+            self.data.triangulation = triangulation
+        # Spec-curve / model-averaging robustness (issue #103). Attach the
+        # SpecCurveResult payload; the SpecCurveSection is data-gated so it only
+        # appears when a sweep was actually run.
+        if spec_curve is not None:
+            self.data.spec_curve = spec_curve
 
         # Budget-allocation plan (a default reallocation, or a saved Planner plan).
         # When attached, expose it on the bundle and turn the allocation section ON
@@ -207,6 +222,8 @@ class MMMReportGenerator:
             ("saturation", SaturationSection, _mmm(self.config.saturation)),
             ("sensitivity", SensitivitySection, _mmm(self.config.sensitivity)),
             ("long_term", LongTermSection, _mmm(self.config.long_term)),
+            ("triangulation", TriangulationSection, _mmm(self.config.triangulation)),
+            ("spec_curve", SpecCurveSection, _mmm(self.config.spec_curve)),
             (
                 "causal_assumptions",
                 CausalAssumptionsSection,
@@ -1123,6 +1140,9 @@ class MMMReportGenerator:
             .report-nav {{ display: none; }}
             .report-body.has-nav .report-container {{ padding-left: 0; }}
         }}
+
+        /* Evidence chips + legend (issue #102) — one visual language for trust. */
+{EVIDENCE_CHIP_CSS}
 """
 
     def to_html(self, filepath: str | Path) -> Path:

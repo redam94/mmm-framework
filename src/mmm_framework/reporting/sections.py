@@ -13,6 +13,7 @@ import numpy as np
 
 from .config import ReportConfig, SectionConfig, ChartConfig
 from . import charts
+from .evidence import evidence_chip_html, evidence_legend_html
 
 if TYPE_CHECKING:
     from .data_extractors import MMMDataBundle
@@ -470,11 +471,25 @@ class ChannelROISection(Section):
         # Channel legend
         legend = self._render_channel_legend(channels)
 
+        # Evidence-tier key (issue #102) — define the trust language once, before
+        # the table uses it. Only when the extractor attached evidence.
+        has_evidence = any(
+            isinstance(self.data.channel_roi.get(ch), dict)
+            and self.data.channel_roi[ch].get("evidence")
+            for ch in channels
+        )
+        evidence_key = (
+            f'<h3>How to read the evidence column</h3>{evidence_legend_html(theme="classic")}'
+            if has_evidence
+            else ""
+        )
+
         content = f"""
             {legend}
             {forest_plot}
             <h3>Detailed ROI Estimates</h3>
             {roi_table}
+            {evidence_key}
         """
 
         return self._render_section_wrapper(content)
@@ -521,13 +536,21 @@ class ChannelROISection(Section):
                 conf_class = "uncertain"
                 status = "Uncertain"
 
+            # Evidence tier + identifiability chip (issue #102). Gated numbers
+            # (prior-dominated or not separately identified) are de-emphasized so
+            # a prior can't masquerade as a finding.
+            ev = meta.get("evidence")
+            chip = evidence_chip_html(ev, theme="classic")
+            value_cls = "mono muted" if (ev and ev.get("gated")) else "mono"
+
             rows.append(f"""
                 <tr>
                     <td>{html.escape(ch)}</td>
                     <td>{html.escape(str(metric_label))}</td>
-                    <td class="mono">{mean:.2f}</td>
-                    <td class="mono">[{lower:.2f}, {upper:.2f}]</td>
+                    <td class="{value_cls}">{mean:.2f}</td>
+                    <td class="{value_cls}">[{lower:.2f}, {upper:.2f}]</td>
                     <td class="{conf_class}">{status}</td>
+                    <td>{chip}</td>
                 </tr>
             """)
 
@@ -540,6 +563,7 @@ class ChannelROISection(Section):
                         <th>{value_header}</th>
                         <th>{ci_level}% CI</th>
                         <th>Confidence</th>
+                        <th>Evidence</th>
                     </tr>
                 </thead>
                 <tbody>{''.join(rows)}</tbody>
@@ -1077,6 +1101,261 @@ class LongTermSection(Section):
                     multiplier calibrated to that evidence — used as a stated
                     assumption, never a silent one.</li>
             </ul>
+class TriangulationSection(Section):
+    """Triangulation panel — MMM × experiment × platform (issue #104).
+
+    Puts each channel's effect from the MMM, from experiments, and from
+    platform-reported attribution side by side, with a reconciled recommendation
+    and plain-language notes on any disagreement. Convergent evidence across
+    independent methods is the most persuasive thing to show a skeptical CFO;
+    divergence, shown honestly, is where the real conversation happens.
+    Data-gated on ``bundle.triangulation``.
+    """
+
+    section_id: str = "triangulation"
+    default_title: str = "Triangulation — MMM × experiment × platform"
+
+    _AGREEMENT_META = {
+        "convergent": ("positive", "Convergent"),
+        "divergent": ("negative", "Divergent"),
+        "platform-inflated": ("uncertain", "Platform-inflated"),
+        "single-source": ("uncertain", "Single-source"),
+    }
+
+    def render(self) -> str:
+        if not self.is_enabled or not self.data.triangulation:
+            return ""
+        tri = self.data.triangulation
+        channels = list(tri.get("channels") or [])
+        if not channels:
+            return ""
+
+        summary = tri.get("summary") or {}
+        by_agree = summary.get("by_agreement") or {}
+        conv = by_agree.get("convergent", 0)
+        parts = [
+            f"""
+            <p>
+                A channel's return can be estimated three ways: by the
+                <strong>MMM</strong> (a model-identified incremental effect), by an
+                <strong>experiment</strong> (a directly measured incremental
+                effect — the causal gold standard), and by
+                <strong>platform-reported</strong> attribution (usually
+                last-touch, and usually inflated). This panel puts them side by
+                side. Where independent methods <em>converge</em>
+                ({conv} of {len(channels)} channel(s) here), the number is as
+                trustworthy as measurement gets; where they diverge, the note
+                explains why — and which figure to act on.
+            </p>
+            """,
+            charts.create_triangulation_chart(tri, self.config),
+            self._render_table(channels),
+            self._render_notes(channels),
+        ]
+        return self._render_section_wrapper("\n".join(p for p in parts if p))
+
+    def _cell(self, src: dict | None) -> str:
+        if not src or src.get("value") is None:
+            return '<td class="mono">—</td>'
+        val = f"{src['value']:.2f}×"
+        lo, hi = src.get("lower"), src.get("upper")
+        ci = (
+            f" <span class='mono' style='opacity:.7'>[{lo:.2f}, {hi:.2f}]</span>"
+            if lo is not None and hi is not None
+            else ""
+        )
+        flag = "" if src.get("incremental", True) else " ⚠"
+        return f'<td class="mono">{val}{ci}{flag}</td>'
+
+    def _render_table(self, channels: list[dict]) -> str:
+        rows = []
+        for c in channels:
+            by = {s["source"]: s for s in c.get("sources") or []}
+            cls, label = self._AGREEMENT_META.get(
+                c.get("agreement", ""), ("uncertain", c.get("agreement", "—"))
+            )
+            rec = c.get("reconciled") or {}
+            rec_val = (
+                f"{rec['value']:.2f}× "
+                f"<span class='mono' style='opacity:.7'>({html.escape(str(rec.get('basis') or '—'))})</span>"
+                if rec.get("value") is not None
+                else "—"
+            )
+            rows.append(f"""
+                <tr>
+                    <td>{html.escape(c['channel'])}</td>
+                    {self._cell(by.get('experiment'))}
+                    {self._cell(by.get('mmm'))}
+                    {self._cell(by.get('platform'))}
+                    <td class="{cls}">{label}</td>
+                    <td>{rec_val}</td>
+                </tr>
+                """)
+        return f"""
+            <h3>Per-channel reconciliation</h3>
+            <table class="data-table">
+                <thead><tr>
+                    <th>Channel</th><th>Experiment</th><th>MMM</th>
+                    <th>Platform</th><th>Agreement</th><th>Reconciled</th>
+                </tr></thead>
+                <tbody>{''.join(rows)}</tbody>
+            </table>
+            <p class="chart-caption">⚠ marks a non-incremental (last-touch)
+            figure — not comparable dollar-for-dollar with the incremental MMM /
+            experiment estimates. "Reconciled" anchors on the experiment when one
+            exists (a direct causal measurement), otherwise the MMM.</p>
+        """
+
+    def _render_notes(self, channels: list[dict]) -> str:
+        blocks = []
+        for c in channels:
+            notes = c.get("notes") or []
+            if not notes:
+                continue
+            items = "".join(f"<li>{html.escape(n)}</li>" for n in notes)
+            blocks.append(
+                f"<div class='callout'><h4>{html.escape(c['channel'])}</h4>"
+                f"<ul>{items}</ul></div>"
+            )
+        if not blocks:
+            return ""
+        return f"<h3>Why the sources differ</h3>{''.join(blocks)}"
+class SpecCurveSection(Section):
+    """Spec-curve / model-averaging robustness (issue #103).
+
+    Renders how each channel's ROI moves across a pre-registered set of
+    defensible specs, plus the LOO-stacking model-averaged (BMA) estimate — so
+    robustness across specs is itself a reported result and fragility can't hide
+    behind one hand-picked number. Data-gated on ``bundle.spec_curve``.
+    """
+
+    section_id: str = "spec-curve"
+    default_title: str = "Specification robustness"
+
+    def render(self) -> str:
+        if not self.is_enabled or not self.data.spec_curve:
+            return ""
+        sc = self.data.spec_curve
+        channels = list(sc.get("channels") or [])
+        specs = list(sc.get("specs") or [])
+        if not channels or not specs:
+            return ""
+
+        parts = [
+            f"""
+            <p>
+                A single MMM specification is one defensible choice among many
+                (adstock form, saturation form, control set, pooling). This panel
+                re-fits a <strong>pre-registered set of {len(specs)}
+                specifications</strong> and shows how each channel's ROI moves
+                across all of them. A tight cluster is a robust finding; a wide
+                spread — especially one that straddles break-even — is a warning a
+                single-spec report would have hidden. The
+                <strong>model-averaged (BMA)</strong> estimate blends the specs by
+                their LOO-stacking weight (out-of-sample predictive skill), so no
+                one spec is privileged.
+            </p>
+            """,
+            charts.create_spec_curve_plot(sc, self.config),
+            self._render_robustness_table(sc, channels),
+            self._render_weights_table(sc, specs),
+        ]
+        return self._render_section_wrapper("\n".join(p for p in parts if p))
+
+    def _render_robustness_table(self, sc: dict, channels: list[str]) -> str:
+        bma = sc.get("bma") or {}
+        robustness = sc.get("robustness") or {}
+        rows = []
+        for ch in channels:
+            rob = robustness.get(ch) or {}
+            b = bma.get(ch) or {}
+            primary = rob.get("primary")
+            primary_str = f"{primary:.2f}" if isinstance(primary, (int, float)) else "—"
+            bma_str = f"{b['mean']:.2f}" if b.get("mean") is not None else "—"
+            bma_ci = (
+                f"[{b['lower']:.2f}, {b['upper']:.2f}]"
+                if b.get("lower") is not None and b.get("upper") is not None
+                else "—"
+            )
+            rng = rob.get("range")
+            range_str = f"{rng:.2f}" if isinstance(rng, (int, float)) else "—"
+            span = (
+                f"{rob['min']:.2f} – {rob['max']:.2f}"
+                if rob.get("min") is not None and rob.get("max") is not None
+                else "—"
+            )
+            stable = rob.get("sign_stable")
+            verdict_cls, verdict = (
+                ("positive", "Robust") if stable else ("uncertain", "Spec-fragile")
+            )
+            rows.append(f"""
+                <tr>
+                    <td>{html.escape(ch)}</td>
+                    <td class="mono">{primary_str}</td>
+                    <td class="mono">{bma_str}</td>
+                    <td class="mono">{bma_ci}</td>
+                    <td class="mono">{span}</td>
+                    <td class="mono">{range_str}</td>
+                    <td class="{verdict_cls}">{verdict}</td>
+                </tr>
+                """)
+        return f"""
+            <h3>Per-channel robustness across specifications</h3>
+            <table class="data-table">
+                <thead><tr>
+                    <th>Channel</th><th>Primary ROI</th><th>BMA ROI</th>
+                    <th>BMA CI</th><th>Range across specs</th><th>Spread</th>
+                    <th>Verdict</th>
+                </tr></thead>
+                <tbody>{''.join(rows)}</tbody>
+            </table>
+            <p class="chart-caption">"Spec-fragile" means the sign of the ROI's
+            relation to break-even is not stable across the spec set — treat that
+            channel's individual number with caution and confirm with an
+            experiment.</p>
+        """
+
+    def _render_weights_table(self, sc: dict, specs: list[str]) -> str:
+        weights = sc.get("weights") or {}
+        per_spec = sc.get("per_spec") or {}
+        primary = sc.get("primary")
+        # Only show the LOO/weights table when stacking actually ran (some weight
+        # differs from a flat 1/N) or LOO is present.
+        any_loo = any((per_spec.get(s) or {}).get("loo") for s in specs)
+        rows = []
+        for s in specs:
+            entry = per_spec.get(s) or {}
+            w = weights.get(s, 0.0)
+            loo = entry.get("loo") or {}
+            elpd = loo.get("elpd_loo")
+            elpd_str = f"{elpd:.1f}" if isinstance(elpd, (int, float)) else "—"
+            err = entry.get("error")
+            name = html.escape(s) + (" ★" if s == primary else "")
+            status = "failed" if err else f"{w * 100:.0f}%"
+            rows.append(f"""
+                <tr>
+                    <td>{name}</td>
+                    <td class="mono">{status}</td>
+                    <td class="mono">{elpd_str}</td>
+                </tr>
+                """)
+        note = (
+            "LOO-stacking weight = each spec's contribution to the best "
+            "out-of-sample predictive mixture (Yao et al. 2018); ELPD is the "
+            "expected log pointwise predictive density (higher is better). ★ marks "
+            "the pre-registered primary spec."
+            if any_loo
+            else "Weights are equal (LOO stacking not computed); the model-average "
+            "is a plain mean across specs. ★ marks the pre-registered primary spec."
+        )
+        return f"""
+            <h3>Specification weights</h3>
+            <table class="data-table">
+                <thead><tr><th>Specification</th><th>Stacking weight</th>
+                    <th>ELPD (LOO)</th></tr></thead>
+                <tbody>{''.join(rows)}</tbody>
+            </table>
+            <p class="chart-caption">{note}</p>
         """
 
 
@@ -2018,15 +2297,29 @@ class EstimandsSection(Section):
             else:
                 conf_class, status = "uncertain", "Uncertain"
 
+            # Evidence tier + identifiability chip (issue #102), stamped by the
+            # extractor onto per-channel estimand entries.
+            ev = v.get("evidence")
+            chip = evidence_chip_html(ev, theme="classic")
+            val_cls = "mono muted" if (ev and ev.get("gated")) else "mono"
+
             rows.append(f"""
                 <tr>
                     <td>{html.escape(self._kind_label(name))}</td>
                     <td>{html.escape(target)}</td>
-                    <td class="mono">{val_str}</td>
-                    <td class="mono">{ci_str}</td>
+                    <td class="{val_cls}">{val_str}</td>
+                    <td class="{val_cls}">{ci_str}</td>
                     <td class="{conf_class}">{status}</td>
+                    <td>{chip}</td>
                 </tr>
             """)
+
+        has_evidence = any(v.get("evidence") for _, v in items)
+        evidence_key = (
+            f'<div class="evidence-key">{evidence_legend_html(theme="classic")}</div>'
+            if has_evidence
+            else ""
+        )
 
         return f"""
             <table class="data-table">
@@ -2036,11 +2329,13 @@ class EstimandsSection(Section):
                         <th>Target</th>
                         <th>Estimate</th>
                         <th>{ci_pct}% CI</th>
+                        <th>Confidence</th>
                         <th>Evidence</th>
                     </tr>
                 </thead>
                 <tbody>{''.join(rows)}</tbody>
             </table>
+            {evidence_key}
         """
 
 
@@ -2253,25 +2548,67 @@ class AllocationSection(Section):
         uplift = alloc.get("expected_uplift", 0.0)
         hdi = alloc.get("uplift_hdi", [0.0, 0.0])
         prob = alloc.get("prob_positive_uplift", 0.0)
+        regret = alloc.get("expected_regret")
+        n_extrap = int(alloc.get("n_extrapolated", 0) or 0)
+
+        # Lead with the DECISION CONFIDENCE, not the allocation (issue #105):
+        # planners defend decisions upward and need "how sure are you this beats
+        # the current plan?" first.
+        conf_cls = (
+            "positive" if prob >= 0.8 else ("uncertain" if prob >= 0.6 else "negative")
+        )
+        regret_txt = (
+            f" If the model's uncertainty resolves against it, you'd expect to leave "
+            f"about {self._format_currency(regret)} of KPI on the table versus a "
+            f"perfectly-informed plan (expected regret)."
+            if regret is not None
+            else ""
+        )
+        extrap_txt = (
+            f" <strong>{n_extrap} channel(s)</strong> are recommended beyond their "
+            f"observed spend range — those moves are extrapolated (flagged below)."
+            if n_extrap
+            else ""
+        )
+        lead = (
+            f'<div class="callout {conf_cls}">'
+            f"<strong>{prob:.0%} chance this plan beats the current allocation.</strong>"
+            f"{regret_txt}{extrap_txt}</div>"
+        )
+        regret_card = (
+            f"""<div class="metric-card">
+                    <div class="value">{self._format_currency(regret)}</div>
+                    <div class="label">Expected regret</div>
+                    <div class="ci">vs a perfectly-informed plan</div>
+                </div>"""
+            if regret is not None
+            else ""
+        )
         return f"""
+            {lead}
             <div class="metrics-grid">
                 <div class="metric-card">
-                    <div class="value">{self._format_currency(total)}</div>
-                    <div class="label">Budget allocated</div>
+                    <div class="value">{prob:.0%}</div>
+                    <div class="label">Chance it beats today</div>
                 </div>
                 <div class="metric-card">
                     <div class="value">{self._format_currency(uplift)}</div>
                     <div class="label">Expected KPI uplift</div>
                     <div class="ci">90% [{self._format_currency(hdi[0])}, {self._format_currency(hdi[1])}]</div>
                 </div>
+                {regret_card}
                 <div class="metric-card">
-                    <div class="value">{prob:.0%}</div>
-                    <div class="label">P(uplift &gt; 0)</div>
+                    <div class="value">{self._format_currency(total)}</div>
+                    <div class="label">Budget allocated</div>
                 </div>
             </div>
         """
 
     def _render_alloc_table(self, alloc: dict) -> str:
+        # Show the extrapolation column only when the optimizer supplied the flag.
+        has_range = any(
+            "within_observed_range" in r for r in alloc.get("allocation", [])
+        )
         rows = []
         for r in alloc["allocation"]:
             ch = html.escape(str(r.get("channel", "")))
@@ -2279,17 +2616,43 @@ class AllocationSection(Section):
             opt = float(r.get("optimal_spend", 0.0))
             chg = float(r.get("change_pct", 0.0))
             cls = "positive" if chg > 1 else ("negative" if chg < -1 else "uncertain")
+            # Recommended spend with its credible interval (issue #105).
+            opt_cell = self._format_currency(opt)
+            if r.get("optimal_spend_p5") is not None:
+                opt_cell += (
+                    f'<br><span class="ci">[{self._format_currency(float(r["optimal_spend_p5"]))}, '
+                    f'{self._format_currency(float(r["optimal_spend_p95"]))}]</span>'
+                )
+            range_cell = ""
+            if has_range:
+                within = r.get("within_observed_range", True)
+                if within:
+                    range_cell = '<td class="positive">In tested range</td>'
+                else:
+                    mo = r.get("max_obs_multiplier")
+                    tip = (
+                        f"Recommended {r.get('recommended_multiplier', 0):.2f}× current "
+                        f"spend, but the model has only observed up to "
+                        f"~{mo:.2f}× — beyond that the response curve is extrapolated."
+                        if mo is not None
+                        else "Beyond the observed spend range — extrapolated."
+                    )
+                    range_cell = (
+                        f'<td class="negative" title="{html.escape(tip)}">'
+                        f"⚠ Extrapolated</td>"
+                    )
             rows.append(
                 f"<tr><td>{ch}</td>"
                 f'<td class="mono">{self._format_currency(cur)}</td>'
-                f'<td class="mono">{self._format_currency(opt)}</td>'
-                f'<td class="{cls}">{chg:+.0f}%</td></tr>'
+                f'<td class="mono">{opt_cell}</td>'
+                f'<td class="{cls}">{chg:+.0f}%</td>{range_cell}</tr>'
             )
+        range_head = "<th>Range</th>" if has_range else ""
         return f"""
             <h3>Recommended allocation</h3>
             <table class="data-table">
                 <thead><tr><th>Channel</th><th>Current spend</th>
-                    <th>Recommended spend</th><th>Change</th></tr></thead>
+                    <th>Recommended spend</th><th>Change</th>{range_head}</tr></thead>
                 <tbody>{"".join(rows)}</tbody>
             </table>
         """
@@ -2354,6 +2717,8 @@ SECTION_REGISTRY: dict[str, type[Section]] = {
     "saturation": SaturationSection,
     "sensitivity": SensitivitySection,
     "long_term": LongTermSection,
+    "triangulation": TriangulationSection,
+    "spec_curve": SpecCurveSection,
     "causal_assumptions": CausalAssumptionsSection,
     "methodology": MethodologySection,
     "diagnostics": DiagnosticsSection,

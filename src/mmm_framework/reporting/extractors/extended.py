@@ -125,6 +125,9 @@ class ExtendedMMMExtractor(DataExtractor, EstimandPPCMixin):
             # Short-term vs long-term / brand split (issue #106).
             bundle = self._extract_long_term(bundle)
 
+            # Evidence tier + identifiability gate on every channel number (#102).
+            bundle = self._extract_channel_evidence(bundle)
+
         bundle.model_specification = self._get_model_specification()
 
         return bundle

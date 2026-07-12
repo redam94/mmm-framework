@@ -1116,6 +1116,50 @@ def _sensitivity_facts(
 # ─────────────────────────────────────────────────────────────────────────────
 # Headline numbers (Python-side, for insights + tests)
 # ─────────────────────────────────────────────────────────────────────────────
+def _evidence_facts(model: Any, channels: list[str]) -> dict[str, dict[str, Any]]:
+    """Per-channel evidence tier + identifiability flag (issue #102), computed on
+    the SAME three signals as the classic/augur reports so the trust language is
+    consistent across every deliverable. Best-effort — any failure yields ``{}``.
+    """
+    try:
+        from ..evidence import channel_evidence, collinearity_from_matrix
+
+        exp: set[str] = set()
+        for e in getattr(model, "experiments", None) or []:
+            ch = getattr(e, "channel", None)
+            if ch is not None:
+                exp.add(str(ch))
+
+        learning = None
+        fn = getattr(model, "compute_parameter_learning", None)
+        if callable(fn) and getattr(model, "_trace", None) is not None:
+            try:
+                learning = fn(prior_samples=400, random_seed=0)
+            except Exception:  # noqa: BLE001 — best-effort
+                learning = None
+
+        collinearity = None
+        X = getattr(model, "X_media_raw", None)
+        if X is None:
+            X = getattr(model, "X_media", None)
+        try:
+            Xm = np.asarray(X, dtype=float)
+            if Xm.ndim == 2 and Xm.shape[1] == len(channels) and Xm.shape[0] >= 3:
+                collinearity = collinearity_from_matrix(Xm, channels)
+        except (TypeError, ValueError):
+            collinearity = None
+
+        ev = channel_evidence(
+            channels,
+            experiment_channels=exp,
+            learning=learning,
+            collinearity=collinearity,
+        )
+        return {ch: e.to_dict() for ch, e in ev.items()}
+    except Exception:  # noqa: BLE001 — the report renders fine without evidence
+        return {}
+
+
 def _headline_facts(
     channels: list[str],
     actual_national: np.ndarray,
@@ -1124,6 +1168,7 @@ def _headline_facts(
     divisor_meta: dict[str, dict[str, Any]],
     fit: dict[str, Any],
     interval: float,
+    evidence: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     total_kpi = float(np.nansum(actual_national))
     media_draws = np.sum([contrib_dp[ch].sum(axis=1) for ch in channels], axis=0)
@@ -1162,6 +1207,9 @@ def _headline_facts(
                 "is_monetary": bool(meta.get("is_monetary", True)),
                 "label": meta.get("roi_label") or "ROI",
                 "reference": meta.get("reference", 1.0),
+                # Evidence tier + identifiability flag (issue #102), so the
+                # recompute-in-browser forest / deep-dive can chip every number.
+                "evidence": (evidence or {}).get(ch),
             }
         )
 
@@ -1204,6 +1252,8 @@ def interactive_report_facts(
     include_prior_sections: bool = True,
     include_counterfactual_spec: bool = True,
     random_seed: int = 42,
+    triangulation: dict[str, Any] | None = None,
+    platform_figures: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compute every fact the interactive MMM Results Report embeds.
 
@@ -1272,6 +1322,29 @@ def interactive_report_facts(
         for t in level_totals
     ]
     curve_stack = np.stack(level_totals, axis=-1)  # (D, C, L)
+
+    # Observed per-period spend range per channel (issue #105): the response
+    # curve is data-supported only up to the largest weekly spend the model
+    # actually saw. Beyond it, the curve is the saturation FORM extrapolating —
+    # a guess dressed as a finding — so the report shades that region and the
+    # reallocator flags any recommendation past it. Units match the curve x-axis
+    # (avg-weekly divisor), so the boundary drops straight onto the plot.
+    def _obs_range(arr: np.ndarray) -> tuple[float | None, float | None]:
+        a = np.asarray(arr, dtype=float)
+        a = a[np.isfinite(a)]
+        if a.size == 0:
+            return None, None
+        nz = a[a > 0]
+        lo = float(nz.min()) if nz.size else float(a.min())
+        return lo, float(a.max())
+
+    obs_min_weekly: dict[str, float | None] = {}
+    obs_max_weekly: dict[str, float | None] = {}
+    for ch in channels:
+        lo, hi = _obs_range(spend[ch])
+        obs_min_weekly[ch] = lo
+        obs_max_weekly[ch] = hi
+
     curves = {
         "multipliers": multipliers,
         "n_draws": int(curve_draws_n),
@@ -1280,6 +1353,8 @@ def interactive_report_facts(
         },
         "spend_total": {ch: float(np.nansum(spend[ch])) for ch in channels},
         "n_periods": n_periods,
+        "obs_min_weekly": obs_min_weekly,
+        "obs_max_weekly": obs_max_weekly,
     }
 
     # Carryover kernels from the posterior adstock parameters.
@@ -1335,8 +1410,16 @@ def interactive_report_facts(
         random_seed,
     )
 
+    evidence = _evidence_facts(model, channels)
     headline = _headline_facts(
-        channels, actual_national, contrib_dp, spend, divisor_meta, fit, interval
+        channels,
+        actual_national,
+        contrib_dp,
+        spend,
+        divisor_meta,
+        fit,
+        interval,
+        evidence,
     )
 
     yoy = _yoy_facts(actual_national, contrib_dp, periods, channels, interval)
@@ -1345,6 +1428,20 @@ def interactive_report_facts(
     latent = _latent_facts(model, trace, time_idx, n_periods, interval)
 
     assumptions = [r.to_dict() for r in model_assumptions(model)]
+
+    # Triangulation panel (issue #104): MMM × experiment × platform. Use a
+    # caller-provided payload, else auto-build from the model's in-graph
+    # experiment calibrations (+ any platform figures). Best-effort.
+    tri_facts = triangulation
+    if tri_facts is None:
+        try:
+            from ..triangulation import triangulation_from_model
+
+            tri_facts = triangulation_from_model(
+                model, platform=platform_figures
+            ).to_dict()
+        except Exception:  # noqa: BLE001 — report renders fine without it
+            tri_facts = None
 
     diagnostics: dict[str, Any] = {}
     if results is not None:
@@ -1404,6 +1501,8 @@ def interactive_report_facts(
         "sensitivity": sensitivity,
         "ppc_prior": ppc_prior,
         "headline": headline,
+        "triangulation": _jsafe(tri_facts) if tri_facts else None,
+        "evidence": _jsafe(evidence),
         "yoy": yoy,
         "mediation": mediation,
         "latent": latent,

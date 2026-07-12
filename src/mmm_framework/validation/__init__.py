@@ -118,6 +118,15 @@ from .backtest import (
     run_backtest,
 )
 from .sensitivity_unobserved import UnobservedConfoundingAnalysis
+from .spec_curve import (
+    SpecCurveResult,
+    SpecFit,
+    SpecSet,
+    SpecVariant,
+    apply_variant,
+    default_spec_variants,
+    run_spec_curve,
+)
 from .validator import ModelValidator
 from .calibration import (
     LooPitResult,
@@ -141,6 +150,14 @@ __all__ = [
     "PosteriorForecaster",
     "rolling_origins",
     "run_backtest",
+    # Spec-curve / model-averaging robustness
+    "SpecSet",
+    "SpecVariant",
+    "SpecFit",
+    "SpecCurveResult",
+    "apply_variant",
+    "default_spec_variants",
+    "run_spec_curve",
     # Validators
     "PPCValidator",
     "ResidualDiagnostics",
