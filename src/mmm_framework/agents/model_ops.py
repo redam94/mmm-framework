@@ -668,6 +668,112 @@ def spec_curve(
 spec_curve.allow_unfitted = True
 
 
+def cfo_summary(
+    mmm: Any,
+    results: Any = None,
+    *,
+    margin: float | None = None,
+    cut_levels: list | None = None,
+    kpi_name: str = "revenue",
+    currency: str = "$",
+    max_draws: int = 300,
+    hdi_prob: float = 0.90,
+) -> dict:
+    """CFO one-pager: the P&L rollup (base vs incremental marketing contribution)
+    + the spend-cut revenue/profit-at-risk sensitivity, both with uncertainty
+    (issue #108). ``margin`` (0–1) adds profit-at-risk; omit for revenue only.
+    Emits ``dashboard['cfo']`` (the report bundle) + a spend-cut table."""
+    try:
+        from ..reporting.helpers.cfo import DEFAULT_CUT_LEVELS, cfo_facts
+
+        levels = (
+            tuple(float(c) for c in cut_levels) if cut_levels else DEFAULT_CUT_LEVELS
+        )
+        facts = cfo_facts(
+            mmm,
+            margin=margin,
+            cut_levels=levels,
+            max_draws=int(max_draws),
+            hdi_prob=float(hdi_prob),
+        )
+
+        def _m(v):
+            if not isinstance(v, (int, float)) or not math.isfinite(v):
+                return "—"
+            return f"{currency}{v:,.0f}"
+
+        mc = facts["marketing_contribution"]
+        pct = facts.get("marketing_pct")
+        pct_s = f"{pct * 100:.0f}%" if isinstance(pct, (int, float)) else "—"
+        ci = int(facts["hdi_prob"] * 100)
+        content = (
+            "### CFO one-pager — marketing's P&L contribution & what's at risk\n\n"
+            f"Marketing drives **{_m(mc['mean'])}** of the **{_m(facts['kpi_total'])}** "
+            f"total {kpi_name} ({pct_s}); the remaining **{_m(facts['base_contribution'])}** "
+            f"is base demand that would occur with no marketing. "
+            f"{ci}% CI on marketing's contribution: [{_m(mc['lower'])}, {_m(mc['upper'])}].\n\n"
+            "**If marketing is cut:**\n\n"
+        )
+        head = f"| Cut | {kpi_name.title()} at risk | {ci}% CI |"
+        sep = "|---|---|---|"
+        if margin is not None:
+            head += " Profit at risk |"
+            sep += "---|"
+        content += head + "\n" + sep + "\n"
+        rows: list[dict] = []
+        for c in facts["spend_cuts"]:
+            line = (
+                f"| −{c['cut_pct'] * 100:.0f}% | {_m(c['revenue_at_risk'])} | "
+                f"[{_m(c['revenue_lower'])}, {_m(c['revenue_upper'])}] |"
+            )
+            row = {
+                "cut": f"-{c['cut_pct'] * 100:.0f}%",
+                "revenue_at_risk": c["revenue_at_risk"],
+                "revenue_lower": c["revenue_lower"],
+                "revenue_upper": c["revenue_upper"],
+                "pct_of_kpi": c.get("pct_of_kpi"),
+            }
+            if margin is not None:
+                line += f" {_m(c.get('profit_at_risk'))} |"
+                row["profit_at_risk"] = c.get("profit_at_risk")
+            content += line + "\n"
+            rows.append(row)
+        if margin is None:
+            content += (
+                "\n_Provide a gross margin to convert revenue-at-risk into "
+                "profit-at-risk._"
+            )
+
+        cols = [
+            {"key": "cut", "label": "Spend cut", "type": "string"},
+            {
+                "key": "revenue_at_risk",
+                "label": f"{kpi_name.title()} at risk",
+                "type": "number",
+            },
+            {"key": "revenue_lower", "label": "CI low", "type": "number"},
+            {"key": "revenue_upper", "label": "CI high", "type": "number"},
+            {"key": "pct_of_kpi", "label": "% of total", "type": "percent"},
+        ]
+        if margin is not None:
+            cols.append(
+                {"key": "profit_at_risk", "label": "Profit at risk", "type": "number"}
+            )
+        res = _ok(content, {"cfo": facts})
+        res["tables"] = [
+            records_to_table_json(
+                rows,
+                title="Spend-cut revenue at risk",
+                source="cfo_summary",
+                group="results",
+                columns=cols,
+            )
+        ]
+        return res
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Error building the CFO one-pager: {e}")
+
+
 def prior_predictive_check(
     mmm: Any,
     results: Any = None,
@@ -3414,6 +3520,7 @@ OPS = {
     "compute_estimands": compute_estimands,
     "triangulation": triangulation,
     "spec_curve": spec_curve,
+    "cfo_summary": cfo_summary,
     "garden_compat": garden_compat,
     "garden_tune_suggestions": garden_tune_suggestions,
     "component_decomposition": component_decomposition,

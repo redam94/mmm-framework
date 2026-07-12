@@ -5023,6 +5023,34 @@ def run_spec_curve(
 
 
 @tool
+def generate_cfo_onepager(
+    state: Annotated[dict, InjectedState],
+    margin: float = None,
+    kpi_name: str = "revenue",
+    currency: str = "$",
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Assemble a CFO one-pager from the fitted model — the P&L number a budget
+    owner can carry into a board room.
+
+    Reports (1) marketing's total **incremental** contribution vs the base
+    (non-marketing) outcome, with a credible interval — honest about how much
+    marketing actually moves — and (2) a **spend-cut sensitivity**: "cut marketing
+    10% / 25% / 50% → this much revenue at risk (with a CI)". Pass `margin` (a
+    gross margin 0–1) to also state **profit** at risk; `kpi_name`/`currency` label
+    the output. Requires a fitted model. The result is attached to the dashboard
+    so the client report / deck renders the one-pager.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "cfo_summary",
+        {"margin": margin, "kpi_name": kpi_name, "currency": currency},
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
 def plan_experiment(
     channel: str,
     state: Annotated[dict, InjectedState],
@@ -7258,6 +7286,7 @@ TOOLS = [
     list_experiment_log,
     record_platform_figure,
     run_spec_curve,
+    generate_cfo_onepager,
     get_run_history,
     # Continuous learning programs — model-free geo bandit (no MMM required)
     *LEARNING_TOOLS,
@@ -7369,6 +7398,7 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "triangulate_channel_effects",
         "record_platform_figure",
         "run_spec_curve",
+        "generate_cfo_onepager",
         # validation tools that need media channels / the MMM forward pass
         "run_channel_diagnostics",
         "run_refutation_suite",

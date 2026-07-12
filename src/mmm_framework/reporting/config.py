@@ -245,6 +245,9 @@ class ReportConfig:
     # Spec-curve / model-averaging robustness (issue #103). Data-gated: renders
     # only when a spec-curve payload is attached to the bundle.
     spec_curve: SectionConfig = field(default_factory=SectionConfig)
+    # CFO one-pager — P&L rollup + spend-cut revenue/profit-at-risk (issue #108).
+    # Data-gated: renders only when a cfo payload is attached to the bundle.
+    cfo: SectionConfig = field(default_factory=SectionConfig)
     causal_assumptions: SectionConfig = field(default_factory=SectionConfig)
     methodology: SectionConfig = field(default_factory=SectionConfig)
     diagnostics: SectionConfig = field(default_factory=SectionConfig)

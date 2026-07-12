@@ -124,6 +124,8 @@ class BayesianMMMExtractor(
             bundle = self._extract_posterior_predictive(bundle)
             # Short-term vs long-term / brand split (issue #106).
             bundle = self._extract_long_term(bundle)
+            # CFO one-pager: P&L rollup + spend-cut revenue-at-risk (issue #108).
+            bundle = self._extract_cfo(bundle)
 
             # Evidence tier + identifiability gate on every channel number
             # (issue #102) — runs after channel_roi + estimands are populated so

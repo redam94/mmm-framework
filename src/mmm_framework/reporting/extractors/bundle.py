@@ -216,6 +216,11 @@ class MMMDataBundle:
     # generator's ``spec_curve=`` param sets it), so it never appears without a
     # sweep having been run.
     spec_curve: dict[str, Any] | None = None
+    # CFO one-pager (issue #108). A ``reporting.helpers.cfo.cfo_facts`` payload:
+    # marketing's total incremental contribution vs the base (non-marketing)
+    # outcome with a credible interval, and the spend-cut revenue/profit-at-risk
+    # sensitivity. Computed best-effort by the extractor for MMM models.
+    cfo: dict[str, Any] | None = None
 
     # Causal assumptions / identification + unobserved-confounding robustness.
     # Keys (all optional): "identification_strategy" (str), "assumed_confounders"
