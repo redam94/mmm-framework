@@ -118,6 +118,8 @@ def group_estimands(runs: list[dict[str, Any]]) -> dict[str, Any]:
         kpi = r.get("kpi") or ""
         model_key = r.get("model_key") or run_id
         est_rows = r.get("estimands") or []
+        # Per-channel evidence tier map (issue #124); {} for runs without it.
+        ch_evidence = r.get("channel_evidence") or {}
         run_summaries.append(
             {
                 "run_id": run_id,
@@ -193,13 +195,14 @@ def group_estimands(runs: list[dict[str, Any]]) -> dict[str, Any]:
             mean = row.get("mean")
             lower = row.get("hdi_low")
             upper = row.get("hdi_high")
-            model["rows"][channel] = {
+            cell = {
                 "channel": channel,
                 "mean": mean,
                 "lower": lower,
                 "upper": upper,
                 "units": row.get("units") or grp["units"],
                 "status": row.get("status") or "ok",
+                # CI-vs-reference verdict (strong/below/uncertain) — NOT the tier.
                 "evidence": classify_evidence(
                     status=row.get("status"),
                     mean=mean,
@@ -210,6 +213,12 @@ def group_estimands(runs: list[dict[str, Any]]) -> dict[str, Any]:
                 "prob_positive": row.get("prob_positive"),
                 "prob_profitable": row.get("prob_profitable"),
             }
+            # Evidence tier + identifiability flag (issue #124) — same chip the
+            # report renders. Absent for runs fitted before evidence persistence.
+            tier = ch_evidence.get(channel)
+            if tier:
+                cell["tier"] = tier
+            model["rows"][channel] = cell
 
     # Materialize groups: order channels, collapse model dicts -> lists, count
     # models that actually carry a usable number.
@@ -274,6 +283,10 @@ def build_project_estimands(project_id: str | None) -> dict[str, Any]:
                     "kpi": kpi,
                     "created_at": art.get("created_at"),
                     "estimands": est,
+                    # Per-channel evidence tier + identifiability flag persisted at
+                    # fit time (issue #124); None for runs fitted before it / after
+                    # the evidence backfill. Grouped onto each cell below.
+                    "channel_evidence": p.get("channel_evidence"),
                 }
             )
     # Deterministic input order (newest first, run_id tiebreak) so the grouped

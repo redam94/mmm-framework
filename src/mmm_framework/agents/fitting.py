@@ -1659,6 +1659,22 @@ def build_and_fit(spec: dict, dataset_path: str):
         except Exception as est_err:  # noqa: BLE001
             model_run["estimands_error"] = str(est_err)
 
+    # 8e. Per-channel evidence tier + identifiability flag (issue #124): the SAME
+    # signals the report extractor folds — experiment coverage, prior→posterior
+    # contraction, and media collinearity — realized once at fit time (via the
+    # shared evidence_for_model gathering path) so the live Performance/Estimands
+    # dashboard carries the same chip the report does (one source of truth).
+    # Gated on the metrics_draws knob like the estimand snapshot; MMM-only (the
+    # tier axes assume the channel read surface).
+    if metrics_draws > 0 and model_run["model_kind"] == "mmm":
+        try:
+            from mmm_framework.reporting.evidence import evidence_for_model
+
+            _ev = evidence_for_model(mmm, list(mmm.channel_names))
+            model_run["channel_evidence"] = {ch: e.to_dict() for ch, e in _ev.items()}
+        except Exception as ev_err:  # noqa: BLE001
+            model_run["channel_evidence_error"] = str(ev_err)
+
     if model_saved:
         try:
             with open(_os.path.join(model_path, "run_metadata.json"), "w") as f:

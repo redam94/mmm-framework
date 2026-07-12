@@ -10,6 +10,10 @@ Two backfills over the same ``model_run`` artifacts:
   model, realize its declared/default estimands, and write the rows (+
   ``model_kind``) back onto the artifact payload so the Performance estimands
   view can show pre-existing models.
+* ``evidence`` — for every MMM artifact whose payload has no ``channel_evidence``:
+  load the model and compute the per-channel evidence tier + identifiability flag
+  so the live Performance/Estimands dashboard carries the same chip the report
+  does (issue #124).
 
 Skip-and-report anything unrecoverable (empty model dirs, moved datasets) — old
 runs saved on other machines often are.
@@ -17,7 +21,7 @@ runs saved on other machines often are.
 Usage:
     python -m mmm_framework.api.backfill [--project ID] [--dry-run]
                                          [--max-draws 200]
-                                         [--what {metrics,estimands,all}]
+                                         [--what {metrics,estimands,evidence,all}]
 """
 
 from __future__ import annotations
@@ -203,6 +207,45 @@ def backfill_estimands(
     return report
 
 
+def backfill_evidence(
+    project_id: str | None = None,
+    *,
+    dry_run: bool = False,
+) -> list[dict[str, str]]:
+    """Populate ``payload['channel_evidence']`` (per-channel evidence tier +
+    identifiability flag) on every MMM ``model_run`` artifact that lacks it, so
+    the live Performance/Estimands dashboard shows the same evidence chip the
+    report does for models fitted before this snapshot existed (issue #124).
+    Returns a per-run status report with status ∈
+    {done, exists, skipped, error, would-run}."""
+    report: list[dict[str, str]] = []
+    for cand in _candidate_runs(project_id):
+        p = cand["payload"]
+        run_id = p["run_id"]
+        if p.get("channel_evidence"):
+            report.append({"run_id": run_id, "status": "exists", "detail": ""})
+            continue
+        try:
+            if dry_run:
+                mp = p.get("model_path")
+                if not mp or not os.path.isdir(mp) or not os.listdir(mp):
+                    raise FileNotFoundError(f"model dir missing/empty: {mp}")
+                report.append({"run_id": run_id, "status": "would-run", "detail": ""})
+                continue
+            from mmm_framework.reporting.evidence import evidence_for_model
+
+            mmm = _load_saved_model(p)  # raises/skips extension + non-MMM saves
+            ev = evidence_for_model(mmm, list(mmm.channel_names))
+            p["channel_evidence"] = {ch: e.to_dict() for ch, e in ev.items()}
+            sessions_store.update_artifact_payload(cand["artifact_id"], p)
+            report.append({"run_id": run_id, "status": "done", "detail": ""})
+        except FileNotFoundError as exc:
+            report.append({"run_id": run_id, "status": "skipped", "detail": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            report.append({"run_id": run_id, "status": "error", "detail": str(exc)})
+    return report
+
+
 def _print_report(title: str, report: list[dict[str, str]]) -> None:
     print(f"\n== {title} ==")
     if not report:
@@ -224,7 +267,7 @@ def main() -> None:
     parser.add_argument("--max-draws", type=int, default=200)
     parser.add_argument(
         "--what",
-        choices=("metrics", "estimands", "all"),
+        choices=("metrics", "estimands", "evidence", "all"),
         default="all",
         help="which backfill(s) to run (default: all)",
     )
@@ -242,6 +285,11 @@ def main() -> None:
         _print_report(
             "estimands",
             backfill_estimands(args.project, dry_run=args.dry_run),
+        )
+    if args.what in ("evidence", "all"):
+        _print_report(
+            "channel_evidence",
+            backfill_evidence(args.project, dry_run=args.dry_run),
         )
 
 

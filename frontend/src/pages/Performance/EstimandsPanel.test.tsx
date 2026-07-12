@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type {
+  ChannelTier,
   EstimandCell,
   EstimandGroup,
   EstimandModel,
@@ -28,6 +29,28 @@ function cell(channel: string, mean: number | null, evidence: EstimandCell['evid
     evidence,
     prob_positive: 0.9,
     prob_profitable: 0.8,
+  };
+}
+
+function tier(
+  t: ChannelTier['tier'],
+  short_label: string,
+  identified = true,
+): ChannelTier {
+  return {
+    channel: 'TV',
+    tier: t,
+    label: short_label,
+    short_label,
+    gloss: '',
+    identified,
+    collinear_with: identified ? [] : ['Shopping'],
+    contraction: null,
+    learning_verdict: null,
+    vif: null,
+    experiment: t === 'experiment-validated',
+    gated: !identified || t === 'prior-dominated',
+    caveat: identified ? null : 'not separately identified',
   };
 }
 
@@ -139,6 +162,54 @@ describe('EstimandsPanel', () => {
     fireEvent.click(screen.getByText('Select all'));
     expect(screen.getByText('9.99')).toBeInTheDocument();
     expect(screen.getByText('Comparable · 3 models')).toBeInTheDocument();
+  });
+
+  it('renders the evidence-tier chip + legend (issue #124)', () => {
+    const tvCell = cell('TV', 2.1, 'strong');
+    tvCell.tier = tier('experiment-validated', 'Validated');
+    const tieredPayload: ProjectEstimands = {
+      runs: [runSummary('r1', 'revenue', 'm1', true)],
+      kpis: ['revenue'],
+      groups: [
+        {
+          ...roiGroup,
+          models: [model('r1', 2000, [tvCell])],
+          n_models: 1,
+          n_models_with_data: 1,
+        },
+      ],
+    };
+    useProjectEstimands.mockReturnValue({ data: tieredPayload, isLoading: false, isError: false });
+    render(<EstimandsPanel projectId="p" />);
+    // the per-cell chip shows the backend's short label
+    expect(screen.getByText('Validated')).toBeInTheDocument();
+    // the legend explains the three tiers once
+    expect(screen.getByText('Experiment-validated')).toBeInTheDocument();
+    expect(screen.getByText('Model-identified')).toBeInTheDocument();
+    expect(screen.getByText('Prior-dominated')).toBeInTheDocument();
+  });
+
+  it('flags a not-separately-identified channel on its tier chip', () => {
+    const tvCell = cell('TV', 1.1, 'uncertain');
+    tvCell.tier = tier('prior-dominated', 'Prior', false);
+    const tieredPayload: ProjectEstimands = {
+      runs: [runSummary('r1', 'revenue', 'm1', true)],
+      kpis: ['revenue'],
+      groups: [
+        {
+          ...roiGroup,
+          models: [model('r1', 2000, [tvCell])],
+          n_models: 1,
+          n_models_with_data: 1,
+        },
+      ],
+    };
+    useProjectEstimands.mockReturnValue({ data: tieredPayload, isLoading: false, isError: false });
+    render(<EstimandsPanel projectId="p" />);
+    // the chip carries the "not separately identified" caveat in its label
+    expect(
+      screen.getByLabelText(/not separately identified/i),
+    ).toBeInTheDocument();
   });
 
   it('resets an explicit selection when the project changes', () => {
