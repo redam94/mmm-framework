@@ -526,6 +526,7 @@ class EstimandPPCMixin:
         requests one (``config.long_term_multiplier``)."""
         try:
             from ..helpers.longterm import build_long_term_facts
+
             channels = list(bundle.channel_names or [])
             if not channels:
                 return bundle
@@ -612,45 +613,23 @@ class EstimandPPCMixin:
         leaves the bundle unannotated and the reports simply omit the chip.
         """
         try:
-            from ..evidence import channel_evidence, collinearity_from_matrix
+            from ..evidence import evidence_for_model
 
             channels = list(bundle.channel_names or [])
             if not channels:
                 return bundle
             model = self._estimand_model()
 
-            # experiment-validated: channels folded into this fit as calibration
-            exp_channels: set[str] = set()
-            for exp in getattr(model, "experiments", None) or []:
-                ch = getattr(exp, "channel", None)
-                if ch is not None:
-                    exp_channels.add(str(ch))
-
-            # prior-dominated: prior→posterior contraction per channel parameter
-            learning = None
-            fn = getattr(model, "compute_parameter_learning", None)
-            if callable(fn) and getattr(model, "_trace", None) is not None:
-                try:
-                    learning = fn(
-                        prior_samples=self._EVIDENCE_PRIOR_SAMPLES, random_seed=0
-                    )
-                except Exception:  # noqa: BLE001 — learning is best-effort
-                    logger.debug(
-                        "parameter-learning for evidence skipped", exc_info=True
-                    )
-                    learning = None
-
-            # identifiability: per-channel collinearity over the media design
-            collinearity = None
-            mat = self._channel_collinearity_matrix(bundle)
-            if mat is not None:
-                collinearity = collinearity_from_matrix(mat, channels)
-
-            evidence = channel_evidence(
+            # One gathering path shared with the fit-time dashboard snapshot
+            # (evidence_for_model) so the report and the live Performance page
+            # render the SAME tier (issue #124). The bundle's contribution-series
+            # collinearity fallback is passed through for models that don't expose
+            # their raw media design.
+            evidence = evidence_for_model(
+                model,
                 channels,
-                experiment_channels=exp_channels,
-                learning=learning,
-                collinearity=collinearity,
+                collinearity_matrix=self._channel_collinearity_matrix(bundle),
+                prior_samples=self._EVIDENCE_PRIOR_SAMPLES,
             )
             evd = {ch: e.to_dict() for ch, e in evidence.items()}
             bundle.channel_evidence = evd

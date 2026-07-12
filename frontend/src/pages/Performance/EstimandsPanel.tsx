@@ -6,6 +6,8 @@ import { COLORS } from '../../theme/colors';
 import { useProjectEstimands } from '../../api/hooks/useEstimands';
 import type {
   Evidence,
+  EvidenceTier,
+  ChannelTier,
   EstimandCell,
   EstimandGroup,
   EstimandModel,
@@ -24,6 +26,16 @@ const EVIDENCE_STYLE: Record<Evidence, { fg: string; bg: string; label: string }
   below: { fg: COLORS.rust700, bg: COLORS.rust100, label: 'Below ref' },
   uncertain: { fg: COLORS.steel700, bg: COLORS.steel100, label: 'Uncertain' },
   na: { fg: COLORS.ink400, bg: COLORS.cream200, label: 'N/A' },
+};
+
+// Evidence *tier* — where the number's credibility comes from. Colors mirror the
+// report/augur chip (t-scale=sage, t-hold=steel, t-reduce=rust) so the dashboard
+// and the report never disagree (issue #124). Distinct from EVIDENCE_STYLE above,
+// which is the CI-vs-reference verdict.
+const TIER_STYLE: Record<EvidenceTier, { fg: string; bg: string }> = {
+  'experiment-validated': { fg: COLORS.sage800, bg: COLORS.sage100 },
+  'model-identified': { fg: COLORS.steel700, bg: COLORS.steel100 },
+  'prior-dominated': { fg: COLORS.rust700, bg: COLORS.rust100 },
 };
 
 function prettyKind(kind: string): string {
@@ -69,6 +81,54 @@ function EvidenceDot({ evidence }: { evidence: Evidence }) {
   );
 }
 
+/** The evidence-tier chip — the same credibility label the report renders. A
+ *  channel that is not separately identified (collinear) gets a ⚠ marker. */
+function TierChip({ tier }: { tier: ChannelTier }) {
+  const s = TIER_STYLE[tier.tier] ?? { fg: COLORS.ink600, bg: COLORS.cream200 };
+  const notId = tier.identified === false;
+  const title =
+    [tier.label, notId ? 'not separately identified' : '', tier.caveat]
+      .filter(Boolean)
+      .join(' — ') || tier.label;
+  return (
+    <span
+      title={title}
+      aria-label={title}
+      className="inline-flex items-center gap-0.5 rounded px-1 py-px text-[10px] font-medium leading-none"
+      style={{ backgroundColor: s.bg, color: s.fg }}
+    >
+      {notId && <span aria-hidden="true">⚠</span>}
+      {tier.short_label}
+    </span>
+  );
+}
+
+/** Legend for the tier chips, shown once above the estimand groups. */
+function TierLegend() {
+  const items: { tier: EvidenceTier; label: string }[] = [
+    { tier: 'experiment-validated', label: 'Experiment-validated' },
+    { tier: 'model-identified', label: 'Model-identified' },
+    { tier: 'prior-dominated', label: 'Prior-dominated' },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-500">
+      <span className="font-semibold uppercase tracking-wider text-ink-400">Evidence</span>
+      {items.map((it) => (
+        <span key={it.tier} className="inline-flex items-center gap-1">
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-sm"
+            style={{ backgroundColor: TIER_STYLE[it.tier].fg }}
+          />
+          {it.label}
+        </span>
+      ))}
+      <span className="inline-flex items-center gap-1">
+        <span aria-hidden="true">⚠</span> not separately identified
+      </span>
+    </div>
+  );
+}
+
 function ValueCell({ cell, group }: { cell: EstimandCell | undefined; group: EstimandGroup }) {
   if (!cell || cell.status !== 'ok' || cell.mean == null) {
     return <span className="text-ink-300">—</span>;
@@ -94,7 +154,12 @@ function ValueCell({ cell, group }: { cell: EstimandCell | undefined; group: Est
         <EvidenceDot evidence={cell.evidence} />
         <span className="num font-medium text-ink-900">{fmtVal(group, cell.mean)}</span>
       </div>
-      {ci && <span className="num text-xs text-ink-400">{ci}</span>}
+      {(ci || cell.tier) && (
+        <div className="flex items-center gap-1">
+          {ci && <span className="num text-xs text-ink-400">{ci}</span>}
+          {cell.tier && <TierChip tier={cell.tier} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -264,6 +329,7 @@ export function EstimandsPanel({ projectId }: { projectId: string }) {
             KPIs aren&apos;t directly comparable and stay in separate sections.
           </p>
         </div>
+        <TierLegend />
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-ink-400">
             Models
