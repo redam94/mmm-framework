@@ -1506,6 +1506,66 @@ class AugurPacingSection(AugurSection):
         """
 
 
+class AugurCFOSection(AugurSection):
+    """CFO one-pager — marketing's P&L contribution + spend-cut risk (issue #108).
+
+    The augur client-deck rendering of the two numbers a budget owner carries into
+    a board room: marketing's incremental contribution vs the base outcome, and
+    what revenue/profit is at risk if spend is cut. Data-gated on ``bundle.cfo``."""
+
+    section_id = "cfo"
+    default_title = "The P&L view — what marketing contributes, what's at risk"
+    eyebrow = "For the CFO"
+
+    @property
+    def is_enabled(self) -> bool:
+        return super().is_enabled and bool(getattr(self.data, "cfo", None))
+
+    def render(self) -> str:
+        cfo = getattr(self.data, "cfo", None)
+        if not self.is_enabled or not cfo:
+            return ""
+        cuts = list(cfo.get("spend_cuts") or [])
+        if not cuts:
+            return ""
+        mc = cfo.get("marketing_contribution") or {}
+        ci = int(float(cfo.get("hdi_prob", 0.9)) * 100)
+        pct = cfo.get("marketing_pct")
+        pct_s = f"{pct * 100:.0f}%" if isinstance(pct, (int, float)) else "—"
+        has_margin = cfo.get("margin") is not None
+
+        lede = (
+            f"<p class='lede'>Marketing contributes <strong>{self._money(mc.get('mean'))}</strong> "
+            f"of the <strong>{self._money(cfo.get('kpi_total'))}</strong> total ({pct_s}); the rest "
+            f"is base demand. {ci}% range [{self._money(mc.get('lower'))}, "
+            f"{self._money(mc.get('upper'))}].</p>"
+        )
+        body = []
+        for c in cuts:
+            cut_lbl = f"−{float(c.get('cut_pct', 0.0)) * 100:.0f}%"
+            prof = (
+                f"<td class='mono'>{self._money(c.get('profit_at_risk'))}</td>"
+                if has_margin
+                else ""
+            )
+            body.append(
+                f"<tr><td>{cut_lbl}</td>"
+                f"<td class='mono'>{self._money(c.get('revenue_at_risk'))}</td>"
+                f"<td class='mono'>[{self._money(c.get('revenue_lower'))}, "
+                f"{self._money(c.get('revenue_upper'))}]</td>{prof}</tr>"
+            )
+        prof_head = "<th>Profit at risk</th>" if has_margin else ""
+        table = f"""
+            <h3 style="margin-top:1.2rem">If marketing spend is cut</h3>
+            <table class="data-table">
+              <thead><tr><th>Cut</th><th>Revenue at risk</th>
+                <th>{ci}% range</th>{prof_head}</tr></thead>
+              <tbody>{"".join(body)}</tbody>
+            </table>
+        """
+        return self._wrap(lede + table)
+
+
 class AugurTriangulationSection(AugurSection):
     """Triangulation — MMM × experiment × platform (issues #104 / #119).
 
@@ -1703,6 +1763,7 @@ AUGUR_SECTIONS: list[tuple[str, type[AugurSection], str]] = [
     ("ppc-fit", AugurModelFitSection, "ppc_timeseries"),
     ("ppc-checks", AugurPPCSection, "posterior_predictive"),
     ("evidence", AugurEvidenceSection, "evidence_guide"),
+    ("cfo", AugurCFOSection, "cfo"),
     ("triangulation", AugurTriangulationSection, "triangulation"),
     ("tests", AugurTestsSection, "recommended_tests"),
     ("next", AugurNextStepsSection, "next_steps"),
@@ -1726,6 +1787,7 @@ __all__ = [
     "AugurModelFitSection",
     "AugurPPCSection",
     "AugurEvidenceSection",
+    "AugurCFOSection",
     "AugurTriangulationSection",
     "AugurTestsSection",
     "AugurNextStepsSection",

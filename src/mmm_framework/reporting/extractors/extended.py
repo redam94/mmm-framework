@@ -124,6 +124,9 @@ class ExtendedMMMExtractor(DataExtractor, EstimandPPCMixin):
             bundle = self._extract_posterior_predictive(bundle)
             # Short-term vs long-term / brand split (issue #106).
             bundle = self._extract_long_term(bundle)
+            # CFO one-pager (issue #108) — no-op unless the model exposes the
+            # channel response surface (sample_channel_contributions + X/y).
+            bundle = self._extract_cfo(bundle)
 
             # Evidence tier + identifiability gate on every channel number (#102).
             bundle = self._extract_channel_evidence(bundle)

@@ -18,6 +18,7 @@ def test_ops_registry_complete():
         "compute_estimands",
         "triangulation",
         "spec_curve",
+        "cfo_summary",
         "garden_compat",
         "garden_tune_suggestions",
         "component_decomposition",

@@ -33,6 +33,7 @@ from .sections import (
     LongTermSection,
     TriangulationSection,
     SpecCurveSection,
+    CFOSection,
     CausalAssumptionsSection,
     MethodologySection,
     DiagnosticsSection,
@@ -99,6 +100,7 @@ class MMMReportGenerator:
         pacing: dict | None = None,
         triangulation: dict | None = None,
         spec_curve: dict | None = None,
+        cfo: dict | None = None,
     ):
         self.config = config or ReportConfig()
         self._llm = llm
@@ -129,6 +131,10 @@ class MMMReportGenerator:
         # appears when a sweep was actually run.
         if spec_curve is not None:
             self.data.spec_curve = spec_curve
+        # CFO one-pager (issue #108). Data-gated: the CFOSection renders only when
+        # a cfo payload is attached (the extractor fills it best-effort for MMM).
+        if cfo is not None:
+            self.data.cfo = cfo
 
         # Budget-allocation plan (a default reallocation, or a saved Planner plan).
         # When attached, expose it on the bundle and turn the allocation section ON
@@ -231,6 +237,7 @@ class MMMReportGenerator:
             ("long_term", LongTermSection, _mmm(self.config.long_term)),
             ("triangulation", TriangulationSection, _mmm(self.config.triangulation)),
             ("spec_curve", SpecCurveSection, _mmm(self.config.spec_curve)),
+            ("cfo", CFOSection, _mmm(self.config.cfo)),
             (
                 "causal_assumptions",
                 CausalAssumptionsSection,

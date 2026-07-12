@@ -1553,6 +1553,95 @@ class MethodologySection(Section):
         return self._render_section_wrapper("\n".join(content_parts))
 
 
+class CFOSection(Section):
+    """CFO one-pager — marketing's P&L contribution + spend-cut risk (issue #108).
+
+    Rolls the model up into the two numbers a budget owner carries into a board
+    room: marketing's total *incremental* contribution vs the base (non-marketing)
+    outcome, with a credible interval, and a spend-cut sensitivity ("cut marketing
+    X% → this much revenue/profit at risk"). Data-gated on ``bundle.cfo``.
+    """
+
+    section_id: str = "cfo"
+    default_title: str = "CFO one-pager — contribution & revenue at risk"
+
+    def render(self) -> str:
+        if not self.is_enabled or not self.data.cfo:
+            return ""
+        cfo = self.data.cfo
+        cuts = list(cfo.get("spend_cuts") or [])
+        if not cuts:
+            return ""
+        mc = cfo.get("marketing_contribution") or {}
+        ci = int(float(cfo.get("hdi_prob", 0.9)) * 100)
+        pct = cfo.get("marketing_pct")
+        pct_s = f"{pct * 100:.0f}%" if isinstance(pct, (int, float)) else "—"
+        has_margin = cfo.get("margin") is not None
+
+        rollup = f"""
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="value">{self._format_currency(float(mc.get('mean', 0.0)))}</div>
+                    <div class="label">Incremental marketing contribution</div>
+                    <div class="ci">{ci}% CI [{self._format_currency(float(mc.get('lower', 0.0)))},
+                        {self._format_currency(float(mc.get('upper', 0.0)))}]</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">{pct_s}</div>
+                    <div class="label">of total outcome</div>
+                    <div class="ci">the rest is base demand</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">{self._format_currency(float(cfo.get('base_contribution', 0.0)))}</div>
+                    <div class="label">Base (non-marketing) outcome</div>
+                </div>
+            </div>
+        """
+
+        rows = []
+        for c in cuts:
+            cut_lbl = f"−{float(c.get('cut_pct', 0.0)) * 100:.0f}%"
+            rev = self._format_currency(float(c.get("revenue_at_risk", 0.0)))
+            band = (
+                f"[{self._format_currency(float(c.get('revenue_lower', 0.0)))}, "
+                f"{self._format_currency(float(c.get('revenue_upper', 0.0)))}]"
+            )
+            prof_cell = ""
+            if has_margin:
+                prof_cell = (
+                    f'<td class="mono">'
+                    f"{self._format_currency(float(c.get('profit_at_risk', 0.0)))}</td>"
+                )
+            rows.append(
+                f'<tr><td class="negative">{cut_lbl}</td>'
+                f'<td class="mono">{rev}</td>'
+                f'<td class="mono">{band}</td>{prof_cell}</tr>'
+            )
+        prof_head = "<th>Profit at risk</th>" if has_margin else ""
+        margin_note = (
+            ""
+            if has_margin
+            else "<p class='ci'>Provide a gross margin to convert revenue at risk "
+            "into profit at risk.</p>"
+        )
+        table = f"""
+            <h3>If marketing spend is cut</h3>
+            <table class="data-table">
+                <thead><tr><th>Cut</th><th>Revenue at risk</th>
+                    <th>{ci}% CI</th>{prof_head}</tr></thead>
+                <tbody>{"".join(rows)}</tbody>
+            </table>
+            {margin_note}
+        """
+
+        intro = (
+            "<p>What marketing actually contributes to the P&amp;L, and what is at "
+            "risk if it is cut — with the model's uncertainty carried through, so "
+            "the number survives a CFO's scrutiny.</p>"
+        )
+        return self._render_section_wrapper(intro + rollup + table)
+
+
 class CausalAssumptionsSection(Section):
     """Causal assumptions, identification strategy and sensitivity to unobserved
     confounding.
@@ -2864,6 +2953,7 @@ SECTION_REGISTRY: dict[str, type[Section]] = {
     "long_term": LongTermSection,
     "triangulation": TriangulationSection,
     "spec_curve": SpecCurveSection,
+    "cfo": CFOSection,
     "causal_assumptions": CausalAssumptionsSection,
     "methodology": MethodologySection,
     "diagnostics": DiagnosticsSection,

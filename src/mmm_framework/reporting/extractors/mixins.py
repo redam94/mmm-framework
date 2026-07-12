@@ -651,6 +651,32 @@ class EstimandPPCMixin:
             logger.debug("channel evidence extraction skipped", exc_info=True)
         return bundle
 
+    # -- CFO one-pager (P&L rollup + spend-cut risk) --------------------------
+
+    #: Posterior draws for the CFO facts (thinned — a board number, not a chart).
+    _CFO_MAX_DRAWS = 200
+
+    def _extract_cfo(self, bundle: "MMMDataBundle") -> "MMMDataBundle":
+        """Best-effort CFO one-pager facts (issue #108): marketing's incremental
+        contribution + spend-cut revenue-at-risk with uncertainty. Revenue-scale —
+        a margin (for profit-at-risk) is applied on the agent-tool path when one is
+        configured. MMM-only (needs the channel response surface)."""
+        try:
+            model = self._estimand_model()
+            if model is None or not hasattr(model, "sample_channel_contributions"):
+                return bundle
+            if (
+                getattr(model, "X_media_raw", None) is None
+                or getattr(model, "y_raw", None) is None
+            ):
+                return bundle
+            from ..helpers.cfo import cfo_facts
+
+            bundle.cfo = cfo_facts(model, max_draws=self._CFO_MAX_DRAWS)
+        except Exception:  # noqa: BLE001 — reporting must never hard-fail
+            logger.debug("cfo extraction skipped", exc_info=True)
+        return bundle
+
     # -- posterior-predictive goodness-of-fit ---------------------------------
 
     def _extract_posterior_predictive(self, bundle: "MMMDataBundle") -> "MMMDataBundle":
