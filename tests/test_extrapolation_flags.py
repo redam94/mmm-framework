@@ -198,3 +198,73 @@ class TestAugurAllocationRender:
         assert "Chance it beats today" in html
         assert "Expected regret" in html
         assert "extrapolated" in html
+
+
+def _geo_plan_payload():
+    """A per-geo allocation where North TV scales past that geo's observed range
+    (flagged) and North Search stays within it (issue #121)."""
+    plan = _plan_payload(within_a=False)
+    plan["by_geo"] = True
+    plan["geos"] = ["North", "South"]
+    plan["geo_allocation"] = [
+        {
+            "geo": "North",
+            "channel": "TV",
+            "current_spend": 100,
+            "optimal_spend": 175,
+            "change_pct": 75.0,
+            "within_observed_range": False,
+            "recommended_multiplier": 1.75,
+            "max_obs_multiplier": 1.0,
+        },
+        {
+            "geo": "North",
+            "channel": "Search",
+            "current_spend": 100,
+            "optimal_spend": 25,
+            "change_pct": -75.0,
+            "within_observed_range": True,
+            "recommended_multiplier": 0.25,
+            "max_obs_multiplier": 1.0,
+        },
+    ]
+    return plan
+
+
+class TestGeoAllocationRender:
+    """The geo allocation table carries the same Range flag as the national one
+    (issue #121)."""
+
+    def _html(self, plan, shell="classic"):
+        from mmm_framework.reporting import MMMReportGenerator, ReportConfig
+        from mmm_framework.reporting.extractors.bundle import MMMDataBundle
+
+        cfg = dataclasses.replace(ReportConfig(), shell=shell)
+        return MMMReportGenerator(
+            data=MMMDataBundle(channel_names=["TV", "Search"]),
+            config=cfg,
+            allocation=plan,
+        ).render()
+
+    def test_classic_geo_table_flags_extrapolation(self):
+        html = self._html(_geo_plan_payload())
+        assert "Allocation by geography" in html
+        assert "Extrapolated" in html  # North TV beyond its geo range
+        assert "In tested range" in html  # North Search
+        assert "<th>Range</th>" in html
+
+    def test_augur_geo_table_flags_extrapolation(self):
+        html = self._html(_geo_plan_payload(), shell="augur")
+        assert "By geography" in html
+        assert "extrapolated" in html
+
+    def test_geo_table_no_range_column_when_flags_absent(self):
+        # A plan without the flag (pre-#121 / older run) renders no Range column
+        # on the geo OR national table and does not crash.
+        plan = _geo_plan_payload()
+        for r in plan["geo_allocation"] + plan["allocation"]:
+            r.pop("within_observed_range", None)
+            r.pop("max_obs_multiplier", None)
+        html = self._html(plan)
+        assert "Allocation by geography" in html
+        assert "<th>Range</th>" not in html

@@ -833,6 +833,9 @@ class AugurAllocationSection(AugurSection):
         rows = alloc.get("geo_allocation") or []
         if not rows:
             return ""
+        # Per-geo extrapolation flag (issue #121): flag a geo×channel arm scaled
+        # past that geo's own observed spend range, like the national table.
+        has_range = any("within_observed_range" in r for r in rows)
         body = []
         for r in rows:
             geo = self._ch(r.get("geo", ""))
@@ -840,17 +843,28 @@ class AugurAllocationSection(AugurSection):
             cur = float(r.get("current_spend", 0.0) or 0.0)
             opt = float(r.get("optimal_spend", 0.0) or 0.0)
             chg = float(r.get("change_pct", 0.0) or 0.0)
+            range_cell = ""
+            if has_range:
+                if r.get("within_observed_range", True):
+                    range_cell = (
+                        '<td><span class="tier-chip t-scale">in range</span></td>'
+                    )
+                else:
+                    range_cell = (
+                        '<td><span class="tier-chip t-test">⚠ extrapolated</span></td>'
+                    )
             body.append(
                 f"<tr><td>{geo}</td><td>{name}</td>"
                 f'<td class="mono">{self._money(cur)}</td>'
                 f'<td class="mono">{self._money(opt)}</td>'
-                f"<td>{self._change_chip(chg)}</td></tr>"
+                f"<td>{self._change_chip(chg)}</td>{range_cell}</tr>"
             )
+        range_head = "<th>Range</th>" if has_range else ""
         return f"""
             <h3 style="margin-top:1.4rem">By geography</h3>
             <table class="data-table">
               <thead><tr><th>Geography</th><th>Channel</th><th>Current</th>
-                <th>Recommended</th><th>Change</th></tr></thead>
+                <th>Recommended</th><th>Change</th>{range_head}</tr></thead>
               <tbody>{''.join(body)}</tbody>
             </table>
         """
