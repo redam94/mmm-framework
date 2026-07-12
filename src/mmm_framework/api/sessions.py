@@ -454,6 +454,28 @@ def init_db() -> None:
         ):
             c.execute(_ddl)
 
+        # Actual in-flight delivery (issue #123): one row per
+        # (project, channel, period) so a re-upload of a period overwrites it.
+        # The planned side is auto-sourced from the saved budget plan; pacing
+        # compares this stored actual against it without passing spend inline.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS delivery (
+                id          TEXT PRIMARY KEY,
+                project_id  TEXT NOT NULL,
+                channel     TEXT NOT NULL,
+                period      TEXT NOT NULL DEFAULT '',
+                spend       REAL NOT NULL,
+                source      TEXT,
+                created_at  REAL NOT NULL,
+                updated_at  REAL NOT NULL,
+                UNIQUE(project_id, channel, period)
+            )
+            """)
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_delivery_project"
+            " ON delivery(project_id, updated_at)"
+        )
+
         # Continuous-learning programs (model-free geo response-surface bandit).
         # A program is a statused, project-scoped, longitudinal entity; heavy
         # state (posterior draws + the accumulated panel) lives on disk at
@@ -2087,6 +2109,115 @@ def delete_budget_plan(plan_id: str) -> bool:
     with _conn() as c:
         cur = c.execute("DELETE FROM budget_plans WHERE id = ?", (plan_id,))
         return cur.rowcount > 0
+
+
+def latest_budget_plan_for_project(project_id: str) -> dict[str, Any] | None:
+    """The most recently updated saved budget plan for a project (project-scoped,
+    org-agnostic) — the pacing loop auto-sources its planned series from this
+    (issue #123). ``None`` when the project has no saved plan."""
+    with _conn() as c:
+        r = c.execute(
+            "SELECT * FROM budget_plans WHERE project_id = ?"
+            " ORDER BY updated_at DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+    return _budget_plan_row_to_dict(r) if r else None
+
+
+# ── In-flight delivery registry (actual spend, issue #123) ───────────────────
+
+
+def _delivery_row_to_dict(r: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": r["id"],
+        "project_id": r["project_id"],
+        "channel": r["channel"],
+        "period": r["period"],
+        "spend": r["spend"],
+        "source": r["source"],
+        "created_at": r["created_at"],
+        "updated_at": r["updated_at"],
+    }
+
+
+def upsert_delivery(
+    project_id: str,
+    records: list[dict[str, Any]],
+    *,
+    source: str | None = None,
+) -> list[dict[str, Any]]:
+    """Upsert actual-delivery rows for a project (issue #123).
+
+    Each record is ``{channel, spend, period?}``; a row is keyed by
+    ``(project_id, channel, period)`` so re-uploading a period overwrites it
+    (the elapsed window can be re-stated as more actuals land). Records with a
+    non-numeric or missing spend/channel are skipped. Returns all of the
+    project's delivery rows after the write.
+    """
+    now = _now()
+    with _conn() as c:
+        for rec in records or []:
+            ch = rec.get("channel")
+            if ch is None:
+                continue
+            try:
+                spend = float(rec.get("spend"))
+            except (TypeError, ValueError):
+                continue
+            period = str(rec.get("period", "") or "")
+            c.execute(
+                """
+                INSERT INTO delivery
+                    (id, project_id, channel, period, spend, source,
+                     created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(project_id, channel, period) DO UPDATE SET
+                    spend = excluded.spend,
+                    source = excluded.source,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    uuid.uuid4().hex,
+                    project_id,
+                    str(ch),
+                    period,
+                    spend,
+                    source,
+                    now,
+                    now,
+                ),
+            )
+    return list_delivery(project_id)
+
+
+def list_delivery(project_id: str) -> list[dict[str, Any]]:
+    """A project's actual-delivery rows, oldest-first within a channel so a
+    period series reads in order (period is a free-form label — callers align by
+    it)."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM delivery WHERE project_id = ? ORDER BY channel, period",
+            (project_id,),
+        ).fetchall()
+    return [_delivery_row_to_dict(r) for r in rows]
+
+
+def delete_delivery(
+    project_id: str, *, channel: str | None = None, period: str | None = None
+) -> int:
+    """Delete delivery rows for a project (optionally one channel / period).
+    Returns the number of rows removed."""
+    q = "DELETE FROM delivery WHERE project_id = ?"
+    params: list[Any] = [project_id]
+    if channel is not None:
+        q += " AND channel = ?"
+        params.append(channel)
+    if period is not None:
+        q += " AND period = ?"
+        params.append(period)
+    with _conn() as c:
+        cur = c.execute(q, params)
+        return cur.rowcount
 
 
 # ── Model Garden registry ────────────────────────────────────────────────────
