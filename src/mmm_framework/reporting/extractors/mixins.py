@@ -547,6 +547,8 @@ class EstimandPPCMixin:
                 bundle.long_term = facts
         except Exception:  # noqa: BLE001 — reporting must never hard-fail
             logger.debug("long-term extraction skipped", exc_info=True)
+        return bundle
+
     # -- evidence tier + identifiability gate (issue #102) --------------------
 
     #: Prior draws used for the report-time prior→posterior contraction check
@@ -611,6 +613,11 @@ class EstimandPPCMixin:
         """
         try:
             from ..evidence import channel_evidence, collinearity_from_matrix
+
+            channels = list(bundle.channel_names or [])
+            if not channels:
+                return bundle
+            model = self._estimand_model()
 
             # experiment-validated: channels folded into this fit as calibration
             exp_channels: set[str] = set()

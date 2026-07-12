@@ -1101,6 +1101,9 @@ class LongTermSection(Section):
                     multiplier calibrated to that evidence — used as a stated
                     assumption, never a silent one.</li>
             </ul>
+        """
+
+
 class TriangulationSection(Section):
     """Triangulation panel — MMM × experiment × platform (issue #104).
 
