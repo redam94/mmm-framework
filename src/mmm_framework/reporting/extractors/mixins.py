@@ -526,6 +526,27 @@ class EstimandPPCMixin:
         requests one (``config.long_term_multiplier``)."""
         try:
             from ..helpers.longterm import build_long_term_facts
+            channels = list(bundle.channel_names or [])
+            if not channels:
+                return bundle
+            model = self._estimand_model()
+            has_funnel = bool(
+                getattr(model, "mediator_names", None)
+                or getattr(model, "__garden_model_kind__", "") == "structural"
+            )
+            # Caveat-only here (no multiplier); the LongTermSection applies the
+            # optional long-term-multiplier scenario from the report config.
+            facts = build_long_term_facts(
+                channels,
+                bundle.adstock_curves,
+                contribution=bundle.component_totals,
+                multiplier=None,
+                has_structural_funnel=has_funnel,
+            )
+            if facts is not None:
+                bundle.long_term = facts
+        except Exception:  # noqa: BLE001 — reporting must never hard-fail
+            logger.debug("long-term extraction skipped", exc_info=True)
     # -- evidence tier + identifiability gate (issue #102) --------------------
 
     #: Prior draws used for the report-time prior→posterior contraction check
@@ -590,28 +611,6 @@ class EstimandPPCMixin:
         """
         try:
             from ..evidence import channel_evidence, collinearity_from_matrix
-
-            channels = list(bundle.channel_names or [])
-            if not channels:
-                return bundle
-            model = self._estimand_model()
-            has_funnel = bool(
-                getattr(model, "mediator_names", None)
-                or getattr(model, "__garden_model_kind__", "") == "structural"
-            )
-            # Caveat-only here (no multiplier); the LongTermSection applies the
-            # optional long-term-multiplier scenario from the report config.
-            facts = build_long_term_facts(
-                channels,
-                bundle.adstock_curves,
-                contribution=bundle.component_totals,
-                multiplier=None,
-                has_structural_funnel=has_funnel,
-            )
-            if facts is not None:
-                bundle.long_term = facts
-        except Exception:  # noqa: BLE001 — reporting must never hard-fail
-            logger.debug("long-term extraction skipped", exc_info=True)
 
             # experiment-validated: channels folded into this fit as calibration
             exp_channels: set[str] = set()
