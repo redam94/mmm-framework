@@ -29,6 +29,7 @@ from .sections import (
     DecompositionSection,
     SaturationSection,
     SensitivitySection,
+    SpecCurveSection,
     CausalAssumptionsSection,
     MethodologySection,
     DiagnosticsSection,
@@ -91,6 +92,7 @@ class MMMReportGenerator:
         sensitivity: dict | None = None,
         llm: Any | None = None,
         allocation: dict | None = None,
+        spec_curve: dict | None = None,
     ):
         self.config = config or ReportConfig()
         self._llm = llm
@@ -107,6 +109,12 @@ class MMMReportGenerator:
         # Add sensitivity results if provided
         if sensitivity is not None:
             self.data.sensitivity_results = sensitivity
+
+        # Spec-curve / model-averaging robustness (issue #103). Attach the
+        # SpecCurveResult payload; the SpecCurveSection is data-gated so it only
+        # appears when a sweep was actually run.
+        if spec_curve is not None:
+            self.data.spec_curve = spec_curve
 
         # Budget-allocation plan (a default reallocation, or a saved Planner plan).
         # When attached, expose it on the bundle and turn the allocation section ON
@@ -205,6 +213,7 @@ class MMMReportGenerator:
             ),
             ("saturation", SaturationSection, _mmm(self.config.saturation)),
             ("sensitivity", SensitivitySection, _mmm(self.config.sensitivity)),
+            ("spec_curve", SpecCurveSection, _mmm(self.config.spec_curve)),
             (
                 "causal_assumptions",
                 CausalAssumptionsSection,

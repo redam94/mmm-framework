@@ -176,6 +176,15 @@ class MMMDataBundle:
     # Sensitivity analysis
     sensitivity_results: dict[str, Any] | None = None
 
+    # Spec-curve / model-averaging robustness (issue #103). A
+    # ``SpecCurveResult.to_dict()`` payload: how each channel's ROI moves across a
+    # pre-registered set of defensible specifications, the LOO-stacking weights,
+    # the model-averaged (BMA) estimate, and a per-channel robustness summary.
+    # Data-gated: the SpecCurveSection renders only when this is attached (the
+    # generator's ``spec_curve=`` param sets it), so it never appears without a
+    # sweep having been run.
+    spec_curve: dict[str, Any] | None = None
+
     # Causal assumptions / identification + unobserved-confounding robustness.
     # Keys (all optional): "identification_strategy" (str), "assumed_confounders"
     # (list[str]), "robustness" (UnobservedConfoundingSensitivity.to_dict()).
