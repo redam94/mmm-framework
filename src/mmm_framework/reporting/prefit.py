@@ -87,6 +87,7 @@ def prefit_facts(
     *,
     sbc: Any = None,
     revisions: list[dict[str, Any]] | None = None,
+    signoffs: list[dict[str, Any]] | None = None,
     n_prior_samples: int = 500,
     random_seed: int = 42,
     max_density_params: int = 12,
@@ -144,6 +145,16 @@ def prefit_facts(
             if len(densities) >= max_density_params:
                 break
 
+    # Endogeneity-of-spend screen (issue #110) — a pre-fit check that spend isn't
+    # chasing demand (the back-door that breaks the no-confounders assumption).
+    try:
+        from ..diagnostics.endogeneity import endogeneity_diagnostic
+
+        endogeneity = endogeneity_diagnostic(model)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"prefit: endogeneity screen unavailable: {e}")
+        endogeneity = None
+
     sbc_dash = None
     if sbc is not None:
         sbc_dash = sbc.to_dashboard() if hasattr(sbc, "to_dashboard") else dict(sbc)
@@ -186,6 +197,8 @@ def prefit_facts(
         "densities": densities,
         "sbc": sbc_dash,
         "revisions": list(revisions or []),
+        "endogeneity": endogeneity,
+        "signoffs": list(signoffs or []),
     }
 
 
@@ -650,6 +663,7 @@ class PrefitReadoutGenerator:
         config: ReportConfig | None = None,
         sbc: Any = None,
         revisions: list[dict[str, Any]] | None = None,
+        signoffs: list[dict[str, Any]] | None = None,
         llm: Any | None = None,
         facts: dict[str, Any] | None = None,
         n_prior_samples: int = 500,
@@ -677,11 +691,14 @@ class PrefitReadoutGenerator:
                 )
             if revisions:
                 self.facts["revisions"] = list(revisions)
+            if signoffs:
+                self.facts["signoffs"] = list(signoffs)
         else:
             self.facts = prefit_facts(
                 model,
                 sbc=sbc,
                 revisions=revisions,
+                signoffs=signoffs,
                 n_prior_samples=n_prior_samples,
                 random_seed=random_seed,
             )
@@ -714,6 +731,7 @@ class PrefitReadoutGenerator:
             self._section_purpose,
             self._section_spec,
             self._section_assumptions,
+            self._section_endogeneity,
             self._section_priors,
             self._section_response,
             self._section_components,
@@ -889,6 +907,48 @@ class PrefitReadoutGenerator:
         body = f'<p class="lede">{self._insight("assumptions_gloss")}</p>{table}'
         return _NavEntry("assumptions", "Structural assumptions"), self._wrap(
             "assumptions", "Structural assumptions", "What we are assuming", body
+        )
+
+    def _section_endogeneity(self) -> tuple[_NavEntry, str] | None:
+        """Endogeneity-of-spend screen (issue #110): the no-confounders assumption,
+        stated plainly, with the channels where spend appears to chase demand."""
+        endo = self.facts.get("endogeneity")
+        if not endo or not endo.get("available") or not endo.get("channels"):
+            return None
+        rows = []
+        for r in endo["channels"]:
+            chip = (
+                self._chip("reduce", "demand-chasing")
+                if r.get("endogenous")
+                else self._chip("scale", "ok")
+            )
+            rows.append(
+                f'<tr><td class="chname">{_esc(r["channel"])}</td>'
+                f'<td class="mono">{_fmt(r.get("demand_leads_spend"))}</td>'
+                f'<td class="mono">{_fmt(r.get("spend_leads_demand"))}</td>'
+                f"<td>{chip}</td></tr>"
+            )
+        table = (
+            '<table class="data-table"><thead><tr><th>Channel</th>'
+            "<th>Demand&nbsp;&rarr;&nbsp;spend</th><th>Spend&nbsp;&rarr;&nbsp;demand</th>"
+            f'<th>Screen</th></tr></thead><tbody>{"".join(rows)}</tbody></table>'
+        )
+        notes = "".join(
+            f'<p class="note">{_esc(n)}</p>' for n in endo.get("notes") or []
+        )
+        body = (
+            f'<p class="lede">{_esc(endo.get("assumption", ""))}</p>'
+            "<p>The model assumes spend is exogenous. The screen compares whether a "
+            "past change in demand leads a change in spend (spend chasing demand) "
+            "against the intended direction (spend leading demand). A flagged channel "
+            "should be confirmed with a randomized experiment before its estimate is "
+            f"trusted.</p>{table}{notes}"
+        )
+        return _NavEntry("endogeneity", "Endogeneity screen"), self._wrap(
+            "endogeneity",
+            "Endogeneity screen",
+            "Is spend chasing demand?",
+            body,
         )
 
     def _section_priors(self) -> tuple[_NavEntry, str]:
@@ -1388,7 +1448,36 @@ class PrefitReadoutGenerator:
             "document.</span></li>"
             "</ul>"
         )
-        body = f"<p class='lede'>{self._insight('next_steps')}</p>{loop}{steps}"
+        # Sign-off audit trail (issue #110): who approved these assumptions/priors,
+        # with a tamper-evident chain. Shown when sign-offs exist.
+        signoffs = self.facts.get("signoffs") or []
+        signoff_block = ""
+        if signoffs:
+            rows = []
+            for s in signoffs[:8]:
+                who = _esc(s.get("approver", "—"))
+                role = f" · {_esc(s['role'])}" if s.get("role") else ""
+                when = str(s.get("created_at") or "")
+                note = _esc(s.get("note") or "")
+                h = _esc(str(s.get("hash", ""))[:12])
+                rows.append(
+                    f'<tr><td class="chname">{who}{role}</td>'
+                    f'<td class="mono">{when}</td><td>{note}</td>'
+                    f'<td class="mono note">{h}</td></tr>'
+                )
+            signoff_block = (
+                "<h3>Sign-off audit trail</h3>"
+                "<p>Who has formally approved these assumptions and priors. Each entry "
+                "is hash-chained, so a later edit to any record is detectable.</p>"
+                '<table class="data-table"><thead><tr><th>Approver</th><th>When</th>'
+                "<th>Note</th><th>Audit hash</th></tr></thead>"
+                f'<tbody>{"".join(rows)}</tbody></table>'
+            )
+
+        body = (
+            f"<p class='lede'>{self._insight('next_steps')}</p>{loop}{steps}"
+            f"{signoff_block}"
+        )
         return _NavEntry("signoff", "Next steps"), self._wrap(
             "signoff", "Next steps", "Between this document and the fit", body
         )

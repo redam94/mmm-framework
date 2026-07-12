@@ -774,6 +774,82 @@ def cfo_summary(
         return _err(f"Error building the CFO one-pager: {e}")
 
 
+def endogeneity(
+    mmm: Any,
+    results: Any = None,
+    *,
+    max_lag: int = 8,
+) -> dict:
+    """Endogeneity-of-spend diagnostic (issue #110): a Granger-style lead/lag
+    screen for spend that CHASES demand (the back-door spend←demand→sales that
+    breaks the MMM's no-unobserved-confounders assumption). Works on the raw
+    media + KPI series, so it needs no posterior. Emits dashboard['endogeneity']
+    + a per-channel table + the plain-language confounding statement."""
+    try:
+        from ..diagnostics.endogeneity import endogeneity_diagnostic
+
+        d = endogeneity_diagnostic(mmm, max_lag=int(max_lag))
+        if not d.get("available"):
+            return _err(
+                "Could not run the endogeneity screen (media/KPI series unavailable "
+                "or mis-shaped)."
+            )
+        content = (
+            "### Endogeneity of spend — is spend chasing demand?\n\n"
+            "The MMM assumes media spend is exogenous (no unobserved confounders). "
+            "This screens for the opposite — spend responding to past demand — which "
+            "would make the model over-credit those channels.\n\n"
+            "| Channel | Demand→spend | Spend→demand | Verdict |\n|---|---|---|---|\n"
+        )
+        rows: list[dict] = []
+        for r in d["channels"]:
+            verdict = "⚠ demand-chasing" if r["endogenous"] else "ok"
+            content += (
+                f"| {r['channel']} | {r['demand_leads_spend']:+.2f} | "
+                f"{r['spend_leads_demand']:+.2f} | {verdict} |\n"
+            )
+            rows.append(
+                {
+                    "channel": r["channel"],
+                    "demand_leads_spend": r["demand_leads_spend"],
+                    "spend_leads_demand": r["spend_leads_demand"],
+                    "endogenous": r["endogenous"],
+                }
+            )
+        content += "\n" + d["assumption"]
+        for n in d.get("notes") or []:
+            content += f"\n\n_{n}_"
+        res = _ok(content, {"endogeneity": d})
+        res["tables"] = [
+            records_to_table_json(
+                rows,
+                title="Endogeneity screen",
+                source="endogeneity",
+                group="validation",
+                columns=[
+                    {"key": "channel", "label": "Channel", "type": "string"},
+                    {
+                        "key": "demand_leads_spend",
+                        "label": "Demand→spend",
+                        "type": "number",
+                    },
+                    {
+                        "key": "spend_leads_demand",
+                        "label": "Spend→demand",
+                        "type": "number",
+                    },
+                    {"key": "endogenous", "label": "Demand-chasing", "type": "string"},
+                ],
+            )
+        ]
+        return res
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Error running the endogeneity screen: {e}")
+
+
+endogeneity.allow_unfitted = True
+
+
 def prior_predictive_check(
     mmm: Any,
     results: Any = None,
@@ -3521,6 +3597,7 @@ OPS = {
     "triangulation": triangulation,
     "spec_curve": spec_curve,
     "cfo_summary": cfo_summary,
+    "endogeneity": endogeneity,
     "garden_compat": garden_compat,
     "garden_tune_suggestions": garden_tune_suggestions,
     "component_decomposition": component_decomposition,
