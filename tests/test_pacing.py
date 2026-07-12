@@ -181,6 +181,75 @@ class TestReportSection:
         assert "In-flight pacing" not in html
 
 
+class TestAugurSection:
+    """The augur client deck now carries the pacing panel too (issue #123)."""
+
+    def _bundle(self):
+        from mmm_framework.reporting.extractors.bundle import MMMDataBundle
+
+        res = compute_pacing(
+            {
+                "schedule": [
+                    {"period": "W1", "TV": 100, "Search": 50},
+                    {"period": "W2", "TV": 100, "Search": 50},
+                ]
+            },
+            {"schedule": [{"period": "W1", "TV": 130, "Search": 48}]},
+            threshold=0.1,
+        )
+        res.outcome_delta = {"mean": 3.7, "lower": 3.3, "upper": 4.2}
+        return MMMDataBundle(channel_names=["TV", "Search"], pacing=res.to_dict())
+
+    def _augur(self, data=None):
+        import dataclasses
+
+        from mmm_framework.reporting import MMMReportGenerator, ReportConfig
+        from mmm_framework.reporting.extractors.bundle import MMMDataBundle
+
+        cfg = dataclasses.replace(ReportConfig(), shell="augur")
+        return MMMReportGenerator(
+            data=data or MMMDataBundle(channel_names=["TV"]), config=cfg
+        ).render()
+
+    def test_augur_section_renders(self):
+        html = self._augur(self._bundle())
+        assert "In-flight pacing" in html
+        assert "Over-pacing" in html
+        assert "Off-pace" in html
+        assert "Expected KPI impact" in html
+
+    def test_augur_section_absent_without_data(self):
+        # No pacing payload → the augur nav must not carry a dead entry.
+        html = self._augur()
+        assert "In-flight pacing" not in html
+
+    def test_augur_section_escapes_channel_names(self):
+        from mmm_framework.reporting.extractors.bundle import MMMDataBundle
+
+        bundle = MMMDataBundle(
+            channel_names=["<b>X</b>"],
+            pacing={
+                "planned_total": 100.0,
+                "actual_total": 130.0,
+                "divergence_pct": 0.3,
+                "threshold": 0.1,
+                "flagged": ["<b>X</b>"],
+                "channels": [
+                    {
+                        "channel": "<b>X</b>",
+                        "planned": 100.0,
+                        "actual": 130.0,
+                        "divergence_pct": 0.3,
+                        "status": "over-pacing",
+                    }
+                ],
+            },
+        )
+        html = self._augur(bundle)
+        assert "&lt;b&gt;X&lt;/b&gt;" in html
+        assert "<b>X</b>" not in html
+
+
 class TestModelOp:
     def test_op_payload_and_guard(self):
         from mmm_framework.agents.model_ops import OPS

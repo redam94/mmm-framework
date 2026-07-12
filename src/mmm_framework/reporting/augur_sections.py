@@ -1385,6 +1385,113 @@ class AugurEvidenceSection(AugurSection):
 # ─────────────────────────────────────────────────────────────────────────────
 # 14 — Recommended tests
 # ─────────────────────────────────────────────────────────────────────────────
+class AugurPacingSection(AugurSection):
+    """In-flight pacing — planned vs actual delivery (issues #107 / #123).
+
+    The augur client-deck rendering of the pacing panel: portfolio pace vs plan,
+    the expected KPI impact of the divergence (off the fitted response curves),
+    the off-pace channels, and a per-channel plan-vs-actual table. Data-gated on
+    ``bundle.pacing`` (populated by the report's ``pacing=`` param or the
+    ``check_pacing`` model-op), which is attached on demand — so, like
+    triangulation, this section gates its own ``is_enabled`` to leave no dead nav
+    entry on decks without a pacing payload."""
+
+    section_id = "pacing"
+    default_title = "In-flight pacing — plan vs actual"
+    eyebrow = "In-flight pacing"
+
+    #: pacing status → (augur tier-chip class, label)
+    _CHIP = {
+        "on-track": ("t-scale", "On track"),
+        "over-pacing": ("t-reduce", "Over-pacing"),
+        "under-pacing": ("t-hold", "Under-pacing"),
+        "not-started": ("t-hold", "Not started"),
+    }
+
+    @property
+    def is_enabled(self) -> bool:
+        return super().is_enabled and bool(getattr(self.data, "pacing", None))
+
+    def render(self) -> str:
+        pac = getattr(self.data, "pacing", None)
+        if not self.is_enabled or not pac:
+            return ""
+        channels = list(pac.get("channels") or [])
+        if not channels:
+            return ""
+        return self._wrap(
+            self._headline(pac) + self._alert(pac) + self._table(channels)
+        )
+
+    def _headline(self, pac: dict) -> str:
+        div = float(pac.get("divergence_pct", 0.0))
+        thr = float(pac.get("threshold", 0.1))
+        planned = float(pac.get("planned_total", 0.0))
+        actual = float(pac.get("actual_total", 0.0))
+        pace_word = (
+            "on plan"
+            if abs(div) <= thr
+            else ("ahead of plan" if div > 0 else "behind plan")
+        )
+        delta = pac.get("outcome_delta") or {}
+        delta_line = ""
+        if delta.get("mean") is not None:
+            dm = float(delta["mean"])
+            sign = "+" if dm >= 0 else ""
+            ci = (
+                f" <span class='mono' style='opacity:.7'>90% "
+                f"[{self._money(float(delta.get('lower', dm)))}, "
+                f"{self._money(float(delta.get('upper', dm)))}]</span>"
+                if delta.get("lower") is not None
+                else ""
+            )
+            delta_line = (
+                f"<p>Expected KPI impact of the divergence: "
+                f"<strong>{sign}{self._money(dm)}</strong>{ci}.</p>"
+            )
+        return (
+            f"<p>To date, delivery is <strong>{div:+.0%}</strong> {pace_word} "
+            f"({self._money(actual)} spent of {self._money(planned)} planned).</p>"
+            f"{delta_line}"
+        )
+
+    def _alert(self, pac: dict) -> str:
+        flagged = list(pac.get("flagged") or [])
+        thr = float(pac.get("threshold", 0.1))
+        if not flagged:
+            return (
+                f'<p class="lede">All channels are pacing within {thr:.0%} of plan.</p>'
+            )
+        names = ", ".join(self._ch(str(f)) for f in flagged)
+        return (
+            f'<p class="lede"><strong>Off-pace ({len(flagged)}):</strong> {names} '
+            f"— diverged more than {thr:.0%} from plan; review before it compounds.</p>"
+        )
+
+    def _table(self, channels: list[dict]) -> str:
+        body = []
+        for c in channels:
+            chip_cls, chip_lbl = self._CHIP.get(
+                c.get("status", ""), ("t-hold", c.get("status", "—"))
+            )
+            div = float(c.get("divergence_pct", 0.0))
+            div_str = "—" if not np.isfinite(div) else f"{div:+.0%}"
+            body.append(
+                f"<tr><td>{self._ch(c.get('channel', ''))}</td>"
+                f"<td class='mono'>{self._money(float(c.get('planned', 0.0)))}</td>"
+                f"<td class='mono'>{self._money(float(c.get('actual', 0.0)))}</td>"
+                f"<td class='mono'>{div_str}</td>"
+                f'<td><span class="tier-chip {chip_cls}">{chip_lbl}</span></td></tr>'
+            )
+        return f"""
+            <table class="data-table">
+              <thead><tr><th>Channel</th><th>Planned (to date)</th><th>Actual</th>
+                <th>Divergence</th><th>Status</th></tr></thead>
+              <tbody>{"".join(body)}</tbody>
+            </table>
+        """
+
+
 class AugurTestsSection(AugurSection):
     section_id = "tests"
     default_title = "Experiments that would tighten the next plan"
@@ -1490,6 +1597,7 @@ AUGUR_SECTIONS: list[tuple[str, type[AugurSection], str]] = [
     ("budget", AugurReallocationSection, "reallocation"),
     ("allocation", AugurAllocationSection, "allocation"),
     ("flighting", AugurFlightingSection, "flighting"),
+    ("pacing", AugurPacingSection, "pacing"),
     ("deepdives", AugurDeepDivesSection, "deep_dives"),
     ("carryover", AugurCarryoverSection, "carryover"),
     ("ppc-fit", AugurModelFitSection, "ppc_timeseries"),
@@ -1511,6 +1619,7 @@ __all__ = [
     "AugurReallocationSection",
     "AugurAllocationSection",
     "AugurFlightingSection",
+    "AugurPacingSection",
     "AugurDeepDivesSection",
     "AugurCarryoverSection",
     "AugurModelFitSection",
