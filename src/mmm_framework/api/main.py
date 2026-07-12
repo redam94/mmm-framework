@@ -2949,19 +2949,105 @@ async def project_triangulation_endpoint(
     )
 
 
-@app.get("/projects/{project_id}/calibration-coverage", dependencies=[_proj_read])
-async def calibration_coverage_endpoint(project_id: str, as_of: str | None = None):
-    """Channels × evidence tier (calibrated / stale / model_only) with
-    information decay applied at read time, plus coverage percentages."""
-    from mmm_framework.api.history import build_calibration_coverage
-
+@app.get("/projects/{project_id}/delivery", dependencies=[_proj_read])
+async def list_delivery_endpoint(project_id: str):
+    """Actual in-flight delivery rows stored for the project (issue #123)."""
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return JSONResponse(
         content=safe_json_dumps_load(
-            build_calibration_coverage(project_id, as_of=as_of)
+            {"delivery": sessions_store.list_delivery(project_id)}
         )
     )
+
+
+@app.post("/projects/{project_id}/delivery", dependencies=[_proj_write, _rl_heavy])
+async def upload_delivery_endpoint(project_id: str, file: UploadFile = File(...)):
+    """Ingest actual delivery (CSV/TSV or JSON: spend by channel/period) into the
+    delivery registry (issue #123), so pacing compares against the saved plan
+    without spend passed inline. A CSV may be LONG (channel/period/spend columns)
+    or WIDE (a date/period column + one column per channel); re-uploading a period
+    overwrites it."""
+    from mmm_framework.api.pacing import parse_delivery_records
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    raw = await file.read()
+    try:
+        records = parse_delivery_records(raw, file.filename or "")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=400, detail=f"Could not parse delivery file: {exc}"
+        )
+    if not records:
+        raise HTTPException(
+            status_code=400, detail="No delivery rows parsed from the upload."
+        )
+    rows = sessions_store.upsert_delivery(
+        project_id, records, source=(file.filename or "upload")
+    )
+    return JSONResponse(
+        content=safe_json_dumps_load({"delivery": rows, "ingested": len(rows)})
+    )
+
+
+@app.delete("/projects/{project_id}/delivery", dependencies=[_proj_write])
+async def delete_delivery_endpoint(project_id: str, channel: str | None = None):
+    """Clear stored delivery for the project (optionally one channel)."""
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    n = sessions_store.delete_delivery(project_id, channel=channel)
+    return JSONResponse(content=safe_json_dumps_load({"deleted": n}))
+
+
+@app.get("/projects/{project_id}/pacing", dependencies=[_proj_read])
+async def project_pacing_endpoint(project_id: str, threshold: float | None = None):
+    """In-flight pacing for the project (issue #123): the stored actual delivery
+    vs the planned series auto-sourced from the latest saved budget plan, with
+    per-channel divergence, off-pace flags, and an alert digest. Model-free (no
+    fit load) — the expected-outcome delta comes from the check_pacing agent tool.
+    Returns ``available: false`` with a ``reason`` when there is no saved plan or
+    no delivery yet."""
+    from mmm_framework.api.pacing import build_project_pacing
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    kw = {} if threshold is None else {"threshold": float(threshold)}
+    return JSONResponse(
+        content=safe_json_dumps_load(build_project_pacing(project_id, **kw))
+    )
+
+
+@app.get("/projects/{project_id}/calibration-coverage", dependencies=[_proj_read])
+async def calibration_coverage_endpoint(project_id: str, as_of: str | None = None):
+    """Channels × evidence tier (calibrated / stale / model_only) with
+    information decay applied at read time, plus coverage percentages. The
+    in-flight pacing signal is folded in (issue #123): a channel drifting
+    off-pace is a reason to re-look even when its evidence is fresh — the T5
+    re-evaluation surface reads ``pacing_status``/``off_pace`` per channel +
+    the top-level ``pacing_alert``."""
+    from mmm_framework.api.history import build_calibration_coverage
+    from mmm_framework.api.pacing import build_project_pacing
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    payload = build_calibration_coverage(project_id, as_of=as_of)
+    try:  # best-effort — pacing needs a saved plan + delivery
+        pac = build_project_pacing(project_id)
+        if pac.get("available"):
+            status_by_ch = {
+                c["channel"]: c.get("status") for c in pac.get("channels") or []
+            }
+            flagged = set(pac.get("flagged") or [])
+            for row in payload.get("channels") or []:
+                ch = row.get("channel")
+                if ch in status_by_ch:
+                    row["pacing_status"] = status_by_ch[ch]
+                    row["off_pace"] = ch in flagged
+            payload["pacing_alert"] = pac.get("alert")
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse(content=safe_json_dumps_load(payload))
 
 
 @app.get("/projects/{project_id}/experiment-priorities", dependencies=[_proj_read])

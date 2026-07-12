@@ -9,13 +9,22 @@ import { RunsTimeline } from './RunsTimeline';
 import { ModelHealthPanel } from './ModelHealthPanel';
 import { ResponseCurvesPanel } from './ResponseCurvesPanel';
 import { EstimandsPanel } from './EstimandsPanel';
+import { PacingPanel } from './PacingPanel';
 
-type TabId = 'trajectories' | 'estimands' | 'saturation' | 'agreement' | 'health' | 'runs';
+type TabId =
+  | 'trajectories'
+  | 'estimands'
+  | 'saturation'
+  | 'pacing'
+  | 'agreement'
+  | 'health'
+  | 'runs';
 
 const TABS = [
   { id: 'trajectories', label: 'Trajectories' },
   { id: 'estimands', label: 'Estimands' },
   { id: 'saturation', label: 'Saturation & ROAS' },
+  { id: 'pacing', label: 'Pacing' },
   { id: 'agreement', label: 'Agreement' },
   { id: 'health', label: 'Model health' },
   { id: 'runs', label: 'Runs' },
@@ -24,6 +33,7 @@ const TABS = [
 function tabFromPath(pathname: string): TabId {
   if (pathname.endsWith('/estimands')) return 'estimands';
   if (pathname.endsWith('/saturation')) return 'saturation';
+  if (pathname.endsWith('/pacing')) return 'pacing';
   if (pathname.endsWith('/agreement')) return 'agreement';
   if (pathname.endsWith('/health')) return 'health';
   if (pathname.endsWith('/runs')) return 'runs';
@@ -69,6 +79,10 @@ export function PerformancePage() {
         <ModelHealthPanel />
       ) : active === 'saturation' ? (
         <ResponseCurvesPanel projectId={currentProjectId} />
+      ) : active === 'pacing' ? (
+        // Pacing reads its own endpoint (auto-sources the plan; own empty states)
+        // and is not gated behind run_metrics history.
+        <PacingPanel projectId={currentProjectId} />
       ) : active === 'estimands' ? (
         // Estimands read their own endpoint (own loading/empty states) and are
         // not gated behind run_metrics history.
