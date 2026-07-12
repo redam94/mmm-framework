@@ -25,6 +25,7 @@ import numpy as np
 
 from . import charts
 from .config import ChartConfig
+from .evidence import EvidenceTier, evidence_chip_html
 from .helpers.reallocation import (
     TIER_META,
     channel_rows,
@@ -55,6 +56,16 @@ class AugurSection(Section):
 
     def insight(self, key: str, default: str = "") -> str:
         return (self.config.cmo_insights or {}).get(key, default)
+
+    def _evidence(self, name: str) -> dict | None:
+        """The evidence annotation (tier + identifiability) for a channel, or
+        ``None`` when the extractor did not attach it (issue #102)."""
+        ev = getattr(self.data, "channel_evidence", None) or {}
+        return ev.get(name)
+
+    def _evidence_chip(self, name: str) -> str:
+        """Augur-themed evidence chip for a channel (empty when unavailable)."""
+        return evidence_chip_html(self._evidence(name), theme="augur")
 
     def _ratio(self, v: float | None) -> str:
         cur = self.config.currency_symbol
@@ -369,10 +380,14 @@ class AugurScorecardSection(AugurSection):
             return ""
         ci = int((self.section_config.credible_interval or 0.8) * 100)
 
+        has_evidence = any(self._evidence(r["name"]) for r in rows)
         body = []
         for r in rows:
             swatch = self.config.channel_colors.get(r["name"])
             spend = self._money(r.get("spend")) if r.get("spend") else "—"
+            ev_cell = (
+                f"<td>{self._evidence_chip(r['name'])}</td>" if has_evidence else ""
+            )
             body.append(f"""
                 <tr>
                     <td class="chname"><span class="swatch" style="background:{swatch}"></span>{self._ch(r['name'])}</td>
@@ -380,6 +395,7 @@ class AugurScorecardSection(AugurSection):
                     <td class="mono">{r['roi']:.2f}</td>
                     <td class="mono">{r['roi_lower']:.2f} – {r['roi_upper']:.2f}</td>
                     <td><span class="tier-chip {r['css']}">{html.escape(r['read'])}</span></td>
+                    {ev_cell}
                     <td class="action-cell {r['css']}">{html.escape(r['action'])}</td>
                 </tr>
                 """)
@@ -389,10 +405,11 @@ class AugurScorecardSection(AugurSection):
             "The <em>read</em> reflects where that whole range sits relative to "
             "break-even, and the <em>action</em> follows from it.</p>"
         )
+        ev_head = "<th>Evidence</th>" if has_evidence else ""
         table = f"""
             <table class="data-table">
               <thead><tr><th>Channel</th><th>Spend</th><th>Return / $1</th>
-                <th>{ci}% range</th><th>Read</th><th>Action</th></tr></thead>
+                <th>{ci}% range</th><th>Read</th>{ev_head}<th>Action</th></tr></thead>
               <tbody>{''.join(body)}</tbody>
             </table>
         """
@@ -995,7 +1012,7 @@ class AugurDeepDivesSection(AugurSection):
         <div class="dd" id="dd-{self._slug(r['name'])}">
           <div class="dd-head">
             <div class="dd-title"><span class="dot" style="background:{meta['color']}"></span>{name}</div>
-            <span class="tier-chip {meta['css']}">{html.escape(meta['action'])}</span>
+            <div class="dd-chips" style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">{self._evidence_chip(r['name'])}<span class="tier-chip {meta['css']}">{html.escape(meta['action'])}</span></div>
           </div>
           {kpis}
           {charts_html}
@@ -1297,7 +1314,46 @@ class AugurEvidenceSection(AugurSection):
             "honest about thin data. The cure for uncertainty is evidence: a test, "
             "not a more confident spreadsheet.</p>"
         )
-        return self._wrap(f'{intro}<div class="legend">{rows}</div>{outro}')
+
+        # Evidence-provenance tiers (issue #102) — a SECOND colour language, on
+        # every channel number: where its credibility comes from. Only when the
+        # extractor attached evidence to at least one channel.
+        provenance = ""
+        ev = getattr(self.data, "channel_evidence", None) or {}
+        if ev:
+            tier_rows = "".join(
+                f'<div class="row">{evidence_chip_html({"tier": t.value}, theme="augur", show_caveat=False)}'
+                f'<div><div class="lg-desc">{html.escape(gloss)}</div></div></div>'
+                for t, gloss in (
+                    (
+                        EvidenceTier.EXPERIMENT_VALIDATED,
+                        "Calibrated against a randomized experiment folded into this "
+                        "fit — the strongest causal anchor.",
+                    ),
+                    (
+                        EvidenceTier.MODEL_IDENTIFIED,
+                        "The data moved this effect off its prior and the channel is "
+                        "separately identifiable — a genuine model finding, not yet "
+                        "experimentally confirmed.",
+                    ),
+                    (
+                        EvidenceTier.PRIOR_DOMINATED,
+                        "The posterior barely moved off its prior — this number "
+                        "reflects the assumed prior more than the data. Treat it as a "
+                        "placeholder until confirmed.",
+                    ),
+                )
+            )
+            provenance = (
+                '<p style="margin-top:1.4rem">Separately, every channel number '
+                "carries an <em>evidence tier</em> — how much of it is data versus "
+                "assumption. A <em>not separately identified</em> flag means two "
+                "channels are collinear and their individual numbers cannot be "
+                "trusted apart (the combined effect can).</p>"
+                f'<div class="legend">{tier_rows}</div>'
+            )
+
+        return self._wrap(f'{intro}<div class="legend">{rows}</div>{outro}{provenance}')
 
 
 # ─────────────────────────────────────────────────────────────────────────────

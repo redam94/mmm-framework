@@ -123,6 +123,9 @@ class ExtendedMMMExtractor(DataExtractor, EstimandPPCMixin):
             bundle = self._extract_estimands(bundle)
             bundle = self._extract_posterior_predictive(bundle)
 
+            # Evidence tier + identifiability gate on every channel number (#102).
+            bundle = self._extract_channel_evidence(bundle)
+
         bundle.model_specification = self._get_model_specification()
 
         return bundle

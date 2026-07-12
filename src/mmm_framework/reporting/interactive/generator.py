@@ -79,6 +79,7 @@ _PAYLOAD_KEYS = (
     "yoy",
     "mediation",
     "latent",
+    "evidence",
 )
 
 _EXTRA_CSS = r"""
@@ -101,6 +102,16 @@ _EXTRA_CSS = r"""
 .ir-slider-val{font-size:.78rem;color:var(--ink-400);text-align:right;}
 .mono{font-family:var(--font-mono);}
 .chip-approx{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-700);background:var(--gold-100);border:1px solid var(--gold-300);border-radius:999px;padding:.15rem .6rem;margin-left:.5rem;vertical-align:middle;}
+/* Evidence tier + identifiability (issue #102) */
+.ir-evidence{margin-top:1.1rem;}
+.ir-evidence table{width:100%;border-collapse:collapse;font-size:.85rem;}
+.ir-evidence th,.ir-evidence td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--line-200,#e7e1d6);vertical-align:top;}
+.ir-evidence th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-400);}
+.ir-evidence td.gated{color:var(--ink-400);}
+.ir-evidence .ev-caveat{color:var(--rust-700,#7a3525);font-size:.8rem;}
+.ir-ev-legend{display:flex;flex-direction:column;gap:.35rem;margin-top:.9rem;font-size:.8rem;}
+.ir-ev-legend .row{display:flex;align-items:flex-start;gap:.6rem;}
+.ir-ev-legend .gloss{color:var(--ink-500,#5a5148);}
 @media(max-width:700px){.ir-slider-row{grid-template-columns:110px 1fr 110px;}}
 """
 
@@ -485,6 +496,10 @@ class InteractiveReportGenerator:
             "interval, thin whisker = the wide interval. The dashed line is "
             "break-even; channels measured in volume (impressions/clicks) "
             "appear in a separate efficiency panel with a zero reference.</p>"
+            # Evidence tier + identifiability gate (issue #102): one row per
+            # channel, chip-coded by how much of the number is data vs prior,
+            # with a collinearity caveat where two channels can't be separated.
+            '<div class="ir-evidence" id="roiEvidence"></div>'
         )
         return _NavEntry("channel-roi", "Channel ROI"), self._wrap(
             "channel-roi", "Channel ROI", "What each channel returned", body

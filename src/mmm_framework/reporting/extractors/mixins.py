@@ -513,6 +513,129 @@ class EstimandPPCMixin:
             logger.debug("estimands extraction skipped", exc_info=True)
         return bundle
 
+    # -- evidence tier + identifiability gate (issue #102) --------------------
+
+    #: Prior draws used for the report-time prior→posterior contraction check
+    #: (kept modest so evidence extraction stays cheap; it is best-effort).
+    _EVIDENCE_PRIOR_SAMPLES = 400
+
+    def _channel_collinearity_matrix(
+        self, bundle: "MMMDataBundle"
+    ) -> "np.ndarray | None":
+        """An ``(n_obs, n_channels)`` design matrix for the collinearity check.
+
+        Prefers the model's raw media matrix (``X_media_raw`` / ``X_media``) —
+        the channels' input design the likelihood sees — and falls back to the
+        per-channel contribution time series already on the bundle. Returns
+        ``None`` when neither aligns to the channel list.
+        """
+        channels = list(bundle.channel_names or [])
+        n_ch = len(channels)
+        if n_ch < 2:
+            return None
+        model = self._estimand_model()
+        for attr in ("X_media_raw", "X_media"):
+            X = getattr(model, attr, None)
+            if X is None:
+                continue
+            try:
+                X = np.asarray(X, dtype=float)
+            except (TypeError, ValueError):
+                continue
+            if X.ndim == 2 and X.shape[1] == n_ch and X.shape[0] >= 3:
+                return X
+        # Fallback: contribution time series from the bundle.
+        cts = bundle.component_time_series or {}
+        cols = []
+        for ch in channels:
+            v = cts.get(ch)
+            if v is None:
+                return None
+            arr = np.asarray(v, dtype=float).ravel()
+            cols.append(arr)
+        if cols and len({c.shape[0] for c in cols}) == 1 and cols[0].shape[0] >= 3:
+            return np.column_stack(cols)
+        return None
+
+    def _extract_channel_evidence(self, bundle: "MMMDataBundle") -> "MMMDataBundle":
+        """Attach a per-channel evidence tier + identifiability flag (issue #102).
+
+        Three orthogonal signals are folded into one :class:`ChannelEvidence`:
+
+        * *experiment-validated* — the channel's effect was calibrated against a
+          randomized experiment folded into THIS fit (``model.experiments``).
+        * *prior-dominated* — the prior→posterior contraction (best-effort
+          ``model.compute_parameter_learning``) says the data barely moved the
+          channel's coefficient off its prior.
+        * *not separately identified* — the channel is collinear with another
+          over the media design (variance inflation).
+
+        The result is set on ``bundle.channel_evidence`` and stamped into each
+        ``channel_roi[ch]["evidence"]`` and per-channel ``estimands`` entry so
+        every renderer reads one source of truth. Best-effort — any failure
+        leaves the bundle unannotated and the reports simply omit the chip.
+        """
+        try:
+            from ..evidence import channel_evidence, collinearity_from_matrix
+
+            channels = list(bundle.channel_names or [])
+            if not channels:
+                return bundle
+            model = self._estimand_model()
+
+            # experiment-validated: channels folded into this fit as calibration
+            exp_channels: set[str] = set()
+            for exp in getattr(model, "experiments", None) or []:
+                ch = getattr(exp, "channel", None)
+                if ch is not None:
+                    exp_channels.add(str(ch))
+
+            # prior-dominated: prior→posterior contraction per channel parameter
+            learning = None
+            fn = getattr(model, "compute_parameter_learning", None)
+            if callable(fn) and getattr(model, "_trace", None) is not None:
+                try:
+                    learning = fn(
+                        prior_samples=self._EVIDENCE_PRIOR_SAMPLES, random_seed=0
+                    )
+                except Exception:  # noqa: BLE001 — learning is best-effort
+                    logger.debug(
+                        "parameter-learning for evidence skipped", exc_info=True
+                    )
+                    learning = None
+
+            # identifiability: per-channel collinearity over the media design
+            collinearity = None
+            mat = self._channel_collinearity_matrix(bundle)
+            if mat is not None:
+                collinearity = collinearity_from_matrix(mat, channels)
+
+            evidence = channel_evidence(
+                channels,
+                experiment_channels=exp_channels,
+                learning=learning,
+                collinearity=collinearity,
+            )
+            evd = {ch: e.to_dict() for ch, e in evidence.items()}
+            bundle.channel_evidence = evd
+
+            # Stamp onto channel_roi rows (the primary render source).
+            if bundle.channel_roi:
+                for ch, row in bundle.channel_roi.items():
+                    if isinstance(row, dict) and ch in evd:
+                        row["evidence"] = evd[ch]
+            # Stamp onto per-channel estimands ("{name}:{channel}").
+            if bundle.estimands:
+                for key, entry in bundle.estimands.items():
+                    if not isinstance(entry, dict):
+                        continue
+                    ch = key.split(":", 1)[1] if ":" in key else None
+                    if ch and ch in evd:
+                        entry["evidence"] = evd[ch]
+        except Exception:  # noqa: BLE001 — reporting must never hard-fail
+            logger.debug("channel evidence extraction skipped", exc_info=True)
+        return bundle
+
     # -- posterior-predictive goodness-of-fit ---------------------------------
 
     def _extract_posterior_predictive(self, bundle: "MMMDataBundle") -> "MMMDataBundle":

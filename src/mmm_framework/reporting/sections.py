@@ -13,6 +13,7 @@ import numpy as np
 
 from .config import ReportConfig, SectionConfig, ChartConfig
 from . import charts
+from .evidence import evidence_chip_html, evidence_legend_html
 
 if TYPE_CHECKING:
     from .data_extractors import MMMDataBundle
@@ -470,11 +471,25 @@ class ChannelROISection(Section):
         # Channel legend
         legend = self._render_channel_legend(channels)
 
+        # Evidence-tier key (issue #102) — define the trust language once, before
+        # the table uses it. Only when the extractor attached evidence.
+        has_evidence = any(
+            isinstance(self.data.channel_roi.get(ch), dict)
+            and self.data.channel_roi[ch].get("evidence")
+            for ch in channels
+        )
+        evidence_key = (
+            f'<h3>How to read the evidence column</h3>{evidence_legend_html(theme="classic")}'
+            if has_evidence
+            else ""
+        )
+
         content = f"""
             {legend}
             {forest_plot}
             <h3>Detailed ROI Estimates</h3>
             {roi_table}
+            {evidence_key}
         """
 
         return self._render_section_wrapper(content)
@@ -521,13 +536,21 @@ class ChannelROISection(Section):
                 conf_class = "uncertain"
                 status = "Uncertain"
 
+            # Evidence tier + identifiability chip (issue #102). Gated numbers
+            # (prior-dominated or not separately identified) are de-emphasized so
+            # a prior can't masquerade as a finding.
+            ev = meta.get("evidence")
+            chip = evidence_chip_html(ev, theme="classic")
+            value_cls = "mono muted" if (ev and ev.get("gated")) else "mono"
+
             rows.append(f"""
                 <tr>
                     <td>{html.escape(ch)}</td>
                     <td>{html.escape(str(metric_label))}</td>
-                    <td class="mono">{mean:.2f}</td>
-                    <td class="mono">[{lower:.2f}, {upper:.2f}]</td>
+                    <td class="{value_cls}">{mean:.2f}</td>
+                    <td class="{value_cls}">[{lower:.2f}, {upper:.2f}]</td>
                     <td class="{conf_class}">{status}</td>
+                    <td>{chip}</td>
                 </tr>
             """)
 
@@ -540,6 +563,7 @@ class ChannelROISection(Section):
                         <th>{value_header}</th>
                         <th>{ci_level}% CI</th>
                         <th>Confidence</th>
+                        <th>Evidence</th>
                     </tr>
                 </thead>
                 <tbody>{''.join(rows)}</tbody>
@@ -1834,15 +1858,29 @@ class EstimandsSection(Section):
             else:
                 conf_class, status = "uncertain", "Uncertain"
 
+            # Evidence tier + identifiability chip (issue #102), stamped by the
+            # extractor onto per-channel estimand entries.
+            ev = v.get("evidence")
+            chip = evidence_chip_html(ev, theme="classic")
+            val_cls = "mono muted" if (ev and ev.get("gated")) else "mono"
+
             rows.append(f"""
                 <tr>
                     <td>{html.escape(self._kind_label(name))}</td>
                     <td>{html.escape(target)}</td>
-                    <td class="mono">{val_str}</td>
-                    <td class="mono">{ci_str}</td>
+                    <td class="{val_cls}">{val_str}</td>
+                    <td class="{val_cls}">{ci_str}</td>
                     <td class="{conf_class}">{status}</td>
+                    <td>{chip}</td>
                 </tr>
             """)
+
+        has_evidence = any(v.get("evidence") for _, v in items)
+        evidence_key = (
+            f'<div class="evidence-key">{evidence_legend_html(theme="classic")}</div>'
+            if has_evidence
+            else ""
+        )
 
         return f"""
             <table class="data-table">
@@ -1852,11 +1890,13 @@ class EstimandsSection(Section):
                         <th>Target</th>
                         <th>Estimate</th>
                         <th>{ci_pct}% CI</th>
+                        <th>Confidence</th>
                         <th>Evidence</th>
                     </tr>
                 </thead>
                 <tbody>{''.join(rows)}</tbody>
             </table>
+            {evidence_key}
         """
 
 

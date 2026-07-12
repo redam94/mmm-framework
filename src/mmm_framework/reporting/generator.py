@@ -39,6 +39,7 @@ from .sections import (
 )
 from .augur_sections import AUGUR_SECTIONS
 from .augur_theme import augur_css, MASTHEAD_LOGO_SVG, AUGUR_FONTS_LINK
+from .evidence import EVIDENCE_CHIP_CSS
 
 
 class MMMReportGenerator:
@@ -1121,6 +1122,9 @@ class MMMReportGenerator:
             .report-nav {{ display: none; }}
             .report-body.has-nav .report-container {{ padding-left: 0; }}
         }}
+
+        /* Evidence chips + legend (issue #102) — one visual language for trust. */
+{EVIDENCE_CHIP_CSS}
 """
 
     def to_html(self, filepath: str | Path) -> Path:
