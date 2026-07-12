@@ -51,6 +51,9 @@ from .roi import (
 # Triangulation chart — MMM × experiment × platform (issue #104)
 from .triangulation import (
     create_triangulation_chart,
+# Spec-curve / model-averaging robustness chart (issue #103)
+from .spec_curve import (
+    create_spec_curve_plot,
 )
 
 # Diagnostic charts
@@ -124,6 +127,7 @@ __all__ = [
     # ROI charts
     "create_roi_forest_plot",
     "create_triangulation_chart",
+    "create_spec_curve_plot",
     # Diagnostic charts
     "create_saturation_curves",
     "create_adstock_chart",

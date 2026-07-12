@@ -349,6 +349,49 @@ INTERACTIVE_REPORT_JS = r"""
     Plotly.react(divId, traces, ly, CFG);
   }
 
+  // ── evidence tier + identifiability (issue #102) ───────────────────────
+  var EV_CLASS = {
+    'experiment-validated': 't-scale',
+    'model-identified': 't-hold',
+    'prior-dominated': 't-reduce'
+  };
+  function evChip(ev) {
+    if (!ev) return '';
+    var cls = EV_CLASS[ev.tier] || 't-hold';
+    var chip = '<span class="tier-chip ' + cls + '" title="' + esc(ev.gloss || '') +
+      '">' + esc(ev.short_label || ev.tier) + '</span>';
+    if (ev.caveat) {
+      chip += ' <span class="tier-chip t-test" title="' + esc(ev.caveat) +
+        '">not separately identified</span>';
+    }
+    return chip;
+  }
+  function renderEvidence() {
+    var el = document.getElementById('roiEvidence');
+    if (!el) return;
+    var evMap = IR.evidence || {};
+    var chs = CH.filter(function (ch) { return evMap[ch]; });
+    if (!chs.length) { el.innerHTML = ''; return; }
+    var body = chs.map(function (ch) {
+      var ev = evMap[ch];
+      var cav = ev.caveat ? '<div class="ev-caveat">' + esc(ev.caveat) + '</div>' : '';
+      return '<tr><td' + (ev.gated ? ' class="gated"' : '') + '>' + esc(ch) +
+        '</td><td>' + evChip(ev) + cav + '</td></tr>';
+    }).join('');
+    var legend = [
+      ['t-scale', 'Experiment-validated', 'Calibrated against a randomized experiment folded into this fit — the strongest causal anchor.'],
+      ['t-hold', 'Model-identified', 'The data moved this effect off its prior and the channel is separately identifiable — a genuine model finding, not yet experimentally confirmed.'],
+      ['t-reduce', 'Prior-dominated', 'The posterior barely moved off its prior — this number reflects the assumed prior more than the data. Treat it as a placeholder until confirmed.']
+    ].map(function (t) {
+      return '<div class="row"><span class="tier-chip ' + t[0] + '">' + esc(t[1]) +
+        '</span><span class="gloss">' + esc(t[2]) + '</span></div>';
+    }).join('');
+    el.innerHTML =
+      '<h4 style="margin:.4rem 0 .2rem">How much to trust each number</h4>' +
+      '<table><thead><tr><th>Channel</th><th>Evidence</th></tr></thead><tbody>' +
+      body + '</tbody></table><div class="ir-ev-legend">' + legend + '</div>';
+  }
+
   // ── channel ROI section ────────────────────────────────────────────────
   var roiYoY = false;
   function yearsInWindow(s, e) {
@@ -1433,6 +1476,7 @@ INTERACTIVE_REPORT_JS = r"""
     var yoy = document.getElementById('roiYoY');
     if (yoy) yoy.onchange = function () { roiYoY = yoy.checked; renderRoi(roiWin.s, roiWin.e); };
     renderRoi(0, P - 1);
+    renderEvidence();
 
     var estWin = windowControl('estimandWindow', renderEstimand);
     var estSel = document.getElementById('estimandSelect');

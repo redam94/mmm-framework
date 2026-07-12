@@ -160,6 +160,17 @@ class MMMDataBundle:
     channel_spend: dict[str, float] | None = None
     channel_contribution: dict[str, dict[str, float]] | None = None
 
+    # Per-channel EVIDENCE annotation (issue #102): the trust label that gates
+    # every reported channel number so a prior can never masquerade as a finding.
+    # Keyed by channel; each value is ``ChannelEvidence.to_dict()`` (see
+    # ``reporting/evidence.py``) carrying at least ``tier`` (experiment-validated /
+    # model-identified / prior-dominated), ``identified`` (False → collinear, not
+    # separately identifiable), ``gated``, and a plain-language ``caveat``. The
+    # same dict is also stamped into each ``channel_roi[ch]["evidence"]`` and each
+    # per-channel ``estimands["{name}:{ch}"]["evidence"]`` so every renderer reads
+    # one source of truth. Populated best-effort by the extractor (needs a fit).
+    channel_evidence: dict[str, dict[str, Any]] | None = None
+
     # Decomposition
     component_totals: dict[str, float] | None = None  # {component: total_contribution}
     component_time_series: dict[str, np.ndarray] | None = (
@@ -184,6 +195,14 @@ class MMMDataBundle:
     # Data-gated: the TriangulationSection renders only when attached (the
     # generator's ``triangulation=`` param sets it).
     triangulation: dict[str, Any] | None = None
+    # Spec-curve / model-averaging robustness (issue #103). A
+    # ``SpecCurveResult.to_dict()`` payload: how each channel's ROI moves across a
+    # pre-registered set of defensible specifications, the LOO-stacking weights,
+    # the model-averaged (BMA) estimate, and a per-channel robustness summary.
+    # Data-gated: the SpecCurveSection renders only when this is attached (the
+    # generator's ``spec_curve=`` param sets it), so it never appears without a
+    # sweep having been run.
+    spec_curve: dict[str, Any] | None = None
 
     # Causal assumptions / identification + unobserved-confounding robustness.
     # Keys (all optional): "identification_strategy" (str), "assumed_confounders"

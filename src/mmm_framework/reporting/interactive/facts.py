@@ -1116,6 +1116,50 @@ def _sensitivity_facts(
 # ─────────────────────────────────────────────────────────────────────────────
 # Headline numbers (Python-side, for insights + tests)
 # ─────────────────────────────────────────────────────────────────────────────
+def _evidence_facts(model: Any, channels: list[str]) -> dict[str, dict[str, Any]]:
+    """Per-channel evidence tier + identifiability flag (issue #102), computed on
+    the SAME three signals as the classic/augur reports so the trust language is
+    consistent across every deliverable. Best-effort — any failure yields ``{}``.
+    """
+    try:
+        from ..evidence import channel_evidence, collinearity_from_matrix
+
+        exp: set[str] = set()
+        for e in getattr(model, "experiments", None) or []:
+            ch = getattr(e, "channel", None)
+            if ch is not None:
+                exp.add(str(ch))
+
+        learning = None
+        fn = getattr(model, "compute_parameter_learning", None)
+        if callable(fn) and getattr(model, "_trace", None) is not None:
+            try:
+                learning = fn(prior_samples=400, random_seed=0)
+            except Exception:  # noqa: BLE001 — best-effort
+                learning = None
+
+        collinearity = None
+        X = getattr(model, "X_media_raw", None)
+        if X is None:
+            X = getattr(model, "X_media", None)
+        try:
+            Xm = np.asarray(X, dtype=float)
+            if Xm.ndim == 2 and Xm.shape[1] == len(channels) and Xm.shape[0] >= 3:
+                collinearity = collinearity_from_matrix(Xm, channels)
+        except (TypeError, ValueError):
+            collinearity = None
+
+        ev = channel_evidence(
+            channels,
+            experiment_channels=exp,
+            learning=learning,
+            collinearity=collinearity,
+        )
+        return {ch: e.to_dict() for ch, e in ev.items()}
+    except Exception:  # noqa: BLE001 — the report renders fine without evidence
+        return {}
+
+
 def _headline_facts(
     channels: list[str],
     actual_national: np.ndarray,
@@ -1124,6 +1168,7 @@ def _headline_facts(
     divisor_meta: dict[str, dict[str, Any]],
     fit: dict[str, Any],
     interval: float,
+    evidence: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     total_kpi = float(np.nansum(actual_national))
     media_draws = np.sum([contrib_dp[ch].sum(axis=1) for ch in channels], axis=0)
@@ -1162,6 +1207,9 @@ def _headline_facts(
                 "is_monetary": bool(meta.get("is_monetary", True)),
                 "label": meta.get("roi_label") or "ROI",
                 "reference": meta.get("reference", 1.0),
+                # Evidence tier + identifiability flag (issue #102), so the
+                # recompute-in-browser forest / deep-dive can chip every number.
+                "evidence": (evidence or {}).get(ch),
             }
         )
 
@@ -1337,8 +1385,16 @@ def interactive_report_facts(
         random_seed,
     )
 
+    evidence = _evidence_facts(model, channels)
     headline = _headline_facts(
-        channels, actual_national, contrib_dp, spend, divisor_meta, fit, interval
+        channels,
+        actual_national,
+        contrib_dp,
+        spend,
+        divisor_meta,
+        fit,
+        interval,
+        evidence,
     )
 
     yoy = _yoy_facts(actual_national, contrib_dp, periods, channels, interval)
@@ -1421,6 +1477,7 @@ def interactive_report_facts(
         "ppc_prior": ppc_prior,
         "headline": headline,
         "triangulation": _jsafe(tri_facts) if tri_facts else None,
+        "evidence": _jsafe(evidence),
         "yoy": yoy,
         "mediation": mediation,
         "latent": latent,
