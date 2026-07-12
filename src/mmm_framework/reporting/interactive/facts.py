@@ -1322,6 +1322,29 @@ def interactive_report_facts(
         for t in level_totals
     ]
     curve_stack = np.stack(level_totals, axis=-1)  # (D, C, L)
+
+    # Observed per-period spend range per channel (issue #105): the response
+    # curve is data-supported only up to the largest weekly spend the model
+    # actually saw. Beyond it, the curve is the saturation FORM extrapolating —
+    # a guess dressed as a finding — so the report shades that region and the
+    # reallocator flags any recommendation past it. Units match the curve x-axis
+    # (avg-weekly divisor), so the boundary drops straight onto the plot.
+    def _obs_range(arr: np.ndarray) -> tuple[float | None, float | None]:
+        a = np.asarray(arr, dtype=float)
+        a = a[np.isfinite(a)]
+        if a.size == 0:
+            return None, None
+        nz = a[a > 0]
+        lo = float(nz.min()) if nz.size else float(a.min())
+        return lo, float(a.max())
+
+    obs_min_weekly: dict[str, float | None] = {}
+    obs_max_weekly: dict[str, float | None] = {}
+    for ch in channels:
+        lo, hi = _obs_range(spend[ch])
+        obs_min_weekly[ch] = lo
+        obs_max_weekly[ch] = hi
+
     curves = {
         "multipliers": multipliers,
         "n_draws": int(curve_draws_n),
@@ -1330,6 +1353,8 @@ def interactive_report_facts(
         },
         "spend_total": {ch: float(np.nansum(spend[ch])) for ch in channels},
         "n_periods": n_periods,
+        "obs_min_weekly": obs_min_weekly,
+        "obs_max_weekly": obs_max_weekly,
     }
 
     # Carryover kernels from the posterior adstock parameters.
