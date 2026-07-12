@@ -2069,25 +2069,67 @@ class AllocationSection(Section):
         uplift = alloc.get("expected_uplift", 0.0)
         hdi = alloc.get("uplift_hdi", [0.0, 0.0])
         prob = alloc.get("prob_positive_uplift", 0.0)
+        regret = alloc.get("expected_regret")
+        n_extrap = int(alloc.get("n_extrapolated", 0) or 0)
+
+        # Lead with the DECISION CONFIDENCE, not the allocation (issue #105):
+        # planners defend decisions upward and need "how sure are you this beats
+        # the current plan?" first.
+        conf_cls = (
+            "positive" if prob >= 0.8 else ("uncertain" if prob >= 0.6 else "negative")
+        )
+        regret_txt = (
+            f" If the model's uncertainty resolves against it, you'd expect to leave "
+            f"about {self._format_currency(regret)} of KPI on the table versus a "
+            f"perfectly-informed plan (expected regret)."
+            if regret is not None
+            else ""
+        )
+        extrap_txt = (
+            f" <strong>{n_extrap} channel(s)</strong> are recommended beyond their "
+            f"observed spend range — those moves are extrapolated (flagged below)."
+            if n_extrap
+            else ""
+        )
+        lead = (
+            f'<div class="callout {conf_cls}">'
+            f"<strong>{prob:.0%} chance this plan beats the current allocation.</strong>"
+            f"{regret_txt}{extrap_txt}</div>"
+        )
+        regret_card = (
+            f"""<div class="metric-card">
+                    <div class="value">{self._format_currency(regret)}</div>
+                    <div class="label">Expected regret</div>
+                    <div class="ci">vs a perfectly-informed plan</div>
+                </div>"""
+            if regret is not None
+            else ""
+        )
         return f"""
+            {lead}
             <div class="metrics-grid">
                 <div class="metric-card">
-                    <div class="value">{self._format_currency(total)}</div>
-                    <div class="label">Budget allocated</div>
+                    <div class="value">{prob:.0%}</div>
+                    <div class="label">Chance it beats today</div>
                 </div>
                 <div class="metric-card">
                     <div class="value">{self._format_currency(uplift)}</div>
                     <div class="label">Expected KPI uplift</div>
                     <div class="ci">90% [{self._format_currency(hdi[0])}, {self._format_currency(hdi[1])}]</div>
                 </div>
+                {regret_card}
                 <div class="metric-card">
-                    <div class="value">{prob:.0%}</div>
-                    <div class="label">P(uplift &gt; 0)</div>
+                    <div class="value">{self._format_currency(total)}</div>
+                    <div class="label">Budget allocated</div>
                 </div>
             </div>
         """
 
     def _render_alloc_table(self, alloc: dict) -> str:
+        # Show the extrapolation column only when the optimizer supplied the flag.
+        has_range = any(
+            "within_observed_range" in r for r in alloc.get("allocation", [])
+        )
         rows = []
         for r in alloc["allocation"]:
             ch = html.escape(str(r.get("channel", "")))
@@ -2095,17 +2137,43 @@ class AllocationSection(Section):
             opt = float(r.get("optimal_spend", 0.0))
             chg = float(r.get("change_pct", 0.0))
             cls = "positive" if chg > 1 else ("negative" if chg < -1 else "uncertain")
+            # Recommended spend with its credible interval (issue #105).
+            opt_cell = self._format_currency(opt)
+            if r.get("optimal_spend_p5") is not None:
+                opt_cell += (
+                    f'<br><span class="ci">[{self._format_currency(float(r["optimal_spend_p5"]))}, '
+                    f'{self._format_currency(float(r["optimal_spend_p95"]))}]</span>'
+                )
+            range_cell = ""
+            if has_range:
+                within = r.get("within_observed_range", True)
+                if within:
+                    range_cell = '<td class="positive">In tested range</td>'
+                else:
+                    mo = r.get("max_obs_multiplier")
+                    tip = (
+                        f"Recommended {r.get('recommended_multiplier', 0):.2f}× current "
+                        f"spend, but the model has only observed up to "
+                        f"~{mo:.2f}× — beyond that the response curve is extrapolated."
+                        if mo is not None
+                        else "Beyond the observed spend range — extrapolated."
+                    )
+                    range_cell = (
+                        f'<td class="negative" title="{html.escape(tip)}">'
+                        f"⚠ Extrapolated</td>"
+                    )
             rows.append(
                 f"<tr><td>{ch}</td>"
                 f'<td class="mono">{self._format_currency(cur)}</td>'
-                f'<td class="mono">{self._format_currency(opt)}</td>'
-                f'<td class="{cls}">{chg:+.0f}%</td></tr>'
+                f'<td class="mono">{opt_cell}</td>'
+                f'<td class="{cls}">{chg:+.0f}%</td>{range_cell}</tr>'
             )
+        range_head = "<th>Range</th>" if has_range else ""
         return f"""
             <h3>Recommended allocation</h3>
             <table class="data-table">
                 <thead><tr><th>Channel</th><th>Current spend</th>
-                    <th>Recommended spend</th><th>Change</th></tr></thead>
+                    <th>Recommended spend</th><th>Change</th>{range_head}</tr></thead>
                 <tbody>{"".join(rows)}</tbody>
             </table>
         """

@@ -495,7 +495,26 @@ INTERACTIVE_REPORT_JS = r"""
         line: { color: c, width: 2 },
         hovertemplate: 'spend/wk %{x:.3g} → %{y:.3g}<extra>' + esc(ch) + '</extra>' }
     ];
-    var shapes = [];
+    var shapes = [], annos = [];
+    // Extrapolation shading (issue #105): beyond the largest weekly spend the
+    // model actually saw, the curve is the saturation form guessing — mark it.
+    var obsMax = (IR.curves.obs_max_weekly || {})[ch];
+    var xMax = cs.xs[cs.xs.length - 1];
+    if (obsMax != null && obsMax < xMax) {
+      shapes.push({
+        type: 'rect', xref: 'x', yref: 'paper', x0: obsMax, x1: xMax, y0: 0, y1: 1,
+        fillcolor: rgba(TH.muted || '#7a8a78', 0.13), line: { width: 0 }, layer: 'below'
+      });
+      shapes.push({
+        type: 'line', xref: 'x', yref: 'paper', x0: obsMax, x1: obsMax, y0: 0, y1: 1,
+        line: { color: TH.muted || '#7a8a78', width: 1, dash: 'dot' }
+      });
+      annos.push({
+        x: obsMax + (xMax - obsMax) / 2, xref: 'x', y: 0.97, yref: 'paper',
+        text: 'extrapolated', showarrow: false,
+        font: { size: 9, color: TH.muted || '#7a8a78' }
+      });
+    }
     if (mode !== 'mroi' || (cs.avgWeekly >= cs.xs[0] && cs.avgWeekly <= cs.xs[cs.xs.length - 1])) {
       shapes.push({
         type: 'line', x0: cs.avgWeekly, x1: cs.avgWeekly, yref: 'paper', y0: 0, y1: 1,
@@ -513,7 +532,7 @@ INTERACTIVE_REPORT_JS = r"""
       height: height, margin: { l: 48, r: 8, t: 26, b: 34 },
       xaxis: { title: { text: 'avg weekly ' + ((meta[ch] || {}).divisor_units || 'spend'), font: { size: 10 } } },
       yaxis: { title: { text: yTitle, font: { size: 10 } } },
-      shapes: shapes
+      shapes: shapes, annotations: annos
     });
     Plotly.newPlot(divId, traces, ly, CFG);
     return true;
@@ -615,15 +634,34 @@ INTERACTIVE_REPORT_JS = r"""
       newSpend += (IR.curves.spend_total[ch] || 0) * reallocState[ch];
     });
     var dSum = summar(delta);
+    // Decision confidence (issue #105): P(plan beats today) + expected downside.
+    var pBeats = 0, downside = 0, nd = delta.length;
+    for (var di = 0; di < nd; di++) {
+      if (delta[di] > 0) pBeats++;
+      if (delta[di] < 0) downside += -delta[di];
+    }
+    pBeats = nd ? pBeats / nd : 0;
+    downside = nd ? downside / nd : 0;
+    // Channels pushed beyond their observed spend range → extrapolated.
+    var nP = IR.curves.n_periods || P;
+    var extrapCh = chs.filter(function (ch) {
+      var aw = (IR.curves.spend_total[ch] || 0) / nP;
+      var om = (IR.curves.obs_max_weekly || {})[ch];
+      return om != null && aw * reallocState[ch] > om * 1.02;
+    });
+    var moved = chs.filter(function (c) { return Math.abs(reallocState[c] - 1) > 0.011; }).length;
     cardsEl.innerHTML =
+      kpiCard('Chance this beats today', Math.round(pBeats * 100) + '%',
+        'expected downside if wrong: ' + fmt(downside) + ' ' + (IR.meta.kpi || 'KPI')) +
       kpiCard('Expected incremental ' + (IR.meta.kpi || 'KPI'),
         (dSum && dSum.mean >= 0 ? '+' : '') + fmt(dSum ? dSum.mean : null),
         ivPct + '% CI: ' + ciTxt(dSum) + ' · approximate') +
       kpiCard('Budget change', (newSpend - curSpend >= 0 ? '+' : '') + fmt(newSpend - curSpend),
         fmt(curSpend) + ' → ' + fmt(newSpend)) +
-      kpiCard('Channels moved',
-        String(chs.filter(function (c) { return Math.abs(reallocState[c] - 1) > 0.011; }).length),
-        'of ' + chs.length + ' reallocatable');
+      kpiCard('Channels moved', String(moved),
+        extrapCh.length
+          ? '⚠ ' + extrapCh.length + ' beyond observed spend'
+          : 'of ' + chs.length + ' reallocatable');
     if (!rowsEl.dataset.built) {
       rowsEl.dataset.built = '1';
       rowsEl.innerHTML = '';
@@ -655,9 +693,14 @@ INTERACTIVE_REPORT_JS = r"""
     chs.forEach(function (ch) {
       var el = document.getElementById('rv_' + ch);
       if (el) {
-        var st = IR.curves.spend_total[ch] || 0, nP = IR.curves.n_periods || P;
-        el.textContent = '×' + reallocState[ch].toFixed(2) +
-          ' (' + fmt(st * reallocState[ch] / nP) + '/wk)';
+        var st = IR.curves.spend_total[ch] || 0, nPP = IR.curves.n_periods || P;
+        var wk = st * reallocState[ch] / nPP;
+        var om = (IR.curves.obs_max_weekly || {})[ch];
+        var isExtrap = om != null && wk > om * 1.02;
+        el.textContent = '×' + reallocState[ch].toFixed(2) + ' (' + fmt(wk) + '/wk)' +
+          (isExtrap ? ' ⚠' : '');
+        el.style.color = isExtrap ? (TH.rust || '#a04535') : '';
+        el.title = isExtrap ? 'Beyond the observed weekly spend range — extrapolated' : '';
       }
     });
   }

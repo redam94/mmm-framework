@@ -724,23 +724,35 @@ class AugurAllocationSection(AugurSection):
         uplift = alloc.get("expected_uplift", 0.0)
         hdi = alloc.get("uplift_hdi") or [0.0, 0.0]
         prob = alloc.get("prob_positive_uplift", 0.0)
+        regret = alloc.get("expected_regret")
+        # Lead with the confidence, not the allocation (issue #105).
         cards = [
             self._kpi(
-                "Budget allocated",
-                self._money(total),
-                "Same as the current total — a pure reallocation",
+                "Chance it beats today",
+                self._pct(prob),
+                "Posterior probability the plan out-performs the current split",
             ),
             self._kpi(
                 "Expected KPI uplift",
                 self._money(uplift),
                 f"90% range&nbsp; {self._money(hdi[0])} – {self._money(hdi[1])}",
             ),
-            self._kpi(
-                "Chance it beats today",
-                self._pct(prob),
-                "Posterior probability the plan out-performs the current split",
-            ),
         ]
+        if regret is not None:
+            cards.append(
+                self._kpi(
+                    "Expected regret",
+                    self._money(regret),
+                    "KPI you'd forgo vs a perfectly-informed plan",
+                )
+            )
+        cards.append(
+            self._kpi(
+                "Budget allocated",
+                self._money(total),
+                "Same as the current total — a pure reallocation",
+            )
+        )
         return f'<div class="kpi-grid">{"".join(cards)}</div>'
 
     @staticmethod
@@ -764,6 +776,9 @@ class AugurAllocationSection(AugurSection):
         return '<span class="tier-chip t-hold">no change</span>'
 
     def _table(self, alloc: dict) -> str:
+        has_range = any(
+            "within_observed_range" in r for r in alloc.get("allocation", [])
+        )
         body = []
         for r in alloc["allocation"]:
             name = r.get("channel", "")
@@ -771,17 +786,28 @@ class AugurAllocationSection(AugurSection):
             cur = float(r.get("current_spend", 0.0) or 0.0)
             opt = float(r.get("optimal_spend", 0.0) or 0.0)
             chg = float(r.get("change_pct", 0.0) or 0.0)
+            range_cell = ""
+            if has_range:
+                if r.get("within_observed_range", True):
+                    range_cell = (
+                        '<td><span class="tier-chip t-scale">in range</span></td>'
+                    )
+                else:
+                    range_cell = (
+                        '<td><span class="tier-chip t-test">⚠ extrapolated</span></td>'
+                    )
             body.append(
                 f'<tr><td class="chname"><span class="swatch" '
                 f'style="background:{swatch}"></span>{self._ch(name)}</td>'
                 f'<td class="mono">{self._money(cur)}</td>'
                 f'<td class="mono">{self._money(opt)}</td>'
-                f"<td>{self._change_chip(chg)}</td></tr>"
+                f"<td>{self._change_chip(chg)}</td>{range_cell}</tr>"
             )
+        range_head = "<th>Range</th>" if has_range else ""
         return f"""
             <table class="data-table">
               <thead><tr><th>Channel</th><th>Current spend</th>
-                <th>Recommended</th><th>Change</th></tr></thead>
+                <th>Recommended</th><th>Change</th>{range_head}</tr></thead>
               <tbody>{''.join(body)}</tbody>
             </table>
         """
