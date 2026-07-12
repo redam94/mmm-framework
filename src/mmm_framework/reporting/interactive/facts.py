@@ -1204,6 +1204,8 @@ def interactive_report_facts(
     include_prior_sections: bool = True,
     include_counterfactual_spec: bool = True,
     random_seed: int = 42,
+    triangulation: dict[str, Any] | None = None,
+    platform_figures: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compute every fact the interactive MMM Results Report embeds.
 
@@ -1346,6 +1348,20 @@ def interactive_report_facts(
 
     assumptions = [r.to_dict() for r in model_assumptions(model)]
 
+    # Triangulation panel (issue #104): MMM × experiment × platform. Use a
+    # caller-provided payload, else auto-build from the model's in-graph
+    # experiment calibrations (+ any platform figures). Best-effort.
+    tri_facts = triangulation
+    if tri_facts is None:
+        try:
+            from ..triangulation import triangulation_from_model
+
+            tri_facts = triangulation_from_model(
+                model, platform=platform_figures
+            ).to_dict()
+        except Exception:  # noqa: BLE001 — report renders fine without it
+            tri_facts = None
+
     diagnostics: dict[str, Any] = {}
     if results is not None:
         diagnostics = dict(getattr(results, "diagnostics", {}) or {})
@@ -1404,6 +1420,7 @@ def interactive_report_facts(
         "sensitivity": sensitivity,
         "ppc_prior": ppc_prior,
         "headline": headline,
+        "triangulation": _jsafe(tri_facts) if tri_facts else None,
         "yoy": yoy,
         "mediation": mediation,
         "latent": latent,

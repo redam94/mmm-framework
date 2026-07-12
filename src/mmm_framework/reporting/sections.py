@@ -896,6 +896,127 @@ class SensitivitySection(Section):
         return self._render_section_wrapper("\n".join(content_parts))
 
 
+class TriangulationSection(Section):
+    """Triangulation panel — MMM × experiment × platform (issue #104).
+
+    Puts each channel's effect from the MMM, from experiments, and from
+    platform-reported attribution side by side, with a reconciled recommendation
+    and plain-language notes on any disagreement. Convergent evidence across
+    independent methods is the most persuasive thing to show a skeptical CFO;
+    divergence, shown honestly, is where the real conversation happens.
+    Data-gated on ``bundle.triangulation``.
+    """
+
+    section_id: str = "triangulation"
+    default_title: str = "Triangulation — MMM × experiment × platform"
+
+    _AGREEMENT_META = {
+        "convergent": ("positive", "Convergent"),
+        "divergent": ("negative", "Divergent"),
+        "platform-inflated": ("uncertain", "Platform-inflated"),
+        "single-source": ("uncertain", "Single-source"),
+    }
+
+    def render(self) -> str:
+        if not self.is_enabled or not self.data.triangulation:
+            return ""
+        tri = self.data.triangulation
+        channels = list(tri.get("channels") or [])
+        if not channels:
+            return ""
+
+        summary = tri.get("summary") or {}
+        by_agree = summary.get("by_agreement") or {}
+        conv = by_agree.get("convergent", 0)
+        parts = [
+            f"""
+            <p>
+                A channel's return can be estimated three ways: by the
+                <strong>MMM</strong> (a model-identified incremental effect), by an
+                <strong>experiment</strong> (a directly measured incremental
+                effect — the causal gold standard), and by
+                <strong>platform-reported</strong> attribution (usually
+                last-touch, and usually inflated). This panel puts them side by
+                side. Where independent methods <em>converge</em>
+                ({conv} of {len(channels)} channel(s) here), the number is as
+                trustworthy as measurement gets; where they diverge, the note
+                explains why — and which figure to act on.
+            </p>
+            """,
+            charts.create_triangulation_chart(tri, self.config),
+            self._render_table(channels),
+            self._render_notes(channels),
+        ]
+        return self._render_section_wrapper("\n".join(p for p in parts if p))
+
+    def _cell(self, src: dict | None) -> str:
+        if not src or src.get("value") is None:
+            return '<td class="mono">—</td>'
+        val = f"{src['value']:.2f}×"
+        lo, hi = src.get("lower"), src.get("upper")
+        ci = (
+            f" <span class='mono' style='opacity:.7'>[{lo:.2f}, {hi:.2f}]</span>"
+            if lo is not None and hi is not None
+            else ""
+        )
+        flag = "" if src.get("incremental", True) else " ⚠"
+        return f'<td class="mono">{val}{ci}{flag}</td>'
+
+    def _render_table(self, channels: list[dict]) -> str:
+        rows = []
+        for c in channels:
+            by = {s["source"]: s for s in c.get("sources") or []}
+            cls, label = self._AGREEMENT_META.get(
+                c.get("agreement", ""), ("uncertain", c.get("agreement", "—"))
+            )
+            rec = c.get("reconciled") or {}
+            rec_val = (
+                f"{rec['value']:.2f}× "
+                f"<span class='mono' style='opacity:.7'>({html.escape(str(rec.get('basis') or '—'))})</span>"
+                if rec.get("value") is not None
+                else "—"
+            )
+            rows.append(f"""
+                <tr>
+                    <td>{html.escape(c['channel'])}</td>
+                    {self._cell(by.get('experiment'))}
+                    {self._cell(by.get('mmm'))}
+                    {self._cell(by.get('platform'))}
+                    <td class="{cls}">{label}</td>
+                    <td>{rec_val}</td>
+                </tr>
+                """)
+        return f"""
+            <h3>Per-channel reconciliation</h3>
+            <table class="data-table">
+                <thead><tr>
+                    <th>Channel</th><th>Experiment</th><th>MMM</th>
+                    <th>Platform</th><th>Agreement</th><th>Reconciled</th>
+                </tr></thead>
+                <tbody>{''.join(rows)}</tbody>
+            </table>
+            <p class="chart-caption">⚠ marks a non-incremental (last-touch)
+            figure — not comparable dollar-for-dollar with the incremental MMM /
+            experiment estimates. "Reconciled" anchors on the experiment when one
+            exists (a direct causal measurement), otherwise the MMM.</p>
+        """
+
+    def _render_notes(self, channels: list[dict]) -> str:
+        blocks = []
+        for c in channels:
+            notes = c.get("notes") or []
+            if not notes:
+                continue
+            items = "".join(f"<li>{html.escape(n)}</li>" for n in notes)
+            blocks.append(
+                f"<div class='callout'><h4>{html.escape(c['channel'])}</h4>"
+                f"<ul>{items}</ul></div>"
+            )
+        if not blocks:
+            return ""
+        return f"<h3>Why the sources differ</h3>{''.join(blocks)}"
+
+
 class MethodologySection(Section):
     """Model methodology documentation."""
 
@@ -2169,6 +2290,7 @@ SECTION_REGISTRY: dict[str, type[Section]] = {
     "decomposition": DecompositionSection,
     "saturation": SaturationSection,
     "sensitivity": SensitivitySection,
+    "triangulation": TriangulationSection,
     "causal_assumptions": CausalAssumptionsSection,
     "methodology": MethodologySection,
     "diagnostics": DiagnosticsSection,

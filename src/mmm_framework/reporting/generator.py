@@ -29,6 +29,7 @@ from .sections import (
     DecompositionSection,
     SaturationSection,
     SensitivitySection,
+    TriangulationSection,
     CausalAssumptionsSection,
     MethodologySection,
     DiagnosticsSection,
@@ -91,6 +92,7 @@ class MMMReportGenerator:
         sensitivity: dict | None = None,
         llm: Any | None = None,
         allocation: dict | None = None,
+        triangulation: dict | None = None,
     ):
         self.config = config or ReportConfig()
         self._llm = llm
@@ -107,6 +109,11 @@ class MMMReportGenerator:
         # Add sensitivity results if provided
         if sensitivity is not None:
             self.data.sensitivity_results = sensitivity
+
+        # Triangulation panel — MMM × experiment × platform (issue #104).
+        # Data-gated: the TriangulationSection renders only when attached.
+        if triangulation is not None:
+            self.data.triangulation = triangulation
 
         # Budget-allocation plan (a default reallocation, or a saved Planner plan).
         # When attached, expose it on the bundle and turn the allocation section ON
@@ -205,6 +212,7 @@ class MMMReportGenerator:
             ),
             ("saturation", SaturationSection, _mmm(self.config.saturation)),
             ("sensitivity", SensitivitySection, _mmm(self.config.sensitivity)),
+            ("triangulation", TriangulationSection, _mmm(self.config.triangulation)),
             (
                 "causal_assumptions",
                 CausalAssumptionsSection,
