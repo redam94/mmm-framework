@@ -55,6 +55,7 @@ __all__ = [
     "DEFAULT_CONTRACTION_MIN",
     "DEFAULT_VIF_MAX",
     "channel_evidence",
+    "evidence_for_model",
     "collinearity_from_matrix",
     "evidence_chip_html",
     "evidence_legend_html",
@@ -385,6 +386,84 @@ def channel_evidence(
             experiment=ch in exp_set,
         )
     return out
+
+
+def _model_media_matrix(model: Any, n_channels: int) -> "np.ndarray | None":
+    """The model's ``(n_obs, n_channels)`` raw media design for the collinearity
+    check — prefers ``X_media_raw`` then ``X_media``. ``None`` when a single
+    channel or neither attribute aligns to the channel list."""
+    if n_channels < 2:
+        return None
+    for attr in ("X_media_raw", "X_media"):
+        X = getattr(model, attr, None)
+        if X is None:
+            continue
+        try:
+            X = np.asarray(X, dtype=float)
+        except (TypeError, ValueError):
+            continue
+        if X.ndim == 2 and X.shape[1] == n_channels and X.shape[0] >= 3:
+            return X
+    return None
+
+
+def evidence_for_model(
+    model: Any,
+    channels: Sequence[str],
+    *,
+    collinearity_matrix: "np.ndarray | None" = None,
+    prior_samples: int = 400,
+    random_seed: int = 0,
+) -> dict[str, ChannelEvidence]:
+    """Assemble :func:`channel_evidence` inputs straight from a fitted model.
+
+    This is the **single gathering path** shared by the report extractor and the
+    fit-time persistence that feeds the live Performance/Estimands dashboard, so a
+    channel's tier reads identically in the report and the dashboard (issue #124).
+    It folds three model signals:
+
+    * *experiment coverage* — ``model.experiments`` (→ ``experiment-validated``);
+    * *prior→posterior learning* — ``model.compute_parameter_learning``
+      (best-effort; a failure there just omits the prior-dominated downgrade);
+    * *per-channel collinearity* — the model's raw media design, or a
+      caller-supplied ``collinearity_matrix`` (e.g. a contribution-series
+      fallback when the model does not expose its media design).
+
+    Returns one :class:`ChannelEvidence` per channel. Pure aside from reading
+    model attributes; raises nothing the underlying learning call would not.
+    """
+    chans = [str(c) for c in channels]
+
+    # experiment-validated: channels folded into this fit as calibration.
+    exp_channels: set[str] = set()
+    for exp in getattr(model, "experiments", None) or []:
+        ch = getattr(exp, "channel", None)
+        if ch is not None:
+            exp_channels.add(str(ch))
+
+    # prior-dominated: prior→posterior contraction per channel parameter.
+    learning = None
+    fn = getattr(model, "compute_parameter_learning", None)
+    if callable(fn) and getattr(model, "_trace", None) is not None:
+        try:
+            learning = fn(prior_samples=prior_samples, random_seed=random_seed)
+        except Exception:  # noqa: BLE001 — learning is best-effort
+            learning = None
+
+    # identifiability: per-channel collinearity over the media design.
+    collinearity = None
+    mat = collinearity_matrix
+    if mat is None:
+        mat = _model_media_matrix(model, len(chans))
+    if mat is not None:
+        collinearity = collinearity_from_matrix(mat, chans)
+
+    return channel_evidence(
+        chans,
+        experiment_channels=exp_channels,
+        learning=learning,
+        collinearity=collinearity,
+    )
 
 
 def collinearity_from_matrix(

@@ -152,6 +152,58 @@ class TestGeoAllocation:
         assert len(combined.channel_names) == 4  # 2 geos × 2 channels
         assert combined.base_spend.shape == (4,)
 
+    def test_per_geo_curves_carry_observed_range(self):
+        """Each geo's own observed spend range flows onto its curves + arms so a
+        geo-level recommendation can be flagged (issue #121)."""
+        mmm = FakeGeoMMM()
+        curves = compute_response_curves_per_geo(mmm, max_draws=4)
+        # constant spend (100 each, 3 periods) → max==mean → multiplier 1.0
+        north = curves["North"]
+        assert north.n_obs == 3
+        assert north.obs_max_spend.tolist() == [100.0, 100.0]
+        assert np.allclose(north.max_obs_multiplier, [1.0, 1.0])
+        # combined arms keep a per-arm n_obs (ragged-panel safe) + the multiplier
+        combined = combine_geo_curves(curves)
+        assert np.asarray(combined.n_obs).tolist() == [3, 3, 3, 3]
+        assert np.allclose(combined.max_obs_multiplier, [1.0, 1.0, 1.0, 1.0])
+
+    def test_geo_allocation_flags_extrapolation_beyond_geo_range(self):
+        """A geo×channel arm scaled past that geo's observed spend range is
+        flagged within_observed_range=False, exactly like the national path."""
+        mmm = FakeGeoMMM()  # constant spend → any scale-up in a geo extrapolates
+        res = optimize_budget_by_geo(mmm, max_draws=4, n_steps=600)
+        t = res.table.set_index(["geo", "channel"])
+        # North favors TV → TV scales up past 1.0× (flagged); Search scales down.
+        assert bool(t.loc[("North", "TV"), "within_observed_range"]) is False
+        assert bool(t.loc[("North", "Search"), "within_observed_range"]) is True
+        assert t.loc[("North", "TV"), "max_obs_multiplier"] == pytest.approx(1.0)
+        assert res.n_extrapolated >= 1
+
+    def test_combined_arms_n_obs_is_per_geo_for_ragged_panels(self):
+        """Geos with different period counts get the RIGHT per-arm multiplier — a
+        single scalar n_obs would mis-scale the spiky geo."""
+
+        class RaggedGeoMMM:
+            channel_names = ["TV"]
+            geo_names = ["A", "B"]
+            has_geo = True
+            n_geos = 2
+            # geo A: 2 spiky periods (10, 90) → mean 50, max 90 → mult 1.8;
+            # geo B: 3 flat periods (100) → mult 1.0.
+            geo_idx = np.array([0, 0, 1, 1, 1], dtype=np.int32)
+            X_media_raw = np.array([[10.0], [90.0], [100.0], [100.0], [100.0]])
+
+            def sample_channel_contributions(
+                self, X_media=None, max_draws=None, random_seed=None
+            ):
+                X = self.X_media_raw if X_media is None else X_media
+                return np.sqrt(np.clip(X, 0, None))[None, :, :] * np.ones((3, 1, 1))
+
+        curves = compute_response_curves_per_geo(RaggedGeoMMM(), max_draws=3)
+        combined = combine_geo_curves(curves)
+        assert np.asarray(combined.n_obs).tolist() == [2, 3]
+        assert np.allclose(combined.max_obs_multiplier, [1.8, 1.0])
+
 
 class TestPlanOps:
     def test_plan_budget_national(self):
@@ -176,6 +228,12 @@ class TestPlanOps:
         assert plan["by_geo"] is True
         assert plan["geos"] == ["North", "South"]
         assert len(plan["geo_allocation"]) == 4
+        # Issue #121: per-geo rows carry the extrapolation flag (dropped before).
+        for r in plan["geo_allocation"]:
+            assert "within_observed_range" in r
+            assert "max_obs_multiplier" in r
+        # constant-spend fixture → scaled-up arms are flagged as extrapolating
+        assert plan.get("n_extrapolated", 0) >= 1
         fl = plan["flighting"]
         assert fl["pattern"] == "front_loaded" and fl["n_periods"] == 8
         # flighting spreads the rolled-up channel budgets

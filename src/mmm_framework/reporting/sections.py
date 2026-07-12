@@ -1336,6 +1336,8 @@ class TriangulationSection(Section):
         if not blocks:
             return ""
         return f"<h3>Why the sources differ</h3>{''.join(blocks)}"
+
+
 class SpecCurveSection(Section):
     """Spec-curve / model-averaging robustness (issue #103).
 
@@ -2774,22 +2776,48 @@ class AllocationSection(Section):
         """
 
     def _render_geo_table(self, alloc: dict) -> str:
+        # Show the extrapolation column only when the geo optimizer supplied the
+        # per-geo flag (issue #121). A geo×channel arm scaled past THAT geo's own
+        # observed spend range is flagged, exactly like the national path (#105).
+        has_range = any(
+            "within_observed_range" in r for r in alloc.get("geo_allocation", [])
+        )
         rows = []
         for r in alloc["geo_allocation"]:
             geo = html.escape(str(r.get("geo", "")))
             ch = html.escape(str(r.get("channel", "")))
             opt = float(r.get("optimal_spend", 0.0))
             chg = float(r.get("change_pct", 0.0))
+            range_cell = ""
+            if has_range:
+                within = r.get("within_observed_range", True)
+                if within:
+                    range_cell = '<td class="positive">In tested range</td>'
+                else:
+                    mo = r.get("max_obs_multiplier")
+                    tip = (
+                        f"Recommended {r.get('recommended_multiplier', 0):.2f}× this "
+                        f"geo's current spend, but the model has only observed up to "
+                        f"~{mo:.2f}× here — beyond that the response curve is "
+                        f"extrapolated."
+                        if mo is not None
+                        else "Beyond this geo's observed spend range — extrapolated."
+                    )
+                    range_cell = (
+                        f'<td class="negative" title="{html.escape(tip)}">'
+                        f"⚠ Extrapolated</td>"
+                    )
             rows.append(
                 f"<tr><td>{geo}</td><td>{ch}</td>"
                 f'<td class="mono">{self._format_currency(opt)}</td>'
-                f'<td class="mono">{chg:+.0f}%</td></tr>'
+                f'<td class="mono">{chg:+.0f}%</td>{range_cell}</tr>'
             )
+        range_head = "<th>Range</th>" if has_range else ""
         return f"""
             <h3>Allocation by geography</h3>
             <table class="data-table">
                 <thead><tr><th>Geography</th><th>Channel</th>
-                    <th>Recommended spend</th><th>Change</th></tr></thead>
+                    <th>Recommended spend</th><th>Change</th>{range_head}</tr></thead>
                 <tbody>{"".join(rows)}</tbody>
             </table>
         """

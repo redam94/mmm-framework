@@ -169,6 +169,51 @@ def test_channel_union_and_per_channel_rows():
     assert social["evidence"] == "below"
 
 
+def test_channel_evidence_tier_is_threaded_onto_cells():
+    """A run's persisted channel_evidence is stamped onto the matching cell as
+    `tier` (issue #124) — distinct from the CI-vs-ref `evidence`."""
+    rows = [
+        _row("contribution_roi", "TV", "roi", "ROI", 2.0, 1.5, 2.6),
+        _row("contribution_roi", "Search", "roi", "ROI", 1.1, 0.4, 1.9),
+    ]
+    run = _run("a", "revenue", ["TV", "Search"], rows, 100.0)
+    run["channel_evidence"] = {
+        "TV": {
+            "channel": "TV",
+            "tier": "experiment-validated",
+            "label": "Experiment-validated",
+            "short_label": "Validated",
+            "identified": True,
+            "caveat": None,
+        },
+        "Search": {
+            "channel": "Search",
+            "tier": "prior-dominated",
+            "label": "Prior-dominated",
+            "short_label": "Prior",
+            "identified": False,
+            "caveat": "not separately identified",
+        },
+    }
+    out = E.group_estimands([run])
+    by = {r["channel"]: r for r in out["groups"][0]["models"][0]["rows"]}
+    assert by["TV"]["tier"]["tier"] == "experiment-validated"
+    assert by["TV"]["tier"]["identified"] is True
+    # tier is independent of the CI-vs-ref evidence verdict
+    assert by["TV"]["evidence"] == "strong"
+    assert by["Search"]["tier"]["tier"] == "prior-dominated"
+    assert by["Search"]["tier"]["identified"] is False
+
+
+def test_cells_have_no_tier_without_channel_evidence():
+    """Runs fitted before evidence persistence (no channel_evidence) simply omit
+    the `tier` key — the FE renders no chip, no crash."""
+    rows = [_row("contribution_roi", "TV", "roi", "ROI", 2.0, 1.5, 2.6)]
+    out = E.group_estimands([_run("a", "revenue", ["TV"], rows, 100.0)])
+    cell = out["groups"][0]["models"][0]["rows"][0]
+    assert "tier" not in cell
+
+
 def test_contribution_kind_uses_zero_reference():
     rows = [_row("contribution", "TV", "contribution", "KPI", 1200.0, 800.0, 1600.0)]
     out = E.group_estimands([_run("a", "revenue", ["TV"], rows, 100.0)])
@@ -443,7 +488,23 @@ def test_fit_persists_estimands_and_endpoint_groups_them(tmp_path):
     assert rows, f"fit did not persist estimands: {mr.get('estimands_error')}"
     assert any(r["estimand"] == "contribution_roi" for r in rows)
 
-    # The persisted rows flow through the grouping exactly like the endpoint.
+    # Issue #124: the same fit stamps a per-channel evidence tier (experiment /
+    # model / prior) + identifiability flag on the run record.
+    ev = mr.get("channel_evidence")
+    assert (
+        ev
+    ), f"fit did not persist channel_evidence: {mr.get('channel_evidence_error')}"
+    assert set(ev) >= {"TV", "Search", "Social"}
+    for ch, e in ev.items():
+        assert e["tier"] in {
+            "experiment-validated",
+            "model-identified",
+            "prior-dominated",
+        }
+        assert isinstance(e["identified"], bool)
+
+    # The persisted rows flow through the grouping exactly like the endpoint,
+    # carrying the evidence tier onto each cell.
     out = E.group_estimands(
         [
             {
@@ -454,9 +515,16 @@ def test_fit_persists_estimands_and_endpoint_groups_them(tmp_path):
                 "kpi": "Sales",
                 "created_at": 1.0,
                 "estimands": rows,
+                "channel_evidence": ev,
             }
         ]
     )
     roi = [g for g in out["groups"] if g["estimand"] == "contribution_roi"]
     assert roi and roi[0]["kpi"] == "Sales"
     assert "TV" in roi[0]["channels"]
+    tv_cell = next(r for r in roi[0]["models"][0]["rows"] if r["channel"] == "TV")
+    assert tv_cell["tier"]["tier"] in {
+        "experiment-validated",
+        "model-identified",
+        "prior-dominated",
+    }

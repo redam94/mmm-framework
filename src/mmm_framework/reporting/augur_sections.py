@@ -833,6 +833,9 @@ class AugurAllocationSection(AugurSection):
         rows = alloc.get("geo_allocation") or []
         if not rows:
             return ""
+        # Per-geo extrapolation flag (issue #121): flag a geo×channel arm scaled
+        # past that geo's own observed spend range, like the national table.
+        has_range = any("within_observed_range" in r for r in rows)
         body = []
         for r in rows:
             geo = self._ch(r.get("geo", ""))
@@ -840,17 +843,28 @@ class AugurAllocationSection(AugurSection):
             cur = float(r.get("current_spend", 0.0) or 0.0)
             opt = float(r.get("optimal_spend", 0.0) or 0.0)
             chg = float(r.get("change_pct", 0.0) or 0.0)
+            range_cell = ""
+            if has_range:
+                if r.get("within_observed_range", True):
+                    range_cell = (
+                        '<td><span class="tier-chip t-scale">in range</span></td>'
+                    )
+                else:
+                    range_cell = (
+                        '<td><span class="tier-chip t-test">⚠ extrapolated</span></td>'
+                    )
             body.append(
                 f"<tr><td>{geo}</td><td>{name}</td>"
                 f'<td class="mono">{self._money(cur)}</td>'
                 f'<td class="mono">{self._money(opt)}</td>'
-                f"<td>{self._change_chip(chg)}</td></tr>"
+                f"<td>{self._change_chip(chg)}</td>{range_cell}</tr>"
             )
+        range_head = "<th>Range</th>" if has_range else ""
         return f"""
             <h3 style="margin-top:1.4rem">By geography</h3>
             <table class="data-table">
               <thead><tr><th>Geography</th><th>Channel</th><th>Current</th>
-                <th>Recommended</th><th>Change</th></tr></thead>
+                <th>Recommended</th><th>Change</th>{range_head}</tr></thead>
               <tbody>{''.join(body)}</tbody>
             </table>
         """
@@ -1492,6 +1506,92 @@ class AugurPacingSection(AugurSection):
         """
 
 
+class AugurTriangulationSection(AugurSection):
+    """Triangulation — MMM × experiment × platform (issues #104 / #119).
+
+    The augur client-deck rendering of the reconciliation panel: each channel's
+    return from the MMM next to the experiment readout and any platform figure,
+    classified convergent / divergent / platform-inflated. Convergent evidence
+    across independent methods is the most persuasive thing to show a skeptical
+    CFO; divergence, shown honestly, is where the conversation happens.
+    Data-gated on ``bundle.triangulation`` (populated by the extractor or the
+    ``triangulation`` model-op)."""
+
+    section_id = "triangulation"
+    default_title = "Triangulation — MMM × experiment × platform"
+    eyebrow = "Triangulation"
+
+    @property
+    def is_enabled(self) -> bool:
+        # Data-gate the augur nav entry too: unlike the always-present editorial
+        # sections, triangulation is attached on demand (the report/agent tool
+        # passes a panel), so skip it entirely — no dead nav link — when absent.
+        return super().is_enabled and bool(getattr(self.data, "triangulation", None))
+
+    #: agreement → (augur tier-chip class, label)
+    _CHIP = {
+        "convergent": ("t-scale", "Convergent"),
+        "divergent": ("t-reduce", "Divergent"),
+        "platform-inflated": ("t-reduce", "Platform-inflated"),
+        "single-source": ("t-hold", "Single-source"),
+    }
+
+    def render(self) -> str:
+        tri = getattr(self.data, "triangulation", None)
+        if not self.is_enabled or not tri:
+            return ""
+        channels = list(tri.get("channels") or [])
+        if not channels:
+            return ""
+        by_agree = (tri.get("summary") or {}).get("by_agreement") or {}
+        conv = by_agree.get("convergent", 0)
+        intro = self.insight("triangulation_intro") or (
+            f"Each channel's return, estimated independently — by the model, by "
+            f"experiments (the causal gold standard), and by platform-reported "
+            f"attribution. Where the methods agree ({conv} of {len(channels)} "
+            f"here), the number is as trustworthy as measurement gets; the "
+            f"experiment anchors the recommendation, and a platform figure well "
+            f"above the incremental estimate is last-touch inflation, not return."
+        )
+        return self._wrap(f"<p>{self._t(intro)}</p>{self._table(channels)}")
+
+    def _val(self, src: dict | None) -> str:
+        if not src or src.get("value") is None:
+            return '<td class="mono">—</td>'
+        flag = "" if src.get("incremental", True) else " ⚠"
+        return f'<td class="mono">{src["value"]:.2f}×{flag}</td>'
+
+    def _table(self, channels: list[dict]) -> str:
+        body = []
+        for c in channels:
+            by = {s["source"]: s for s in c.get("sources") or []}
+            chip_cls, chip_lbl = self._CHIP.get(
+                c.get("agreement", ""), ("t-hold", c.get("agreement", "—"))
+            )
+            rec = c.get("reconciled") or {}
+            rec_val = (
+                f"{rec['value']:.2f}× <span class='mono' style='opacity:.7'>"
+                f"({html.escape(str(rec.get('basis') or '—'))})</span>"
+                if rec.get("value") is not None
+                else "—"
+            )
+            body.append(
+                f"<tr><td>{self._ch(c['channel'])}</td>"
+                f"{self._val(by.get('experiment'))}"
+                f"{self._val(by.get('mmm'))}"
+                f"{self._val(by.get('platform'))}"
+                f'<td><span class="tier-chip {chip_cls}">{chip_lbl}</span></td>'
+                f"<td>{rec_val}</td></tr>"
+            )
+        return f"""
+            <table class="data-table">
+              <thead><tr><th>Channel</th><th>Experiment</th><th>MMM</th>
+                <th>Platform</th><th>Agreement</th><th>Recommended</th></tr></thead>
+              <tbody>{"".join(body)}</tbody>
+            </table>
+        """
+
+
 class AugurTestsSection(AugurSection):
     section_id = "tests"
     default_title = "Experiments that would tighten the next plan"
@@ -1603,6 +1703,7 @@ AUGUR_SECTIONS: list[tuple[str, type[AugurSection], str]] = [
     ("ppc-fit", AugurModelFitSection, "ppc_timeseries"),
     ("ppc-checks", AugurPPCSection, "posterior_predictive"),
     ("evidence", AugurEvidenceSection, "evidence_guide"),
+    ("triangulation", AugurTriangulationSection, "triangulation"),
     ("tests", AugurTestsSection, "recommended_tests"),
     ("next", AugurNextStepsSection, "next_steps"),
 ]
@@ -1625,6 +1726,7 @@ __all__ = [
     "AugurModelFitSection",
     "AugurPPCSection",
     "AugurEvidenceSection",
+    "AugurTriangulationSection",
     "AugurTestsSection",
     "AugurNextStepsSection",
     "AUGUR_SECTIONS",
