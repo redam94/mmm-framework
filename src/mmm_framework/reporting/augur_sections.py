@@ -1506,6 +1506,70 @@ class AugurPacingSection(AugurSection):
         """
 
 
+class AugurLongTermSection(AugurSection):
+    """Short-term vs long-term (brand) — the augur client-deck view (issues
+    #106/#122). Leads with the ESTIMATED long-term (brand) share when the model
+    fits a slow brand-equity stock; otherwise states plainly that only short-term
+    is measured. Data-gated on ``bundle.long_term``."""
+
+    section_id = "long-term"
+    default_title = "Short-term vs long-term (brand)"
+    eyebrow = "The brand horizon"
+
+    @property
+    def is_enabled(self) -> bool:
+        return super().is_enabled and bool(getattr(self.data, "long_term", None))
+
+    def render(self) -> str:
+        lt = getattr(self.data, "long_term", None)
+        if not self.is_enabled or not lt:
+            return ""
+        est = lt.get("estimated")
+        if est and est.get("long_term_fraction"):
+            return self._wrap(self._estimated(est))
+        # No estimate — the honest caveat (brand beyond adstock isn't measured).
+        return self._wrap(
+            "<p class='lede'>A weekly model measures activation + carryover, not "
+            "long-term brand equity. Read the channel returns as <strong>short-term "
+            "</strong> only — this systematically under-credits brand-building "
+            "channels (TV, video, sponsorship). A brand-equity model or long-window "
+            "experiments are needed to measure the long-term effect.</p>"
+        )
+
+    def _estimated(self, est: dict) -> str:
+        f = est["long_term_fraction"]
+        mean, lo, hi = (
+            float(f.get("mean", 0)) * 100,
+            float(f.get("lower", 0)) * 100,
+            float(f.get("upper", 0)) * 100,
+        )
+        body = []
+        for c in est.get("channels") or []:
+            body.append(
+                f"<tr><td>{self._ch(c.get('channel', ''))}</td>"
+                f"<td class='mono'>{float(c.get('short_term_pct', 0)):.0%}</td>"
+                f"<td class='mono'>{float(c.get('long_term_pct', 0)):.0%}</td></tr>"
+            )
+        table = (
+            f"""
+            <table class="data-table">
+              <thead><tr><th>Channel</th><th>Short-term (activation)</th>
+                <th>Long-term (brand)</th></tr></thead>
+              <tbody>{"".join(body)}</tbody>
+            </table>
+            """
+            if body
+            else ""
+        )
+        return (
+            f"<p class='lede'>This model fits a slow-decaying brand-equity stock, so "
+            f"it <strong>estimates</strong> — not assumes — the long-term effect. An "
+            f"estimated <strong>{mean:.0f}%</strong> of the total media effect is "
+            f"<strong>long-term (brand)</strong> (90% range [{lo:.0f}%, {hi:.0f}%]); "
+            f"the rest is short-term activation.</p>{table}"
+        )
+
+
 class AugurCFOSection(AugurSection):
     """CFO one-pager — marketing's P&L contribution + spend-cut risk (issue #108).
 
@@ -1763,6 +1827,7 @@ AUGUR_SECTIONS: list[tuple[str, type[AugurSection], str]] = [
     ("ppc-fit", AugurModelFitSection, "ppc_timeseries"),
     ("ppc-checks", AugurPPCSection, "posterior_predictive"),
     ("evidence", AugurEvidenceSection, "evidence_guide"),
+    ("long-term", AugurLongTermSection, "long_term"),
     ("cfo", AugurCFOSection, "cfo"),
     ("triangulation", AugurTriangulationSection, "triangulation"),
     ("tests", AugurTestsSection, "recommended_tests"),
@@ -1787,6 +1852,7 @@ __all__ = [
     "AugurModelFitSection",
     "AugurPPCSection",
     "AugurEvidenceSection",
+    "AugurLongTermSection",
     "AugurCFOSection",
     "AugurTriangulationSection",
     "AugurTestsSection",

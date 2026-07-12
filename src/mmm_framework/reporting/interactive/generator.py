@@ -80,6 +80,8 @@ _PAYLOAD_KEYS = (
     "mediation",
     "latent",
     "triangulation",
+    "pacing",
+    "long_term",
     "evidence",
 )
 
@@ -196,6 +198,8 @@ class InteractiveReportGenerator:
             self._section_curves,
             self._section_carryover,
             self._section_triangulation,
+            self._section_pacing,
+            self._section_long_term,
             self._section_pathways,
             self._section_latent,
             self._section_prior_posterior,
@@ -616,6 +620,37 @@ class InteractiveReportGenerator:
             "triangulation",
             "MMM × experiment × platform",
             "Triangulating the evidence",
+            body,
+        )
+
+    def _section_pacing(self) -> tuple[_NavEntry, str] | None:
+        pac = self.facts.get("pacing")
+        if not pac or not pac.get("available") or not pac.get("channels"):
+            return None
+        body = (
+            '<p class="lede">Actual delivery vs the recommended plan — where money '
+            "is drifting off-pace between fits.</p>"
+            '<div class="ir-pacing" id="pacingPanel"></div>'
+        )
+        return _NavEntry("pacing", "Pacing"), self._wrap(
+            "pacing", "In-flight pacing", "Plan vs actual", body
+        )
+
+    def _section_long_term(self) -> tuple[_NavEntry, str] | None:
+        lt = self.facts.get("long_term")
+        if not lt or not lt.get("long_term_fraction"):
+            return None
+        body = (
+            '<p class="lede">This model fits a slow-decaying brand-equity stock '
+            "above the adstock window, so it <strong>estimates</strong> — not "
+            "assumes — the long-term (brand) share of the media effect, with "
+            "uncertainty. The rest is short-term activation.</p>"
+            '<div class="ir-longterm" id="longTermPanel"></div>'
+        )
+        return _NavEntry("long-term", "Long-term"), self._wrap(
+            "long-term",
+            "Short-term vs long-term (brand)",
+            "The brand horizon",
             body,
         )
 

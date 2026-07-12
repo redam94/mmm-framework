@@ -790,6 +790,32 @@ class TestGenerator:
         assert 'href="#pathways"' not in html
         assert 'href="#latent-structure"' not in html
 
+    def test_pacing_section_gating_and_render(self):
+        # absent by default → no section
+        html0 = InteractiveReportGenerator(facts=_canned_facts()).generate_report()
+        assert 'href="#pacing"' not in html0
+        # a pacing payload → the panel + JS engine render
+        facts = _canned_facts()
+        facts["pacing"] = {
+            "available": True,
+            "threshold": 0.1,
+            "flagged": ["TV"],
+            "alert": {"off_pace": True, "n_flagged": 1, "flagged": ["TV"]},
+            "channels": [
+                {
+                    "channel": "TV",
+                    "planned": 200.0,
+                    "actual": 250.0,
+                    "divergence_pct": 0.25,
+                    "status": "over-pacing",
+                }
+            ],
+        }
+        html = InteractiveReportGenerator(facts=facts).generate_report()
+        assert 'id="pacingPanel"' in html
+        assert 'href="#pacing"' in html
+        assert "renderPacing" in html
+
     def test_pathways_and_latent_render(self):
         html = InteractiveReportGenerator(facts=_canned_facts()).generate_report()
         assert 'id="pathwaysChart"' in html

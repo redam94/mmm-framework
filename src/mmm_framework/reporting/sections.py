@@ -1065,14 +1065,73 @@ class LongTermSection(Section):
                 growth, which decays far more slowly than any adstock window.
             </p>
         """
-        caveat = self._render_caveat(has_funnel, bool(rows))
+        estimate = self._render_estimated(lt.get("estimated"))
+        caveat = self._render_caveat(has_funnel, bool(rows), bool(lt.get("estimated")))
         split = self._render_split(rows, lt.get("blended")) if rows else ""
         scenario = self._render_scenario(rows, lt)
         guidance = self._render_guidance()
-        parts = [intro, caveat, split, scenario, guidance]
+        # The estimate (a genuine long-term measurement) leads; the caveat/scenario
+        # only follow when there is no estimate.
+        parts = [intro, estimate, caveat, split, scenario, guidance]
         return self._render_section_wrapper("\n".join(p for p in parts if p))
 
-    def _render_caveat(self, has_funnel: bool, has_split: bool) -> str:
+    def _render_estimated(self, est: dict | None) -> str:
+        """The ESTIMATED long-term (brand) share of the media effect, from a model
+        that fits a slow brand-equity stock (issue #122) — a genuine estimate with
+        uncertainty, not the assumption-driven scenario."""
+        if not est or not est.get("long_term_fraction"):
+            return ""
+        f = est["long_term_fraction"]
+        mean = float(f.get("mean", 0.0)) * 100
+        lo = float(f.get("lower", 0.0)) * 100
+        hi = float(f.get("upper", 0.0)) * 100
+        rows = []
+        for c in est.get("channels") or []:
+            ch = html.escape(str(c.get("channel", "")))
+            lt_pct = float(c.get("long_term_pct", 0.0))
+            st_pct = float(c.get("short_term_pct", 0.0))
+            rows.append(
+                f"<tr><td>{ch}</td><td>{self._bar(st_pct, lt_pct)}</td>"
+                f'<td class="mono">{st_pct:.0%}</td>'
+                f'<td class="mono">{lt_pct:.0%}</td></tr>'
+            )
+        table = (
+            f"""
+            <table class="data-table">
+                <thead><tr><th>Channel</th><th>Split</th>
+                    <th>Short-term (activation)</th>
+                    <th>Long-term (brand)</th></tr></thead>
+                <tbody>{"".join(rows)}</tbody>
+            </table>
+            """
+            if rows
+            else ""
+        )
+        return f"""
+            <div class="callout positive">
+                <h4>Estimated long-term (brand) contribution</h4>
+                <p>This model fits a <strong>slow-decaying brand-equity stock</strong>
+                above the adstock window, so it <strong>estimates</strong> the long-term
+                share of the media effect (with uncertainty) rather than assuming it.
+                An estimated <strong>{mean:.0f}%</strong> of the total media effect is
+                <strong>long-term (brand)</strong> — 90% credible interval
+                [{lo:.0f}%, {hi:.0f}%]; the rest is short-term activation.</p>
+            </div>
+            {table}
+        """
+
+    def _render_caveat(
+        self, has_funnel: bool, has_split: bool, has_estimate: bool = False
+    ) -> str:
+        if has_estimate:
+            body = (
+                "This model <strong>estimates</strong> a long-term brand-equity term "
+                "(shown above), so the short-vs-long split here is a measurement, not "
+                "an assumption. Treat the estimate as horizon-dependent — it is only "
+                "as good as the assumed brand-memory decay and the length of history "
+                "available to identify it; confirm with long-window experiments."
+            )
+            return f'<div class="callout uncertain"><h4>How to read this estimate</h4><p>{body}</p></div>'
         if has_funnel:
             body = (
                 "This model includes a <strong>survey/brand funnel</strong>, so "
