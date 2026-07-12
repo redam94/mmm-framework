@@ -55,7 +55,10 @@ class ResponseCurves:
     # ``max_obs_multiplier`` pushes the AVERAGE period beyond any observed level
     # → extrapolation. ``None`` for curves built without a model (back-compat).
     obs_max_spend: np.ndarray | None = None  # (C,) max spend at any observation
-    n_obs: int | None = None  # number of observations behind base_spend
+    # Observations behind ``base_spend``: a single int for national curves, or a
+    # per-channel ``(C,)`` array for combined geo arms whose geographies may have
+    # different period counts (ragged panels) — see ``combine_geo_curves``.
+    n_obs: int | np.ndarray | None = None
 
     @property
     def spend_grid(self) -> np.ndarray:
@@ -71,7 +74,10 @@ class ResponseCurves:
         the observed range was not captured."""
         if self.obs_max_spend is None or self.n_obs is None:
             return None
-        mean_per_obs = self.base_spend / max(self.n_obs, 1)
+        # np.maximum handles both a scalar n_obs (national) and a per-arm array
+        # (combined geo arms) without a Python truth-value ambiguity.
+        n = np.maximum(np.asarray(self.n_obs, dtype=float), 1.0)
+        mean_per_obs = self.base_spend / n
         with np.errstate(divide="ignore", invalid="ignore"):
             m = self.obs_max_spend / np.where(mean_per_obs > 0, mean_per_obs, np.nan)
         # A channel run at a perfectly constant level has max==mean → 1.0 (any
@@ -499,7 +505,7 @@ def compute_response_curves_per_geo(
     if 1.0 not in mults:
         mults = np.sort(np.append(mults, 1.0))
 
-    X = mmm.X_media_raw
+    X = np.asarray(mmm.X_media_raw, dtype=float)
     geo_idx = np.asarray(mmm.geo_idx)
     geo_names = list(mmm.geo_names)
     n_geos = len(geo_names)
@@ -519,6 +525,11 @@ def compute_response_curves_per_geo(
     for g, name in enumerate(geo_names):
         mask = geo_idx == g
         base_spend = X[mask].sum(axis=0)  # (C,)
+        # This geography's own observed per-period spend range (issue #121), so a
+        # per-geo recommendation that scales a geo's spend past what that geo
+        # actually ran is flagged, exactly like the national path (#105).
+        n_geo_obs = int(mask.sum())
+        obs_max_spend = X[mask].max(axis=0) if n_geo_obs else None
         # (G, D, C) -> (D, C, G)
         contributions = np.stack(per_mult_by_geo[g], axis=0).transpose(1, 2, 0)
         out[name] = ResponseCurves(
@@ -526,6 +537,8 @@ def compute_response_curves_per_geo(
             multipliers=mults,
             base_spend=base_spend,
             contributions=contributions,
+            obs_max_spend=obs_max_spend,
+            n_obs=n_geo_obs,
         )
     return out
 
@@ -542,18 +555,33 @@ def combine_geo_curves(geo_curves: dict[str, ResponseCurves]) -> ResponseCurves:
     arm_names: list[str] = []
     base: list[float] = []
     contribs: list[np.ndarray] = []
+    # Carry each geo's observed per-period spend range onto its arms (issue #121)
+    # so the flattened optimizer flags a geo×channel arm scaled past that geo's
+    # observed range. n_obs is kept PER ARM (its geo's period count) rather than a
+    # single scalar so ragged panels — geos with different period counts — get the
+    # right multiplier. Dropped only if any geo lacks the range (back-compat).
+    arm_obs_max: list[float] = []
+    arm_n_obs: list[int] = []
+    has_range = True
     for g_idx, g in enumerate(geos):
         rc = geo_curves[g]
         for c, ch in enumerate(rc.channel_names):
             arm_names.append(f"{g_idx}{GEO_ARM_SEP}{ch}")
             base.append(float(rc.base_spend[c]))
             contribs.append(rc.contributions[:, c, :])  # (D, G_mult)
+            if rc.obs_max_spend is None or rc.n_obs is None:
+                has_range = False
+            else:
+                arm_obs_max.append(float(rc.obs_max_spend[c]))
+                arm_n_obs.append(int(np.asarray(rc.n_obs)))
     contributions = np.stack(contribs, axis=1)  # (D, A, G_mult)
     return ResponseCurves(
         channel_names=arm_names,
         multipliers=mults,
         base_spend=np.asarray(base),
         contributions=contributions,
+        obs_max_spend=np.asarray(arm_obs_max) if has_range else None,
+        n_obs=np.asarray(arm_n_obs) if has_range else None,
     )
 
 
