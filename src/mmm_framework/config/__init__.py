@@ -37,6 +37,7 @@ from .enums import (
 )
 from .events import EventSpec, EventsConfig
 from .interactions import ChannelInteraction
+from .levers import PriceConfig, PromoConfig
 from .likelihood import LikelihoodConfig
 from .dataset import DATASET_SCHEMA_VERSION, DatasetSchema, RoleBinding
 from .roles import DatasetRole
@@ -92,6 +93,8 @@ __all__ = [
     "EventSpec",
     "EventsConfig",
     "ChannelInteraction",
+    "PriceConfig",
+    "PromoConfig",
     "LikelihoodConfig",
     "AdstockConfig",
     "SaturationConfig",

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from .enums import FitMethod, InferenceMethod, ModelSpecification, PriorType
 from .events import EventsConfig
 from .interactions import ChannelInteraction
+from .levers import PriceConfig, PromoConfig
 from .likelihood import LikelihoodConfig
 from .priors import PriorConfig
 
@@ -174,6 +175,13 @@ class ModelConfig(BaseModel):
     # (default). Each entry adds a `beta_ij * sat_i * sat_j` term so a channel pair
     # can do more (synergy) or less (cannibalization) than the sum of its parts.
     channel_interactions: list[ChannelInteraction] = Field(default_factory=list)
+
+    # Price & promotion levers (#138). None / empty ⇒ these enter (if present) as
+    # ordinary linear controls. When set, the named control column is promoted to
+    # a first-class lever (log-price elasticity / promo lift with carryover) and
+    # removed from the linear control block.
+    price: PriceConfig | None = None
+    promotions: list[PromoConfig] = Field(default_factory=list)
 
     # Control selection
     control_selection: ControlSelectionConfig = Field(

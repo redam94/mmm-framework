@@ -690,6 +690,23 @@ tv_channel = (
             </div>
 
             <div class="note">
+                <h4>Price &amp; promotion as first-class levers (opt-in)</h4>
+                <p style="margin-bottom:0;">
+                    For CPG / retail / DTC, price and promotion are decisions the client controls, and
+                    planners want an <em>elasticity</em> and a <em>promo ROI</em> — not a nuisance
+                    coefficient. <code>ModelConfigBuilder().with_price(PriceConfig(variable="Price",
+                    reference="median")).with_promotions(PromoConfig(variable="Promo"))</code> promotes
+                    those control columns to levers: a sign-guarded
+                    <strong>log-price elasticity</strong> (responding to <em>discount depth</em> vs a
+                    reference price) and a <strong>promo lift with its own carryover</strong>, reported
+                    as a separate "Price &amp; Promotion" contribution. <strong>Caveat:</strong> price
+                    is usually endogenous (cut <em>because</em> demand is soft) — treat the elasticity
+                    as conditional, cross-check the <a href="identification-assumptions.html">identification
+                    assumptions</a>, and confirm with an experiment.
+                </p>
+            </div>
+
+            <div class="note">
                 <h4>Do channels work together? Synergy / interaction terms (opt-in)</h4>
                 <p style="margin-bottom:0;">
                     The base model is strictly additive, so it can't say "TV makes Search work harder."

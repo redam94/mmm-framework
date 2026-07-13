@@ -193,6 +193,11 @@ class ComponentDecomposition:
     interactions: np.ndarray | None = None
     total_interactions: float | None = None
 
+    # Price & promotion levers (#138), original scale — the combined price-
+    # elasticity + promo-lift contribution. ``None`` when no lever was fit.
+    levers: np.ndarray | None = None
+    total_levers: float | None = None
+
     def summary(self) -> pd.DataFrame:
         """Get summary of component contributions."""
         components = {
@@ -211,6 +216,8 @@ class ComponentDecomposition:
             components["Events / Holidays"] = self.total_events
         if self.total_interactions is not None:
             components["Synergy / Interactions"] = self.total_interactions
+        if self.total_levers is not None:
+            components["Price & Promotion"] = self.total_levers
 
         total = sum(components.values())
 
