@@ -453,8 +453,14 @@ class MMMSerializer:
         # (e.g. a CFA) re-derived its own data in ``_prepare_data`` during
         # reconstruction, so skip it.
         if metadata.get("model_kind", "mmm") == "mmm":
-            # Re-standardize y with loaded params
-            instance.y = (instance.y_raw - instance.y_mean) / instance.y_std
+            # Re-standardize y with loaded params. The multiplicative (semi-log)
+            # model standardizes log(y); y_raw stays original, so re-log here.
+            y_src = (
+                np.log(instance.y_raw)
+                if getattr(instance, "_multiplicative", False)
+                else instance.y_raw
+            )
+            instance.y = (y_src - instance.y_mean) / instance.y_std
 
             # Re-normalize media with loaded max values
             for alpha in instance.adstock_alphas:

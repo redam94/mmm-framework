@@ -119,14 +119,14 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-10",
+          "dateModified": "2026-07-12",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/modeling-guide.html#breadcrumb"
           },
           "@id": "https://redam94.github.io/mmm-framework/modeling-guide.html#webpage",
           "@type": "TechArticle",
           "headline": "Modeling Guide",
-          "datePublished": "2026-07-10",
+          "datePublished": "2026-07-12",
           "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
           "author": {
             "@type": "Person",
@@ -191,6 +191,7 @@
             <ul class="sidebar-nav">
                 <li><a href="#prepare-data">Prepare Data</a></li>
                 <li><a href="#configure-model">Configure the Model</a></li>
+                <li><a href="#functional-form">Additive vs Multiplicative</a></li>
                 <li><a href="#set-priors">Set Priors</a></li>
                 <li><a href="#prior-predictive">Prior Predictive Check</a></li>
             </ul>
@@ -505,6 +506,53 @@ mmm = BayesianMMM(panel, model_config, trend_config)
 print("Model parameters:")
 for var in mmm.model.free_RVs:
     print(f"  {var.name}")</code></pre>
+            </div>
+
+            <h3 id="functional-form">Functional form: additive or multiplicative</h3>
+            <p>
+                By default the model is <strong>additive</strong>: sales = baseline + Σ channel
+                contributions. The alternative is a <strong>multiplicative</strong> (semi-log) form,
+                <code>ModelConfigBuilder().multiplicative()</code>, which models <em>log(sales)</em>
+                with each channel entering as the <em>same</em> saturating curve (see
+                <a href="math-02-saturation.html">saturation</a>) but acting as a
+                <strong>percent lift</strong> on sales rather than a dollar addition:
+            </p>
+            <p style="text-align:center;">
+                <code>log(sales) = baseline + Σ<sub>c</sub> β<sub>c</sub> · sat<sub>c</sub>(spend<sub>c</sub>)</code>
+            </p>
+            <p>
+                Because saturation is bounded in [0, 1] with <code>sat(0) = 0</code>, a channel's
+                lift runs from <strong>1× at zero spend</strong> (a finite baseline) up to
+                <strong>exp(β<sub>c</sub>) at full saturation</strong>. So <code>β<sub>c</sub></code> is
+                the channel's <strong>maximum log-lift</strong>, and the model reports
+                <code>max_pct_lift_&lt;channel&gt;</code> = exp(β)−1 directly — e.g. a max lift of 0.30
+                means "at saturation this channel lifts sales 30%."
+            </p>
+            <ul>
+                <li><strong>Use additive</strong> (the default) for most MMMs — it gives per-channel
+                    dollar contributions, marginal ROAS, and experiment calibration.</li>
+                <li><strong>Use multiplicative</strong> when effects are better thought of as
+                    <em>percent lifts</em> that compound (common in demand-driven categories) — it keeps
+                    the saturation curves, needs a strictly positive KPI (it models logs), and handles
+                    zero-spend / flighted weeks fine.</li>
+            </ul>
+            <p>
+                The decomposition still works: because the multiplicative form has a finite media-off
+                baseline, <code>compute_component_decomposition()</code> returns an
+                <strong>exact</strong> waterfall via the log-mean (LMDI) index — each channel's
+                original-scale contribution is its share of the log-lift, and the components sum to the
+                fitted sales.
+            </p>
+            <div class="note">
+                <h4>Two surfaces stay additive-only</h4>
+                <p style="margin-bottom:0;">
+                    The in-graph <strong>marginal-ROAS table</strong> and <strong>experiment
+                    calibration</strong> are computed on the additive scale and raise a clear error
+                    under the multiplicative form rather than return a wrong number; use
+                    <code>compute_counterfactual_contributions()</code> /
+                    <code>compute_channel_roi()</code> (which diff back-transformed predictions) for
+                    original-scale channel effects and ROI.
+                </p>
             </div>
 
             <h2 id="set-priors">Set Priors Thoughtfully</h2>

@@ -87,6 +87,21 @@ class BaseExtendedMMM:
         self.model_config = model_config
         self.trend_config = trend_config
 
+        # The multiplicative (semi-log) specification is a core-BayesianMMM feature;
+        # the extension families (nested / multivariate / combined / structural)
+        # build their own additive graphs and do not implement a log link.
+        from ...config import ModelSpecification as _ModelSpec
+
+        if (
+            getattr(model_config, "specification", _ModelSpec.ADDITIVE)
+            == _ModelSpec.MULTIPLICATIVE
+        ):
+            raise NotImplementedError(
+                "Multiplicative (semi-log) specification is not supported for "
+                f"extension models ({type(self).__name__}); it is available on the "
+                "core BayesianMMM. Use the additive form for this model family."
+            )
+
         self.n_obs = len(y)
         self.n_channels = len(channel_names)
 
