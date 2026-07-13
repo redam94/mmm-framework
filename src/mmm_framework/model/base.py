@@ -755,6 +755,10 @@ class BayesianMMM:
         # === Media hierarchy ===
         self.media_groups = self.mff_config.get_hierarchical_media_groups()
         self.has_media_hierarchy = len(self.media_groups) > 0
+        # DF-2: channels whose coefficient was partial-pooled behind a group
+        # prior (populated by _build_grouped_media_betas when the flag is on).
+        # Reported so a pooled channel's per-channel ROI is disclosed as such.
+        self._pooled_channels: set[str] = set()
 
     def _resolve_control_causal_roles(self) -> list[CausalControlRole | None]:
         """Resolve the causal role of each control and refuse bad controls.
@@ -1383,6 +1387,69 @@ class BayesianMMM:
         z = pm.Normal(f"beta_{channel_name}_z", mu=0.0, sigma=1.0, shape=self.n_geos)
         return pm.Deterministic(f"beta_{channel_name}", pt.exp(logmu + logtau * z))
 
+    def _build_grouped_media_betas(self) -> dict[str, "pt.TensorVariable"]:
+        """DF-2: partial-pool the coefficients of channels sharing a
+        ``parent_channel`` group toward a shared log-normal mean.
+
+        Returns ``{channel: log_beta_expr}`` — the LOG-scale pooled coefficient
+        for each pooled channel (the caller wraps it in ``beta_<ch> =
+        exp(log_beta_expr)`` so the ``beta_<ch>`` Deterministic lives in one
+        place). Empty when ``use_grouped_media_priors`` is off, so the media
+        block is byte-identical (R0.1/R0.2). Must be called inside the
+        ``pm.Model`` context, before the channel loop.
+
+        Log-normal (positive) pooling toward a shared *mean* — a HalfNormal
+        "shared scale" would pool toward zero, wrong for a coefficient that
+        should sit near 1. Non-centered (``mu + tau * z``) for clean sampling
+        with sparse groups. A channel is pooled only if it is genuinely
+        unconstrained — a calibrated ``roi_prior``, an explicit
+        ``coefficient_prior``, or a per-channel ROI-scale prior all EXCLUDE it
+        (DF2.4: the experiment/explicit prior wins, it is not dragged toward a
+        weak group mean). Groups with fewer than two eligible members are
+        skipped (nothing to pool).
+        """
+        grouped: dict[str, "pt.TensorVariable"] = {}
+        if not getattr(self.model_config, "use_grouped_media_priors", False):
+            return grouped
+        if self._multiplicative:
+            # The multiplicative branch uses log_lift, not the additive beta, and
+            # returns before this block — pooling additive betas would leave dead
+            # group RVs in the graph. Grouping the multiplicative lift is a
+            # separate, not-yet-implemented feature.
+            warnings.warn(
+                "use_grouped_media_priors is ignored under the multiplicative "
+                "specification (it pools the additive coefficient); the "
+                "multiplicative lift is not pooled.",
+                stacklevel=2,
+            )
+            return grouped
+
+        def _eligible(ch: str) -> bool:
+            cfg = self.mff_config.get_media_config(ch)
+            return (
+                getattr(cfg, "roi_prior", None) is None
+                and _explicit_prior(cfg, "coefficient_prior") is None
+                and getattr(cfg, "roi_prior_mu", None) is None
+                and getattr(cfg, "roi_prior_sigma", None) is None
+            )
+
+        for parent, children in self.media_groups.items():
+            members = [c for c in children if c in self.channel_names and _eligible(c)]
+            if len(members) < 2:
+                continue
+            # Log-space group level (mu) + between-channel spread (tau). The
+            # pooling that matters is tau: with the level pinned near log(1.5), an
+            # informative channel reaches its value through tau*z, so the adaptive
+            # tau preserves genuine between-channel differences (no over-shrinkage;
+            # verified in tests). Non-centered for clean sampling with sparse groups.
+            mu_g = pm.Normal(f"beta_mu_{parent}", mu=float(np.log(1.5)), sigma=0.5)
+            tau_g = pm.HalfNormal(f"beta_tau_{parent}", sigma=0.5)
+            z = pm.Normal(f"beta_z_{parent}", mu=0.0, sigma=1.0, shape=len(members))
+            for i, ch in enumerate(members):
+                grouped[ch] = mu_g + tau_g * z[i]
+            self._pooled_channels.update(members)
+        return grouped
+
     def _build_channel_saturation(
         self, channel_name: str
     ) -> tuple[SaturationType, dict[str, Any]]:
@@ -1744,6 +1811,10 @@ class BayesianMMM:
             # mROAS) from the *same* beta, saturation, and adstock parameters.
             channel_handles: dict[str, dict[str, Any]] = {}
 
+            # DF-2: log-scale pooled coefficients for channels sharing a
+            # parent_channel group ({} when the flag is off -> loop byte-identical).
+            grouped_log_betas = self._build_grouped_media_betas()
+
             for c, channel_name in enumerate(self.channel_names):
                 if self.use_parametric_adstock:
                     # Estimate a continuous adstock kernel in-graph (geometric,
@@ -1872,7 +1943,17 @@ class BayesianMMM:
                 # hierarchy would re-parameterize away). `beta_eff` is per-obs (so
                 # contributions/marginals are geo-correct); `beta_pop` is a scalar
                 # population summary for the off-panel (national) estimand.
-                if (
+                if channel_name in grouped_log_betas:
+                    # DF-2: partial-pooled group coefficient (takes precedence over
+                    # the per-geo hierarchy and the ROI/coefficient default). The
+                    # channel was only added to the group if it has no calibrated /
+                    # explicit prior, so no precedence conflict arises. Emitted as
+                    # the `beta_<ch>` Deterministic here so naming lives in one place.
+                    beta_eff = pm.Deterministic(
+                        f"beta_{channel_name}", pt.exp(grouped_log_betas[channel_name])
+                    )
+                    beta_pop = beta_eff
+                elif (
                     self.has_geo
                     and getattr(self.hierarchical_config, "vary_media_by_geo", False)
                     and beta_prior is None

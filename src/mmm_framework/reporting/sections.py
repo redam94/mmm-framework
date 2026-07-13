@@ -484,9 +484,30 @@ class ChannelROISection(Section):
             else ""
         )
 
+        # DF-2 disclosure: channels partial-pooled behind a group prior do not
+        # have an independently-identified per-channel ROI — their split rests on
+        # the exchangeability assumption, so the group total is the trustworthy
+        # quantity. Disclosed in the same register as the other diagnostics (R0.6).
+        pooled = [
+            html.escape(ch)
+            for ch in (self.data.pooled_channels or [])
+            if ch in channels
+        ]
+        pooled_note = ""
+        if pooled:
+            pooled_note = (
+                '<div class="note"><strong>Partially pooled:</strong> '
+                f'{", ".join(pooled)} share a channel group and were fit with a '
+                "partial-pooling (grouped) prior, so their per-channel ROIs borrow "
+                "strength toward a shared mean and are <em>not</em> independently "
+                "identified. Treat the <em>combined</em> group effect as the "
+                "reliable quantity; an experiment is what identifies the split.</div>"
+            )
+
         content = f"""
             {legend}
             {forest_plot}
+            {pooled_note}
             <h3>Detailed ROI Estimates</h3>
             {roi_table}
             {evidence_key}

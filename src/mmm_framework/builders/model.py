@@ -281,6 +281,7 @@ class ModelConfigBuilder:
         self._media_prior_mode: str = "coefficient"
         self._media_roi_prior_mu: float = 0.0
         self._media_roi_prior_sigma: float = 1.0
+        self._use_grouped_media_priors: bool = False
         self._hierarchical: HierarchicalConfig | None = None
         self._seasonality: SeasonalityConfig | None = None
         self._control_selection: ControlSelectionConfig | None = None
@@ -441,6 +442,14 @@ class ModelConfigBuilder:
         """Convenience: switch the default media priors to the ROI scale."""
         return self.with_media_prior_mode("roi", roi_mu=roi_mu, roi_sigma=roi_sigma)
 
+    def with_grouped_media_priors(self, enabled: bool = True) -> Self:
+        """Partial-pool the coefficients of channels sharing a ``parent_channel``
+        group toward a shared mean (DF-2). Off by default; only pool genuinely
+        exchangeable channels. Calibrated / explicitly-priored channels are
+        excluded from the pool."""
+        self._use_grouped_media_priors = enabled
+        return self
+
     # Component configs
     def with_hierarchical(self, config: HierarchicalConfig) -> Self:
         """Set hierarchical configuration."""
@@ -510,6 +519,7 @@ class ModelConfigBuilder:
             media_prior_mode=self._media_prior_mode,
             media_roi_prior_mu=self._media_roi_prior_mu,
             media_roi_prior_sigma=self._media_roi_prior_sigma,
+            use_grouped_media_priors=self._use_grouped_media_priors,
             hierarchical=self._hierarchical or HierarchicalConfigBuilder().build(),
             seasonality=self._seasonality or SeasonalityConfigBuilder().build(),
             control_selection=self._control_selection
