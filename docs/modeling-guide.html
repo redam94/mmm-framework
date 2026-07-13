@@ -690,6 +690,21 @@ tv_channel = (
             </div>
 
             <div class="note">
+                <h4>Do channels work together? Synergy / interaction terms (opt-in)</h4>
+                <p style="margin-bottom:0;">
+                    The base model is strictly additive, so it can't say "TV makes Search work harder."
+                    Add a pair term with
+                    <code>ModelConfigBuilder().with_channel_interactions(ChannelInteraction(channel_a="TV",
+                    channel_b="Search", expected_sign="positive"))</code> — it fits
+                    <code>β<sub>ij</sub>·sat<sub>i</sub>·sat<sub>j</sub></code> with a sign-aware,
+                    shrink-to-zero prior (synergy positive, cannibalization negative), reported as a
+                    separate "Synergy" contribution. Off by default. <strong>Caveat:</strong>
+                    interactions are weakly identified without designed variation — trust the sign, not
+                    the magnitude, and run an experiment to actually pin a synergy.
+                </p>
+            </div>
+
+            <div class="note">
                 <h4>Sharp spikes: holiday &amp; event effects (opt-in)</h4>
                 <p style="margin-bottom:0;">
                     Black Friday, Prime Day, a product launch — these are <em>not</em> smooth-seasonal,

@@ -762,6 +762,8 @@ class BayesianMMM:
         # prior (populated by _build_grouped_media_betas when the flag is on).
         # Reported so a pooled channel's per-channel ROI is disclosed as such.
         self._pooled_channels: set[str] = set()
+        # #142: names of the fitted channel-interaction pairs (set at build).
+        self._interaction_names: list[str] = []
 
     def _resolve_control_causal_roles(self) -> list[CausalControlRole | None]:
         """Resolve the causal role of each control and refuse bad controls.
@@ -1484,6 +1486,66 @@ class BayesianMMM:
             self._pooled_channels.update(members)
         return grouped
 
+    def _build_channel_interactions(
+        self, channel_handles: dict[str, dict]
+    ) -> "pt.TensorVariable | None":
+        """Cross-channel synergy / interaction (#142): sum of
+        ``beta_ij * sat_i * sat_j`` over the configured channel pairs.
+
+        Returns the per-obs interaction contribution (and registers the
+        ``interaction_contributions`` (obs x pair) + ``interaction_component``
+        deterministics), or ``None`` when nothing is configured — so the default
+        graph is byte-identical (R0.1). Sign-aware prior per pair: ``positive`` ⇒
+        HalfNormal (synergy only), ``negative`` ⇒ its reflection, ``any`` ⇒
+        Normal(0, sigma); all shrink toward zero. Must be called inside the
+        ``pm.Model`` context, after the channel loop.
+        """
+        specs = list(getattr(self.model_config, "channel_interactions", []) or [])
+        if not specs:
+            return None
+        if self._multiplicative:
+            warnings.warn(
+                "channel_interactions are ignored under the multiplicative "
+                "specification (they are an additive-model term).",
+                stacklevel=2,
+            )
+            return None
+
+        self._interaction_names: list[str] = []
+        terms: list = []
+        for spec in specs:
+            a, b = spec.channel_a, spec.channel_b
+            if a not in channel_handles or b not in channel_handles:
+                warnings.warn(
+                    f"channel_interaction '{spec.name}': unknown channel "
+                    f"({a!r} or {b!r} not in the model); skipping.",
+                    stacklevel=2,
+                )
+                continue
+            s_a = channel_handles[a]["x_saturated"]
+            s_b = channel_handles[b]["x_saturated"]
+            sigma = float(spec.prior_sigma)
+            rv_name = f"beta_int_{a}_{b}"
+            # `beta_int_<a>_<b>` is always the EFFECTIVE (correctly-signed)
+            # interaction coefficient, so the trace reads it directly.
+            if spec.expected_sign == "positive":
+                beta_ij = pm.HalfNormal(rv_name, sigma=sigma)
+            elif spec.expected_sign == "negative":
+                mag = pm.HalfNormal(f"{rv_name}_mag", sigma=sigma)
+                beta_ij = pm.Deterministic(rv_name, -mag)
+            else:
+                beta_ij = pm.Normal(rv_name, mu=0.0, sigma=sigma)
+            terms.append(beta_ij * s_a * s_b)
+            self._interaction_names.append(spec.name)
+
+        if not terms:
+            return None
+        interaction_matrix = pt.stack(terms, axis=1)
+        pm.Deterministic("interaction_contributions", interaction_matrix)
+        total = interaction_matrix.sum(axis=1)
+        pm.Deterministic("interaction_component", total)
+        return total
+
     def _build_channel_beta_tvp(
         self, channel_name: str
     ) -> tuple["pt.TensorVariable", "pt.TensorVariable"]:
@@ -2140,6 +2202,7 @@ class BayesianMMM:
                     # Back-compat alias (None unless logistic).
                     "sat_lam": sat_params.get("sat_lam"),
                     "channel_contrib": channel_contrib,  # standardized, per-obs
+                    "x_saturated": x_saturated,  # saturated response, for #142 synergy
                     "adstock_apply": adstock_apply,  # parametric path only
                     # FIR lag weights (parametric path; None for "none" kernel),
                     # reused by the off-panel experiment estimand.
@@ -2159,6 +2222,12 @@ class BayesianMMM:
                 "channel_contributions", media_matrix, dims=("obs", "channel")
             )
             pm.Deterministic("media_total", media_contribution)
+
+            # CROSS-CHANNEL SYNERGY / INTERACTION (#142) — beta_ij * sat_i * sat_j
+            # per configured pair, so a channel pair can do more (synergy) or less
+            # (cannibalization) than the sum of its parts. No RVs and NOT added to
+            # mu when none are configured, so the default graph is byte-identical.
+            interaction_contribution = self._build_channel_interactions(channel_handles)
 
             # EXPERIMENT LIKELIHOODS (incrementality / lift / ROAS calibration)
             # Fold any registered experimental results into the joint posterior
@@ -2211,6 +2280,9 @@ class BayesianMMM:
             # byte-identical — the term is absent, not zero).
             if event_contribution is not None:
                 mu = mu + event_contribution
+            # Additive cross-channel synergy block, same discipline (#142).
+            if interaction_contribution is not None:
+                mu = mu + interaction_contribution
 
             # Off path: create sigma here exactly as before (bit-identical). On
             # the selection path it was already created above for the horseshoe.
@@ -2956,6 +3028,12 @@ class BayesianMMM:
         # Event block (#143): present only when events were configured.
         has_events = "event_component" in posterior
         event_scaled = get_mean("event_component") if has_events else None
+        # Synergy block (#142): present only when interactions were configured.
+        interaction_scaled = (
+            get_mean("interaction_component")
+            if "interaction_component" in posterior
+            else None
+        )
 
         if self.n_controls > 0 and "control_contributions" in posterior:
             control_contributions_scaled = get_mean("control_contributions")
@@ -3013,6 +3091,12 @@ class BayesianMMM:
         )
         events = event_scaled * self.y_std if event_scaled is not None else None
         total_events = float(events.sum()) if events is not None else None
+        interactions = (
+            interaction_scaled * self.y_std if interaction_scaled is not None else None
+        )
+        total_interactions = (
+            float(interactions.sum()) if interactions is not None else None
+        )
 
         return ComponentDecomposition(
             intercept=intercept,
@@ -3035,6 +3119,8 @@ class BayesianMMM:
             y_std=self.y_std,
             events=events,
             total_events=total_events,
+            interactions=interactions,
+            total_interactions=total_interactions,
         )
 
     def _multiplicative_decomposition(

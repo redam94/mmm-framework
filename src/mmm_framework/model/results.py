@@ -187,6 +187,12 @@ class ComponentDecomposition:
     events: np.ndarray | None = None
     total_events: float | None = None
 
+    # Cross-channel synergy / interaction (#142), original scale — the joint
+    # effect not captured by the additive per-channel contributions. ``None``
+    # when no interaction terms were fit.
+    interactions: np.ndarray | None = None
+    total_interactions: float | None = None
+
     def summary(self) -> pd.DataFrame:
         """Get summary of component contributions."""
         components = {
@@ -203,6 +209,8 @@ class ComponentDecomposition:
             components["Product Effects"] = self.total_product
         if self.total_events is not None:
             components["Events / Holidays"] = self.total_events
+        if self.total_interactions is not None:
+            components["Synergy / Interactions"] = self.total_interactions
 
         total = sum(components.values())
 
