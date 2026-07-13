@@ -207,7 +207,7 @@ def _apply_saturation_pt(
         params: The channel's saturation RVs as created by
             :meth:`BayesianMMM._build_channel_saturation` (``sat_lam`` for
             logistic; ``sat_half``/``sat_slope`` for hill; ``sat_half`` for
-            michaelis_menten and tanh; empty for none).
+            michaelis_menten and tanh; ``sat_exponent`` for root; empty for none).
 
     Returns:
         The saturated tensor.
@@ -216,6 +216,13 @@ def _apply_saturation_pt(
         sat_lam = params["sat_lam"]
         exponent = pt.clip(-sat_lam * x, -20, 0)
         return 1 - pt.exp(exponent)
+    if kind == SaturationType.ROOT:
+        # x**k with 0 < k < 1 (concave power response). d/dx x^k is unbounded at
+        # x = 0 for k < 1, so clamp x away from 0 (same guard as Hill) to keep
+        # NUTS gradients finite on zero-spend weeks.
+        sat_exponent = params["sat_exponent"]
+        x_safe = pt.maximum(x, 1e-9)
+        return x_safe**sat_exponent
     if kind == SaturationType.HILL:
         # x^s / (x^s + k^s). Clamp x away from 0: d/dx x^s is unbounded at
         # x = 0 for s < 1, which would hand NUTS infinite gradients on
@@ -1375,6 +1382,13 @@ class BayesianMMM:
                 f"sat_half_{channel_name}",
                 cfg.kappa_prior,
                 lambda: pm.Beta(f"sat_half_{channel_name}", alpha=2, beta=2),
+            )
+        elif kind == SaturationType.ROOT:
+            # Power exponent k in (0, 1); Beta(2, 2) keeps the curve concave.
+            params["sat_exponent"] = _sample_from_prior_config(
+                f"sat_exponent_{channel_name}",
+                cfg.slope_prior,
+                lambda: pm.Beta(f"sat_exponent_{channel_name}", alpha=2, beta=2),
             )
         # SaturationType.NONE: no RVs.
         return kind, params

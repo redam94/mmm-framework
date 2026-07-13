@@ -197,6 +197,39 @@ class TestLogisticSaturation:
         assert result_high[0] > result_low[0]
 
 
+class TestRootSaturation:
+    """Tests for root / power saturation transformation."""
+
+    def test_formula(self):
+        from mmm_framework.transforms import root_saturation
+
+        x = np.array([0.0, 0.25, 0.5, 1.0])
+        np.testing.assert_array_almost_equal(
+            root_saturation(x, exponent=0.5), np.sqrt(x)
+        )
+
+    def test_concave_and_monotone_for_k_below_1(self):
+        from mmm_framework.transforms import root_saturation
+
+        x = np.linspace(0.0, 1.0, 20)
+        r = root_saturation(x, exponent=0.4)
+        assert r[0] == 0.0
+        assert np.all(np.diff(r) > 0)  # monotone increasing
+        assert np.all(np.diff(r, 2) < 1e-9)  # concave (diminishing returns)
+
+    def test_negative_clipped_to_zero(self):
+        from mmm_framework.transforms import root_saturation
+
+        r = root_saturation(np.array([-2.0, -0.1, 0.0, 0.5]), exponent=0.5)
+        assert r[0] == 0.0 and r[1] == 0.0 and r[2] == 0.0
+
+    def test_exponent_one_is_linear(self):
+        from mmm_framework.transforms import root_saturation
+
+        x = np.array([0.0, 0.3, 0.7, 1.0])
+        np.testing.assert_array_almost_equal(root_saturation(x, exponent=1.0), x)
+
+
 class TestCreateFourierFeatures:
     """Tests for Fourier feature creation."""
 

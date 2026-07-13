@@ -178,6 +178,14 @@ def _get_saturation_params(
             params["lam"] = _flatten_samples(posterior[name].values)
             return params
 
+    # Try root / power saturation (sat_exponent = the power k in x**k)
+    for prefix in ["sat_exponent_", "saturation_exponent_"]:
+        name = f"{prefix}{channel}"
+        if name in posterior:
+            params["type"] = "root"
+            params["exponent"] = _flatten_samples(posterior[name].values)
+            return params
+
     # Try Hill saturation (kappa, slope). ``sat_half_``/``sat_slope_`` are the
     # core BayesianMMM's per-channel Hill RVs.
     kappa_name = None
@@ -268,6 +276,10 @@ def _apply_saturation(
         kappa = params["kappa"]
         return np.tanh(x / kappa)
 
+    elif sat_type == "root":
+        exponent = params["exponent"]
+        return np.clip(x, 1e-9, None) ** exponent
+
     elif sat_type == "logistic":
         lam = params["lam"]
         return 1 / (1 + np.exp(-lam * (x - 0.5)))
@@ -310,6 +322,11 @@ def _apply_saturation_derivative(
         kappa = params["kappa"]
         th = np.tanh(x / kappa)
         return (1.0 / kappa) * (1.0 - th**2)
+
+    elif sat_type == "root":  # f = x^k -> f' = k·x^(k-1)
+        exponent = params["exponent"]
+        xs = np.clip(x, 1e-9, None)
+        return exponent * xs ** (exponent - 1.0)
 
     elif sat_type == "logistic":  # f = sigmoid(lam(x-0.5)) -> f' = lam·f·(1-f)
         lam = params["lam"]

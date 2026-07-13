@@ -587,6 +587,16 @@ tv_channel = (
 # of 1-3 weeks."</code></pre>
             </div>
 
+            <p>
+                Saturation shape is per-channel: <code>.with_logistic_saturation()</code> (the concave
+                default), <code>.with_hill_saturation()</code> (S-shaped, for threshold/tipping-point
+                response), <code>.with_michaelis_menten_saturation()</code> / <code>.with_tanh_saturation()</code>
+                (hyperbolic elbows), and <code>.with_root_saturation()</code> (the classic concave power
+                curve \(x^{k}\)). See the <a href="math-02-saturation.html#framework">saturation math</a> for
+                the equations and when each fits (including why ADBUDG is the Hill form and exponential-CDF is
+                the logistic form).
+            </p>
+
             <details class="deep-dive">
                 <summary><span class="deep-dive-tag">Deep dive</span>Shipped prior defaults: parametric adstock and the legacy blend opt-out</summary>
                 <div class="deep-dive-body">

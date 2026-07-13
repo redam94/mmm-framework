@@ -754,6 +754,8 @@ def _sat_curve(
         return x[None, :] / (x[None, :] + s["half"][:, None] + 1e-12)
     if family == "tanh" and "half" in s:
         return np.tanh(x[None, :] / (s["half"][:, None] + 1e-12))
+    if family == "root" and "exponent" in s:
+        return np.power(np.clip(x, 1e-9, None)[None, :], s["exponent"][:, None])
     return None
 
 
@@ -836,6 +838,7 @@ def prior_response_curves(
             ("lam", f"sat_lam_{ch}"),
             ("half", f"sat_half_{ch}"),
             ("slope", f"sat_slope_{ch}"),
+            ("exponent", f"sat_exponent_{ch}"),
         ):
             v = _samples(rv)
             if v is not None:

@@ -2073,6 +2073,22 @@ class BayesianMMMExtractor(
                     logger.debug(f"Generated {sat_type} saturation curve for {ch}")
                     continue
 
+                # Root / power saturation: x**k on normalized spend.
+                for exp_name in [f"sat_exponent_{ch}", f"saturation_exponent_{ch}"]:
+                    if exp_name in posterior:
+                        k_val = float(posterior[exp_name].values.mean())
+                        x_grid = np.clip(
+                            spend_range / max(spend_range.max(), 1), 1e-9, None
+                        )
+                        curves[ch] = {
+                            "spend": spend_range,
+                            "response": _beta_scaled(x_grid**k_val),
+                        }
+                        logger.debug(f"Generated root saturation curve for {ch}")
+                        break
+                if ch in curves:
+                    continue
+
                 # Logistic saturation (the core default): 1 - exp(-lam * x)
                 for lam_name in [f"sat_lam_{ch}", f"saturation_lam_{ch}", f"lam_{ch}"]:
                     if lam_name in posterior:

@@ -359,7 +359,14 @@ _LIKELIHOOD_KEYS = {"family", "link", "params"}
 _ADSTOCK_KEYS = {"type", "l_max"}
 _ADSTOCK_TYPES = {"geometric", "weibull", "delayed"}
 _SATURATION_KEYS = {"type"}
-_SATURATION_TYPES = {"hill", "logistic", "michaelis_menten", "michaelis-menten", "tanh"}
+_SATURATION_TYPES = {
+    "hill",
+    "logistic",
+    "michaelis_menten",
+    "michaelis-menten",
+    "tanh",
+    "root",
+}
 _MEASUREMENT_UNITS = {"spend", "impressions", "clicks", "other"}
 _CHANNEL_SCALAR_FIELDS = {"name", "measurement_unit", "spend_column", "cpm", "cpc"}
 _CONTROL_FIELDS = {"name", "role"}
@@ -572,7 +579,7 @@ def unconsumed_spec_path(parts: list[str], value, spec: dict) -> str | None:
                     return (
                         f"`{path}` = {leaf_val!r} would silently fall back to "
                         f"hill — recognized saturation types: hill, logistic, "
-                        f"michaelis_menten, tanh."
+                        f"michaelis_menten, tanh, root."
                     )
             elif field == "measurement_unit":
                 if str(leaf_val).strip().lower() not in _MEASUREMENT_UNITS:
@@ -675,6 +682,8 @@ def _mff_config_from_spec(spec: dict):
             sb.michaelis_menten()
         elif sat_type == "tanh":
             sb.tanh()
+        elif sat_type == "root":
+            sb.root()
         else:
             sb.hill()
         if "saturation_kappa" in ch_priors:

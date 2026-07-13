@@ -105,12 +105,20 @@ class AdstockType(str, Enum):
 
 
 class SaturationType(str, Enum):
-    """Supported saturation transformations."""
+    """Supported saturation transformations.
+
+    Note on completeness: two forms practitioners sometimes name separately are
+    already available here under different names — the **ADBUDG** S-curve
+    ``x**s / (k**s + x**s)`` is exactly :attr:`HILL`, and the **exponential-CDF**
+    form ``1 - exp(-lam * x)`` is exactly :attr:`LOGISTIC`. :attr:`ROOT` (power)
+    is the genuinely distinct concave form the others don't cover.
+    """
 
     HILL = "hill"
     LOGISTIC = "logistic"
     MICHAELIS_MENTEN = "michaelis_menten"
     TANH = "tanh"
+    ROOT = "root"
     NONE = "none"
 
 
