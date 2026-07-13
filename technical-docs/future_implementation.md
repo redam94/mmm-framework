@@ -9,12 +9,20 @@ which holds the formal contracts (R0.x cross-cutting requirements, acceptance ga
 
 ## Grouped / hierarchical priors for collinear channels (DF-2)
 
-**Status:** Not implemented. Specified as **DF-2** in
-[`deferred-causal-features.md`](./deferred-causal-features.md). Detection ships today
+**Status:** **Implemented behind the flag** (`ModelConfig.use_grouped_media_priors`,
+builder `.with_grouped_media_priors()`), off by default. The acceptance gates checkable
+today pass: A1/R0.2 (flag off ⇒ bit-identical, same-seed MAP fit), A2 (a strong channel's
+between-channel ratio is preserved — no silent over-shrinkage), A3/DF2.4 (calibrated /
+explicitly-priored channels excluded from the pool), and DF2.6 (pooled channels disclosed
+in the ROI section). **A4 (held-out experimental validation) is still pending**, so it
+ships behind the flag but is NOT recommended as a default. Detection also ships
 (`validation/channel_diagnostics.py::_detect_collinear_clusters`, surfaced in §7 of
-`nbs/demos/causal_features_showcase.ipynb`); *fitting* a grouped prior is deferred because it
-changes posteriors and must clear held-out experimental validation before it can be a
-default.
+`nbs/demos/causal_features_showcase.ipynb`). Tests: `tests/test_grouped_media_priors.py`.
+
+> **Reporting caveat:** pooled `beta_<ch>` are log-normal, so their absolute posterior
+> means are not directly comparable to the independent-Gamma betas; treat the *combined*
+> group effect (and per-channel *ratios* / the disclosed pooling) as the reliable read.
+> This is exactly why the report discloses the pool rather than asserting a split.
 
 ### The crux: collinearity ≠ "should be pooled"
 

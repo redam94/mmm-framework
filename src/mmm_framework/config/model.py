@@ -132,6 +132,16 @@ class ModelConfig(BaseModel):
     media_roi_prior_mu: float = 0.0
     media_roi_prior_sigma: float = Field(default=1.0, gt=0)
 
+    # DF-2: partial-pool the coefficients of channels sharing a `parent_channel`
+    # group toward a shared (log-normal) group mean, so genuinely EXCHANGEABLE
+    # collinear channels (e.g. several social platforms) borrow strength and
+    # their split is regularized. OFF BY DEFAULT (R0.1): the media block is
+    # byte-identical when disabled. Channels with a calibrated `roi_prior` or an
+    # explicit `coefficient_prior` are excluded from the pool (their prior wins).
+    # Collinearity ≠ "should be pooled" — only pool a priori exchangeable
+    # channels; see technical-docs/future_implementation.md (DF-2).
+    use_grouped_media_priors: bool = False
+
     # Inference settings
     inference_method: InferenceMethod = InferenceMethod.BAYESIAN_NUMPYRO
 

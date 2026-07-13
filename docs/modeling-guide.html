@@ -672,6 +672,23 @@ tv_channel = (
                 </div>
             </details>
 
+            <div class="note">
+                <h4>Collinear, exchangeable channels: grouped priors (opt-in)</h4>
+                <p style="margin-bottom:0;">
+                    When several channels are near-collinear <em>and</em> genuinely exchangeable
+                    (e.g. five social platforms), you can partial-pool their coefficients toward a
+                    shared mean with <code>ModelConfigBuilder().with_grouped_media_priors()</code> —
+                    set a shared <code>parent_channel</code> on the members. It is
+                    <strong>off by default</strong>: only pool channels you believe are alike, because
+                    collinearity means the <em>split</em> is unidentified, not that the effects are
+                    similar. A channel with a calibrated ROI prior (from an experiment) is excluded
+                    from the pool, and pooled channels are disclosed in the report — their combined
+                    group effect is the reliable number, not the per-channel split.
+                    <a href="variable-selection.html">Variable Selection</a> covers the different
+                    problem of collinear <em>controls</em> (shrink to zero, not pool).
+                </p>
+            </div>
+
             <h2 id="prior-predictive">Prior Predictive Check</h2>
             <p>
                 Before fitting the model to data, verify that your priors produce plausible predictions. This is the most underrated step in Bayesian modeling.

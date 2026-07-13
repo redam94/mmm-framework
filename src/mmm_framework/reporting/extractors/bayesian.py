@@ -74,6 +74,8 @@ class BayesianMMMExtractor(
         logger.debug("Extracting data from BayesianMMM model")
         # Extract basic info
         bundle.channel_names = self._get_channel_names()
+        pooled = getattr(self.mmm, "_pooled_channels", None)
+        bundle.pooled_channels = sorted(pooled) if pooled else None
         bundle.dates = self._get_dates()
 
         # Actual values

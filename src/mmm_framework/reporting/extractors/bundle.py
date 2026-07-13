@@ -289,6 +289,11 @@ class MMMDataBundle:
     # Channel names
     channel_names: list[str] | None = None
 
+    # DF-2: channels whose coefficient was partial-pooled behind a group prior
+    # (use_grouped_media_priors). Their per-channel ROIs are disclosed as
+    # partially pooled — not independently identified — in the ROI section.
+    pooled_channels: list[str] | None = None
+
     # Extended model data (nested, multivariate)
     mediator_effects: dict[str, Any] | None = None
     cross_effects: dict[str, Any] | None = None
