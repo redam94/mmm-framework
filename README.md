@@ -1627,7 +1627,7 @@ mmm-framework/
 Contributions are welcome. Please ensure:
 
 1. All new features include tests
-2. Code follows the existing style (run `ruff check` and `ruff format`)
+2. Code follows the existing style (run `make lint` for ruff check and `make format` for black formatting)
 3. Documentation is updated for API changes
 4. Commit messages are descriptive
 
