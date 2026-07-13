@@ -14,8 +14,16 @@ from .budget import (
     compute_response_curves,
     compute_response_curves_per_geo,
     default_reallocation,
+    objective_curves,
+    objective_label,
     optimize_budget,
     optimize_budget_by_geo,
+)
+from .frontier import (
+    FrontierResult,
+    GoalSeekResult,
+    budget_frontier,
+    goal_seek,
 )
 from .flighting import FLIGHTING_PATTERNS, build_flighting_schedule
 from .pacing import (
@@ -75,6 +83,12 @@ __all__ = [
     "ResponseCurves",
     "compute_response_curves",
     "optimize_budget",
+    "objective_curves",
+    "objective_label",
+    "budget_frontier",
+    "goal_seek",
+    "FrontierResult",
+    "GoalSeekResult",
     "default_reallocation",
     "DEFAULT_REALLOC_DEVIATION",
     "GEO_ARM_SEP",

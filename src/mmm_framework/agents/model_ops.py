@@ -1157,6 +1157,14 @@ def optimize_budget(
     min_multiplier: float = 0.0,
     max_multiplier: float = 2.0,
     bounds: dict | None = None,
+    abs_bounds: dict | None = None,
+    groups: list | None = None,
+    min_channel_spend: float | dict | None = None,
+    objective: str = "mean",
+    mode: str = "fixed",
+    value_per_kpi: float = 1.0,
+    frontier: bool | dict | None = None,
+    target_kpi: float | None = None,
     max_draws: int = 200,
 ) -> dict:
     """Optimal budget allocation from the fitted model's response curves, with
@@ -1167,28 +1175,23 @@ def optimize_budget(
     multipliers of current spend (e.g. a partner-committed cap or a frozen line),
     overriding the global ``min_multiplier``/``max_multiplier`` for those channels.
     An unknown channel or a malformed range is rejected (a silently-ignored
-    constraint would hand a planner an unexecutable plan)."""
-    norm_bounds: dict[str, tuple[float, float]] | None = None
-    if bounds:
-        names = list(getattr(mmm, "channel_names", []) or [])
-        unknown = [c for c in bounds if c not in names]
-        if unknown:
-            return _err(
-                f"Unknown channel(s) in bounds: {unknown}. Valid channels: {names}."
-            )
-        norm_bounds = {}
-        for c, lohi in bounds.items():
-            try:
-                lo, hi = float(lohi[0]), float(lohi[1])
-            except Exception:  # noqa: BLE001
-                return _err(
-                    f"bounds[{c!r}] must be [low, high] multipliers, got {lohi!r}."
-                )
-            if lo < 0 or hi < lo:
-                return _err(
-                    f"bounds[{c!r}] must satisfy 0 <= low <= high, got [{lo}, {hi}]."
-                )
-            norm_bounds[c] = (lo, hi)
+    constraint would hand a planner an unexecutable plan).
+
+    Budget optimizer v2 (#139): a risk ``objective`` ('mean'/'p<q>'/'cvar<a>'),
+    ``mode`` ('fixed' or 'free' = fund to breakeven), ABSOLUTE-$ ``abs_bounds``,
+    portfolio ``groups`` (share/$ constraints), a keep-on ``min_channel_spend``
+    floor, an efficient ``frontier`` sweep and ``target_kpi`` goal-seek."""
+    norm_bounds, err = _normalize_channel_bounds(mmm, bounds)
+    if err:
+        return _err(err)
+    obj_err = _validate_objective(objective)
+    if obj_err:
+        return _err(obj_err)
+    if mode not in _ALLOWED_MODES:
+        return _err(f"Unknown mode {mode!r}. Use one of {list(_ALLOWED_MODES)}.")
+    norm_groups, grp_err = _validate_groups(mmm, groups)
+    if grp_err:
+        return _err(grp_err)
 
     try:
         from mmm_framework.planning import optimize_budget as _optimize
@@ -1200,6 +1203,12 @@ def optimize_budget(
             min_multiplier=min_multiplier,
             max_multiplier=max_multiplier,
             bounds=norm_bounds,
+            abs_bounds=abs_bounds or None,
+            groups=norm_groups,
+            min_channel_spend=min_channel_spend,
+            objective=objective,
+            mode=mode,
+            value_per_kpi=value_per_kpi,
             max_draws=max_draws,
             random_seed=42,
         )
@@ -1231,7 +1240,63 @@ def optimize_budget(
             f"`{c}` [{lo:g}x–{hi:g}x]" for c, (lo, hi) in norm_bounds.items()
         )
         lines.append(f"- Per-channel constraints applied: {bound_str}")
-    for n in res.notes:
+
+    # Budget optimizer v2 (#139): risk objective / mode / shadow price + extras.
+    advanced = (
+        objective != "mean"
+        or mode != "fixed"
+        or bool(norm_groups)
+        or bool(abs_bounds)
+        or min_channel_spend is not None
+        or bool(frontier)
+        or target_kpi is not None
+    )
+    extras, extra_notes = _budget_v2_extras(
+        mmm,
+        frontier=frontier,
+        target_kpi=target_kpi,
+        objective=objective,
+        min_multiplier=min_multiplier,
+        max_multiplier=max_multiplier,
+        norm_bounds=norm_bounds,
+        abs_bounds=abs_bounds,
+        norm_groups=norm_groups,
+        min_channel_spend=min_channel_spend,
+        value_per_kpi=value_per_kpi,
+        max_draws=max_draws,
+    )
+    notes = list(res.notes) + extra_notes
+    if advanced:
+        lines.append(f"- Objective: {getattr(res, 'objective_label', 'expected KPI')}")
+        if getattr(res, "mode", "fixed") == "free":
+            lines.append(
+                "- **Breakeven (free-budget) mode**: each channel funded until its "
+                "marginal return hits the breakeven line."
+            )
+        if getattr(res, "shadow_price", None) is not None:
+            lines.append(
+                f"- Budget shadow price (marginal return of the next dollar): "
+                f"{res.shadow_price:.2f}"
+            )
+    if extras.get("frontier"):
+        pts = extras["frontier"]["points"]
+        lines.append(
+            f"- Efficient frontier: {len(pts)} points ("
+            f"{pts[0]['total_budget']:,.0f}→{pts[-1]['total_budget']:,.0f}); "
+            f"marginal ROI {pts[0]['marginal_roi']:.2f}→{pts[-1]['marginal_roi']:.2f}."
+        )
+    if extras.get("goal_seek"):
+        gs = extras["goal_seek"]
+        lines.append(
+            f"- Goal-seek to {gs['target_kpi']:,.0f}: "
+            + (
+                f"needs {gs['required_budget']:,.0f} budget "
+                f"(P(hit) = {gs['prob_hit_target']:.0%})."
+                if gs["feasible"]
+                else "not reachable within the supported spend range."
+            )
+        )
+    for n in notes:
         lines.append(f"- ⚠️ {n}")
     lines.append(
         "\nCaveats: optimal within the sampled spend range only (no evidence "
@@ -1245,6 +1310,16 @@ def optimize_budget(
         "uplift_hdi": list(res.uplift_hdi),
         "prob_positive_uplift": res.prob_positive_uplift,
         "allocation": t.to_dict(orient="records"),
+        "objective": getattr(res, "objective", "mean"),
+        "objective_label": getattr(res, "objective_label", "expected KPI"),
+        "mode": getattr(res, "mode", "fixed"),
+        "shadow_price": (
+            None
+            if getattr(res, "shadow_price", None) is None
+            else float(res.shadow_price)
+        ),
+        "marginal_roas": getattr(res, "marginal_roas", None),
+        **extras,
     }
     out = _ok("\n".join(lines), {"budget_optimization": summary})
     out["tables"] = [
@@ -1287,6 +1362,107 @@ def _normalize_channel_bounds(
     return norm, None
 
 
+_ALLOWED_MODES = ("fixed", "free")
+
+
+def _validate_objective(objective: str) -> str | None:
+    """Return an error message for an unrecognized risk objective, else None."""
+    obj = (objective or "mean").strip().lower()
+    if obj in ("mean", "expected"):
+        return None
+    if obj.startswith("cvar") and obj[4:].replace(".", "", 1).isdigit():
+        return None
+    if obj.startswith("p") and obj[1:].replace(".", "", 1).isdigit():
+        return None
+    return (
+        f"Unknown objective {objective!r}. Use 'mean', 'p<q>' (e.g. 'p10'), or "
+        "'cvar<a>' (e.g. 'cvar5')."
+    )
+
+
+def _validate_groups(mmm: Any, groups: list | None) -> tuple[list | None, str | None]:
+    """Validate portfolio group constraints against the model's channels."""
+    if not groups:
+        return None, None
+    names = set(getattr(mmm, "channel_names", []) or [])
+    out = []
+    for g in groups:
+        chans = g.get("channels") or []
+        unknown = [c for c in chans if c not in names]
+        if unknown:
+            return None, f"group {g.get('name', '?')!r}: unknown channel(s) {unknown}."
+        if not chans:
+            return None, f"group {g.get('name', '?')!r}: no channels listed."
+        out.append(g)
+    return out, None
+
+
+def _budget_v2_extras(
+    mmm: Any,
+    *,
+    frontier: bool | dict | None,
+    target_kpi: float | None,
+    objective: str,
+    min_multiplier: float,
+    max_multiplier: float,
+    norm_bounds: dict | None,
+    abs_bounds: dict | None,
+    norm_groups: list | None,
+    min_channel_spend: float | dict | None,
+    value_per_kpi: float,
+    max_draws: int,
+) -> tuple[dict, list[str]]:
+    """Compute the efficient frontier and/or goal-seek extras shared by the
+    ``optimize_budget`` and ``plan_budget`` ops (#139). Returns ``(extras, notes)``
+    where ``extras`` may hold ``"frontier"`` and/or ``"goal_seek"`` dicts."""
+    from mmm_framework import planning as _pl
+
+    extras: dict[str, Any] = {}
+    notes: list[str] = []
+    if frontier:
+        fkw = frontier if isinstance(frontier, dict) else {}
+        try:
+            fr = _pl.budget_frontier(
+                mmm,
+                budget_min=fkw.get("budget_min"),
+                budget_max=fkw.get("budget_max"),
+                n_points=int(fkw.get("n_points", 12)),
+                objective=objective,
+                min_multiplier=min_multiplier,
+                max_multiplier=max_multiplier,
+                bounds=norm_bounds,
+                abs_bounds=abs_bounds or None,
+                groups=norm_groups,
+                min_channel_spend=min_channel_spend,
+                value_per_kpi=value_per_kpi,
+                max_draws=min(max_draws, 120),
+                random_seed=42,
+            )
+            extras["frontier"] = fr.to_dict()
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"Frontier skipped: {e}")
+    if target_kpi is not None:
+        try:
+            gs = _pl.goal_seek(
+                mmm,
+                target_kpi=float(target_kpi),
+                objective=objective,
+                min_multiplier=min_multiplier,
+                max_multiplier=max_multiplier,
+                bounds=norm_bounds,
+                abs_bounds=abs_bounds or None,
+                groups=norm_groups,
+                min_channel_spend=min_channel_spend,
+                value_per_kpi=value_per_kpi,
+                max_draws=min(max_draws, 120),
+                random_seed=42,
+            )
+            extras["goal_seek"] = gs.to_dict()
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"Goal-seek skipped: {e}")
+    return extras, notes
+
+
 def plan_budget(
     mmm: Any,
     results: Any = None,
@@ -1296,6 +1472,14 @@ def plan_budget(
     min_multiplier: float = 0.0,
     max_multiplier: float = 2.0,
     bounds: dict | None = None,
+    abs_bounds: dict | None = None,
+    groups: list | None = None,
+    min_channel_spend: float | dict | None = None,
+    objective: str = "mean",
+    mode: str = "fixed",
+    value_per_kpi: float = 1.0,
+    frontier: bool | dict | None = None,
+    target_kpi: float | None = None,
     by_geo: bool = False,
     flighting: dict | None = None,
     max_draws: int = 200,
@@ -1307,17 +1491,52 @@ def plan_budget(
     ``by_geo`` and the model is a geo panel) and, if ``flighting`` is given,
     spreads the recommended per-channel budgets across future periods. Returns a
     single ``budget_plan`` dashboard payload the FE renders without a chat
-    round-trip."""
+    round-trip.
+
+    Budget optimizer v2 (#139): a risk ``objective`` ('mean'/'p<q>'/'cvar<a>'),
+    ``mode`` ('fixed' or 'free' = fund to breakeven), ABSOLUTE-$ ``abs_bounds``,
+    portfolio ``groups`` (share/$ constraints), a keep-on ``min_channel_spend``
+    floor, an efficient ``frontier`` sweep, and ``target_kpi`` goal-seek. The
+    advanced features run on the NATIONAL response curves (geo advanced is a
+    follow-up); ``by_geo`` keeps the historical per-geo greedy path."""
     import pandas as pd
 
     norm_bounds, err = _normalize_channel_bounds(mmm, bounds)
     if err:
         return _err(err)
+    obj_err = _validate_objective(objective)
+    if obj_err:
+        return _err(obj_err)
+    if mode not in _ALLOWED_MODES:
+        return _err(f"Unknown mode {mode!r}. Use one of {list(_ALLOWED_MODES)}.")
+    norm_groups, grp_err = _validate_groups(mmm, groups)
+    if grp_err:
+        return _err(grp_err)
+
+    advanced = (
+        objective != "mean"
+        or mode != "fixed"
+        or bool(norm_groups)
+        or bool(abs_bounds)
+        or min_channel_spend is not None
+        or bool(frontier)
+        or target_kpi is not None
+    )
 
     use_geo = (
         bool(by_geo)
         and bool(getattr(mmm, "has_geo", False))
         and int(getattr(mmm, "n_geos", 1)) > 1
+        and not advanced  # advanced v2 features run on the national curves
+    )
+
+    adv_kwargs = dict(
+        abs_bounds=abs_bounds or None,
+        groups=norm_groups,
+        min_channel_spend=min_channel_spend,
+        objective=objective,
+        mode=mode,
+        value_per_kpi=value_per_kpi,
     )
 
     try:
@@ -1344,6 +1563,7 @@ def plan_budget(
                 bounds=norm_bounds,
                 max_draws=max_draws,
                 random_seed=42,
+                **adv_kwargs,
             )
     except Exception as e:  # noqa: BLE001
         return _err(f"Budget planning failed: {e}")
@@ -1386,10 +1606,38 @@ def plan_budget(
         "n_draws": int(res.n_draws),
         "allocation": national.round(2).to_dict(orient="records"),
         "notes": list(res.notes),
+        # Budget optimizer v2 (#139) headline extras.
+        "objective": getattr(res, "objective", "mean"),
+        "objective_label": getattr(res, "objective_label", "expected KPI"),
+        "mode": getattr(res, "mode", "fixed"),
+        "shadow_price": (
+            None
+            if getattr(res, "shadow_price", None) is None
+            else float(res.shadow_price)
+        ),
+        "marginal_roas": getattr(res, "marginal_roas", None),
     }
     if use_geo:
         plan["geo_allocation"] = t.round(2).to_dict(orient="records")
         plan["geos"] = list(getattr(mmm, "geo_names", []))
+
+    # Efficient frontier + goal-seek extras (#139).
+    _extras, _extra_notes = _budget_v2_extras(
+        mmm,
+        frontier=frontier,
+        target_kpi=target_kpi,
+        objective=objective,
+        min_multiplier=min_multiplier,
+        max_multiplier=max_multiplier,
+        norm_bounds=norm_bounds,
+        abs_bounds=abs_bounds,
+        norm_groups=norm_groups,
+        min_channel_spend=min_channel_spend,
+        value_per_kpi=value_per_kpi,
+        max_draws=max_draws,
+    )
+    plan.update(_extras)
+    plan["notes"].extend(_extra_notes)
 
     if flighting:
         try:
@@ -1428,6 +1676,40 @@ def plan_budget(
         f"(90% [{res.uplift_hdi[0]:,.0f}, {res.uplift_hdi[1]:,.0f}]; "
         f"P(>0)={res.prob_positive_uplift:.0%})"
     )
+    # Budget optimizer v2 headlines (#139).
+    if advanced:
+        lines.append(f"- Objective: {plan['objective_label']}")
+        if plan["mode"] == "free":
+            lines.append(
+                "- **Breakeven (free-budget) mode**: each channel funded until its "
+                "marginal return hits the breakeven line — the total is the output."
+            )
+        if plan.get("shadow_price") is not None:
+            lines.append(
+                f"- Budget shadow price (marginal return of the next dollar): "
+                f"{plan['shadow_price']:.2f}"
+            )
+    if plan.get("frontier"):
+        pts = plan["frontier"]["points"]
+        lines.append(
+            f"- Efficient frontier: {len(pts)} points from "
+            f"{pts[0]['total_budget']:,.0f} to {pts[-1]['total_budget']:,.0f}; "
+            f"marginal ROI falls {pts[0]['marginal_roi']:.2f} → "
+            f"{pts[-1]['marginal_roi']:.2f} (diminishing returns)."
+        )
+    if plan.get("goal_seek"):
+        gs = plan["goal_seek"]
+        if gs["feasible"]:
+            lines.append(
+                f"- Goal-seek to KPI {gs['target_kpi']:,.0f}: needs "
+                f"{gs['required_budget']:,.0f} budget "
+                f"(P(hit target) = {gs['prob_hit_target']:.0%})."
+            )
+        else:
+            lines.append(
+                f"- Goal-seek to KPI {gs['target_kpi']:,.0f}: **not reachable** "
+                "within the supported spend range."
+            )
     if use_geo:
         lines.append(
             f"- Allocated per geography across {len(plan.get('geos', []))} geos"

@@ -14,6 +14,48 @@ export interface AllocationRow {
   allocation_instability?: number;
 }
 
+// Budget optimizer v2 (#139).
+export interface FrontierPoint {
+  total_budget: number;
+  expected_return: number;
+  return_p5: number;
+  return_p95: number;
+  marginal_roi: number;
+  allocation: Record<string, number>;
+}
+
+export interface FrontierResult {
+  objective: string;
+  objective_label: string;
+  channels: string[];
+  current_total: number;
+  current_return: number;
+  points: FrontierPoint[];
+  notes: string[];
+}
+
+export interface GoalSeekResult {
+  target_kpi: number;
+  objective: string;
+  objective_label: string;
+  channels: string[];
+  feasible: boolean;
+  required_budget: number | null;
+  allocation: Record<string, number> | null;
+  expected_return: number | null;
+  prob_hit_target: number | null;
+  notes: string[];
+}
+
+export interface BudgetGroupConstraint {
+  name?: string;
+  channels: string[];
+  min_share?: number;
+  max_share?: number;
+  min_spend?: number;
+  max_spend?: number;
+}
+
 export interface GeoAllocationRow extends AllocationRow {
   geo: string;
 }
@@ -47,6 +89,14 @@ export interface BudgetPlanResult {
   geos?: string[];
   flighting?: FlightingSchedule;
   notes: string[];
+  // Budget optimizer v2 (#139).
+  objective?: string;
+  objective_label?: string;
+  mode?: string;
+  shadow_price?: number | null;
+  marginal_roas?: Record<string, number> | null;
+  frontier?: FrontierResult;
+  goal_seek?: GoalSeekResult;
 }
 
 export interface ScenarioChannelDetail {
@@ -89,6 +139,15 @@ export interface PlannerOptimizeRequest {
   by_geo?: boolean;
   flighting?: FlightingRequest | null;
   max_draws?: number;
+  // Budget optimizer v2 (#139).
+  abs_bounds?: Record<string, [number, number]> | null;
+  groups?: BudgetGroupConstraint[] | null;
+  min_channel_spend?: number | null;
+  objective?: string;
+  mode?: string;
+  value_per_kpi?: number;
+  frontier?: boolean | null;
+  target_kpi?: number | null;
 }
 
 export interface PlannerScenarioRequest {
