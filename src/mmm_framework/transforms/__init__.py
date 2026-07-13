@@ -13,6 +13,7 @@ from .adstock import (
     parametric_adstock,
 )
 from .saturation import logistic_saturation, root_saturation
+from .events import build_event_regressors
 from .seasonality import create_fourier_features
 from .trend import create_bspline_basis, create_piecewise_trend_matrix
 
@@ -27,6 +28,7 @@ __all__ = [
     "logistic_saturation",
     "root_saturation",
     # Seasonality
+    "build_event_regressors",
     "create_fourier_features",
     # Trend
     "create_bspline_basis",

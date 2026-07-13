@@ -33,7 +33,7 @@ dependencies = [
     # extras, and without one every model save silently degrades (xarray
     # DataTree groups need netCDF4 or h5netcdf — scipy's netcdf3 can't do it).
     "h5netcdf>=1.6.4",
-    "h5py>=3.12",  # h5netcdf >=1.8 no longer hard-depends on it
+    "h5py>=3.12", # h5netcdf >=1.8 no longer hard-depends on it
     # Pathfinder VI out of the box (fit(method="pathfinder")). Keep the minor
     # cap: pymc-extras 0.11+ tracks pymc 6; raise the cap only after checking
     # its pymc/pytensor/arviz floors against the locked stack.
@@ -59,6 +59,7 @@ dependencies = [
     "langchain-google-vertexai>=3.2.3",
     "pypdf>=4.0.0",
     "python-docx>=1.1.0",
+    "holidays>=0.100",
 ]
 
 [project.optional-dependencies]

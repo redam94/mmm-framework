@@ -1667,6 +1667,9 @@ class BayesianMMMExtractor(
             components["Trend"] = np.asarray(decomp.trend, dtype=float)
         if np.any(decomp.seasonality):
             components["Seasonality"] = np.asarray(decomp.seasonality, dtype=float)
+        if decomp.events is not None and np.any(decomp.events):
+            # #143: holiday / event contributions, separate from Fourier seasonality.
+            components["Events"] = np.asarray(decomp.events, dtype=float)
         if decomp.geo_effects is not None and np.any(decomp.geo_effects):
             components["Geo"] = np.asarray(decomp.geo_effects, dtype=float)
         if decomp.product_effects is not None and np.any(decomp.product_effects):

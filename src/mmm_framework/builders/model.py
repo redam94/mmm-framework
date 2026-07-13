@@ -282,6 +282,7 @@ class ModelConfigBuilder:
         self._media_roi_prior_mu: float = 0.0
         self._media_roi_prior_sigma: float = 1.0
         self._use_grouped_media_priors: bool = False
+        self._events = None
         self._hierarchical: HierarchicalConfig | None = None
         self._seasonality: SeasonalityConfig | None = None
         self._control_selection: ControlSelectionConfig | None = None
@@ -450,6 +451,13 @@ class ModelConfigBuilder:
         self._use_grouped_media_priors = enabled
         return self
 
+    def with_events(self, events) -> Self:
+        """Add holiday / event effects (#143) — an :class:`EventsConfig` of named
+        country holidays and/or custom event windows, fit as an additive
+        ``event_component`` distinct from the smooth Fourier seasonality."""
+        self._events = events
+        return self
+
     # Component configs
     def with_hierarchical(self, config: HierarchicalConfig) -> Self:
         """Set hierarchical configuration."""
@@ -520,6 +528,7 @@ class ModelConfigBuilder:
             media_roi_prior_mu=self._media_roi_prior_mu,
             media_roi_prior_sigma=self._media_roi_prior_sigma,
             use_grouped_media_priors=self._use_grouped_media_priors,
+            events=self._events,
             hierarchical=self._hierarchical or HierarchicalConfigBuilder().build(),
             seasonality=self._seasonality or SeasonalityConfigBuilder().build(),
             control_selection=self._control_selection
