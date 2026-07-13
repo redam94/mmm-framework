@@ -1670,6 +1670,9 @@ class BayesianMMMExtractor(
         if decomp.events is not None and np.any(decomp.events):
             # #143: holiday / event contributions, separate from Fourier seasonality.
             components["Events"] = np.asarray(decomp.events, dtype=float)
+        if decomp.interactions is not None and np.any(decomp.interactions):
+            # #142: cross-channel synergy / interaction contributions.
+            components["Synergy"] = np.asarray(decomp.interactions, dtype=float)
         if decomp.geo_effects is not None and np.any(decomp.geo_effects):
             components["Geo"] = np.asarray(decomp.geo_effects, dtype=float)
         if decomp.product_effects is not None and np.any(decomp.product_effects):

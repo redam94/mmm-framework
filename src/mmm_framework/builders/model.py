@@ -283,6 +283,7 @@ class ModelConfigBuilder:
         self._media_roi_prior_sigma: float = 1.0
         self._use_grouped_media_priors: bool = False
         self._events = None
+        self._channel_interactions: list = []
         self._hierarchical: HierarchicalConfig | None = None
         self._seasonality: SeasonalityConfig | None = None
         self._control_selection: ControlSelectionConfig | None = None
@@ -458,6 +459,13 @@ class ModelConfigBuilder:
         self._events = events
         return self
 
+    def with_channel_interactions(self, *interactions) -> Self:
+        """Add cross-channel synergy / interaction terms (#142) — one or more
+        :class:`ChannelInteraction`, each a ``beta_ij * sat_i * sat_j`` term with
+        a sign-aware, shrink-to-zero prior. Off by default (strictly additive)."""
+        self._channel_interactions = list(interactions)
+        return self
+
     # Component configs
     def with_hierarchical(self, config: HierarchicalConfig) -> Self:
         """Set hierarchical configuration."""
@@ -529,6 +537,7 @@ class ModelConfigBuilder:
             media_roi_prior_sigma=self._media_roi_prior_sigma,
             use_grouped_media_priors=self._use_grouped_media_priors,
             events=self._events,
+            channel_interactions=self._channel_interactions,
             hierarchical=self._hierarchical or HierarchicalConfigBuilder().build(),
             seasonality=self._seasonality or SeasonalityConfigBuilder().build(),
             control_selection=self._control_selection

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from .enums import FitMethod, InferenceMethod, ModelSpecification, PriorType
 from .events import EventsConfig
+from .interactions import ChannelInteraction
 from .likelihood import LikelihoodConfig
 from .priors import PriorConfig
 
@@ -168,6 +169,11 @@ class ModelConfig(BaseModel):
     # sharp date-specific effects enter as an additive `event_component`, distinct
     # from the smooth Fourier seasonality.
     events: EventsConfig | None = None
+
+    # Cross-channel synergy / interaction terms (#142). Empty ⇒ strictly additive
+    # (default). Each entry adds a `beta_ij * sat_i * sat_j` term so a channel pair
+    # can do more (synergy) or less (cannibalization) than the sum of its parts.
+    channel_interactions: list[ChannelInteraction] = Field(default_factory=list)
 
     # Control selection
     control_selection: ControlSelectionConfig = Field(

@@ -36,6 +36,7 @@ from .enums import (
     VariableRole,
 )
 from .events import EventSpec, EventsConfig
+from .interactions import ChannelInteraction
 from .likelihood import LikelihoodConfig
 from .dataset import DATASET_SCHEMA_VERSION, DatasetSchema, RoleBinding
 from .roles import DatasetRole
@@ -90,6 +91,7 @@ __all__ = [
     "PriorConfig",
     "EventSpec",
     "EventsConfig",
+    "ChannelInteraction",
     "LikelihoodConfig",
     "AdstockConfig",
     "SaturationConfig",
