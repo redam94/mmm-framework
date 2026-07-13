@@ -2340,6 +2340,15 @@ class PlannerOptimizeRequest(BaseModel):
     by_geo: bool = False
     flighting: dict[str, Any] | None = None
     max_draws: int = 120
+    # Budget optimizer v2 (#139).
+    abs_bounds: dict[str, list[float]] | None = None
+    groups: list[dict[str, Any]] | None = None
+    min_channel_spend: float | dict[str, float] | None = None
+    objective: str = "mean"
+    mode: str = "fixed"
+    value_per_kpi: float = 1.0
+    frontier: bool | dict[str, Any] | None = None
+    target_kpi: float | None = None
 
 
 class PlannerScenarioRequest(BaseModel):
@@ -2369,6 +2378,15 @@ async def start_planner_optimization(project_id: str, body: PlannerOptimizeReque
         "by_geo": bool(body.by_geo),
         "flighting": body.flighting,
         "max_draws": int(body.max_draws),
+        # Budget optimizer v2 (#139).
+        "abs_bounds": body.abs_bounds,
+        "groups": body.groups,
+        "min_channel_spend": body.min_channel_spend,
+        "objective": body.objective,
+        "mode": body.mode,
+        "value_per_kpi": float(body.value_per_kpi),
+        "frontier": body.frontier,
+        "target_kpi": body.target_kpi,
     }
     return _start_planner_job(project_id, "plan_budget", op_kwargs, "budget_plan", run)
 

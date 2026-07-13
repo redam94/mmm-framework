@@ -65,4 +65,64 @@ describe('AllocationResult', () => {
     expect(screen.queryByText(/Allocation by geography/)).toBeNull();
     expect(screen.queryByText(/Flighting calendar/)).toBeNull();
   });
+
+  it('renders v2 objective chip, shadow price, frontier and goal-seek (#139)', () => {
+    const v2: BudgetPlanResult = {
+      ...PLAN,
+      by_geo: false,
+      geo_allocation: undefined,
+      geos: undefined,
+      flighting: undefined,
+      objective: 'cvar5',
+      objective_label: 'CVaR5 (risk-averse)',
+      mode: 'fixed',
+      shadow_price: 1.42,
+      marginal_roas: { TV: 1.2, Search: 0.8 },
+      frontier: {
+        objective: 'mean',
+        objective_label: 'expected KPI',
+        channels: ['TV', 'Search'],
+        current_total: 1200,
+        current_return: 900,
+        points: [
+          {
+            total_budget: 800,
+            expected_return: 700,
+            return_p5: 620,
+            return_p95: 780,
+            marginal_roi: 1.8,
+            allocation: { TV: 500, Search: 300 },
+          },
+          {
+            total_budget: 1600,
+            expected_return: 1050,
+            return_p5: 950,
+            return_p95: 1150,
+            marginal_roi: 0.9,
+            allocation: { TV: 950, Search: 650 },
+          },
+        ],
+        notes: [],
+      },
+      goal_seek: {
+        target_kpi: 1000,
+        objective: 'mean',
+        objective_label: 'expected KPI',
+        channels: ['TV', 'Search'],
+        feasible: true,
+        required_budget: 1400,
+        allocation: { TV: 820, Search: 580 },
+        expected_return: 1010,
+        prob_hit_target: 0.66,
+        notes: [],
+      },
+    };
+    render(<AllocationResult plan={v2} />);
+    expect(screen.getByText(/Objective: CVaR5/)).toBeInTheDocument();
+    expect(screen.getByText(/Shadow price/)).toBeInTheDocument();
+    expect(screen.getByText(/Efficient frontier/)).toBeInTheDocument();
+    expect(screen.getByText(/Goal-seek to KPI/)).toBeInTheDocument();
+    expect(screen.getByText('66%')).toBeInTheDocument(); // prob hit target
+    expect(screen.getByText('Marg. ROAS')).toBeInTheDocument();
+  });
 });

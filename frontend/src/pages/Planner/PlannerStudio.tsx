@@ -47,6 +47,14 @@ export function PlannerStudio({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [minMult, setMinMult] = useState(0);
   const [maxMult, setMaxMult] = useState(2);
+  // Budget optimizer v2 (#139): decision mode.
+  const [objective, setObjective] = useState<'mean' | 'p10' | 'cvar5'>('mean');
+  const [optMode, setOptMode] = useState<'fixed' | 'free'>('fixed');
+  const [withFrontier, setWithFrontier] = useState(false);
+  const [targetKpi, setTargetKpi] = useState<string>('');
+  const [keepOnFloor, setKeepOnFloor] = useState<string>('');
+  const [groupChannels, setGroupChannels] = useState<string[]>([]);
+  const [groupMinShare, setGroupMinShare] = useState<number>(40);
   // Per-channel overrides: only channels the user edits are sent; the rest fall
   // back to the default min/max on the backend.
   const [perChannel, setPerChannel] = useState<Record<string, { lo?: number; hi?: number }>>({});
@@ -71,6 +79,13 @@ export function PlannerStudio({
     minMult,
     maxMult,
     perChannel,
+    objective,
+    optMode,
+    withFrontier,
+    targetKpi,
+    keepOnFloor,
+    groupChannels,
+    groupMinShare,
   ]);
 
   const result =
@@ -104,13 +119,23 @@ export function PlannerStudio({
   }, [perChannel, channels, minMult, maxMult]);
 
   const run = () => {
+    const groups =
+      groupChannels.length > 0
+        ? [{ name: 'Group', channels: groupChannels, min_share: groupMinShare / 100 }]
+        : null;
     const body: PlannerOptimizeRequest = {
       by_geo: byGeo,
       flighting,
       min_multiplier: minMult,
       max_multiplier: maxMult,
       channel_bounds: channelBounds,
+      objective,
+      mode: optMode,
       ...(budgetMode === 'change' ? { budget_change_pct: budgetChangePct } : {}),
+      ...(withFrontier ? { frontier: true } : {}),
+      ...(targetKpi.trim() ? { target_kpi: Number(targetKpi) } : {}),
+      ...(keepOnFloor.trim() ? { min_channel_spend: Number(keepOnFloor) } : {}),
+      ...(groups ? { groups } : {}),
     };
     optimization.start.mutate(body);
   };
@@ -170,6 +195,110 @@ export function PlannerStudio({
         />
         Allocate per geography / DMA (geo panels only)
       </label>
+
+      <div className="space-y-3 rounded-lg border border-line-200 bg-cream-50 px-3 py-3">
+        <span className="text-sm font-medium text-ink-700">Decision mode</span>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className={labelCls}>Objective (risk)</span>
+            <select
+              value={objective}
+              onChange={(e) => setObjective(e.target.value as 'mean' | 'p10' | 'cvar5')}
+              className={inputCls}
+            >
+              <option value="mean">Expected KPI (risk-neutral)</option>
+              <option value="p10">Downside P10 (risk-averse)</option>
+              <option value="cvar5">CVaR 5% (worst-case averse)</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className={labelCls}>Budget mode</span>
+            <select
+              value={optMode}
+              onChange={(e) => setOptMode(e.target.value as 'fixed' | 'free')}
+              className={inputCls}
+            >
+              <option value="fixed">Spend the budget</option>
+              <option value="free">Fund to breakeven</option>
+            </select>
+          </label>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className={labelCls}>Goal-seek: target KPI (optional)</span>
+            <input
+              type="number"
+              value={targetKpi}
+              placeholder="e.g. 250000"
+              onChange={(e) => setTargetKpi(e.target.value)}
+              className={inputCls}
+            />
+          </label>
+          <label className="block">
+            <span className={labelCls}>Keep-on floor $/channel (optional)</span>
+            <input
+              type="number"
+              value={keepOnFloor}
+              placeholder="min spend"
+              onChange={(e) => setKeepOnFloor(e.target.value)}
+              className={inputCls}
+            />
+          </label>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-ink-700">
+          <input
+            type="checkbox"
+            checked={withFrontier}
+            onChange={(e) => setWithFrontier(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-line-300 text-sage-600 focus:ring-sage-600"
+          />
+          Compute the efficient frontier (return vs budget)
+        </label>
+        {channels.length > 0 && (
+          <div>
+            <span className={labelCls}>
+              Portfolio constraint — selected channels ≥ {groupMinShare}% of budget
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {channels.map((ch) => {
+                const on = groupChannels.includes(ch);
+                return (
+                  <button
+                    key={ch}
+                    type="button"
+                    onClick={() =>
+                      setGroupChannels((g) =>
+                        on ? g.filter((c) => c !== ch) : [...g, ch],
+                      )
+                    }
+                    className={`rounded-full border px-2.5 py-1 text-xs ${
+                      on
+                        ? 'border-sage-600 bg-sage-600 text-white'
+                        : 'border-line-300 bg-white text-ink-700'
+                    }`}
+                  >
+                    {ch}
+                  </button>
+                );
+              })}
+            </div>
+            {groupChannels.length > 0 && (
+              <label className="mt-2 block">
+                <span className={labelCls}>Minimum group share %</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={groupMinShare}
+                  onChange={(e) => setGroupMinShare(Number(e.target.value))}
+                  className={numInputCls}
+                />
+              </label>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="rounded-lg border border-line-200 bg-cream-50 px-3 py-3">
         <label className="flex items-center gap-2 text-sm font-medium text-ink-700">

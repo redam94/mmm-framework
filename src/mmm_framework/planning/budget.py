@@ -180,6 +180,223 @@ def _eval_allocation(
     )
 
 
+# ---------------------------------------------------------------------------
+# Budget optimizer v2 (#139): risk objectives, constrained SLSQP solve, and
+# breakeven / free-budget mode with shadow prices.
+# ---------------------------------------------------------------------------
+
+#: Recognized risk objectives for the response curve the optimizer maximizes.
+_OBJECTIVES_DOC = (
+    "'mean' (posterior mean), 'p<q>' (downside q-th percentile, e.g. 'p10'), or "
+    "'cvar<a>' (mean of the worst a% of draws, e.g. 'cvar5')"
+)
+
+
+def objective_curves(curves: ResponseCurves, objective: str = "mean") -> np.ndarray:
+    """(C, G) response curve for a risk objective — the curve the allocator
+    maximizes. ``'mean'`` = posterior mean (risk-neutral); ``'p<q>'`` = the
+    per-channel q-th percentile across draws (a conservative *downside* curve);
+    ``'cvar<a>'`` = the per-channel mean of the worst a% of draws (expected
+    shortfall). Per-channel quantiles are a conservative proxy for the joint
+    portfolio quantile (they ignore cross-channel draw correlation), documented
+    in ``technical-docs/budget-optimizer-v2.md``.
+    """
+    c = curves.contributions  # (D, C, G)
+    obj = (objective or "mean").strip().lower()
+    if obj in ("mean", "expected"):
+        return c.mean(axis=0)
+    if obj.startswith("cvar"):
+        a = float(obj[4:] or 5.0)
+        if not 0 < a < 100:
+            raise ValueError(f"cvar level must be in (0, 100): got {a}")
+        D = c.shape[0]
+        k = max(1, int(np.ceil(a / 100.0 * D)))
+        return np.sort(c, axis=0)[:k].mean(axis=0)  # worst-k mean
+    if obj.startswith("p") and obj[1:].replace(".", "", 1).isdigit():
+        q = float(obj[1:])
+        if not 0 <= q <= 100:
+            raise ValueError(f"percentile must be in [0, 100]: got {q}")
+        return np.percentile(c, q, axis=0)
+    raise ValueError(f"Unknown objective '{objective}'. Use one of: {_OBJECTIVES_DOC}.")
+
+
+def objective_label(objective: str = "mean") -> str:
+    """Human-readable label for an objective, for reporting which one was used."""
+    obj = (objective or "mean").strip().lower()
+    if obj in ("mean", "expected"):
+        return "expected KPI (posterior mean)"
+    if obj.startswith("cvar"):
+        return f"CVaR{obj[4:] or '5'} (mean of the worst draws — risk-averse)"
+    if obj.startswith("p"):
+        return f"downside P{obj[1:]} (a low quantile — risk-averse)"
+    return objective
+
+
+def _segment_marginal(curve_c: np.ndarray, grid_c: np.ndarray, s: float) -> float:
+    """Local marginal contribution per dollar at spend ``s`` on one channel's
+    piecewise-linear curve (the slope of the segment containing ``s``; the last
+    segment's slope past the grid)."""
+    j = int(np.searchsorted(grid_c, s, side="right")) - 1
+    j = max(0, min(j, len(grid_c) - 2))
+    dx = grid_c[j + 1] - grid_c[j]
+    if dx <= 0:
+        return 0.0
+    return float((curve_c[j + 1] - curve_c[j]) / dx)
+
+
+def _normalize_groups(
+    groups: list[dict] | None, names: list[str], total_budget: float
+) -> list[dict]:
+    """Convert user group specs to internal ``{indices, min_spend, max_spend}``
+    (absolute dollars). A group names ``channels`` and either share bounds
+    (``min_share`` / ``max_share``, fractions of the total budget) or absolute
+    dollar bounds (``min_spend`` / ``max_spend``). Unknown channel names raise."""
+    idx = {n: c for c, n in enumerate(names)}
+    out: list[dict] = []
+    for g in groups or []:
+        chans = g.get("channels") or []
+        indices = []
+        for ch in chans:
+            if ch not in idx:
+                raise ValueError(
+                    f"group '{g.get('name', '?')}': unknown channel '{ch}'"
+                )
+            indices.append(idx[ch])
+        entry: dict = {"indices": indices, "name": g.get("name")}
+        if g.get("min_share") is not None:
+            entry["min_spend"] = float(g["min_share"]) * total_budget
+        if g.get("max_share") is not None:
+            entry["max_spend"] = float(g["max_share"]) * total_budget
+        if g.get("min_spend") is not None:
+            entry["min_spend"] = float(g["min_spend"])
+        if g.get("max_spend") is not None:
+            entry["max_spend"] = float(g["max_spend"])
+        out.append(entry)
+    return out
+
+
+def _solve_allocation(
+    curve: np.ndarray,  # (C, G) objective curve
+    spend_grid: np.ndarray,  # (C, G)
+    *,
+    total_budget: float | None,
+    lo_spend: np.ndarray,  # (C,)
+    hi_spend: np.ndarray,  # (C,)
+    groups: list[dict] | None = None,
+    mode: str = "fixed",
+    value_per_kpi: float = 1.0,
+    x0: np.ndarray | None = None,
+) -> tuple[np.ndarray, float, np.ndarray]:
+    """Constrained allocation on one response curve via SLSQP (convex: a sum of
+    concave channel curves under linear constraints).
+
+    ``mode='fixed'`` spends exactly ``total_budget``; ``mode='free'`` (breakeven)
+    treats the total as a decision and funds each channel until its marginal
+    return hits the breakeven line — maximizing ``value_per_kpi·KPI − spend``.
+
+    ``groups`` is a list of ``{"indices": [...], "min_spend"/"max_spend": $}``
+    portfolio constraints (absolute dollars; share bounds are converted upstream).
+    Returns ``(alloc (C,), shadow_price, marginal_roas (C,))`` where the shadow
+    price is the budget constraint's water level (the marginal KPI-value of the
+    next dollar) and ``marginal_roas[c] = value_per_kpi · dKPI/dspend`` at the
+    solution (the funding line: fund while it exceeds 1).
+    """
+    from scipy.optimize import minimize
+
+    C = curve.shape[0]
+
+    def value(s: np.ndarray) -> float:
+        return float(sum(np.interp(s[c], spend_grid[c], curve[c]) for c in range(C)))
+
+    def marginals(s: np.ndarray) -> np.ndarray:
+        return np.array(
+            [_segment_marginal(curve[c], spend_grid[c], s[c]) for c in range(C)]
+        )
+
+    if mode == "free":
+        # Maximize profit value_per_kpi·KPI(s) − Σs → minimize the negative.
+        def neg(s):
+            return -(value_per_kpi * value(s) - float(s.sum()))
+
+        def neg_jac(s):
+            return -(value_per_kpi * marginals(s) - 1.0)
+
+        constraints = []
+    else:  # fixed budget
+
+        def neg(s):
+            return -value_per_kpi * value(s)
+
+        def neg_jac(s):
+            return -value_per_kpi * marginals(s)
+
+        constraints = [
+            {
+                "type": "eq",
+                "fun": lambda s: float(s.sum()) - float(total_budget),
+                "jac": lambda s: np.ones(C),
+            }
+        ]
+
+    for g in groups or []:
+        idx = list(g["indices"])
+        sel = np.zeros(C)
+        sel[idx] = 1.0
+        if g.get("min_spend") is not None:
+            lo_g = float(g["min_spend"])
+            constraints.append(
+                {
+                    "type": "ineq",  # Σ s[idx] − lo ≥ 0
+                    "fun": (lambda s, sel=sel, lo=lo_g: float(sel @ s) - lo),
+                    "jac": (lambda s, sel=sel: sel),
+                }
+            )
+        if g.get("max_spend") is not None:
+            hi_g = float(g["max_spend"])
+            constraints.append(
+                {
+                    "type": "ineq",  # hi − Σ s[idx] ≥ 0
+                    "fun": (lambda s, sel=sel, hi=hi_g: hi - float(sel @ s)),
+                    "jac": (lambda s, sel=sel: -sel),
+                }
+            )
+
+    bnds = [
+        (float(lo_spend[c]), float(max(hi_spend[c], lo_spend[c]))) for c in range(C)
+    ]
+    if x0 is None:
+        if mode == "free":
+            x0 = np.clip(0.5 * (lo_spend + hi_spend), lo_spend, hi_spend)
+        else:
+            # feasible warm start: lower bounds + budget spread proportionally.
+            x0 = lo_spend.astype(float).copy()
+            extra = max(float(total_budget) - x0.sum(), 0.0)
+            room = np.maximum(hi_spend - lo_spend, 0.0)
+            if room.sum() > 0:
+                x0 = x0 + extra * room / room.sum()
+    res = minimize(
+        neg,
+        np.asarray(x0, dtype=float),
+        jac=neg_jac,
+        method="SLSQP",
+        bounds=bnds,
+        constraints=constraints,
+        options={"maxiter": 200, "ftol": 1e-9},
+    )
+    alloc = np.clip(res.x, lo_spend, np.maximum(hi_spend, lo_spend))
+    if mode != "free" and total_budget and alloc.sum() > 0:
+        # SLSQP may leave a small equality residual; renormalize to the budget
+        # within bounds (proportional to headroom above the floor).
+        room = np.maximum(alloc - lo_spend, 1e-12)
+        deficit = float(total_budget) - alloc.sum()
+        alloc = alloc + deficit * room / room.sum()
+        alloc = np.clip(alloc, lo_spend, np.maximum(hi_spend, lo_spend))
+    m = value_per_kpi * marginals(alloc)
+    funded = (alloc > lo_spend + 1e-9) & (alloc < hi_spend - 1e-9)
+    shadow = float(np.median(m[funded])) if funded.any() else float(np.max(m))
+    return alloc, shadow, m
+
+
 @dataclass
 class BudgetOptimizationResult:
     """Optimal allocation plus the decision-uncertainty diagnostics."""
@@ -202,6 +419,16 @@ class BudgetOptimizationResult:
     expected_regret: float = 0.0
     # Number of channels whose recommendation extrapolates past observed spend.
     n_extrapolated: int = 0
+    # Budget optimizer v2 (#139). The objective the allocator maximized ("mean",
+    # "p10", "cvar5", …) and its human label; the optimization mode ("fixed" =
+    # spend the budget, "free" = fund to breakeven); the budget shadow price (the
+    # marginal KPI-value of the next dollar — the water level greedy equalizes);
+    # and per-channel marginal ROAS at the recommended plan (the funding line).
+    objective: str = "mean"
+    objective_label: str = "expected KPI (posterior mean)"
+    mode: str = "fixed"
+    shadow_price: float | None = None
+    marginal_roas: dict[str, float] | None = None
 
 
 def optimize_budget(
@@ -213,23 +440,43 @@ def optimize_budget(
     min_multiplier: float = 0.0,
     max_multiplier: float = 2.0,
     bounds: dict[str, tuple[float, float]] | None = None,
+    abs_bounds: dict[str, tuple[float, float]] | None = None,
+    groups: list[dict] | None = None,
+    min_channel_spend: float | dict[str, float] | None = None,
+    objective: str = "mean",
+    mode: str = "fixed",
+    value_per_kpi: float = 1.0,
     n_steps: int = 400,
     max_draws: int = 200,
     random_seed: int | None = None,
 ) -> BudgetOptimizationResult:
-    """Find the budget allocation that maximizes expected KPI contribution.
+    """Find the budget allocation that maximizes the chosen KPI objective.
 
     Args:
         curves: precomputed response curves (else sampled from ``mmm``).
         total_budget: budget to allocate. Default: current total spend
             (pure reallocation). ``budget_change_pct`` (e.g. ``-10`` or ``15``)
-            scales the current total instead.
+            scales the current total instead. Ignored in ``mode="free"``.
         min_multiplier / max_multiplier: per-channel spend bounds as multiples
             of CURRENT channel spend (floors/caps keep recommendations inside
             the range the model has evidence for; extrapolating far beyond
             observed spend is curve-fiction).
-        bounds: per-channel ``{name: (lo_mult, hi_mult)}`` overrides.
-        n_steps: greedy increments (granularity of the allocation).
+        bounds: per-channel ``{name: (lo_mult, hi_mult)}`` multiplier overrides.
+        abs_bounds: per-channel ``{name: (lo_$, hi_$)}`` ABSOLUTE dollar bounds
+            (override the multiplier bounds for that channel) — #139.
+        groups: portfolio constraints, a list of
+            ``{"name", "channels": [...], "min_share"/"max_share": frac,
+            "min_spend"/"max_spend": $}`` — e.g. "digital ≥ 40%" — #139.
+        min_channel_spend: keep-every-channel-on floor (a scalar applied to all
+            channels, or per-channel ``{name: $}``) — #139.
+        objective: the risk objective the allocator maximizes — 'mean'
+            (posterior mean), 'p<q>' (downside q-th percentile, e.g. 'p10'), or
+            'cvar<a>' (mean of the worst a% of draws, e.g. 'cvar5') (#139).
+        mode: ``"fixed"`` spends the budget; ``"free"`` funds each channel to
+            breakeven (marginal value = $1), the total becomes an output (#139).
+        value_per_kpi: $ value of one KPI unit (for breakeven / marginal ROAS
+            when the KPI is not already revenue). Default 1.0.
+        n_steps: greedy increments (granularity of the default allocation).
         max_draws: posterior draws used for curves and stability analysis.
     """
     if curves is None:
@@ -266,16 +513,83 @@ def optimize_budget(
             "the sampled curve range."
         )
         hi_spend = np.minimum(hi_spend, base * grid_max)
-    if total_budget > hi_spend.sum():
+
+    # #139 absolute-$ bounds override the multiplier-derived bounds per channel.
+    if abs_bounds:
+        idx = {n: c for c, n in enumerate(names)}
+        for n, (blo, bhi) in abs_bounds.items():
+            if n in idx:
+                lo_spend[idx[n]] = float(blo)
+                hi_spend[idx[n]] = min(float(bhi), base[idx[n]] * grid_max)
+
+    # #139 keep-on floor: raise each channel's lower bound so no channel is off.
+    if min_channel_spend is not None:
+        for c, n in enumerate(names):
+            floor = (
+                float(min_channel_spend.get(n, 0.0))
+                if isinstance(min_channel_spend, dict)
+                else float(min_channel_spend)
+            )
+            lo_spend[c] = max(lo_spend[c], min(floor, hi_spend[c]))
+
+    # #139 normalize group share constraints → absolute-$ against the budget.
+    norm_groups = _normalize_groups(groups, names, total_budget) if groups else None
+
+    if mode != "free" and total_budget > hi_spend.sum():
         notes.append(
             "Total budget exceeds the sum of per-channel caps; the surplus "
             "cannot be allocated within bounds."
         )
 
-    mean_curves = curves.mean_curves()
-    optimal = _greedy_allocate(
-        mean_curves, spend_grid, total_budget, lo_spend, hi_spend, n_steps
+    # Choose the allocator. The historical greedy path (mean objective, fixed
+    # mode, no advanced constraints) is preserved byte-for-byte; any v2 feature
+    # routes through the constrained SLSQP solver.
+    advanced = (
+        objective != "mean"
+        or mode != "fixed"
+        or bool(norm_groups)
+        or bool(abs_bounds)
+        or min_channel_spend is not None
     )
+    obj_curve = objective_curves(curves, objective)  # (C, G)
+    obj_label = objective_label(objective)
+
+    def _allocate(curve2d: np.ndarray, budget: float, x0=None) -> np.ndarray:
+        if not advanced:
+            return _greedy_allocate(
+                curve2d, spend_grid, budget, lo_spend, hi_spend, n_steps
+            )
+        alloc, _, _ = _solve_allocation(
+            curve2d,
+            spend_grid,
+            total_budget=budget,
+            lo_spend=lo_spend,
+            hi_spend=hi_spend,
+            groups=norm_groups,
+            mode=mode,
+            value_per_kpi=value_per_kpi,
+            x0=x0,
+        )
+        return alloc
+
+    mean_curves = obj_curve
+    optimal = _allocate(mean_curves, total_budget)
+    if mode == "free":
+        total_budget = float(optimal.sum())  # breakeven total is an output
+    # Shadow price + marginal ROAS AT the recommended plan (v2 readouts): the
+    # per-channel marginal value of the next dollar, and the budget water level
+    # (the level greedy/SLSQP equalizes across interior funded channels).
+    marg = value_per_kpi * np.array(
+        [
+            _segment_marginal(mean_curves[c], spend_grid[c], optimal[c])
+            for c in range(len(names))
+        ]
+    )
+    interior = (optimal > lo_spend + 1e-9) & (optimal < hi_spend - 1e-9)
+    shadow_price = (
+        float(np.median(marg[interior])) if interior.any() else float(np.max(marg))
+    )
+    marginal_roas = {n: float(marg[c]) for c, n in enumerate(names)}
 
     # Decision uncertainty: re-optimize under each draw's curves, and evaluate
     # the recommended vs current allocation under each draw.
@@ -290,9 +604,7 @@ def optimize_budget(
     current_alloc = base.astype(float)
     for d in range(D):
         cd = curves.contributions[d]
-        per_draw_alloc[d] = _greedy_allocate(
-            cd, spend_grid, total_budget, lo_spend, hi_spend, n_steps
-        )
+        per_draw_alloc[d] = _allocate(cd, total_budget, x0=optimal)
         v_plan[d] = _eval_allocation(optimal, cd, spend_grid)
         v_perfect[d] = _eval_allocation(per_draw_alloc[d], cd, spend_grid)
         uplift[d] = v_plan[d] - _eval_allocation(current_alloc, cd, spend_grid)
@@ -367,6 +679,11 @@ def optimize_budget(
         optimal_alloc=optimal,
         expected_regret=expected_regret,
         n_extrapolated=n_extrapolated,
+        objective=objective,
+        objective_label=obj_label,
+        mode=mode,
+        shadow_price=shadow_price,
+        marginal_roas=marginal_roas,
     )
 
 

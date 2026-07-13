@@ -4723,10 +4723,18 @@ def run_budget_optimizer(
     min_multiplier: float = 0.0,
     max_multiplier: float = 2.0,
     channel_bounds: dict = None,
+    abs_bounds: dict = None,
+    groups: list[dict] = None,
+    min_channel_spend: float = None,
+    objective: str = "mean",
+    mode: str = "fixed",
+    value_per_kpi: float = 1.0,
+    frontier: bool = False,
+    target_kpi: float = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
-    """Find the budget allocation that maximizes expected KPI, using the fitted
-    model's posterior response curves (saturation + adstock respected).
+    """Find the budget allocation that maximizes the chosen KPI objective, using
+    the fitted model's posterior response curves (saturation + adstock respected).
 
     Defaults to REALLOCATING the current total spend; pass `total_budget` (an
     absolute amount) or `budget_change_pct` (e.g. -10 or 15) to size the budget.
@@ -4736,10 +4744,27 @@ def run_budget_optimizer(
 
     `channel_bounds` sets PER-CHANNEL spend limits that override the global
     bounds — `{"TV": [1.0, 1.0], "Social": [0.0, 1.2]}` means "freeze TV at its
-    current spend, cap Social at +20%". Use this to encode real plan constraints
-    (partner-committed caps, contractual floors, a locked line). Each value is
-    `[low, high]` multipliers of that channel's current spend; an unknown channel
-    name is rejected (so a constraint is never silently ignored).
+    current spend, cap Social at +20%". Each value is `[low, high]` multipliers of
+    that channel's current spend; an unknown channel name is rejected.
+
+    Budget optimizer v2 (#139) — planner-grade decision modes:
+    - `objective`: `"mean"` (expected KPI, default), `"p10"` (maximize a downside
+      10th-percentile KPI — risk-averse), or `"cvar5"` (maximize the mean of the
+      worst 5% of draws — expected shortfall). The result reports which was used.
+    - `mode`: `"fixed"` spends the budget; `"free"` funds each channel to
+      BREAKEVEN (marginal return = 1) and the total becomes an output.
+    - `abs_bounds`: ABSOLUTE-$ per-channel bounds `{"TV": [50000, 120000]}`.
+    - `groups`: portfolio constraints, e.g.
+      `[{"name": "digital", "channels": ["Search","Social"], "min_share": 0.4}]`
+      ("digital ≥ 40% of budget"); `min_share`/`max_share` are fractions, or use
+      `min_spend`/`max_spend` for dollars.
+    - `min_channel_spend`: a keep-every-channel-on floor (dollars).
+    - `frontier=True`: also return the EFFICIENT FRONTIER — optimized return vs
+      budget with credible bands and the marginal ROI at each budget.
+    - `target_kpi`: GOAL-SEEK — the minimum budget (and mix) whose optimized plan
+      hits this KPI contribution, plus the probability it actually clears it.
+    - `value_per_kpi`: $ value of one KPI unit (for breakeven / marginal ROAS when
+      the KPI is not already revenue).
 
     The result includes DECISION uncertainty: the optimizer re-runs under each
     posterior draw, so each channel gets a 90% range of its optimal share. Wide
@@ -4750,6 +4775,9 @@ def run_budget_optimizer(
     kwargs = {
         "min_multiplier": min_multiplier,
         "max_multiplier": max_multiplier,
+        "objective": objective,
+        "mode": mode,
+        "value_per_kpi": value_per_kpi,
     }
     if total_budget is not None:
         kwargs["total_budget"] = float(total_budget)
@@ -4757,6 +4785,16 @@ def run_budget_optimizer(
         kwargs["budget_change_pct"] = float(budget_change_pct)
     if channel_bounds:
         kwargs["bounds"] = channel_bounds
+    if abs_bounds:
+        kwargs["abs_bounds"] = abs_bounds
+    if groups:
+        kwargs["groups"] = groups
+    if min_channel_spend is not None:
+        kwargs["min_channel_spend"] = float(min_channel_spend)
+    if frontier:
+        kwargs["frontier"] = True
+    if target_kpi is not None:
+        kwargs["target_kpi"] = float(target_kpi)
     res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
         "optimize_budget", kwargs
     )
