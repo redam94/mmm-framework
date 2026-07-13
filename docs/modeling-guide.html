@@ -689,6 +689,21 @@ tv_channel = (
                 </p>
             </div>
 
+            <div class="note">
+                <h4>Effectiveness that drifts: time-varying coefficients (opt-in)</h4>
+                <p style="margin-bottom:0;">
+                    A single scalar coefficient assumes a channel is equally effective across the whole
+                    window. When that's wrong — creative fatigue, a channel maturing, a mid-window
+                    break — set <code>MediaChannelConfigBuilder().with_time_varying()</code> to model
+                    <code>log(β<sub>t</sub>)</code> as a smooth random walk. It's
+                    <strong>off by default</strong> and collapses to the constant-β model as its
+                    innovation scale → 0; <code>beta_&lt;channel&gt;</code> is still reported as the
+                    time-average, and the report surfaces the trajectory. Read the drift's
+                    <em>shape</em>, not its exact level — TVP is weakly identified against trend and
+                    seasonality, so use it only for genuinely unexplained drift.
+                </p>
+            </div>
+
             <h2 id="prior-predictive">Prior Predictive Check</h2>
             <p>
                 Before fitting the model to data, verify that your priors produce plausible predictions. This is the most underrated step in Bayesian modeling.

@@ -55,6 +55,8 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
         self._roi_prior_sigma: float | None = None
         self._parent_channel: str | None = None
         self._split_dimensions: list[DimensionType] = []
+        self._time_varying: bool = False
+        self._tvp_innovation_sigma: float = 0.15
         self._measurement_unit: MeasurementUnit = MeasurementUnit.SPEND
         self._spend_column: str | None = None
         self._cpm: float | None = None
@@ -163,6 +165,16 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
         self._split_dimensions = list(dims)
         return self
 
+    def with_time_varying(
+        self, enabled: bool = True, innovation_sigma: float = 0.15
+    ) -> Self:
+        """Model this channel's coefficient as time-varying (a random walk on
+        ``log(beta_t)``) so effectiveness can drift. ``innovation_sigma`` is the
+        per-step log-innovation scale (smaller ⇒ closer to constant beta)."""
+        self._time_varying = enabled
+        self._tvp_innovation_sigma = innovation_sigma
+        return self
+
     def measured_in(self, unit: MeasurementUnit | str) -> Self:
         """Declare how the modeled variable is measured.
 
@@ -220,6 +232,8 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
             saturation=saturation,
             parent_channel=self._parent_channel,
             split_dimensions=self._split_dimensions,
+            time_varying=self._time_varying,
+            tvp_innovation_sigma=self._tvp_innovation_sigma,
             measurement_unit=self._measurement_unit,
             spend_column=self._spend_column,
             cpm=self._cpm,
