@@ -77,6 +77,7 @@ class BayesianMMMExtractor(
         pooled = getattr(self.mmm, "_pooled_channels", None)
         bundle.pooled_channels = sorted(pooled) if pooled else None
         bundle.time_varying_betas = self._extract_time_varying_betas()
+        bundle.reach_frequency = self._extract_reach_frequency()
         bundle.dates = self._get_dates()
 
         # Actual values
@@ -290,6 +291,32 @@ class BayesianMMMExtractor(
                 "median": np.median(arr, axis=0).tolist(),
                 "lower": np.percentile(arr, 5, axis=0).tolist(),
                 "upper": np.percentile(arr, 95, axis=0).tolist(),
+            }
+        return out or None
+
+    def _extract_reach_frequency(self) -> dict | None:
+        """Reach & frequency (#141): per-channel effective-frequency insight —
+        the ``effective_frequency_<ch>`` scalar (raw frequency at 90% of the
+        response asymptote / half-saturation) with a 90% credible band and the
+        curve shape, for the reach-vs-frequency tradeoff insight."""
+        trace = getattr(self.mmm, "_trace", None)
+        rf = getattr(self.mmm, "_reach_freq", None)
+        if trace is None or not hasattr(trace, "posterior") or not rf:
+            return None
+        post = trace.posterior
+        out: dict[str, dict] = {}
+        for ch, entry in rf.items():
+            cfg = entry[0]
+            name = f"effective_frequency_{ch}"
+            if name not in post:
+                continue
+            arr = np.asarray(post[name].values).reshape(-1)
+            out[ch] = {
+                "effective_frequency": float(np.median(arr)),
+                "lower": float(np.percentile(arr, 5)),
+                "upper": float(np.percentile(arr, 95)),
+                "response": getattr(cfg.response, "value", str(cfg.response)),
+                "mean_frequency": float(entry[2]),
             }
         return out or None
 

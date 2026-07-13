@@ -690,6 +690,24 @@ tv_channel = (
             </div>
 
             <div class="note">
+                <h4>Reach or frequency? Reach × frequency-saturation channels (opt-in)</h4>
+                <p style="margin-bottom:0;">
+                    For channels with reach/frequency data (TV, YouTube, programmatic), the lever
+                    is <em>how many distinct people were reached and how often</em> — not raw
+                    impressions. <code>ModelConfigBuilder().with_reach_frequency(ReachFrequencyConfig(
+                    channel="TV", frequency_column="Frequency"))</code> treats the channel's column
+                    as <strong>reach</strong> and modulates it by a <strong>frequency-saturation</strong>
+                    curve <code>g(f)</code> (diminishing returns to added exposures — the 3+ frequency
+                    wearout): <code>effect = beta · sat(adstock(reach · g(frequency)))</code>. The
+                    report surfaces an <em>effective-frequency</em> insight ("effectiveness plateaus
+                    around N exposures — buy reach, not frequency, beyond this"). Pick
+                    <code>exponential</code> (diminishing from the first exposure) or <code>hill</code>
+                    (an S-shaped minimum-effective-frequency threshold). Off by default; identified by
+                    frequency variation that is not collinear with reach.
+                </p>
+            </div>
+
+            <div class="note">
                 <h4>Price &amp; promotion as first-class levers (opt-in)</h4>
                 <p style="margin-bottom:0;">
                     For CPG / retail / DTC, price and promotion are decisions the client controls, and

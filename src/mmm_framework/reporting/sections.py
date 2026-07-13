@@ -504,10 +504,44 @@ class ChannelROISection(Section):
                 "reliable quantity; an experiment is what identifies the split.</div>"
             )
 
+        # Reach & frequency (#141): for channels fit as reach × a frequency-
+        # saturation curve, surface the effective-frequency insight — where added
+        # exposures stop paying off — so the plan can trade reach against frequency.
+        rf_note = ""
+        rf = getattr(self.data, "reach_frequency", None)
+        if rf:
+            rows = []
+            for ch, info in rf.items():
+                if ch not in channels:
+                    continue
+                ef = info.get("effective_frequency")
+                lo, hi = info.get("lower"), info.get("upper")
+                if ef is None:
+                    continue
+                band = (
+                    f" (90% CI {lo:.1f}–{hi:.1f})"
+                    if lo is not None and hi is not None
+                    else ""
+                )
+                rows.append(
+                    f"<li><strong>{html.escape(str(ch))}</strong>: effectiveness "
+                    f"plateaus around <strong>{ef:.1f}</strong> average exposures"
+                    f"{band} — beyond this, extra <em>frequency</em> adds little; "
+                    "spend the next dollar on <em>reach</em>.</li>"
+                )
+            if rows:
+                rf_note = (
+                    '<div class="note"><strong>Reach &amp; frequency:</strong> '
+                    "these channels are modeled as reach modulated by a "
+                    "frequency-saturation curve (diminishing returns to added "
+                    f"exposures).<ul>{''.join(rows)}</ul></div>"
+                )
+
         content = f"""
             {legend}
             {forest_plot}
             {pooled_note}
+            {rf_note}
             <h3>Detailed ROI Estimates</h3>
             {roi_table}
             {evidence_key}
