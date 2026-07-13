@@ -1452,6 +1452,84 @@ def make_economic_health(seed: int = 14, *, n_weeks: int | None = None) -> Scena
     )
 
 
+def make_reach_frequency(seed: int = 15, *, n_weeks: int | None = None) -> Scenario:
+    """TV's effect is driven by **reach × a frequency-saturation curve** (#141).
+
+    The classic volume MMM treats TV impressions as one number, so it cannot
+    answer *"buy more reach or more frequency?"*. Here TV's column is **reach**
+    (the distinct fraction of the audience reached each week) and its true effect
+    is ``amp · reach · g(frequency)`` with a saturating ``g(f) = 1 - exp(-k f)``
+    (diminishing returns to added exposures — the 3+ frequency wearout). The
+    average-frequency series is placed in ``controls`` as ``Frequency`` so a
+    reach/frequency model can pull it out and fit the curve; the other channels
+    (Search / Social / Display) are ordinary spend channels.
+
+    Ground truth on ``notes``: ``true_freq_k`` (the planted exponential rate),
+    ``true_effective_frequency`` (raw frequency at 90% of the asymptote,
+    ``ln(10)/k · mean_freq``), and ``frequency`` (the array, dropped from the JSON
+    answer key but available to a Python test).
+    """
+    rng, weeks, n, spend, baseline, controls, maxes = _base_world(seed, n_weeks)
+    t = np.arange(n)
+
+    # TV reach: distinct-audience fraction, 0.15..0.75, with a slow build + noise.
+    reach = np.clip(
+        0.45 + 0.18 * np.sin(2 * np.pi * t / 52.0) + rng.normal(0, 0.06, n), 0.1, 0.85
+    )
+    # Average frequency: 1.5..6 exposures, independent of reach (so the curve is
+    # identified by frequency variation, not collinear with reach).
+    frequency = np.clip(
+        3.0 + 1.4 * np.cos(2 * np.pi * t / 26.0) + rng.normal(0, 0.7, n), 1.2, 7.0
+    )
+    mean_freq = float(frequency.mean())
+    k_true = 1.6  # exponential frequency-saturation rate (on mean-normalized freq)
+    g_freq = 1.0 - np.exp(-k_true * (frequency / mean_freq))
+    amp_tv = 260.0  # KPI amplitude of fully-frequency-saturated full reach
+
+    spend = spend.copy()
+    spend["TV"] = reach  # TV's modeled column is reach, not spend
+
+    def fn(s: np.ndarray) -> np.ndarray:
+        mu = baseline.copy()
+        for i, c in enumerate(CHANNELS):
+            if c == "TV":
+                # effective reach = reach · g(frequency); no adstock (reach is a
+                # within-period audience measure), matching the reach/freq model
+                # with AdstockConfig.none().
+                mu = mu + amp_tv * s[:, i] * g_freq
+            else:
+                xn = s[:, i] / maxes[c]
+                ad = _geom_adstock(xn, _ALPHA[c])
+                mu = mu + _AMP[c] * _logistic_sat(ad, _LAM[c])
+        return mu
+
+    mu = fn(spend.to_numpy(float))
+    noise = rng.normal(0, 20.0, n)
+    controls = controls.copy()
+    controls["Frequency"] = frequency
+    return _finish(
+        "reach_frequency",
+        "impressions are a pure volume substitute (no frequency saturation)",
+        "TV's effect is reach × a saturating frequency curve (diminishing returns "
+        "to added exposures); a volume MMM that ignores frequency cannot say "
+        "whether to buy reach or frequency.",
+        weeks,
+        spend,
+        mu,
+        noise,
+        controls,
+        fn,
+        notes={
+            "true_freq_k": k_true,
+            "true_effective_frequency": float(np.log(10.0) / k_true * mean_freq),
+            "mean_frequency": mean_freq,
+            "frequency": frequency,
+            "reach_channel": "TV",
+            "frequency_column": "Frequency",
+        },
+    )
+
+
 # ===========================================================================
 # breakout-weighting worlds (one channel split into impression sub-streams)
 # ===========================================================================
@@ -1683,6 +1761,7 @@ SCENARIOS: dict[str, Callable[..., Scenario]] = {
     "seasonality_misspec": make_seasonality_misspec,
     "dense_controls": make_dense_controls,
     "economic_health": make_economic_health,
+    "reach_frequency": make_reach_frequency,
     "breakout_heterogeneous": make_breakout_heterogeneous,
     "breakout_homogeneous": make_breakout_homogeneous,
     "breakout_collinear": make_breakout_collinear,

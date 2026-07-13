@@ -286,6 +286,7 @@ class ModelConfigBuilder:
         self._channel_interactions: list = []
         self._price = None
         self._promotions: list = []
+        self._reach_frequency: list = []
         self._hierarchical: HierarchicalConfig | None = None
         self._seasonality: SeasonalityConfig | None = None
         self._control_selection: ControlSelectionConfig | None = None
@@ -481,6 +482,13 @@ class ModelConfigBuilder:
         self._promotions = list(promotions)
         return self
 
+    def with_reach_frequency(self, *configs) -> Self:
+        """Model channels as reach × a frequency-saturation curve (#141). Pass one
+        or more :class:`ReachFrequencyConfig`; each names a channel (its column is
+        reach) and a frequency column (from the control block). Off by default."""
+        self._reach_frequency = list(configs)
+        return self
+
     # Component configs
     def with_hierarchical(self, config: HierarchicalConfig) -> Self:
         """Set hierarchical configuration."""
@@ -555,6 +563,7 @@ class ModelConfigBuilder:
             channel_interactions=self._channel_interactions,
             price=self._price,
             promotions=self._promotions,
+            reach_frequency=self._reach_frequency,
             hierarchical=self._hierarchical or HierarchicalConfigBuilder().build(),
             seasonality=self._seasonality or SeasonalityConfigBuilder().build(),
             control_selection=self._control_selection

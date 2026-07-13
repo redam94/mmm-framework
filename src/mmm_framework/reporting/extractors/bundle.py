@@ -300,6 +300,13 @@ class MMMDataBundle:
     # scale — a "how effectiveness moved over time" view.
     time_varying_betas: dict | None = None
 
+    # Reach & frequency (#141): per-channel effective-frequency insight, when a
+    # channel was fit as reach × a frequency-saturation curve.
+    # ``{channel: {"effective_frequency": float, "lower": float, "upper": float,
+    # "response": "exponential"|"hill", "mean_frequency": float}}`` — the
+    # reach-vs-frequency tradeoff ("effectiveness plateaus around N exposures").
+    reach_frequency: dict | None = None
+
     # Extended model data (nested, multivariate)
     mediator_effects: dict[str, Any] | None = None
     cross_effects: dict[str, Any] | None = None

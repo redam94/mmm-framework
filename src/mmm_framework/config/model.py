@@ -10,6 +10,7 @@ from .enums import FitMethod, InferenceMethod, ModelSpecification, PriorType
 from .events import EventsConfig
 from .interactions import ChannelInteraction
 from .levers import PriceConfig, PromoConfig
+from .reach_frequency import ReachFrequencyConfig
 from .likelihood import LikelihoodConfig
 from .priors import PriorConfig
 
@@ -182,6 +183,12 @@ class ModelConfig(BaseModel):
     # removed from the linear control block.
     price: PriceConfig | None = None
     promotions: list[PromoConfig] = Field(default_factory=list)
+
+    # Reach & frequency channels (#141). Empty ⇒ channels are ordinary volume
+    # channels (byte-identical). When set, the named channel's column is treated
+    # as reach and modulated by a frequency-saturation curve built from a
+    # frequency column pulled out of the control block.
+    reach_frequency: list[ReachFrequencyConfig] = Field(default_factory=list)
 
     # Control selection
     control_selection: ControlSelectionConfig = Field(

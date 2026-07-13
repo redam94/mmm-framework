@@ -43,6 +43,7 @@ from ..config import (
     AdstockType,
     CausalControlRole,
     FitMethod,
+    FrequencyResponse,
     LikelihoodFamily,
     ModelConfig,
     ModelSpecification,
@@ -650,6 +651,14 @@ class BayesianMMM:
         self._promo_levers: list = []  # [(PromoConfig, raw series)]
         self._prepare_levers()
 
+        # Reach & frequency channels (#141): pull each channel's frequency
+        # column out of the control block and stash the normalized frequency so
+        # _build_model can build its frequency-saturation gain. No-op (channels
+        # are ordinary volume channels) when none are configured.
+        self._reach_freq: dict[str, tuple] = {}  # channel -> (cfg, freq_norm)
+        self._freq_gain: dict[str, Any] = {}  # channel -> g(freq) expr (in-graph)
+        self._prepare_reach_frequency()
+
         # === Target: standardize (Gaussian) or keep natural scale (else) ===
         # Gaussian-scale families (normal/student_t/lognormal) z-score ``y`` so
         # the component priors — all calibrated in KPI standard deviations — apply
@@ -1040,6 +1049,58 @@ class BayesianMMM:
         self.X_controls_raw = self.X_controls_raw[:, keep] if keep else None
         self.n_controls = len(self.control_names)
 
+    def _prepare_reach_frequency(self):
+        """Split each reach/frequency channel's frequency column out of the
+        control block and stash its mean-normalized series (#141).
+
+        The frequency column is pulled from ``control_names`` / ``X_controls_raw``
+        (so it is not also fit as a linear control) and normalized by its mean so
+        the frequency-saturation shape prior is scale-free. A misconfigured entry
+        (unknown channel, or a frequency column that is not a control) warns and
+        is skipped. No-op when no reach/frequency channels are configured.
+        """
+        rf_cfgs = list(getattr(self.model_config, "reach_frequency", []) or [])
+        if not rf_cfgs:
+            return
+
+        remove: set[str] = set()
+        ctrl_idx = {name: i for i, name in enumerate(self.control_names)}
+        for cfg in rf_cfgs:
+            if cfg.channel not in self.channel_names:
+                warnings.warn(
+                    f"reach/frequency channel '{cfg.channel}' is not a modeled "
+                    "media channel; ignored.",
+                    stacklevel=2,
+                )
+                continue
+            if self.n_controls == 0 or cfg.frequency_column not in ctrl_idx:
+                warnings.warn(
+                    f"frequency column '{cfg.frequency_column}' for channel "
+                    f"'{cfg.channel}' is not a control column; ignored.",
+                    stacklevel=2,
+                )
+                continue
+            freq = self.X_controls_raw[:, ctrl_idx[cfg.frequency_column]].astype(
+                np.float64
+            )
+            mean = float(np.nanmean(freq))
+            if not np.isfinite(mean) or mean <= 0:
+                warnings.warn(
+                    f"frequency column '{cfg.frequency_column}' for channel "
+                    f"'{cfg.channel}' has non-positive mean; ignored.",
+                    stacklevel=2,
+                )
+                continue
+            self._reach_freq[cfg.channel] = (cfg, freq / mean, mean)
+            remove.add(cfg.frequency_column)
+
+        if not remove:
+            return
+        keep = [i for i, name in enumerate(self.control_names) if name not in remove]
+        self.control_names = [self.control_names[i] for i in keep]
+        self.X_controls_raw = self.X_controls_raw[:, keep] if keep else None
+        self.n_controls = len(self.control_names)
+
     def _prepare_events(self):
         """Build holiday / event regressors (#143) from ``ModelConfig.events``.
 
@@ -1421,7 +1482,17 @@ class BayesianMMM:
         replaces a channel's column with a partial-pooled weighted aggregate of
         its impression sub-streams. Called inside the ``pm.Model`` context on the
         parametric-adstock path only.
+
+        For a reach/frequency channel (#141) the column is *reach*; it is
+        re-mixed to *effective reach* ``reach · g(frequency)`` using the cached
+        frequency-saturation gain (built once per channel by
+        ``_build_reach_frequency_gains``). The gain multiplies the swappable
+        reach input, so a reach counterfactual scales effective reach with the
+        frequency shape held fixed.
         """
+        gain = self._freq_gain.get(channel_name)
+        if gain is not None:
+            return X_media_raw_data[:, c] * gain
         return X_media_raw_data[:, c]
 
     def _roi_mode_divisor(self, channel_name: str, c: int) -> float | None:
@@ -1609,6 +1680,47 @@ class BayesianMMM:
             total = total + c
         pm.Deterministic("lever_component", total)
         return total
+
+    def _build_reach_frequency_gains(self) -> None:
+        """Build the frequency-saturation gain ``g(frequency)`` for each
+        reach/frequency channel (#141) and cache it in ``self._freq_gain``.
+
+        ``g`` maps the mean-normalized frequency series to a per-period factor in
+        ``(0, 1]`` — ``1 - exp(-k f)`` (exponential; diminishing from the first
+        exposure) or the Hill ``f^s / (f^s + h^s)`` (S-shaped; a minimum-effective
+        -frequency threshold). ``_channel_media_input`` then feeds
+        ``reach · g(frequency)`` (effective reach) into the channel's normal
+        adstock/saturation/beta pipeline, so ``beta_<channel>`` /
+        ``channel_contributions`` keep their meaning (R0.4). Registers
+        ``freq_gain_<channel>`` (the series) and ``effective_frequency_<channel>``
+        (the frequency reaching 90% of the asymptote — exponential — or the
+        half-saturation frequency — Hill), in raw frequency units. No-op when no
+        reach/frequency channels are configured. Must be called inside the
+        ``pm.Model`` context.
+        """
+        for channel_name, (cfg, freq_norm, raw_mean) in self._reach_freq.items():
+            f = pt.as_tensor_variable(freq_norm)  # mean-normalized frequency
+            scale = float(cfg.frequency_prior_scale)
+            if cfg.response == FrequencyResponse.HILL:
+                # S-shaped: half-saturation h (normalized freq) + slope s.
+                h = pm.HalfNormal(f"freq_halfsat_{channel_name}", sigma=scale)
+                s = pm.Gamma(f"freq_slope_{channel_name}", alpha=2.0, beta=1.0)
+                fs = pt.power(pt.maximum(f, 1e-9), s)
+                hs = pt.power(pt.maximum(h, 1e-9), s)
+                gain = fs / (fs + hs)
+                # Raw-unit half-saturation frequency (50% of asymptote).
+                pm.Deterministic(f"effective_frequency_{channel_name}", h * raw_mean)
+            else:  # EXPONENTIAL
+                k = pm.HalfNormal(f"freq_k_{channel_name}", sigma=scale)
+                gain = 1.0 - pt.exp(-k * f)
+                # Raw-unit frequency at 90% of the asymptote: -ln(0.1)/k.
+                pm.Deterministic(
+                    f"effective_frequency_{channel_name}",
+                    (np.log(10.0) / k) * raw_mean,
+                )
+            self._freq_gain[channel_name] = pm.Deterministic(
+                f"freq_gain_{channel_name}", gain
+            )
 
     def _build_channel_interactions(
         self, channel_handles: dict[str, dict]
@@ -2086,6 +2198,10 @@ class BayesianMMM:
             # DF-2: log-scale pooled coefficients for channels sharing a
             # parent_channel group ({} when the flag is off -> loop byte-identical).
             grouped_log_betas = self._build_grouped_media_betas()
+
+            # #141: build each reach/frequency channel's frequency-saturation gain
+            # so _channel_media_input can feed effective reach (no-op when none).
+            self._build_reach_frequency_gains()
 
             for c, channel_name in enumerate(self.channel_names):
                 if self.use_parametric_adstock:
