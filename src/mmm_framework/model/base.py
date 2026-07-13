@@ -45,6 +45,7 @@ from ..config import (
     FitMethod,
     LikelihoodFamily,
     ModelConfig,
+    ModelSpecification,
     PriorConfig,
     PriorType,
     SaturationConfig,
@@ -408,6 +409,11 @@ class BayesianMMM:
     #: when non-empty. Mirrors an estimand's ``required_capabilities`` gating.
     REQUIRED_DATASET_CAPABILITIES: "tuple[str, ...]" = ()
 
+    #: Whether the model uses the multiplicative (semi-log + saturation)
+    #: specification. Set in ``_prepare_data``; class default keeps subclasses
+    #: that override ``_prepare_data`` (garden models) safe if they never touch it.
+    _multiplicative: bool = False
+
     def __init__(
         self,
         panel: "PanelDataset | Dataset",
@@ -579,6 +585,39 @@ class BayesianMMM:
         self.y_raw = self.panel.y.values.astype(np.float64)
         self.X_media_raw = self.panel.X_media.values.astype(np.float64)
 
+        # Multiplicative (semi-log + saturation) specification: the KPI is
+        # modeled on the log scale and each channel enters as ``beta * sat(spend)``
+        # (the SAME saturation curve as the additive form). Because ``sat`` is
+        # bounded in ``[0, 1]`` with ``sat(0) = 0``, a channel's multiplicative
+        # lift on sales runs from 1x at zero spend up to ``exp(beta)`` at full
+        # saturation — i.e. ``beta`` is the channel's max log-lift. The default
+        # ADDITIVE form leaves everything below byte-identical. See
+        # ``_build_model`` for the media term and ``predict`` for the exp
+        # back-transform.
+        self._multiplicative = (
+            getattr(self.model_config, "specification", ModelSpecification.ADDITIVE)
+            == ModelSpecification.MULTIPLICATIVE
+        )
+        if self._multiplicative:
+            if not self._standardizes_y:
+                raise NotImplementedError(
+                    "Multiplicative specification is only supported with a "
+                    "Gaussian-scale likelihood; the log link and a count/bounded "
+                    "family cannot both transform the KPI."
+                )
+            if not np.all(self.y_raw > 0):
+                raise ValueError(
+                    "Multiplicative specification requires a strictly positive KPI "
+                    "(it is modeled on the log scale); found "
+                    f"{int((self.y_raw <= 0).sum())} non-positive value(s)."
+                )
+            # Zero spend is fine here (``sat(0) = 0`` gives a channel no lift), so
+            # unlike a pure log-log form there is NO positive-spend requirement.
+            # NOTE: ``self.y_raw`` stays in the ORIGINAL units — external readers
+            # (diagnostics, reporting, serialization) rely on that. Only the graph
+            # target ``self.y`` below is standardized log(y); ``predict`` exp-back-
+            # transforms so callers still see original units.
+
         # External per-channel dollar spend for impression/click channels that
         # declare a ``spend_column`` (impression-level ROI). ``None`` when the
         # modeled variable IS the spend. Does NOT enter the PyMC graph — it only
@@ -611,9 +650,11 @@ class BayesianMMM:
         # then makes ``y_obs_scaled`` and every downstream ``* y_std`` bridge an
         # identity no-op. Default likelihood is normal -> byte-identical to before.
         if self._standardizes_y:
-            self.y_mean = float(self.y_raw.mean())
-            self.y_std = float(self.y_raw.std()) + 1e-8
-            self.y = (self.y_raw - self.y_mean) / self.y_std
+            # Multiplicative form standardizes log(y); additive standardizes y.
+            y_src = np.log(self.y_raw) if self._multiplicative else self.y_raw
+            self.y_mean = float(y_src.mean())
+            self.y_std = float(y_src.std()) + 1e-8
+            self.y = (y_src - self.y_mean) / self.y_std
         else:
             self.y_mean = 0.0
             self.y_std = 1.0
@@ -1728,6 +1769,58 @@ class BayesianMMM:
                     adstock_mix = pm.Beta(f"adstock_{channel_name}", alpha=2, beta=2)
                     x_adstocked = (1 - adstock_mix) * x_low + adstock_mix * x_high
 
+                if self._multiplicative:
+                    # Semi-log + saturation: the media term is the SAME
+                    # ``beta * sat(adstocked spend)`` as the additive path, but on
+                    # the standardized LOG KPI. Because ``sat`` is bounded in
+                    # ``[0, 1]`` with ``sat(0) = 0``, the channel's multiplicative
+                    # lift on sales is ``exp(beta * sat)`` — 1x at zero spend
+                    # (finite baseline) up to ``exp(log_lift)`` at full saturation.
+                    # We sample the interpretable ``log_lift_<ch>`` (the max log
+                    # lift) and DERIVE the standardized coefficient
+                    # ``beta_<ch> = log_lift / y_std``; ``max_pct_lift_<ch> =
+                    # exp(log_lift) - 1`` is the max % lift at saturation. The ROI
+                    # parameterization does not apply (a lift is not a $ return);
+                    # an explicit ``coefficient_prior`` is honored as the log-lift
+                    # prior.
+                    media_cfg = self.mff_config.get_media_config(channel_name)
+                    sat_kind, sat_params = self._build_channel_saturation(channel_name)
+                    x_saturated = _apply_saturation_pt(
+                        x_adstocked, sat_kind, sat_params
+                    )
+                    log_lift = _sample_from_prior_config(
+                        f"log_lift_{channel_name}",
+                        _explicit_prior(media_cfg, "coefficient_prior"),
+                        lambda: pm.HalfNormal(f"log_lift_{channel_name}", sigma=0.5),
+                    )
+                    beta_eff = pm.Deterministic(
+                        f"beta_{channel_name}", log_lift / self.y_std
+                    )
+                    pm.Deterministic(
+                        f"max_pct_lift_{channel_name}", pt.exp(log_lift) - 1.0
+                    )
+                    channel_contrib = beta_eff * x_saturated
+                    channel_contribs.append(channel_contrib)
+                    channel_handles[channel_name] = {
+                        "index": c,
+                        "beta": beta_eff,
+                        "beta_pop": beta_eff,
+                        "log_lift": log_lift,
+                        "sat_kind": sat_kind,
+                        "sat_params": sat_params,
+                        "sat_lam": sat_params.get("sat_lam"),
+                        "channel_contrib": channel_contrib,
+                        "adstock_apply": adstock_apply,
+                        "adstock_weights": adstock_kernel_weights,
+                        "x_input": x_input,
+                        "x_low": x_low if not self.use_parametric_adstock else None,
+                        "x_high": x_high if not self.use_parametric_adstock else None,
+                        "adstock_mix": (
+                            adstock_mix if not self.use_parametric_adstock else None
+                        ),
+                    }
+                    continue
+
                 # Saturation: per the channel's SaturationConfig (logistic by
                 # default, matching historical behavior bit-for-bit). The same
                 # helper is reused for perturbed-spend re-evaluations so the
@@ -2224,6 +2317,14 @@ class BayesianMMM:
         if not self.experiments:
             return
 
+        if self._multiplicative:
+            raise NotImplementedError(
+                "Experiment calibration is not supported for the multiplicative "
+                "specification: the in-graph contribution/ROAS estimands "
+                "are on the log scale and do not match additive-scale lift "
+                "measurements. Fit the additive form to calibrate experiments."
+            )
+
         from ..calibration.likelihood import (
             ExperimentEstimand,
             attach_experiment_likelihood,
@@ -2628,6 +2729,9 @@ class BayesianMMM:
 
         if return_original_scale:
             y_samples = y_samples * self.y_std + self.y_mean
+            if self._multiplicative:
+                # Model target was standardized log(y); un-log to original units.
+                y_samples = np.exp(y_samples)
 
         y_mean = y_samples.mean(axis=0)
         y_std = y_samples.std(axis=0)
@@ -2675,6 +2779,18 @@ class BayesianMMM:
             control_contributions_scaled = get_mean("control_contributions")
         else:
             control_contributions_scaled = None
+
+        if self._multiplicative:
+            return self._multiplicative_decomposition(
+                intercept_scaled,
+                trend_scaled,
+                seasonality_scaled,
+                controls_total_scaled,
+                geo_scaled,
+                product_scaled,
+                channel_contributions_scaled,
+                control_contributions_scaled,
+            )
 
         # Convert to original scale
         intercept = intercept_scaled * self.y_std + self.y_mean
@@ -2730,6 +2846,108 @@ class BayesianMMM:
             total_controls=total_controls,
             total_geo=total_geo,
             total_product=total_product,
+            y_mean=self.y_mean,
+            y_std=self.y_std,
+        )
+
+    def _multiplicative_decomposition(
+        self,
+        intercept_scaled: np.ndarray,
+        trend_scaled: np.ndarray,
+        seasonality_scaled: np.ndarray,
+        controls_total_scaled: np.ndarray,
+        geo_scaled: np.ndarray | None,
+        product_scaled: np.ndarray | None,
+        channel_contributions_scaled: np.ndarray,
+        control_contributions_scaled: np.ndarray | None,
+    ) -> ComponentDecomposition:
+        """Exact additive decomposition of the semi-log + saturation model.
+
+        The model is ``y = exp(baseline_log) * prod_c exp(beta_c * sat_c)``, so it
+        has a FINITE media-off baseline ``B = exp(baseline_log)`` and an exact
+        additive decomposition via the log-mean (LMDI) index: each original-scale
+        difference is allocated by its log-scale term. Concretely, with the
+        logarithmic mean ``L(a, b) = (a - b) / (ln a - ln b)`` (and ``L(a, a) =
+        a``): the media effect ``y - B`` is split across channels as
+        ``L(y, B) * (beta_c * sat_c)``, and the baseline dynamics ``B - flat``
+        (relative to the intercept-only level ``flat = exp(intercept_log)``) are
+        split across trend / seasonality / controls / geo / product the same way.
+        Everything sums to the fitted ``y`` exactly. This is the honest
+        original-scale waterfall for a multiplicative model — see the docs on
+        additive vs multiplicative decomposition.
+        """
+        ys = self.y_std
+        n = self.n_obs
+
+        def _logmean(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+            a = np.asarray(a, dtype=np.float64)
+            b = np.asarray(b, dtype=np.float64)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                lm = (a - b) / (np.log(a) - np.log(b))
+            return np.where(np.isclose(a, b), a, lm)
+
+        # Log-scale component terms (the y_mean rides with the flat intercept).
+        intercept_log = intercept_scaled * ys + self.y_mean
+        trend_log = trend_scaled * ys
+        seas_log = seasonality_scaled * ys
+        controls_log = controls_total_scaled * ys
+        geo_log = geo_scaled * ys if geo_scaled is not None else np.zeros(n)
+        product_log = product_scaled * ys if product_scaled is not None else np.zeros(n)
+        media_log = channel_contributions_scaled * ys  # (n_obs, n_channels)
+
+        flat = np.exp(intercept_log)  # intercept-only baseline level
+        baseline_log = (
+            intercept_log + trend_log + seas_log + controls_log + geo_log + product_log
+        )
+        B = np.exp(baseline_log)  # all-media-off baseline level
+        y_pred = np.exp(baseline_log + media_log.sum(axis=1))
+
+        Lb = _logmean(B, flat)  # allocates (B - flat) across baseline dynamics
+        Ly = _logmean(y_pred, B)  # allocates (y - B) across media channels
+
+        intercept = flat
+        trend = Lb * trend_log
+        seasonality = Lb * seas_log
+        controls_total = Lb * controls_log
+        geo_effects = (Lb * geo_log) if geo_scaled is not None else None
+        product_effects = (Lb * product_log) if product_scaled is not None else None
+
+        media_by_channel = pd.DataFrame(
+            Ly[:, None] * media_log,
+            index=self.panel.index,
+            columns=self.channel_names,
+        )
+        media_total = media_by_channel.to_numpy().sum(axis=1)
+
+        if control_contributions_scaled is not None:
+            # Each control var's LMDI contribution (× Lb) sums to controls_total.
+            controls_by_var = pd.DataFrame(
+                Lb[:, None] * (control_contributions_scaled * ys),
+                index=self.panel.index,
+                columns=self.control_names,
+            )
+        else:
+            controls_by_var = None
+
+        return ComponentDecomposition(
+            intercept=intercept,
+            trend=trend,
+            seasonality=seasonality,
+            media_total=media_total,
+            media_by_channel=media_by_channel,
+            controls_total=controls_total,
+            controls_by_var=controls_by_var,
+            geo_effects=geo_effects,
+            product_effects=product_effects,
+            total_intercept=float(intercept.sum()),
+            total_trend=float(trend.sum()),
+            total_seasonality=float(seasonality.sum()),
+            total_media=float(media_total.sum()),
+            total_controls=float(controls_total.sum()),
+            total_geo=(float(geo_effects.sum()) if geo_effects is not None else None),
+            total_product=(
+                float(product_effects.sum()) if product_effects is not None else None
+            ),
             y_mean=self.y_mean,
             y_std=self.y_std,
         )
@@ -2886,6 +3104,15 @@ class BayesianMMM:
         """
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
+
+        if self._multiplicative:
+            raise NotImplementedError(
+                "In-graph marginal contributions are computed on the additive "
+                "(log) scale and would be wrong for the multiplicative "
+                "model. Use compute_counterfactual_contributions() / "
+                "compute_channel_roi(), which diff exp-back-transformed "
+                "predictions and are correct on the original scale."
+            )
 
         channels = channels or self.channel_names
         multiplier = 1.0 + spend_increase_pct / 100.0

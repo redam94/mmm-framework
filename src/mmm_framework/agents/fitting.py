@@ -1073,6 +1073,17 @@ def _model_config_from_spec(spec: dict):
             float(roi_default["roi_sigma"]) if "roi_sigma" in roi_default else None
         ),
     )
+    # Functional form: additive (default) or multiplicative (semi-log +
+    # saturation). Honored here so an agent/programmatic spec is not silently
+    # dropped; the media_prior_mode above does not apply to the multiplicative branch.
+    spec_form = str(spec.get("specification", "additive")).strip().lower()
+    if spec_form == "multiplicative":
+        model_config_builder.multiplicative()
+    elif spec_form not in ("additive", ""):
+        raise ValueError(
+            f"spec.specification must be 'additive' or 'multiplicative', "
+            f"got {spec_form!r}."
+        )
     intercept_prior = spec.get("priors", {}).get("intercept", {})
     if "mu" in intercept_prior or "sigma" in intercept_prior:
         model_config_builder.with_intercept_prior(
