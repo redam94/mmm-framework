@@ -1,0 +1,77 @@
+{
+  "scenario": "realistic",
+  "description": "7 media channels (2 weak/prior-dominated, 2 mediated), 13 controls (2 confounders, 4 precision, 6 irrelevant, 1 mediator); confounded spend; low media SNR. Adstock/saturation in the model's family.",
+  "violates": "(realistic mix: confounding + many controls + weak/noisy media)",
+  "representable": true,
+  "channels": [
+    "TV",
+    "Search",
+    "Social",
+    "Display",
+    "Video",
+    "Radio",
+    "Print"
+  ],
+  "true_contribution": {
+    "TV": 6487.8419119819255,
+    "Search": 1727.9659403433675,
+    "Social": 2756.055090649586,
+    "Display": 2151.0342172495475,
+    "Video": 5113.032285525912,
+    "Radio": 1829.385588743421,
+    "Print": 1150.9533533188574
+  },
+  "true_roas": {
+    "TV": 3.948705659744279,
+    "Search": 0.33685072528505544,
+    "Social": 3.193470896198502,
+    "Display": 0.7648761317934988,
+    "Video": 3.5811695960796595,
+    "Radio": 0.9579728874479099,
+    "Print": 0.9463599035438345
+  },
+  "notes": {
+    "roles": {
+      "category_demand": "confounder",
+      "distribution": "confounder",
+      "price": "precision",
+      "competitor_promo": "precision",
+      "weather": "precision",
+      "holiday": "precision",
+      "noise_1": "irrelevant",
+      "noise_2": "irrelevant",
+      "noise_3": "irrelevant",
+      "noise_4": "irrelevant",
+      "noise_5": "irrelevant",
+      "noise_6": "irrelevant",
+      "brand_awareness": "mediator"
+    },
+    "confounders": [
+      "category_demand",
+      "distribution"
+    ],
+    "precision": [
+      "price",
+      "competitor_promo",
+      "weather",
+      "holiday"
+    ],
+    "irrelevant": [
+      "noise_1",
+      "noise_2",
+      "noise_3",
+      "noise_4",
+      "noise_5",
+      "noise_6"
+    ],
+    "mediator": "brand_awareness",
+    "weak_channels": [
+      "Radio",
+      "Print"
+    ],
+    "mediated_channels": [
+      "TV",
+      "Video"
+    ]
+  }
+}

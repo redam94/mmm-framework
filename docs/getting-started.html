@@ -428,6 +428,7 @@
             <ul class="sidebar-nav">
                 <li><a href="scientific-workflow-demo.html" style="color: var(--color-primary); font-weight: 600;">🔬 Workflow Demo</a></li>
                 <li><a href="mmm-example-report.html" style="color: var(--color-accent);">📊 Example Report</a></li>
+                <li><a href="troubleshooting.html">🔧 Troubleshooting</a></li>
             </ul>
 
             <h3>Getting Started</h3>
@@ -439,6 +440,7 @@
 
             <h3>Quick Start</h3>
             <ul class="sidebar-nav">
+                <li><a href="#fastest-path">Fastest Path (copy-paste)</a></li>
                 <li><a href="#your-first-model">Your First Model</a></li>
                 <li><a href="#step-1-data">Step 1: Prepare Data</a></li>
                 <li><a href="#step-2-config">Step 2: Configure Model</a></li>
@@ -462,6 +464,7 @@
 
             <h3>Next Steps</h3>
             <ul class="sidebar-nav">
+                <li><a href="#learn-by-series">Learn by Series</a></li>
                 <li><a href="#next-steps">Where to Go Next</a></li>
             </ul>
         </aside>
@@ -520,8 +523,8 @@
 
             <!-- Prerequisites -->
             <h2 id="prerequisites">Prerequisites</h2>
-            <p>Before you begin, ensure you have the following installed:</p>
-            
+            <p>To install the modeling library and fit a model in Python, you need only:</p>
+
             <div class="prereq-list">
                 <div class="prereq-item">
                     <span class="check">✓</span>
@@ -529,25 +532,27 @@
                 </div>
                 <div class="prereq-item">
                     <span class="check">✓</span>
-                    <span>Redis Server</span>
-                </div>
-                <div class="prereq-item">
-                    <span class="check">✓</span>
                     <span>uv (recommended) or pip</span>
                 </div>
                 <div class="prereq-item">
                     <span class="check">✓</span>
-                    <span>Git</span>
+                    <span>Git <span style="opacity:.7">(source install only)</span></span>
                 </div>
             </div>
 
             <div class="note">
-                <h4>Why Redis?</h4>
+                <h4>Running the web application?</h4>
                 <p>
-                    The framework uses Redis + ARQ for asynchronous model fitting. This allows the
-                    web frontends to remain responsive while MCMC sampling runs in the background.
-                    For development, a local Redis instance is sufficient.
+                    The library needs nothing beyond the above &mdash; no server, no database. Extra
+                    services only matter if you also run the <a href="#api-backend">web app</a>:
                 </p>
+                <ul>
+                    <li><strong>React&nbsp;+ agent API (modern, recommended):</strong> <em>no Redis.</em>
+                        The agent API runs fits in-kernel, so there is no separate job queue to stand up.</li>
+                    <li><strong>Streamlit (legacy):</strong> needs <strong>Redis&nbsp;+ ARQ</strong> for the
+                        asynchronous job queue that keeps the UI responsive while MCMC sampling runs in the
+                        background. A local Redis instance is sufficient.</li>
+                </ul>
             </div>
 
             <!-- Installation -->
@@ -627,11 +632,92 @@ from mmm_framework import (
 print("✓ All core components imported successfully")</code></pre>
             </div>
 
+            <div class="note">
+                <h4>Install or first fit not cooperating?</h4>
+                <p style="margin-bottom:0;">
+                    JAX on Apple Silicon, a PyTensor/clang link error, a slow sampler, a rejected dataset —
+                    the <a href="troubleshooting.html">Troubleshooting runbook</a> has a symptom-and-fix
+                    entry for each.
+                </p>
+            </div>
+
             <!-- Your First Model -->
-            <h2 id="your-first-model">Your First Model</h2>
+            <h2 id="fastest-path">Fastest Path: fit a model in one script</h2>
             <p>
-                Let's build a complete Marketing Mix Model from scratch. We'll walk through each step 
-                of the workflow, from data preparation to interpreting results.
+                The library ships two ready-to-model example datasets, so you can fit a real model
+                <strong>without writing any data-loading code</strong>. Copy the block below into a
+                Python session — it loads an example, fits a Bayesian MMM, prints each channel's ROI,
+                and grades the estimate against the example's <em>sealed answer key</em>.
+            </p>
+
+            <p>
+                <a href="https://colab.research.google.com/github/redam94/mmm-framework/blob/main/nbs/quickstart.ipynb"
+                   target="_blank" rel="noopener">
+                    <img src="https://colab.research.google.com/assets/colab-badge.svg"
+                         alt="Open the quickstart in Google Colab" style="vertical-align:middle;">
+                </a>
+                &nbsp; Run it in your browser — no local install.
+            </p>
+
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework import (
+    load_example,
+    load_example_answer_key,
+    BayesianMMM,
+    ModelConfigBuilder,
+    TrendConfig,
+    TrendType,
+)
+
+# 1. Load a bundled example — 104 weeks of national weekly data, ready to model.
+panel = load_example("national")
+print(panel.summary())
+
+# 2. Configure inference (fast JAX/NumPyro sampler) and a linear trend.
+model_config = (
+    ModelConfigBuilder()
+    .bayesian_numpyro()      # ~3x faster than PyMC at equal draws
+    .with_chains(4)
+    .with_draws(500)         # small + fast for a first run
+    .with_tune(500)
+    .build()
+)
+trend_config = TrendConfig(type=TrendType.LINEAR)
+
+# 3. Fit. On a laptop this national model takes roughly 15-25 seconds.
+mmm = BayesianMMM(panel, model_config, trend_config)
+results = mmm.fit(random_seed=42)
+print("max R-hat:", round(results.diagnostics["rhat_max"], 3))   # ~1.0 = converged
+
+# 4. The headline: each channel's return on ad spend (contribution / spend).
+decomp = mmm.compute_component_decomposition()
+roi = (decomp.media_by_channel.sum() / panel.X_media.sum()).sort_values(ascending=False)
+print("\nEstimated ROI by channel:")
+print(roi.round(2))
+
+# 5. This example ships a SEALED answer key — grade the estimate against truth.
+truth = load_example_answer_key("national")["true_roas"]
+print("\nchannel   estimated   true")
+for ch in roi.index:
+    print(f"  {ch:&lt;8} {roi[ch]:&gt;8.2f}   {truth[ch]:&gt;5.2f}")</code></pre>
+            </div>
+
+            <div class="definition">
+                <h4>What just happened</h4>
+                <p>
+                    The model recovers the causal <strong>ranking</strong> — the brand channels
+                    (TV, Social, Video) out-earn the performance channels (Search, Display) — even though a
+                    single observational fit attenuates the magnitudes. Tightening those magnitudes is exactly
+                    what the <a href="measurement-calibration.html">experiment-calibration loop</a> is for.
+                    <code>load_example("geo")</code> gives you an 8-market geo panel instead.
+                </p>
+            </div>
+
+            <h2 id="your-first-model">Your First Model, step by step</h2>
+            <p>
+                Prefer to understand each piece? The rest of this section builds the same kind of model
+                from scratch — preparing data in MFF format, configuring priors and inference, fitting,
+                and interpreting the results with honest uncertainty.
             </p>
 
             <h3 id="step-1-data">Step 1: Prepare Your Data</h3>
@@ -1161,48 +1247,18 @@ hierarchical = (
 
             <h2 id="api-backend">Running the Web Application</h2>
             <p>
-                The web application pairs a shared backend (Redis, FastAPI, and an ARQ worker) with
-                your choice of two frontends: the modern React web app (recommended) or the legacy
-                Streamlit interface. Whichever frontend you choose, start the backend services first:
+                Two frontends are available, and they target <em>different</em> backends. The modern
+                <strong>React app talks to the agent API, which runs fits in-kernel — so it needs no
+                Redis and no separate worker</strong>. The legacy Streamlit app targets the older REST
+                API plus its Redis&nbsp;+ ARQ job queue. Pick one path; you do not need both backends.
             </p>
 
-            <div class="quick-start-grid">
-                <div class="quick-start-card">
-                    <h4><span class="step-number">1</span> Start Redis</h4>
-                    <p>The job queue requires Redis running locally.</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> redis-server
-                        </div>
-                    </div>
-                </div>
-                <div class="quick-start-card">
-                    <h4><span class="step-number">2</span> Start API Server</h4>
-                    <p>FastAPI backend with OpenAPI docs (port 8000).</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> cd api<br>
-                            <span class="prompt">$</span> uvicorn main:app --reload
-                        </div>
-                    </div>
-                </div>
-                <div class="quick-start-card">
-                    <h4><span class="step-number">3</span> Start Worker</h4>
-                    <p>ARQ worker processes model fitting jobs.</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> cd api<br>
-                            <span class="prompt">$</span> arq worker.WorkerSettings
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <h3>Option 1: React Web App (modern, recommended)</h3>
+            <h3>Option 1: React Web App + Agent API (modern, recommended)</h3>
             <p>
                 The React frontend is where the full measurement loop lives—Program, Experiments,
                 Performance, and the AI agent workspace. Take the
                 <a href="platform-overview.html">platform tour</a> for a guided look around.
+                <strong>No Redis, no worker</strong> — just two terminals:
             </p>
             <div class="terminal-block">
                 <div class="terminal-header">
@@ -1211,17 +1267,51 @@ hierarchical = (
                     <span class="terminal-dot green"></span>
                 </div>
                 <div class="terminal-content">
-                    <span class="comment"># Terminal 4: React UI (Vite dev server)</span><br>
+                    <span class="comment"># Terminal 1: Agent API (runs model fits in-kernel)</span><br>
+                    <span class="prompt">$</span> uv run uvicorn mmm_framework.api.main:app --port 8000 --reload<br><br>
+                    <span class="comment"># Terminal 2: React UI (Vite dev server, proxies /api → :8000)</span><br>
                     <span class="prompt">$</span> cd frontend<br>
                     <span class="prompt">$</span> npm run dev
                 </div>
             </div>
 
-            <h3 id="streamlit-app">Option 2: Streamlit (legacy)</h3>
+            <h3 id="streamlit-app">Option 2: Streamlit (legacy, deprecated)</h3>
             <p>
-                The original Streamlit interface remains available as a secondary surface. It uses
-                the same backend services.
+                The original Streamlit interface remains available as a secondary surface. It targets the
+                separate legacy REST API and <strong>requires Redis&nbsp;+ an ARQ worker</strong> for its
+                asynchronous job queue. Start the three backend services first, then the UI:
             </p>
+            <div class="quick-start-grid">
+                <div class="quick-start-card">
+                    <h4><span class="step-number">1</span> Start Redis</h4>
+                    <p>The legacy job queue requires Redis running locally.</p>
+                    <div class="terminal-block" style="margin: 0.5rem 0;">
+                        <div class="terminal-content" style="padding: 0.75rem;">
+                            <span class="prompt">$</span> redis-server
+                        </div>
+                    </div>
+                </div>
+                <div class="quick-start-card">
+                    <h4><span class="step-number">2</span> Start legacy REST API</h4>
+                    <p>The Streamlit backend (port 8000).</p>
+                    <div class="terminal-block" style="margin: 0.5rem 0;">
+                        <div class="terminal-content" style="padding: 0.75rem;">
+                            <span class="prompt">$</span> cd api<br>
+                            <span class="prompt">$</span> uvicorn main:app --reload
+                        </div>
+                    </div>
+                </div>
+                <div class="quick-start-card">
+                    <h4><span class="step-number">3</span> Start ARQ worker</h4>
+                    <p>Processes model-fitting jobs off the queue.</p>
+                    <div class="terminal-block" style="margin: 0.5rem 0;">
+                        <div class="terminal-content" style="padding: 0.75rem;">
+                            <span class="prompt">$</span> cd api<br>
+                            <span class="prompt">$</span> arq worker.WorkerSettings
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="terminal-block">
                 <div class="terminal-header">
                     <span class="terminal-dot red"></span>
@@ -1264,6 +1354,65 @@ hierarchical = (
                 You've built your first model. Here's where to go next:
             </p>
 
+            <h3 id="learn-by-series">Learn by series</h3>
+            <p>
+                The docs are organized into five guided, self-contained series. Each opens with a
+                "Before you start" box (prerequisites, time, what you'll learn) and every synthetic
+                world ships a sealed answer key. Not sure which to pick? The
+                <a href="demos.html#recommended-paths">Recommended Paths</a> matrix maps a route for
+                evaluators, sponsors, analysts, and methodologists by how much time you have.
+            </p>
+
+            <div class="next-steps">
+                <a href="workshop-00-thinking-in-distributions.html" class="next-step-link">
+                    <div>
+                        <strong>Workshop <span style="opacity:.7">· beginner · 6 parts</span></strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            New to Bayes? Build intuition from distributions to your first MMM.
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="aurora-00-overview.html" class="next-step-link">
+                    <div>
+                        <strong>Aurora Tour <span style="opacity:.7">· 6 parts</span></strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            The whole framework on one synthetic brand: causality → base → extended → reporting.
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="causal-00-the-ladder.html" class="next-step-link">
+                    <div>
+                        <strong>Causal Inference <span style="opacity:.7">· 11 parts</span></strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            Why correlation misleads and how experiments fix it — the ladder of evidence.
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="stress-00-rosy-picture.html" class="next-step-link">
+                    <div>
+                        <strong>Pressure Testing <span style="opacity:.7">· 7 parts</span></strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            Where MMMs silently fail, each failure graded against ground truth.
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="math-00-overview.html" class="next-step-link">
+                    <div>
+                        <strong>Mathematics <span style="opacity:.7">· technical · 7 parts</span></strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            The generative model in full: adstock, saturation, the Bayesian core.
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+            </div>
+
+            <h3 style="margin-top: 2rem;">Explore the platform &amp; methodology</h3>
+
             <div class="highlight-box" style="background: linear-gradient(135deg, rgba(143, 168, 106, 0.15) 0%, rgba(106, 143, 168, 0.15) 100%); border: 2px solid var(--color-primary); margin-bottom: 2rem;">
                 <h4 style="margin-top: 0;">🔬 Interactive Workflow Demo</h4>
                 <p>
@@ -1280,6 +1429,33 @@ hierarchical = (
             </div>
 
             <div class="next-steps">
+                <a href="data-prep-cookbook.html" class="next-step-link">
+                    <div>
+                        <strong>Data-Prep Cookbook</strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            Turn raw Google Ads / Meta / GA4 exports into a modeling-ready MFF
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="reading-the-report.html" class="next-step-link">
+                    <div>
+                        <strong>Reading the Report</strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            What each report section shows and the budget decision it supports
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="migration-guide.html" class="next-step-link">
+                    <div>
+                        <strong>Migration Guide</strong>
+                        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+                            Coming from Robyn, Meridian, or PyMC-Marketing? Map your model over
+                        </p>
+                    </div>
+                    <span class="arrow">→</span>
+                </a>
                 <a href="platform-overview.html" class="next-step-link">
                     <div>
                         <strong>Platform Tour</strong>

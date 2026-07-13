@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Troubleshooting | MMM Framework</title>
+    <meta name="description" content="A troubleshooting runbook for the MMM Framework — fixes for install failures (JAX on Apple Silicon, PyTensor/clang on macOS), slow or diverging samplers, MFF data-validation errors, model load/serialization across versions, and web-app/Redis issues.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/troubleshooting.html">
+    <meta property="og:title" content="Troubleshooting | MMM Framework">
+    <meta property="og:description" content="A troubleshooting runbook for the MMM Framework — install, sampling, data, serialization, and web-app failure modes with concrete fixes.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/troubleshooting.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .symptom {
+            font-weight: 600;
+            color: var(--color-primary-dark);
+            margin: 1.75rem 0 0.5rem;
+            display: flex;
+            gap: 0.6rem;
+            align-items: baseline;
+        }
+        .symptom::before {
+            content: "▸";
+            color: var(--color-primary);
+            font-weight: 700;
+        }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Troubleshooting | MMM Framework">
+    <meta name="twitter:description" content="A troubleshooting runbook for the MMM Framework — install, sampling, data, serialization, and web-app failure modes with concrete fixes.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/troubleshooting.html",
+          "name": "Troubleshooting | MMM Framework",
+          "description": "A troubleshooting runbook for the MMM Framework — fixes for install failures (JAX on Apple Silicon, PyTensor/clang on macOS), slow or diverging samplers, MFF data-validation errors, model load/serialization across versions, and web-app/Redis issues.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-12",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/troubleshooting.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/troubleshooting.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/troubleshooting.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Troubleshooting",
+              "item": "https://redam94.github.io/mmm-framework/troubleshooting.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Getting unstuck</h3>
+            <ul class="sidebar-nav">
+                <li><a href="getting-started.html">Getting Started</a></li>
+                <li><a href="faq.html">Conceptual FAQ</a></li>
+            </ul>
+
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#install">Installation</a></li>
+                <li><a href="#sampling">Sampling &amp; fitting</a></li>
+                <li><a href="#data">Data &amp; MFF</a></li>
+                <li><a href="#serialization">Saving &amp; loading models</a></li>
+                <li><a href="#webapp">Web app &amp; agent</a></li>
+                <li><a href="#still-stuck">Still stuck?</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Troubleshooting</h1>
+            <p class="lead">
+                A runbook for the moments most likely to stop a first run: a failed install, a slow or
+                diverging sampler, a rejected dataset, a model that won't reload, or a web app that
+                won't start. Each entry names the <strong>symptom</strong>, the <strong>cause</strong>,
+                and the <strong>fix</strong>. For "what does a negative coefficient mean?"-style questions,
+                see the <a href="faq.html">conceptual FAQ</a> instead.
+            </p>
+
+            <div class="note">
+                <h4>First, confirm the install is intact</h4>
+                <p>
+                    A surprising share of "it's broken" reports are a half-finished environment. Verify:
+                </p>
+                <div class="code-wrapper">
+                    <pre><code class="language-python">import mmm_framework
+print(mmm_framework.__version__)   # expect 0.2.0
+
+from mmm_framework import load_example, BayesianMMM
+panel = load_example("national")   # bundled data — no files needed
+print(panel.n_obs, "observations,", panel.n_channels, "channels")</code></pre>
+                </div>
+                <p style="margin-bottom:0;">
+                    If that prints without error, the library is installed correctly and the problem is
+                    in your data, config, or environment — read on.
+                </p>
+            </div>
+
+            <!-- ============================ INSTALL ============================ -->
+            <h2 id="install">Installation &amp; environment</h2>
+
+            <div class="symptom">ImportError / ModuleNotFoundError on <code>import mmm_framework</code></div>
+            <p>
+                Dependencies aren't installed, or you're in the wrong environment. From a source checkout,
+                install the library (and the dev/app groups if you need tests or the web app):
+            </p>
+            <div class="terminal-block">
+                <div class="terminal-content">
+                    <span class="comment"># library only</span><br>
+                    <span class="prompt">$</span> uv sync<br>
+                    <span class="comment"># or, with pip</span><br>
+                    <span class="prompt">$</span> pip install -e .<br><br>
+                    <span class="comment"># add dev + app tooling (tests, API backend, Streamlit)</span><br>
+                    <span class="prompt">$</span> uv sync --group dev --group app
+                </div>
+            </div>
+            <p>
+                If you installed into a global Python but run inside <code>uv</code>, prefix commands with
+                <code>uv run</code> so they use the project's virtual environment.
+            </p>
+
+            <div class="symptom">JAX / NumPyro won't import or crashes on Apple Silicon</div>
+            <p>
+                NumPyro is the fast default sampler and rides on JAX. On macOS (Intel or Apple Silicon)
+                install the <strong>CPU</strong> JAX build — it is fast enough for MMM-scale models and
+                avoids the experimental Metal backend, which is not supported here:
+            </p>
+            <div class="terminal-block">
+                <div class="terminal-content">
+                    <span class="prompt">$</span> pip install --upgrade "jax[cpu]"
+                </div>
+            </div>
+            <p>
+                If a fit still fails inside JAX, fall back to the pure-PyMC sampler
+                (<code>ModelConfigBuilder().bayesian_pymc()</code>) or an
+                <a href="#slow">approximate fit</a> to isolate whether the problem is JAX-specific.
+            </p>
+
+            <div class="symptom">PyTensor / C-compiler ("clang") link errors on macOS</div>
+            <p>
+                PyTensor compiles the model graph with a C++ compiler. A conda <code>base</code>
+                environment often puts its own <code>clang</code> first on <code>PATH</code>, which then
+                fails to link against the system libraries. Pin the system compiler in
+                <code>~/.pytensorrc</code>:
+            </p>
+            <div class="code-wrapper">
+                <pre><code class="language-ini">[global]
+cxx = /usr/bin/clang++</code></pre>
+            </div>
+            <p>
+                Then reactivate your shell and re-run. (Deactivating the conda <code>base</code>
+                environment entirely also works.)
+            </p>
+
+            <div class="symptom">Frontend won't start (<code>npm run dev</code> errors)</div>
+            <p>Install the React app's packages once before starting the dev server:</p>
+            <div class="terminal-block">
+                <div class="terminal-content">
+                    <span class="prompt">$</span> cd frontend &amp;&amp; npm install<br>
+                    <span class="prompt">$</span> npm run dev
+                </div>
+            </div>
+
+            <!-- ============================ SAMPLING ============================ -->
+            <h2 id="sampling">Sampling &amp; fitting</h2>
+
+            <div class="symptom" id="slow">"Fitting is slow" — a national model takes minutes</div>
+            <p>
+                A 104-week national model should fit in <strong>seconds</strong>, not minutes. Two levers:
+            </p>
+            <ul>
+                <li><strong>Use a fast sampler.</strong> NumPyro (JAX) measured ~3&times; faster than the
+                    default PyMC sampler at equal draws. Select it on the config with
+                    <code>ModelConfigBuilder().bayesian_numpyro()</code>. If a national fit takes minutes,
+                    the PyMC sampler (<code>bayesian_pymc()</code>) is probably still selected.</li>
+                <li><strong>Check the model geometry <em>first</em> with an approximate fit.</strong> Before
+                    paying for full NUTS, run a MAP or variational fit in seconds to catch bad priors or a
+                    pathological saturation/adstock setup:
+                    <div class="code-wrapper">
+                        <pre><code class="language-python"># seconds-fast sanity check — NOT calibrated uncertainty
+results = model.fit(method="map")          # or "advi", "fullrank_advi", "pathfinder"
+print(results.approximate)                 # True</code></pre>
+                    </div>
+                </li>
+            </ul>
+            <div class="warning">
+                <h4>Approximate ≠ trustworthy intervals</h4>
+                <p style="margin-bottom:0;">
+                    MAP / ADVI / Pathfinder are for <em>model checking</em>, not decisions. Their R-hat and
+                    ESS are undefined and their uncertainty is <strong>not calibrated</strong> — re-fit with
+                    full NUTS before trusting any ROI, credible interval, or budget recommendation.
+                </p>
+            </div>
+
+            <div class="symptom">"Chains have not converged" — R-hat &gt; 1.01 or low ESS</div>
+            <p>
+                The framework annotates every fit with convergence diagnostics and warns when they fail —
+                <strong>do not interpret an unconverged posterior</strong>. Usual remedies, in order:
+            </p>
+            <ul>
+                <li>More warmup and draws: <code>model.fit(tune=2000, draws=2000, chains=4)</code>.</li>
+                <li>Raise the target acceptance rate to tame a stiff geometry:
+                    <code>model.fit(target_accept=0.95)</code>.</li>
+                <li>Tighten or reconsider priors that are fighting the data (a diffuse prior on a
+                    weakly-identified channel is a common culprit) — see the
+                    <a href="bayesian-workflow.html">Bayesian workflow</a> page.</li>
+            </ul>
+
+            <div class="symptom">Divergences won't clear</div>
+            <p>
+                Divergences signal the sampler can't explore part of the posterior — usually a funnel in a
+                hierarchical or tightly-constrained parameter. Raise <code>target_accept</code> (0.9 &rarr;
+                0.95 &rarr; 0.99), add data or a lift-test calibration to pin the offending parameter, or
+                simplify the structure (fewer per-geo effects) until they clear. A handful of divergences
+                on an otherwise-converged fit with good ESS is usually tolerable; dozens are not.
+            </p>
+
+            <div class="symptom">Out-of-memory during sampling</div>
+            <p>Reduce the sampler footprint — draws, chains, or both:</p>
+            <div class="code-wrapper">
+                <pre><code class="language-python">results = model.fit(draws=1000, tune=500, chains=2)</code></pre>
+            </div>
+
+            <!-- ============================ DATA ============================ -->
+            <h2 id="data">Data &amp; MFF</h2>
+
+            <div class="symptom">MFF validation errors when loading data</div>
+            <p>
+                The loader expects <strong>Master Flat File (MFF)</strong> long format: a
+                <code>Period</code> column, the dimension columns
+                (<code>Geography</code>, <code>Product</code>, …), and a
+                <code>VariableName</code> / <code>VariableValue</code> pair — one row per variable per
+                period. A raised <code>MFFValidationError</code> lists exactly which columns or variables
+                are missing. Common causes: a KPI or channel named in the config that doesn't appear in
+                <code>VariableName</code>, or a wide (one-column-per-variable) file that hasn't been melted
+                to long form (<code>mff_from_wide_format</code> does that). The
+                <a href="getting-started.html#mff-format">MFF format section</a> shows the exact shape.
+            </p>
+
+            <div class="symptom">"KPI has N missing period(s) … non-contiguous" warning</div>
+            <p>
+                Adstock carryover and trend estimation assume an evenly-spaced series, so a gap in the KPI
+                weeks is flagged. Fill the missing periods (carry-forward, interpolation, or a zero where a
+                zero is real) before fitting. The loader anchors the expected weekly grid to your data's own
+                weekday, so genuinely-contiguous Monday- or Sunday-dated weekly data will <em>not</em> trip
+                this warning — if it fires, there is a real gap.
+            </p>
+
+            <div class="symptom">Negative or implausible spend values</div>
+            <p>
+                Media variables must be non-negative — a negative spend or impression value is almost always
+                a join or sign error upstream. Screen for it before modeling with the
+                <a href="data-requirements.html">data-quality checks</a> or the Data Studio EDA tab, which
+                flags negatives, outliers, and missing weeks and offers one-click treatments.
+            </p>
+
+            <div class="symptom">DAG validation fails when building an extension model</div>
+            <p>
+                The DAG builder rejects graphs it can't compile into a valid model (a cycle, a mediator with
+                no path to the outcome, an edge referencing an unknown node). The
+                <code>DAGValidationError</code> message names the offending node or edge; fix the graph and
+                rebuild. See the <a href="causal-inference.html">causal-inference</a> page for what makes a
+                well-formed measurement DAG.
+            </p>
+
+            <!-- ============================ SERIALIZATION ============================ -->
+            <h2 id="serialization">Saving &amp; loading models</h2>
+
+            <div class="symptom">A saved model won't unpickle after an upgrade</div>
+            <p>
+                Model artifacts are written with <code>cloudpickle</code>, which is
+                <strong>version-sensitive</strong>: a large mismatch in <code>cloudpickle</code>, PyMC, or
+                ArviZ between the environment that saved the model and the one loading it can break the
+                unpickle. (Models saved under 0.1.0 reload cleanly under 0.2.0 despite the PyMC&nbsp;5&rarr;6
+                jump — see the <a href="changelog.html">changelog</a>.)
+            </p>
+            <div class="definition">
+                <h4>The robust recovery: re-fit from the config</h4>
+                <p>
+                    A fitted model is fully determined by its <em>spec + data</em>, both of which are saved
+                    alongside the trace. If an artifact won't load, rebuild it from those rather than
+                    fighting the pickle — the fit is cheap (seconds for a national model) and reproducible
+                    given the recorded <code>random_seed</code>. In the agent/API path this is the
+                    <code>build_and_fit(spec, dataset_path)</code> flow; from the library, reload the panel
+                    and re-run <code>BayesianMMM(...).fit()</code> with the saved settings. Pinning the exact
+                    version the model was saved with (<code>pip install mmm-framework==&lt;version&gt;</code>)
+                    to load-then-re-save is the fallback when a re-fit isn't possible.
+                </p>
+            </div>
+
+            <div class="symptom">"cloudpickle version" errors across machines</div>
+            <p>
+                Keep the modeling environment consistent — pin <code>mmm-framework</code> to an exact
+                release (<code>==0.2.0</code>) and use the same lockfile everywhere you save and load models,
+                so <code>cloudpickle</code> and the core stack match.
+            </p>
+
+            <!-- ============================ WEBAPP ============================ -->
+            <h2 id="webapp">Web app &amp; agent</h2>
+
+            <div class="note">
+                <h4>Which backend am I running?</h4>
+                <p style="margin-bottom:0;">
+                    The <strong>modern React app talks to the agent API, which runs fits in-kernel — no
+                    Redis, no worker</strong>. Only the <strong>legacy Streamlit</strong> app needs Redis
+                    + an ARQ worker. If you're on the React path, none of the Redis fixes below apply. See
+                    <a href="getting-started.html#api-backend">Running the Web Application</a>.
+                </p>
+            </div>
+
+            <div class="symptom">Redis connection refused (legacy Streamlit path)</div>
+            <p>Start a local Redis server before the legacy REST API and worker:</p>
+            <div class="terminal-block">
+                <div class="terminal-content">
+                    <span class="prompt">$</span> redis-server
+                </div>
+            </div>
+
+            <div class="symptom">Jobs submitted but never finish (legacy Streamlit path)</div>
+            <p>The ARQ worker that processes fitting jobs isn't running. Start it:</p>
+            <div class="terminal-block">
+                <div class="terminal-content">
+                    <span class="prompt">$</span> cd api &amp;&amp; arq worker.WorkerSettings
+                </div>
+            </div>
+
+            <div class="symptom">Agent uses the wrong LLM, or auth fails</div>
+            <p>
+                The agent's model is chosen by <code>config/model_config.yaml</code> (or
+                <code>MMM_LLM_*</code> environment variables), not hard-coded. On Google Cloud, Vertex uses
+                Application Default Credentials — grant the VM service account
+                <code>roles/aiplatform.user</code> and run
+                <code>gcloud auth application-default login</code>. See
+                <a href="platform-overview.html">the platform overview</a> and the project's
+                <code>docs/model-configuration.md</code> for provider setup (Anthropic, OpenAI, Google,
+                Vertex, or a local LM&nbsp;Studio model).
+            </p>
+
+            <!-- ============================ STILL STUCK ============================ -->
+            <h2 id="still-stuck">Still stuck?</h2>
+            <p>
+                If none of the above fixes it:
+            </p>
+            <ul>
+                <li>Re-read the exact error message and the line it points to — the framework's validators
+                    are written to say precisely what's wrong.</li>
+                <li>Reproduce it against a bundled example (<code>load_example("national")</code>) to tell a
+                    data problem apart from a code or environment problem.</li>
+                <li>Search or open an issue on
+                    <a href="https://github.com/redam94/mmm-framework/issues" target="_blank" rel="noopener">GitHub</a>,
+                    including your version (<code>mmm_framework.__version__</code>), OS, and the full
+                    traceback.</li>
+            </ul>
+        </main>
+    </div>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Back to building</h2>
+            <p>Fixed the blocker? Pick up the quickstart, or explore the guided learning series.</p>
+            <div class="cta-buttons">
+                <a href="getting-started.html" class="btn btn-white">Getting Started</a>
+                <a href="demos.html#recommended-paths" class="btn btn-outline-white">Recommended Paths</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Shared Components (loads nav + footer) -->
+    <script src="shared/components.js"></script>
+</body>
+</html>

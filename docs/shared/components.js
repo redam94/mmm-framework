@@ -49,9 +49,23 @@
                 { href: 'modeling-guide.html', label: 'Modeling Guide' },
                 { href: 'real-data-guide.html', label: 'Real-Data Guide' },
                 { href: 'interpreting-results.html', label: 'Interpreting Results' },
+                { href: 'reading-the-report.html', label: 'Reading the Report' },
+                { href: 'migration-guide.html', label: 'Migration Guide' },
                 { href: 'business-stakeholders.html', label: 'For Business' },
                 { href: 'glossary.html', label: 'Glossary' },
-                { href: 'faq.html', label: 'FAQ' }
+                { href: 'faq.html', label: 'FAQ' },
+                { href: 'troubleshooting.html', label: 'Troubleshooting' }
+            ]
+        },
+        {
+            label: 'Tutorials',
+            items: [
+                { href: 'workshop-00-thinking-in-distributions.html', label: 'Workshop (Beginner)' },
+                { href: 'aurora-00-overview.html', label: 'Aurora — Framework Tour' },
+                { href: 'causal-00-the-ladder.html', label: 'Causal Inference Series' },
+                { href: 'stress-00-rosy-picture.html', label: 'Pressure-Test Series' },
+                { href: 'math-00-overview.html', label: 'Mathematics Series' },
+                { href: 'demos.html#recommended-paths', label: 'Recommended paths →' }
             ]
         },
         {
@@ -75,6 +89,7 @@
                 { href: 'model-garden.html', label: 'Model Garden & Atelier' },
                 { href: 'pricing.html', label: 'Pricing' },
                 { href: 'data-requirements.html', label: 'Data Requirements & Runtime' },
+                { href: 'data-prep-cookbook.html', label: 'Data-Prep Cookbook' },
                 { href: 'data-connections.html', label: 'Data Connections' },
                 { href: 'trust.html', label: 'Trust & Security' },
                 { href: 'security.html', label: 'Security & AI Governance' },
@@ -191,6 +206,7 @@
     const TIER_OVERVIEW = 'overview', TIER_ANALYST = 'analyst', TIER_TECHNICAL = 'technical';
     const PAGE_TIERS = {
         'getting-started.html': TIER_OVERVIEW,
+        'troubleshooting.html': TIER_OVERVIEW,
         'about.html': TIER_OVERVIEW,
         'business-stakeholders.html': TIER_OVERVIEW,
         'faq.html': TIER_OVERVIEW,
@@ -207,6 +223,9 @@
         'modeling-guide.html': TIER_ANALYST,
         'real-data-guide.html': TIER_ANALYST,
         'interpreting-results.html': TIER_ANALYST,
+        'reading-the-report.html': TIER_ANALYST,
+        'data-prep-cookbook.html': TIER_ANALYST,
+        'migration-guide.html': TIER_ANALYST,
         'causal-inference.html': TIER_ANALYST,
         'bayesian-workflow.html': TIER_ANALYST,
         'variable-selection.html': TIER_ANALYST,
@@ -219,6 +238,7 @@
         'evaluator.html': TIER_ANALYST,
         'model-garden.html': TIER_ANALYST,
         'mmm-walkthrough.html': TIER_ANALYST,
+        'mmm-example-report.html': TIER_ANALYST,
         'causal-features-showcase.html': TIER_ANALYST,
         'scientific-workflow-demo.html': TIER_ANALYST,
         'scientific-workflow-simple.html': TIER_ANALYST,
@@ -513,7 +533,7 @@
         </div>
         <div class="footer-meta">
             <span>Apache-2.0 licensed</span>
-            <span>v0.1.0 (Beta, in development)</span>
+            <span>v0.2.0 (Beta, in development)</span>
             <a href="changelog.html">Changelog &amp; API stability</a>
             <a href="evaluator.html">For evaluators</a>
             <a href="https://github.com/redam94/mmm-framework" target="_blank" rel="noopener">Source on GitHub</a>
