@@ -76,6 +76,7 @@ class BayesianMMMExtractor(
         bundle.channel_names = self._get_channel_names()
         pooled = getattr(self.mmm, "_pooled_channels", None)
         bundle.pooled_channels = sorted(pooled) if pooled else None
+        bundle.time_varying_betas = self._extract_time_varying_betas()
         bundle.dates = self._get_dates()
 
         # Actual values
@@ -271,6 +272,26 @@ class BayesianMMMExtractor(
             return list(self.panel.channel_names)
         logger.debug("Channel names not found")
         return []
+
+    def _extract_time_varying_betas(self) -> dict | None:
+        """TVP (#137): per-period coefficient trajectory for each time-varying
+        channel (``beta_tv_<ch>`` deterministic) — median + 90% band."""
+        trace = getattr(self.mmm, "_trace", None)
+        if trace is None or not hasattr(trace, "posterior"):
+            return None
+        post = trace.posterior
+        out: dict[str, dict] = {}
+        for ch in self._get_channel_names():
+            name = f"beta_tv_{ch}"
+            if name not in post:
+                continue
+            arr = post[name].values.reshape(-1, post[name].shape[-1])
+            out[ch] = {
+                "median": np.median(arr, axis=0).tolist(),
+                "lower": np.percentile(arr, 5, axis=0).tolist(),
+                "upper": np.percentile(arr, 95, axis=0).tolist(),
+            }
+        return out or None
 
     def _get_dates(self) -> np.ndarray | None:
         """Get date index."""

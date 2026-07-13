@@ -91,6 +91,14 @@ class MediaChannelConfig(VariableConfig):
     # Hierarchical grouping (e.g., "social" groups meta, snapchat, twitter)
     parent_channel: str | None = None
 
+    # TVP (#137): model this channel's coefficient as time-varying — a smooth
+    # random walk on log(beta_t) — so effectiveness can drift (creative fatigue,
+    # secular decay). OFF by default (a single scalar beta). ``tvp_innovation_sigma``
+    # is the HalfNormal scale of the per-step log innovation; smaller ⇒ closer to
+    # the constant-beta model (it collapses to it as sigma → 0).
+    time_varying: bool = False
+    tvp_innovation_sigma: float = Field(default=0.15, gt=0)
+
     # Split dimensions beyond base dimensions (e.g., Outlet for social platforms)
     split_dimensions: list[DimensionType] = Field(default_factory=list)
 

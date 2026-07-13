@@ -294,6 +294,12 @@ class MMMDataBundle:
     # partially pooled — not independently identified — in the ROI section.
     pooled_channels: list[str] | None = None
 
+    # TVP (#137): per-channel time-varying coefficient trajectories, when a
+    # channel was fit with ``time_varying=True``. ``{channel: {"median": [...],
+    # "lower": [...], "upper": [...]}}`` on the model (standardized-coefficient)
+    # scale — a "how effectiveness moved over time" view.
+    time_varying_betas: dict | None = None
+
     # Extended model data (nested, multivariate)
     mediator_effects: dict[str, Any] | None = None
     cross_effects: dict[str, Any] | None = None

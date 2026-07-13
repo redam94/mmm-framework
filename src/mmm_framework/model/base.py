@@ -1431,6 +1431,7 @@ class BayesianMMM:
                 and _explicit_prior(cfg, "coefficient_prior") is None
                 and getattr(cfg, "roi_prior_mu", None) is None
                 and getattr(cfg, "roi_prior_sigma", None) is None
+                and not getattr(cfg, "time_varying", False)  # TVP handles it
             )
 
         for parent, children in self.media_groups.items():
@@ -1449,6 +1450,37 @@ class BayesianMMM:
                 grouped[ch] = mu_g + tau_g * z[i]
             self._pooled_channels.update(members)
         return grouped
+
+    def _build_channel_beta_tvp(
+        self, channel_name: str
+    ) -> tuple["pt.TensorVariable", "pt.TensorVariable"]:
+        """Time-varying channel coefficient (#137): ``log(beta_t) = level +
+        sigma * demeaned_RW`` so effectiveness drifts smoothly over time.
+
+        Returns ``(beta_per_period, beta_summary)`` — ``beta_per_period`` has
+        shape ``n_periods`` (indexed to obs by ``time_idx``); ``beta_summary`` is
+        the scalar time-average emitted as ``beta_{channel}`` (R0.4). Also emits
+        the ``beta_tv_{channel}`` trajectory for the "effectiveness over time"
+        report. Non-centered + demeaned so the level is the *average* log-beta
+        (identifiable separately from the drift shape), and it collapses to a
+        constant beta as the innovation scale ``tvp_sigma`` → 0. Must be called
+        inside the ``pm.Model`` context.
+        """
+        cfg = self.mff_config.get_media_config(channel_name)
+        sigma_scale = float(getattr(cfg, "tvp_innovation_sigma", 0.15))
+        log_level = pm.Normal(
+            f"beta_{channel_name}_level", mu=float(np.log(1.5)), sigma=0.5
+        )
+        tvp_sigma = pm.HalfNormal(f"beta_{channel_name}_tvpsigma", sigma=sigma_scale)
+        z = pm.Normal(
+            f"beta_{channel_name}_tvpz", mu=0.0, sigma=1.0, shape=self.n_periods
+        )
+        rw = pt.cumsum(z)
+        rw = rw - pt.mean(rw)  # demean: level is the average, not the RW start
+        beta_t = pt.exp(log_level + tvp_sigma * rw)  # (n_periods,), positive
+        pm.Deterministic(f"beta_tv_{channel_name}", beta_t)
+        beta_summary = pm.Deterministic(f"beta_{channel_name}", pt.mean(beta_t))
+        return beta_t, beta_summary
 
     def _build_channel_saturation(
         self, channel_name: str
@@ -1943,7 +1975,15 @@ class BayesianMMM:
                 # hierarchy would re-parameterize away). `beta_eff` is per-obs (so
                 # contributions/marginals are geo-correct); `beta_pop` is a scalar
                 # population summary for the off-panel (national) estimand.
-                if channel_name in grouped_log_betas:
+                if getattr(media_cfg, "time_varying", False):
+                    # TVP (#137): a per-period random-walk coefficient (takes
+                    # precedence over grouping / the per-geo hierarchy / the
+                    # ROI/coefficient default). `beta_eff` is per-obs via time_idx;
+                    # `beta_{channel}` is the time-average summary (R0.4).
+                    beta_t, beta_summary = self._build_channel_beta_tvp(channel_name)
+                    beta_eff = beta_t[self.time_idx]
+                    beta_pop = beta_summary
+                elif channel_name in grouped_log_betas:
                     # DF-2: partial-pooled group coefficient (takes precedence over
                     # the per-geo hierarchy and the ROI/coefficient default). The
                     # channel was only added to the group if it has no calibrated /
