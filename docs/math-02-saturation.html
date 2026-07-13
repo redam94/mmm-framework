@@ -166,14 +166,14 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-04",
+          "dateModified": "2026-07-10",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/math-02-saturation.html#breadcrumb"
           },
           "@id": "https://redam94.github.io/mmm-framework/math-02-saturation.html#webpage",
           "@type": "TechArticle",
           "headline": "Math 02: Saturation",
-          "datePublished": "2026-07-04",
+          "datePublished": "2026-07-10",
           "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
           "author": {
             "@type": "Person",
@@ -763,6 +763,12 @@ x_saturated = 1 - pt.exp(exponent)                            # == 1 - exp(-sat_
                         <td>concave</td>
                     </tr>
                     <tr>
+                        <td><code>root</code></td>
+                        <td>\(x^{k}\), \(0&lt;k&lt;1\)</td>
+                        <td><code>sat_exponent_&lt;ch&gt;</code></td>
+                        <td>concave power</td>
+                    </tr>
+                    <tr>
                         <td><code>none</code></td>
                         <td>identity</td>
                         <td>—</td>
@@ -770,6 +776,24 @@ x_saturated = 1 - pt.exp(exponent)                            # == 1 - exp(-sat_
                     </tr>
                 </tbody>
             </table>
+
+            <div class="definition">
+                <h4>The <code>root</code> curve, and two forms you already have</h4>
+                <p>
+                    <code>root</code> (<code>SaturationConfig.root()</code>) is the classic econometric
+                    power-response curve \(f(x) = x^{k}\): with \(0 &lt; k &lt; 1\) it is strictly concave
+                    with an unbounded marginal at the origin — the diminishing-returns shape from
+                    log-log-style models, distinct from the elbow of the hyperbolic forms. Its exponent
+                    \(k\) is the <code>sat_exponent_&lt;ch&gt;</code> RV (default \(\mathrm{Beta}(2,2)\)).
+                </p>
+                <p style="margin-bottom:0;">
+                    Two shapes practitioners sometimes name separately are <em>already</em> here under
+                    other names: <strong>ADBUDG</strong>'s S-curve \(x^{s}/(\kappa^{s}+x^{s})\) is exactly
+                    the <code>hill</code> form, and the <strong>exponential-CDF</strong> \(1 - e^{-\lambda x}\)
+                    is exactly the <code>logistic</code> default. So the common library is complete: use
+                    <code>hill</code> for ADBUDG and <code>logistic</code> for exponential-CDF.
+                </p>
+            </div>
 
             <div class="note">
                 <h4>🔧 This was a fix surfaced by the stress series</h4>

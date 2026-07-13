@@ -105,6 +105,11 @@ class MediaChannelConfigBuilder(VariableConfigBuilderMixin):
         self._saturation = SaturationConfigBuilder().tanh().build()
         return self
 
+    def with_root_saturation(self) -> Self:
+        """Convenience: set root / power saturation (``x ** k``) with defaults."""
+        self._saturation = SaturationConfigBuilder().root().build()
+        return self
+
     def with_coefficient_prior(self, prior: PriorConfig) -> Self:
         """Set coefficient prior."""
         self._coefficient_prior = prior

@@ -165,6 +165,16 @@ class TestPerChannelDispatch:
         assert "sat_slope_TV" not in free
         assert "sat_lam_TV" not in free
 
+    def test_root_channel_gets_exponent_only(self):
+        m = _mmm({"TV": SaturationConfig.root()})
+        free = _free_rv_names(m)
+        assert "sat_exponent_TV" in free
+        assert "sat_half_TV" not in free
+        assert "sat_lam_TV" not in free
+        # Untouched channel keeps the default logistic RV.
+        assert "sat_lam_Digital" in free
+        assert "sat_exponent_Digital" not in free
+
     def test_none_channel_has_no_saturation_rv(self):
         m = _mmm({"TV": SaturationConfig.none()})
         free = _free_rv_names(m)
@@ -216,9 +226,40 @@ class TestApplySaturationHelper:
         got = self._eval(SaturationType.TANH, {"sat_half": k})
         np.testing.assert_allclose(got, np.tanh(self.X / k), rtol=1e-12)
 
+    def test_root_matches_closed_form(self):
+        k = 0.5
+        got = self._eval(SaturationType.ROOT, {"sat_exponent": k})
+        want = np.clip(self.X, 1e-9, None) ** k
+        np.testing.assert_allclose(got, want, rtol=1e-10)
+        # Near-zero at zero spend and monotone increasing. (Concavity is
+        # asserted on a uniform grid in tests/test_transforms.py.)
+        assert got[0] < 1e-4
+        assert np.all(np.diff(got) > 0)
+
     def test_none_is_identity(self):
         got = self._eval(SaturationType.NONE, {})
         np.testing.assert_allclose(got, self.X, rtol=0)
+
+
+class TestReportingRootHelper:
+    """The report/marginal-ROI numpy helpers understand the root form."""
+
+    def test_apply_and_derivative_match_closed_form(self):
+        from mmm_framework.reporting.helpers.saturation import (
+            _apply_saturation,
+            _apply_saturation_derivative,
+        )
+
+        k = np.array([0.5])  # per-posterior-sample exponent
+        params = {"type": "root", "exponent": k}
+        x = 0.4
+        np.testing.assert_allclose(_apply_saturation(x, params), x**0.5, rtol=1e-10)
+        # f'(x) = k·x^(k-1)
+        np.testing.assert_allclose(
+            _apply_saturation_derivative(x, params),
+            0.5 * x ** (0.5 - 1.0),
+            rtol=1e-10,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -235,9 +276,10 @@ class TestTinyFits:
             SaturationConfig.hill(),
             SaturationConfig.michaelis_menten(),
             SaturationConfig.tanh(),
+            SaturationConfig.root(),
             SaturationConfig.none(),
         ],
-        ids=["logistic", "hill", "michaelis_menten", "tanh", "none"],
+        ids=["logistic", "hill", "michaelis_menten", "tanh", "root", "none"],
     )
     def test_fit_no_nan(self, sat):
         m = _mmm({c: sat for c in CHANNELS}, parametric_adstock=True)

@@ -68,3 +68,51 @@ def logistic_saturation(x: NDArray[np.floating], lam: float) -> NDArray[np.float
     model via pm.math operations.
     """
     return 1.0 - np.exp(-lam * np.clip(x, 0, None))
+
+
+def root_saturation(x: NDArray[np.floating], exponent: float) -> NDArray[np.floating]:
+    """Apply root / power saturation transformation.
+
+    Implements the transformation:
+        f(x) = x ** exponent
+
+    for x >= 0, with negative values clipped to 0. With ``0 < exponent < 1``
+    this is the classic concave power-response curve — diminishing returns that
+    fall off as a fixed power of (adstocked, normalized) spend. ``exponent = 1``
+    is linear; ``exponent > 1`` is convex (increasing returns, not saturation).
+
+    Parameters
+    ----------
+    x : NDArray[np.floating]
+        Input values (e.g., normalized media spend). Negative values are
+        clipped to 0.
+    exponent : float
+        The power ``k``. Use ``0 < k < 1`` for a saturating (concave) curve.
+
+    Returns
+    -------
+    NDArray[np.floating]
+        Saturated values ``x ** exponent``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from mmm_framework.transforms import root_saturation
+    >>>
+    >>> x = np.array([0.0, 0.25, 0.5, 1.0])
+    >>> root_saturation(x, exponent=0.5).round(3)
+    array([0.   , 0.5  , 0.707, 1.   ])
+
+    Notes
+    -----
+    Unlike the logistic/Hill forms this curve has no finite asymptote; it is
+    typically applied to spend normalized into ``[0, 1]`` so ``f`` stays in
+    ``[0, 1]``. The marginal ``f'(x) = k * x**(k-1)`` is unbounded at ``x = 0``
+    for ``k < 1``, which the model's in-graph form guards against by clamping
+    ``x`` away from 0.
+
+    See Also
+    --------
+    logistic_saturation : exponential-CDF saturation ``1 - exp(-lam * x)``.
+    """
+    return np.clip(x, 0, None) ** exponent

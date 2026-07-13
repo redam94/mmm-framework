@@ -240,6 +240,11 @@ class SaturationConfigBuilder:
         self._type = SaturationType.TANH
         return self
 
+    def root(self) -> Self:
+        """Use root / power saturation ``x ** k`` (exponent via slope prior)."""
+        self._type = SaturationType.ROOT
+        return self
+
     def none(self) -> Self:
         """Disable saturation transformation."""
         self._type = SaturationType.NONE

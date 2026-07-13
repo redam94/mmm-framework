@@ -127,8 +127,9 @@ class SaturationConfig(BaseModel):
     The core :class:`BayesianMMM` honors ``type`` per channel: ``logistic``
     (the default, a single ``sat_lam_<ch>``), ``hill`` (``sat_half_<ch>`` and
     ``sat_slope_<ch>``), ``michaelis_menten`` / ``tanh`` (``sat_half_<ch>``),
-    or ``none`` (identity). The Hill ``kappa``/``slope``/``beta`` prior fields
-    are also read by :mod:`mmm_framework.mmm_extensions`.
+    ``root`` (``sat_exponent_<ch>``), or ``none`` (identity). The Hill
+    ``kappa``/``slope``/``beta`` prior fields are also read by
+    :mod:`mmm_framework.mmm_extensions`.
     """
 
     type: SaturationType = SaturationType.HILL
@@ -230,6 +231,24 @@ class SaturationConfig(BaseModel):
         return cls(
             type=SaturationType.TANH,
             kappa_prior=kappa_prior or PriorConfig.beta(alpha=2, beta=2),
+        )
+
+    @classmethod
+    def root(cls, exponent_prior: PriorConfig | None = None) -> SaturationConfig:
+        """Root / power saturation ``x ** k`` with ``0 < k < 1`` (concave).
+
+        The classic econometric power-response curve: constant returns fall off
+        as a power of the (adstocked, normalized) spend. The exponent ``k`` is
+        the ``sat_exponent_<ch>`` RV; ``exponent_prior=None`` defaults to
+        ``Beta(2, 2)``, which keeps ``k`` in ``(0, 1)`` so the curve is strictly
+        concave (diminishing returns). ``k`` reuses the ``slope_prior`` field.
+
+        For an S-shaped curve use :meth:`hill`; for a hyperbolic elbow use
+        :meth:`michaelis_menten`.
+        """
+        return cls(
+            type=SaturationType.ROOT,
+            slope_prior=exponent_prior or PriorConfig.beta(alpha=2, beta=2),
         )
 
     @classmethod
