@@ -642,6 +642,14 @@ class BayesianMMM:
             list(self.panel.coords.controls) if self.n_controls > 0 else []
         )
 
+        # Price / promotion levers (#138): pull the named columns OUT of the
+        # linear control block (so they are not double-counted) and stash their
+        # raw series for the dedicated lever blocks in _build_model. No-op (linear
+        # controls unchanged) when no levers are configured.
+        self._price_lever = None  # (PriceConfig, raw series)
+        self._promo_levers: list = []  # [(PromoConfig, raw series)]
+        self._prepare_levers()
+
         # === Target: standardize (Gaussian) or keep natural scale (else) ===
         # Gaussian-scale families (normal/student_t/lognormal) z-score ``y`` so
         # the component priors — all calibrated in KPI standard deviations — apply
@@ -984,6 +992,53 @@ class BayesianMMM:
                 period_values, categories=periods_unique
             ).codes.astype(np.int32)
         return np.arange(self.n_obs, dtype=np.int32)
+
+    def _prepare_levers(self):
+        """Split price/promo lever columns out of the linear control block (#138).
+
+        A control named by ``ModelConfig.price`` / ``.promotions`` is removed from
+        ``control_names`` / ``X_controls_raw`` (so it is not double-counted as a
+        linear control) and its raw series stashed for the dedicated lever block.
+        No-op when no levers are configured — the control block is unchanged.
+        """
+        price_cfg = getattr(self.model_config, "price", None)
+        promo_cfgs = list(getattr(self.model_config, "promotions", []) or [])
+        if (price_cfg is None and not promo_cfgs) or self.n_controls == 0:
+            return
+
+        idx = {name: i for i, name in enumerate(self.control_names)}
+        remove: set[str] = set()
+        if price_cfg is not None:
+            if price_cfg.variable in idx:
+                self._price_lever = (
+                    price_cfg,
+                    self.X_controls_raw[:, idx[price_cfg.variable]].astype(np.float64),
+                )
+                remove.add(price_cfg.variable)
+            else:
+                warnings.warn(
+                    f"price lever '{price_cfg.variable}' is not a control column; "
+                    "ignored.",
+                    stacklevel=2,
+                )
+        for p in promo_cfgs:
+            if p.variable in idx:
+                self._promo_levers.append(
+                    (p, self.X_controls_raw[:, idx[p.variable]].astype(np.float64))
+                )
+                remove.add(p.variable)
+            else:
+                warnings.warn(
+                    f"promo lever '{p.variable}' is not a control column; ignored.",
+                    stacklevel=2,
+                )
+
+        if not remove:
+            return
+        keep = [i for i, name in enumerate(self.control_names) if name not in remove]
+        self.control_names = [self.control_names[i] for i in keep]
+        self.X_controls_raw = self.X_controls_raw[:, keep] if keep else None
+        self.n_controls = len(self.control_names)
 
     def _prepare_events(self):
         """Build holiday / event regressors (#143) from ``ModelConfig.events``.
@@ -1485,6 +1540,75 @@ class BayesianMMM:
                 grouped[ch] = mu_g + tau_g * z[i]
             self._pooled_channels.update(members)
         return grouped
+
+    def _resolve_price_reference(self, cfg, price_raw: np.ndarray) -> float:
+        ref = cfg.reference
+        if ref is None:
+            return 1.0  # log(price); the constant is absorbed by the intercept
+        if isinstance(ref, (int, float)):
+            return float(ref)
+        pos = price_raw[price_raw > 0]
+        base = pos if pos.size else price_raw
+        return float({"mean": np.mean, "median": np.median, "max": np.max}[ref](base))
+
+    def _build_price_promo_levers(self) -> "pt.TensorVariable | None":
+        """Price & promotion levers (#138): a log-price elasticity term and/or a
+        promo-lift term (with its own carryover), added to ``mu``.
+
+        Returns the total lever contribution (and registers ``price_elasticity`` /
+        ``price_component`` / ``promo_component`` / ``lever_component``
+        deterministics), or ``None`` when no lever is configured — so the graph is
+        byte-identical (levers are simply linear controls). Must be called inside
+        the ``pm.Model`` context.
+        """
+        if self._price_lever is None and not self._promo_levers:
+            return None
+
+        contribs: list = []
+        if self._price_lever is not None:
+            cfg, price_raw = self._price_lever
+            ref = self._resolve_price_reference(cfg, price_raw)
+            log_price = np.log(np.maximum(price_raw, 1e-9) / ref).astype(np.float64)
+            # Sign guard: elasticity ≤ 0 (a price rise cannot raise demand here).
+            mag = pm.HalfNormal(
+                "price_elasticity_mag", sigma=float(cfg.elasticity_prior_sigma)
+            )
+            elasticity = pm.Deterministic("price_elasticity", -mag)
+            price_contrib = elasticity * pt.as_tensor_variable(log_price)
+            pm.Deterministic("price_component", price_contrib)
+            contribs.append(price_contrib)
+
+        promo_contribs: list = []
+        for cfg, promo_raw in self._promo_levers:
+            scale = float(np.max(np.abs(promo_raw))) + 1e-9
+            promo_norm = (promo_raw / scale).astype(np.float64)
+            x = pt.as_tensor_variable(promo_norm)
+            if cfg.adstock_lmax > 1:
+                from ..transforms.adstock_pt import parametric_adstock_pt
+
+                alpha = pm.Beta(f"promo_alpha_{cfg.variable}", alpha=1, beta=3)
+                x = parametric_adstock_pt(x, "geometric", cfg.adstock_lmax, alpha=alpha)
+            if cfg.allow_negative:
+                beta = pm.Normal(
+                    f"beta_promo_{cfg.variable}", mu=0.0, sigma=cfg.lift_prior_sigma
+                )
+            else:
+                beta = pm.HalfNormal(
+                    f"beta_promo_{cfg.variable}", sigma=cfg.lift_prior_sigma
+                )
+            promo_contribs.append(beta * x)
+        if promo_contribs:
+            promo_total = promo_contribs[0]
+            for pc in promo_contribs[1:]:
+                promo_total = promo_total + pc
+            pm.Deterministic("promo_component", promo_total)
+            contribs.append(promo_total)
+
+        total = contribs[0]
+        for c in contribs[1:]:
+            total = total + c
+        pm.Deterministic("lever_component", total)
+        return total
 
     def _build_channel_interactions(
         self, channel_handles: dict[str, dict]
@@ -2229,6 +2353,11 @@ class BayesianMMM:
             # mu when none are configured, so the default graph is byte-identical.
             interaction_contribution = self._build_channel_interactions(channel_handles)
 
+            # PRICE & PROMOTION LEVERS (#138) — a log-price elasticity term and/or
+            # promo-lift terms (own carryover). None (not added to mu) when no lever
+            # is configured, so the default graph is byte-identical.
+            lever_contribution = self._build_price_promo_levers()
+
             # EXPERIMENT LIKELIHOODS (incrementality / lift / ROAS calibration)
             # Fold any registered experimental results into the joint posterior
             # as likelihood terms on the model-implied estimand. No-op (and graph
@@ -2283,6 +2412,9 @@ class BayesianMMM:
             # Additive cross-channel synergy block, same discipline (#142).
             if interaction_contribution is not None:
                 mu = mu + interaction_contribution
+            # Price / promotion levers, same discipline (#138).
+            if lever_contribution is not None:
+                mu = mu + lever_contribution
 
             # Off path: create sigma here exactly as before (bit-identical). On
             # the selection path it was already created above for the horseshoe.
@@ -3034,6 +3166,10 @@ class BayesianMMM:
             if "interaction_component" in posterior
             else None
         )
+        # Price/promo levers (#138): present only when a lever was configured.
+        lever_scaled = (
+            get_mean("lever_component") if "lever_component" in posterior else None
+        )
 
         if self.n_controls > 0 and "control_contributions" in posterior:
             control_contributions_scaled = get_mean("control_contributions")
@@ -3097,6 +3233,8 @@ class BayesianMMM:
         total_interactions = (
             float(interactions.sum()) if interactions is not None else None
         )
+        levers = lever_scaled * self.y_std if lever_scaled is not None else None
+        total_levers = float(levers.sum()) if levers is not None else None
 
         return ComponentDecomposition(
             intercept=intercept,
@@ -3121,6 +3259,8 @@ class BayesianMMM:
             total_events=total_events,
             interactions=interactions,
             total_interactions=total_interactions,
+            levers=levers,
+            total_levers=total_levers,
         )
 
     def _multiplicative_decomposition(

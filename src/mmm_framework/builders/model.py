@@ -284,6 +284,8 @@ class ModelConfigBuilder:
         self._use_grouped_media_priors: bool = False
         self._events = None
         self._channel_interactions: list = []
+        self._price = None
+        self._promotions: list = []
         self._hierarchical: HierarchicalConfig | None = None
         self._seasonality: SeasonalityConfig | None = None
         self._control_selection: ControlSelectionConfig | None = None
@@ -466,6 +468,19 @@ class ModelConfigBuilder:
         self._channel_interactions = list(interactions)
         return self
 
+    def with_price(self, price) -> Self:
+        """Promote a control column to a price lever (#138) — a log-price
+        elasticity (≤ 0) with an optional reference/discount-depth. Pass a
+        :class:`PriceConfig`."""
+        self._price = price
+        return self
+
+    def with_promotions(self, *promotions) -> Self:
+        """Promote control columns to promo levers (#138) — a lift with its own
+        carryover. Pass one or more :class:`PromoConfig`."""
+        self._promotions = list(promotions)
+        return self
+
     # Component configs
     def with_hierarchical(self, config: HierarchicalConfig) -> Self:
         """Set hierarchical configuration."""
@@ -538,6 +553,8 @@ class ModelConfigBuilder:
             use_grouped_media_priors=self._use_grouped_media_priors,
             events=self._events,
             channel_interactions=self._channel_interactions,
+            price=self._price,
+            promotions=self._promotions,
             hierarchical=self._hierarchical or HierarchicalConfigBuilder().build(),
             seasonality=self._seasonality or SeasonalityConfigBuilder().build(),
             control_selection=self._control_selection

@@ -1673,6 +1673,9 @@ class BayesianMMMExtractor(
         if decomp.interactions is not None and np.any(decomp.interactions):
             # #142: cross-channel synergy / interaction contributions.
             components["Synergy"] = np.asarray(decomp.interactions, dtype=float)
+        if decomp.levers is not None and np.any(decomp.levers):
+            # #138: price elasticity + promo lift contributions.
+            components["Price & Promotion"] = np.asarray(decomp.levers, dtype=float)
         if decomp.geo_effects is not None and np.any(decomp.geo_effects):
             components["Geo"] = np.asarray(decomp.geo_effects, dtype=float)
         if decomp.product_effects is not None and np.any(decomp.product_effects):
