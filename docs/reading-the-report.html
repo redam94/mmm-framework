@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reading the Report | MMM Framework</title>
+    <meta name="description" content="A section-by-section guide to reading an MMM Framework report — what the model-fit, ROI forest, decomposition waterfall, saturation and adstock curves, prior-vs-posterior, posterior-predictive checks, and estimand credible intervals each show, and the budget decision each one supports.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/reading-the-report.html">
+    <meta property="og:title" content="Reading the Report | MMM Framework">
+    <meta property="og:description" content="What each report section shows and the decision it supports: ROI forest, decomposition waterfall, saturation, adstock, PPC, estimand credible intervals.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/reading-the-report.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .reads { margin: 0.75rem 0 1.5rem; padding-left: 0; list-style: none; }
+        .reads li { padding: 0.35rem 0; }
+        .reads .k { font-weight: 600; color: var(--color-primary-dark); }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Reading the Report | MMM Framework">
+    <meta name="twitter:description" content="What each report section shows and the decision it supports: ROI forest, decomposition waterfall, saturation, adstock, PPC, estimand credible intervals.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/reading-the-report.html",
+          "name": "Reading the Report | MMM Framework",
+          "description": "A section-by-section guide to reading an MMM Framework report — what the model-fit, ROI forest, decomposition waterfall, saturation and adstock curves, prior-vs-posterior, posterior-predictive checks, and estimand credible intervals each show, and the budget decision each one supports.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-12",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/reading-the-report.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/reading-the-report.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/reading-the-report.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Reading the Report",
+              "item": "https://redam94.github.io/mmm-framework/reading-the-report.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>See it live</h3>
+            <ul class="sidebar-nav">
+                <li><a href="mmm-example-report.html" style="color: var(--color-accent);">📊 Example Report</a></li>
+                <li><a href="interpreting-results.html">Interpreting Results</a></li>
+            </ul>
+            <h3>Report sections</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#executive">Executive Summary</a></li>
+                <li><a href="#fit">Model Fit &amp; PPC</a></li>
+                <li><a href="#roi">Channel ROI (forest)</a></li>
+                <li><a href="#decomposition">Revenue Decomposition</a></li>
+                <li><a href="#saturation">Saturation Curves</a></li>
+                <li><a href="#adstock">Carryover (Adstock)</a></li>
+                <li><a href="#prior-posterior">Prior vs Posterior</a></li>
+                <li><a href="#reallocation">Budget Reallocation</a></li>
+                <li><a href="#sensitivity">Sensitivity</a></li>
+                <li><a href="#assumptions">Causal Assumptions</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Reading the Report</h1>
+            <p class="lead">
+                An MMM Framework report is a decision document, not a diagnostics dump. This guide walks the
+                report section by section: what each chart <em>shows</em>, the <em>decision</em> it supports,
+                and the <em>red flags</em> that mean "don't act yet." Read it alongside the
+                <a href="mmm-example-report.html">live example report</a>. For the plain-language version aimed
+                at planners and CMOs, see <a href="interpreting-results.html">Interpreting Results</a>.
+            </p>
+
+            <div class="warning">
+                <h4>The one habit that matters</h4>
+                <p style="margin-bottom:0;">
+                    Every number in this report is a <strong>distribution</strong>, reported as a point estimate
+                    plus a credible interval. Read the interval first. A channel whose ROI interval spans 1.0
+                    hasn't been shown to pay back — a tight point estimate on a wide interval is still a guess.
+                </p>
+            </div>
+
+            <h2 id="executive">Executive Summary</h2>
+            <ul class="reads">
+                <li><span class="k">Shows:</span> the headline — blended ROI, the top and bottom channels, total modeled marketing contribution, and whether the fit is trustworthy.</li>
+                <li><span class="k">Decides:</span> where the conversation starts. It orients the room before the detail.</li>
+                <li><span class="k">Red flag:</span> a banner noting an <em>approximate</em> (MAP/ADVI) fit or non-convergence. If you see one, treat every number as provisional and re-fit with full NUTS before deciding anything.</li>
+            </ul>
+
+            <h2 id="fit">Model Fit &amp; posterior-predictive checks</h2>
+            <ul class="reads">
+                <li><span class="k">Shows:</span> predicted vs actual sales over time with a predictive band, plus posterior-predictive checks — replicated datasets overlaid on the observed one, an interval-calibration curve, and posterior-predictive p-values for summary statistics.</li>
+                <li><span class="k">Decides:</span> whether the model describes <em>this</em> business well enough to reason about at all. Good coverage (the actuals sit inside the band about as often as the band claims) is the license to read the rest.</li>
+                <li><span class="k">Red flag:</span> the band systematically misses turning points, coverage is far from nominal, or a p-value is extreme (near 0 or 1) — the model is missing structure (a driver, a level shift, the wrong likelihood).</li>
+            </ul>
+            <div class="note">
+                <p style="margin-bottom:0;">
+                    Good fit is necessary, not sufficient: a model can track sales perfectly and still
+                    mis-attribute the <em>cause</em>. That's what the ROI, sensitivity, and causal-assumptions
+                    sections are for — see the <a href="stress-00-rosy-picture.html">rosy-picture</a> stress test.
+                </p>
+            </div>
+
+            <h2 id="roi">Channel ROI Estimates (the forest plot)</h2>
+            <ul class="reads">
+                <li><span class="k">Shows:</span> each channel's return per dollar (or efficiency per unit for impression-measured channels) as a point with a credible interval — a "forest" of intervals you can rank at a glance.</li>
+                <li><span class="k">Decides:</span> which channels are earning and which aren't. The <em>ordering</em> is usually more robust than the magnitudes; fund up the channels whose interval sits clearly above the break-even reference and scrutinize those below it.</li>
+                <li><span class="k">Red flag:</span> a very wide interval (the model can't tell — often a low-variation or collinear channel) or an interval straddling break-even. Neither is a verdict; both are a call for an <a href="measurement-calibration.html">experiment</a>.</li>
+            </ul>
+
+            <h2 id="decomposition">Revenue Decomposition (waterfall &amp; time series)</h2>
+            <ul class="reads">
+                <li><span class="k">Shows:</span> how observed sales split into baseline (intercept + trend + seasonality), each media channel, and controls — as a waterfall of totals and as stacked contributions over time.</li>
+                <li><span class="k">Decides:</span> how much of the business marketing actually moves. A large baseline and small media slice is the common, honest picture — it bounds how much upside any reallocation can capture.</li>
+                <li><span class="k">Red flag:</span> a channel's contribution that dwarfs its spend share with no experimental support, or a baseline so small it implies marketing drives nearly all sales — usually a confounder leaking into a coefficient.</li>
+            </ul>
+
+            <h2 id="saturation">Saturation &amp; Diminishing Returns</h2>
+            <ul class="reads">
+                <li><span class="k">Shows:</span> each channel's response curve — incremental sales as a function of spend — with an uncertainty band, and where current spend sits on it.</li>
+                <li><span class="k">Decides:</span> headroom. A channel on the steep part of its curve rewards more budget; one on the flat part is saturated and the next dollar buys little. This is where "should we spend more here?" gets answered.</li>
+                <li><span class="k">Red flag:</span> current spend far past the elbow (you're paying for saturated inventory) or a curve so uncertain it can't distinguish steep from flat — the data hasn't varied spend enough to learn the shape.</li>
+            </ul>
+
+            <h2 id="adstock">Carryover Effects (Adstock)</h2>
+            <ul class="reads">
+                <li><span class="k">Shows:</span> the posterior carryover kernel per channel — how a week's exposure decays over subsequent weeks — and the implied half-life.</li>
+                <li><span class="k">Decides:</span> flighting and measurement timing. A long half-life (brand channels) means effects persist and an experiment needs a longer read window; a short one (performance channels) means near-immediate response.</li>
+                <li><span class="k">Red flag:</span> a half-life implausibly long for the channel, which can trade off with the trend and inflate carryover — cross-check against the sensitivity section.</li>
+            </ul>
+
+            <h2 id="prior-posterior">Prior vs. Posterior</h2>
+            <ul class="reads">
+                <li><span class="k">Shows:</span> each key parameter's prior (what you assumed before data) overlaid on its posterior (what the data taught you).</li>
+                <li><span class="k">Decides:</span> how much to trust each estimate. A posterior much narrower than its prior means the data was informative; a posterior that just reprints the prior means the data said little and the number is riding on your assumption.</li>
+                <li><span class="k">Red flag:</span> a posterior pinned against a prior boundary, or an ROI conclusion that only holds because the prior was tight — flagged so you can't mistake an assumption for a finding.</li>
+            </ul>
+
+            <h2 id="reallocation">Budget Reallocation Simulator</h2>
+            <ul class="reads">
+                <li><span class="k">Shows:</span> the modeled outcome of shifting budget between channels, propagating saturation and uncertainty into the projected lift — with break-even spend zones from marginal ROI.</li>
+                <li><span class="k">Decides:</span> the actual plan. Move budget toward channels with high <em>marginal</em> return until their curves flatten to meet the others — not toward the highest average ROI, which ignores diminishing returns.</li>
+                <li><span class="k">Red flag:</span> a projected lift whose uncertainty band includes "no change." Reallocation this model can't distinguish from noise is a hypothesis to test, not a decision to ship.</li>
+            </ul>
+
+            <h2 id="sensitivity">Sensitivity Analysis</h2>
+            <ul class="reads">
+                <li><span class="k">Shows:</span> how the headline conclusions move when the model is perturbed — dropping windows, excluding high-spend weeks, changing specification — as a spec-curve of estimates.</li>
+                <li><span class="k">Decides:</span> how much to lean on a finding. A conclusion stable across perturbations is one you can act on; one that flips when you drop a quarter is fragile.</li>
+                <li><span class="k">Red flag:</span> wide swings under mild perturbation. The single reported number is then a point on a cloud, and the report says so on purpose.</li>
+            </ul>
+
+            <h2 id="assumptions">Recommendations &amp; Causal Assumptions</h2>
+            <ul class="reads">
+                <li><span class="k">Shows:</span> the concrete budget moves the analysis supports, and — crucially — the causal assumptions they rest on: which confounders were controlled, what's assumed exogenous, and where an experiment is needed to confirm.</li>
+                <li><span class="k">Decides:</span> what to do <em>and</em> what to verify next. The assumptions section is the honest fine print — an MMM is a causal claim, and this is where the claim's conditions are stated.</li>
+                <li><span class="k">Red flag:</span> a recommendation presented without its assumptions, or one that depends on a channel whose ROI interval straddles break-even. Those go to the <a href="measurement-calibration.html">experiment queue</a>, not the budget.</li>
+            </ul>
+
+            <div class="definition">
+                <h4>From report to program</h4>
+                <p style="margin-bottom:0;">
+                    A single report is one turn of the loop. The channels it can't resolve become the next
+                    experiments; their results <a href="measurement-calibration.html">calibrate</a> the next
+                    fit, tightening the intervals that mattered. That's the measurement program — see the
+                    <a href="causal-09-measurement-program.html">closed loop</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>See it on a real report</h2>
+            <p>Open the example report and read it with this guide open alongside.</p>
+            <div class="cta-buttons">
+                <a href="mmm-example-report.html" class="btn btn-white" target="_blank">View Example Report</a>
+                <a href="interpreting-results.html" class="btn btn-outline-white">Interpreting Results</a>
+            </div>
+        </div>
+    </section>
+
+    <script src="shared/components.js"></script>
+</body>
+</html>

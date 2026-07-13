@@ -31,7 +31,7 @@ ORG_ID = f"{SITE}/#organization"
 SITE_ID = f"{SITE}/#website"
 SENTINEL = "<!-- seo:augmented (structured data + social cards) -->"
 DEFAULT_IMG = f"{SITE}/assets/mmm-framework-social-preview.png"
-TODAY = "2026-07-10"
+TODAY = "2026-07-12"
 EXCLUDE = {"TEMPLATE.html", "TEMPLATE-SIDEBAR.html", "404.html"}
 BLOG_PREFIX = "blog-"  # blog-*.html posts emit BlogPosting nodes (index: blog.html)
 
@@ -64,14 +64,18 @@ TECH_EXPLICIT = {
     "interpreting-results.html", "causal-inference.html", "bayesian-workflow.html",
     "variable-selection.html", "scientific-modeling.html", "measurement-calibration.html",
     "identification-assumptions.html", "technical-guide.html", "data-requirements.html",
+    "data-prep-cookbook.html", "migration-guide.html",
     "mmm-walkthrough.html", "pressure-testing.html", "causal-features-showcase.html",
     "business-readiness-report.html",
 }
 NAV_LABEL = {
     "index.html": "Home", "getting-started.html": "Getting Started",
     "modeling-guide.html": "Modeling Guide", "real-data-guide.html": "Real-Data Guide",
-    "interpreting-results.html": "Interpreting Results", "business-stakeholders.html": "For Business",
-    "glossary.html": "Glossary", "faq.html": "FAQ", "causal-inference.html": "Causal Inference",
+    "interpreting-results.html": "Interpreting Results", "reading-the-report.html": "Reading the Report",
+    "data-prep-cookbook.html": "Data-Prep Cookbook", "migration-guide.html": "Migration Guide",
+    "business-stakeholders.html": "For Business",
+    "glossary.html": "Glossary", "faq.html": "FAQ", "troubleshooting.html": "Troubleshooting",
+    "causal-inference.html": "Causal Inference",
     "bayesian-workflow.html": "Bayesian Workflow", "variable-selection.html": "Variable Selection",
     "scientific-modeling.html": "Scientific Modeling", "measurement-calibration.html": "Calibration Loop",
     "identification-assumptions.html": "Identification Assumptions", "technical-guide.html": "Technical Guide",
@@ -333,8 +337,8 @@ def build_sitemap():
 
 # llms.txt information architecture — keep in sync when adding pages.
 GROUPS = [
-    ("Start here", ["index.html", "getting-started.html", "platform-overview.html", "faq.html", "glossary.html"]),
-    ("Learn the framework", ["modeling-guide.html", "real-data-guide.html", "interpreting-results.html", "business-stakeholders.html", "data-requirements.html"]),
+    ("Start here", ["index.html", "getting-started.html", "platform-overview.html", "faq.html", "troubleshooting.html", "glossary.html"]),
+    ("Learn the framework", ["modeling-guide.html", "real-data-guide.html", "interpreting-results.html", "reading-the-report.html", "data-prep-cookbook.html", "migration-guide.html", "business-stakeholders.html", "data-requirements.html"]),
     ("Methodology & causal foundations", ["causal-inference.html", "bayesian-workflow.html", "scientific-modeling.html", "variable-selection.html", "measurement-calibration.html", "continuous-learning.html", "continuous-learning-math.html", "identification-assumptions.html", "technical-guide.html"]),
     ("Platform (Augur)", ["platform-overview.html", "model-garden.html", "pricing.html", "data-connections.html", "trust.html", "security.html", "responsible-disclosure.html", "evaluator.html"]),
     ("Proof, demos & worked examples", ["demos.html", "mmm-walkthrough.html", "mmm-example-report.html", "causal-features-showcase.html", "pressure-testing.html", "scientific-workflow-demo.html", "scientific-workflow-simple.html", "business-readiness-report.html"]),

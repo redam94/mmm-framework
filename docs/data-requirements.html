@@ -610,13 +610,30 @@ print(panel.summary())</code></pre>
                 explicitly&mdash;not baked invisibly into the fit.
             </p>
 
+            <h2 id="data-ready">Data-ready checklist</h2>
+            <p>
+                Before you fit, walk this list. Building the MFF from raw platform exports? The
+                <a href="data-prep-cookbook.html">Data-Prep Cookbook</a> is the step-by-step code version.
+            </p>
+            <ul style="list-style:none; padding-left:0;">
+                <li style="padding:0.4rem 0; border-bottom:1px solid var(--color-border);">☐ &nbsp;Data is in <a href="#mff-format">MFF long format</a> — <code>Period</code>, dimension columns, and a <code>VariableName</code>/<code>VariableValue</code> pair.</li>
+                <li style="padding:0.4rem 0; border-bottom:1px solid var(--color-border);">☐ &nbsp;Every variable shares one weekly (or daily/monthly) anchor; the KPI has no missing periods.</li>
+                <li style="padding:0.4rem 0; border-bottom:1px solid var(--color-border);">☐ &nbsp;Media values are non-negative; a dark week is a real zero, not a blank.</li>
+                <li style="padding:0.4rem 0; border-bottom:1px solid var(--color-border);">☐ &nbsp;Confounding controls are present — anything that moves spend <em>and</em> sales (price, promotions, seasonality drivers, distribution).</li>
+                <li style="padding:0.4rem 0; border-bottom:1px solid var(--color-border);">☐ &nbsp;You have <a href="#minimum-data">enough history</a> (≈ two years of weekly data for a national model).</li>
+                <li style="padding:0.4rem 0; border-bottom:1px solid var(--color-border);">☐ &nbsp;Each channel is modeled on the right variable — <a href="#spend-vs-impressions">spend, or impressions/clicks</a> with a spend column for dollar ROI.</li>
+                <li style="padding:0.4rem 0; border-bottom:1px solid var(--color-border);">☐ &nbsp;The EDA screen is clean — <code>validate_dataset</code> and <code>detect_outliers</code> raise nothing you haven't reviewed.</li>
+                <li style="padding:0.4rem 0;">☐ &nbsp;The MFF loads without validation errors or contiguity warnings.</li>
+            </ul>
+
             <div class="note" style="margin-top: 2rem;">
                 <h4>Next Steps</h4>
                 <p>
-                    Have your data in shape? The <a href="getting-started.html">Getting Started</a> guide
-                    takes you from install to first fit. For the full pre-specified workflow this data feeds,
-                    see the <a href="modeling-guide.html">Modeling Guide</a>; for the priors that fill the gaps
-                    your data leaves, see the
+                    Every box checked? The <a href="getting-started.html">Getting Started</a> guide
+                    takes you from install to first fit. Starting from raw exports, walk the
+                    <a href="data-prep-cookbook.html">Data-Prep Cookbook</a>. For the full pre-specified
+                    workflow this data feeds, see the <a href="modeling-guide.html">Modeling Guide</a>; for the
+                    priors that fill the gaps your data leaves, see the
                     <a href="technical-guide.html#standard-priors">Technical Guide&rsquo;s prior specification</a>.
                     Evaluating the framework for procurement? The <a href="evaluator.html">Evaluator&rsquo;s
                     Guide</a> collects the facts in RFP order.
@@ -627,11 +644,11 @@ print(panel.summary())</code></pre>
 
     <section class="cta-section">
         <div class="container">
-            <h2>Data Ready?</h2>
-            <p>Install the framework and load your first MFF with the getting started guide.</p>
+            <h2>Data ready?</h2>
+            <p>Turn raw platform exports into a modeling-ready MFF, then fit your first model.</p>
             <div class="cta-buttons">
-                <a href="getting-started.html" class="btn btn-white">Getting Started</a>
-                <a href="https://github.com/redam94/mmm-framework" class="btn btn-outline-white" target="_blank">View on GitHub</a>
+                <a href="data-prep-cookbook.html" class="btn btn-white">Data-Prep Cookbook</a>
+                <a href="getting-started.html" class="btn btn-outline-white">Getting Started</a>
             </div>
         </div>
     </section>

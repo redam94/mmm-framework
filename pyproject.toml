@@ -164,6 +164,12 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mmm_framework"]
+# Ship the bundled example datasets (load_example). They match the global
+# *.csv / *.json ignore, so name them explicitly or they are dropped.
+artifacts = [
+    "src/mmm_framework/datasets/data/*.csv",
+    "src/mmm_framework/datasets/data/*.json",
+]
 
 # Keep the sdist lean: ship the library + metadata only, not the monorepo
 # (frontend/, docs/, nbs/, api/, app/, tests/ are not needed to `pip install`).
@@ -173,6 +179,10 @@ include = [
     "/README.md",
     "/LICENSE",
     "/pyproject.toml",
+]
+artifacts = [
+    "src/mmm_framework/datasets/data/*.csv",
+    "src/mmm_framework/datasets/data/*.json",
 ]
 
 # Never ship dev cruft or the 3.2 GB runtime session DB that lives in the

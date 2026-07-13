@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data-Prep Cookbook | MMM Framework</title>
+    <meta name="description" content="A code cookbook for turning raw ad-platform exports (Google Ads, Meta, GA4) into a Master Flat File (MFF) ready for the MMM Framework — joining spend and impressions, aligning weekly cadence, handling missing periods, and choosing spend vs impressions.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/data-prep-cookbook.html">
+    <meta property="og:title" content="Data-Prep Cookbook | MMM Framework">
+    <meta property="og:description" content="Turn raw Google Ads / Meta / GA4 exports into a modeling-ready MFF: join, align cadence, handle missing weeks, spend vs impressions.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/data-prep-cookbook.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .checklist { list-style: none; padding-left: 0; }
+        .checklist li {
+            display: flex; gap: 0.7rem; align-items: baseline;
+            padding: 0.4rem 0; border-bottom: 1px solid var(--color-border);
+        }
+        .checklist li::before { content: "☐"; color: var(--color-primary); font-weight: 700; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Data-Prep Cookbook | MMM Framework">
+    <meta name="twitter:description" content="Turn raw Google Ads / Meta / GA4 exports into a modeling-ready MFF: join, align cadence, handle missing weeks, spend vs impressions.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/data-prep-cookbook.html",
+          "name": "Data-Prep Cookbook | MMM Framework",
+          "description": "A code cookbook for turning raw ad-platform exports (Google Ads, Meta, GA4) into a Master Flat File (MFF) ready for the MMM Framework — joining spend and impressions, aligning weekly cadence, handling missing periods, and choosing spend vs impressions.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-12",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/data-prep-cookbook.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/data-prep-cookbook.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Data-Prep Cookbook",
+          "datePublished": "2026-07-12",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/data-prep-cookbook.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/data-prep-cookbook.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Data-Prep Cookbook",
+              "item": "https://redam94.github.io/mmm-framework/data-prep-cookbook.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Related</h3>
+            <ul class="sidebar-nav">
+                <li><a href="data-requirements.html">Data Requirements</a></li>
+                <li><a href="getting-started.html#mff-format">MFF Format</a></li>
+                <li><a href="data-connections.html">Platform Connectors</a></li>
+            </ul>
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#target">The target: one long table</a></li>
+                <li><a href="#step1">1 · Normalize each export</a></li>
+                <li><a href="#step2">2 · Align the cadence</a></li>
+                <li><a href="#step3">3 · Join &amp; fill gaps</a></li>
+                <li><a href="#step4">4 · Spend or impressions?</a></li>
+                <li><a href="#to-mff">5 · Emit the MFF</a></li>
+                <li><a href="#checklist">Pre-flight checklist</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Data-Prep Cookbook</h1>
+            <p class="lead">
+                You have a Google Ads export, a Meta export, and a GA4 sales pull — three CSVs at three
+                cadences with three schemas. This recipe joins them into the one
+                <a href="data-requirements.html">Master Flat File (MFF)</a> the framework models, and hands
+                the result to <code>load_mff</code>. The
+                <a href="data-connections.html">platform connectors</a> automate this for hosted users; this
+                page is the code version for anyone starting from raw files.
+            </p>
+
+            <h2 id="target">The target: one long table</h2>
+            <p>
+                Everything below builds toward MFF long format — one row per
+                <em>variable × period (× geography)</em>, with a <code>Period</code> column, the dimension
+                columns, and a <code>VariableName</code> / <code>VariableValue</code> pair. Sales, each
+                channel's spend, and each control all live in the same table, distinguished only by
+                <code>VariableName</code>. The <a href="data-requirements.html#mff-columns">column dictionary</a>
+                is the authoritative spec.
+            </p>
+
+            <h2 id="step1">1 · Normalize each export</h2>
+            <p>
+                Platform exports rarely share a schema. For each source, keep only what you need and rename
+                to a common shape: a <code>week</code> date column plus one numeric column per metric.
+            </p>
+            <div class="code-wrapper">
+                <pre><code class="language-python"># illustrative — plain pandas, adapt column names to your exports
+import pandas as pd
+
+# Google Ads: daily rows -> keep date + cost + impressions, rename channel
+gads = pd.read_csv("google_ads.csv", parse_dates=["day"])
+gads = gads.rename(columns={"day": "date", "cost": "search_spend",
+                            "impressions": "search_impr"})
+
+# Meta: same treatment
+meta = pd.read_csv("meta.csv", parse_dates=["date"])
+meta = meta.rename(columns={"amount_spent": "social_spend",
+                            "impressions": "social_impr"})
+
+# GA4: weekly sales (the KPI)
+sales = pd.read_csv("ga4_revenue.csv", parse_dates=["week"])
+sales = sales.rename(columns={"week": "date", "revenue": "Sales"})</code></pre>
+            </div>
+
+            <h2 id="step2">2 · Align the cadence</h2>
+            <p>
+                MMM is almost always fit weekly. Roll daily platform data up to the <strong>same weekly
+                anchor</strong> as your KPI (if Sales is reported for weeks ending Sunday, use Sundays
+                everywhere). Sum spend and impressions within the week; average or take period-end for a
+                price or index control.
+            </p>
+            <div class="code-wrapper">
+                <pre><code class="language-python"># illustrative — resample daily platform data to weekly (week ending Sunday)
+def to_weekly(df, sum_cols):
+    return (df.set_index("date")
+              .resample("W-SUN")[sum_cols].sum()
+              .reset_index())
+
+gads_w = to_weekly(gads, ["search_spend", "search_impr"])
+meta_w = to_weekly(meta, ["social_spend", "social_impr"])
+# sales is already weekly; make sure its dates land on the same W-SUN anchor</code></pre>
+            </div>
+            <div class="note">
+                <h4>Anchor consistency matters</h4>
+                <p style="margin-bottom:0;">
+                    The loader anchors its expected weekly grid to your data's own weekday, so Monday- or
+                    Sunday-dated weeks both validate — but every variable must share <em>one</em> anchor. Mixed
+                    anchors read as missing weeks. Pick one and resample all sources to it.
+                </p>
+            </div>
+
+            <h2 id="step3">3 · Join &amp; fill gaps</h2>
+            <p>
+                Outer-join the weekly frames on <code>date</code> so no week is silently dropped, then decide
+                each column's fill rule: a channel that was simply <strong>dark</strong> that week is a real
+                <strong>zero</strong>; a control that's genuinely unobserved is forward-filled or interpolated;
+                a missing KPI week is a data problem to fix, not to zero.
+            </p>
+            <div class="code-wrapper">
+                <pre><code class="language-python"># illustrative
+wide = (sales
+        .merge(gads_w, on="date", how="outer")
+        .merge(meta_w, on="date", how="outer")
+        .sort_values("date"))
+
+# spend/impressions: a missing week means the channel was off -> 0
+media_cols = ["search_spend", "search_impr", "social_spend", "social_impr"]
+wide[media_cols] = wide[media_cols].fillna(0.0)
+
+# KPI must be present every week — investigate, don't fillna
+assert wide["Sales"].notna().all(), "missing KPI weeks — fix upstream before modeling"</code></pre>
+            </div>
+            <p>
+                The framework <em>will</em> warn you about non-contiguous weeks at load time, but it's cheaper
+                to resolve gaps here. See <a href="troubleshooting.html#data">Troubleshooting &rarr; Data</a>
+                for the exact messages.
+            </p>
+
+            <h2 id="step4">4 · Spend or impressions?</h2>
+            <p>
+                Model each channel on the variable that actually drives response. Spend is the usual choice and
+                lets ROI divide by dollars directly. If you model <strong>impressions or clicks</strong>, the
+                framework computes efficiency-per-unit instead — and can still report dollar ROI if you attach
+                a spend column or a CPM/CPC. Keep both columns in the wide frame and decide per channel; the
+                <a href="data-requirements.html#spend-vs-impressions">spend-vs-impressions</a> section covers
+                the trade-off.
+            </p>
+
+            <h2 id="to-mff">5 · Emit the MFF and load it</h2>
+            <p>
+                Melt the wide frame to MFF long format with <code>mff_from_wide_format</code> — you pass a
+                mapping of <em>your</em> column names to canonical <code>VariableName</code>s — then declare
+                roles with <code>MFFConfigBuilder</code> and load:
+            </p>
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework import mff_from_wide_format, MFFConfigBuilder, load_mff
+
+# wide columns -> canonical variable names (modeling on spend here)
+mff = mff_from_wide_format(
+    wide,
+    period_col="date",
+    value_columns={
+        "Sales": "Sales",
+        "search_spend": "Search",
+        "social_spend": "Social",
+    },
+)
+
+config = (
+    MFFConfigBuilder()
+    .with_kpi_name("Sales")
+    .add_national_media("Search", adstock_lmax=4)
+    .add_national_media("Social", adstock_lmax=6)
+    .weekly()
+    .build()
+)
+
+panel = load_mff(mff, config)
+print(panel.summary())</code></pre>
+            </div>
+            <p>
+                That <code>panel</code> is the exact object the <a href="getting-started.html#fastest-path">quickstart</a>
+                fits. Want to rehearse the downstream steps first? <code>load_example("national")</code> returns
+                a ready panel of the same shape.
+            </p>
+
+            <h2 id="checklist">Pre-flight checklist</h2>
+            <p>Before you fit, confirm:</p>
+            <ul class="checklist">
+                <li>Every variable shares one weekly anchor; the KPI has no missing weeks.</li>
+                <li>Media values are non-negative; dark weeks are real zeros, not blanks.</li>
+                <li>Controls that could confound spend <em>and</em> sales (price, promotions, seasonality drivers, distribution) are included — omitting a common cause biases ROI.</li>
+                <li>You have enough history — roughly <a href="data-requirements.html#minimum-data">two years of weekly data</a> for a national model.</li>
+                <li>Each channel is modeled on the right variable (spend, or impressions/clicks with a spend column for dollar ROI).</li>
+                <li>The MFF loads without validation errors or contiguity warnings.</li>
+            </ul>
+            <div class="definition">
+                <h4>Then fit</h4>
+                <p style="margin-bottom:0;">
+                    With a clean <code>panel</code>, follow the <a href="getting-started.html#your-first-model">step-by-step
+                    build</a>, then read the output with the
+                    <a href="reading-the-report.html">report-interpretation guide</a>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Data in the right shape?</h2>
+            <p>Fit your first model, or check the full data requirements and runtime budgets.</p>
+            <div class="cta-buttons">
+                <a href="getting-started.html" class="btn btn-white">Getting Started</a>
+                <a href="data-requirements.html" class="btn btn-outline-white">Data Requirements</a>
+            </div>
+        </div>
+    </section>
+
+    <script src="shared/components.js"></script>
+</body>
+</html>

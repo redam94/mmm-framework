@@ -77,6 +77,12 @@ from .data_loader import (
 from .dataset import Dataset
 from .dataset_loader import load_dataset
 
+from .datasets import (
+    load_example,
+    list_examples,
+    load_example_answer_key,
+)
+
 from .model import (
     # Model classes
     TrendType,
@@ -208,6 +214,10 @@ __all__ = [
     "PanelDataset",
     "Dataset",
     "load_dataset",
+    # Bundled example datasets
+    "load_example",
+    "list_examples",
+    "load_example_answer_key",
     "MFFLoader",
     "load_mff",
     "mff_from_wide_format",

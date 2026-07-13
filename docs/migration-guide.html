@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migration Guide | MMM Framework</title>
+    <meta name="description" content="A migration guide for moving an MMM from Robyn, Google Meridian, or PyMC-Marketing to the MMM Framework — how hyperparameter ranges become priors, how adstock/saturation and geo hierarchy map across, and where experiment calibration and pre-registration differ.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/migration-guide.html">
+    <meta property="og:title" content="Migration Guide | MMM Framework">
+    <meta property="og:description" content="Move a model from Robyn, Meridian, or PyMC-Marketing: concept-to-config mapping for adstock, saturation, priors, geo hierarchy, and calibration.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/migration-guide.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .map-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.95rem; }
+        .map-table th, .map-table td { padding: 0.7rem 0.85rem; text-align: left; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+        .map-table th { background: var(--color-bg-alt); font-weight: 600; }
+        .map-table td:first-child { font-weight: 600; color: var(--color-primary-dark); white-space: nowrap; }
+        .map-wrap { overflow-x: auto; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Migration Guide | MMM Framework">
+    <meta name="twitter:description" content="Move a model from Robyn, Meridian, or PyMC-Marketing: concept-to-config mapping for adstock, saturation, priors, geo hierarchy, and calibration.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/migration-guide.html",
+          "name": "Migration Guide | MMM Framework",
+          "description": "A migration guide for moving an MMM from Robyn, Google Meridian, or PyMC-Marketing to the MMM Framework — how hyperparameter ranges become priors, how adstock/saturation and geo hierarchy map across, and where experiment calibration and pre-registration differ.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-12",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/migration-guide.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/migration-guide.html#webpage",
+          "@type": "TechArticle",
+          "headline": "Migration Guide",
+          "datePublished": "2026-07-12",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/migration-guide.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/migration-guide.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Migration Guide",
+              "item": "https://redam94.github.io/mmm-framework/migration-guide.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Related</h3>
+            <ul class="sidebar-nav">
+                <li><a href="modeling-guide.html">Modeling Guide</a></li>
+                <li><a href="technical-guide.html">Technical Guide</a></li>
+                <li><a href="measurement-calibration.html">Calibration Loop</a></li>
+            </ul>
+            <h3>On this page</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#mindset">The one mindset shift</a></li>
+                <li><a href="#map">Concept map</a></li>
+                <li><a href="#robyn">From Robyn</a></li>
+                <li><a href="#meridian">From Meridian</a></li>
+                <li><a href="#pymc-marketing">From PyMC-Marketing</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Migration Guide</h1>
+            <p class="lead">
+                Coming from <strong>Robyn</strong>, Google <strong>Meridian</strong>, or
+                <strong>PyMC-Marketing</strong>? Your modeling instincts transfer — adstock, saturation,
+                controls, and ROI all have direct homes here. This guide maps the concepts you know to this
+                framework's config and API, and is honest about what differs.
+            </p>
+
+            <h2 id="mindset">The one mindset shift</h2>
+            <p>
+                In grid-search tools, a model's <em>hyperparameters</em> (adstock decay, saturation shape,
+                coefficients) are numbers you search over and then fix. Here they are
+                <strong>random variables with priors</strong>, and fitting returns their full
+                <strong>posterior</strong>. So "what adstock decay did we pick?" becomes "what does the decay
+                <em>posterior</em> look like?" — you get an interval, not a point, and that interval flows
+                into every downstream ROI and reallocation. Two more differences worth knowing up front: the
+                framework asks you to <a href="bayesian-workflow.html">pre-register the model design</a> before
+                seeing results (limiting researcher degrees of freedom), and it treats
+                <a href="measurement-calibration.html">experiment calibration</a> as a first-class step, not an
+                afterthought.
+            </p>
+
+            <h2 id="map">Concept map</h2>
+            <div class="map-wrap">
+            <table class="map-table">
+                <thead>
+                    <tr><th>Concept</th><th>Robyn</th><th>Meridian</th><th>This framework</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Carryover</td>
+                        <td>geometric / Weibull adstock, <code>theta</code>/shape ranges</td>
+                        <td>geometric adstock, <code>alpha</code> prior</td>
+                        <td><code>AdstockConfig</code> (geometric, delayed, Weibull); decay is a fitted RV</td>
+                    </tr>
+                    <tr>
+                        <td>Saturation</td>
+                        <td>Hill (<code>alpha</code>, <code>gamma</code> ranges)</td>
+                        <td>Hill saturation, priors on slope/half</td>
+                        <td><code>SaturationConfig</code> (Hill, logistic, …); shape params are fitted RVs</td>
+                    </tr>
+                    <tr>
+                        <td>Effect size</td>
+                        <td>ridge coefficient (regularized point)</td>
+                        <td>coefficient / ROI prior (Bayesian)</td>
+                        <td>coefficient <em>or</em> ROI-scale prior; <code>media_prior_mode="roi"</code></td>
+                    </tr>
+                    <tr>
+                        <td>Inference</td>
+                        <td>Nevergrad search + ridge, Pareto front of models</td>
+                        <td>NUTS (TF-Probability)</td>
+                        <td>NUTS (NumPyro/PyMC); one model, full posterior</td>
+                    </tr>
+                    <tr>
+                        <td>Uncertainty</td>
+                        <td>spread across Pareto solutions</td>
+                        <td>posterior credible intervals</td>
+                        <td>posterior credible intervals throughout</td>
+                    </tr>
+                    <tr>
+                        <td>Experiment calibration</td>
+                        <td><code>calibration_input</code> (lift studies)</td>
+                        <td>ROI priors from experiments</td>
+                        <td>in-graph likelihood on lift/ROAS estimands; a full <a href="measurement-calibration.html">loop</a></td>
+                    </tr>
+                    <tr>
+                        <td>Geo hierarchy</td>
+                        <td>one model per geo, or national</td>
+                        <td>hierarchical geo model</td>
+                        <td>partial-pooled per-geo betas (<code>vary_media_by_geo</code>)</td>
+                    </tr>
+                    <tr>
+                        <td>Controls / confounders</td>
+                        <td>context variables</td>
+                        <td>control variables</td>
+                        <td>role-tagged controls with a <a href="causal-inference.html">causal DAG</a> and refutation checks</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+
+            <h2 id="robyn">From Robyn</h2>
+            <p>
+                Robyn searches hyperparameter <em>ranges</em> and returns a Pareto front of candidate models.
+                The translation is mechanical: a range becomes a <strong>prior</strong>, and the Pareto spread
+                becomes a single model's <strong>posterior</strong>. Your <code>theta</code> adstock ranges map
+                to an <code>AdstockConfig</code>; your Hill <code>alpha</code>/<code>gamma</code> ranges map to
+                a <code>SaturationConfig</code>; your <code>calibration_input</code> lift studies map to the
+                framework's <a href="measurement-calibration.html">experiment calibration</a> — with the added
+                honesty that you commit to the design before seeing which model "looks best."
+            </p>
+            <div class="code-wrapper">
+                <pre><code class="language-python">from mmm_framework import (
+    MFFConfigBuilder, ModelConfigBuilder, TrendConfig, TrendType,
+)
+
+# Robyn theta/Hill ranges -> per-channel adstock windows + Bayesian inference
+mff_config = (
+    MFFConfigBuilder()
+    .with_kpi_name("Sales")
+    .add_national_media("TV", adstock_lmax=8)       # longer carryover, like a high-theta TV
+    .add_national_media("Search", adstock_lmax=2)   # short carryover
+    .weekly()
+    .build()
+)
+model_config = ModelConfigBuilder().bayesian_numpyro().build()
+trend_config = TrendConfig(type=TrendType.LINEAR)</code></pre>
+            </div>
+            <p>
+                Instead of hand-picking from a Pareto front, you fit once and read the posterior — and where
+                Robyn asks for a business "budget allocation" objective, here that lives in the
+                <a href="reading-the-report.html#reallocation">reallocation simulator</a> on top of the fitted
+                curves.
+            </p>
+
+            <h2 id="meridian">From Meridian</h2>
+            <p>
+                Meridian is already Bayesian, so the concepts line up closely — adstock, Hill saturation, geo
+                hierarchy, and priors on ROI all have direct equivalents. If you set ROI priors in Meridian,
+                use this framework's <strong>ROI-scale media priors</strong> so the prior lives on the decision
+                quantity rather than an abstract coefficient:
+            </p>
+            <div class="code-wrapper">
+                <pre><code class="language-python"># illustrative — ROI-scale priors and per-geo hierarchy in the model spec
+spec = {
+    "kpi": "Sales",
+    "media_channels": [{"name": "TV"}, {"name": "Search"}, {"name": "Social"}],
+    "media_prior_mode": "roi",                       # priors on ROI, not raw coefficients
+    "priors": {"media": {"TV": {"roi": {"median": 2.0, "sigma": 0.5}}}},
+    "vary_media_by_geo": True,                        # partial-pooled per-geo effectiveness
+}</code></pre>
+            </div>
+            <p>
+                <strong>Honest gap:</strong> if your Meridian model leans on <em>reach &amp; frequency</em>
+                inputs, note that first-class frequency-saturation modeling is on the roadmap rather than
+                shipped — model those channels on impressions or spend for now, and calibrate with a
+                frequency experiment. Geo hierarchy, ROI priors, and adstock/saturation all transfer directly.
+            </p>
+
+            <h2 id="pymc-marketing">From PyMC-Marketing</h2>
+            <p>
+                This is the smoothest migration, because both are PyMC&nbsp;6 under the hood. A common
+                misconception: this framework <strong>does not subclass PyMC-Marketing</strong> — it is a
+                separate, standalone engine that can optionally <em>interoperate</em> with a PyMC-Marketing
+                model for reporting. PyMC-Marketing's <code>MMM</code> maps to <code>BayesianMMM</code>; its
+                adstock and saturation transformations map to <code>AdstockConfig</code> /
+                <code>SaturationConfig</code>; its model coordinates map to the MFF's declared dimensions.
+                What you gain by moving up is the layer <em>around</em> the model: declared causal roles and
+                refutation checks, the pre-registration and calibration loop, experiment design and
+                prioritization, and the report/agent surface. The
+                <a href="model-garden.html">Model Garden</a> is the place to bring a bespoke model class along.
+            </p>
+            <div class="note">
+                <h4>Fastest way to compare</h4>
+                <p style="margin-bottom:0;">
+                    Fit the bundled example (<code>load_example("national")</code>) here and against your
+                    current tool on the same data. The <a href="getting-started.html#fastest-path">quickstart</a>
+                    even grades the result against a sealed answer key — a like-for-like recovery test you can
+                    run in minutes.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to port a model?</h2>
+            <p>Start from the quickstart, or dig into the modeling guide for the full config surface.</p>
+            <div class="cta-buttons">
+                <a href="getting-started.html" class="btn btn-white">Getting Started</a>
+                <a href="modeling-guide.html" class="btn btn-outline-white">Modeling Guide</a>
+            </div>
+        </div>
+    </section>
+
+    <script src="shared/components.js"></script>
+</body>
+</html>

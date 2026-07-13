@@ -1113,11 +1113,19 @@ def generate_complete_date_range(
         Complete date range with no gaps.
     """
     freq_map = {
-        "W": "W-SUN",  # Weekly ending Sunday (adjust as needed)
         "D": "D",
         "M": "MS",  # Month start
     }
-    pd_freq = freq_map.get(frequency, frequency)
+    if frequency == "W":
+        # Anchor the weekly grid to the data's OWN weekday. Marketing panels are
+        # commonly Monday-anchored; a fixed "W-SUN" grid would land on Sundays and
+        # flag every Monday observation as "missing". Anchoring to start_date's
+        # weekday makes contiguous weekly data (on any weekday) validate cleanly,
+        # while genuine gaps in that grid are still detected.
+        anchor = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"][start_date.weekday()]
+        pd_freq = f"W-{anchor}"
+    else:
+        pd_freq = freq_map.get(frequency, frequency)
     return pd.date_range(start=start_date, end=end_date, freq=pd_freq)
 
 

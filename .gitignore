@@ -29,6 +29,10 @@ node_modules/
 # consumed client-side by the Cmd-K palette and glossary tooltips — must ship)
 !docs/shared/search-index.json
 !docs/shared/glossary.json
+# Bundled example datasets shipped inside the package (load_example) — these MUST
+# be tracked and packaged despite the global *.csv / *.json ignores.
+!src/mmm_framework/datasets/data/*.csv
+!src/mmm_framework/datasets/data/*.json
 
 *.db
 *.db-*
