@@ -749,6 +749,9 @@ class BayesianMMM:
         # === Seasonality features ===
         self._prepare_seasonality()
 
+        # === Holiday / event regressors (#143) ===
+        self._prepare_events()
+
         # === Trend features ===
         self._prepare_trend()
 
@@ -979,6 +982,36 @@ class BayesianMMM:
                 period_values, categories=periods_unique
             ).codes.astype(np.int32)
         return np.arange(self.n_obs, dtype=np.int32)
+
+    def _prepare_events(self):
+        """Build holiday / event regressors (#143) from ``ModelConfig.events``.
+
+        Sets ``self.event_features`` (n_periods x n_events), ``self.event_names``,
+        and ``self.event_sigmas`` (per-event prior sigma). Empty (no event block,
+        graph byte-identical) when no events are configured — R0.1.
+        """
+        self.event_features = np.zeros((self.n_periods, 0))
+        self.event_names: list[str] = []
+        self.event_sigmas: list[float] = []
+        cfg = getattr(self.model_config, "events", None)
+        if cfg is None or cfg.is_empty():
+            return
+        from ..transforms.events import build_event_regressors
+
+        regressors = build_event_regressors(self.panel.coords.periods, cfg)
+        if regressors.shape[1] == 0:
+            warnings.warn(
+                "events configured but no holiday/event fell inside the data "
+                "window; no event regressors were built.",
+                stacklevel=2,
+            )
+            return
+        self.event_features = regressors.to_numpy().astype(np.float64)
+        self.event_names = list(regressors.columns)
+        by_name = {ev.name: ev.prior_sigma for ev in cfg.custom_events}
+        self.event_sigmas = [
+            float(by_name.get(name) or cfg.prior_sigma) for name in self.event_names
+        ]
 
     def _prepare_seasonality(self):
         """Prepare Fourier features for seasonality.
@@ -1806,6 +1839,27 @@ class BayesianMMM:
                 _anchored_det(seasonality_at_periods, intercept, model),
             )
 
+            # HOLIDAY / EVENT EFFECTS (#143) — sharp, date-specific spikes the
+            # smooth Fourier basis above cannot represent, estimated and reported
+            # SEPARATELY from seasonality. No RVs and NOT added to mu when no
+            # events are configured, so the default graph is byte-identical (R0.2).
+            event_contribution = None
+            if self.event_features.shape[1] > 0:
+                beta_events = pm.Normal(
+                    "beta_events",
+                    mu=0.0,
+                    sigma=np.asarray(self.event_sigmas),
+                    shape=len(self.event_names),
+                )
+                event_at_periods = pt.dot(
+                    pt.as_tensor_variable(self.event_features), beta_events
+                )
+                event_contribution = event_at_periods[time_idx_data]
+                pm.Deterministic(
+                    "event_component",
+                    _anchored_det(event_contribution, intercept, model),
+                )
+
             # GEO EFFECTS
             if self.has_geo and self.hierarchical_config.pool_across_geo:
                 geo_sigma = pm.HalfNormal("geo_sigma", sigma=0.3)
@@ -2153,6 +2207,10 @@ class BayesianMMM:
                 + media_contribution
                 + control_contribution
             )
+            # Additive event block only when configured (keeps the default graph
+            # byte-identical — the term is absent, not zero).
+            if event_contribution is not None:
+                mu = mu + event_contribution
 
             # Off path: create sigma here exactly as before (bit-identical). On
             # the selection path it was already created above for the horseshoe.
@@ -2895,6 +2953,9 @@ class BayesianMMM:
         product_scaled = get_mean("product_component") if self.has_product else None
 
         channel_contributions_scaled = get_mean("channel_contributions")
+        # Event block (#143): present only when events were configured.
+        has_events = "event_component" in posterior
+        event_scaled = get_mean("event_component") if has_events else None
 
         if self.n_controls > 0 and "control_contributions" in posterior:
             control_contributions_scaled = get_mean("control_contributions")
@@ -2911,6 +2972,7 @@ class BayesianMMM:
                 product_scaled,
                 channel_contributions_scaled,
                 control_contributions_scaled,
+                event_scaled,
             )
 
         # Convert to original scale
@@ -2949,6 +3011,8 @@ class BayesianMMM:
         total_product = (
             float(product_effects.sum()) if product_effects is not None else None
         )
+        events = event_scaled * self.y_std if event_scaled is not None else None
+        total_events = float(events.sum()) if events is not None else None
 
         return ComponentDecomposition(
             intercept=intercept,
@@ -2969,6 +3033,8 @@ class BayesianMMM:
             total_product=total_product,
             y_mean=self.y_mean,
             y_std=self.y_std,
+            events=events,
+            total_events=total_events,
         )
 
     def _multiplicative_decomposition(
@@ -2981,6 +3047,7 @@ class BayesianMMM:
         product_scaled: np.ndarray | None,
         channel_contributions_scaled: np.ndarray,
         control_contributions_scaled: np.ndarray | None,
+        event_scaled: np.ndarray | None = None,
     ) -> ComponentDecomposition:
         """Exact additive decomposition of the semi-log + saturation model.
 
@@ -3014,11 +3081,18 @@ class BayesianMMM:
         controls_log = controls_total_scaled * ys
         geo_log = geo_scaled * ys if geo_scaled is not None else np.zeros(n)
         product_log = product_scaled * ys if product_scaled is not None else np.zeros(n)
+        event_log = event_scaled * ys if event_scaled is not None else np.zeros(n)
         media_log = channel_contributions_scaled * ys  # (n_obs, n_channels)
 
         flat = np.exp(intercept_log)  # intercept-only baseline level
         baseline_log = (
-            intercept_log + trend_log + seas_log + controls_log + geo_log + product_log
+            intercept_log
+            + trend_log
+            + seas_log
+            + controls_log
+            + geo_log
+            + product_log
+            + event_log
         )
         B = np.exp(baseline_log)  # all-media-off baseline level
         y_pred = np.exp(baseline_log + media_log.sum(axis=1))
@@ -3032,6 +3106,7 @@ class BayesianMMM:
         controls_total = Lb * controls_log
         geo_effects = (Lb * geo_log) if geo_scaled is not None else None
         product_effects = (Lb * product_log) if product_scaled is not None else None
+        events = (Lb * event_log) if event_scaled is not None else None
 
         media_by_channel = pd.DataFrame(
             Ly[:, None] * media_log,
@@ -3071,6 +3146,8 @@ class BayesianMMM:
             ),
             y_mean=self.y_mean,
             y_std=self.y_std,
+            events=events,
+            total_events=(float(events.sum()) if events is not None else None),
         )
 
     def compute_counterfactual_contributions(

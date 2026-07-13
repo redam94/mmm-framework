@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .enums import FitMethod, InferenceMethod, ModelSpecification, PriorType
+from .events import EventsConfig
 from .likelihood import LikelihoodConfig
 from .priors import PriorConfig
 
@@ -162,6 +163,11 @@ class ModelConfig(BaseModel):
 
     # Seasonality
     seasonality: SeasonalityConfig = Field(default_factory=SeasonalityConfig)
+
+    # Holiday / event effects (#143). None ⇒ no event block (default). When set,
+    # sharp date-specific effects enter as an additive `event_component`, distinct
+    # from the smooth Fourier seasonality.
+    events: EventsConfig | None = None
 
     # Control selection
     control_selection: ControlSelectionConfig = Field(

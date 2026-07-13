@@ -119,14 +119,14 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-12",
+          "dateModified": "2026-07-13",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/modeling-guide.html#breadcrumb"
           },
           "@id": "https://redam94.github.io/mmm-framework/modeling-guide.html#webpage",
           "@type": "TechArticle",
           "headline": "Modeling Guide",
-          "datePublished": "2026-07-12",
+          "datePublished": "2026-07-13",
           "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
           "author": {
             "@type": "Person",
@@ -686,6 +686,20 @@ tv_channel = (
                     group effect is the reliable number, not the per-channel split.
                     <a href="variable-selection.html">Variable Selection</a> covers the different
                     problem of collinear <em>controls</em> (shrink to zero, not pool).
+                </p>
+            </div>
+
+            <div class="note">
+                <h4>Sharp spikes: holiday &amp; event effects (opt-in)</h4>
+                <p style="margin-bottom:0;">
+                    Black Friday, Prime Day, a product launch — these are <em>not</em> smooth-seasonal,
+                    so the yearly Fourier basis can't represent them and they bleed into media around
+                    your highest-revenue weeks. Declare them instead of hand-building dummies:
+                    <code>ModelConfigBuilder().with_events(EventsConfig(country="US",
+                    holidays=[...], custom_events=[...]))</code>. Each holiday/event becomes a
+                    windowed, optionally-decaying regressor with its own coefficient, fit as a separate
+                    <strong>event contribution</strong> in the decomposition — distinct from Fourier
+                    seasonality, so they don't double-count. Off by default.
                 </p>
             </div>
 

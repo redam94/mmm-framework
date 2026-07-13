@@ -35,6 +35,7 @@ from .enums import (
     SaturationType,
     VariableRole,
 )
+from .events import EventSpec, EventsConfig
 from .likelihood import LikelihoodConfig
 from .dataset import DATASET_SCHEMA_VERSION, DatasetSchema, RoleBinding
 from .roles import DatasetRole
@@ -87,6 +88,8 @@ __all__ = [
     "DATASET_SCHEMA_VERSION",
     # Prior / transform configs
     "PriorConfig",
+    "EventSpec",
+    "EventsConfig",
     "LikelihoodConfig",
     "AdstockConfig",
     "SaturationConfig",

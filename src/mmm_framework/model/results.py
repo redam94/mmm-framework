@@ -182,6 +182,11 @@ class ComponentDecomposition:
     y_mean: float
     y_std: float
 
+    # Holiday / event effects (#143), original scale — separate from the smooth
+    # ``seasonality``. ``None`` when no event block was fit.
+    events: np.ndarray | None = None
+    total_events: float | None = None
+
     def summary(self) -> pd.DataFrame:
         """Get summary of component contributions."""
         components = {
@@ -196,6 +201,8 @@ class ComponentDecomposition:
             components["Geo Effects"] = self.total_geo
         if self.total_product is not None:
             components["Product Effects"] = self.total_product
+        if self.total_events is not None:
+            components["Events / Holidays"] = self.total_events
 
         total = sum(components.values())
 
