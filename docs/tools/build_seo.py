@@ -359,6 +359,7 @@ SERIES = [
         "blog-bayesian-mmm-carryover-shape.html", "blog-calibrating-mmm-experiments.html",
         "blog-carryover-experiment-timing.html",
         "blog-modeling-pitfalls.html", "blog-multiple-comparisons.html",
+        "blog-p-hacking-evidence.html",
         "blog-prior-predictive-sbc.html",
         "blog-lindley-to-dad.html", "blog-geo-holdout-eig.html",
         "blog-bed-bo-bandits.html", "blog-thompson-sampling.html",

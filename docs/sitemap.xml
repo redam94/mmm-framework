@@ -113,6 +113,11 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-p-hacking-evidence.html</loc>
+        <lastmod>2026-07-14</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/blog-prior-predictive-sbc.html</loc>
         <lastmod>2026-07-14</lastmod>
         <changefreq>monthly</changefreq>
@@ -139,7 +144,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/blog.html</loc>
-        <lastmod>2026-07-10</lastmod>
+        <lastmod>2026-07-14</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>

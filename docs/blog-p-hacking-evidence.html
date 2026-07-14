@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P-Hacking and the Thin Evidence of a P-Value | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="A p-value just under 0.05 is both weak evidence and easy to manufacture. How researcher degrees of freedom inflate false positives, and why a significant result leaves the null hypothesis with roughly a one-in-four chance of being true.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-p-hacking-evidence.html">
+    <meta property="og:title" content="P-Hacking and the Thin Evidence of a P-Value">
+    <meta property="og:description" content="A significant p-value is both weak evidence and easy to manufacture. Researcher degrees of freedom, the Bayesian calibration of p=0.05, and what it all means for media measurement.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-p-hacking-evidence.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="P-Hacking and the Thin Evidence of a P-Value">
+    <meta name="twitter:description" content="A significant p-value is both weak evidence and easy to manufacture. Researcher degrees of freedom, the Bayesian calibration of p=0.05, and what it all means for media measurement.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-p-hacking-evidence.html",
+          "name": "P-Hacking and the Thin Evidence of a P-Value | MMM Framework",
+          "description": "A p-value just under 0.05 is both weak evidence and easy to manufacture. How researcher degrees of freedom inflate false positives, and why a significant result leaves the null hypothesis with roughly a one-in-four chance of being true.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-14",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-p-hacking-evidence.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-p-hacking-evidence.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "P-Hacking and the Thin Evidence of a P-Value",
+          "datePublished": "2026-07-14",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-p-hacking-evidence.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-p-hacking-evidence.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "P-Hacking and the Thin Evidence of a P-Value",
+              "item": "https://redam94.github.io/mmm-framework/blog-p-hacking-evidence.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#what-it-isnt">What a P-Value Isn't</a></li>
+                <li><a href="#manufacturing">Manufacturing Significance</a></li>
+                <li><a href="#how-much">How Much Evidence Is p = 0.05?</a></li>
+                <li><a href="#fpr">The False-Positive Risk</a></li>
+                <li><a href="#redefine-retire">Redefine, or Retire?</a></li>
+                <li><a href="#media">What It Means for Media</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">P-Hacking and the Thin Evidence of a P-Value</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-14">July 14, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Practice</span>
+            </p>
+            <p class="lead">The p-value has two problems, and they compound each other. The first is that a result just under the sacred 0.05 line carries far less evidence than its reputation suggests — a "significant" finding can leave the null hypothesis with something like a one-in-four chance of being true. The second is that, precisely because the bar is low, a determined or even well-meaning analyst can clear it by chance, through choices that each look innocent. Weak evidence that is easy to manufacture is a bad foundation for a decision. This post is about why, and what to do instead.</p>
+
+            <h2 id="what-it-isnt">What a P-Value Isn't</h2>
+            <p>Start with the definition, because almost every misuse is a substitution of something the p-value is not. A p-value is the probability, computed under a specified statistical model <em>assuming the null hypothesis is true</em>, of observing a test statistic at least as extreme as the one you got. That is all it is. In 2016 the American Statistical Association took the unusual step of issuing a formal statement of principles (Wasserstein and Lazar, 2016), because the misinterpretations had become a public-health problem for science. Three of its six principles are worth stating plainly, because each is a thing people constantly believe a p-value tells them and it does not.</p>
+
+            <div class="warning">
+                <h4>⚠️ Three things a p-value does not measure</h4>
+                <p><strong>It is not the probability the null is true.</strong> A p-value conditions <em>on</em> the null; it cannot also be the probability <em>of</em> the null. \( p = P(\text{data} \mid H_0) \) is not \( P(H_0 \mid \text{data}) \), and confusing them is the transposed conditional — as wrong as equating the chance a person is dead given they were hanged with the chance they were hanged given they are dead. <strong>It is not the effect size or its importance.</strong> A trivial effect measured with enough data yields a tiny p-value; a large, decision-relevant effect measured noisily yields a big one. <strong>And by itself it is not a good measure of evidence.</strong> The ASA's sixth principle says this outright.</p>
+            </div>
+
+            <p>The gap between \( P(\text{data} \mid H_0) \) and \( P(H_0 \mid \text{data}) \) is not a pedantic quibble — it is the whole story of the second half of this post. But first, the easier failure: even taken at face value, the 0.05 threshold is a bar low enough to trip over on purpose.</p>
+
+            <h2 id="manufacturing">Manufacturing Significance</h2>
+            <p>Every analysis involves choices. Which observations are outliers? Should the outcome be logged? Which covariates go in the model? Where does the time window start? Do you stop collecting data now or after another week? Each choice is defensible in isolation. The problem, named by Simmons, Nelson, and Simonsohn (2011) as <em>researcher degrees of freedom</em>, is that when the choice is made <em>after</em> seeing which version gives a smaller p-value, the reported 5% error rate is a fiction.</p>
+
+            <p>Their demonstration is deservedly famous. Exploiting four common, individually-innocent degrees of freedom — two dependent variables, an optional covariate, optional extra observations, and a subgroup split — they drove the probability of finding at least one "significant" result to <strong>61%</strong>, from a nominal 5%. Then they turned the machine on a real experiment and "proved," at \( p \lt 0.05 \), that listening to the Beatles' "When I'm Sixty-Four" made people about a year and a half <em>younger</em> — not younger-feeling, but younger in chronological age, a logical impossibility. The point was not that the song is magic; it was that the method will certify anything.</p>
+
+            <div class="note">
+                <h4>💡 You don't have to be cheating</h4>
+                <p>The unsettling version, which Gelman and Loken (2014) call the <em>garden of forking paths</em>, needs no p-hacking at all. Even an honest analyst who runs a single test inflates their error rate if the test they <em>would have run</em> depends on the data — a different pattern in the numbers would have led to a different, equally reasonable, analysis. The multiple comparisons are latent: they are all the analyses you didn't run but would have, given other data. This is why "but I only ran one regression" is not a defense, and why the problem surfaces even for a hypothesis posited in advance. It is a close cousin of the <a href="blog-multiple-comparisons.html">winner's curse across model specifications</a>, and both are treated at more length in that companion post.</p>
+            </div>
+
+            <pre><code># illustrative
+# The garden of forking paths: significance from choices, not effects.
+# None of these steps is individually dishonest.
+for outcome in [y_raw, log(y)]:            # which outcome scale?
+    for controls in candidate_control_sets:  # which covariates?
+        for window in [full, last_2y, ex_covid]:  # which period?
+            p = fit(outcome, controls, window).pvalue
+            if p &lt; 0.05:
+                report(outcome, controls, window)  # stop and publish
+# With enough forks, a p &lt; 0.05 is near-certain even if the effect is zero.</code></pre>
+
+            <h2 id="how-much">How Much Evidence Is p = 0.05?</h2>
+            <p>Now the deeper problem. Suppose there is no p-hacking at all — one pre-registered test, honestly reported, coming back at exactly \( p = 0.05 \). How much should that move your belief? Much less than the ritual implies, and there is a clean way to see it. Because \( p = P(\text{data} \mid H_0) \) is not \( P(H_0 \mid \text{data}) \), converting one to the other requires Bayes' theorem — and that conversion has a startling lower bound.</p>
+
+            <p>Berger and Sellke (1987) asked how small the posterior probability of the null can be pushed when \( p = 0.05 \). For any reasonable prior — one that is unimodal and symmetric about the null — a two-sided test leaves the null with a posterior probability of at least about 0.30; even the absolute floor, minimizing over <em>every</em> prior including ones gerrymandered to favor an effect, only lowers it to roughly 0.13. Sellke, Bayarri, and Berger (2001) sharpened this into a calibration you can compute on a napkin. The most evidence a p-value can possibly carry against the null is bounded by a Bayes factor</p>
+            $$ \overline{B}(p) \;=\; -e\,p\,\ln p, \qquad p \lt 1/e, $$
+            <p>and, starting from even odds, the null's posterior probability is at least</p>
+            $$ \underline{\alpha}(p) \;=\; \left(1 + \frac{1}{-e\,p\,\ln p}\right)^{-1}. $$
+            <p>Plug in the usual thresholds and the ritual looks threadbare.</p>
+
+            <table>
+                <thead>
+                    <tr><th>p-value</th><th>Max Bayes factor for \( H_1 \)</th><th>Max odds against \( H_0 \)</th><th>Min posterior \( P(H_0) \), even prior</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>0.05</td><td>0.41</td><td>2.5 : 1</td><td>&asymp; 29%</td></tr>
+                    <tr><td>0.01</td><td>0.13</td><td>8 : 1</td><td>&asymp; 11%</td></tr>
+                    <tr><td>0.005</td><td>0.07</td><td>14 : 1</td><td>&asymp; 7%</td></tr>
+                    <tr><td>0.001</td><td>0.02</td><td>53 : 1</td><td>&asymp; 2%</td></tr>
+                </tbody>
+            </table>
+
+            <p>Read the top row again. A result that just cleared the most celebrated threshold in science offers, <em>at best</em>, odds of about two and a half to one against the null — and leaves the null with roughly a 29% chance of being true even before you account for any of the flexibility in the previous section. Two-and-a-half-to-one is the kind of edge you would not bet a mortgage on. It is emphatically not "the effect is real." The bound is generous, too: it is the <em>most</em> evidence \( p = 0.05 \) can supply, achieved only by tuning the prior in the alternative's favor; realistic priors give less.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Where \( -e\,p\,\ln p \) comes from</summary>
+                <div class="deep-dive-body">
+                    <p>The calibration treats the observed p-value itself as the datum and asks how its density behaves under the null versus the best-case alternative. Under the null, p-values are uniform on \( [0,1] \), so the null density is \( 1 \). If one entertains alternatives under which small p-values are more likely — modeling the p-value's density as \( \mathrm{Beta}(\xi, 1) \) with \( \xi \lt 1 \) — the maximum-likelihood member of that family, evaluated at the observed \( p \), has density \( -e\,p\ln p \) at its most favorable. The ratio of that best-case alternative density to the null density is the Bayes-factor bound \( \overline{B}(p) \); feeding it through Bayes' theorem with equal prior odds gives \( \underline\alpha(p) \). The construction is deliberately charitable to the alternative, which is what makes it a <em>lower</em> bound on how much the null survives — the real posterior on the null is generally larger, not smaller.</p>
+                </div>
+            </details>
+
+            <h2 id="fpr">The False-Positive Risk</h2>
+            <p>The calibration above assumed a coin-flip prior. In practice, whether a "significant" result is a false alarm depends on how often the hypotheses you test are true in the first place — the base rate — and on the power of the test. This is the same arithmetic that governs a medical screen: a positive result on a rare disease is mostly false positives, no matter how good the test.</p>
+
+            <div class="definition">
+                <h4>Definition: False-positive risk</h4>
+                <p>Let \( \pi \) be the prior probability that a hypothesis is true, \( \alpha \) the significance threshold, and \( 1-\beta \) the power. Among all the times you declare significance, the fraction that are false alarms is</p>
+                $$ \mathrm{FPR} \;=\; \frac{\alpha\,(1-\pi)}{\alpha\,(1-\pi) + (1-\beta)\,\pi}. $$
+                <p>The value of a "significant" result is not fixed at 5% — it slides with the base rate \( \pi \) and the power.</p>
+            </div>
+
+            <p>Ioannidis (2005) made this the centerpiece of the most-downloaded paper in the history of <em>PLoS Medicine</em>, "Why Most Published Research Findings Are False." His positive-predictive-value framing adds a bias term, but the skeleton is the formula above: when true effects are uncommon and power is mediocre — the normal condition in exploratory work — most claimed discoveries are false, and no amount of hitting \( p \lt 0.05 \) rescues them. Colquhoun (2014) put concrete numbers on the everyday case. A result observed sitting right at \( p \approx 0.05 \) carries a false-positive risk of at least about 26% even under a generous even-odds prior — reassuringly close to the 29% from the Sellke&ndash;Bayarri&ndash;Berger calibration by a completely different route. And if only, say, one in ten of your tested hypotheses is actually true, the false-discovery rate among your \( p \lt 0.05 \) "findings" climbs to roughly three in four.</p>
+
+            <div class="note">
+                <h4>💡 "p &lt; 0.05" and "p = 0.049" are different numbers</h4>
+                <p>A subtlety that trips up even careful analysts: the false-positive rate averaged over <em>all</em> results with \( p \lt 0.05 \) is much lower than the risk attached to a result that landed <em>right at</em> the boundary. The pooled set includes all the strongly-significant results that pull the average down. But when you report \( p = 0.049 \), you have the boundary result, not the average one — and that is the ~26&ndash;30% case, not the comfortable single-digit one. The number to quote for a specific finding is the "p-equals" risk, not the "p-less-than" rate.</p>
+            </div>
+
+            <h2 id="redefine-retire">Redefine, or Retire?</h2>
+            <p>The field's response has split into two camps, and both are instructive. One camp says the threshold is simply in the wrong place. Benjamin and 71 co-authors (2018) proposed lowering the default bar for claiming a <em>new</em> discovery from 0.05 to <strong>0.005</strong>, relabeling the 0.005-to-0.05 zone as merely "suggestive." Their justification is precisely the calibration above: \( p = 0.05 \) corresponds to a Bayes factor of only about 2.4 to 3.4 — weak — whereas \( p = 0.005 \) buys a Bayes factor around 14 to 26, which reaches the "substantial-to-strong" range. Move the line and you move the evidence a significant result must carry.</p>
+
+            <p>The other camp says the line itself is the problem. Amrhein, Greenland, and McShane (2019), in a <em>Nature</em> comment endorsed by more than 800 signatories, argued to "retire statistical significance" entirely — not to lower the threshold but to stop dichotomizing at any threshold. The dichotomy is what manufactures the garden of forking paths, the file drawer, and the illusion that \( p = 0.049 \) and \( p = 0.051 \) describe different worlds. In the same special issue, the ASA's own editors called for "a world beyond \( p \lt 0.05 \)" (Wasserstein, Schirm, and Lazar, 2019): report effect sizes and their uncertainty, treat the p-value as one continuous piece of evidence among many, and stop letting a threshold make binary decisions that the data cannot support.</p>
+
+            <p>These are not really in conflict. Both agree that a single p-value near 0.05 is thin, that thresholds invite gaming, and that the honest output of an analysis is an <em>estimate with its uncertainty</em>, not a verdict. Which is exactly where a Bayesian workflow was already standing.</p>
+
+            <h2 id="media">What It Means for Media</h2>
+            <p>Marketing measurement is a garden of forking paths with unusually lush foliage. A media mix model asks the analyst to choose an adstock form and its decay, a saturation curve and its shape, the lag length, the control variables, the outlier treatment, the transformations, the training window — and then, in most commercial workflows, to select the "best" of hundreds or thousands of candidate model runs. Every one of those is a researcher degree of freedom, and the last one — picking the winner from a large search — is the <a href="blog-multiple-comparisons.html">winner's curse</a> in its purest form. If the reporting boiled down to a significance star next to a channel's coefficient, it would be worth almost nothing, for every reason above.</p>
+
+            <p>Three practices follow directly, and they are the framework's posture rather than afterthoughts.</p>
+            <p><strong>Pre-specify the analysis.</strong> The cleanest defense against forking paths is to commit to the model structure, the controls, and the transforms <em>before</em> seeing which choice flatters which channel — the same logic as pre-registration in science, which is why this framework treats a pre-specified analysis as reducing researcher degrees of freedom by construction rather than by discipline. A <a href="blog-prior-predictive-sbc.html">prior predictive check</a> lets you interrogate that specification before it ever touches the outcome.</p>
+            <p><strong>Report the posterior, not a verdict.</strong> A Bayesian estimate is an effect size with a credible interval — a distribution over how much a channel drove, with its uncertainty attached. That is the "continuous evidence, not a dichotomy" prescription made concrete. A channel whose ROI posterior is wide and straddles break-even is <em>reported as uncertain</em>, not laundered into a binary "significant / not." No threshold to hack, no boundary result to over-read.</p>
+            <p><strong>Anchor to experiments.</strong> The only thing that resolves the base-rate problem — is this apparent effect real, or a false alarm from a low-prior hypothesis? — is a causal design. A geo lift test supplies exactly the kind of high-quality evidence a lone p-value cannot, and <a href="blog-calibrating-mmm-experiments.html">folding it in as a prior</a> pulls the whole model toward something an experiment actually verified. The p-value's weakness is, in the end, an argument for the measurement loop: don't ask a single observational test to carry a decision it was never strong enough to bear.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>A p-value is \( P(\text{data} \mid H_0) \), not \( P(H_0 \mid \text{data}) \), not an effect size, and — by the ASA's own statement — not by itself a good measure of evidence.</li>
+                    <li>Researcher degrees of freedom drive the real false-positive rate far above 5% (Simmons et al. hit 61%); the garden of forking paths does it even without conscious p-hacking.</li>
+                    <li>At \( p = 0.05 \), the most evidence possible is a Bayes factor of about 2.5:1, leaving the null with roughly a 29% posterior probability even when the comparison is stacked in the alternative's favor (Sellke&ndash;Bayarri&ndash;Berger).</li>
+                    <li>The false-positive risk of a just-significant result is ~26&ndash;30% at even odds and climbs to ~75% when true effects are rare — it depends on the base rate and power, not on the threshold.</li>
+                    <li>The reform consensus: lower the bar to 0.005 for discovery claims, or retire the dichotomy entirely and report effect sizes with uncertainty.</li>
+                    <li>For MMM: pre-specify the analysis, report the full posterior instead of a significance verdict, and anchor to experiments — the weakness of a single p-value is the case for the whole measurement loop.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Wasserstein, R. L., &amp; Lazar, N. A. (2016). <em>The ASA Statement on p-Values: Context, Process, and Purpose</em>. The American Statistician, 70(2).</li>
+                <li>Simmons, J. P., Nelson, L. D., &amp; Simonsohn, U. (2011). <em>False-Positive Psychology: Undisclosed Flexibility in Data Collection and Analysis Allows Presenting Anything as Significant</em>. Psychological Science, 22(11).</li>
+                <li>Gelman, A., &amp; Loken, E. (2014). <em>The Statistical Crisis in Science</em> (the garden of forking paths). American Scientist, 102(6).</li>
+                <li>Berger, J. O., &amp; Sellke, T. (1987). <em>Testing a Point Null Hypothesis: The Irreconcilability of P Values and Evidence</em>. Journal of the American Statistical Association, 82(397).</li>
+                <li>Sellke, T., Bayarri, M. J., &amp; Berger, J. O. (2001). <em>Calibration of p Values for Testing Precise Null Hypotheses</em>. The American Statistician, 55(1).</li>
+                <li>Ioannidis, J. P. A. (2005). <em>Why Most Published Research Findings Are False</em>. PLoS Medicine, 2(8).</li>
+                <li>Colquhoun, D. (2014). <em>An Investigation of the False Discovery Rate and the Misinterpretation of p-Values</em>. Royal Society Open Science, 1(3).</li>
+                <li>Benjamin, D. J., et al. (2018). <em>Redefine Statistical Significance</em>. Nature Human Behaviour, 2(1).</li>
+                <li>Amrhein, V., Greenland, S., &amp; McShane, B. (2019). <em>Retire Statistical Significance</em>. Nature, 567.</li>
+                <li>Wasserstein, R. L., Schirm, A. L., &amp; Lazar, N. A. (2019). <em>Moving to a World Beyond "p &lt; 0.05"</em>. The American Statistician, 73(sup1).</li>
+                <li>Nuzzo, R. (2014). <em>Scientific Method: Statistical Errors</em>. Nature, 506.</li>
+                <li>Simonsohn, U., Nelson, L. D., &amp; Simmons, J. P. (2014). <em>P-Curve: A Key to the File-Drawer</em>. Journal of Experimental Psychology: General, 143(2).</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
