@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Literal, TypeVar
 
 from pydantic import BaseModel, Field, model_validator
@@ -13,6 +14,8 @@ from .variables import (
     MediaChannelConfig,
     VariableConfig,
 )
+
+logger = logging.getLogger(__name__)
 
 # TypeVar for generic config lookup
 T = TypeVar("T", bound="VariableConfig")
@@ -183,6 +186,39 @@ class MFFConfig(BaseModel):
         return self._get_config_by_name(
             self.media_channels, name
         ) or self._get_config_by_name(self.controls, name)
+
+    @model_validator(mode="after")
+    def dedupe_channel_names(self) -> MFFConfig:
+        """Drop media/control entries that repeat an already-configured name.
+
+        The panel channel axis (``coords.channels`` == :attr:`media_names`) is
+        built straight from ``media_channels``, but the media matrix is assembled
+        as a dict keyed by name (``data_loader``), so a repeated name silently
+        collapses to ONE data column while the name axis keeps BOTH labels. That
+        desync makes ``channel_names`` longer than the real data — surfacing as
+        duplicate channel rows in the ROI / decomposition tables (and a
+        ``channel_names`` vs ``n_channels`` mismatch). A duplicate media/control
+        name is never meaningful (you cannot model the same column twice), so
+        keep the FIRST occurrence and warn. Runs before ``validate_dimensions``
+        so downstream validators see the de-duplicated lists.
+        """
+        for attr in ("media_channels", "controls"):
+            items = getattr(self, attr)
+            seen: set[str] = set()
+            deduped = []
+            for item in items:
+                if item.name in seen:
+                    logger.warning(
+                        "Dropping duplicate %s entry %r (already configured)",
+                        attr,
+                        item.name,
+                    )
+                    continue
+                seen.add(item.name)
+                deduped.append(item)
+            if len(deduped) != len(items):
+                setattr(self, attr, deduped)
+        return self
 
     @model_validator(mode="after")
     def validate_dimensions(self) -> MFFConfig:

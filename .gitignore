@@ -116,3 +116,6 @@ nbs/artifacts/_*/
 
 # Local screen-recording scratch (large video files; never committed)
 recordings/
+# Session DB backups produced by the prune/backup CLI (never committed)
+src/mmm_framework/api/sessions_backup_*.sql.gz
+sessions_backup_*.sql.gz

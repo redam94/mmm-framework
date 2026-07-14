@@ -17,6 +17,32 @@ _DATASET_INFO_MAX_CHARS = int(
 )
 _MODEL_SPEC_MAX_CHARS = int(os.environ.get("MMM_AGENT_MODEL_SPEC_MAX_CHARS", "16000"))
 
+# Hard cap on a single ToolMessage's textual content. Unlike the re-injected
+# state blobs above, tool results ACCUMULATE in the `messages` channel, which
+# LangGraph re-serializes into every checkpoint — so one tool that returns a
+# multi-MB string (e.g. a giant markdown dump) gets stored again on every
+# super-step, ballooning sessions.db until writes lock ("database is locked").
+# The full payload is still available through the dashboard_data table/plot refs
+# the tools publish; the model only needs a bounded textual view. Generous by
+# default (~50k tokens) so it never truncates a normal tool result.
+_TOOL_MESSAGE_MAX_CHARS = int(os.environ.get("MMM_TOOL_MESSAGE_MAX_CHARS", "200000"))
+
+
+def _cap_tool_output(result):
+    """Truncate any oversized ToolMessage content in a ToolNode result so a single
+    tool result can't bloat the persisted (and per-checkpoint re-serialized)
+    ``messages`` channel. Accepts the dict or list a ToolNode returns, mutates the
+    ToolMessages in place, and returns the same object unchanged in shape."""
+    msgs = result.get("messages") if isinstance(result, dict) else result
+    for m in msgs or []:
+        if (
+            isinstance(m, ToolMessage)
+            and isinstance(m.content, str)
+            and len(m.content) > _TOOL_MESSAGE_MAX_CHARS
+        ):
+            m.content = cap_text(m.content, _TOOL_MESSAGE_MAX_CHARS)
+    return result
+
 
 # Role preambles + the mode/role-aware prompt assembly now live in prompts.py.
 # Re-exported here so any external reference to the old names keeps working.
@@ -142,12 +168,12 @@ def create_agent_graph(
 
     def tools_node(state: AgentState):
         if role != "orchestrator":
-            return _stock_tool_node.invoke(state)
+            return _cap_tool_output(_stock_tool_node.invoke(state))
         last = state["messages"][-1]
         calls = list(getattr(last, "tool_calls", None) or [])
         invalid = [c for c in calls if c.get("name") not in _valid_tool_names]
         if not invalid:
-            return _stock_tool_node.invoke(state)
+            return _cap_tool_output(_stock_tool_node.invoke(state))
 
         corrections = [
             ToolMessage(
@@ -176,13 +202,13 @@ def create_agent_graph(
         try:
             shim = last.model_copy(update={"tool_calls": valid})
             sub_state = {**state, "messages": state["messages"][:-1] + [shim]}
-            result = _stock_tool_node.invoke(sub_state)
+            result = _cap_tool_output(_stock_tool_node.invoke(sub_state))
             result_msgs = result["messages"] if isinstance(result, dict) else result
             return {"messages": list(result_msgs) + corrections}
         except Exception:
             # Never break the happy path: fall back to the stock node, which
             # still answers every call (with its generic error for invalid ones).
-            return _stock_tool_node.invoke(state)
+            return _cap_tool_output(_stock_tool_node.invoke(state))
 
     workflow.add_node("agent", agent_node)
     workflow.add_node("tools", tools_node)

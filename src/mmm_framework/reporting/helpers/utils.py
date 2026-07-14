@@ -136,13 +136,24 @@ def _get_posterior(model: Any) -> Any | None:
 
 
 def _get_channel_names(model: Any) -> list[str]:
-    """Extract channel names from model."""
+    """Extract channel names from model, de-duplicated and order-preserving.
+
+    A duplicate channel name renders the same channel multiple times in the ROI
+    and decomposition tables. The root guard lives in ``MFFConfig`` (it dedupes
+    ``media_channels``), but a model fitted/saved before that guard — or an
+    extension model constructed directly with a repeated name — can still carry
+    duplicates, so collapse them here too (``dict.fromkeys`` keeps first-seen
+    order)."""
+    names: list[str] = []
     if hasattr(model, "channel_names"):
-        return list(model.channel_names)
-    if hasattr(model, "panel") and model.panel is not None:
-        if hasattr(model.panel, "channel_names"):
-            return list(model.panel.channel_names)
-    return []
+        names = list(model.channel_names)
+    elif (
+        hasattr(model, "panel")
+        and model.panel is not None
+        and hasattr(model.panel, "channel_names")
+    ):
+        names = list(model.panel.channel_names)
+    return list(dict.fromkeys(names))
 
 
 def _get_scaling_params(model: Any) -> tuple[float, float]:

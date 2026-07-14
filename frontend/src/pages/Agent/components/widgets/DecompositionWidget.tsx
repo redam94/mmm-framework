@@ -4,7 +4,12 @@ import { DashWidget } from '../common/DashWidget';
 import { applyLightModeLayout } from '../../utils/plotly';
 
 export function DecompositionWidget({ decomposition }: { decomposition: Array<{ component: string; total_contribution: number; pct_of_total: number }> }) {
-  const sorted = [...decomposition].sort((a, b) => b.pct_of_total - a.pct_of_total);
+  // Collapse duplicate components: some legacy sessions persisted decomposition
+  // concatenated 2–3× (a pre-2026-07 reducer bug), so each component (Baseline,
+  // Trend, every channel…) appeared repeated. Keep the first per component.
+  const seen = new Set<string>();
+  const unique = decomposition.filter(d => (seen.has(d.component) ? false : (seen.add(d.component), true)));
+  const sorted = [...unique].sort((a, b) => b.pct_of_total - a.pct_of_total);
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#06b6d4', '#84cc16'];
 
   const barLayout = applyLightModeLayout({

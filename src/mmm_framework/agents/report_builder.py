@@ -10,6 +10,27 @@ from __future__ import annotations
 import json
 from typing import Any
 
+
+def _dedupe_rows(rows: list, key: str) -> list:
+    """Drop rows repeating an identity value (``channel`` / ``component``).
+
+    Legacy sessions (pre-2026-07) persisted ``roi_metrics`` / ``decomposition``
+    concatenated 2–3× via an old ``dashboard_data`` reducer, so a report built
+    from such a session repeats every channel/component. Mirrors the frontend
+    ``DataTable`` / ``DecompositionWidget`` guards so reports heal the same
+    baked-in payloads. Rows lacking the key are always kept (never collapsed)."""
+    seen: set = set()
+    out: list = []
+    for r in rows or []:
+        k = r.get(key) if isinstance(r, dict) else None
+        if k is not None and k in seen:
+            continue
+        if k is not None:
+            seen.add(k)
+        out.append(r)
+    return out
+
+
 _PALETTE = [
     "#4f46e5",
     "#0d9488",
@@ -854,8 +875,8 @@ def generate_html_report(
 
     dataset = dashboard.get("dataset") or {}
     model_spec = dashboard.get("model_spec") or {}
-    decomp = dashboard.get("decomposition") or []
-    roi = dashboard.get("roi_metrics") or []
+    decomp = _dedupe_rows(dashboard.get("decomposition") or [], "component")
+    roi = _dedupe_rows(dashboard.get("roi_metrics") or [], "channel")
     diag = dashboard.get("diagnostics") or {}
     plots = _hydrate_plots(dashboard.get("plots"))
     model_run = dashboard.get("model_run") or {}
@@ -1413,8 +1434,8 @@ def generate_html_slides(
 ) -> str:
     dataset = dashboard.get("dataset") or {}
     model_spec = dashboard.get("model_spec") or {}
-    decomp = dashboard.get("decomposition") or []
-    roi = dashboard.get("roi_metrics") or []
+    decomp = _dedupe_rows(dashboard.get("decomposition") or [], "component")
+    roi = _dedupe_rows(dashboard.get("roi_metrics") or [], "channel")
     diag = dashboard.get("diagnostics") or {}
     plots = _hydrate_plots(dashboard.get("plots"))
     model_run = dashboard.get("model_run") or {}

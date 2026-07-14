@@ -545,6 +545,52 @@ async def _hard_reset_thread(thread_id: str) -> None:
         logger.exception("Hard reset failed for thread %s", thread_id)
 
 
+async def _prune_thread_checkpoints(thread_id: str) -> None:
+    """Cap a thread's LangGraph checkpoint history to the most recent N versions.
+
+    LangGraph writes a full ``AgentState`` checkpoint on *every* graph super-step
+    and keeps every version forever. A single long session accumulated 400+
+    versions at multiple MB each, ballooning the shared ``sessions.db`` into the
+    multi-GB range — at which point each checkpoint write + WAL fold-back grew
+    slow enough that concurrent writers blew past the 30s ``busy_timeout`` and
+    surfaced as ``sqlite3.OperationalError: database is locked``.
+
+    Called at the end of every /chat turn (after orphan repair), this keeps only
+    the newest ``MMM_CHECKPOINT_RETENTION`` checkpoints per ``checkpoint_ns`` and
+    drops the orphaned ``writes`` rows. Normal resume only needs the latest
+    checkpoint; older versions are time-travel history we deliberately bound.
+    ``checkpoint_id`` is a time-ordered UUID, so ``ORDER BY checkpoint_id DESC``
+    is newest-first (the same ordering LangGraph itself queries by). Best-effort:
+    a failure here must never break the chat response.
+    """
+    if _aiosqlite_conn is None:
+        return
+    keep = max(1, int(os.environ.get("MMM_CHECKPOINT_RETENTION", "40")))
+    try:
+        # Survivor set: the newest `keep` checkpoint_ids per namespace.
+        keep_sql = """
+            SELECT checkpoint_ns, checkpoint_id FROM (
+                SELECT checkpoint_ns, checkpoint_id,
+                       ROW_NUMBER() OVER (PARTITION BY checkpoint_ns
+                                          ORDER BY checkpoint_id DESC) AS rn
+                FROM checkpoints WHERE thread_id = ?)
+            WHERE rn <= ?
+        """
+        await _aiosqlite_conn.execute(
+            f"DELETE FROM checkpoints WHERE thread_id = ? AND "
+            f"(checkpoint_ns, checkpoint_id) NOT IN ({keep_sql})",
+            (thread_id, thread_id, keep),
+        )
+        await _aiosqlite_conn.execute(
+            f"DELETE FROM writes WHERE thread_id = ? AND "
+            f"(checkpoint_ns, checkpoint_id) NOT IN ({keep_sql})",
+            (thread_id, thread_id, keep),
+        )
+        await _aiosqlite_conn.commit()
+    except Exception:
+        logger.exception("Checkpoint prune failed for thread %s", thread_id)
+
+
 async def _repair_orphan_tool_calls(thread_id: str) -> None:
     """Backfill stub ToolMessages for any AI tool_call that never got a result.
 
@@ -1122,6 +1168,9 @@ async def chat_endpoint(
             # the next /chat call would 400 on Anthropic. Backfill stub
             # ToolMessages so the conversation stays valid.
             await _repair_orphan_tool_calls(request.thread_id)
+            # Bound this thread's checkpoint history so sessions.db can't grow
+            # unbounded (the root cause of the "database is locked" bloat).
+            await _prune_thread_checkpoints(request.thread_id)
 
         yield "data: [DONE]\n\n"
 

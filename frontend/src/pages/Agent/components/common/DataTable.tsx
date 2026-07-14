@@ -26,6 +26,23 @@ function csvEscape(v: unknown): string {
 export function DataTable({ table, maxHeight = 360 }: { table: TableSpec; maxHeight?: number }) {
   const [sort, setSort] = useState<SortState>(null);
 
+  // Drop byte-identical duplicate rows. Some legacy sessions persisted their
+  // roi_metrics / decomposition payloads concatenated 2–3× (a pre-2026-07 state
+  // reducer bug, since fixed), so reopening them showed every channel repeated.
+  // A table never means to display the exact same row twice, so this is a safe
+  // presentational guard that heals those baked-in payloads without a re-fit.
+  const rows = useMemo(() => {
+    const seen = new Set<string>();
+    const out: TableSpec['rows'] = [];
+    for (const r of table.rows) {
+      const k = JSON.stringify(table.columns.map(c => r[c.key]));
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(r);
+    }
+    return out;
+  }, [table]);
+
   // A column is "numeric" if its declared type says so, or every non-null value
   // in it parses as a finite number (with at least one value present).
   const numericCols = useMemo(() => {
@@ -33,18 +50,18 @@ export function DataTable({ table, maxHeight = 360 }: { table: TableSpec; maxHei
     for (const col of table.columns) {
       if (col.type && NUMERIC_TYPES.has(col.type)) { set.add(col.key); continue; }
       if (col.type) continue; // declared non-numeric (string/date)
-      const values = table.rows.map(r => r[col.key]).filter(v => v != null);
+      const values = rows.map(r => r[col.key]).filter(v => v != null);
       if (values.length > 0 && values.every(isFiniteValue)) set.add(col.key);
     }
     return set;
-  }, [table]);
+  }, [table, rows]);
 
   const sortedRows = useMemo(() => {
-    if (!sort) return table.rows;
+    if (!sort) return rows;
     const { key, dir } = sort;
     const numeric = numericCols.has(key);
     const sign = dir === 'asc' ? 1 : -1;
-    return [...table.rows].sort((a, b) => {
+    return [...rows].sort((a, b) => {
       const va = a[key];
       const vb = b[key];
       if (va == null && vb == null) return 0;
@@ -53,7 +70,7 @@ export function DataTable({ table, maxHeight = 360 }: { table: TableSpec; maxHei
       if (numeric) return (Number(va) - Number(vb)) * sign;
       return String(va).localeCompare(String(vb)) * sign;
     });
-  }, [table, sort, numericCols]);
+  }, [rows, sort, numericCols]);
 
   const cycleSort = (key: string) =>
     setSort(prev => {
@@ -64,7 +81,7 @@ export function DataTable({ table, maxHeight = 360 }: { table: TableSpec; maxHei
 
   const downloadCsv = () => {
     const lines = [table.columns.map(c => csvEscape(c.label)).join(',')];
-    for (const row of table.rows) {
+    for (const row of rows) {
       lines.push(table.columns.map(c => csvEscape(row[c.key])).join(','));
     }
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
@@ -76,7 +93,7 @@ export function DataTable({ table, maxHeight = 360 }: { table: TableSpec; maxHei
     URL.revokeObjectURL(url);
   };
 
-  const totalRows = table.total_rows ?? table.rows.length;
+  const totalRows = table.total_rows ?? rows.length;
 
   return (
     <div>
@@ -136,7 +153,7 @@ export function DataTable({ table, maxHeight = 360 }: { table: TableSpec; maxHei
       <div className="flex items-center justify-between gap-3 pt-2">
         <p className="text-[11px] text-ink-300">
           {table.truncated
-            ? `Showing ${table.rows.length} of ${totalRows} rows — full data available via CSV`
+            ? `Showing ${rows.length} of ${totalRows} rows — full data available via CSV`
             : `${totalRows} row${totalRows === 1 ? '' : 's'}`}
         </p>
         <button

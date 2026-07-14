@@ -406,6 +406,15 @@ export function WorkspaceTabs({
               {hasDecomp && <DecompositionWidget decomposition={dashboardData.decomposition} />}
 
               {dashboardData.roi_metrics && (() => {
+                // Collapse duplicate channels: some legacy sessions persisted
+                // roi_metrics concatenated 2–3× (a pre-2026-07 reducer bug),
+                // which reopened as every channel repeated. Keep first per channel.
+                const seenCh = new Set<string>();
+                const roiRows = (dashboardData.roi_metrics as RoiMetricRow[]).filter(r => {
+                  if (seenCh.has(r.channel)) return false;
+                  seenCh.add(r.channel);
+                  return true;
+                });
                 const table = (
                   <div className="overflow-x-auto rounded-xl border border-line-200">
                     <table className="w-full text-left text-sm">
@@ -417,7 +426,7 @@ export function WorkspaceTabs({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-line-200">
-                        {(dashboardData.roi_metrics as RoiMetricRow[]).map((row) => (
+                        {roiRows.map((row) => (
                           <tr key={row.channel} className="bg-white hover:bg-cream-100 transition-colors">
                             <td className="px-4 py-3 font-medium text-ink-900">{row.channel}</td>
                             <td className="px-4 py-3 text-emerald-600 font-semibold">{row.roi_mean?.toFixed(2)}x</td>
