@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Experiment Is the Prior: Calibrating a Media Mix Model | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="An observational MMM coefficient is not causal — spend is endogenous and collinear. A geo lift test identifies what the likelihood cannot, and calibration turns that experiment into a prior. How the bridge works, and what it does not fix.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-calibrating-mmm-experiments.html">
+    <meta property="og:title" content="The Experiment Is the Prior: Calibrating a Media Mix Model">
+    <meta property="og:description" content="A geo lift test identifies the causal effect an observational MMM cannot. Calibration turns that experiment into a prior — via an informative ROI prior or an in-graph likelihood on the model's implied lift. How the bridge works, and its failure modes.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-calibrating-mmm-experiments.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Experiment Is the Prior: Calibrating a Media Mix Model">
+    <meta name="twitter:description" content="A geo lift test identifies the causal effect an observational MMM cannot. Calibration turns that experiment into a prior — via an informative ROI prior or an in-graph likelihood on the model's implied lift. How the bridge works, and its failure modes.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-calibrating-mmm-experiments.html",
+          "name": "The Experiment Is the Prior: Calibrating a Media Mix Model | MMM Framework",
+          "description": "An observational MMM coefficient is not causal — spend is endogenous and collinear. A geo lift test identifies what the likelihood cannot, and calibration turns that experiment into a prior. How the bridge works, and what it does not fix.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-14",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-calibrating-mmm-experiments.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-calibrating-mmm-experiments.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "The Experiment Is the Prior: Calibrating a Media Mix Model",
+          "datePublished": "2026-07-14",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-calibrating-mmm-experiments.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-calibrating-mmm-experiments.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "The Experiment Is the Prior: Calibrating a Media Mix Model",
+              "item": "https://redam94.github.io/mmm-framework/blog-calibrating-mmm-experiments.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#not-causal">Why the Coefficient Isn't Causal</a></li>
+                <li><a href="#how-wrong">How Wrong Is Observational?</a></li>
+                <li><a href="#identifies">What the Experiment Identifies</a></li>
+                <li><a href="#two-routes">Two Ways to Inject It</a></li>
+                <li><a href="#precision">The Precision Argument</a></li>
+                <li><a href="#local-global">Local Effect, Global Curve</a></li>
+                <li><a href="#not-fix">What Calibration Doesn't Fix</a></li>
+                <li><a href="#which-when">Which Channel, and When</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">The Experiment Is the Prior</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-14">July 14, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">MMM</span>
+            </p>
+            <p class="lead">A media mix model fit to observational spend answers a correlational question and is routinely mistaken for a causal one. The channel coefficient it reports is not the incremental effect of advertising — it is that effect tangled up with everything that made spend rise and fall in the first place. A randomized geo experiment cuts the tangle for one channel, at one moment. Calibration is the machinery that carries that hard-won causal fact back into the model as a prior, so the whole system is anchored to something an experiment actually verified. This is the single most important thing you can do to make an MMM trustworthy — and it is worth understanding why, and what it cannot do.</p>
+
+            <h2 id="not-causal">Why the Coefficient Isn't Causal</h2>
+            <p>Start with the uncomfortable premise. When you regress sales on media spend, the fitted coefficient inherits four distinct problems, catalogued in Chan and Perry's (2017) survey of the field's identification troubles.</p>
+            <p><strong>Spend is endogenous.</strong> Marketing budgets are not set by a coin flip; they respond to demand, seasonality, product launches, and the business cycle. Spend rises in the quarters when sales were going to rise anyway, so the coefficient absorbs the demand shock that drove both. This is textbook confounding — an open back-door path from spend to sales through latent demand — and it is why paid search is the canonical offender: search budget chases users already expressing intent, so a naive regression credits search with conversions it merely intercepted (Chen et al., 2018).</p>
+            <p><strong>Spend is collinear.</strong> Channels ramp and cut together, so their spend series move in near-lockstep. The design matrix is close to singular, individual channel effects trade off against one another, and the model cannot cleanly attribute credit — it can only find a ridge of combinations that fit about equally well.</p>
+            <p><strong>There is barely any data.</strong> A typical national MMM has two or three years of weekly observations and little independent variation in spend. With so little signal, the likelihood is nearly flat in the directions that matter, and the prior does most of the work — which is a liability when the prior is wrong and a lever when it is right.</p>
+            <p><strong>The response is nonlinear.</strong> Advertising carries over across weeks and saturates at high spend. Get the <a href="blog-bayesian-mmm-carryover-shape.html">adstock and saturation transforms</a> wrong and the coefficient is biased before confounding even enters. Together these mean the fitted number is an artifact of the joint history of spend and demand, not a causal quantity you can act on.</p>
+
+            <h2 id="how-wrong">How Wrong Is Observational?</h2>
+            <p>It would be comforting to think that with enough covariates, the confounding washes out. The largest study on the question says otherwise, and it is worth quoting because it reframes the whole exercise. Gordon, Zettelmeyer, Bhargava, and Chapsky (2019) ran fifteen randomized advertising experiments at Facebook — roughly 500 million user-experiment observations and 1.6 billion impressions — and then asked whether standard observational methods could reproduce the experimental answer.</p>
+
+            <div class="warning">
+                <h4>⚠️ Observational ad measurement was off by a factor of three</h4>
+                <p>Across exposed-versus-unexposed comparisons, propensity-score matching, regression adjustment, and inverse-probability weighting, the observational estimates <em>predominantly overstated</em> ad effectiveness — and for roughly half of the studies with a purchase outcome, the estimate was off by about a factor of three, in some cases in either direction (Gordon et al., 2019). No single method consistently won. Upper-funnel outcomes like registrations aligned better, precisely because unexposed users rarely reach those pages on their own, which quietly makes the naive comparison closer to the experiment.</p>
+            </div>
+
+            <p>The follow-up closed the last escape hatch. In "Close Enough?", Gordon, Moakler, and Zettelmeyer (2023) applied double/debiased machine learning and stratified propensity-score matching — with more than five thousand user features and deep-learning nuisance models — across 663 experiments. The sophisticated methods beat the crude ones, but neither reliably recovered the experimental effect. The lesson is not "use a better estimator." It is that the confounding in advertising data is not a covariate-richness problem you can regress away. You need the experiment. And an MMM, which has vastly less user-level detail than Facebook's internal data, is in no better position — which is exactly why its coefficients need an external causal anchor.</p>
+
+            <h2 id="identifies">What the Experiment Identifies</h2>
+            <p>A geo lift test does something the observational likelihood structurally cannot: it manufactures independent variation in spend. Randomly assign markets to a treatment that raises (or cuts, or holds out) a channel's spend, and the difference in outcomes between arms estimates an <em>incremental</em> effect — incremental sales per incremental dollar, an incremental ROAS — with a causal design behind it. The methodology and its assumptions are the subject of a <a href="blog-geo-experiments-tbr.html">companion post</a>; here the point is narrower. Because the treatment was randomized, the estimate identifies the parameter that the confounded, collinear, data-starved regression left unidentified. It is a shaft of light down one of the flat directions of the likelihood.</p>
+
+            <p>The intuition the whole field runs on: randomized experiments give <em>unbiased but imprecise</em> effect estimates; observational models give <em>precise but biased</em> ones. Calibration marries the two — it uses the experiment's unbiasedness to correct the model's bias, and the model's structure to extend the experiment's one-shot, one-channel measurement across the full response curve, the other channels, and time.</p>
+
+            <h2 id="two-routes">Two Ways to Inject It</h2>
+            <p>There are two clean mechanisms for carrying the experiment into the model, and the major open-source tools split neatly across them.</p>
+
+            <div class="definition">
+                <h4>The prior route vs. the likelihood route</h4>
+                <p><strong>Prior route.</strong> Put an informative prior directly on the channel's ROI (or coefficient), centered on the experiment's point estimate with a spread set by its standard error. The model's likelihood is then pulled toward the experimentally identified value. This is <em>Google Meridian's</em> approach, and the contribution of Zhang and colleagues (2023) is to <em>reparameterize the model so that ROAS is itself a parameter</em> — which turns "set a prior from the experiment" into a one-line, interpretable operation rather than an opaque prior on a standardized coefficient.</p>
+                <p><strong>Likelihood route.</strong> Add a term that scores how far the model's <em>own implied</em> incremental estimand — its decomposed channel contribution or ROAS over the experiment window — sits from the measured lift. This is essentially <em>Meta's Robyn</em> mechanism: it adds a lift-error objective (MAPE.LIFT) alongside fit error (NRMSE) and a business-logic penalty (DECOMP.RSSD), and lets a multi-objective optimizer trade them off.</p>
+            </div>
+
+            <p>Robyn's calibration input is a small table — for each experiment: the channel, the test window, the absolute measured lift, the spend during the window, and a confidence flag that it checks exceeds 80%. It also asks whether the experiment measured the channel's <em>immediate</em> effect or its <em>total</em> effect including carryover, recommending the immediate scope for Facebook-lift-style tests. Meridian, on the prior side, ships helpers to build a LogNormal ROI prior either from a point estimate and standard error or from a confidence interval, and a setting to point the prior at the experiment's calibration window. The two routes are not rivals so much as duals — this framework implements both, an informative ROI prior and an <a href="measurement-calibration.html">in-graph experiment likelihood</a> on the model's contribution, ROAS, or marginal-ROAS estimand, so you can calibrate on whichever quantity the experiment actually measured.</p>
+
+            <h2 id="precision">The Precision Argument</h2>
+            <p>Why does a prior from one experiment move a model fit to years of data? Because the years of data are far less informative than they look. For approximately Gaussian quantities, Bayesian updating is additive in precision — the inverse of variance:</p>
+            $$ \underbrace{\tau_{\text{post}}}_{\text{posterior precision}} \;=\; \underbrace{\tau_{\text{prior}}}_{\text{experiment}} \;+\; \underbrace{\tau_{\text{data}}}_{\text{observational likelihood}}, \qquad \mu_{\text{post}} \;=\; \frac{\tau_{\text{prior}}\,\mu_{\text{prior}} + \tau_{\text{data}}\,\mu_{\text{data}}}{\tau_{\text{prior}} + \tau_{\text{data}}}. $$
+            <p>The posterior mean is a precision-weighted average of the experiment and the data. When spend is collinear and barely varies, the observational likelihood carries little precision in the channel's direction — \( \tau_{\text{data}} \) is small — so a reasonably tight experiment prior dominates. Meridian frames these priors as <em>guardrails</em> for exactly this reason: they pull a noisy, weakly-identified estimate toward a value that was actually measured. Jin and colleagues (2017) put the flip side plainly in their own simulation — with a small sample, "prior distributions have a big impact on the posteriors and may lead to biased estimates." That is a warning about bad priors and, read the other way, a mandate for good ones.</p>
+
+            <div class="note">
+                <h4>💡 Calibration buys precision, not just accuracy</h4>
+                <p>The payoff shows up in the width of the intervals, not only their center. Zhang and colleagues (2023) report that an uncalibrated geo-hierarchical MMM produced posterior ROAS estimates whose standard deviation was roughly <em>five times</em> that of the same model calibrated with an experiment prior. Sharper intervals change decisions: a budget reallocation you would not make on a factor-of-five-wide ROAS becomes defensible once the experiment has tightened it. This is the same logic by which a geo-level model already beats a national-only one (Sun et al., 2017) — more identifying variation, tighter credible intervals, safer decisions.</p>
+            </div>
+
+            <h2 id="local-global">Local Effect, Global Curve</h2>
+            <p>Here is the subtlety that separates calibration done carefully from calibration done wrong. An experiment measures a <em>local</em> quantity: the marginal or average effect at the specific spend level, time, geography, creative, and audience it ran under. The MMM parameter it is meant to inform is a <em>global</em> one: a coefficient governing the entire response curve. These are not the same number, and mapping one onto the other has to respect the transforms in between.</p>
+
+            <p>The model's marginal effect at spend \( s \) is not the raw coefficient \( \beta \) but \( \beta \) times the local slope of the saturation-of-adstock curve evaluated at \( s \). So an experiment run at a particular spend constrains \( \beta \) only <em>through</em> that curve at that point. Put a prior naively on the raw coefficient and you have implied an arbitrary, spend-dependent ROI that will not match the experiment at any other operating point. This is the deeper reason the prior belongs on ROI rather than on the coefficient: ROI lives on the decision scale, comparable across channels regardless of spend magnitude or units, and it is the scale on which you have <a href="blog-prior-predictive-sbc.html">intuition and prior beliefs</a> in the first place. Meridian defaults its treatment prior to ROI for precisely this reason, reserving a coefficient prior as a rarely-recommended fallback because it is "difficult to translate into business terms."</p>
+
+            <div class="warning">
+                <h4>⚠️ The counterfactuals may not even match</h4>
+                <p>An MMM's ROI is usually defined against a <em>zero-spend</em> counterfactual — what sales would be if the channel went dark. An experiment's counterfactual is whatever the control arm did: often a <em>reduced</em>-spend holdout, not full darkness. As Meridian's own documentation warns, "the ROI measured by an experiment rarely aligns perfectly with the ROI measured by MMM." Before treating a lift number as a prior mean, confirm you are calibrating like-for-like — the same estimand, over a comparable spend contrast — or you will anchor the model to an answer to a different question.</p>
+            </div>
+
+            <h2 id="not-fix">What Calibration Doesn't Fix</h2>
+            <p>Calibration is powerful enough that it is tempting to treat a calibrated model as settled truth. Five cautions keep that instinct honest.</p>
+            <p><strong>External validity is bounded.</strong> A lift test is specific to its time, geo, creative, audience, and competitive context. A holiday test on a hero creative in high-intent markets does not license the same ROI in a January always-on flight. Treat the experiment as evidence about the world it ran in, and discount its transportability deliberately.</p>
+            <p><strong>Priors go stale.</strong> Media effectiveness drifts as algorithms, audiences, and competitors move, so a once-valid calibration slowly misleads. The principled response is to re-test on a cadence and to <em>discount</em> older evidence rather than trust it forever — the power-prior idea (Ibrahim and Chen, 2000) of raising external evidence to a fractional weight is the formal knob for this.</p>
+            <p><strong>Bias can flow sideways.</strong> Because channel spends are collinear, pinning one channel's ROI with a tight prior does not only fix that channel — it can push residual confounding onto the correlated, un-calibrated channels. "Calibrating one channel helps the whole model" is true, but double-edged: the same coupling that spreads the correction can displace bias rather than remove it. Calibrating the highest-spend, most-collinear channels, or several jointly, is the mitigation.</p>
+            <p><strong>A noisy test deserves a wide prior.</strong> The standard error of the experiment is not decoration — it sets how hard the prior pulls. Set it too tight around a noisy point estimate and you have let one under-powered test overrule everything else. Widen the prior to reflect both the experiment's own uncertainty and your doubt about its applicability; Robyn's confidence gate exists to keep low-quality tests out entirely.</p>
+            <p><strong>It does not certify the model.</strong> A calibrated channel can still sit in a mis-specified model. Calibration corrects a targeted causal parameter; it does not validate the transforms, the controls, or the computation — those are the jobs of <a href="blog-prior-predictive-sbc.html">prior predictive checks, simulation-based calibration, and posterior predictive checks</a>. Anchoring the wrong model to a right number still gives you the wrong model.</p>
+
+            <h2 id="which-when">Which Channel, and When</h2>
+            <p>Experiments cost money and attention, so the natural question is where to spend them. The answer is an information-value calculation, not a hunch: test the channel where an experiment most reduces decision uncertainty per dollar — typically high-spend channels with wide posterior uncertainty and high <a href="blog-geo-holdout-eig.html">expected information gain</a>. Calibrating a channel the model already pins tightly, or one too small to move the budget, is wasted budget. And because effects decay, calibration is not a one-time chore but a loop: the value of a stale prior erodes, which itself triggers the next test.</p>
+
+            <p>This is where a single MMM becomes a standing <a href="continuous-learning.html">measurement program</a>. Fit the model, read which channel's ROI is both consequential and uncertain, run the experiment that resolves it, fold the result back in as a prior, re-allocate, and let the decay clock schedule the next test. The model tells you which experiment is worth running; the experiment tells you what the model got wrong. Neither is sufficient alone — the observational model is precise but biased, the experiment unbiased but narrow — and the calibration loop is what makes them add up to something you can put a budget behind.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>An observational MMM coefficient is not causal: spend is endogenous, collinear, scarce, and nonlinearly transformed. At Facebook scale, observational ad measurement was off by roughly a factor of three even with thousands of covariates.</li>
+                    <li>A randomized geo experiment identifies the incremental effect the likelihood cannot. Calibration carries that causal fact into the model as a prior.</li>
+                    <li>Two routes: an informative prior on ROI (Meridian) or an in-graph likelihood on the model's implied lift (Robyn). Put the prior on ROI, not the raw coefficient — ROI is the decision scale.</li>
+                    <li>The math is precision-weighting: a weakly-identified observational likelihood cedes to a tighter experiment prior. Calibration cuts posterior ROAS uncertainty — one study reports roughly five-fold.</li>
+                    <li>Respect the local-vs-global mismatch: an experiment measures a marginal effect at one spend; map it through the saturation and adstock curve, and confirm the counterfactuals match.</li>
+                    <li>Calibration does not fix external validity, drift, sideways bias flow, or model misspecification. Re-test on a cadence, discount stale evidence, and validate the model separately.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Chan, D., &amp; Perry, M. (2017). <em>Challenges and Opportunities in Media Mix Modeling</em>. Google Inc.</li>
+                <li>Gordon, B. R., Zettelmeyer, F., Bhargava, N., &amp; Chapsky, D. (2019). <em>A Comparison of Approaches to Advertising Measurement: Evidence from Big Field Experiments at Facebook</em>. Marketing Science, 38(2).</li>
+                <li>Gordon, B. R., Moakler, R., &amp; Zettelmeyer, F. (2023). <em>Close Enough? A Large-Scale Exploration of Non-Experimental Approaches to Advertising Measurement</em>. Marketing Science. arXiv:2201.07055.</li>
+                <li>Zhang, Y., Wurm, M., Li, E., Wakim, A., Kelly, J., Price, B., &amp; Liu, Y. (2023). <em>Media Mix Model Calibration With Bayesian Priors</em>. Google LLC.</li>
+                <li>Jin, Y., Wang, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). <em>Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects</em>. Google Inc.</li>
+                <li>Sun, Y., Wang, Y., Jin, Y., Chan, D., &amp; Koehler, J. (2017). <em>Geo-level Bayesian Hierarchical Media Mix Modeling</em>. Google Inc.</li>
+                <li>Chen, A., Chan, D., Perry, M., Jin, Y., Sun, Y., Wang, Y., &amp; Koehler, J. (2018). <em>Bias Correction for Paid Search in Media Mix Modeling</em>. arXiv:1807.03292.</li>
+                <li>Ibrahim, J. G., &amp; Chen, M.-H. (2000). <em>Power Prior Distributions for Regression Models</em>. Statistical Science, 15(1).</li>
+                <li>Meta Open Source. <em>Robyn: Continuous &amp; Semi-Automated MMM</em> — Calibration with Experiments. facebookexperimental.github.io/Robyn.</li>
+                <li>Google. <em>Meridian Documentation</em> — ROI Priors and Calibration; Set Custom Priors from Past Experiments. developers.google.com/meridian.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

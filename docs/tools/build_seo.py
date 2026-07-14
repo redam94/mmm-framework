@@ -31,7 +31,7 @@ ORG_ID = f"{SITE}/#organization"
 SITE_ID = f"{SITE}/#website"
 SENTINEL = "<!-- seo:augmented (structured data + social cards) -->"
 DEFAULT_IMG = f"{SITE}/assets/mmm-framework-social-preview.png"
-TODAY = "2026-07-12"
+TODAY = "2026-07-14"
 EXCLUDE = {"TEMPLATE.html", "TEMPLATE-SIDEBAR.html", "404.html"}
 BLOG_PREFIX = "blog-"  # blog-*.html posts emit BlogPosting nodes (index: blog.html)
 
@@ -353,10 +353,13 @@ SERIES = [
     ("Causal inference series", ["causal-00-the-ladder.html", "causal-01-confounding-adjustment.html", "causal-02-mmm-as-causal-model.html", "causal-03-structural-mediation.html", "causal-04-latent-confounders.html", "causal-05-measuring-one-experiment.html", "causal-06-calibrating-the-model.html", "causal-07-many-experiments.html", "causal-08-designing-next-experiment.html", "causal-09-measurement-program.html", "causal-10-closed-loop.html"]),
     ("Modern measurement research (blog)", ["blog.html",
         "blog-activity-bias.html", "blog-causal-estimates-observational.html",
-        "blog-geo-experiments-tbr.html", "blog-synthetic-control.html",
+        "blog-geo-experiments-tbr.html", "blog-switchback-experiments.html",
+        "blog-synthetic-control.html",
         "blog-staggered-did.html", "blog-causalimpact-bsts.html",
-        "blog-bayesian-mmm-carryover-shape.html", "blog-carryover-experiment-timing.html",
+        "blog-bayesian-mmm-carryover-shape.html", "blog-calibrating-mmm-experiments.html",
+        "blog-carryover-experiment-timing.html",
         "blog-modeling-pitfalls.html", "blog-multiple-comparisons.html",
+        "blog-prior-predictive-sbc.html",
         "blog-lindley-to-dad.html", "blog-geo-holdout-eig.html",
         "blog-bed-bo-bandits.html", "blog-thompson-sampling.html",
         "blog-continuous-learning-interactions.html"]),

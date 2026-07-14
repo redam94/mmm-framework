@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Switchback Experiments: Randomizing Time When You Can't Split Users | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="When a marketplace makes user-level A/B tests biased, you can randomize the whole system on and off over time instead. How switchbacks work, why carryover sets the switching interval, and where they fit in media measurement.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-switchback-experiments.html">
+    <meta property="og:title" content="Switchback Experiments: Randomizing Time When You Can't Split Users">
+    <meta property="og:description" content="Randomize the whole system on and off over time to defeat marketplace interference. Carryover sets the switching interval; the design-based estimator needs no outcome model — and long adstock is the killer.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-switchback-experiments.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Switchback Experiments: Randomizing Time When You Can't Split Users">
+    <meta name="twitter:description" content="Randomize the whole system on and off over time to defeat marketplace interference. Carryover sets the switching interval; the design-based estimator needs no outcome model — and long adstock is the killer.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-switchback-experiments.html",
+          "name": "Switchback Experiments: Randomizing Time When You Can't Split Users | MMM Framework",
+          "description": "When a marketplace makes user-level A/B tests biased, you can randomize the whole system on and off over time instead. How switchbacks work, why carryover sets the switching interval, and where they fit in media measurement.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-14",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-switchback-experiments.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-switchback-experiments.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Switchback Experiments: Randomizing Time When You Can't Split Users",
+          "datePublished": "2026-07-14",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-switchback-experiments.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-switchback-experiments.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Switchback Experiments: Randomizing Time When You Can't Split Users",
+              "item": "https://redam94.github.io/mmm-framework/blog-switchback-experiments.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#why-not-users">Why Not Just Split Users</a></li>
+                <li><a href="#what-is">What a Switchback Is</a></li>
+                <li><a href="#carryover">Carryover Is the Whole Problem</a></li>
+                <li><a href="#interval">The Interval Tradeoff</a></li>
+                <li><a href="#design-based">Inference Without a Model</a></li>
+                <li><a href="#optimal">Designing It Well</a></li>
+                <li><a href="#autocorrelation">The Autocorrelation Coupling</a></li>
+                <li><a href="#media">Switchbacks in Media</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Switchback Experiments</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-14">July 14, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Experiments</span>
+            </p>
+            <p class="lead">A geo experiment randomizes <em>where</em>; a user A/B test randomizes <em>who</em>. A switchback randomizes <em>when</em> — it flips the entire system between treatment and control over time and reads the effect off the difference. That sounds like a strange thing to do until you hit a setting where splitting users is quietly biased: a marketplace, an auction, any place where treated and control units compete for the same finite pool. The catch is that time-randomization trades one interference problem for another — carryover — and everything interesting about the design is about managing that trade.</p>
+
+            <h2 id="why-not-users">Why Not Just Split Users</h2>
+            <p>The workhorse online experiment splits users into treatment and control and compares them. Its validity rests on the stable-unit-treatment-value assumption (SUTVA): one user's outcome does not depend on another user's assignment. In a two- or three-sided marketplace, that assumption fails outright. A ride-hailing pricing change tested on half the riders still draws from the <em>same</em> pool of drivers; a new ranking rule shown to half the sessions still competes in the <em>same</em> auction for the <em>same</em> inventory. Treated and control users interfere through the shared resource, so the A/B contrast measures a distorted, congestion-mediated thing rather than the effect of deploying the policy to everyone.</p>
+            <p>This is not a hypothetical. The design emerged from exactly this pain at ride-sharing and delivery platforms — Lyft's engineering team described "time-split" testing to escape marketplace interference (Chamandy, 2016), and DoorDash formalized region-by-time "switchback" tests because a shared Dasher fleet makes simultaneous treatment and control orders statistically dependent (Kastelman and Ramesh, 2018). The idea itself is far older: agricultural statisticians ran "switchback" or change-over trials on dairy cows in the 1930s and 40s, alternating each animal between diets to cancel between-cow variation, and already writing a regression term for the lagged carryover effect (Cochran, Autrey, and Cannon, 1941). The modern marketplace rediscovered a very old design under a very new kind of interference.</p>
+
+            <h2 id="what-is">What a Switchback Is</h2>
+            <p>Formally, a switchback is a cluster-randomized experiment where the cluster is <em>time</em>. Take a single aggregate unit — a whole city, market, or platform — and a binary treatment \( W_t \in \{0, 1\} \). Divide the horizon \( t = 1, \dots, T \) into blocks of length \( l \), hold the treatment constant within each block, and re-randomize it at the block boundaries. Because the entire system is on one arm at any instant, there are never two co-existing treatment regimes to interfere with each other. You have converted a spatial interference problem into a temporal one.</p>
+
+            <div class="definition">
+                <h4>Definition: The global average treatment effect</h4>
+                <p>The estimand is the difference between running the system <em>always treated</em> versus <em>always in control</em>, averaged over the experiment window. With \( \tau_t \) the stable per-period effect at time \( t \),</p>
+                $$ \tau_{\mathrm{GATE}} \;=\; \frac{1}{T}\sum_{t=1}^{T} \tau_t. $$
+                <p>This is the "if we shipped it to everyone, forever" quantity a decision-maker actually wants (Hu and Wager, 2022). A related target, the filtered ATE, averages only over a chosen subset of periods — the ones that are not still settling after a switch.</p>
+            </div>
+
+            <p>Note what the estimand is <em>not</em>: it is not the effect on a single user, and it is defined conditional on the environment during the experiment. If the two weeks you ran the switchback were unusually hot, promotional, or seasonal, the GATE you measured is the GATE <em>in that environment</em>. External validity — "was this window representative?" — is a first-order concern, not a footnote, precisely because the design leans so hard on the time dimension.</p>
+
+            <h2 id="carryover">Carryover Is the Whole Problem</h2>
+            <p>Randomizing over time defeats spatial interference but creates a new adversary: the treatment at time \( t \) affects not only \( Y_t \) but future outcomes, because the system carries state. Right after a switch from control to treatment, the outcome still reflects the lingering control regime — surge prices that haven't reset, a matching queue that hasn't cleared, demand that hasn't responded. Naively differencing treated against control periods folds that contamination straight into the estimate. There are two ways to model it, and they lead to different designs.</p>
+
+            <p>The first assumes carryover has a <em>finite, known order</em> \( m \): an action at \( t \) has fully dissipated by \( t + m \), so \( Y_t \) depends only on the treatments in the window \( W_{t-m:t} \). Surge-pricing effects that "dissipate after one or two hours" fit this picture, and \( m \) can be set from domain knowledge or estimated from data (Bojinov, Simchi-Levi, and Zhao, 2023). The second, more realistic, stance is <em>geometric mixing</em>: the system is a non-stationary Markov process with mixing time \( t_{\mathrm{mix}} \), and the influence of an action decays like \( e^{-(t' - t)/t_{\mathrm{mix}}} \) but never reaches exactly zero (Hu and Wager, 2022). Under geometric mixing the remedy is a <strong>burn-in</strong> — discard the first \( b \) observations after every switch, while the system is still relaxing toward its new steady state, and analyze only the settled periods.</p>
+
+            <div class="warning">
+                <h4>⚠️ Carryover contamination is the failure mode, and it is asymmetric with the horizon</h4>
+                <p>The lag-\( p \) "always-on vs always-off" estimand is not even well-defined once the carryover length approaches the horizon \( T \) — there is no clean stretch of pure-treatment or pure-control state to observe. Everything below about choosing the switching interval is, at bottom, a negotiation with carryover: the longer the effect persists, the longer your blocks and burn-ins must be, and the less data you have left to estimate anything.</p>
+            </div>
+
+            <h2 id="interval">The Interval Tradeoff</h2>
+            <p>How long should a block be? This is the single design knob, and it sits on a clean bias&ndash;variance tension. <strong>Short blocks</strong> give many independent randomizations — low variance — but leave little time for the system to settle, so carryover bias is large. <strong>Long blocks</strong> give clean, settled measurement — low bias — but few randomizations, so variance is large. Burn-in adds a second knob that spends data to buy bias reduction.</p>
+
+            <p>Hu and Wager (2022) make the tension quantitative, and the punchline is sobering. For the naive block difference-in-means estimator targeting the global effect under geometric mixing, the root-mean-square error <em>cannot</em> beat order \( T^{-1/3} \) — markedly slower than the \( T^{-1/2} \) you would get with no carryover at all. The rate-optimal choice there is a single long block scaling like \( T^{1/3} \). The good news is that a smarter analysis recovers most of the loss: with a burn-in of order \( t_{\mathrm{mix}} \log T \) and either a filtered estimand or a bias-corrected inverse-propensity estimator, the RMSE improves to order \( \sqrt{\log T / T} \) — within a \( \sqrt{\log T} \) factor of the carryover-free ideal. The practical shape of that solution is counterintuitive: <em>most periods should be burn-in</em>. You switch relatively often, throw away the majority of each block as it settles, and keep only the tail.</p>
+
+            <p>Their ride-sharing simulation shows what this buys in coverage, the number that actually matters for a decision. Adding burn-in to the difference-in-means estimator cut the bias from about 2.64 to 0.09 and lifted the confidence-interval coverage from 78% toward a healthy 92% — turning an over-confident, mis-centered interval into a usable one.</p>
+
+            <h2 id="design-based">Inference Without a Model</h2>
+            <p>A quietly radical feature of the modern switchback literature is that it is <em>design-based</em>. Potential outcomes are treated as fixed but unknown; the only randomness is the assignment path the coin flips generated. This lineage — Fisher, Neyman, Kempthorne, Rubin — buys you inference that does not depend on getting an outcome model right.</p>
+
+            <div class="note">
+                <h4>💡 The estimator is a weighted average, and it is unbiased by construction</h4>
+                <p>The workhorse is the Horvitz&ndash;Thompson estimator: weight each period's outcome by the inverse probability of the treatment path it actually received. Under a properly randomized switchback this is unbiased for the temporal effect, with no likelihood, no stationarity assumption, and no functional form for how spend maps to sales (Bojinov and Shephard, 2019; Bojinov, Simchi-Levi, and Zhao, 2023). You can go further and compute an <em>exact</em> randomization p-value for the sharp null of no temporal effect by re-running the randomization on the observed data — a test that is valid in finite samples, whatever the outcome process looks like.</p>
+            </div>
+
+            <p>Two assumptions are load-bearing. <strong>Probabilistic assignment</strong>: every period must have a strictly-between-zero-and-one chance of each arm, or the inverse-propensity weights blow up. And <strong>no anticipation</strong>: the assignment at time \( t \) must not depend on future potential outcomes — formally, the future outcomes do not Granger-cause the treatment (Bojinov and Shephard, 2019). A randomized switchback satisfies this by construction, which is exactly why an <em>observational</em> "we turned the feature on when it seemed slow" on/off history does not qualify: there, the toggling responds to the very outcomes you are trying to measure. Bojinov and Shephard's original application was not marketing at all but a hedge fund comparing human versus algorithmic trade execution across equity-index futures — a reminder that "randomize a single system over time" is a general causal tool. They also note a variance-reduction trick with a familiar flavor: subtracting a one-step-ahead <em>proxy</em> prediction of the outcome before analyzing is the design-based cousin of CUPED.</p>
+
+            <h2 id="optimal">Designing It Well</h2>
+            <p>If block length trades bias against variance, is there an optimal schedule? Bojinov, Simchi-Levi, and Zhao (2023) pose it as a minimax problem — choose the randomization points and probabilities to minimize the worst-case variance over an adversarial choice of potential outcomes — and solve it. The answer is reassuringly simple and gives a rule you can carry in your head.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Design choice</th><th>Consequence (finite carryover order \( m \))</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Switch every period</td><td>Wastes power: about 28&ndash;32% higher variance than optimal</td></tr>
+                    <tr><td>Block length \( \approx m + 1 \)</td><td>Within 1&ndash;2% of the optimal minimax design</td></tr>
+                    <tr><td>One giant block</td><td>Too few randomizations; variance dominated</td></tr>
+                    <tr><td>Over-specify \( p \gt m \)</td><td>Stays unbiased at small variance cost</td></tr>
+                    <tr><td>Under-specify \( p \lt m \)</td><td>Estimates a different, weighted estimand</td></tr>
+                </tbody>
+            </table>
+
+            <p>The headline is the middle row: <em>align the block length to the carryover order</em>, roughly \( m + 1 \), and you capture almost all of the achievable efficiency. The optimal schedule is nearly regularly spaced at that interval, with slightly longer boundary blocks and switching probabilities kept to multiples of one-half to avoid unstable weights. And when you are unsure of \( m \), the asymmetry is your friend: over-specifying the carryover order costs a little variance but preserves unbiasedness, while under-specifying quietly changes the quantity you are estimating. When in doubt, assume the effect lingers longer than you think.</p>
+
+            <h2 id="autocorrelation">The Autocorrelation Coupling</h2>
+            <p>There is a second time-series subtlety that interacts with carryover in a way that surprises people: the serial correlation of the outcome's <em>noise</em>. Standard two-sample tests assume independent observations; switchback outcomes are anything but, and using a naive t-test on them gives anti-conservative variance and false positives. But autocorrelation is not merely a nuisance to correct — its sign changes the optimal design (Wen, Shi, Yang, Tang, and Zhu, 2025).</p>
+
+            <p>The result is a small decision table. When carryover is weak and the outcome errors are <em>positively</em> autocorrelated, switching <em>more</em> frequently improves precision — rapid flips average out the correlated noise. When errors are <em>negatively</em> correlated, infrequent switching (an alternating-day design) is most efficient. When carryover is <em>large</em>, infrequent switching wins regardless, because you need long settled stretches. So the same instinct — "switch fast" — that helps in one regime hurts in another, and the diagnosis hinges on quantities you have to estimate from history.</p>
+
+            <p>None of this makes switchbacks free. Pankratev (2026), working from DoorDash's cluster-by-time designs, derives a closed-form variance formula whose bottom line is blunt: a switchback is <em>strictly less powerful</em> than a naive A/B test on the same data. The extra variance term is the price of validity under interference. Worse, in a dense but imbalanced marketplace the penalty compounds — a size-imbalance factor \( (1 + cv^2) \) attaches permanently to system-wide shocks and does <em>not</em> shrink as you pile more observations into existing cells. In one worked regime the switchback needed on the order of fourteen times more data than a naive A/B test for equal power, though moving to a finer cell-level estimator roughly doubled the power back. The lesson is not to avoid switchbacks — it is to reserve them for the settings that genuinely need them, and to budget for the power tax.</p>
+
+            <h2 id="media">Switchbacks in Media</h2>
+            <p>Where does this land for advertising measurement? Switchbacks are the right tool for <em>system-level, fast-washing levers</em> that cannot be split cleanly by user: real-time bidding algorithms, budget pacing, auction and ranking logic, ad-load and slot allocation, marketplace and retail-media pricing. These share the auction- or inventory-interference that biases user-split tests, and their effects dissipate in minutes to hours, so temporal blocks stay short and power stays affordable. Delivery and ride-hailing platforms have reported using switchbacks to measure the incrementality of marketplace search ads under exactly these conditions.</p>
+
+            <div class="warning">
+                <h4>⚠️ Long adstock is the killer — do not switchback brand media</h4>
+                <p>The optimal block length scales with the carryover length, and burn-in must cover the settling time. If a channel's effect decays over <em>weeks</em> — the regime of brand and upper-funnel advertising, where <a href="blog-bayesian-mmm-carryover-shape.html">adstock</a> lingers — a temporal switchback would demand multi-week blocks plus multi-week burn-ins, discarding most of the horizon and collapsing power. That is precisely the "carryover comparable to the horizon" regime where the rate floor bites. For durable media the appropriate tools are the spatial ones: <a href="blog-geo-experiments-tbr.html">geo experiments</a>, staggered rollouts, or a long-run <a href="measurement-calibration.html">MMM calibrated by lift tests</a>. Switch time for fast levers; switch geography for slow ones.</p>
+            </div>
+
+            <p>It is worth seeing the switchback next to its spatial sibling. A geo experiment randomizes regions and holds time, spending cross-sectional units to buy immunity from temporal carryover — which is why it suits durable effects that need weeks to accrue. A switchback randomizes time and holds geography, spending temporal units to buy immunity from cross-user interference — which is why it suits fast, congestion-mediated effects. Neither dominates; they fail in opposite directions, and a clustered design that randomizes spatial clusters <em>and</em> time blocks together (Jia, Kallus, and Yu, 2023) exists precisely for the problems that have both kinds of spillover at once. The framework's own <a href="continuous-learning.html">continuous-learning</a> loop leans on the geo side because media carryover is long; a switchback is the instrument you reach for when the lever you are testing resets faster than a decision cycle.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>A switchback randomizes a single system on and off <em>over time</em>, defeating the marketplace interference that biases user-level A/B tests when treated and control units share a resource pool.</li>
+                    <li>The estimand is the global "always-on vs always-off" effect, defined conditional on the experiment's environment — so external validity is a first-order concern.</li>
+                    <li>Carryover sets everything. Block length should track the carryover length (about \( m + 1 \) for finite order \( m \)); with geometric mixing, most of each block becomes burn-in and the naive estimator's rate floor is a slow \( T^{-1/3} \).</li>
+                    <li>Inference is design-based: a Horvitz&ndash;Thompson estimator and exact randomization tests give validity with no outcome model, resting on probabilistic assignment and no anticipation.</li>
+                    <li>Switch faster under weak carryover and positive noise autocorrelation; switch slower under strong carryover or negative autocorrelation — the optimal cadence flips with the regime.</li>
+                    <li>Use switchbacks for fast levers (bidding, pacing, pricing, matching); use geo experiments for durable brand media, where long adstock makes temporal switching collapse.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Bojinov, I., Simchi-Levi, D., &amp; Zhao, J. (2023). <em>Design and Analysis of Switchback Experiments</em>. Management Science, 69(7).</li>
+                <li>Bojinov, I., &amp; Shephard, N. (2019). <em>Time Series Experiments and Causal Estimands: Exact Randomization Tests and Trading</em>. Journal of the American Statistical Association, 114(528).</li>
+                <li>Hu, Y., &amp; Wager, S. (2022). <em>Switchback Experiments under Geometric Mixing</em>. arXiv:2209.00197.</li>
+                <li>Wen, Q., Shi, C., Yang, Y., Tang, N., &amp; Zhu, H. (2025). <em>Unraveling the Interplay between Carryover Effects and Reward Autocorrelations in Switchback Experiments</em>. ICML (PMLR 267). arXiv:2403.17285.</li>
+                <li>Pankratev, S. (2026). <em>Powerful Switchback Experiments — Or Not?</em> arXiv:2606.03012.</li>
+                <li>Jia, S., Kallus, N., &amp; Yu, C. L. (2023). <em>Clustered Switchback Designs for Experimentation Under Spatio-temporal Interference</em>. arXiv:2312.15574.</li>
+                <li>Glynn, P. W., Johari, R., &amp; Rasouli, M. (2020). <em>Adaptive Experimental Design with Temporal Interference: A Maximum Likelihood Approach</em>. NeurIPS, 33.</li>
+                <li>Xiong, R., Chin, A., &amp; Taylor, S. J. (2024). <em>Data-Driven Switchback Experiments: Theoretical Tradeoffs and Empirical Bayes Designs</em>. arXiv:2406.06768.</li>
+                <li>Cochran, W. G., Autrey, K. M., &amp; Cannon, C. Y. (1941). <em>A Double Change-Over Design for Dairy Cattle Feeding Experiments</em>. Journal of Dairy Science, 24(11).</li>
+                <li>Chamandy, N. (2016). <em>Experimentation in a Ridesharing Marketplace</em>. Lyft Engineering.</li>
+                <li>Kastelman, D., &amp; Ramesh, R. (2018). <em>Switchback Tests and Randomized Experimentation Under Network Effects at DoorDash</em>. DoorDash Engineering.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
