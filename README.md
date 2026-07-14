@@ -220,9 +220,10 @@ results = model.fit(
 )
 
 # Get contributions with uncertainty
-contributions = model.compute_contributions()
-print(contributions.mean_contributions)
-print(contributions.hdi_contributions)  # 94% credible intervals
+contributions = model.compute_counterfactual_contributions()
+print(contributions.total_contributions)
+print(contributions.contribution_hdi_low)   # lower bound of 94% credible interval
+print(contributions.contribution_hdi_high)  # upper bound of 94% credible interval
 ```
 
 ### Fluent Configuration API
