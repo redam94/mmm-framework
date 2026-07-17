@@ -15,7 +15,7 @@ the `.ipynb`.
 | `lifecycle/` | Experimental Measurement Lifecycle, T0→T5 (lifecycle_00–06) | `lifecycle/README_lifecycle.md` |
 | `continuous_learning/` | Model-free sequential learning loop (engine walkthrough + "Nomi" story) | — |
 | `validation/` | Measured evidence: rolling-origin backtest, runtime benchmark, Pinkham real-data pressure test | — |
-| `demos/` | Standalone walkthroughs: modeling workflow, messy-data onboarding, causal features showcase, PPTX deck demo | — |
+| `demos/` | Standalone walkthroughs: modeling workflow, messy-data onboarding, causal features showcase, PPTX deck demo, every fit method compared (MAP/Laplace/ADVI/Pathfinder/SMC vs NUTS) | — |
 | `extensions/` | Bespoke/extension models: structural nested MMM, breakout weighting (+ `_recovery/` nested-mediation recovery harness) | — |
 | `legacy/` | Old scratch notebooks and generated outputs (untracked HTML/xlsx/csv) | — |
 | `builders/` | All `build_*.py` authoring scripts + shared runtime modules (`aurora.py`, `charts_src.py`, `lifecycle_common.py`, `validate_chart_cells.py`) | — |
