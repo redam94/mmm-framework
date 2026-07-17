@@ -242,9 +242,10 @@ function ModelRunsWidget({
                               {(() => {
                                 const method = r.inference?.method ?? 'nuts';
                                 const sampler = `${r.inference?.chains ?? '?'} chains × ${r.inference?.draws ?? '?'} draws${r.inference?.tune ? ` (${r.inference.tune} tune)` : ''}`;
-                                return method === 'nuts'
-                                  ? `nuts · ${sampler}`
-                                  : `${method} (approximate)`;
+                                // NUTS and SMC are exact samplers; everything else is approximate.
+                                if (method === 'nuts') return `nuts · ${sampler}`;
+                                if (method === 'smc') return `smc · ${r.inference?.chains ?? '?'} runs × ${r.inference?.draws ?? '?'} particles`;
+                                return `${method} (approximate)`;
                               })()}
                             </p>
                           </div>

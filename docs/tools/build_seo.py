@@ -361,6 +361,7 @@ SERIES = [
         "blog-modeling-pitfalls.html", "blog-multiple-comparisons.html",
         "blog-p-hacking-evidence.html",
         "blog-prior-predictive-sbc.html",
+        "blog-when-sampling-fails.html",
         "blog-lindley-to-dad.html", "blog-geo-holdout-eig.html",
         "blog-bed-bo-bandits.html", "blog-thompson-sampling.html",
         "blog-continuous-learning-interactions.html"]),

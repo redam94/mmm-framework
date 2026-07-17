@@ -736,10 +736,15 @@ def fit_mmm_model(
         dataset_path: Optional override for the dataset path. Defaults to the
             dataset already loaded into the session state.
         method: Fit method. Defaults to ``"nuts"`` (full MCMC — use this for
-            real inference). Pass an *approximate* method to fit in seconds when
+            real inference). ``"smc"`` (Sequential Monte Carlo) is also EXACT:
+            slower than NUTS, but use it when NUTS chains disagree and you
+            suspect a multimodal posterior (R-hat across independent SMC runs
+            confirms it), or when you need a log marginal likelihood for model
+            comparison. Pass an *approximate* method to fit in seconds when
             you just want to check whether a model is sensible (catch bad priors,
             divergent geometry, broken saturation/adstock) before paying for a
-            full sample: ``"map"`` (fastest, point estimate), ``"advi"`` /
+            full sample: ``"map"`` (fastest, point estimate), ``"laplace"``
+            (MAP + Gaussian curvature uncertainty), ``"advi"`` /
             ``"fullrank_advi"`` (variational), or ``"pathfinder"``. All work out
             of the box. Approximate fits have UNCALIBRATED uncertainty — always
             re-fit with NUTS before reporting intervals or making spend
@@ -773,9 +778,10 @@ def fit_mmm_model(
             if method_norm not in _INFERENCE_METHODS:
                 raise ValueError(
                     f"Unknown fit method {method!r}. Recognized methods: "
-                    f"{', '.join(sorted(_INFERENCE_METHODS))} (nuts = full MCMC; "
-                    "map/advi/fullrank_advi/pathfinder are fast approximate fits "
-                    "with uncalibrated uncertainty)."
+                    f"{', '.join(sorted(_INFERENCE_METHODS))} (nuts = full MCMC "
+                    "and smc = Sequential Monte Carlo, both exact; "
+                    "map/laplace/advi/fullrank_advi/pathfinder are fast "
+                    "approximate fits with uncalibrated uncertainty)."
                 )
             spec.setdefault("inference", {})["method"] = method_norm
         info = _KERNELS.get_or_spawn(get_current_thread()).fit(spec, path)
@@ -2459,7 +2465,7 @@ def update_model_setting(
     Examples:
       setting_path="inference.draws",           value=2000
       setting_path="inference.chains",          value=4
-      setting_path="inference.method",          value="map"      (approximate fit: map|advi|fullrank_advi|pathfinder|nuts)
+      setting_path="inference.method",          value="map"      (exact: nuts|smc; approximate: map|laplace|advi|fullrank_advi|pathfinder)
       setting_path="inference.metrics_draws",   value=0          (0 disables per-run history metrics)
       setting_path="trend.type",                value="piecewise"
       setting_path="trend.n_changepoints",      value=10

@@ -632,7 +632,16 @@ class MMMSerializer:
             fit_method = getattr(fm, "value", fm)
             if fit_method is not None:
                 metadata["fit_method"] = str(fit_method)
-                metadata["approximate"] = str(fit_method).lower() != "nuts"
+                # NUTS and SMC are exact (FitMethod.is_approximate); fall back
+                # to the legacy != "nuts" rule only for unknown method strings.
+                try:
+                    from .config.enums import FitMethod as _FM
+
+                    metadata["approximate"] = _FM(
+                        str(fit_method).lower()
+                    ).is_approximate
+                except ValueError:
+                    metadata["approximate"] = str(fit_method).lower() != "nuts"
         except Exception:  # noqa: BLE001
             pass
 

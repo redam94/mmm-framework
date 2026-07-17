@@ -83,14 +83,14 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-10",
+          "dateModified": "2026-07-12",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/data-requirements.html#breadcrumb"
           },
           "@id": "https://redam94.github.io/mmm-framework/data-requirements.html#webpage",
           "@type": "TechArticle",
           "headline": "Data Requirements & Runtime",
-          "datePublished": "2026-07-10",
+          "datePublished": "2026-07-12",
           "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
           "author": {
             "@type": "Person",
@@ -572,12 +572,15 @@ print(panel.summary())</code></pre>
             <p>
                 <strong>Even faster during exploration:</strong> for model-checking &mdash; catching bad priors,
                 broken geometry, or pathological saturation/adstock before paying for a full sample &mdash;
-                <code>fit(method="map"|"advi"|"fullrank_advi"|"pathfinder")</code>
+                <code>fit(method="map"|"laplace"|"advi"|"fullrank_advi"|"pathfinder")</code>
                 (builder <code>.with_fit_method(&hellip;)</code> / agent <code>fit_mmm_model(method=&hellip;)</code>)
                 returns an <em>approximate</em> posterior in seconds, faster than the &asymp;&nbsp;10&ndash;15&nbsp;s
                 NUTS fit, and works on the extension models too (shared <code>run_approximate_fit</code> engine).
                 The catch: R-hat/ESS are unavailable and the uncertainty is <strong>not calibrated</strong>, so
-                re-fit with NUTS before reporting numbers or making decisions.
+                re-fit with NUTS before reporting numbers or making decisions. (A second <em>exact</em>
+                sampler, <code>fit(method="smc")</code>, exists for a different job &mdash; confirming
+                multimodal posteriors and computing model evidence; see
+                <a href="troubleshooting.html#sampling">troubleshooting</a>.)
             </p>
 
             <!-- ===============================================================

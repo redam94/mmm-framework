@@ -437,6 +437,22 @@ def model_assumptions(model: Any) -> list[AssumptionRow]:
             "The sampling plan the final fit will use. Convergence "
             "(R-hat, ESS, divergences) will be reported post-fit."
         )
+    elif method == "smc":
+        if mc is not None:
+            setting = (
+                f"SMC — {getattr(mc, 'n_chains', '?')} independent runs × "
+                f"{getattr(mc, 'n_draws', '?')} particles (tempered "
+                "Sequential Monte Carlo)"
+            )
+        else:
+            setting = "SMC — tempered Sequential Monte Carlo"
+        detail = (
+            "An EXACT sampler (not an approximate check): chosen for "
+            "robustness to multimodal posteriors and/or the log marginal "
+            "likelihood it estimates for model comparison. R-hat across the "
+            "independent runs and ESS will be reported post-fit; divergences "
+            "do not apply."
+        )
     else:
         setting = f"{method.upper()} — approximate (fast check)"
         detail = (

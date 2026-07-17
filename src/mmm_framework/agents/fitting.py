@@ -343,9 +343,18 @@ _INFERENCE_KEYS = {
     "method",
     "metrics_draws",
 }
-# Mirrors config.enums.FitMethod — "nuts" is full MCMC; the rest are the
-# approximate methods BayesianMMM.fit dispatches to (_fit_approx).
-_INFERENCE_METHODS = {"nuts", "map", "advi", "fullrank_advi", "pathfinder"}
+# Mirrors config.enums.FitMethod — "nuts" is full MCMC and "smc" is tempered
+# Sequential Monte Carlo (both EXACT); the rest are the approximate methods
+# BayesianMMM.fit dispatches to (_fit_approx).
+_INFERENCE_METHODS = {
+    "nuts",
+    "smc",
+    "map",
+    "laplace",
+    "advi",
+    "fullrank_advi",
+    "pathfinder",
+}
 _TREND_KEYS = {
     "type",
     "n_changepoints",
@@ -530,7 +539,8 @@ def unconsumed_spec_path(parts: list[str], value, spec: dict) -> str | None:
                         f"`inference.method` = {leaf_val!r} is not a fit method — "
                         f"the fit would fail. Recognized methods: "
                         f"{', '.join(sorted(_INFERENCE_METHODS))} (nuts = full "
-                        "MCMC; the rest are fast approximate fits with "
+                        "MCMC and smc = Sequential Monte Carlo, both exact; "
+                        "the rest are fast approximate fits with "
                         "uncalibrated uncertainty)."
                     )
             # likelihood.params is free-form (family-specific); the family/link
@@ -926,6 +936,11 @@ def settings_digest_markdown(settings: dict) -> str:
             inf_line += f", {inf['chains']} chains × {inf['draws']} draws"
             if inf.get("tune"):
                 inf_line += f" ({inf['tune']} tune)"
+    elif method == "smc":
+        # Exact sampler (Sequential Monte Carlo) — never label it approximate.
+        if inf.get("chains") and inf.get("draws"):
+            inf_line += f", {inf['chains']} runs × {inf['draws']} particles"
+        inf_line += " (SMC — exact)"
     else:
         inf_line += " (approximate — uncertainty not calibrated)"
     lines.append(inf_line)
@@ -1515,6 +1530,11 @@ def build_and_fit(spec: dict, dataset_path: str):
                 target_accept=target_accept,
                 random_seed=random_seed,
             )
+        elif method == "smc":
+            # Exact SMC: chains = number of independent runs (R-hat across them).
+            results = mmm.fit(
+                method="smc", draws=draws, chains=chains, random_seed=random_seed
+            )
         else:
             results = mmm.fit(method=method, draws=draws, random_seed=random_seed)
     else:
@@ -1550,7 +1570,7 @@ def build_and_fit(spec: dict, dataset_path: str):
             f"Model fitted successfully! "
             f"Observations: {mmm.n_obs}, Channels: {mmm.n_channels}. "
             f"Trend: {trend_type}, Seasonality: yearly={yearly}/monthly={monthly}/weekly={weekly}, "
-            f"Inference: {chains} chains × {draws} draws."
+            f"Inference: {method} — {chains} chains × {draws} draws."
         )
 
     # 6. Report (best-effort) — stored in the oracle session, not a shared CWD

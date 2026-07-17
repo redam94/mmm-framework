@@ -1,12 +1,17 @@
-"""Tests for approximate fit methods (MAP / ADVI / Pathfinder).
+"""Tests for approximate fit methods (MAP / Laplace / ADVI / Pathfinder) and
+the exact SMC method.
 
-These methods exist to fit a model in seconds for quick checking — the test
-contract is that they return a drop-in :class:`MMMResults` whose posterior works
-everywhere the NUTS trace does (summary, ArviZ, ``predict``), and that they are
-clearly flagged as approximate.
+The approximate methods exist to fit a model in seconds for quick checking —
+the test contract is that they return a drop-in :class:`MMMResults` whose
+posterior works everywhere the NUTS trace does (summary, ArviZ, ``predict``),
+and that they are clearly flagged as approximate. SMC is the anti-contract:
+an exact sampler whose results must NOT be flagged approximate, with real
+R-hat/ESS across its independent runs and a log marginal likelihood.
 """
 
 from __future__ import annotations
+
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -188,6 +193,84 @@ def test_no_parameter_independent_deterministics(simple_panel):
         if not any(a in free for a in ancestors([d], blockers=observed))
     ]
     assert constant == [], f"parameter-independent deterministics: {constant}"
+
+
+def test_laplace_fit(simple_panel, model_config, trend_config):
+    # pymc-extras is a declared dependency, so Laplace works out of the box.
+    # MAP point + Gaussian curvature draws — still approximate, but a step up
+    # from bare MAP for model checking.
+    mmm = BayesianMMM(simple_panel, model_config, trend_config)
+    results = mmm.fit(method="laplace", draws=50, random_seed=42)
+    assert results.diagnostics["fit_method"] == "laplace"
+    assert results.diagnostics.get("laplace") is True
+    _assert_usable_posterior(results, mmm, expected_draws=50)
+
+
+def test_laplace_missing_dep_message(
+    monkeypatch, simple_panel, model_config, trend_config
+):
+    """When pymc_extras is absent, the error names the install path."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "pymc_extras":
+            raise ImportError("no module")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    mmm = BayesianMMM(simple_panel, model_config, trend_config)
+    with pytest.raises(ImportError, match="pymc_extras"):
+        mmm.fit(method="laplace", random_seed=42)
+
+
+class TestSMCFit:
+    """SMC is an EXACT sampler — the anti-contract of the approximate tier."""
+
+    def test_smc_fit_contract(self, simple_panel, model_config, trend_config):
+        mmm = BayesianMMM(simple_panel, model_config, trend_config)
+        with warnings.catch_warnings():
+            # A deliberately small particle count -> expected low-ESS warnings.
+            warnings.simplefilter("ignore")
+            results = mmm.fit(
+                method="smc",
+                draws=120,
+                chains=2,
+                random_seed=42,
+                cores=1,
+                progressbar=False,
+            )
+        assert isinstance(results, MMMResults)
+        # NOT approximate: SMC must never trip the uncalibrated-uncertainty
+        # banners / report gating.
+        assert results.approximate is False
+        d = results.diagnostics
+        assert d["fit_method"] == "smc"
+        assert d["approximate"] is False
+        # R-hat / ESS across the 2 independent SMC runs are real numbers
+        # (disagreeing runs = the multimodality signal).
+        assert d["rhat_max"] is not None and np.isfinite(d["rhat_max"])
+        assert d["ess_bulk_min"] is not None and np.isfinite(d["ess_bulk_min"])
+        # Divergences do not exist for SMC — None and never flagged.
+        assert d["divergences"] is None
+        assert "divergences" not in (d.get("flags") or [])
+        # Log marginal likelihood (mean + per-run) recorded for Bayes factors.
+        assert np.isfinite(d["log_marginal_likelihood"])
+        assert len(d["log_marginal_likelihood_per_run"]) == 2
+        # The posterior is a normal trace: params AND deterministics, all runs.
+        post = results.trace.posterior
+        assert post.sizes["chain"] == 2
+        assert post.sizes["draw"] == 120
+        assert "beta_TV" in post
+        results.summary()
+        pred = mmm.predict()
+        assert np.shape(pred.y_pred_mean) == (mmm.n_obs,)
+
+    def test_smc_enum_is_exact(self):
+        assert FitMethod.SMC.is_approximate is False
+        assert FitMethod.LAPLACE.is_approximate is True
+        assert FitMethod.NUTS.is_approximate is False
 
 
 def test_pathfinder_missing_dep_message(

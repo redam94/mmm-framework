@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>When Sampling Fails: Diagnosing a Bayesian Fit and What to Try Next | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="R-hat, effective sample size, and divergences each point to a different failure — multimodality, ridges, or broken geometry. An escalation ladder for failed Bayesian fits: pre-fit checks, cheap approximations, reparameterization, and Sequential Monte Carlo as the second opinion.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-when-sampling-fails.html">
+    <meta property="og:title" content="When Sampling Fails: Diagnosing a Bayesian Fit and What to Try Next">
+    <meta property="og:description" content="Sampler failures are almost always model failures. What R-hat, ESS, and divergences actually measure, and the cheapest-first ladder of fixes — ending with SMC as the multimodality second opinion.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-when-sampling-fails.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="When Sampling Fails: Diagnosing a Bayesian Fit and What to Try Next">
+    <meta name="twitter:description" content="Sampler failures are almost always model failures. What R-hat, ESS, and divergences actually measure, and the cheapest-first ladder of fixes — ending with SMC as the multimodality second opinion.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-when-sampling-fails.html",
+          "name": "When Sampling Fails: Diagnosing a Bayesian Fit and What to Try Next | MMM Framework",
+          "description": "R-hat, effective sample size, and divergences each point to a different failure — multimodality, ridges, or broken geometry. An escalation ladder for failed Bayesian fits: pre-fit checks, cheap approximations, reparameterization, and Sequential Monte Carlo as the second opinion.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-17",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-when-sampling-fails.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-when-sampling-fails.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "When Sampling Fails: Diagnosing a Bayesian Fit and What to Try Next",
+          "datePublished": "2026-07-17",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-when-sampling-fails.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-when-sampling-fails.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "When Sampling Fails: Diagnosing a Bayesian Fit and What to Try Next",
+              "item": "https://redam94.github.io/mmm-framework/blog-when-sampling-fails.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#instrument">The Sampler Is an Instrument</a></li>
+                <li><a href="#three-numbers">Three Numbers, Read Correctly</a></li>
+                <li><a href="#syndromes">Three Failure Syndromes</a></li>
+                <li><a href="#recon">Cheap Reconnaissance</a></li>
+                <li><a href="#identification">Fix Identification, Not the Sampler</a></li>
+                <li><a href="#settings">When Settings Are the Answer</a></li>
+                <li><a href="#smc">SMC: The Second Opinion</a></li>
+                <li><a href="#evidence">Evidence and Bayes Factors</a></li>
+                <li><a href="#mmm">Where an MMM Breaks</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">When Sampling Fails</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-17">July 17, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Bayesian workflow</span>
+            </p>
+            <p class="lead">Every applied Bayesian eventually stares at a fit that refuses to converge: R-hat stuck at 1.4, a scatter of divergences, an effective sample size in the double digits. The instinctive responses — run longer, add chains, raise <code>target_accept</code> until the warnings stop — are usually the wrong first moves, because the three diagnostics are not interchangeable alarm bells. Each one points at a <em>different</em> disease, and only one of the three is ever cured by more iterations. This post reads the diagnostics properly, then walks the escalation ladder from cheapest fix to last resort — ending with Sequential Monte Carlo, the exact sampler you call not for speed but for a second opinion.</p>
+
+            <h2 id="instrument">The Sampler Is an Instrument, and It Is Telling You Something</h2>
+            <p>The organizing idea comes from what Gelman and colleagues (2020) call the <em>folk theorem of statistical computing</em>: when you have computational problems, often there is a problem with your model. A sampler is a measurement instrument pointed at a posterior distribution. When the instrument struggles, the overwhelmingly common cause is not a bug in the instrument — modern implementations of the No-U-Turn Sampler (Hoffman &amp; Gelman, 2014) are extraordinarily well engineered — but a posterior whose <em>geometry</em> is pathological: a funnel it cannot descend into, a ridge it can only crawl along, or two separated modes it cannot travel between.</p>
+            <p>That reframing has a practical consequence. A failed fit is not an obstacle between you and your results; it usually <em>is</em> a result. It is telling you that the model, as parameterized, asks for something the data cannot deliver — and the specific diagnostic that fired tells you which kind of something. The escalation ladder below is ordered accordingly: understand the signal first, spend seconds before minutes, and fix the model's identification before reaching for a different algorithm.</p>
+
+            <h2 id="three-numbers">Three Numbers, Read Correctly</h2>
+            <p>Modern convergence assessment rests on three quantities, standardized in their current form by Vehtari and colleagues (2021).</p>
+
+            <div class="definition">
+                <h4>Definition: Split R-hat</h4>
+                <p>Run \( M \) chains of \( N \) draws, split each in half (so slow drift within a chain shows up as disagreement), and compare the between-chain variance \( B \) to the within-chain variance \( W \):</p>
+                $$ \hat{R} \;=\; \sqrt{\frac{\widehat{\mathrm{var}}^{+}}{W}}, \qquad \widehat{\mathrm{var}}^{+} \;=\; \frac{N-1}{N}\,W \;+\; \frac{1}{N}\,B . $$
+                <p>If every chain explores the same distribution, \( B \approx W \) and \( \hat R \to 1 \). Vehtari and colleagues (2021) compute it on <em>rank-normalized</em> values (robust to heavy tails and infinite variance) and recommend acting only when \( \hat R \lt 1.01 \) — a deliberately stricter bar than the older 1.1 convention, which they show can pass fits whose estimates are still badly unstable.</p>
+            </div>
+
+            <p><strong>Effective sample size</strong> answers a different question: of the \( MN \) draws you paid for, how many independent draws are they worth? Autocorrelation \( \rho_t \) at lag \( t \) discounts them,</p>
+            $$ \mathrm{ESS} \;=\; \frac{MN}{\,1 + 2\sum_{t=1}^{\infty} \rho_t\,} , $$
+            <p>and the practical floor is roughly 400 effective draws in the bulk (about 100 per chain at four chains) before R-hat itself is even reliably estimable — plus a separate <em>tail</em>-ESS check, because the quantiles that make up your credible intervals converge more slowly than the mean. Low ESS with good R-hat is not "failure to converge"; it is slow mixing. The chains agree about where the posterior is; they are just expensive to move around it.</p>
+            <p><strong>Divergences</strong> are the odd one out — not a statistic but an event counter, and specific to Hamiltonian samplers. HMC simulates a physical trajectory through the posterior; when the true curvature changes faster than the integrator's step size can track, the simulated energy explodes and the trajectory is flagged as divergent (Betancourt, 2017). The crucial property is <em>where</em> divergences happen: they cluster exactly in the regions the sampler is being repelled from — the neck of a funnel, the corner of a constraint. A divergent fit is therefore biased precisely in the part of parameter space you most needed explored, and no amount of additional sampling fixes that, because the additional samples avoid the same region.</p>
+
+            <h2 id="syndromes">Three Failure Syndromes</h2>
+            <p>Put the three numbers together and the differential diagnosis falls out.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Presentation</th><th>Likely disease</th><th>First-line treatment</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Divergences, often with high R-hat</td><td>Pathological curvature — funnels in hierarchical variances, cliffs from constraints or mis-scaled data</td><td>Reparameterize (non-centered), rescale; <code>target_accept</code> only after</td></tr>
+                    <tr><td>High R-hat, but each chain individually mixes cleanly</td><td><strong>Multimodality</strong> — each chain found a different mode: label switching, sign reflections, aliased structure</td><td>Identification: anchors, constraints, ordering — then confirm with SMC</td></tr>
+                    <tr><td>Low ESS across many parameters, R-hat roughly fine</td><td>A ridge — two parameters trading off (weak identification), or strong posterior correlation</td><td>Priors that break the ridge; more information; then, and only then, longer runs</td></tr>
+                </tbody>
+            </table>
+
+            <p>The middle row deserves the emphasis, because it is the one where the standard advice actively misleads. When two chains sit in two modes, each one looks healthy in isolation — good within-chain mixing, stable traces, no divergences. Only the <em>between</em>-chain comparison catches it, which is precisely why R-hat is computed across multiple independently-initialized chains in the first place. Doubling the draws does nothing: the chains converge ever more confidently to their separate answers. In mixture and latent-structure models this is generic, not exotic — permute the class labels or flip the sign of a latent factor <em>and</em> its loadings, and the likelihood is exactly unchanged (Stephens, 2000). The posterior genuinely has \( k! \) or \( 2^k \) copies of every mode, and a gradient-based chain started near one copy will stay there.</p>
+
+            <div class="note">
+                <h4>💡 The wall-clock diagnostic</h4>
+                <p>There is a fourth signal the diagnostics tables never list: time. A model whose warmup will not settle, or whose sampling pace is an order of magnitude slower than a comparable model, is exhibiting the same geometry problems before any threshold trips. Treat "this is inexplicably slow" as a divergence-class symptom, not an infrastructure complaint — the folk theorem applies to runtime too.</p>
+            </div>
+
+            <h2 id="recon">Cheap Reconnaissance: MAP, Laplace, and Variational Fits</h2>
+            <p>Before touching the sampler's dials, it pays to interrogate the posterior with tools that cost seconds. None of them produce calibrated uncertainty — in the framework they are all flagged <code>approximate=True</code> and the reports refuse to present them as final inference — but each one answers a specific diagnostic question.</p>
+            <p>A <strong>MAP</strong> optimization asks the cheapest question of all: does a well-behaved mode even exist, and can gradient ascent find it? An optimizer that stalls or returns NaN almost always indicates a mechanical defect — data on wild scales, a gradient that is undefined at the initialization, a constraint boundary — that would have wasted an hour of NUTS warmup to discover.</p>
+            <p>A <strong>Laplace approximation</strong> (Tierney &amp; Kadane, 1986) goes one step further: expand the log posterior to second order around the MAP point \( \hat\theta \), giving</p>
+            $$ p(\theta \mid y) \;\approx\; \mathcal{N}\!\left(\hat\theta,\; H^{-1}\right), \qquad H \;=\; -\nabla^2 \log p(\theta \mid y)\big|_{\hat\theta} . $$
+            <p>The Gaussian is a caricature of the posterior, but the <em>attempt</em> is informative: if \( H \) fails to be positive definite, some direction of parameter space is flat at the mode — a weak-identification flag delivered in seconds, naming the parameters involved, before any MCMC has run. This is also why a Laplace fit is a more stable quick-check than bare MAP on high-dimensional models: the curvature draws smooth over the optimizer's run-to-run jitter.</p>
+            <p>Variational fits — ADVI (Kucukelbir et al., 2017) and the quasi-Newton Pathfinder (Zhang et al., 2022) — give a cheap sketch of the posterior's shape and location. An ELBO that oscillates without improving is another geometry smell; a variational posterior that lands somewhere absurd suggests the priors and likelihood are fighting. In the framework all four run through the same interface:</p>
+
+            <pre><code># illustrative
+results = model.fit(method="map")       # does a mode exist?
+results = model.fit(method="laplace")   # is the curvature sane? (Hessian = identification probe)
+results = model.fit(method="advi")      # cheap posterior sketch
+results.approximate                     # True — never final inference</code></pre>
+
+            <h2 id="identification">Fix Identification, Not the Sampler</h2>
+            <p>The rung where failed fits actually get fixed is the model itself, and the fixes are boringly repeatable. The canonical example is the hierarchical funnel. In a <em>centered</em> parameterization, group effects \( \theta_g \sim \mathcal{N}(\mu, \tau) \) create a geometry where the plausible scale of every \( \theta_g \) depends on \( \tau \): as \( \tau \to 0 \) the posterior narrows into a funnel neck whose curvature defeats any fixed step size (Betancourt &amp; Girolami, 2015). The <em>non-centered</em> form,</p>
+            $$ \theta_g \;=\; \mu + \tau \,\eta_g, \qquad \eta_g \sim \mathcal{N}(0, 1), $$
+            <p>is algebraically the same model with the dependence between location and scale removed from the prior — and it routinely converts a divergence-riddled fit into a clean one. Which form samples better depends on how strongly the data constrain each group (Papaspiliopoulos, Roberts &amp; Sk&ouml;ld, 2007): well-measured groups favor centered, weakly-measured groups favor non-centered. The point is that the cure was a reparameterization, not a sampler setting.</p>
+            <p>Multimodality has its own family of identification fixes. Label switching in a mixture is removed by an ordering constraint or a post-hoc relabeling rule (Stephens, 2000). Sign reflection in a latent factor — the \( (F, \lambda) \leftrightarrow (-F, -\lambda) \) symmetry — is removed by anchoring one loading positive. And the anchor has to be chosen where the data have leverage: in our own structural mediation work, a factor anchored on a loading the data held near zero still escaped into its reflected mode (the positivity constraint costs nothing at zero), showing up as a split R-hat of 1.755 with individually clean chains; re-anchoring on a loading the data held firmly nonzero dropped R-hat to 1.08. Ridges respond to the same logic: when two parameters can trade off — a carryover rate against an autoregressive coefficient, a scale against a loading — the fix is a prior or constraint that breaks the trade, or an experiment that informs one side of it.</p>
+
+            <div class="warning">
+                <h4>⚠️ A different sampler does not remove modes</h4>
+                <p>It is tempting to treat multimodality as a sampler deficiency: NUTS gets stuck, so find an algorithm that doesn't. But if the modes come from a symmetry of the model, they are exact copies — sampling all of them perfectly yields a posterior mean of zero for every symmetric quantity, which is not inference, it is cancellation. The sampler that reaches every mode (below: SMC) is the <em>diagnosis</em>; the identification constraint is the treatment. Only when modes are semantically real — genuinely competing explanations the model should entertain — is the multimodal posterior itself the answer.</p>
+            </div>
+
+            <h2 id="settings">When Sampler Settings Are the Answer</h2>
+            <p>Settings have a legitimate but narrow role, and the order matters. Raising <code>target_accept</code> (0.9 &rarr; 0.95 &rarr; 0.99) shrinks the step size so the integrator can track tighter curvature — the right move for a <em>few</em> stubborn divergences on an otherwise-healthy fit, after reparameterization has done the heavy lifting. More warmup helps a sampler whose adaptation had not settled; more draws and chains are the honest cure for a pure ESS shortfall on a slow-mixing but correct geometry. A faster backend (the framework defaults to NumPyro's NUTS) buys wall-clock, not correctness.</p>
+            <p>The failure mode to avoid is using settings to silence rather than cure: <code>target_accept=0.999</code> on an unfixed funnel trades divergence warnings for a sampler that crawls, and the bias that remains is now invisible. If a setting change makes warnings disappear, the diagnostics that should <em>confirm</em> the fix are the ones that were failing before — not merely the absence of the warning.</p>
+
+            <h2 id="smc">Sequential Monte Carlo: The Second Opinion</h2>
+            <p>When the syndrome table says "multimodality" and the identification fixes are in dispute, you want an exact method that cannot get mode-locked. That is what tempered Sequential Monte Carlo is for (Del Moral, Doucet &amp; Jasra, 2006; Chopin, 2002; the tempering idea traces to Neal's 2001 annealed importance sampling). Instead of one point moving through the posterior, SMC evolves a whole <em>population</em> of particles through a sequence of distributions that interpolate from the prior to the posterior,</p>
+            $$ p_{\beta}(\theta) \;\propto\; p(\theta)\; p(y \mid \theta)^{\beta}, \qquad 0 = \beta_0 \lt \beta_1 \lt \cdots \lt \beta_T = 1 . $$
+            <p>At \( \beta = 0 \) the particles blanket the prior — every mode's basin is populated before the modes exist. As \( \beta \) rises, the likelihood switches on gradually; importance weighting, resampling, and short MCMC moves let the population concentrate into whatever structure the posterior has, with mass allocated across modes in proportion to what they actually contain. A gradient chain must <em>travel</em> between modes through a probability desert; an SMC population never has to make the trip.</p>
+            <p>The framework runs it as <code>fit(method="smc")</code> — an exact method, so nothing about the result is flagged approximate — and launches several <em>independent</em> SMC runs, computing R-hat across them. That cross-run R-hat is the second opinion: if independent tempered populations agree with each other but not with your NUTS chains, NUTS was stuck; if the SMC runs also disagree, the posterior's multimodality is severe enough that even population methods struggle, and the model needs identification work regardless of sampler.</p>
+
+            <pre><code># illustrative
+results = model.fit(method="smc", draws=2000, chains=4)   # 4 independent runs x 2000 particles
+results.approximate                                       # False — exact sampler
+results.diagnostics["rhat_max"]                           # across runs: the multimodality verdict
+results.diagnostics["log_marginal_likelihood"]            # model evidence (see below)</code></pre>
+
+            <p>Honesty about the costs: SMC is not a speedup and should never be chosen as one. On a well-behaved unimodal posterior, NUTS is far more sample-efficient — gradients are simply the best guidance system available. SMC's particle moves (an independent Metropolis-Hastings kernel in the PyMC implementation) degrade with dimension, so a model with many hundreds of free parameters — a large geo hierarchy, a latent-state structural model — will crawl or worse. Its niche is exactly the two things gradient MCMC cannot do: populate separated modes, and estimate the quantity in the next section.</p>
+
+            <h2 id="evidence">Model Evidence and Bayes Factors</h2>
+            <p>The tempering ladder yields a by-product that no other sampler in the workflow provides. Each increment \( \beta_t \to \beta_{t+1} \) estimates a ratio of normalizing constants from its importance weights, and the ratios telescope into the <strong>marginal likelihood</strong> — the normalizing constant of Bayes' theorem itself:</p>
+            $$ Z \;=\; p(y) \;=\; \int p(y \mid \theta)\, p(\theta)\, d\theta, \qquad \frac{Z_1}{Z_0} \;=\; \prod_{t=0}^{T-1} \frac{Z_{\beta_{t+1}}}{Z_{\beta_t}} . $$
+            <p>The ratio of two models' marginal likelihoods is the Bayes factor (Kass &amp; Raftery, 1995) — the factor by which the data shift the odds between them, with the integral's built-in penalty for unused flexibility. In a failed-fit investigation this is the tool for adjudicating between candidate <em>fixes</em>: two adstock families, two mediation structures, a one- versus two-mode specification. Marginal likelihoods are famously sensitive to priors — a diffuse prior on an extra parameter is punished whether or not the data use it — so treat Bayes factors from SMC as one line of evidence alongside predictive comparison, not a verdict. But when the question is structural ("does the second mode earn its place?"), the evidence integral is the right instrument, and SMC computes it as a side effect of sampling.</p>
+
+            <h2 id="mmm">Where an MMM Breaks, Specifically</h2>
+            <p>A media mix model assembles most of the classic pathologies in one place, which is why it makes a good closing case study.</p>
+            <p><strong>Ridges are the default, not the exception.</strong> Adstock carryover and an autoregressive baseline both say "this week resembles last week," so their parameters trade off along a ridge the data barely constrain — low ESS, R-hat near the line. A saturation half-point and a coefficient trade off similarly when spend never leaves a narrow band. The durable fixes are informative: an ROI-scale prior, a lift-test calibration that pins one end of the trade (see <a href="blog-calibrating-mmm-experiments.html">the calibration post</a>), or spend variation designed into the media plan itself.</p>
+            <p><strong>Hierarchy means funnels.</strong> Geo-level pooling puts the eight-schools geometry at the center of the model; per-geo effect scales are exactly the \( \tau \) whose funnel neck generates divergences. Non-centered parameterization is the standard cure, and the framework's structural models choose parameterization by how densely each latent state is measured.</p>
+            <p><strong>Latent structure means symmetry.</strong> Mediators, latent demand factors, and latent-class extensions bring reflection and relabeling modes — the high-R-hat-with-clean-chains syndrome. Sign anchors placed where the data have leverage are the treatment; SMC across independent runs is the confirmation.</p>
+            <p>The pre-fit checks — prior predictive simulation and simulation-based calibration (Talts et al., 2018) — deserve the last word, because they are where much of this post becomes unnecessary. A large share of "sampling problems" are priors implying absurd data or a computation that was never calibrated in the first place, and both are detectable before the first real fit; the <a href="blog-prior-predictive-sbc.html">companion post</a> covers them in depth. The framework's <a href="troubleshooting.html#sampling">troubleshooting guide</a> encodes the full ladder — diagnostics, approximate reconnaissance, identification, settings, SMC — as its standard operating procedure for a fit that will not converge.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>The three diagnostics are not interchangeable: divergences mean broken curvature, high R-hat with clean chains means multimodality, low ESS means a ridge. Only the ESS shortfall is ever cured by running longer.</li>
+                    <li>Divergences cluster where the sampler is repelled, so a divergent fit is biased exactly where it matters most — more draws avoid the same region.</li>
+                    <li>Reconnaissance is nearly free: MAP asks whether a mode exists, a Laplace fit's failing Hessian names the weakly-identified directions, variational fits sketch the shape. None are final inference.</li>
+                    <li>The durable fixes are identification: non-centered parameterizations for funnels, sign anchors placed where the data have leverage, priors or experiments that break ridges. Settings like <code>target_accept</code> are the last dial, not the first.</li>
+                    <li>SMC is the second opinion, not a speedup: independent tempered particle populations cannot get mode-locked, so R-hat across SMC runs separates "NUTS was stuck" from "the posterior really has modes" — and the tempering ladder yields the marginal likelihood for Bayes-factor comparison of candidate fixes.</li>
+                    <li>An MMM concentrates all three syndromes: adstock↔baseline ridges, geo-hierarchy funnels, and latent-structure symmetries. Pre-fit checks (prior predictive, SBC) catch a large share before the first real fit.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Vehtari, A., Gelman, A., Simpson, D., Carpenter, B., &amp; B&uuml;rkner, P.-C. (2021). <em>Rank-Normalization, Folding, and Localization: An Improved \( \hat R \) for Assessing Convergence of MCMC</em>. Bayesian Analysis, 16(2).</li>
+                <li>Gelman, A., Vehtari, A., Simpson, D., Margossian, C. C., Carpenter, B., Yao, Y., Kennedy, L., Gabry, J., B&uuml;rkner, P.-C., &amp; Modr&aacute;k, M. (2020). <em>Bayesian Workflow</em>. arXiv:2011.01808.</li>
+                <li>Betancourt, M. (2017). <em>A Conceptual Introduction to Hamiltonian Monte Carlo</em>. arXiv:1701.02434.</li>
+                <li>Betancourt, M., &amp; Girolami, M. (2015). <em>Hamiltonian Monte Carlo for Hierarchical Models</em>. In Current Trends in Bayesian Methodology with Applications. CRC Press.</li>
+                <li>Hoffman, M. D., &amp; Gelman, A. (2014). <em>The No-U-Turn Sampler: Adaptively Setting Path Lengths in Hamiltonian Monte Carlo</em>. Journal of Machine Learning Research, 15.</li>
+                <li>Papaspiliopoulos, O., Roberts, G. O., &amp; Sk&ouml;ld, M. (2007). <em>A General Framework for the Parametrization of Hierarchical Models</em>. Statistical Science, 22(1).</li>
+                <li>Stephens, M. (2000). <em>Dealing with Label Switching in Mixture Models</em>. Journal of the Royal Statistical Society: Series B, 62(4).</li>
+                <li>Del Moral, P., Doucet, A., &amp; Jasra, A. (2006). <em>Sequential Monte Carlo Samplers</em>. Journal of the Royal Statistical Society: Series B, 68(3).</li>
+                <li>Chopin, N. (2002). <em>A Sequential Particle Filter Method for Static Models</em>. Biometrika, 89(3).</li>
+                <li>Neal, R. M. (2001). <em>Annealed Importance Sampling</em>. Statistics and Computing, 11(2).</li>
+                <li>Tierney, L., &amp; Kadane, J. B. (1986). <em>Accurate Approximations for Posterior Moments and Marginal Densities</em>. Journal of the American Statistical Association, 81(393).</li>
+                <li>Kucukelbir, A., Tran, D., Ranganath, R., Gelman, A., &amp; Blei, D. M. (2017). <em>Automatic Differentiation Variational Inference</em>. Journal of Machine Learning Research, 18.</li>
+                <li>Zhang, L., Carpenter, B., Gelman, A., &amp; Vehtari, A. (2022). <em>Pathfinder: Parallel Quasi-Newton Variational Inference</em>. Journal of Machine Learning Research, 23.</li>
+                <li>Kass, R. E., &amp; Raftery, A. E. (1995). <em>Bayes Factors</em>. Journal of the American Statistical Association, 90(430).</li>
+                <li>Talts, S., Betancourt, M., Simpson, D., Vehtari, A., &amp; Gelman, A. (2018). <em>Validating Bayesian Inference Algorithms with Simulation-Based Calibration</em>. arXiv:1804.06788.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

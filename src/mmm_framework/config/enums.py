@@ -155,22 +155,44 @@ class InferenceMethod(str, Enum):
 class FitMethod(str, Enum):
     """How the posterior is obtained at fit time.
 
-    ``NUTS`` is full MCMC (the default, the only one suitable for final
-    inference). The remaining methods are *approximate* and exist to fit a
-    model in seconds so you can spot problems — bad priors, broken geometry,
+    Two methods are *exact* (asymptotically unbiased posterior samplers):
+
+    * ``NUTS`` — full gradient MCMC, the default and the workhorse for final
+      inference.
+    * ``SMC`` — tempered Sequential Monte Carlo (``pm.sample_smc``). Slower
+      than NUTS on well-behaved posteriors, but it handles **multimodal**
+      posteriors NUTS gets mode-locked in (reflected factor modes, label
+      switching, adstock↔AR ridges) and yields a **log marginal likelihood**
+      for model comparison. Use it to confirm suspected multimodality or to
+      compute model evidence — not as a speedup.
+
+    The remaining methods are *approximate* and exist to fit a model in
+    seconds so you can spot problems — bad priors, broken geometry,
     pathological saturation/adstock — before paying for a full sample. Treat
-    their uncertainty as unreliable.
+    their uncertainty as unreliable. ``MAP`` is a point estimate; ``LAPLACE``
+    adds a Gaussian curvature approximation around the MAP point (cheap
+    uncertainty, better-behaved than bare MAP on high-dimensional models);
+    ``ADVI``/``FULLRANK_ADVI`` are variational; ``PATHFINDER`` is quasi-Newton
+    variational (via the declared ``pymc-extras`` dependency, like LAPLACE).
     """
 
     NUTS = "nuts"
+    SMC = "smc"
     MAP = "map"
+    LAPLACE = "laplace"
     ADVI = "advi"
     FULLRANK_ADVI = "fullrank_advi"
     PATHFINDER = "pathfinder"
 
     @property
     def is_approximate(self) -> bool:
-        return self is not FitMethod.NUTS
+        """True for the fast-check methods whose uncertainty is not calibrated.
+
+        NUTS **and SMC** are exact samplers — SMC must not trip the
+        "approximate fit — uncertainty is not calibrated" banners/report
+        gating even though it is not NUTS.
+        """
+        return self not in (FitMethod.NUTS, FitMethod.SMC)
 
 
 class ModelSpecification(str, Enum):

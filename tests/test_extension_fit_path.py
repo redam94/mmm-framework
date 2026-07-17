@@ -118,6 +118,28 @@ def test_advi_fit_supported_for_extensions(mediated_mff):
     assert results.trace.posterior.sizes["draw"] == 50
 
 
+@pytest.mark.slow
+def test_smc_fit_supported_for_extensions(mediated_mff):
+    """SMC (exact Sequential Monte Carlo) works for an extension model and is
+    NOT flagged approximate — R-hat/ESS across the independent runs plus the
+    log marginal likelihood land in the diagnostics."""
+    import warnings
+
+    mmm = build_model(_nested_spec(), mediated_mff)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # tiny particle count -> low-ESS noise
+        results = mmm.fit(
+            method="smc", draws=80, chains=2, random_seed=0, cores=1, progressbar=False
+        )
+    assert results.approximate is False
+    d = results.diagnostics
+    assert d["fit_method"] == "smc"
+    assert d["rhat_max"] is not None
+    assert "log_marginal_likelihood" in d
+    assert results.trace.posterior.sizes["chain"] == 2
+    assert results.trace.posterior.sizes["draw"] == 80
+
+
 def test_approximate_method_flows_through_the_agent_fit_path(mediated_mff):
     """The agent build_model → fit path passes method='map' to the extension
     model instead of raising (the old behavior)."""

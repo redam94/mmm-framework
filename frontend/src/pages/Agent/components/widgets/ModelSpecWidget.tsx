@@ -12,15 +12,20 @@ import type { ModelSpec } from '../../types';
 // leaves are concrete (numbers/strings/arrays), unlike the loose incoming spec.
 type DraftSpec = ReturnType<typeof specWithDefaults>;
 
-// Fit methods the backend dispatches on (config.enums.FitMethod). Everything
-// except NUTS is a fast approximate fit with uncalibrated uncertainty.
+// Fit methods the backend dispatches on (config.enums.FitMethod). NUTS and
+// SMC are exact samplers; the rest are fast approximate fits with
+// uncalibrated uncertainty (mirrors FitMethod.is_approximate).
 const FIT_METHODS: ReadonlyArray<readonly [string, string]> = [
   ['nuts', 'NUTS (full MCMC)'],
+  ['smc', 'SMC (Sequential Monte Carlo)'],
   ['map', 'MAP (point estimate)'],
+  ['laplace', 'Laplace (MAP + Gaussian)'],
   ['advi', 'ADVI (variational)'],
   ['fullrank_advi', 'Full-rank ADVI (variational)'],
   ['pathfinder', 'Pathfinder'],
 ];
+const EXACT_METHODS = new Set(['nuts', 'smc']);
+const isApproximateMethod = (m: string) => !EXACT_METHODS.has(m);
 const fitMethodLabel = (m: string) =>
   FIT_METHODS.find(([v]) => v === m)?.[1] ?? m;
 
@@ -214,7 +219,7 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
         <SpecRow label="Method" value={
           <span className="flex items-center gap-1.5 justify-end">
             {fitMethodLabel(inference?.method ?? 'nuts')}
-            {(inference?.method ?? 'nuts') !== 'nuts' && (
+            {isApproximateMethod(inference?.method ?? 'nuts') && (
               <Badge label="approximate" color="amber" />
             )}
           </span>
@@ -224,11 +229,18 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
         <SpecRow label="Tune" value={inference?.tune ?? 1000} />
         <SpecRow label="Target Accept" value={inference?.target_accept ?? 0.85} />
         <SpecRow label="Seed" value={inference?.random_seed ?? 42} />
-        {(inference?.method ?? 'nuts') !== 'nuts' && (
+        {isApproximateMethod(inference?.method ?? 'nuts') && (
           <p className="text-[11px] text-amber-700 py-1">
             Approximate fits run in seconds for model checking, but their
             uncertainty is <em>not</em> calibrated — re-fit with NUTS before
             trusting intervals or making spend decisions.
+          </p>
+        )}
+        {(inference?.method ?? 'nuts') === 'smc' && (
+          <p className="text-[11px] text-ink-400 py-1">
+            SMC is an exact sampler — slower than NUTS, but robust to
+            multimodal posteriors and it estimates the log marginal
+            likelihood for model comparison.
           </p>
         )}
       </SpecSection>
@@ -331,10 +343,16 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
-          {draft.inference.method !== 'nuts' && (
+          {isApproximateMethod(draft.inference.method) && (
             <p className="text-[11px] text-amber-700 mt-1">
               Approximate fit — seconds instead of minutes, but uncertainty is
               not calibrated. Use NUTS for final inference.
+            </p>
+          )}
+          {draft.inference.method === 'smc' && (
+            <p className="text-[11px] text-ink-400 mt-1">
+              Exact sampler — slower than NUTS, but robust to multimodal
+              posteriors and estimates the log marginal likelihood.
             </p>
           )}
         </div>

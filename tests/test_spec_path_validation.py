@@ -35,9 +35,11 @@ ACCEPTED = [
     ("skip_quality_gate", True),
     ("inference.draws", 2000),
     ("inference.method", "map"),
+    ("inference.method", "laplace"),
     ("inference.method", "advi"),
     ("inference.method", "fullrank_advi"),
     ("inference.method", "pathfinder"),
+    ("inference.method", "smc"),
     ("inference.method", "NUTS"),  # canonicalized case-insensitively
     ("inference.metrics_draws", 0),
     ("trend.type", "piecewise"),

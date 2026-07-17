@@ -368,13 +368,16 @@ class ModelConfigBuilder:
         self._target_accept = rate
         return self
 
-    # Fit method (full MCMC vs. fast approximate checks)
+    # Fit method (full MCMC / SMC vs. fast approximate checks)
     def with_fit_method(self, method: FitMethod | str) -> Self:
         """Set the default fit method used by ``BayesianMMM.fit()``.
 
-        ``"nuts"`` (default) runs full MCMC. The approximate methods — ``"map"``,
-        ``"advi"``, ``"fullrank_advi"``, ``"pathfinder"`` — fit in seconds for
-        quick model checks but produce uncalibrated uncertainty.
+        ``"nuts"`` (default) runs full MCMC; ``"smc"`` runs tempered Sequential
+        Monte Carlo (also exact — robust to multimodality, estimates the log
+        marginal likelihood, but slower than NUTS on well-behaved posteriors).
+        The approximate methods — ``"map"``, ``"laplace"``, ``"advi"``,
+        ``"fullrank_advi"``, ``"pathfinder"`` — fit in seconds for quick model
+        checks but produce uncalibrated uncertainty.
         """
         self._fit_method = FitMethod(method)
         return self
@@ -382,6 +385,15 @@ class ModelConfigBuilder:
     def map_fit(self) -> Self:
         """Default to a maximum a posteriori (MAP) point estimate — fastest check."""
         self._fit_method = FitMethod.MAP
+        return self
+
+    def laplace(self) -> Self:
+        """Default to a Laplace (Gaussian around the MAP point) approximation.
+
+        Cheap curvature-based uncertainty — a step up from bare MAP for model
+        checking, still approximate (via the declared ``pymc_extras`` dep).
+        """
+        self._fit_method = FitMethod.LAPLACE
         return self
 
     def advi(self, full_rank: bool = False) -> Self:
@@ -392,6 +404,17 @@ class ModelConfigBuilder:
     def pathfinder(self) -> Self:
         """Default to Pathfinder VI (requires the optional ``pymc_extras`` package)."""
         self._fit_method = FitMethod.PATHFINDER
+        return self
+
+    def smc(self) -> Self:
+        """Default to tempered Sequential Monte Carlo (``pm.sample_smc``).
+
+        An **exact** sampler (not an approximate check): use it to confirm
+        suspected multimodality (R-hat across independent SMC runs) or to get
+        a log marginal likelihood for model comparison. Slower than NUTS on
+        well-behaved posteriors.
+        """
+        self._fit_method = FitMethod.SMC
         return self
 
     def with_likelihood(self, likelihood: LikelihoodConfig) -> Self:

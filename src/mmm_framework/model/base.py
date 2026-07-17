@@ -284,8 +284,8 @@ def run_approximate_fit(
     random_seed: int | None,
     **kwargs,
 ) -> tuple[az.InferenceData, dict]:
-    """Run an approximate fit (MAP / ADVI / full-rank ADVI / Pathfinder) on ANY
-    PyMC ``model`` and return ``(idata, extra_diagnostics)``.
+    """Run an approximate fit (MAP / Laplace / ADVI / full-rank ADVI /
+    Pathfinder) on ANY PyMC ``model`` and return ``(idata, extra_diagnostics)``.
 
     The returned ``InferenceData`` always carries a ``posterior`` group with
     ``chain``/``draw`` dims and the model's deterministics (``find_MAP`` reports
@@ -325,6 +325,25 @@ def run_approximate_fit(
             pass
         return idata, {"vi_iterations": n_iter, "elbo": final_elbo}
 
+    if method is FitMethod.LAPLACE:
+        try:
+            import pymc_extras as pmx
+        except ImportError as exc:  # pragma: no cover - broken env only
+            raise ImportError(
+                "Laplace needs the 'pymc_extras' package, which IS a declared "
+                "dependency of mmm-framework (pymc-extras>=0.12,<0.13) — this "
+                "environment is missing it. Re-sync (`uv sync`) or `pip install "
+                "'pymc-extras>=0.12,<0.13'`. MAP and ADVI need no extra deps."
+            ) from exc
+        with model:
+            idata = pmx.fit_laplace(
+                draws=draws,
+                random_seed=random_seed,
+                progressbar=kwargs.pop("progressbar", False),
+                **kwargs,
+            )
+        return idata, {"laplace": True}
+
     if method is FitMethod.PATHFINDER:
         try:
             import pymc_extras as pmx
@@ -345,6 +364,59 @@ def run_approximate_fit(
         return idata, {"pathfinder": True}
 
     raise ValueError(f"Unsupported approximate fit method: {method}")
+
+
+def run_smc_fit(
+    model: "pm.Model",
+    draws: int,
+    chains: int,
+    random_seed: int | None,
+    **kwargs,
+) -> tuple[az.InferenceData, dict]:
+    """Run tempered Sequential Monte Carlo (``pm.sample_smc``) on ANY PyMC
+    ``model`` and return ``(idata, extra_diagnostics)``.
+
+    SMC is an **exact** sampler (not part of the approximate tier): ``chains``
+    independent SMC runs are launched, so R-hat across them is meaningful —
+    disagreement between runs is the multimodality signal SMC exists to
+    surface. The extra diagnostics carry the per-run **log marginal
+    likelihood** estimates (final tempering stage) and their mean, usable for
+    Bayes-factor model comparison.
+
+    Shared by :class:`BayesianMMM` and the extended models
+    (``mmm_extensions.models.base.BaseExtendedMMM.fit``) so both exact-SMC
+    paths are identical. NB models with ``pm.Potential`` terms (e.g. experiment
+    calibration, the LCA garden model) are supported, but PyMC folds the
+    Potential into the tempered likelihood term — semantically fine here, and
+    PyMC warns about it.
+    """
+    with model:
+        idata = pm.sample_smc(
+            draws=draws,
+            chains=chains,
+            random_seed=random_seed,
+            **kwargs,
+        )
+    extra: dict = {"smc": True}
+    try:
+        raw = np.asarray(idata.sample_stats["log_marginal_likelihood"].values)
+        # One per-stage estimate sequence per chain. When chains agree on the
+        # stage count this is a (chain, stage) array (possibly object-dtype,
+        # NaN-padded); with RAGGED stage counts it is a 1-D object array of
+        # per-chain lists. Either way the final tempering stage's estimate is
+        # the last FINITE value of each chain's sequence.
+        entries = list(raw) if raw.ndim >= 1 else [raw.item()]
+        per_run: list[float] = []
+        for entry in entries:
+            seq = np.asarray(entry, dtype=float).ravel()
+            finite_vals = seq[np.isfinite(seq)]
+            if finite_vals.size:
+                per_run.append(float(finite_vals[-1]))
+        extra["log_marginal_likelihood"] = float(np.mean(per_run)) if per_run else None
+        extra["log_marginal_likelihood_per_run"] = per_run
+    except Exception:  # noqa: BLE001 - lml is best-effort metadata
+        pass
+    return idata, extra
 
 
 class BayesianMMM:
@@ -2959,31 +3031,42 @@ class BayesianMMM:
         """
         Fit the model.
 
-        By default this runs full NUTS MCMC. Pass ``method`` to use an
-        *approximate* algorithm instead — these fit in seconds and are intended
-        for quickly checking a model (bad priors, broken geometry, pathological
-        saturation/adstock) before committing to a full sample. Their
-        uncertainty is **not** calibrated and convergence diagnostics
-        (R-hat / ESS) do not apply, so do not use them for final inference.
+        By default this runs full NUTS MCMC. ``method="smc"`` runs tempered
+        Sequential Monte Carlo instead — also an *exact* sampler
+        (``MMMResults.approximate`` stays ``False``), slower than NUTS on
+        well-behaved posteriors but robust to **multimodality** (it populates
+        modes NUTS gets stuck in) and it estimates the **log marginal
+        likelihood** (``diagnostics["log_marginal_likelihood"]``) for model
+        comparison. The remaining methods are *approximate* — they fit in
+        seconds and are intended for quickly checking a model (bad priors,
+        broken geometry, pathological saturation/adstock) before committing to
+        a full sample. Their uncertainty is **not** calibrated and convergence
+        diagnostics (R-hat / ESS) do not apply, so do not use them for final
+        inference. See ``technical-docs/sampling-failure-playbook.md`` for
+        which method to reach for when a fit fails.
 
         Args:
-            draws: Posterior draws per chain (NUTS) or number of approximate
-                draws to take from the fitted approximation. Default from config.
+            draws: Posterior draws per chain (NUTS), particles per SMC run
+                (SMC), or number of approximate draws to take from the fitted
+                approximation. Default from config.
             tune: Number of tuning samples (NUTS only). Default from config.
-            chains: Number of MCMC chains (NUTS only). Default from config.
+            chains: Number of MCMC chains (NUTS) or independent SMC runs
+                (SMC — R-hat is computed across them). Default from config.
             target_accept: Target acceptance rate for NUTS. Default 0.9.
             random_seed: Random seed for reproducibility.
-            method: Fit method — ``"nuts"`` (default, full MCMC), ``"map"``
-                (maximum a posteriori point), ``"advi"`` / ``"fullrank_advi"``
-                (variational inference), or ``"pathfinder"`` (via the declared
-                ``pymc-extras`` dependency — works out of the box). Defaults to
-                ``model_config.fit_method``.
+            method: Fit method — ``"nuts"`` (default, full MCMC), ``"smc"``
+                (Sequential Monte Carlo, exact), ``"map"`` (maximum a
+                posteriori point), ``"laplace"`` (Gaussian approximation
+                around the MAP point; via the declared ``pymc-extras``
+                dependency), ``"advi"`` / ``"fullrank_advi"`` (variational
+                inference), or ``"pathfinder"`` (via ``pymc-extras`` — works
+                out of the box). Defaults to ``model_config.fit_method``.
             **kwargs: Additional arguments passed to the underlying sampler
-                (``pm.sample`` for NUTS).
+                (``pm.sample`` for NUTS, ``pm.sample_smc`` for SMC).
 
         Returns:
             Fitted model results with diagnostics. For approximate methods
-            ``MMMResults.approximate`` is ``True``.
+            ``MMMResults.approximate`` is ``True`` (NUTS and SMC: ``False``).
         """
         method = (
             FitMethod(method) if method is not None else self.model_config.fit_method
@@ -3055,7 +3138,54 @@ class BayesianMMM:
                 )
             )
 
-        # ---- Approximate inference (MAP / ADVI / full-rank ADVI / Pathfinder) ----
+        if method is FitMethod.SMC:
+            # ---- Exact inference via tempered Sequential Monte Carlo ----
+            # NOT an approximate method: `approximate` stays False and R-hat /
+            # ESS are computed across the independent SMC runs. tune /
+            # target_accept are NUTS-only and ignored here.
+            draws = draws or self.model_config.n_draws
+            chains = chains or self.model_config.n_chains
+
+            prior = self.get_prior(samples=1000, random_seed=random_seed)
+
+            trace, extra_diagnostics = run_smc_fit(
+                self.model,
+                draws=draws,
+                chains=chains,
+                random_seed=random_seed,
+                **kwargs,
+            )
+            trace = arviz_compat.attach_prior(trace, prior)
+            self._trace = trace
+
+            from ..diagnostics import convergence as _conv
+
+            diagnostics = {
+                "fit_method": method.value,
+                "approximate": False,
+            }
+            # Best-effort R-hat/ESS across the independent runs (divergences do
+            # not exist for SMC and come back None, which is never flagged).
+            diagnostics.update(_conv.compute_convergence(trace))
+            diagnostics.update(extra_diagnostics)
+            _conv.annotate(diagnostics)
+            # Disagreeing SMC runs (high R-hat) = the multimodality signal.
+            _conv.warn_if_not_converged(diagnostics, label="BayesianMMM (SMC)")
+
+            return self._attach_declared_estimands(
+                MMMResults(
+                    trace=trace,
+                    model=self.model,
+                    panel=self.panel,
+                    diagnostics=diagnostics,
+                    y_mean=self.y_mean,
+                    y_std=self.y_std,
+                    approximate=False,
+                )
+            )
+
+        # ---- Approximate inference (MAP / Laplace / ADVI / full-rank ADVI /
+        # Pathfinder) ----
         draws = draws or self.model_config.n_draws
         trace, extra_diagnostics = self._fit_approx(
             method=method,

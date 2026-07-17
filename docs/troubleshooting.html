@@ -243,17 +243,22 @@ cxx = /usr/bin/clang++</code></pre>
                     pathological saturation/adstock setup:
                     <div class="code-wrapper">
                         <pre><code class="language-python"># seconds-fast sanity check — NOT calibrated uncertainty
-results = model.fit(method="map")          # or "advi", "fullrank_advi", "pathfinder"
+results = model.fit(method="map")          # or "laplace", "advi", "fullrank_advi", "pathfinder"
 print(results.approximate)                 # True</code></pre>
                     </div>
+                    <code>"laplace"</code> adds a Gaussian curvature approximation around the MAP
+                    point — cheap uncertainty that is better behaved than bare MAP on
+                    high-dimensional models, and a failing Hessian is itself a
+                    weak-identification warning.
                 </li>
             </ul>
             <div class="warning">
                 <h4>Approximate ≠ trustworthy intervals</h4>
                 <p style="margin-bottom:0;">
-                    MAP / ADVI / Pathfinder are for <em>model checking</em>, not decisions. Their R-hat and
-                    ESS are undefined and their uncertainty is <strong>not calibrated</strong> — re-fit with
-                    full NUTS before trusting any ROI, credible interval, or budget recommendation.
+                    MAP / Laplace / ADVI / Pathfinder are for <em>model checking</em>, not decisions. Their
+                    R-hat and ESS are undefined and their uncertainty is <strong>not calibrated</strong> —
+                    re-fit with full NUTS before trusting any ROI, credible interval, or budget
+                    recommendation.
                 </p>
             </div>
 
@@ -270,6 +275,34 @@ print(results.approximate)                 # True</code></pre>
                     weakly-identified channel is a common culprit) — see the
                     <a href="bayesian-workflow.html">Bayesian workflow</a> page.</li>
             </ul>
+            <p>
+                The full escalation ladder — which diagnostic points to which fix, in cost order — is
+                formalized in the research post
+                <a href="blog-when-sampling-fails.html">When Sampling Fails</a>.
+            </p>
+
+            <div class="symptom">High R-hat but each chain looks fine — suspected multimodality</div>
+            <p>
+                When chains individually mix well yet disagree with each other (high <em>split</em>
+                R-hat with clean per-chain traces), each chain has usually found a <em>different
+                posterior mode</em> — label switching in latent-class models, a reflected latent
+                factor, or an adstock↔carryover ridge. More draws will not fix this. Confirm it with
+                <strong>Sequential Monte Carlo</strong>, an exact sampler whose independent tempered
+                runs do not get mode-locked:
+            </p>
+            <div class="code-wrapper">
+                <pre><code class="language-python"># exact sampler — approximate stays False; R-hat compares independent runs
+results = model.fit(method="smc", draws=2000, chains=4)
+print(results.diagnostics["log_marginal_likelihood"])  # model evidence, for Bayes factors</code></pre>
+            </div>
+            <p>
+                If SMC confirms real modes, the fix is <em>identification</em> — sign-anchor the latent
+                factor, constrain or re-center the offending component — not a different sampler.
+                SMC also estimates the <strong>log marginal likelihood</strong>, so competing fixes
+                (adstock families, mediation structures) can be compared by Bayes factor. Note SMC is
+                slower than NUTS on well-behaved posteriors and degrades on very high-dimensional
+                models — it is a diagnosis and evidence tool, not a speedup.
+            </p>
 
             <div class="symptom">Divergences won't clear</div>
             <p>

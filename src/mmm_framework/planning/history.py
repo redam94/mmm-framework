@@ -131,16 +131,26 @@ def compute_run_metrics(
     }
 
     # Fit provenance so persisted ROI/CI history is not silently treated as
-    # calibrated when it came from an approximate (MAP/ADVI/Pathfinder) fit.
+    # calibrated when it came from an approximate (MAP/Laplace/ADVI/Pathfinder)
+    # fit. NUTS and SMC are exact (FitMethod.is_approximate).
     _fm = getattr(getattr(mmm, "model_config", None), "fit_method", None)
     _fit_method = getattr(_fm, "value", _fm)
+
+    def _is_approx(val) -> bool | None:
+        if val is None:
+            return None
+        try:
+            from ..config.enums import FitMethod as _FM
+
+            return _FM(str(val).lower()).is_approximate
+        except ValueError:
+            return str(val).lower() != "nuts"
+
     metrics = {
         "schema_version": RUN_METRICS_SCHEMA_VERSION,
         "n_draws": int(curves.contributions.shape[0]),
         "fit_method": str(_fit_method) if _fit_method is not None else None,
-        "approximate": (
-            str(_fit_method).lower() != "nuts" if _fit_method is not None else None
-        ),
+        "approximate": _is_approx(_fit_method),
         "response_curves": response_curves,
         "channels": channels,
         "portfolio": {

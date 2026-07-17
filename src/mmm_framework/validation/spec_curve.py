@@ -345,6 +345,13 @@ def _default_fit(spec: dict, dataset_path: str) -> Any:
             chains=int(inf.get("chains", 4)),
             target_accept=float(inf.get("target_accept", 0.85)),
         )
+    elif method == "smc":
+        # Exact SMC: draws = particles per run, chains = independent runs.
+        kwargs.update(
+            method="smc",
+            draws=int(inf.get("draws", 1000)),
+            chains=int(inf.get("chains", 4)),
+        )
     else:
         kwargs["method"] = method
     model.fit(**kwargs)

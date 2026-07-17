@@ -13,9 +13,12 @@ bulk-ESS rule of thumb at 4 chains):
 * ``ess_bulk_min >= 400``
 * ``divergences == 0``
 
-For *approximate* fits (MAP / ADVI / Pathfinder) R-hat and ESS are undefined, so
-the verdict is ``None`` (not assessable) — callers must not treat ``None`` as
-"converged".
+For *approximate* fits (MAP / Laplace / ADVI / Pathfinder) R-hat and ESS are
+undefined, so the verdict is ``None`` (not assessable) — callers must not treat
+``None`` as "converged". SMC fits are EXACT (``approximate`` False): R-hat/ESS
+are computed across the independent SMC runs and the verdict applies —
+disagreeing runs (high R-hat) are SMC's multimodality signal; divergences do
+not exist for SMC and stay ``None`` (never flagged).
 """
 
 from __future__ import annotations
@@ -124,9 +127,13 @@ def convergence_warning_message(
         return None
     parts: list[str] = []
     if "divergences" in flags:
-        parts.append(f"{int(diagnostics.get('divergences') or 0)} divergent transition(s)")
+        parts.append(
+            f"{int(diagnostics.get('divergences') or 0)} divergent transition(s)"
+        )
     if "rhat" in flags:
-        parts.append(f"max R-hat={_finite(diagnostics.get('rhat_max')):.3f} (> {RHAT_OK})")
+        parts.append(
+            f"max R-hat={_finite(diagnostics.get('rhat_max')):.3f} (> {RHAT_OK})"
+        )
     if "ess" in flags:
         parts.append(
             f"min bulk-ESS={_finite(diagnostics.get('ess_bulk_min')):.0f} "

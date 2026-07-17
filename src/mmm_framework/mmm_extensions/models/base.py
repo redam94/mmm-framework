@@ -488,26 +488,35 @@ class BaseExtendedMMM:
         method: "FitMethod | str" = "nuts",
         **kwargs,
     ) -> ModelResults:
-        """Fit the model with NUTS (default) or a fast **approximate** method.
+        """Fit the model with NUTS (default), SMC, or a fast **approximate** method.
 
-        ``method`` ∈ {``nuts``, ``map``, ``advi``, ``fullrank_advi``,
-        ``pathfinder``}. NUTS is full MCMC for real inference. The approximate
-        methods fit in **seconds** for quick model checks — the returned
-        ``ModelResults.approximate`` is ``True``, R-hat/ESS are ``None`` and the
-        uncertainty is **not calibrated** (re-fit with NUTS before trusting
-        intervals/decisions). The approximate posterior is a drop-in for the
-        NUTS trace (deterministics included), so the extended reports and
-        pathway analysis work off it. Extension models share the base model's
-        approximate engine (:func:`~mmm_framework.model.base.run_approximate_fit`).
+        ``method`` ∈ {``nuts``, ``smc``, ``map``, ``laplace``, ``advi``,
+        ``fullrank_advi``, ``pathfinder``}. NUTS is full MCMC for real
+        inference. ``smc`` is tempered Sequential Monte Carlo — also **exact**
+        (``ModelResults.approximate`` stays ``False``): slower than NUTS but
+        robust to the multimodal geometries extension models are prone to
+        (reflected factor modes, label switching, adstock↔AR ridges) and it
+        estimates the log marginal likelihood for model comparison. The
+        approximate methods fit in **seconds** for quick model checks — the
+        returned ``ModelResults.approximate`` is ``True``, R-hat/ESS are
+        ``None`` and the uncertainty is **not calibrated** (re-fit with NUTS
+        before trusting intervals/decisions). The approximate posterior is a
+        drop-in for the NUTS trace (deterministics included), so the extended
+        reports and pathway analysis work off it. Extension models share the
+        base model's engines (:func:`~mmm_framework.model.base.run_approximate_fit`,
+        :func:`~mmm_framework.model.base.run_smc_fit`).
 
         Args:
-            draws: Posterior draws per chain (NUTS) or number of approximate
-                draws (ADVI/Pathfinder; MAP is a single point and ignores it).
-            tune / chains / target_accept / nuts_sampler: NUTS controls (unused
-                by the approximate methods).
+            draws: Posterior draws per chain (NUTS), particles per SMC run,
+                or number of approximate draws (ADVI/Laplace/Pathfinder; MAP
+                is a single point and ignores it).
+            tune / target_accept / nuts_sampler: NUTS controls (unused by SMC
+                and the approximate methods). ``chains`` also sets the number
+                of independent SMC runs (R-hat is computed across them).
             random_seed: Random seed for reproducibility.
             method: Inference method (see above).
-            **kwargs: forwarded to ``pm.sample`` (NUTS) or the approximate fitter.
+            **kwargs: forwarded to ``pm.sample`` (NUTS), ``pm.sample_smc``
+                (SMC), or the approximate fitter.
 
         Returns:
             Container with trace, model and diagnostics.
@@ -555,7 +564,52 @@ class BaseExtendedMMM:
                 diagnostics=diagnostics,
             )
 
-        # ---- Approximate inference (MAP / ADVI / full-rank ADVI / Pathfinder) --
+        if fit_method is FitMethod.SMC:
+            # ---- Exact inference via tempered SMC (shared engine) ----
+            from ...model.base import run_smc_fit
+            from ...utils import arviz_compat
+
+            trace, extra = run_smc_fit(
+                self.model,
+                draws=draws,
+                chains=chains,
+                random_seed=random_seed,
+                **kwargs,
+            )
+            try:
+                prior = self.sample_prior_predictive(
+                    samples=1000, random_seed=random_seed
+                )
+                trace = arviz_compat.attach_prior(trace, prior)
+            except Exception:  # noqa: BLE001 - prior is best-effort
+                pass
+            self._trace = trace
+
+            diagnostics = {"fit_method": "smc", "approximate": False}
+            try:
+                from ...diagnostics import convergence as _conv
+
+                diagnostics.update(_conv.compute_convergence(self._trace))
+                diagnostics.update(extra)
+                _conv.annotate(diagnostics)
+                # Disagreeing SMC runs (high R-hat) = the multimodality signal.
+                _conv.warn_if_not_converged(
+                    diagnostics, label=f"{type(self).__name__} (SMC)"
+                )
+            except Exception:  # noqa: BLE001 - diagnostics are best-effort
+                diagnostics.update(extra)
+
+            self._fit_diagnostics = dict(diagnostics)
+
+            return ModelResults(
+                trace=self._trace,
+                model=self.model,
+                config=getattr(self, "config", None),
+                diagnostics=diagnostics,
+            )
+
+        # ---- Approximate inference (MAP / Laplace / ADVI / full-rank ADVI /
+        # Pathfinder) --
         from ...model.base import run_approximate_fit
         from ...utils import arviz_compat
 

@@ -147,9 +147,11 @@ panels, run any recursion INDEPENDENTLY per cell (`cell_idx`), never across cell
 If your model is national-only, raise a clear error on `has_geo or has_product`.
 
 ## Approximate fits
-`method` ∈ {"map","advi","fullrank_advi","pathfinder"} give a fast approximate
-posterior (`MMMResults.approximate=True`, R-hat/ESS None) — great for a structural
-sanity check before paying for NUTS.
+`method` ∈ {"map","laplace","advi","fullrank_advi","pathfinder"} give a fast
+approximate posterior (`MMMResults.approximate=True`, R-hat/ESS None) — great
+for a structural sanity check before paying for NUTS. `method="smc"` is EXACT
+(Sequential Monte Carlo): slower, but handles multimodal posteriors (label
+switching, reflected factor modes) and estimates the log marginal likelihood.
 """
 
 
