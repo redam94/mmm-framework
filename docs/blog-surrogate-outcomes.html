@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Measuring the Long Run: Surrogate Outcomes in Media | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Budget decisions need long-run effects, but experiments and MMMs mostly see the short term. How surrogate outcomes and the surrogate index estimate long-term ad effects — and where they break.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-surrogate-outcomes.html">
+    <meta property="og:title" content="Measuring the Long Run: Surrogate Outcomes in Media">
+    <meta property="og:description" content="Budget decisions need long-run effects, but experiments and MMMs mostly see the short term. How surrogate outcomes and the surrogate index estimate long-term ad effects — and where they break.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-surrogate-outcomes.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Measuring the Long Run: Surrogate Outcomes in Media">
+    <meta name="twitter:description" content="Budget decisions need long-run effects, but experiments and MMMs mostly see the short term. How surrogate outcomes and the surrogate index estimate long-term ad effects — and where they break.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-surrogate-outcomes.html",
+          "name": "Measuring the Long Run: Surrogate Outcomes in Media | MMM Framework",
+          "description": "Budget decisions need long-run effects, but experiments and MMMs mostly see the short term. How surrogate outcomes and the surrogate index estimate long-term ad effects — and where they break.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-14",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-surrogate-outcomes.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-surrogate-outcomes.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Measuring the Long Run: Surrogate Outcomes in Media",
+          "datePublished": "2026-07-18",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-surrogate-outcomes.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-surrogate-outcomes.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Measuring the Long Run: Surrogate Outcomes in Media",
+              "item": "https://redam94.github.io/mmm-framework/blog-surrogate-outcomes.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#the-gap">The Gap Between Decision and Data</a></li>
+                <li><a href="#prentice">What a Valid Surrogate Demands</a></li>
+                <li><a href="#paradox">The Surrogate Paradox</a></li>
+                <li><a href="#index">The Surrogate Index</a></li>
+                <li><a href="#assumptions">The Identifying Assumptions</a></li>
+                <li><a href="#holdbacks">Long-Term Holdbacks in Practice</a></li>
+                <li><a href="#goodhart">Goodhart and the Discipline of Truth</a></li>
+                <li><a href="#mmm">Surrogates and the MMM</a></li>
+                <li><a href="#synthesis">A Practical Synthesis</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Measuring the Long Run</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-18">July 18, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Measurement</span>
+            </p>
+            <p class="lead">Every budget decision is a bet on the long run. You spend today to build a customer who stays, a brand that carries pricing power, a base of demand that compounds for years. But almost every instrument we have — the two-week lift test, the quarter of sales an MMM sees, the immediate conversion an ad platform reports — measures the short run. The uncomfortable gap between what we decide about and what we observe is the central problem of long-horizon measurement, and it has a name in the causal-inference literature: <em>surrogacy</em>. A surrogate is a short-term quantity you observe now, standing in for a long-term outcome you cannot yet see. Used well, surrogates let you steer toward durable value without waiting years. Used badly, they let you optimize confidently in exactly the wrong direction.</p>
+
+            <h2 id="the-gap">The Gap Between Decision and Data</h2>
+            <p>Consider what a marketer actually wants to know: if I raise brand spend by a million dollars this quarter, what is the effect on revenue — not this month, but over the customer lifetimes I am seeding? The honest answer arrives on a timescale that no experiment tolerates. Lifetime value accrues over years; brand equity shifts over multiple purchase cycles; retention cohorts reveal themselves only as they churn or don't. Meanwhile the decision must be made this planning cycle, and the data in hand covers weeks.</p>
+            <p>The reflexive fix is to optimize the short-term outcome you <em>can</em> see and hope it tracks the long one. Sometimes it does. Often it does not, and the divergence is not random noise but structural. A promotion that pulls forward demand lifts this month's sales while cannibalizing next quarter's. An aggressive ad load raises immediate click revenue while training users to ignore ads — the phenomenon Google researchers named "ads blindness" (Hohnhold, O'Brien, and Tang, 2015). A discount-heavy acquisition channel books cheap conversions that churn before they ever pay back. In each case the short-term proxy points one way and the long-run outcome points the other. Optimizing the proxy is then worse than optimizing nothing: it applies real pressure toward a goal you did not choose.</p>
+            <p>This is why "just use a proxy" is not a solution but a hypothesis — one that has to be stated formally and checked. The surrogate literature, born in clinical trials where waiting to observe mortality is both slow and ethically fraught, gives us the language to state it and the tools to check it.</p>
+
+            <h2 id="prentice">What a Valid Surrogate Demands</h2>
+            <p>The foundational treatment is Prentice (1989), which asked exactly the media question in medical dress: when can a comparison of treatments on a short-term marker substitute for the comparison on the true endpoint? His answer is a criterion strict enough that it still disciplines the field. A surrogate is valid, in Prentice's operational sense, when a test of "no treatment effect on the surrogate" is also a valid test of "no treatment effect on the true endpoint" — which requires the surrogate to <em>fully capture</em> the treatment's influence on the outcome.</p>
+
+            <div class="definition">
+                <h4>Definition: The Prentice full-mediation criterion</h4>
+                <p>Let \( W \) be the treatment (say, a spend change), \( S \) the surrogate observed early, and \( Y^{L} \) the true long-run outcome. The core Prentice condition is that the true endpoint is conditionally independent of treatment given the surrogate:</p>
+                $$ Y^{L} \;\perp\; W \;\mid\; S. $$
+                <p>In words: once you know the surrogate, learning whether the unit was treated tells you nothing more about the long-run outcome. The entire causal effect of \( W \) on \( Y^{L} \) is <em>routed through</em> \( S \) — the surrogate is a complete mediator. Prentice's paper is often summarized as four criteria (treatment affects the surrogate; treatment affects the true endpoint; the surrogate predicts the endpoint given treatment; and full capture), but the last is the binding one and the others are its scaffolding.</p>
+            </div>
+
+            <p>The strength of this condition is also its problem. Full mediation says there is <em>no</em> path from treatment to the long-run outcome that bypasses the surrogate. A single short-term metric almost never earns that. Immediate conversions do not capture the brand-memory effects of an impression; this month's sales do not capture the habit a customer is forming. Prentice himself was cautious about how rarely real markers meet the bar, and the subsequent literature has been a long catalogue of ways single surrogates fail. The failure has a sharp form worth its own section.</p>
+
+            <h2 id="paradox">The Surrogate Paradox</h2>
+            <p>The most alarming failure mode is not that a surrogate is uninformative — it is that a surrogate can be strongly, correctly associated with the outcome and <em>still</em> point the decision the wrong way. This is the <strong>surrogate paradox</strong>, and it is not a curiosity but a live risk in any optimization loop.</p>
+
+            <div class="warning">
+                <h4>⚠️ A treatment can improve the surrogate, harm the true outcome, and lie the whole time</h4>
+                <p>Formally (VanderWeele, 2013): a treatment may have a <em>positive</em> average effect on the surrogate, the surrogate may have a <em>positive</em> effect on the true endpoint, and yet the treatment may have a <em>negative</em> effect on the true endpoint. Every pairwise association you can measure looks reassuring, and the net effect is the opposite of what those associations imply. Marginal correlation between surrogate and outcome — the thing dashboards actually show — is no protection at all.</p>
+            </div>
+
+            <p>How does this happen? The paradox arises when the treatment reaches the outcome through more than one path and those paths carry different signs, or when the surrogate–outcome association is confounded rather than causal. An ad-load increase might raise short-term revenue (one positive path) while eroding user trust and future engagement (a negative path the surrogate never sees). Because the surrogate captures only the first path, optimizing it maximizes the wrong sum. VanderWeele's contribution was to derive sufficient conditions under which a surrogate is "consistent" — provably free of the paradox — even when the treatment has a direct effect on the outcome not routed through the surrogate. Those conditions (monotonicity of effects, sign restrictions) are exactly the kind of structural assumptions that are hard to verify and easy to violate in messy media systems.</p>
+            <p>A parallel line, principal stratification (Frangakis and Rubin, 2002), reframes surrogacy around <em>principal strata</em> — groups defined by their joint potential surrogate values under treatment and control — and defines a "principal surrogate" through associative and dissociative effects. It is a cleaner causal object than Prentice's regression-flavored criterion, but it identifies less from data alone; principal surrogacy generally needs either multiple trials or strong structural assumptions to pin down. The practical takeaway from three decades of this work is consistent: a <em>single</em> surrogate almost never provably escapes the paradox, and the correlations you can see do not certify it. That negative result is what makes the next idea so useful — it changes the strategy from finding one perfect surrogate to combining many imperfect ones.</p>
+
+            <h2 id="index">The Surrogate Index</h2>
+            <p>The modern reframing comes from Athey, Chetty, Imbens, and Kang (2019; published in the <em>Review of Economic Studies</em>, 2025). Their move is deceptively simple. Stop searching for the one metric that fully mediates the long-run effect. Instead, collect <em>many</em> short-term proxies and combine them into a single predictor of the long-run outcome — the <strong>surrogate index</strong> — estimated on a historical sample where you <em>do</em> eventually observe the truth.</p>
+
+            <div class="definition">
+                <h4>Definition: The surrogate index construction</h4>
+                <p>Let \( S \) be a vector of short-term surrogates (many of them) and \( X \) baseline covariates. In an <em>observational</em> or historical sample where the long-run outcome \( Y^{L} \) was eventually observed, estimate the conditional mean</p>
+                $$ h(s, x) \;=\; \mathbb{E}\!\left[\, Y^{L} \,\mid\, S = s,\; X = x \,\right]. $$
+                <p>This function \( h \) is the surrogate index: the predicted long-run outcome given everything you can see early. Now take a fresh <em>experiment</em> that ran only long enough to observe \( S \) and \( X \), and impute each unit's long-run outcome by \( h(S_i, X_i) \). The long-run average treatment effect is recovered as the effect on the index:</p>
+                $$ \mathbb{E}\!\left[\, Y^{L}(1) - Y^{L}(0) \,\right] \;=\; \mathbb{E}_{\mathrm{exp}}\!\left[\, h(S, X) \mid W = 1 \,\right] - \mathbb{E}_{\mathrm{exp}}\!\left[\, h(S, X) \mid W = 0 \,\right]. $$
+                <p>You never wait for \( Y^{L} \) in the experiment; you borrow the surrogate-to-outcome map from history and apply it to the experiment's short-term data.</p>
+            </div>
+
+            <p>Two things make this more than a repackaging of Prentice. First, the crucial identifying condition is now stated on the <em>whole vector</em> of surrogates rather than a single marker. Using many proxies makes the required conditional independence far more plausible: it is easy to believe that <em>some single</em> metric leaves a path to the outcome open, and much harder to believe that a rich basket — early sales, search interest, brand-tracking scores, retention signals, engagement depth — jointly leaves any path uncovered. The assumption is the same in form; it is dramatically weaker in practice because a high-dimensional surrogate has more ways to capture the effect. A companion paper (Athey, Chetty, and Imbens, 2016) develops the "surrogate score" and surrogate index together and makes the many-surrogates logic explicit.</p>
+            <p>Second, the payoff is not only speed but precision. In their canonical application — a multi-site job-training experiment in California — the authors show that the first six quarters of short-run outcomes, indexed, recover the nine-year employment effect without the seven-year wait, and with materially tighter standard errors than the direct long-run estimate would have delivered. The surrogate index is thus a variance-reduction device as much as a time machine: a well-chosen index can be <em>more</em> efficient than observing the noisy long-run outcome directly, because the index averages over many informative early signals.</p>
+
+            <h2 id="assumptions">The Identifying Assumptions</h2>
+            <p>None of this is free, and the two load-bearing assumptions deserve to be stated plainly, because violating either silently returns a confident wrong number.</p>
+
+            <div class="note">
+                <h4>💡 Surrogacy: the treatment reaches the long run only through the surrogates</h4>
+                <p>The identifying condition is a conditional independence — the long-run outcome is independent of treatment given the surrogates and covariates:</p>
+                $$ Y^{L} \;\perp\; W \;\mid\; S,\, X. $$
+                <p>This is Prentice's full-mediation criterion, promoted to a vector \( S \). It says the surrogates <em>collectively</em> capture every channel by which treatment moves the long-run outcome. The more (and more diverse) the surrogates, the more credible this is — but it is an assumption about causal structure, not something the data can fully confirm, and it fails exactly when there is a slow, hidden path the early metrics don't touch.</p>
+            </div>
+
+            <p>The second assumption is <strong>comparability</strong> (sometimes "stability" or "sample exchangeability"): the surrogate-to-outcome relationship \( h \) estimated in the historical sample must be the <em>same</em> relationship that holds in the experimental sample. If the map from early signals to long-run value drifted — because the product changed, the customer mix shifted, the macro environment turned, or the channel matured — then imputing with a stale \( h \) transports the wrong function. In media this is a serious hazard: the relationship between, say, early search lift and eventual revenue is not a law of nature but a regime that platforms, competitors, and seasons all perturb. The surrogate index inherits the external-validity burden of any transported estimate.</p>
+            <p>A subtle corollary: because \( h \) is estimated, it must be <em>re-estimated</em>. A surrogate index is not a formula you calibrate once and trust forever. It is a model of a relationship that decays, and keeping it honest requires periodically observing the true long-run outcome on <em>some</em> cohort and checking that the index still predicts it. This is the bridge to the industry practice that predates the econometrics.</p>
+
+            <h2 id="holdbacks">Long-Term Holdbacks in Practice</h2>
+            <p>Long before the surrogate index had a name, large platforms were solving the same problem operationally with <strong>long-term holdbacks</strong>. Hohnhold, O'Brien, and Tang (2015) is the canonical account. Studying ad-load changes on Google Search, they observed that the short-term revenue effect of showing more ads is a poor guide to the long-term effect, because users <em>learn</em>: served more ads, they grow "ad-blind" and click less over time; served better or fewer ads, they become "ad-sighted." The immediate metric and the durable metric can carry opposite signs.</p>
+            <p>Their instrument was a set of long-running holdback experiments — cohorts held out of a change for extended periods — that let them observe the user-learning curve directly and quantify how the effect evolves from launch toward a stable long-run level. The methodological point generalizes far beyond ad load: whenever behavior adapts to a treatment, the treatment's true effect is the <em>converged</em> effect, and you can only see convergence by keeping a control arm alive long enough to reach it. A long-term holdout is the empirical anchor that a surrogate index is trying to approximate without the wait.</p>
+
+            <div class="note">
+                <h4>💡 The two techniques are complements, not rivals</h4>
+                <p>A long-term holdback <em>observes</em> the truth slowly and expensively but reliably; a surrogate index <em>imputes</em> it quickly and cheaply but on assumptions. The mature program runs both: use the occasionally-observed holdout truth to fit and re-validate the surrogate index, then use the index to make the many fast decisions in between. The holdback is the calibration; the index is the extrapolation. Neither is trustworthy alone — an index with no ground truth drifts undetectably, and a holdback with no index is too slow to steer week-to-week budgets.</p>
+            </div>
+
+            <h2 id="goodhart">Goodhart and the Discipline of Truth</h2>
+            <p>There is a reason surrogate optimization deserves suspicion even when the statistics are clean: the moment a proxy becomes a target, the system starts to game it. This is Goodhart's law — "when a measure becomes a target, it ceases to be a good measure" — and it is the behavioral counterpart of the surrogate paradox. A team told to maximize short-term conversions will find ways to maximize short-term conversions, including ways that strip out long-run value the metric never counted. The optimization pressure itself degrades the surrogate's validity, and it does so precisely because the surrogate was chosen for its convenience rather than its completeness.</p>
+            <p>The defense is not to abandon proxies — you cannot; the long run is unobservable in real time — but to treat every surrogate as provisional and auditable. Three habits keep it honest. First, <em>prefer an index to a single metric</em>, so that no one dimension can be hill-climbed in isolation without moving the others. Second, <em>keep observing the real outcome</em> on a maintained holdout, and re-fit the surrogate model whenever the true outcome is available; a surrogate that has not been checked against truth recently is a liability dressed as a KPI. Third, <em>watch for divergence</em>: when the surrogate says "up" and the (slowly arriving) truth says "flat," treat that as a five-alarm signal that the map has broken or the paradox has arrived, not as noise to be smoothed. Proxy-hacking is not defeated by a cleverer proxy. It is defeated by refusing to let the proxy be the final word.</p>
+
+            <h2 id="mmm">Surrogates and the MMM</h2>
+            <p>Where does a marketing-mix model sit in this picture? An MMM already contains a small, honest model of persistence: <a href="blog-bayesian-mmm-carryover-shape.html">adstock</a>, the geometric or delayed decay that lets an impression this week keep paying into sales for several weeks after. Adstock is, in effect, a parametric surrogate for medium-run carryover — it extrapolates a short window of exposure into a slightly longer window of effect. For fast-and-medium channels that is often enough.</p>
+            <p>But genuine long-run brand effects operate on a horizon that ordinary adstock cannot reach. A typical MMM is fit on one to three years of weekly data with carryover windows measured in weeks; the brand equity that a sustained campaign builds compounds over <em>years</em> and across purchase cycles, well outside any adstock kernel the data can identify. Asking a standard MMM to see multi-year brand payback is asking it to extrapolate far beyond its window — precisely the regime where its uncertainty should balloon and its point estimates should not be trusted.</p>
+            <p>This is where surrogate thinking earns its place in the MMM stack. Rather than stretching adstock to implausible half-lives, bring in short-term surrogates that plausibly mediate the long-run effect and can be measured now: brand-tracking survey movements, branded-search interest, retention and repeat-purchase cohorts, consideration and awareness lifts. A dual-model approach — a short-term MMM for immediate response and a long-term or brand-equity layer that consumes these surrogates — separates the fast effect the weekly data can identify from the slow effect it cannot. The framework's own long-term brand modeling and its <a href="continuous-learning.html">continuous-learning</a> loop lean in exactly this direction: treat the medium-run response curve as directly estimable, and treat the genuinely long-run brand contribution as a surrogate-mediated quantity that must be calibrated against occasionally-observed truth rather than read off the adstock tail.</p>
+            <p>The connective tissue is <em>triangulation</em>. No single instrument sees the whole horizon: the MMM sees weeks, the lift test sees a campaign, the surrogate index projects the long run from early signals, and the long-term holdback eventually delivers ground truth. Each is biased in a different direction and validates the others. A surrogate index whose projections systematically disagree with the holdback is telling you its map has drifted; an MMM whose brand contribution disagrees with brand-tracking surrogates is telling you its long-run extrapolation is unmoored. Keeping all of them in the room, and keeping the real long-run outcome under measurement, is how you avoid mistaking a convenient proxy for the thing you actually sell against.</p>
+
+            <h2 id="synthesis">A Practical Synthesis</h2>
+            <p>The discipline of long-run measurement comes down to a handful of rules that the theory and the industry precedent agree on. <strong>Choose surrogates that plausibly mediate the effect you care about</strong> — signals that sit causally between the spend and the long-run outcome, not merely correlated bystanders. <strong>Prefer an index over any single metric</strong>, because a rich basket makes the surrogacy assumption credible where a lone proxy makes it fragile and gameable. <strong>Estimate the surrogate-to-outcome map on data where you eventually saw the truth</strong>, and re-estimate it as the world moves, because that map is a regime, not a constant. <strong>Keep a long-term holdout alive</strong> so you always have fresh ground truth to calibrate against and to catch the surrogate paradox before it costs a year of misdirected budget. And <strong>never let a short-term proxy quietly become the objective</strong> without continually re-checking that it still tracks the outcome you are actually optimizing for. The long run is unobservable in real time — that is not going to change. What changes, with these tools, is whether your short-term decisions are aimed at a defensible estimate of the long run or at a convenient number that only looks like one.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Budget decisions are bets on long-run value (LTV, retention, brand), but our instruments — lift tests, MMMs, platform metrics — mostly observe the short run. Optimizing a short-term proxy can actively push the wrong way.</li>
+                    <li>Prentice's criterion demands a valid surrogate <em>fully mediate</em> the treatment's effect on the true outcome (\( Y^{L} \perp W \mid S \)). A single surrogate almost never earns this, and the correlations you can see do not certify it.</li>
+                    <li>The surrogate paradox: a treatment can improve the surrogate, the surrogate can predict the outcome, and the treatment can still <em>harm</em> the outcome. Marginal association is no protection (VanderWeele; Frangakis &amp; Rubin).</li>
+                    <li>The surrogate index (Athey, Chetty, Imbens, Kang) combines <em>many</em> short-term proxies into a predictor of the long-run outcome, fit on historical data and applied to a short experiment — making the surrogacy assumption far more plausible and often <em>more</em> precise than the direct estimate.</li>
+                    <li>Two assumptions carry the method: surrogacy (\( Y^{L} \perp W \mid S, X \)) and comparability between the historical and experimental samples. Both fail silently if a slow hidden path exists or the surrogate-to-outcome map has drifted.</li>
+                    <li>Long-term holdbacks (Hohnhold et al., Google) are the empirical anchor: use occasionally-observed truth to calibrate and re-validate the surrogate index, and to catch Goodhart-style proxy degradation.</li>
+                    <li>For MMMs: adstock is a medium-run surrogate; genuine multi-year brand effects exceed it. Bridge with mediating surrogates (brand tracking, branded search, retention cohorts), triangulate, and keep measuring the real long-run outcome.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Prentice, R. L. (1989). <em>Surrogate Endpoints in Clinical Trials: Definition and Operational Criteria</em>. Statistics in Medicine, 8(4), 431&ndash;440.</li>
+                <li>Athey, S., Chetty, R., Imbens, G. W., &amp; Kang, H. (2019). <em>The Surrogate Index: Combining Short-Term Proxies to Estimate Long-Term Treatment Effects More Rapidly and Precisely</em>. NBER Working Paper 26463; published in the Review of Economic Studies (2025).</li>
+                <li>Athey, S., Chetty, R., &amp; Imbens, G. W. (2016). <em>Estimating Treatment Effects Using Multiple Surrogates: The Role of the Surrogate Score and the Surrogate Index</em>. arXiv:1603.09326.</li>
+                <li>Hohnhold, H., O'Brien, D., &amp; Tang, D. (2015). <em>Focusing on the Long-term: It's Good for Users and Business</em>. Proceedings of the 21st ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD), 1849&ndash;1858.</li>
+                <li>VanderWeele, T. J. (2013). <em>Surrogate Measures and Consistent Surrogates</em>. Biometrics, 69(3), 561&ndash;565.</li>
+                <li>Frangakis, C. E., &amp; Rubin, D. B. (2002). <em>Principal Stratification in Causal Inference</em>. Biometrics, 58(1), 21&ndash;29.</li>
+                <li>Prentice, R. L. (1989). See also Fleming, T. R., &amp; DeMets, D. L. (1996). <em>Surrogate End Points in Clinical Trials: Are We Being Misled?</em> Annals of Internal Medicine, 125(7), 605&ndash;613.</li>
+                <li>Goodhart, C. A. E. (1975). <em>Problems of Monetary Management: The U.K. Experience</em>. Papers in Monetary Economics, Reserve Bank of Australia. (Origin of "Goodhart's law.")</li>
+                <li>Chetty, R. (2019). <em>The Surrogate Index</em> (Opportunity Insights replication data and lecture notes). Harvard University.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

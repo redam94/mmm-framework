@@ -53,6 +53,11 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-attribution-incrementality.html</loc>
+        <lastmod>2026-07-14</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/blog-bayesian-mmm-carryover-shape.html</loc>
         <lastmod>2026-07-10</lastmod>
         <changefreq>monthly</changefreq>
@@ -118,6 +123,11 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-pretrends-testing.html</loc>
+        <lastmod>2026-07-14</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/blog-prior-predictive-sbc.html</loc>
         <lastmod>2026-07-14</lastmod>
         <changefreq>monthly</changefreq>
@@ -125,6 +135,11 @@
     <url>
         <loc>https://redam94.github.io/mmm-framework/blog-staggered-did.html</loc>
         <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-surrogate-outcomes.html</loc>
+        <lastmod>2026-07-14</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -138,18 +153,28 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-table-2-fallacy-mmm.html</loc>
+        <lastmod>2026-07-14</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-table-2-fallacy.html</loc>
+        <lastmod>2026-07-14</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/blog-thompson-sampling.html</loc>
         <lastmod>2026-07-10</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/blog-when-sampling-fails.html</loc>
-        <lastmod>2026-07-14</lastmod>
+        <lastmod>2026-07-17</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/blog.html</loc>
-        <lastmod>2026-07-14</lastmod>
+        <lastmod>2026-07-17</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -254,7 +279,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/data-requirements.html</loc>
-        <lastmod>2026-07-12</lastmod>
+        <lastmod>2026-07-17</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -454,7 +479,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/troubleshooting.html</loc>
-        <lastmod>2026-07-12</lastmod>
+        <lastmod>2026-07-17</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attribution Is Not Incrementality | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Attribution distributes conversions across touchpoints; incrementality asks the counterfactual. Why attributed ROAS overstates causal lift, the RCT evidence, and how to measure the real thing.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-attribution-incrementality.html">
+    <meta property="og:title" content="Attribution Is Not Incrementality">
+    <meta property="og:description" content="Attribution distributes observed conversions across touchpoints; incrementality asks how many would not have happened absent the ad. Why the two diverge most exactly where you spend most.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-attribution-incrementality.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Attribution Is Not Incrementality">
+    <meta name="twitter:description" content="Attribution distributes observed conversions across touchpoints; incrementality asks how many would not have happened absent the ad. Why the two diverge most exactly where you spend most.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-attribution-incrementality.html",
+          "name": "Attribution Is Not Incrementality | MMM Framework",
+          "description": "Attribution distributes conversions across touchpoints; incrementality asks the counterfactual. Why attributed ROAS overstates causal lift, the RCT evidence, and how to measure the real thing.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-14",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-attribution-incrementality.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-attribution-incrementality.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Attribution Is Not Incrementality",
+          "datePublished": "2026-07-18",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-attribution-incrementality.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-attribution-incrementality.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Attribution Is Not Incrementality",
+              "item": "https://redam94.github.io/mmm-framework/blog-attribution-incrementality.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#two-questions">Two Different Questions</a></li>
+                <li><a href="#conditioning">Conditioning on the Outcome</a></li>
+                <li><a href="#overstate">Why Attribution Overstates</a></li>
+                <li><a href="#rct-evidence">The RCT-vs-Observational Evidence</a></li>
+                <li><a href="#economics">The Economics of Measurement</a></li>
+                <li><a href="#mta">Multi-Touch and Shapley</a></li>
+                <li><a href="#incrementality">Measuring Incrementality</a></li>
+                <li><a href="#synthesis">A Working Synthesis</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Attribution Is Not Incrementality</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-18">July 18, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Measurement</span>
+            </p>
+            <p class="lead">Two numbers sit on most marketing dashboards, and they are routinely confused for one another. The first, <em>attributed conversions</em>, takes the sales that actually happened and divides credit among the ads each buyer touched. The second, <em>incremental conversions</em>, asks a counterfactual question the data never directly answers: how many of those sales would still have happened if the ads had never run? These are not two estimates of the same quantity. They are answers to different questions, and the gap between them is not noise — it is systematic, it points in a predictable direction, and it is largest in exactly the channels where budgets are largest. Treating an attributed return on ad spend as if it were an incremental one is the single most expensive mistake in modern media measurement.</p>
+
+            <h2 id="two-questions">Two Different Questions</h2>
+            <p>Start by stating the two questions precisely, because the sloppiness begins in the language. Attribution is a <em>bookkeeping</em> operation. It observes a set of conversions and a set of ad exposures, then applies a rule that partitions the observed credit across touchpoints. Last-touch gives all credit to the final click; linear attribution splits it evenly; a data-driven or Shapley model splits it by some learned or game-theoretic weight. Whatever the rule, the credit sums to the conversions that were <em>observed</em>. Attribution never questions whether those conversions would have occurred anyway; it takes them as given and only asks how to divide them.</p>
+            <p>Incrementality is a <em>causal</em> operation. It asks for the difference between two states of the world — one in which the advertising ran and one in which it did not — for the same population over the same period. In the potential-outcomes notation of Neyman and Rubin, let \( W \in \{0, 1\} \) indicate whether a unit was advertised to, and let \( Y(1) \) and \( Y(0) \) be that unit's conversion outcome under exposure and non-exposure respectively. The incremental effect of advertising is the average treatment effect,</p>
+            $$ \tau \;=\; \mathbb{E}\!\left[\, Y(1) - Y(0) \,\right], $$
+            <p>and the incremental conversions delivered by a campaign are \( \sum_i \big( Y_i(1) - Y_i(0) \big) \) summed over the exposed population. The fundamental problem of causal inference is that for any given unit we observe only one of \( Y_i(1) \) and \( Y_i(0) \), never both — the other is a counterfactual. Attribution sidesteps this problem by never posing it. It works entirely inside the observed world of \( Y_i(1) \) among converters and asks a question that requires no counterfactual at all.</p>
+
+            <div class="definition">
+                <h4>Definition: what each number actually computes</h4>
+                <p>An attribution rule assigns to channel \( c \) a share \( a_c \) of the observed conversions \( C \), such that the shares partition the total:</p>
+                $$ \sum_{c} a_c \;=\; C, \qquad a_c \ge 0. $$
+                <p>Incrementality assigns to channel \( c \) the causal lift \( \tau_c = \sum_i \big(Y_i(1) - Y_i^{-c}(0)\big) \), the conversions that would <em>not</em> have occurred had channel \( c \) been switched off. There is no accounting identity forcing \( \sum_c \tau_c \) to equal \( C \); the incremental total can be — and usually is — far smaller than the observed total, because most conversions are not caused by any ad.</p>
+            </div>
+
+            <p>The distinction is not academic hair-splitting. A budget decision — should I spend another dollar on retargeting or on prospecting? — is a question about \( \tau_c \), the marginal causal return. An attribution report answers the \( a_c \) question. Using \( a_c \) to make a \( \tau_c \) decision is a category error, and the whole of this essay is about why that error is so consistently costly.</p>
+
+            <h2 id="conditioning">Conditioning on the Outcome</h2>
+            <p>The deepest reason attribution and incrementality diverge is statistical, and it has a name in the causal-inference literature: <strong>selection on the outcome</strong>. Attribution begins from the set of converters and looks backward at the ads they saw. By construction, it conditions on the very event — conversion — whose cause it is trying to establish. That is a collider-like conditioning that opens spurious associations between exposure and purchase even when the ad did nothing.</p>
+            <p>Consider the causal graph. Let \( U \) be a buyer's latent purchase intent, unobserved. Intent drives two things: it makes a person more likely to convert, and it makes them more likely to be exposed to relevant ads, because ad platforms optimize delivery toward people who look like converters, and because high-intent people search, browse, and click on category-relevant content that triggers retargeting. So \( U \) is a common cause of both exposure \( W \) and outcome \( Y \). The exposure–conversion association we observe is a mixture of any true causal path \( W \to Y \) and the back-door path \( W \leftarrow U \to Y \). Attribution reads the whole mixture as if it were the causal path. Incrementality, done with randomization, severs the back-door by making \( W \) independent of \( U \).</p>
+            <p>This is the formal content of the <a href="blog-activity-bias.html">activity bias</a> that Lewis, Rao, and Reiley documented in a trio of controlled experiments. People do "more of everything" in bursts — on the day someone is exposed to an ad, they are also more likely to search for the brand, view unrelated pages, and even sign up at a competitor, for reasons that have nothing to do with the ad. Because exposure coincides with a general spike of activity, any observational or matched-control method that lines up "exposed" against "recent history" over-credits the ad for behavior that was going to happen regardless. The bias is not a quirk of one dataset; it is a structural feature of how online behavior clusters in time.</p>
+
+            <h2 id="overstate">Why Attribution Overstates, and Where</h2>
+            <p>The direction of the bias is not random. Selection on the outcome inflates credit most for the touchpoints that sit <em>closest to conversion</em>, because those are the touchpoints most contaminated by pre-existing intent. Two channels are the canonical offenders.</p>
+            <p><strong>Retargeting</strong> shows ads to people who have already visited the site or added to cart — that is, to people already deep in the funnel and disproportionately likely to buy anyway. A last-touch or even a data-driven model sees the retargeting impression immediately before a high rate of conversion and awards it enormous credit. But much of that conversion was baked in before the retargeting ad ever served. The ad frequently <em>intercepts</em> intent rather than <em>creating</em> it.</p>
+            <p><strong>Branded and paid search</strong> is the same phenomenon in a different costume. When someone types your brand name into a search engine, they have already decided to find you; the paid search ad that appears at the top merely collects a click that an organic link would often have collected for free. Attribution credits the paid click with the ensuing purchase. Incrementality asks whether the purchase would have happened without the paid ad — and for brand terms, the answer is frequently "yes, almost all of it."</p>
+
+            <div class="warning">
+                <h4>⚠️ The gap is largest exactly where the money is</h4>
+                <p>The uncomfortable arithmetic is that the channels attribution over-credits — retargeting, branded search, lower-funnel display — are also the channels marketers pour budget into <em>because</em> attribution reports them as efficient. The over-crediting and the over-spending reinforce each other. The apparent ROAS is highest precisely where the incremental ROAS is lowest, so optimizing to attributed ROAS steers money toward the channels with the widest attribution-to-incrementality gap. You get a flywheel that looks like it is winning while it quietly reallocates budget away from the ads that actually cause sales.</p>
+            </div>
+
+            <h2 id="rct-evidence">The RCT-vs-Observational Evidence</h2>
+            <p>None of this would matter if observational attribution, given enough data and clever adjustment, recovered the causal number closely enough for decisions. The most careful test of that hope is Gordon, Zettelmeyer, Bhargava, and Chapsky's study of fifteen large advertising experiments at Facebook — roughly 500 million user-experiment observations and 1.6 billion impressions. For each campaign they had a genuine randomized controlled trial (RCT) giving the causal lift, and they asked whether observational methods, applied to the same rich user-level data an advertiser could plausibly access, could reproduce it.</p>
+            <p>They could not. Across a battery of observational approaches — exact matching, propensity-score matching, regression adjustment, and stratification on hundreds of demographic and behavioral covariates — the observational estimates generally <em>overstated</em> the true experimental lift, and in some campaigns understated it, sometimes badly enough to be wrong for practical purposes. Their headline comparison is stark when read against the size of the real effects: the median absolute difference between observational and experimental lift was on the order of 100 percentage points or more for upper- and mid-funnel outcomes and around 60 percentage points for lower-funnel outcomes, against median RCT lifts of only roughly 28%, 19%, and 6% respectively. In other words, the measurement error was frequently several times larger than the thing being measured. Adjustment on rich data narrowed the gap in some cases but did not close it, and — crucially — the analyst could not tell from the observational data alone whether a given campaign's estimate was close or wildly off.</p>
+            <p>A natural rejoinder is that machine learning, with far more features, would rescue the observational approach. Gordon, Moakler, and Zettelmeyer tested exactly this at larger scale — 663 Facebook experiments, each described by more than five thousand user- and experiment-level features — comparing double/debiased machine learning (DML) and stratified propensity-score matching. DML did better than the simpler matching method, but neither reliably recovered the experimental ground truth. Their conclusion is blunt and worth internalizing: until ad platforms disclose far more about how they select and deliver ads, non-experimental methods are unlikely to estimate causal effects reliably enough to be trusted for budget decisions. More data and fancier estimators do not make selection-on-the-outcome go away; the missing ingredient is randomization, not sophistication.</p>
+            <p>The single cleanest illustration predates both. Blake, Nosko, and Tadelis ran a large field experiment at eBay that switched off paid search advertising in randomly selected markets. For <em>branded</em> keywords — searches containing "eBay" — the measured short-term incremental return was statistically indistinguishable from zero: the paid ads were largely cannibalizing clicks that free organic listings would have captured anyway. Attribution had been crediting those ads generously; incrementality revealed they were, for the most part, buying traffic eBay already owned. For non-brand keywords the story was more nuanced — new and infrequent users responded, but the frequent users who accounted for most of the spend did not, leaving average returns negative once the full cost was counted. The paper became canonical because it put a hard experimental number on a suspicion practitioners had long harbored: the ads attribution loves most can be the ads with the least incremental value.</p>
+
+            <h2 id="economics">The Economics of Measurement</h2>
+            <p>There is a deeper reason attribution's apparent precision is illusory, and it is economic rather than merely statistical. Lewis and Rao, analyzing twenty-five large advertising field experiments representing millions of customers, showed that advertising's true effect is <em>small relative to the volatility of individual sales</em>. A coefficient of variation of ten — sales ten times as variable as their mean — is typical, and against that noise the signal from a modestly effective campaign is faint. The consequence is sobering: in their sample, the median confidence interval on advertising ROI was more than one hundred percentage points wide, and they estimated that a well-powered experiment could require more than ten million person-weeks of data to pin the return down to a useful precision.</p>
+
+            <div class="note">
+                <h4>💡 Precise-looking attribution is precise about the wrong thing</h4>
+                <p>Here is the paradox. If a genuine randomized experiment — the gold standard — struggles to measure advertising ROI to within a hundred points, how can an attribution dashboard report a channel's ROAS to two decimal places? The answer is that it is not measuring the same quantity. Attribution reports a <em>deterministic partition</em> of observed conversions, which has tiny sampling error precisely because it never attempts the hard causal counterfactual. Its confidence intervals are narrow because the question is easy; the question is easy because it is the wrong question. The apparent precision of attributed ROAS is a measurement of bookkeeping, not of causal return.</p>
+            </div>
+
+            <p>This is why the signal-to-noise problem indicts observational attribution twice. First, the true effect is small and buried in volatile sales, so even honest causal estimates are wide. Second, attribution's tight intervals are a false comfort — they quantify how consistently the rule divides credit, not how accurately it recovers lift. A confident, stable, wrong number is more dangerous than an honestly uncertain one, because it invites decisive action.</p>
+
+            <h2 id="mta">Multi-Touch and Shapley: Better Bookkeeping, Still Not Causal</h2>
+            <p>Faced with the manifest silliness of last-touch — which credits whichever ad happened to be last, usually a branded search or retargeting click intercepting a decided buyer — the industry moved to <em>multi-touch attribution</em> (MTA). Shao and Li's influential KDD paper introduced data-driven MTA, fitting a model (a bagged logistic regression, chosen for stable channel weights) to conversion paths so that credit reflects each channel's statistical association with conversion rather than mere recency. Later work reached for the Shapley value from cooperative game theory: treat each channel as a player in a coalition, and assign credit equal to the channel's average marginal contribution to conversion across all orderings of the channels. Berman's analysis showed the Shapley value is a genuine improvement over last-touch — it removes the perverse incentive to over-value the final touch and can raise advertiser profits — and noted that, under the right conditions, it can <em>approximate</em> a causal effect.</p>
+            <p>But read that qualifier carefully, because it is the whole point. Both data-driven MTA and Shapley attribution are fit to <em>observational path data</em>: the sequences of exposures that converters and non-converters happened to receive. Without experimental variation in those exposures, the fitted weights are correlational. The Shapley value fairly divides credit for a <em>coalition's observed output</em>, but "fairly" here means axiomatically consistent credit-sharing, not counterfactual causal lift. The marginal contribution the Shapley formula averages over is the contribution to a <em>predictive</em> model of conversion, not to the real-world potential outcome \( Y(1) - Y(0) \). If exposure is confounded by intent — and on optimized ad platforms it always is — then every path-based weight, however elegantly derived, inherits that confounding.</p>
+            <p>The formal gap is exactly the one from the conditioning section. Let \( v(S) \) be the observed conversion rate among users exposed to the set of channels \( S \). Shapley attribution assigns channel \( c \) the credit</p>
+            $$ \phi_c \;=\; \sum_{S \subseteq \mathcal{C} \setminus \{c\}} \frac{|S|!\,(|\mathcal{C}| - |S| - 1)!}{|\mathcal{C}|!}\,\big[\, v(S \cup \{c\}) - v(S) \,\big]. $$
+            <p>For \( \phi_c \) to equal channel \( c \)'s incremental effect, the differences \( v(S \cup \{c\}) - v(S) \) would have to be causal contrasts — the conversion rate <em>had we intervened</em> to add channel \( c \) versus not. In observational data they are conditional associations: the conversion rate <em>among people who happened to be exposed</em> to \( c \), who are systematically higher-intent than those who were not. The Shapley machinery is impeccable; the inputs are contaminated. A line of research, including Dalessandro and colleagues' causally-motivated attribution, has tried to inject causal structure into MTA, but the honest summary is that path-based attribution recovers incrementality only to the extent that exposure was randomized — and on real platforms it is not.</p>
+
+            <h2 id="incrementality">What Measuring Incrementality Actually Looks Like</h2>
+            <p>If the counterfactual cannot be read off observed paths, it has to be manufactured, and every credible method for doing so shares one ingredient: a control group that did not receive the ad but is otherwise comparable. The tools differ in how they build that control.</p>
+            <p><strong>User-level RCTs and ghost ads.</strong> The cleanest design randomizes users into treatment and control and compares conversion rates. A naive holdout that simply withholds ads from the control is biased, because the platform still would have chosen <em>which</em> control users to expose — so the comparison mixes ad effect with selection. Ghost-ad and PSA-controlled designs fix this by running the ad auction for control users too, logging the ad they <em>would</em> have seen (the "ghost"), and either showing nothing or a public-service placeholder. That equalizes the selection process across arms and isolates the incremental effect. These designs are the gold standard where they are feasible.</p>
+            <p><strong>Geo experiments.</strong> When user-level randomization is impossible — offline sales, privacy constraints, media that cannot be split by person — you randomize <em>markets</em> instead. Turn a channel up or down in randomly assigned regions, hold it steady in matched control regions, and read the lift from the difference. <a href="blog-geo-experiments-tbr.html">Geo lift and time-based regression designs</a> trade the fine granularity of user tests for immunity to the cross-user selection problem, which makes them the practical workhorse for durable, hard-to-split media.</p>
+            <p><strong>MMM calibrated to experiments.</strong> A marketing-mix model estimates each channel's contribution from aggregate time-series and cross-sectional variation. On its own an MMM is observational and can suffer its own confounding, but when its channel coefficients are <a href="blog-calibrating-mmm-experiments.html">calibrated against experimental lift</a> — using geo tests or holdouts as priors or likelihood constraints — it becomes a causal instrument that also extrapolates across budgets and time. The framework's own <a href="measurement-calibration.html">calibration workflow</a> exists for exactly this: to anchor the always-on model to the occasional clean experiment.</p>
+
+            <div class="warning">
+                <h4>⚠️ Incrementality is expensive and noisy — that is the honest tradeoff</h4>
+                <p>None of these methods is free, and the economics of measurement guarantee they will be less precise than the crisp-looking attribution numbers they replace. A geo test ties up markets; a ghost-ad holdout forgoes revenue on the control group; an experiment powered to detect a small lift needs a lot of data. The temptation is to retreat to attribution because it "always has an answer." Resist it. An honest wide interval around the right quantity beats a narrow interval around the wrong one. The purpose of incrementality measurement is not to eliminate uncertainty but to point it at the question that governs the budget.</p>
+            </div>
+
+            <h2 id="synthesis">A Working Synthesis: Use Both, Confuse Neither</h2>
+            <p>The practical resolution is not to abolish attribution — it is genuinely useful — but to assign each tool to the question it can answer. Attribution's strengths are speed, granularity, and coverage: it updates in near real time, it exists for every channel and campaign, and it needs no experiment. Those make it an excellent <em>operational</em> signal — for pacing budgets within a flight, catching a broken pixel, spotting a creative that stopped converting, or ranking campaigns for day-to-day optimization where the relative ordering is more stable than the absolute level. Incrementality's strength is that it answers the causal question that governs how much to spend and where. Those are its jobs, and they should not be swapped.</p>
+            <p>The triangulation view that experienced measurement teams converge on runs roughly like this: use attribution for near-real-time operations, use experiments to establish ground-truth incrementality on the channels that matter, and use an experiment-calibrated MMM to carry that ground truth across the whole budget and forward in time. When the three disagree — and they will, most loudly on retargeting and branded search — trust the causal instruments for the money decision and treat the attribution number as a fast but biased proxy whose bias you now understand.</p>
+            <p>The one discipline that ties it all together is never to launder an attributed ROAS into a budget model as if it were incremental. The gap between the two is not a modeling artifact to be tuned away; it is a real, signed, structural quantity that is largest — by the evidence of eBay's branded search, Facebook's fifteen experiments, and the arithmetic of activity bias — in precisely the channels where the most money rides on getting it right. Attribution tells you where conversions <em>landed</em>. Incrementality tells you which of them your advertising <em>caused</em>. Only the second question has a dollar figure attached, and only the second should set the budget.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Attribution partitions <em>observed</em> conversions across touchpoints; incrementality estimates the <em>counterfactual</em> lift \( \mathbb{E}[Y(1) - Y(0)] \). The two answer different questions, and their difference is systematic, not noise.</li>
+                    <li>Attribution conditions on the outcome (conversion), opening a back-door path through latent intent — a selection/collider bias that inflates credit most for touchpoints closest to purchase.</li>
+                    <li>Retargeting and branded/paid search are the canonical over-credited channels: they intercept existing intent rather than create demand, so attributed ROAS is highest exactly where incremental ROAS is lowest.</li>
+                    <li>Across 15 Facebook RCTs, observational methods missed the experimental lift by errors often several times the true effect, and rich covariates or machine learning (663-experiment DML study) did not fix it. eBay's experiment found near-zero incremental return to branded search.</li>
+                    <li>Advertising effects are small relative to volatile sales, so honest causal intervals are wide (median ROI interval &gt; 100 points in Lewis &amp; Rao); attribution's narrow intervals measure bookkeeping consistency, not causal accuracy.</li>
+                    <li>Data-driven MTA and Shapley attribution are fairer credit-sharing but remain correlational — they equal incrementality only under randomized exposure, which real platforms do not provide.</li>
+                    <li>Measure incrementality with ghost-ad RCTs, geo experiments, holdouts, and experiment-calibrated MMM. Use attribution for pacing and operations; never let attributed ROAS set a budget.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Gordon, B. R., Zettelmeyer, F., Bhargava, N., &amp; Chapsky, D. (2019). <em>A Comparison of Approaches to Advertising Measurement: Evidence from Big Field Experiments at Facebook</em>. Marketing Science, 38(2), 193&ndash;225.</li>
+                <li>Gordon, B. R., Moakler, R., &amp; Zettelmeyer, F. (2023). <em>Close Enough? A Large-Scale Exploration of Non-Experimental Approaches to Advertising Measurement</em>. Marketing Science, 42(4), 768&ndash;793.</li>
+                <li>Lewis, R. A., &amp; Rao, J. M. (2015). <em>The Unfavorable Economics of Measuring the Returns to Advertising</em>. Quarterly Journal of Economics, 130(4), 1941&ndash;1973.</li>
+                <li>Lewis, R. A., Rao, J. M., &amp; Reiley, D. H. (2011). <em>Here, There, and Everywhere: Correlated Online Behaviors Can Lead to Overestimates of the Effects of Advertising</em>. Proceedings of the 20th International Conference on the World Wide Web (WWW), 157&ndash;166.</li>
+                <li>Blake, T., Nosko, C., &amp; Tadelis, S. (2015). <em>Consumer Heterogeneity and Paid Search Effectiveness: A Large-Scale Field Experiment</em>. Econometrica, 83(1), 155&ndash;174.</li>
+                <li>Shao, X., &amp; Li, L. (2011). <em>Data-Driven Multi-Touch Attribution Models</em>. Proceedings of the 17th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD), 258&ndash;264.</li>
+                <li>Berman, R. (2018). <em>Beyond the Last Touch: Attribution in Online Advertising</em>. Marketing Science, 37(5), 771&ndash;792.</li>
+                <li>Dalessandro, B., Perlich, C., Stitelman, O., &amp; Provost, F. (2012). <em>Causally Motivated Attribution for Online Advertising</em>. Proceedings of the Sixth International Workshop on Data Mining for Online Advertising (ADKDD).</li>
+                <li>Johnson, G. A., Lewis, R. A., &amp; Nubbemeyer, E. I. (2017). <em>Ghost Ads: Improving the Economics of Measuring Online Ad Effectiveness</em>. Journal of Marketing Research, 54(6), 867&ndash;884.</li>
+                <li>Rubin, D. B. (1974). <em>Estimating Causal Effects of Treatments in Randomized and Nonrandomized Studies</em>. Journal of Educational Psychology, 66(5), 688&ndash;701.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

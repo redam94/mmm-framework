@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Table 2 Fallacy: When a Coefficient Isn't an Effect | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="A multivariable regression is built to estimate one effect, yet every coefficient in the table gets read as causal. Why only the exposure coefficient earns that reading — confounders, mediators, colliders, and the identification argument.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-table-2-fallacy.html">
+    <meta property="og:title" content="The Table 2 Fallacy: When a Coefficient Isn't an Effect">
+    <meta property="og:description" content="A regression is designed to identify one exposure effect. Reading every other coefficient as causal is the Table 2 Fallacy — and the covariate coefficients are often confounded, mixed, or sign-flipped nonsense.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-table-2-fallacy.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Table 2 Fallacy: When a Coefficient Isn't an Effect">
+    <meta name="twitter:description" content="A regression is designed to identify one exposure effect. Reading every other coefficient as causal is the Table 2 Fallacy — and the covariate coefficients are often confounded, mixed, or sign-flipped nonsense.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy.html",
+          "name": "The Table 2 Fallacy: When a Coefficient Isn't an Effect | MMM Framework",
+          "description": "A multivariable regression is built to estimate one effect, yet every coefficient in the table gets read as causal. Why only the exposure coefficient earns that reading — confounders, mediators, colliders, and the identification argument.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-14",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "The Table 2 Fallacy: When a Coefficient Isn't an Effect",
+          "datePublished": "2026-07-18",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "The Table 2 Fallacy: When a Coefficient Isn't an Effect",
+              "item": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#the-fallacy">What the Fallacy Is</a></li>
+                <li><a href="#one-model">One Model, One Estimand</a></li>
+                <li><a href="#total-direct">Total vs. Direct Effects</a></li>
+                <li><a href="#three-roles">Three Roles a Covariate Can Play</a></li>
+                <li><a href="#colliders">Colliders and Overadjustment</a></li>
+                <li><a href="#sign-flip">Why a Coefficient Can Flip Sign</a></li>
+                <li><a href="#bayesian">Precise Nonsense</a></li>
+                <li><a href="#reporting">The Reporting Response</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">The Table 2 Fallacy</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-18">July 18, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Causal inference</span>
+            </p>
+            <p class="lead">Open almost any observational study and you will find it: a single regression table, one row per variable, a point estimate and confidence interval beside each, all typeset identically. The row for the exposure of interest is a genuine, carefully-argued causal estimate. The rows beneath it — for age, sex, income, prior disease, every covariate that was thrown in to &ldquo;adjust for&rdquo; — look exactly the same and are read exactly the same way, as if each were the causal effect of that variable too. It is a category error, and Westreich and Greenland (2013) named it the <em>Table 2 Fallacy</em>: presenting a fraction of a model's coefficients as though they were all effects of the same kind. The uncomfortable truth is that a regression built to identify one effect identifies exactly one effect, and the rest of the table is, at best, a set of adjustment terms with no causal warrant.</p>
+
+            <h2 id="the-fallacy">What the Fallacy Is</h2>
+            <p>The fallacy is a mismatch between how a model is <em>designed</em> and how its output is <em>read</em>. A multivariable regression of an outcome \( Y \) on an exposure \( X \) and a set of covariates \( \mathbf{Z} \) is typically constructed with a single causal question in mind: <em>what is the effect of \( X \) on \( Y \)?</em> The covariates \( \mathbf{Z} \) are chosen for one purpose — to remove confounding of the \( X \)&ndash;\( Y \) relationship — and the model earns its causal interpretation for \( X \) only if \( \mathbf{Z} \) happens to be a valid adjustment set for that specific pairing. Nothing about that construction licenses a causal reading of the coefficient on any \( Z_j \). Yet the estimates arrive in one undifferentiated table, and readers, reviewers, and even authors routinely interpret every row as &ldquo;the adjusted effect of this variable.&rdquo;</p>
+
+            <p>Westreich and Greenland identify two distinct interpretive errors that the shared table invites. First, a coefficient on a covariate that is a mediator or shares causes with the outcome may be <em>confounded even when the exposure coefficient is not</em>: the same adjustment set that de-confounds \( X \) does nothing to de-confound \( Z_j \). Second, the exposure estimate and a covariate estimate from the same model may target <em>different kinds of effect</em> — a total effect for one, a direct effect for the other — so that comparing them, or reporting them side by side, silently mixes incommensurable quantities. Both errors flow from the same root: the model was a tool for one estimand, and the table pretends it was a tool for many.</p>
+
+            <div class="definition">
+                <h4>Definition: The Table 2 Fallacy</h4>
+                <p>The error of interpreting more than one coefficient from a single multivariable regression as a causal effect, when the model's covariate set was selected to identify the effect of only one exposure. Only the exposure coefficient carries the intended causal meaning, and only if its adjustment set is valid for that exposure; the remaining coefficients are &ldquo;adjustment terms, not effects.&rdquo;</p>
+            </div>
+
+            <h2 id="one-model">One Model, One Estimand</h2>
+            <p>The cleanest way to see why is through the back-door criterion (Pearl, 2009; Greenland, Pearl, and Robins, 1999). To identify the causal effect of \( X \) on \( Y \) from observational data, we need a covariate set \( \mathbf{Z} \) that blocks every non-causal (back-door) path between \( X \) and \( Y \) while opening none. Crucially, <em>the valid adjustment set is defined relative to a chosen exposure&ndash;outcome pair.</em> The set \( \mathbf{Z} \) that satisfies the back-door criterion for \( X \to Y \) is generally <strong>not</strong> the set that satisfies it for \( Z_1 \to Y \), or \( Z_2 \to Y \). Each of those questions has its own graph, its own back-door paths, and therefore its own — usually different — adjustment set.</p>
+
+            <p>So a single fitted model can carry, at most, one identification argument. When you regress \( Y \) on \( \{X, Z_1, Z_2, \dots\} \), you have committed to one adjustment set. It may be the right set for \( X \). It is almost never simultaneously the right set for every \( Z_j \), because the covariates were selected to control the exposure's confounding, not their own. Reading the whole column of coefficients causally is asking one adjustment set to do the work of many, tailored ones. That is the structural reason the fallacy is a fallacy and not merely sloppiness: it is not that the covariate estimates are noisy, but that they answer no well-posed causal question at all.</p>
+
+            <div class="note">
+                <h4>💡 The identification argument is attached to the estimand, not the software</h4>
+                <p>Regression returns a coefficient for every term you include, indifferent to whether that term has an identifiable causal meaning. The estimator is happy to hand you a precisely estimated number for the effect of a mediator, a collider-adjacent proxy, or a variable whose own confounders you never measured. The discipline the fallacy demands is to keep a written identification argument attached to <em>each</em> quantity you intend to interpret — and to notice how few of the table's rows have one.</p>
+            </div>
+
+            <h2 id="total-direct">Total vs. Direct Effects</h2>
+            <p>Even setting confounding aside, the coefficients in one table can be effects of <em>different types</em>. This is the second horn of the fallacy, and it turns on mediation. Consider an exposure \( X \), an intermediate variable \( M \) on the causal path from \( X \) to \( Y \), and the outcome \( Y \). If we regress \( Y \) on \( X \) alone (with proper confounding control), the \( X \) coefficient estimates the <strong>total effect</strong> — everything \( X \) does to \( Y \), including the part routed through \( M \). If we instead put \( M \) into the model, the \( X \) coefficient changes meaning: it now estimates a <strong>controlled direct effect</strong>, the effect of \( X \) with \( M \) held fixed. Same variable, same data, a different causal quantity, purely because of what else is in the model.</p>
+
+            <div class="definition">
+                <h4>Definition: Total, controlled direct, and natural effects</h4>
+                <p>Following VanderWeele (2015), write \( Y_x \) for the potential outcome under exposure level \( x \), and \( Y_{x,m} \) under \( x \) with mediator set to \( m \). For a shift from \( x^* \) to \( x \):</p>
+                <p><strong>Total effect:</strong> \( \mathbb{E}[Y_x - Y_{x^*}] \) — the full effect of the exposure through all pathways.</p>
+                <p><strong>Controlled direct effect:</strong> \( \mathbb{E}[Y_{x,m} - Y_{x^*,m}] \) — the effect of the exposure when the mediator is fixed at \( m \) for everyone.</p>
+                <p><strong>Natural direct effect:</strong> \( \mathbb{E}[Y_{x,M_{x^*}} - Y_{x^*,M_{x^*}}] \) — the exposure's effect with the mediator held at the value it <em>would naturally have taken</em> under the reference exposure.</p>
+                <p><strong>Natural indirect effect:</strong> \( \mathbb{E}[Y_{x,M_{x}} - Y_{x,M_{x^*}}] \) — the effect of moving the mediator from its \( x^* \)-value to its \( x \)-value, holding exposure at \( x \). Natural direct and indirect effects sum to the total effect; the controlled direct effect generally does not decompose so cleanly.</p>
+            </div>
+
+            <p>The fallacy's sharp edge here is that adding a mediator to &ldquo;adjust for&rdquo; it changes the exposure coefficient from a total effect into a controlled direct effect <em>and</em> hands the mediator a coefficient that is itself a mix. The mediator's coefficient in a model like \( Y \sim X + M \) captures \( M \)'s effect on \( Y \) tangled with any confounding of the \( M \)&ndash;\( Y \) relationship — confounding the exposure's adjustment set was never built to address. Two variables, two coefficients, and neither means what the shared row format implies: the exposure is now a direct effect it may not have been intended to be, and the mediator is a confounded quantity dressed as an effect.</p>
+
+            <h2 id="three-roles">Three Roles a Covariate Can Play</h2>
+            <p>Westreich and Greenland organize the trouble by asking what a secondary variable actually <em>is</em> relative to the exposure. A covariate \( Z \) that sits in the model alongside \( X \) can stand in three qualitatively different relationships, and each corrupts a naive causal reading of \( Z \)'s coefficient in a different way.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Role of \( Z \)</th><th>Relationship to exposure \( X \)</th><th>What \( Z \)'s coefficient becomes</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Confounder</strong></td><td>\( Z \) is a common cause of \( X \) and \( Y \)</td><td>A mix of \( Z \)'s own effect on \( Y \) and any confounding of the \( Z \)&ndash;\( Y \) path that the model does not block</td></tr>
+                    <tr><td><strong>Mediator</strong></td><td>\( X \) causes \( Z \), which causes \( Y \)</td><td>Turns \( X \)'s coefficient into a direct effect; \( Z \)'s own coefficient is confounded by \( X \)&ndash;\( Z \)&ndash;\( Y \) common causes</td></tr>
+                    <tr><td><strong>Competing exposure</strong></td><td>\( Z \) affects \( Y \) but is not on the \( X \)&ndash;\( Y \) pathway</td><td>The effect of \( Z \) demands its <em>own</em> adjustment set, generally different from \( X \)'s</td></tr>
+                </tbody>
+            </table>
+
+            <p>The unifying point is the one from the back-door discussion: the adjustment set that de-confounds the primary exposure is, in general, the <em>wrong</em> adjustment set for a secondary variable. If \( Z \) is a competing exposure — say, both a treatment and a smoking history predict a disease, and smoking is in the model to clean up the treatment estimate — then interpreting the smoking coefficient causally requires blocking smoking's back-door paths, which the treatment-focused model made no attempt to do. If \( Z \) is a confounder, its coefficient absorbs whatever confounds \( Z \)'s relationship with \( Y \). If \( Z \) is a mediator, we are back in the total-versus-direct trap, with the added twist of &ldquo;mutual adjustment&rdquo;: exposure and mediator each adjust the other, and both coefficients drift from any interpretable estimand. Westreich and Greenland call this the problem of <em>mutual adjustment for mediators and confounders</em> — the model adjusts variables for one another with no coherent per-variable identification in mind.</p>
+
+            <h2 id="colliders">Colliders and Overadjustment</h2>
+            <p>There is a failure mode more dangerous than an uninterpretable coefficient: adjustment that actively <em>creates</em> bias where none existed. A collider is a variable caused by two others — \( A \to C \leftarrow B \). Along a path, a collider is naturally <em>blocked</em>; conditioning on it (or on a descendant of it) <em>opens</em> the path, inducing a spurious association between \( A \) and \( B \). The back-door criterion is explicit about this asymmetry: you must block back-door paths, but you must not condition on colliders or their descendants, because doing so opens biasing paths (Pearl, 2009; Greenland, Pearl, and Robins, 1999).</p>
+
+            <p>This is precisely how a Table 2 covariate can poison the very exposure estimate it was meant to help. If a covariate is a collider on a path between \( X \) and \( Y \) — or a mediator whose inclusion opens a path through unmeasured common causes — then adjusting for it induces bias. Schisterman, Cole, and Platt (2009) formalize this as <strong>overadjustment bias</strong>: control for an intermediate variable, or a proxy for one, on the causal path from exposure to outcome. Unlike the inefficiency of adjusting for an irrelevant variable — which merely costs precision and shrinks with sample size — overadjustment bias is structural. It does not vanish as \( n \to \infty \); a larger study estimates the biased quantity more precisely.</p>
+
+            <div class="warning">
+                <h4>⚠️ &ldquo;More covariates&rdquo; is not a safety margin</h4>
+                <p>The reflex to control for everything measured treats adjustment as monotonically protective. It is not. Adding a collider opens a back-door path; adding a mediator changes the estimand and can open paths through its unmeasured causes; a variant known as <em>M-bias</em> shows that conditioning on a pre-exposure variable can bias the exposure effect even when that variable causes neither \( X \) nor \( Y \) directly (it sits at the center of an M-shaped collider structure). Covariate selection is a causal decision that requires a graph, not a checklist of &ldquo;available columns.&rdquo; Every extra term in the table is another quantity you are implicitly claiming to have identified.</p>
+            </div>
+
+            <h2 id="sign-flip">Why a Coefficient Can Flip Sign</h2>
+            <p>It is worth making concrete just how untethered a confounder's coefficient can be. Suppose the true data-generating process is linear. We want the effect of exposure \( X \) on outcome \( Y \), and \( Z \) is a genuine confounder — a common cause of both — so we correctly adjust for it. But \( Z \) itself has an <em>unmeasured</em> cause \( U \) that also affects \( Y \):</p>
+
+            <p style="text-align:center;">\( X \leftarrow Z \rightarrow Y \), and \( U \rightarrow Z \), \( U \rightarrow Y \), with \( U \) unmeasured.</p>
+
+            <p>Adjusting for \( Z \) does everything we need for \( X \): it blocks the back-door path \( X \leftarrow Z \rightarrow Y \), and \( U \) does not lie on any open back-door path for the \( X \)&ndash;\( Y \) effect, so the \( X \) coefficient is unconfounded exactly as intended. Now look at the coefficient the same regression reports for \( Z \). That coefficient is trying to describe \( Z \)'s association with \( Y \) conditional on \( X \), and it inherits the open path \( Z \leftarrow U \rightarrow Y \) — a back-door path <em>for \( Z \)</em> that the model never blocked, because the model was built for \( X \). Write the structural equation \( Y = \beta_X X + \beta_Z Z + \gamma U + \varepsilon \). The regression of \( Y \) on \( X \) and \( Z \) omits \( U \), so \( Z \)'s estimated coefficient converges not to \( \beta_Z \) but to</p>
+
+            $$ \hat{\beta}_Z \;\to\; \beta_Z \;+\; \gamma \cdot \frac{\operatorname{Cov}(U, Z \mid X)}{\operatorname{Var}(Z \mid X)}. $$
+
+            <p>The second term is pure omitted-variable bias, and its sign is the sign of \( \gamma \) times the partial covariance of \( U \) and \( Z \). If \( U \) raises \( Y \) (\( \gamma &gt; 0 \)) and is positively associated with \( Z \), the bias inflates \( \hat{\beta}_Z \) upward; if \( U \) and \( Z \) move in opposite directions, or \( \gamma &lt; 0 \), the bias pulls the coefficient down — and if the bias term is larger in magnitude than \( \beta_Z \) itself, the reported coefficient <em>changes sign</em>. A protective factor can appear harmful, or vice versa, entirely as an artifact of a back-door path the exposure-focused model was never designed to close. The exposure coefficient in the same table is, meanwhile, perfectly clean. That is the fallacy in one picture: two rows, identical typography, one identified and one arbitrary.</p>
+
+            <p>Hünermund and Louw (2025) push this further and argue it is the generic case, not a corner. Even a <em>valid</em> control variable is typically endogenous and represents a superposition of several causal mechanisms acting jointly on the outcome; its coefficient has no clean structural meaning to recover. Their recommendation is blunt: refrain from interpreting the marginal effects of controls, and either mark them as non-causal or omit them from the table entirely.</p>
+
+            <h2 id="bayesian">Precise Nonsense</h2>
+            <p>None of this is a large-sample problem that more data or a better estimator dissolves. Identification is prior to estimation. If a coefficient does not correspond to a well-defined causal contrast — because its back-door paths are open, or because it silently switched from a total to a direct effect — then no amount of precision rescues its interpretation. This lands with particular force in a Bayesian workflow, where the natural output is a full posterior and a tidy credible interval for <em>every</em> parameter in the model.</p>
+
+            <div class="warning">
+                <h4>⚠️ A credible interval on a non-identified coefficient is precise nonsense</h4>
+                <p>A 95% posterior interval for a confounder's coefficient answers the question &ldquo;given the model, where does this parameter lie?&rdquo; with complete internal consistency — and complete external irrelevance if the parameter is not the causal quantity anyone reads it as. Tightness is not warrant. The interval can be narrow, symmetric, and reproducible while describing a mixture of a structural effect and omitted-variable bias. The Bayesian machinery quantifies uncertainty <em>conditional on</em> the identification assumptions; it cannot manufacture an identification argument that the design did not supply. Report intervals only for quantities you have argued are identified.</p>
+            </div>
+
+            <p>The same caution applies to any modern regularized or machine-learning fit that emits an importance score or partial-effect estimate per feature. A well-calibrated uncertainty band around an unidentified effect is a more persuasive form of the Table 2 Fallacy, not an escape from it. The discipline is unchanged: separate the estimands you can defend from the terms you merely included.</p>
+
+            <h2 id="reporting">The Reporting Response</h2>
+            <p>Because the fallacy is common — Westreich and Greenland motivate their commentary precisely because side-by-side adjusted estimates are a fixture of top journals — the corrective has become a matter of reporting standards, not just individual vigilance. An ad hoc group of 47 editors across 35 respiratory, sleep, and critical-care journals issued guidance (Lederer et al., 2019) that names the Table 2 Fallacy explicitly and asks authors to avoid presenting confounder coefficients as if they were effects. Bulbulia (2024), writing for the human sciences, makes the same point through causal diagrams: the covariate set needed to identify an effect differs for each exposure&ndash;outcome pairing, so a single model cannot certify a whole column of causal claims.</p>
+
+            <p>The practical recommendations converge on a short list:</p>
+            <ul>
+                <li><strong>Report only estimates with an identification argument.</strong> For each number you intend to interpret causally, be able to state the estimand and the adjustment set that identifies it. If you cannot, do not present it as an effect.</li>
+                <li><strong>Use a separate model per estimand.</strong> If you genuinely need the causal effect of a second variable, fit a second model with an adjustment set tailored to <em>that</em> exposure&ndash;outcome pair. One model, one identified effect.</li>
+                <li><strong>Label covariates as adjustment terms.</strong> When covariate coefficients must appear — for transparency about model composition — mark them clearly as adjustment terms without a causal interpretation, or omit them (Hünermund and Louw, 2025).</li>
+                <li><strong>Do not propagate covariate coefficients downstream.</strong> They should not seed subsequent theory-building or meta-analyses, where their non-causal status is easily lost.</li>
+            </ul>
+
+            <p>These are cheap disciplines with a large payoff: they replace a table that implicitly overclaims with one that says exactly what it knows. The underlying idea — a coefficient is not an effect until an identification argument makes it one — is not epidemiology-specific. It governs every regression run for a causal purpose, which is why it has a direct analogue in marketing measurement, where a media-mix model routinely reports a coefficient per channel and per control and invites us to read them all as return on investment. That parallel deserves its own treatment; a companion post, <a href="blog-table-2-fallacy-mmm.html">The Table 2 Fallacy in Media Mix Models</a>, works it through for MMMs.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>A multivariable regression is designed to identify <em>one</em> exposure effect; the Table 2 Fallacy is reading every coefficient in the shared table as a causal effect of that variable.</li>
+                    <li>The back-door adjustment set that de-confounds the primary exposure is generally the wrong set for any secondary variable — each exposure&ndash;outcome pair needs its own adjustment set and its own identification argument.</li>
+                    <li>Adjusting for a mediator changes the exposure coefficient from a total effect to a controlled direct effect (VanderWeele's decomposition), while the mediator's own coefficient becomes a confounded mix.</li>
+                    <li>A covariate can be a confounder, a mediator, or a competing exposure — and its coefficient is corrupted differently in each case; a confounder's coefficient can even flip sign through an unblocked back-door path.</li>
+                    <li>Adjusting for a collider or an intermediate variable creates <em>overadjustment bias</em> that does not shrink with sample size; more covariates is not a safety margin.</li>
+                    <li>A tight credible interval on an unidentified coefficient is precise nonsense — identification precedes estimation. Report intervals only for effects you have argued are identified; use one model per estimand and label covariates as adjustment terms.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Westreich, D., &amp; Greenland, S. (2013). <em>The Table 2 Fallacy: Presenting and Interpreting Confounder and Modifier Coefficients</em>. American Journal of Epidemiology, 177(4), 292&ndash;298.</li>
+                <li>VanderWeele, T. J. (2015). <em>Explanation in Causal Inference: Methods for Mediation and Interaction</em>. Oxford University Press.</li>
+                <li>Pearl, J. (2009). <em>Causality: Models, Reasoning, and Inference</em> (2nd ed.). Cambridge University Press.</li>
+                <li>Greenland, S., Pearl, J., &amp; Robins, J. M. (1999). <em>Causal Diagrams for Epidemiologic Research</em>. Epidemiology, 10(1), 37&ndash;48.</li>
+                <li>Schisterman, E. F., Cole, S. R., &amp; Platt, R. W. (2009). <em>Overadjustment Bias and Unnecessary Adjustment in Epidemiologic Studies</em>. Epidemiology, 20(4), 488&ndash;495.</li>
+                <li>Lederer, D. J., Bell, S. C., Branson, R. D., et al. (2019). <em>Control of Confounding and Reporting of Results in Causal Inference Studies: Guidance for Authors from Editors of Respiratory, Sleep, and Critical Care Journals</em>. Annals of the American Thoracic Society, 16(1), 22&ndash;28.</li>
+                <li>Bulbulia, J. A. (2024). <em>Methods in Causal Inference. Part 1: Causal Diagrams and Confounding</em>. Evolutionary Human Sciences, 6, e40.</li>
+                <li>Hünermund, P., &amp; Louw, B. (2025). <em>On the Nuisance of Control Variables in Causal Regression Analysis</em>. Organizational Research Methods (published online 2024; working paper arXiv:2005.10314, 2020).</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pretest With Caution: Testing for Parallel Trends | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Passing a pre-trend test does not license a difference-in-differences design. Why pre-tests have low power against the trends that bias you most, why conditioning on passing distorts inference, and what to do instead.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-pretrends-testing.html">
+    <meta property="og:title" content="Pretest With Caution: Testing for Parallel Trends">
+    <meta property="og:description" content="Passing a pre-trend test is weak evidence, and testing itself distorts inference. Roth's power diagnostics, HonestDiD sensitivity bounds, and what this means for geo lift tests.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-pretrends-testing.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Pretest With Caution: Testing for Parallel Trends">
+    <meta name="twitter:description" content="Passing a pre-trend test is weak evidence, and testing itself distorts inference. Roth's power diagnostics, HonestDiD sensitivity bounds, and what this means for geo lift tests.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-pretrends-testing.html",
+          "name": "Pretest With Caution: Testing for Parallel Trends | MMM Framework",
+          "description": "Passing a pre-trend test does not license a difference-in-differences design. Why pre-tests have low power against the trends that bias you most, why conditioning on passing distorts inference, and what to do instead.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-14",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-pretrends-testing.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-pretrends-testing.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Pretest With Caution: Testing for Parallel Trends",
+          "datePublished": "2026-07-18",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-pretrends-testing.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-pretrends-testing.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Pretest With Caution: Testing for Parallel Trends",
+              "item": "https://redam94.github.io/mmm-framework/blog-pretrends-testing.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#ritual">The Pre-Test Ritual</a></li>
+                <li><a href="#power">Low Power Where It Matters</a></li>
+                <li><a href="#distortion">Testing Distorts Inference</a></li>
+                <li><a href="#pretest-lineage">The Pre-Test Estimator Lineage</a></li>
+                <li><a href="#diagnose">Diagnose the Power</a></li>
+                <li><a href="#honest">Sensitivity, Not Testing</a></li>
+                <li><a href="#relatives">A Family of Better Ideas</a></li>
+                <li><a href="#media">Geo Lift Tests Inherit This</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Pretest With Caution</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-18">July 18, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Causal inference</span>
+            </p>
+            <p class="lead">Difference-in-differences rests on one assumption you can never check: that the treated and untreated groups would have moved in parallel absent treatment. Because that counterfactual is unobservable, a ritual grew up around it. Estimate the event study, look at the pre-treatment coefficients, confirm they are small and jointly insignificant, and declare parallel trends "tested and passed." Jonathan Roth's <em>Pretest with Caution</em> takes that ritual apart. The tests we run have almost no power against exactly the confounding trends that would bias us most, and — more subtly — the act of conditioning on a passing test warps the very sampling distribution we then use for inference. Passing is weak evidence, and it is <em>self-selected</em> weak evidence.</p>
+
+            <h2 id="ritual">The Pre-Test Ritual</h2>
+            <p>Fix the standard dynamic specification. With treatment turning on at event time zero, we estimate a set of relative-time coefficients around it:</p>
+            $$ Y_{it} \;=\; \alpha_i + \lambda_t + \sum_{k \neq -1} \beta_k \, D_{it}^{(k)} + \varepsilon_{it}, $$
+            <p>where \( D_{it}^{(k)} \) indicates that unit \( i \) is \( k \) periods from its treatment date at time \( t \), and the period just before treatment (\( k = -1 \)) is the omitted baseline. The coefficients split into <strong>lags</strong> \( \beta_0, \beta_1, \dots \) (the dynamic treatment effects we care about) and <strong>leads</strong> \( \beta_{-2}, \beta_{-3}, \dots \) (the pre-treatment "placebo" coefficients). Under the identifying assumption, the leads should all be zero in expectation:</p>
+            $$ H_0:\; \beta_{-k} = 0 \quad \text{for all } k \geq 2. $$
+            <p>The parallel-trends assumption is precisely that the untreated potential outcomes of the two groups follow paths that differ only by a fixed level — no differential drift. The leads are the observable shadow of that assumption in the pre-period, so testing \( H_0 \) with an \( F \)-test on the leads feels like testing parallel trends itself. It is not. Parallel trends is a statement about the <em>post-treatment</em> counterfactual, which the pre-period data are silent about. A clean pre-period is consistent with the assumption; it does not imply it. Kahn-Lang and Lang (2020) press this point on substantive grounds: parallel trends is rarely a natural default, the choice of functional form (levels versus logs) can make it hold or fail (Roth and Sant'Anna, 2023), and a passing pre-test does nothing to justify the economic story that the two groups would have converged.</p>
+
+            <div class="definition">
+                <h4>Definition: A pre-trends test as a screening rule</h4>
+                <p>Let \( \hat{\beta}_{\mathrm{pre}} = (\hat\beta_{-2}, \dots, \hat\beta_{-K}) \) be the estimated leads with covariance \( \hat\Sigma_{\mathrm{pre}} \). The conventional test rejects when the Wald statistic \( \hat\beta_{\mathrm{pre}}' \hat\Sigma_{\mathrm{pre}}^{-1} \hat\beta_{\mathrm{pre}} \) exceeds a \( \chi^2 \) critical value. In practice the design is <em>kept</em> — published, interpreted, acted on — only when the test <em>fails to reject</em>. That "fail to reject &rArr; proceed" step is a screening rule, and Roth's paper is about what screening does to everything downstream.</p>
+            </div>
+
+            <h2 id="power">Low Power Where It Matters</h2>
+            <p>The first problem is power. A hypothesis test that fails to reject the null is not evidence <em>for</em> the null unless it had a good chance of rejecting when the null was false. Pre-trend tests routinely do not. Roth (2022) shows that against the specific confounding trends that would most bias the treatment estimate — smooth, low-order differential trends, the linear trend being the canonical case — commonly used pre-tests have low power. The pathology is worst exactly where it hurts: a modest linear divergence between the groups can be very likely to slip past the test while generating substantial bias in the post-treatment coefficients, because a linear trend that is nearly invisible in a short, noisy pre-period keeps accumulating into the post-period.</p>
+            <p>Roth makes this concrete by calibrating simulations to a survey of recent event-study papers in leading economics journals. The finding is not reassuring: for many published designs, the pre-trend test would have had low power against a linear violation large enough to meaningfully distort the reported effect — in a number of cases well below the coin-flip mark of fifty percent. Low power is not an occasional accident of small samples; it is the typical state of the designs the field already accepts. The intuition is dimensional. The pre-test spreads its attention across all directions of pre-trend violation, but bias in the estimand loads on one particular direction — the trend that, extrapolated forward, moves the lags. A test tuned to detect "any" violation is badly tuned to detect "the one that matters."</p>
+
+            <div class="warning">
+                <h4>&#9888;&#65039; "The leads look flat" is a statement about your standard errors</h4>
+                <p>Insignificant leads can mean the trends are genuinely parallel, or they can mean the pre-period is too short and too noisy to detect the trend that is quietly biasing you. The two are observationally identical in the point estimates and distinguishable only by <em>power</em>. Eyeballing a flat pre-trend plot, or reporting a large \( F \)-test \( p \)-value, tells you nothing about which world you are in unless you also report how large a trend the test could have caught.</p>
+            </div>
+
+            <h2 id="distortion">Testing Distorts Inference</h2>
+            <p>The second problem is deeper and less intuitive. Even setting power aside, the act of <em>conditioning</em> on having passed the pre-test changes the sampling distribution of the treatment estimator. Because the leads and the lags are estimated from overlapping data and are statistically correlated, selecting the samples in which \( \hat\beta_{\mathrm{pre}} \) happened to look small is not selecting a random subset of the world — it is selecting a subset correlated with the pre-period noise, and that correlation leaks into the post-period estimate.</p>
+            <p>Formally, the object we actually report is not the unconditional estimator \( \hat\beta_{\mathrm{post}} \) but the estimator <em>conditional on passing</em>:</p>
+            $$ \mathbb{E}\!\left[\, \hat\beta_{\mathrm{post}} \;\middle|\; \text{pre-test not rejected} \,\right] \;\neq\; \mathbb{E}\!\left[\, \hat\beta_{\mathrm{post}} \,\right]. $$
+            <p>Truncating the joint distribution of \( (\hat\beta_{\mathrm{pre}}, \hat\beta_{\mathrm{post}}) \) to the region where the leads are small shifts and skews the marginal distribution of the lags. Roth's striking result is on the sign of the effect: conditioning on passing can <em>exacerbate</em> the bias rather than reduce it. The mental model many practitioners carry — "if there were a pre-trend, the test would have caught it, so passing means the residual bias is small" — has it backwards in the cases that matter. Under a real underlying trend, the samples that pass are disproportionately the ones where noise masked the pre-trend, and in exactly those samples the same trend is still pushing on the post-period coefficients. Passing filters <em>toward</em> the contaminated draws.</p>
+            <p>Coverage suffers in lockstep. A nominal 95% confidence interval built the usual way — ignoring that the design was retained only because it passed a screen — under-covers the true effect once you account for the selection. Roth documents this under-coverage in the calibrated simulations: intervals that advertise 95% do not deliver it after the pre-test gate. The confidence interval is answering the wrong question. It quantifies uncertainty in a hypothetical world where you would have reported the estimate regardless of the pre-test, but you would not have; you would have thrown it away had the leads looked bad.</p>
+
+            <div class="note">
+                <h4>&#128161; The mechanism in one sentence</h4>
+                <p>Passing the pre-test is correlated with the pre-period noise, so conditioning on it induces a <em>truncated, shifted</em> sampling distribution for the treatment estimate — the standard errors and the naive point estimate are both computed as if that selection never happened.</p>
+            </div>
+
+            <h2 id="pretest-lineage">The Pre-Test Estimator Lineage</h2>
+            <p>None of this is new to statistics; it is new only to the event-study ritual. The failure is the classical <em>pre-test estimator</em> problem, studied since the 1940s. When you first test whether a coefficient belongs in a regression and then estimate the model implied by the test's verdict, the resulting estimator has a sampling distribution that is neither the restricted nor the unrestricted one — it is a data-dependent mixture, discontinuous in the truth, with bias and non-normal tails that the textbook standard errors ignore (Judge and Bock's line of work formalized this; the caution against "estimation after model selection" is a staple of the econometrics canon). Reporting a conventional confidence interval after a specification search is invalid for the same reason a pre-trend-gated interval is: the reported inference does not condition on the selection event that produced the estimate.</p>
+            <p>Seen this way, the event-study convention is a specific and especially seductive instance of a known trap. It is seductive because the pre-test looks like a diagnostic <em>of the identifying assumption</em> rather than a model-selection step — but operationally, "keep the design iff the leads are insignificant" is model selection, and it carries the pre-test estimator's full baggage. The remedy is also the classical one: stop letting a binary test silently prune the sample, and instead characterize the whole family of conclusions consistent with the data.</p>
+
+            <h2 id="diagnose">Diagnose the Power</h2>
+            <p>If you are going to look at pre-trends at all, Roth's constructive advice is to report what the test could actually see. The companion <code>pretrends</code> R package (Roth and Sant'Anna) turns the abstract worry into two numbers a reader can interrogate. First, given the estimated event study and its covariance matrix, it computes the <strong>power</strong> of the pre-test against a hypothesized violation — a linear trend of a given slope, say. Second, and more usefully, it inverts the question: it finds the linear trend against which the test has a chosen power, for example the slope the test would detect only <em>50% of the time</em>.</p>
+            <p>That "50% slope" is a communication device. In the package's worked example (built on He and Wang, 2017), the slope the pre-test would catch half the time is on the order of \( 0.05 \) per period — and the package then plots what that undetectable-half-the-time trend would do to the event study, together with the expected coefficients <em>conditional on passing the pre-test</em> under that trend (its <code>meanAfterPretesting</code> output). If that hypothesized trend is economically large relative to your effect, your flat leads mean little; the test simply could not have ruled it out. If it is implausibly large, the pre-test is genuinely informative. Either way you have replaced "the leads are insignificant" with "the test could rule out trends bigger than this, and here is the distortion a just-detectable trend would leave behind."</p>
+
+            <div class="definition">
+                <h4>Definition: The 50%-power trend as a yardstick</h4>
+                <p>Let \( \gamma \) index a family of hypothesized linear pre-trends (slope per period). The 50%-power slope \( \gamma_{0.5} \) solves \( \Pr(\text{reject} \mid \text{trend } \gamma_{0.5}) = 0.5 \). Report it next to your estimated effect. A pre-test that only reliably catches a trend an order of magnitude larger than the effect you are claiming is not a safeguard — it is decoration.</p>
+            </div>
+
+            <h2 id="honest">Sensitivity, Not Testing</h2>
+            <p>The more thorough answer abandons the binary test for a <em>sensitivity analysis</em>. Rambachan and Roth (2023), "A More Credible Approach to Parallel Trends," reframes the whole problem. Instead of asking "is parallel trends true or false," you posit that the post-treatment violation of parallel trends is <em>restricted</em> — bounded by what you saw in the pre-period — and report the entire set of treatment effects consistent with that restriction. The estimand becomes <em>partially identified</em>, and the deliverable is an interval of intervals rather than a point with a green checkmark.</p>
+            <p>Two restriction families do most of the work. The <strong>relative-magnitudes</strong> restriction says the post-period differential trend is no larger than \( M \) times the largest pre-period differential trend — you let the observed pre-trends set the scale of plausible post-trends, tuning the multiplier \( M \). The <strong>smoothness</strong> restriction instead bounds how much the slope of the differential trend can change from one period to the next, formalizing the idea that secular confounders evolve gradually rather than jumping at the treatment date. For any choice of restriction, the <code>HonestDiD</code> package returns valid confidence sets for the treatment effect — built from conditional, fixed-length, and hybridized confidence sets that remain honest under the partial identification.</p>
+            <p>The natural summary is a <strong>breakdown</strong> analysis: the largest restriction (the biggest \( M \), or the largest allowed slope change) under which you can still reject a null effect. Rather than "we passed the pre-test," you report "our conclusion survives as long as the post-treatment differential trend is no more than, say, twice the pre-treatment one." That is a claim a skeptical reader can argue with on its merits, and it degrades gracefully — the finding does not flip from "valid" to "invalid" at a \( p \)-value threshold; it weakens continuously as you allow larger violations.</p>
+
+            <div class="takeaway-box" style="margin: 1.5rem 0;">
+                <h4>The reframing in a line</h4>
+                <p style="margin-bottom:0;">A pre-test asks a yes/no question the data cannot answer. A sensitivity analysis asks "how wrong could the identifying assumption be before my conclusion breaks?" — a question the data <em>can</em> speak to, and the one a decision-maker actually needs answered.</p>
+            </div>
+
+            <h2 id="relatives">A Family of Better Ideas</h2>
+            <p>Roth's paper sits inside a broader movement away from the naive pre-test. Several strands are worth knowing. Bilinski and Hatfield (2018/2026), "Nothing to See Here?", make the equivalence-testing case sharp: the conventional test controls the probability of <em>wrongly declaring non-parallel trends</em>, which is the error you do not care about, while leaving the error you do care about — missing a real violation — uncontrolled. They propose a non-inferiority framing that instead tightly bounds the chance of missing a violation large enough to matter, measured on the scale of the treatment effect, and show it can be used as a screening step with little or no induced bias under common error structures. The philosophical inversion — put the burden of proof on parallelism, not on its absence — is the right one.</p>
+            <p>Freyaldenhoven, Hansen, and Shapiro (2019) attack the confounder directly: if a covariate proxies the trend that threatens parallelism, you can use it as an instrument-like control and estimate the treatment effect while explicitly modeling the pre-event dynamics, rather than testing them away. On the estimator side, the modern event-study literature — Callaway and Sant'Anna (2021) and Sun and Abraham (2021) — cleaned up the coefficients that feed these tests, so that the leads and lags are not themselves contaminated by the negative-weighting pathologies of two-way fixed effects under staggered adoption (the subject of our companion piece on <a href="blog-staggered-did.html">staggered difference-in-differences</a>). And the whole enterprise descends from the partial-identification tradition of Manski and Pepper — when a point-identifying assumption is untestable, report the bounds implied by a <em>credible weaker</em> assumption instead of asserting the strong one.</p>
+            <p>The common thread: replace a fragile point identification defended by an underpowered test with an honest range defended by a stated, arguable restriction. You give up the clean single number and the reassuring checkmark. You gain a result that means what it says.</p>
+
+            <h2 id="media">Geo Lift Tests Inherit This</h2>
+            <p>Marketing measurement runs on difference-in-differences whether or not it uses the name. A matched-market geo lift test picks control markets whose pre-period outcome trajectory tracks the treated markets, turns advertising on in the treated set, and reads incrementality off the post-period divergence — a DiD in all but branding. The identifying assumption is the same parallel-trends condition, and the "matching" step is the same pre-trend check: we accept the control set because the pre-period lined up. Everything above applies without modification.</p>
+            <p>The two failure modes translate directly. <strong>Low power</strong>: with a handful of markets and a few months of pre-period, the "the markets matched well before launch" check can easily miss a differential trend — a control region that was quietly decelerating, a treated region riding a local demand wave — large enough to swamp a real lift of a few percent. <strong>Conditioning distortion</strong>: when we search over candidate control sets and keep the one whose pre-period fits best, we are running exactly the pre-test-and-select procedure that biases the estimate and breaks the confidence interval. The tighter the pre-period match we demand, the more aggressively we are selecting on pre-period noise, and the more the reported lift interval overstates its own precision.</p>
+
+            <div class="warning">
+                <h4>&#9888;&#65039; A clean pre-period match is a starting point, not a certificate</h4>
+                <p>Report the power of the match, not just the fact of it: how large a pre-existing test-versus-control trend would your matching window have failed to catch? Then bound the lift under a stated sensitivity restriction — "the conclusion holds as long as any residual geo-level trend is no more than \( M \) times what we saw pre-launch" — rather than treating a good pre-period fit as proof of comparability. Synthetic-control weighting and honest bounds beat a green/red pre-check.</p>
+            </div>
+
+            <p>This is why the framework leans on <em>randomization</em> where it can and on <em>sensitivity</em> where it cannot. A properly randomized geo experiment (see <a href="blog-geo-experiments-tbr.html">geo lift and time-based regression</a>) earns parallel trends by design — random assignment makes the treated and control groups exchangeable in expectation, so there is no untestable trend to pre-test. When randomization is impossible and matched-market DiD is the only option, the honest move is to carry the identifying assumption forward explicitly: state it, bound the effect under credible violations of it, and refuse to let an underpowered pre-period check stand in for the argument. The measurement platform's <a href="continuous-learning.html">continuous-learning</a> loop treats a passed pre-trend check as one input to a sensitivity band, never as a license. In observational MMM, the same discipline shows up as calibrating the model against lift experiments and reporting how far the conclusions can bend — the difference-in-differences instinct, held honestly.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Parallel trends is the untestable identifying assumption of DiD; a clean pre-period is consistent with it but does not imply it. Testing the leads is not testing the assumption.</li>
+                    <li>Pre-trend tests have <em>low power</em> against the smooth, low-order differential trends — linear trends above all — that would most bias the treatment estimate. Calibrated to published designs, that power is often well below 50%.</li>
+                    <li>Conditioning on <em>passing</em> the pre-test distorts inference: it truncates and shifts the estimator's sampling distribution, can <em>exacerbate</em> bias in the retained samples, and makes nominal 95% intervals under-cover. This is the classical pre-test estimator problem.</li>
+                    <li>If you look at pre-trends, report the power: use the <code>pretrends</code> package to state the trend the test would catch only half the time and the distortion a just-undetectable trend would leave.</li>
+                    <li>Prefer sensitivity analysis (Rambachan&ndash;Roth <code>HonestDiD</code>): bound post-period violations by the pre-period (relative magnitudes) or by smoothness, and report the breakdown point where the conclusion fails — not a binary pass/fail.</li>
+                    <li>Geo lift tests and matched-market DiD inherit all of this. A pre-period match is a starting point, not a certificate; randomize where possible, and bound the lift under stated restrictions where not.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Roth, J. (2022). <em>Pretest with Caution: Event-Study Estimates after Testing for Parallel Trends</em>. American Economic Review: Insights, 4(3), 305&ndash;322. Working paper: <a href="https://www.jonathandroth.com/assets/files/roth_pretrends_testing.pdf">jonathandroth.com</a>.</li>
+                <li>Rambachan, A., &amp; Roth, J. (2023). <em>A More Credible Approach to Parallel Trends</em>. Review of Economic Studies, 90(5), 2555&ndash;2591.</li>
+                <li>Roth, J., &amp; Sant'Anna, P. H. C. <em>pretrends</em> (R package): power calculations for pre-trends tests. <a href="https://github.com/jonathandroth/pretrends">github.com/jonathandroth/pretrends</a>.</li>
+                <li>Rambachan, A., &amp; Roth, J. <em>HonestDiD</em> (R package): robust inference in DiD and event-study designs. <a href="https://github.com/asheshrambachan/HonestDiD">github.com/asheshrambachan/HonestDiD</a>.</li>
+                <li>Bilinski, A., &amp; Hatfield, L. A. (2018/2026). <em>Nothing to See Here? A Non-Inferiority Approach to Parallel Trends</em>. Statistics in Medicine; arXiv:1805.03273.</li>
+                <li>Freyaldenhoven, S., Hansen, C., &amp; Shapiro, J. M. (2019). <em>Pre-event Trends in the Panel Event-Study Design</em>. American Economic Review, 109(9), 3307&ndash;3338.</li>
+                <li>Kahn-Lang, A., &amp; Lang, K. (2020). <em>The Promise and Pitfalls of Differences-in-Differences: Reflections on 16 and Pregnant and Other Applications</em>. Journal of Business &amp; Economic Statistics, 38(3), 613&ndash;620.</li>
+                <li>Roth, J., &amp; Sant'Anna, P. H. C. (2023). <em>When Is Parallel Trends Sensitive to Functional Form?</em> Econometrica, 91(2), 737&ndash;747.</li>
+                <li>Callaway, B., &amp; Sant'Anna, P. H. C. (2021). <em>Difference-in-Differences with Multiple Time Periods</em>. Journal of Econometrics, 225(2), 200&ndash;230.</li>
+                <li>Sun, L., &amp; Abraham, S. (2021). <em>Estimating Dynamic Treatment Effects in Event Studies with Heterogeneous Treatment Effects</em>. Journal of Econometrics, 225(2), 175&ndash;199.</li>
+                <li>Manski, C. F., &amp; Pepper, J. V. (2018). <em>How Do Right-to-Carry Laws Affect Crime Rates? Coping with Ambiguity Using Bounded-Variation Assumptions</em>. Review of Economics and Statistics, 100(2), 232&ndash;244.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

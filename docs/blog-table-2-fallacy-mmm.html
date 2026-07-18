@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Table 2 Fallacy in Media Mix Models | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="An MMM coefficient table is not a menu of effects. Why control-variable coefficients — price, seasonality, distribution — carry no clean causal reading, and how the good/bad-controls taxonomy fixes it.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-table-2-fallacy-mmm.html">
+    <meta property="og:title" content="The Table 2 Fallacy in Media Mix Models">
+    <meta property="og:description" content="An MMM fits sales on media plus controls and prints one coefficient table. Reading the price or seasonality coefficient as an effect is the Table 2 Fallacy — and it corrupts channel ROI too.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-table-2-fallacy-mmm.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Table 2 Fallacy in Media Mix Models">
+    <meta name="twitter:description" content="An MMM fits sales on media plus controls and prints one coefficient table. Reading the price or seasonality coefficient as an effect is the Table 2 Fallacy — and it corrupts channel ROI too.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy-mmm.html",
+          "name": "The Table 2 Fallacy in Media Mix Models | MMM Framework",
+          "description": "An MMM coefficient table is not a menu of effects. Why control-variable coefficients — price, seasonality, distribution — carry no clean causal reading, and how the good/bad-controls taxonomy fixes it.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-14",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy-mmm.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy-mmm.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "The Table 2 Fallacy in Media Mix Models",
+          "datePublished": "2026-07-18",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy-mmm.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy-mmm.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "The Table 2 Fallacy in Media Mix Models",
+              "item": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy-mmm.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#anatomy">Anatomy of the MMM Table</a></li>
+                <li><a href="#media-not-causal">Even Media Isn't Free</a></li>
+                <li><a href="#taxonomy">Good Controls, Bad Controls</a></li>
+                <li><a href="#confounder">The Confounder That Confounds Itself</a></li>
+                <li><a href="#mediator">The Mediator Trap</a></li>
+                <li><a href="#collider">The Collider Trap</a></li>
+                <li><a href="#price">The Price Coefficient Is Precise Nonsense</a></li>
+                <li><a href="#practice">One DAG, One Estimand at a Time</a></li>
+                <li><a href="#triangulate">Trust, but Calibrate</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">The Table 2 Fallacy in Media Mix Models</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-18">July 18, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">MMM</span>
+            </p>
+            <p class="lead">A marketing mix model regresses sales on media spend and a pile of controls — price, promotion, distribution, seasonality, competitor activity, a trend — and hands back one tidy coefficient table. The temptation is to read every row of that table as an effect: "TV returns 2.1x, and by the way price elasticity is &minus;1.4 and December adds 12%." That second half is the <a href="blog-table-2-fallacy.html">Table 2 Fallacy</a> — the epidemiologists' name for treating the adjustment coefficients in a single regression as if they carried the same causal standing as the exposure you actually designed the model to estimate (Westreich and Greenland, 2013). In an MMM the fallacy is not a curiosity. It quietly corrupts the channel ROIs everyone downstream is about to spend money against.</p>
+
+            <p>This is a companion to the <a href="blog-table-2-fallacy.html">general treatment of the Table 2 Fallacy</a>; here we make it concrete for media measurement, where the "one model, many coefficients" habit is nearly universal and the controls are precisely the strategic, endogenous variables that break under a naive reading.</p>
+
+            <h2 id="anatomy">Anatomy of the MMM Table</h2>
+            <p>Write the core additive MMM as a regression of a KPI \( Y_t \) on adstocked, saturated media and a set of controls:</p>
+            $$ Y_t \;=\; \beta_0 \;+\; \sum_{c} \beta_c \, f_c\!\big(\mathrm{adstock}(x_{c,t})\big) \;+\; \sum_{k} \gamma_k \, z_{k,t} \;+\; \varepsilon_t, $$
+            <p>where \( x_{c,t} \) is spend or impressions on channel \( c \), \( f_c \) is a saturation curve, and \( z_{k,t} \) are the controls — price, promotion depth, distribution or ACV, a seasonality basis, competitor pressure, a macro index, a trend. A Bayesian fit (Jin, Wang, Sun, Chan, and Koehler, 2017) returns a full posterior for every \( \beta_c \) and every \( \gamma_k \), and it is entirely natural to print them side by side with credible intervals. That single table is the whole trap.</p>
+
+            <div class="definition">
+                <h4>Definition: The Table 2 Fallacy</h4>
+                <p>Presenting the adjusted coefficients of secondary variables from one multivariable model — here the control terms \( \gamma_k \) — and interpreting each as the effect of that variable, when the model was specified to identify only the effect of the primary exposure. The secondary coefficients are typically <em>direct</em> effects conditional on everything else in the equation, not total effects, and they generally remain confounded even when the exposure of interest is properly adjusted (Westreich and Greenland, 2013).</p>
+            </div>
+
+            <p>The key word is <em>conditional</em>. Each \( \gamma_k \) is defined holding fixed every other regressor — including the media terms and the other controls. That conditional slope answers a question almost no one asked and few would want the answer to: "what is the association of price with sales, net of spend, promotion, distribution, seasonality, and trend, under whatever functional form we happened to impose?" It is not the price elasticity, not the seasonal lift, not the promotion effect. It is an adjustment term.</p>
+
+            <h2 id="media-not-causal">Even the Media Coefficients Aren't Free</h2>
+            <p>Before indicting the controls, it is worth conceding that the coefficients we <em>do</em> want — the \( \beta_c \) that become channel ROI — are causal only under an identification argument, not by virtue of being estimated. Three assumptions are load-bearing. First, <strong>no unobserved confounding</strong> of spend and sales: nothing outside the model drives both how much a channel spent and how much the business sold. Second, <strong>correct functional form</strong> for carryover and shape, since a mis-specified adstock or saturation curve reassigns contribution across channels. Third, <strong>no reverse causality</strong> from sales to budget.</p>
+
+            <p>That third one is not academic. Media budgets are set by planners who react to expected demand — they flight spend into strong seasons, cut it in weak ones, and chase the very sales they are trying to explain. Spend is therefore <em>endogenous</em>, and an observational regression coefficient absorbs the demand signal the planner was responding to. Google's own MMM group documented the sharpest case: paid search spend is targeted at high-intent queries that would have converted anyway, so a naive MMM over-credits search unless the selection is corrected (Chen, Chan, Perry, Jin, Sun, Wang, and Koehler, 2018). And the field-experiment literature is bleak about how much signal observational advertising data even contains: across twenty-five large experiments, Lewis and Rao (2015) found individual sales so volatile relative to ad cost that ROI confidence intervals routinely spanned more than 100 percentage points — the "unfavorable economics" that make observational point estimates fragile.</p>
+
+            <div class="note">
+                <h4>💡 The honest reading of an MMM table</h4>
+                <p>Channel coefficients are causal <em>conditional on an identification story you are asserting</em>, most credibly when that story is backed by experiments. Control coefficients are adjustment terms with no such story attached. Treat the first as estimates to be calibrated and the second as nuisance parameters — never as a second column of "effects."</p>
+            </div>
+
+            <h2 id="taxonomy">Good Controls, Bad Controls</h2>
+            <p>Why can't we just throw every plausibly relevant variable into the regression and read off whatever we like? Because a variable's role in a causal graph — not its correlation with sales — decides whether adjusting for it helps or harms. Cinelli, Forney, and Pearl (2024) organize this into a taxonomy every modeler should internalize, and it maps cleanly onto MMM controls.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Role in the DAG</th><th>MMM example</th><th>Adjust for it?</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>Confounder</strong> (common cause of spend and sales)</td><td>Seasonality, macro demand, holiday calendar</td><td>Yes — omitting it biases channel effects</td></tr>
+                    <tr><td><strong>Mediator</strong> (on the causal path from media to sales)</td><td>Brand search volume, site visits, "awareness"</td><td>No, if you want the <em>total</em> channel effect</td></tr>
+                    <tr><td><strong>Collider</strong> (common effect of spend and something else)</td><td>A post-spend metric driven by both media and a demand shock</td><td>Never — conditioning opens a spurious path</td></tr>
+                    <tr><td><strong>Competing exposure</strong> (another cause of sales, not of spend)</td><td>Price set independently, distribution gains</td><td>Optional — helps precision, its own coefficient stays non-causal</td></tr>
+                </tbody>
+            </table>
+
+            <p>The crucial insight is that these roles are properties of the data-generating structure, invisible in the coefficient table itself. Two variables with identical correlations and identical fitted slopes can demand opposite treatment: adjust for the confounder, refuse to adjust for the collider. No amount of staring at t-statistics or credible intervals will tell you which is which. Only a causal diagram will — which is why the fix for the Table 2 Fallacy is, at bottom, "draw the graph first." For a longer walk through the underlying causal machinery, see the framework's <a href="causal-inference.html">causal inference primer</a>.</p>
+
+            <h2 id="confounder">The Confounder That Confounds Itself</h2>
+            <p>Start with the controls we are <em>right</em> to include and still wrong to interpret. Seasonality is a genuine confounder: December drives both heavier spend and heavier sales, so leaving it out biases the channel betas upward. Including a seasonal basis is correct. But the seasonality coefficients themselves are not "the effect of December." They are the residual seasonal pattern <em>net of media</em> — and if some of that seasonal lift actually flows through advertising the brand ran because it was December, the control has already eaten part of the channel's own contribution. The seasonal coefficient and the channel coefficient are entangled by construction.</p>
+
+            <p>The general statement, from Westreich and Greenland, is that a confounder's own coefficient is itself typically confounded: the model was built to de-confound the <em>exposure</em>, and it makes no promise about de-confounding the adjustment variables. In an MMM, seasonality is confounded by promotions, promotions by price, price by competitive dynamics, and none of these were given the adjustment set that would make <em>their</em> coefficients causal. Each control's slope is a projection onto whatever variance the other regressors left behind. Reporting it as an effect asserts an identification you never argued for.</p>
+
+            <h2 id="mediator">The Mediator Trap</h2>
+            <p>The most damaging version of the fallacy in modern MMMs is not misreading a control — it is <em>choosing the wrong controls in the first place</em>, and the classic mistake is adjusting for a mediator. Suppose an upper-funnel channel — a brand campaign, say — works partly by lifting <strong>brand search volume</strong>, site visits, or measured awareness, which then convert to sales. That intermediate variable sits <em>on the causal path</em> from media to KPI:</p>
+            $$ \text{Brand TV} \;\longrightarrow\; \text{brand search / awareness} \;\longrightarrow\; \text{sales}. $$
+
+            <p>Analysts routinely toss brand search into the model as a "control" because it is a strong predictor of sales. But conditioning on a mediator blocks the indirect path and strips out exactly the mediated portion of the channel's effect — a textbook case of <strong>over-adjustment</strong> that attenuates the estimate toward zero (Cinelli, Forney, and Pearl, 2024; VanderWeele, 2015). The brand campaign looks weak, not because it is, but because the model handed its credit to the mediator sitting next to it. The channel's <em>total</em> effect — the number a budget decision needs — is the sum of its direct and indirect paths, and adjusting for the mediator discards the indirect one.</p>
+
+            <div class="warning">
+                <h4>⚠️ Do not "control for" a downstream KPI</h4>
+                <p>Any variable that media <em>causes</em> on its way to sales — organic/brand search, app installs, site sessions, funnel-stage awareness — is a mediator, not a control. Adjusting for it biases the upper-funnel channels toward zero and quietly reallocates their credit. If a variable is genuinely part of the mechanism, it should be <em>modeled as a mediator</em>, not adjusted away.</p>
+            </div>
+
+            <p>The constructive answer is to stop pretending the mediator is a nuisance and model the mechanism explicitly. A <a href="causal-03-structural-mediation.html">structural or nested MMM</a> writes down the two equations — media to the mediator, mediator (plus direct media) to sales — and recovers the total effect as the sum of the paths rather than annihilating one of them. That is the difference between <em>adjusting a mediator away</em> and <em>estimating through it</em>: the first commits the Table 2 Fallacy, the second answers the mediation question the fallacy was hiding.</p>
+
+            <h2 id="collider">The Collider Trap</h2>
+            <p>Colliders are subtler and rarer in MMM, but when they occur they inject bias where the modeler expected to remove it. A collider is a common <em>effect</em> of two variables; conditioning on it opens a non-causal association between its parents. Imagine a post-spend operational metric — inventory depletion, say, or a "marketing-qualified lead" score — that is driven <em>both</em> by media spend and by an unobserved demand shock. Adding it as a control conditions on a collider, opening a spurious path <span class="nowrap">spend &leftrightarrow; demand shock &rightarrow; sales</span> and biasing every channel coefficient in a direction that is hard to sign a priori.</p>
+
+            <p>The general rule from the good-controls taxonomy is uncompromising: never adjust for a variable that is a descendant of the treatment and shares a hidden cause with the outcome. In practice the trap springs whenever someone reaches for a "richer" feature set of downstream engagement or operational signals to "improve fit." Fit improves; identification degrades. This is the deepest way the fallacy bites — a bad control need not merely be uninterpretable in its own row, it can poison the exposure rows you do care about.</p>
+
+            <h2 id="price">The Price Coefficient Is Precise Nonsense</h2>
+            <p>Return to the row everyone wants to read: price. Its coefficient looks like an elasticity, has a tight Bayesian credible interval, and is nearly always reported as though the model measured price sensitivity. It did not. Price in an MMM is set strategically — discounted during promotional windows, moved with competitor pricing, correlated with the very seasonality and promotion terms sitting beside it in the equation. Its coefficient absorbs whatever the model failed to specify about demand, promotion timing, and competitive response.</p>
+
+            <p>The Bayesian machinery makes this worse in a specific, seductive way. A narrow posterior on the price coefficient signals <em>statistical</em> precision — the data pin down that conditional slope tightly — but says nothing about whether the slope is the causal quantity. You can have a razor-sharp credible interval around a badly confounded number. It is <em>precise nonsense</em>: confident about the wrong thing.</p>
+
+            <div class="warning">
+                <h4>⚠️ A tight interval on a confounder is not evidence</h4>
+                <p>Do not present the price, distribution, or competitor coefficient as an elasticity or effect, and do not let a narrow credible interval launder it into one. If you need a price elasticity, that is a <em>different estimand</em> requiring its own identification strategy — its own adjustment set, likely its own instruments or experiments — not a free byproduct of the media model.</p>
+            </div>
+
+            <h2 id="practice">One DAG, One Estimand at a Time</h2>
+            <p>The discipline that dissolves the fallacy is embarrassingly simple to state and requires real thought to execute. It has four steps.</p>
+
+            <p><strong>1. Draw one causal DAG.</strong> Put media, controls, sales, and the unobserved demand drivers on a diagram and commit to which arrows exist. This is where seasonality reveals itself as a confounder, brand search as a mediator, and the operational metric as a collider — distinctions the regression output cannot make. The framework's <a href="platform-overview.html">DAG-based model builder</a> exists precisely so this graph is an explicit, versioned artifact rather than an implicit assumption buried in a variable list.</p>
+
+            <p><strong>2. Choose the adjustment set for the estimand you actually want.</strong> The estimand here is incremental channel contribution — the total effect of each channel on sales. Given the DAG, the back-door criterion tells you which variables to adjust for (the confounders) and which to leave alone (the mediators and colliders). Different estimands imply different adjustment sets; there is no single "correct" set of controls independent of the question.</p>
+
+            <div class="note">
+                <h4>💡 Per-estimand reasoning is the whole game</h4>
+                <p>The channel-total estimand adjusts for seasonality and macro demand and refuses to condition on brand search. A hypothetical "direct effect of TV net of search" estimand <em>would</em> condition on search — and would answer a different, usually less useful, question. One model cannot serve as a valid causal source for every coefficient it contains, because each would need its own adjustment set. Decide the estimand first, then the controls.</p>
+            </div>
+
+            <p><strong>3. Report only channel effects as causal; label the rest as adjustment terms.</strong> The output table should carry channel ROIs as the causal deliverables and mark every control coefficient as a nuisance parameter that stabilizes the media estimates and nothing more. This is not pedantry — it is the difference between a media plan and a fabricated pricing recommendation.</p>
+
+            <p><strong>4. Be careful what priors you place on confounder-role controls.</strong> There is a Bayesian wrinkle worth flagging. Placing a very tight prior on a confounder's coefficient — pinning it near zero, or near a "known" value — partially removes that variable's ability to soak up the confounding it was included to absorb, which re-opens the back-door path into the channel estimates. A confounder must be allowed enough posterior flexibility to actually do its de-confounding job; over-shrinking it is a quiet way to reintroduce the bias you added it to remove. The framework surfaces this as an explicit caution when a narrow coefficient prior is set on a control tagged with a confounder role.</p>
+
+            <h2 id="triangulate">Trust, but Calibrate</h2>
+            <p>Even a well-specified DAG with the right adjustment set delivers channel coefficients that are causal only <em>if</em> the no-unobserved-confounding assumption holds — and for endogenous, planner-set media spend, that assumption is always partly heroic. The resolution is not to argue harder about the regression; it is to bring in a source of variation that does not depend on the model being right. Geo lift experiments and other randomized designs identify a channel's incremental effect from assignment rather than from the observational covariance, and that experimental estimate can be folded back in to <a href="blog-calibrating-mmm-experiments.html">calibrate the model's channel coefficients</a> directly (see also the framework's <a href="measurement-calibration.html">calibration workflow</a>).</p>
+
+            <p>This closes the loop the fallacy opens. The Table 2 Fallacy is really a warning that a single observational regression cannot be a universal causal instrument — most of its coefficients are adjustment machinery, and even its target coefficients rest on assumptions the data cannot check. Triangulation with experiments is how you validate the coefficients you chose to interpret, while the DAG discipline is how you decide which coefficients those are. Read the whole table and you will believe six impossible things before breakfast; read the two rows you identified and calibrated, and you have a measurement.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>An MMM prints one coefficient table, but only the channel rows were designed to be causal. Reading the control rows — price, seasonality, distribution — as effects is the Table 2 Fallacy (Westreich and Greenland, 2013).</li>
+                    <li>Control coefficients are <em>conditional adjustment terms</em>, not total effects, and they generally remain confounded even when the channel effects are properly adjusted.</li>
+                    <li>Even the media coefficients are causal only under no-unobserved-confounding, correct adstock/saturation form, and no reverse causality — and planner-set spend is endogenous, so the assumption is always partly asserted.</li>
+                    <li>The good/bad-controls taxonomy decides roles by graph position: adjust for confounders (seasonality, macro demand), never for colliders, and do not adjust for mediators like brand search if you want a channel's total effect (Cinelli, Forney, and Pearl, 2024).</li>
+                    <li>Adjusting for a downstream mediator attenuates upper-funnel channels toward zero; model the mechanism with a structural/nested MMM instead of controlling it away.</li>
+                    <li>A tight credible interval on a price or competitor coefficient is precise nonsense — statistical precision around a confounded quantity, not an elasticity.</li>
+                    <li>Draw one DAG, pick the adjustment set for the incremental-contribution estimand, report only channel effects as causal, keep confounder priors loose enough to de-confound, and calibrate the channel coefficients with geo experiments.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Westreich, D., &amp; Greenland, S. (2013). <em>The Table 2 Fallacy: Presenting and Interpreting Confounder and Modifier Coefficients</em>. American Journal of Epidemiology, 177(4), 292&ndash;298.</li>
+                <li>Cinelli, C., Forney, A., &amp; Pearl, J. (2024). <em>A Crash Course in Good and Bad Controls</em>. Sociological Methods &amp; Research, 53(3), 1071&ndash;1104. (First circulated 2020; online 2022.)</li>
+                <li>Jin, Y., Wang, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). <em>Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects</em>. Google Research.</li>
+                <li>Chen, A., Chan, D., Perry, M., Jin, Y., Sun, Y., Wang, Y., &amp; Koehler, J. (2018). <em>Bias Correction For Paid Search In Media Mix Modeling</em>. arXiv:1807.03292.</li>
+                <li>Wang, Y., Jin, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). <em>A Hierarchical Bayesian Approach to Improve Media Mix Models Using Category Data</em>. Google Research.</li>
+                <li>Chan, D., &amp; Perry, M. (2017). <em>Challenges and Opportunities in Media Mix Modeling</em>. Google Research.</li>
+                <li>Lewis, R. A., &amp; Rao, J. M. (2015). <em>The Unfavorable Economics of Measuring the Returns to Advertising</em>. The Quarterly Journal of Economics, 130(4), 1941&ndash;1973.</li>
+                <li>VanderWeele, T. J. (2015). <em>Explanation in Causal Inference: Methods for Mediation and Interaction</em>. Oxford University Press.</li>
+                <li>Pearl, J. (2009). <em>Causality: Models, Reasoning, and Inference</em> (2nd ed.). Cambridge University Press.</li>
+                <li>Rubin, D. B. (1974). <em>Estimating Causal Effects of Treatments in Randomized and Nonrandomized Studies</em>. Journal of Educational Psychology, 66(5), 688&ndash;701.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
