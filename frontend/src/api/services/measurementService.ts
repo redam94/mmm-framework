@@ -573,7 +573,14 @@ export interface CandidateEval {
   mde_roas: number;
   power_shortfall: number;
   tradeoff: number;
-  tradeoff_basis: 'net_dollar' | 'forgone_kpi' | 'spend_at_risk';
+  tradeoff_basis: 'net_dollar' | 'forgone_kpi' | 'spend_at_risk' | 'net_value';
+  // net-value axis (present when the backend applied it): with basis
+  // 'net_value', tradeoff === −net_value (lower-better Pareto convention).
+  sigma_exp?: number | null;
+  evoi_kpi?: number | null;
+  reallocation_gain?: number | null;
+  net_value?: number | null;
+  net_value_basis?: string | null;
   // statistical power to detect the model's expected effect (null if unknown)
   power: number | null;
   // conservative power at the model's lower 95% effect bound (null if unknown)
@@ -636,6 +643,17 @@ export interface ExperimentOptimizationPayload {
   margin_known: boolean;
   tradeoff_label: string;
   mixed_tradeoff_units: boolean;
+  /** true when the cost objective is −net_value (gain − loss, $) */
+  net_value_axis?: boolean;
+  response_horizon_weeks?: number;
+  /** provenance of the fitted EVOI surrogate: MC anchors + (k, delta) fit */
+  evoi_anchor?: {
+    anchors: [number, number][];
+    evpi: number;
+    tau: number;
+    k: number;
+    delta: number;
+  } | null;
   power_target: number;
   design_space: {
     duration_min: number;

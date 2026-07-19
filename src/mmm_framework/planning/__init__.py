@@ -51,7 +51,21 @@ from .design import (
     geo_lift_design,
     matched_pairs,
 )
-from .evoi import EvoiResult, compute_evoi_for_channel, compute_evpi
+from .cpa import (
+    cpa_interval,
+    cpa_power,
+    max_detectable_cpa,
+    simulate_cpa_distribution,
+)
+from .evoi import (
+    EvoiResult,
+    EvoiSurrogate,
+    compute_evoi_for_channel,
+    compute_evpi,
+    fit_evoi_surrogate,
+    preposterior_sd_ratio,
+    surrogate_evoi,
+)
 from .experiments import recommend_experiments
 from .priority import ChannelPriority, compute_experiment_priorities
 from .opportunity_cost import OpportunityCostResult, compute_opportunity_cost
@@ -116,6 +130,14 @@ __all__ = [
     "compute_experiment_priorities",
     "EvoiResult",
     "compute_evoi_for_channel",
+    "cpa_interval",
+    "cpa_power",
+    "max_detectable_cpa",
+    "simulate_cpa_distribution",
+    "EvoiSurrogate",
+    "fit_evoi_surrogate",
+    "preposterior_sd_ratio",
+    "surrogate_evoi",
     "compute_evpi",
     "eig_gaussian",
     "eig_monte_carlo",

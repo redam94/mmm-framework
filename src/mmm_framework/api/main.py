@@ -3495,9 +3495,7 @@ async def ghost_ads_power_endpoint(project_id: str, body: GhostAdsPowerRequest):
             result["users_required_for_target"] = ghost_ads_users_for_mde(
                 design, body.target_lift_abs
             )
-            result["power_at_target"] = ghost_ads_power_at(
-                design, body.target_lift_abs
-            )
+            result["power_at_target"] = ghost_ads_power_at(design, body.target_lift_abs)
         if body.simulate and body.outcome == "binary":
             lift = body.target_lift_abs or result["mde_abs"]
             result["simulation"] = ghost_ads_simulate(
@@ -5775,6 +5773,9 @@ class ExperimentOptimizeRequest(BaseModel):
     # explicit overrides for the auto-sampling (optional)
     durations: list[int] | None = None
     scaling_intensities: list[float] | None = None
+    # net-value axis: gain-minus-loss cost objective (auto-disabled w/o margin)
+    net_value_axis: bool = True
+    response_horizon_weeks: int = 26
     max_draws: int = 80
     seed: int = 42
 
@@ -5809,6 +5810,8 @@ async def start_experiment_optimization(
         "intensity_min": float(body.intensity_min),
         "intensity_max": float(body.intensity_max),
         "include_holdout": bool(body.include_holdout),
+        "net_value_axis": bool(body.net_value_axis),
+        "response_horizon_weeks": int(body.response_horizon_weeks),
         "max_draws": int(body.max_draws),
         "random_seed": int(body.seed),
     }

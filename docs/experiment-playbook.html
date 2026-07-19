@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experiment Playbook — planning every test type and calibrating the MMM | MMM Framework</title>
+    <meta name="description" content="A practical playbook for every experiment type the framework supports — matched-pair geo lift, synthetic control, TBR/CausalImpact, GBR, matched-market DiD, ghost ads, switchbacks, national flighting — how to plan each one, how its readout calibrates the MMM, and how EIG/EVOI and net test value pick the right experiment, including non-geo designs.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/experiment-playbook.html">
+    <meta property="og:title" content="Experiment Playbook — planning every test type and calibrating the MMM">
+    <meta property="og:description" content="Geo lift, synthetic control, TBR, GBR, DiD, ghost ads, switchbacks and flighting: plan them, calibrate the MMM with them, and let EIG/EVOI decide which one is worth running.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/experiment-playbook.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Experiment Playbook — planning every test type and calibrating the MMM">
+    <meta name="twitter:description" content="Geo lift, synthetic control, TBR, GBR, DiD, ghost ads, switchbacks and flighting: plan them, calibrate the MMM with them, and let EIG/EVOI decide which one is worth running.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta name="author" content="Matthew Reda">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/experiment-playbook.html",
+          "name": "Experiment Playbook — planning every test type and calibrating the MMM | MMM Framework",
+          "description": "A practical playbook for every experiment type the framework supports — matched-pair geo lift, synthetic control, TBR/CausalImpact, GBR, matched-market DiD, ghost ads, switchbacks, national flighting — how to plan each one, how its readout calibrates the MMM, and how EIG/EVOI and net test value pick the right experiment, including non-geo designs.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-19",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/experiment-playbook.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/experiment-playbook.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/experiment-playbook.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Experiment Playbook",
+              "item": "https://redam94.github.io/mmm-framework/experiment-playbook.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Overview</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Why experiments + MMM</a></li>
+                <li><a href="#choosing">Choosing a method</a></li>
+            </ul>
+
+            <h3>Planning each type</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#geo">Geo experiments</a></li>
+                <li><a href="#ghost-ads">Ghost ads (user-level)</a></li>
+                <li><a href="#switchback">Switchbacks</a></li>
+                <li><a href="#flighting">National flighting</a></li>
+                <li><a href="#leaderboard">Method leaderboard</a></li>
+            </ul>
+
+            <h3>Back into the model</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#calibration">Calibrating the MMM</a></li>
+                <li><a href="#off-panel">Off-panel calibration</a></li>
+            </ul>
+
+            <h3>Which test to run</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#eig-evoi">EIG &amp; EVOI</a></li>
+                <li><a href="#non-geo-selection">Non-geo selection</a></li>
+                <li><a href="#net-value">Net test value</a></li>
+                <li><a href="#pareto">The design optimizer</a></li>
+            </ul>
+
+            <h3>Reference</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#tools">Tools &amp; endpoints</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1>Experiment Playbook</h1>
+            <p class="lead">
+                An MMM tells you where the model is <em>uncertain</em>; an experiment is how you buy
+                the missing information. This page is the practical playbook: every experiment type
+                the framework supports, how to plan each one with honest power math, how its readout
+                flows back into the MMM as a calibration likelihood, and how the value-of-information
+                machinery — EIG, EVOI, and the net dollar value of testing — decides which experiment
+                (geo or not) is actually worth running.
+            </p>
+
+            <h2 id="overview">Why experiments and an MMM need each other</h2>
+            <p>
+                Observational media data is confounded by design: budgets chase demand, seasonality
+                moves spend and sales together, and channels launch alongside promotions. The MMM
+                controls for what it can see, but some channel effects are only weakly identified
+                from history alone — the posterior stays wide, and a wide posterior on a big budget
+                line is an expensive place to be undecided.
+            </p>
+            <p>
+                Experiments inject the identifying variation the history lacks. The framework treats
+                them as a first-class loop, not a side quest:
+            </p>
+            <ol>
+                <li><strong>Fit</strong> the MMM and find the decision-critical uncertainty (<a href="#eig-evoi">EIG/EVOI grid</a>).</li>
+                <li><strong>Design</strong> the test with the method that fits your data (<a href="#choosing">method registry</a>), powered against the model's own predicted effect.</li>
+                <li><strong>Price</strong> it: short-term opportunity cost vs the reallocation gain the learning unlocks (<a href="#net-value">net value</a>).</li>
+                <li><strong>Run &amp; read out</strong> with a pre-registered analysis plan.</li>
+                <li><strong>Calibrate</strong>: the readout becomes a likelihood term in the next fit (<a href="#calibration">calibration</a>), shrinking the posterior where the test actually measured.</li>
+                <li><strong>Re-test</strong> when the information decays (channel half-lives; the grid flags <em>retest due</em>).</li>
+            </ol>
+            <p>
+                The methodology of the loop itself — priors, likelihood routes, decay — is covered in
+                <a href="measurement-calibration.html">The Calibration Loop</a>. This page is about the
+                experiments: which one, how to size it, and how to get its value back into the model.
+            </p>
+
+            <h2 id="choosing">Choosing a method — the experiment-method registry</h2>
+            <p>
+                Every supported methodology is a named entry in the method registry
+                (<code>planning/methods/</code>), carrying its data requirements, estimator, power
+                math and references. The design tools, the REST API and the agent all enumerate the
+                same registry, so "which methods can my data support?" has one answer everywhere:
+            </p>
+            <pre><code class="python">from mmm_framework.planning.methods import list_methods, methods_for_data
+
+for spec in list_methods():
+    print(spec.key, "—", spec.name, "| family:", spec.requirement.family)
+
+# only the methods THIS dataset can support (geo count, pre-period length…)
+usable = methods_for_data(n_geos=8, n_pre_weeks=52, has_panel=True)</code></pre>
+
+            <div class="table-scroll">
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Randomized?</th>
+                        <th>Data needed</th>
+                        <th>What it measures</th>
+                        <th>Reach for it when…</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Matched-pair geo lift</strong></td>
+                        <td>Yes (pairs)</td>
+                        <td>≥ 4 geos, geo panel</td>
+                        <td>Incremental KPI / iROAS in treated geos</td>
+                        <td>You can randomize; the default gold standard for geo data. Holdout (go dark) or scaling (spend change) cells.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Synthetic control (SCM)</strong></td>
+                        <td>No (observational)</td>
+                        <td>≥ 4 geos, ≥ 12 pre-weeks</td>
+                        <td>Treated-market lift vs a convex donor counterfactual</td>
+                        <td>One or few treated markets you could not randomize; inference by RMSPE-standardized placebo permutation.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Regression-adjusted geo (ridge)</strong></td>
+                        <td>Either</td>
+                        <td>≥ 4 geos, ≥ 12 pre-weeks</td>
+                        <td>Same estimand, ridge control weights</td>
+                        <td>Faster, lower variance than SCM — but can extrapolate outside the donor hull; compare both.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>TBR / CausalImpact (BSTS)</strong></td>
+                        <td>Either</td>
+                        <td>≥ 2 geos, ≥ 12 pre-weeks</td>
+                        <td>Cumulative lift with a full Bayesian posterior</td>
+                        <td>Few geos, strong control series; the fast conjugate tier powers simulations, the full structural time-series the headline readout.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Geo-based regression (GBR)</strong></td>
+                        <td>Yes</td>
+                        <td>≥ 4 geos, ≥ 8 pre-weeks</td>
+                        <td>Treatment coefficient in a post-on-pre cross-section</td>
+                        <td>Many geos, short windows; one row per geo keeps it robust to week-level noise.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Matched-market DiD (DiD-MMT)</strong></td>
+                        <td>Either</td>
+                        <td>≥ 4 geos, ≥ 8 pre-weeks</td>
+                        <td>Difference-in-differences on matched pairs</td>
+                        <td>Familiar, transparent; cluster-robust per-pair SEs. Observational when not randomized — check parallel trends.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Ghost ads (user-level RCT)</strong></td>
+                        <td>Yes (users)</td>
+                        <td>User-level reach + conversions; <em>no panel</em></td>
+                        <td>Per-user incremental conversion / value lift</td>
+                        <td>Digital channels where the ad server can randomize individuals; the cleanest design there is, and it needs no geo structure at all.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Switchback</strong></td>
+                        <td>Yes (time blocks)</td>
+                        <td>National series only</td>
+                        <td>On/off contrast across randomized time blocks</td>
+                        <td>No geo split possible and you can toggle the channel; block length must exceed the adstock memory.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>National flighting</strong></td>
+                        <td>Yes (schedule)</td>
+                        <td>National series only</td>
+                        <td>Average ROAS — and with ≥ 3 spend levels, the response <em>curve</em> (marginal ROAS)</td>
+                        <td>Budget-neutral learning on national data; the only design here that identifies saturation, not just the average effect.</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+
+            <div class="note">
+                <strong>One dispatcher.</strong> <code>design_experiment(..., method=&quot;synthetic_control&quot;)</code>
+                infers the right design family from the method, attaches the method's metadata to the
+                plan, and rewrites the analysis-plan estimator line — so the pre-registered plan and
+                the eventual readout use the same estimator by construction.
+            </div>
+
+            <h2 id="geo">Planning a geo experiment</h2>
+            <p>
+                Geo designs start from <code>design_options</code> (what does this dataset support?)
+                and <code>design_experiment</code> (build the runnable plan): matched pairs by
+                pre-period KPI similarity, randomized treatment within pair, a power curve of
+                minimum detectable effect (MDE) by duration, and DiD power + placebo diagnostics.
+            </p>
+            <pre><code class="python">from mmm_framework.planning import design_experiment, design_options
+
+opts = design_options("data.csv", kpi="Sales", channel="TV")
+print(opts["designs"], opts["methods"])   # families + registry methods this data supports
+
+plan = design_experiment(
+    "data.csv", "Sales", "TV",
+    method="synthetic_control",   # or tbr / gbr / did_mmt / regadj_geo
+    design="holdout",             # or "scaling" with a signed intensity_pct
+    duration=8,
+)
+print(plan["mde_roas"], plan["power_curve"])</code></pre>
+            <p>
+                When a fitted model is available, the plan is <em>anchored</em>: the model predicts the
+                incremental ROAS the test should see (perturbing only the treated geos over the test
+                window, not the global curve) and issues a powered / underpowered / overpowered /
+                inconclusive verdict, plus the opportunity cost of deviating from business-as-usual —
+                including the case where a holdout <em>saves</em> money. A cool-down period derived
+                from the channel's fitted adstock tells you how long treated geos need before they
+                are back to baseline.
+            </p>
+
+            <h2 id="ghost-ads">Ghost ads — user-level power with no panel at all</h2>
+            <p>
+                Ghost ads randomize <em>individuals</em>: treated users see the real ad; ghost/PSA users
+                a placebo the ad server logs as "would have been served". Because the randomization
+                lives in the ad server, this method needs no geo panel and works pre-fit — it is a
+                standalone power calculator over reach, baseline rate and exposure:
+            </p>
+            <pre><code class="python">from mmm_framework.planning.methods import (
+    GhostAdsDesign, ghost_ads_power, ghost_ads_simulate, ghost_ads_users_for_mde,
+)
+
+design = GhostAdsDesign(
+    users_reached=400_000,
+    baseline_rate=0.021,          # control conversion rate
+    treated_fraction=0.5,
+    exposure_rate=0.65,           # share of assigned users actually reached (ITT dilution)
+    value_per_conversion=38.0,    # enables the break-even lift + ROAS bridge
+    cost_per_user=0.05,
+)
+power = ghost_ads_power(design)          # closed-form MDE + diagnostics
+# users required to detect a +0.2pp absolute lift (≈ +10% relative on 2.1%)
+need = ghost_ads_users_for_mde(design, target_lift_abs=0.002)
+check = ghost_ads_simulate(design)       # binomial Monte-Carlo: empirical FPR + power</code></pre>
+            <ul>
+                <li><strong>ITT vs TOT.</strong> With 65% exposure, the intent-to-treat effect is diluted
+                    by the never-reached — the calculator reports both scales so you don't power the
+                    test against the wrong one.</li>
+                <li><strong>Rare events.</strong> Below ~30 expected conversions per arm the normal
+                    approximation is flagged as shaky; the simulation check is the honest fallback.</li>
+                <li><strong>Economics.</strong> With a value per conversion (or a
+                    <a href="ltv-modeling.html">CLV-derived lifetime value</a>) the calculator reports the
+                    break-even lift — the smallest true effect at which the media pays for itself.</li>
+                <li><strong>Cost per conversion — never a naive flip.</strong> Clients read results as
+                    CPA (spend ÷ incremental conversions), but the reciprocal of a well-behaved lift
+                    estimate is <em>extremely right-skewed</em>: its mean overshoots, the symmetric
+                    delta-method interval under-covers (and can dip below zero), and a weak readout's
+                    honest interval is <em>unbounded above</em>. The planning summary that survives
+                    inversion is the <strong>maximum detectable cost per conversion</strong> —
+                    cost ÷ the detectable-lift bound — reported by <code>ghost_ads_power</code>
+                    directly, with <code>planning.cpa</code> (<code>cpa_interval</code>,
+                    <code>cpa_power</code>, <code>simulate_cpa_distribution</code>) supplying the
+                    honest interval, target-certification power, and the skew demonstration for any
+                    lift-based design.</li>
+            </ul>
+
+            <h2 id="switchback">Switchbacks — time-randomized on/off blocks</h2>
+            <p>
+                When there is no geo split and no user-level randomization, you can still randomize
+                <em>time</em>: switch the channel on and off in randomized blocks. Two things make naive
+                switchback power calculations dishonest, and the design handles both:
+            </p>
+            <pre><code class="python">from mmm_framework.planning.methods import switchback_design, switchback_power
+
+design = switchback_design(
+    "data.csv", "Sales", "Search",
+    duration=12,
+    amplitude_pct=50.0,
+    # block length defaults to the channel's carryover; pass mmm=... to use
+    # the FITTED adstock washout instead of the heuristic
+)
+power = switchback_power(design, sigma_y=noise_sd)
+print(power["se_iid"], power["se_honest"])   # the honest SE carries the AR(1) design effect</code></pre>
+            <ul>
+                <li><strong>Carryover.</strong> A block shorter than the channel's adstock memory smears
+                    treatment into control blocks. The block length is derived from the fitted washout
+                    (<code>cooldown_weeks</code>) when a model is available, and the design warns when the
+                    schedule cannot respect it.</li>
+                <li><strong>Autocorrelation.</strong> KPI series are serially correlated, so the effective
+                    sample size is smaller than the block count. The design effect uses the AR(1)
+                    coefficient of the <em>detrended levels</em> — first-differencing a smooth series flips
+                    the estimated correlation negative and silently zeroes the correction.</li>
+            </ul>
+
+            <h2 id="flighting">National flighting — the design that identifies the curve</h2>
+            <p>
+                Budget-neutral flighting schedules the channel through planned spend <em>levels</em>. A
+                two-level on/off pins the average ROAS; a schedule with three or more distinct levels
+                traces the response curve itself, so the <em>marginal</em> ROAS and saturation become
+                identifiable — the quantities the budget optimizer actually uses. The optimizer reports
+                power separately for ROAS, contribution and marginal ROAS, and a two-level design is
+                never credited with curve power its secant cannot deliver. See
+                <a href="#pareto">the design optimizer</a> for how the level grid is chosen.
+            </p>
+
+            <h2 id="leaderboard">The methodology leaderboard — audition estimators on your own history</h2>
+            <p>
+                Analytic power formulas assume away the mess in real panels: autocorrelation inflates
+                false-positive rates, and a method that looks powered on paper can be invalid on your
+                data. The leaderboard runs every estimator the data supports through A/A (null) and
+                A/B (injected-lift) simulations <em>on your own history</em>, then ranks by validity →
+                power → cost:
+            </p>
+            <pre><code class="python">from mmm_framework.planning import methodology_leaderboard
+
+board = methodology_leaderboard(
+    "data.csv", "Sales", "TV",
+    mmm=None,          # pre-fit works; pass the fitted model to inject ITS predicted lift
+    duration=8,
+)
+# each row: method, empirical false-positive rate (A/A), empirical power (A/B),
+# calibrated critical value, and a recommendation</code></pre>
+            <p>
+                The A/A pass is the part most teams skip and shouldn't: an estimator whose 5% test
+                rejects 15% of null windows will "detect" lift that isn't there, and only a
+                block-calibrated critical value restores honest size.
+            </p>
+
+            <h2 id="calibration">Calibrating the MMM with the readout</h2>
+            <p>
+                A finished experiment is worth more than its own read — it is direct evidence about a
+                channel's causal effect that the next MMM fit should not be allowed to ignore. The
+                framework folds readouts into the model as <strong>likelihood terms on the model's own
+                estimands</strong>: the measured value, with its standard error, constrains the in-graph
+                contribution / ROAS / marginal-ROAS of the tested channel over the tested window.
+            </p>
+            <pre><code class="python">from mmm_framework.calibration import ExperimentMeasurement, ExperimentEstimand
+
+exp = ExperimentMeasurement(
+    channel="TV",
+    test_period=("2025-03-03", "2025-04-28"),
+    value=1.8,                        # measured incremental ROAS
+    se=0.35,                          # the experiment's uncertainty — never drop it
+    estimand=ExperimentEstimand.ROAS,
+)
+mmm.add_experiment_calibration([exp])
+results = mmm.fit()                   # the posterior now respects the experiment</code></pre>
+            <p>Why this route beats hand-tightening a prior:</p>
+            <ul>
+                <li><strong>The estimand matches.</strong> A geo test measures incremental KPI over a
+                    window — that is a statement about the model's contribution in that window, not
+                    about a raw coefficient. The likelihood is placed on exactly the quantity the
+                    experiment measured (<code>CONTRIBUTION</code>, <code>ROAS</code>, or
+                    <code>MROAS</code> with the spend-lift percentage for scaling cells).</li>
+                <li><strong>Uncertainty propagates.</strong> A noisy test moves the posterior a little;
+                    a precise one moves it a lot. No cliff-edge overrides.</li>
+                <li><strong>Disagreement is visible.</strong> If the model and the experiment conflict,
+                    the tension shows up in fit diagnostics instead of being silently overwritten —
+                    that disagreement is information about model misspecification.</li>
+            </ul>
+            <p>
+                <strong>Every method in the registry calibrates the same way</strong>, because every
+                readout reduces to (estimand, value, standard error, window):
+            </p>
+            <ul>
+                <li><em>Geo methods</em> (matched-pair, SCM, TBR, GBR, DiD-MMT) read out incremental KPI or
+                    iROAS directly; <code>holdout_regions</code> restricts the likelihood to the treated
+                    geos on a geo model.</li>
+                <li><em>Ghost ads</em>: per-user lift × users reached × value per conversion is a window
+                    contribution (or divide by test spend for ROAS); the delta-method SE comes with it.
+                    A user-level RCT calibrates a national MMM exactly like a geo test does.</li>
+                <li><em>Switchbacks and flighting</em> read out an on/off or level contrast — an ROAS (two
+                    levels) or a marginal ROAS (≥ 3 levels, <code>MROAS</code> with
+                    <code>spend_lift_pct</code>).</li>
+            </ul>
+            <p>
+                In the Oracle workflow the same flow is conversational:
+                <code>record_experiment_readout</code> stores the result against the pre-registered
+                experiment, <code>apply_experiment_calibration</code> stages it into the model spec, and
+                the next <code>fit_mmm_model</code> marks the experiment <em>calibrated</em> in the
+                lifecycle registry.
+            </p>
+
+            <h2 id="off-panel">Off-panel calibration — tests from outside the training window</h2>
+            <p>
+                An experiment that ran <em>before</em> your modeling window (or in geos the panel doesn't
+                carry) still calibrates. Supplying the spend level the test ran at routes the
+                likelihood through the channel's <em>global response curve</em> — evaluating
+                β·sat(adstock(s)) at that spend — instead of summing training-matrix rows, so window
+                overlap becomes irrelevant:
+            </p>
+            <pre><code class="python">exp = ExperimentMeasurement(
+    channel="TV",
+    test_period=("2023-05-01", "2023-06-26"),  # predates the training window
+    value=210_000.0, se=60_000.0,
+    estimand=ExperimentEstimand.CONTRIBUTION,
+    eval_spend=45_000.0,     # per period, per treated unit, during the test
+    eval_periods=8,
+    eval_units=12,           # treated geos
+    adstock_state="steady_state",   # or "cold_start" for a from-zero launch
+)</code></pre>
+            <p>
+                The assumption you are buying is <strong>structural stationarity</strong> — the response
+                curve is stable between the test period and the training period. State it, don't
+                hide it; the further back the test, the more the
+                <a href="#eig-evoi">information-decay clock</a> should discount it anyway.
+            </p>
+
+            <h2 id="eig-evoi">EIG &amp; EVOI — which uncertainty is worth paying to remove</h2>
+            <p>
+                Not every wide posterior deserves an experiment. Two numbers separate the cases:
+            </p>
+            <p>
+                <strong>EIG</strong> (expected information gain) — how much a test of a given precision
+                would <em>teach</em>. For a channel with ROI posterior sd \( \sigma_k \) and an
+                experiment that measures ROI with sd \( \sigma_{\text{exp}} \):
+            </p>
+            $$ \mathrm{EIG} = \tfrac{1}{2}\,\ln\!\left(1 + \sigma_k^2 / \sigma_{\text{exp}}^2\right) \ \text{nats} $$
+            <p>
+                <strong>EVOI</strong> (expected value of information) — what that learning is
+                <em>worth to the budget decision</em>: simulate outcomes the experiment could return,
+                reweight the posterior by each, re-optimize the allocation, and score the expected
+                improvement over deciding without the test (preposterior analysis). EVOI is capped by
+                EVPI, the value of perfect information. A channel can have huge EIG and near-zero
+                EVOI — you'd learn a lot, but the budget wouldn't move.
+            </p>
+            <pre><code class="python">from mmm_framework.planning import compute_experiment_priorities
+
+grid, portfolio = compute_experiment_priorities(mmm)
+for row in grid:
+    print(row.channel, row.quadrant, row.eig, row.evoi, row.retest_due)
+# quadrants: test_now / learn_cheaply / monitor / deprioritize</code></pre>
+            <p>
+                The critical honesty rule: \( \sigma_{\text{exp}} \) must be
+                <strong>design-grounded</strong> — derived from the experiment you could actually run
+                (geo footprint, reach, blocks), never from the channel's own posterior width, or every
+                channel scores the same and the ranking collapses. Evidence also
+                <strong>decays</strong>: each channel class has an information half-life, and once the
+                effective uncertainty regrows enough that a fresh test would clear the EIG threshold,
+                the grid flags <em>retest due</em>.
+            </p>
+
+            <h2 id="non-geo-selection">Selecting non-geo experiments with the same machinery</h2>
+            <p>
+                Nothing in EIG or EVOI is geographic. Both consume exactly one fact about a candidate
+                design: the standard error \( \sigma_{\text{exp}} \) it would achieve
+                <em>on the ROI scale</em>. Every planner on this page emits one:
+            </p>
+            <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr><th>Design</th><th>Where its \( \sigma_{\text{exp}} \) comes from</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Geo holdout / scaling</td>
+                        <td>Power curve MDE at the chosen duration: \( \sigma_{\text{exp}} = \mathrm{MDE}/2.8 \) (the 80%-power, 5%-size factor \( z_{0.975}+z_{0.80} \)).</td>
+                    </tr>
+                    <tr>
+                        <td>Ghost ads</td>
+                        <td>The two-proportion SE of the lift, bridged to ROAS by value per conversion and test spend — <code>ghost_ads_power</code> reports the MDE; divide by 2.8.</td>
+                    </tr>
+                    <tr>
+                        <td>Switchback</td>
+                        <td><code>switchback_power</code>'s <code>se_honest</code> (AR(1)-corrected), already an effect-scale SE.</td>
+                    </tr>
+                    <tr>
+                        <td>National flighting</td>
+                        <td>The design-matrix estimand SEs — <code>se_roas</code> for the average, <code>se_mroas</code> when ≥ 3 levels identify the curve.</td>
+                    </tr>
+                    <tr>
+                        <td>No design yet (screening)</td>
+                        <td><code>sigma_exp_for_design(&quot;national_pulse&quot;, roi_median)</code> — operational relative-precision defaults per design class.</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+            <pre><code class="python">from mmm_framework.planning import compute_experiment_priorities
+from mmm_framework.planning.eig import sigma_exp_for_design
+
+# a ghost-ads test is on the table for Search; a switchback for Display:
+grid, portfolio = compute_experiment_priorities(
+    mmm,
+    design_type="national_pulse",            # default for channels with no override
+    sigma_exp_overrides={
+        "Search": ghost_ads_mde_roas / 2.8,   # from ghost_ads_power + the value bridge
+        "Display": switchback_se_roas,        # switchback_power()["se_honest"], ROI scale
+    },
+)</code></pre>
+            <p>
+                The grid then compares a user-level RCT on Search against a geo holdout on TV against
+                a switchback on Display <em>on one scale</em>: what each would teach (EIG) and what that
+                teaching is worth to the allocation (EVOI). This is the point of routing everything
+                through \( \sigma_{\text{exp}} \) — the experiment-selection problem stops caring what
+                kind of experiment it is.
+            </p>
+
+            <h2 id="net-value">Net test value — is this experiment worth the money?</h2>
+            <p>
+                EVOI prices the upside. A real test also has a downside: the profit given up while it
+                runs (a holdout forgoes sales; a scaling test commits budget). The net-economics
+                module produces the single decision figure:
+            </p>
+            $$ \text{net value} \;=\; \underbrace{\min(\mathrm{EVOI},\ \mathrm{EVPI}) \cdot m \cdot \bar d}_{\text{decayed reallocation gain (\$)}} \;+\; \underbrace{\mathbb{E}[\,m\,\Delta\mathrm{KPI} - \Delta\mathrm{spend}\,]}_{\text{signed profit during the test}} $$
+            <p>
+                where \( m \) is the margin per KPI unit and
+                \( \bar d = \tfrac{1}{H}\sum_{w &lt; H} 0.5^{\,w/h}\,\rho^{w} \) is the average
+                informativeness retained over the decision horizon \( H \) under the channel's
+                information half-life \( h \) (and optional financial discounting \( \rho \)) — EVOI
+                values a posterior that stays sharp forever; real information doesn't.
+            </p>
+            <pre><code class="python">from mmm_framework.planning import compute_experiment_net_value
+
+nv = compute_experiment_net_value(
+    channel="TV",
+    evoi_kpi_units=evoi,             # from the priorities grid / anchor loopback
+    evpi_kpi_units=portfolio["evpi"],
+    margin_per_kpi=0.42,
+    response_horizon_weeks=26,
+    half_life_weeks=52.0,            # TV evidence decays slowly
+    opportunity_cost_result=oc,      # reuses its per-draw KPI deltas → P(net &gt; 0)
+)
+print(nv.net_value, nv.prob_net_positive, nv.breakeven_horizon_weeks)</code></pre>
+            <p>
+                The signed convention keeps a money-saving holdout coherent: when the saved spend
+                outweighs the forgone margin, the "loss" is negative, the net value <em>exceeds</em> the
+                gain, and the break-even horizon is zero — the test pays for itself on day one.
+            </p>
+
+            <h2 id="pareto">The design optimizer — a Pareto front priced in dollars</h2>
+            <p>
+                Within one channel there is still a design space: holdout vs scaling, footprint,
+                intensity, duration, spend levels. <code>suggest_experiment</code> evaluates a bounded
+                grid of candidate designs on four objectives — MDE, power shortfall below the 80%
+                target, cost, and duration — and returns the non-dominated <strong>Pareto front</strong>
+                plus a recommended "knee" design with runnable test/control groups (or a flighting
+                schedule) and the adstock-derived cool-down.
+            </p>
+            <p>
+                When a margin is known, the cost axis is upgraded from "what does the test destroy
+                short-term" to <strong>the net value of testing</strong> — gain minus loss, per
+                candidate. The expensive part of that is EVOI, which normally costs a preposterior
+                Monte-Carlo per design. The optimizer instead prices the whole grid from
+                <em>two</em> anchored MC evaluations using a calibrated Gaussian surrogate
+                (Raiffa–Schlaifer preposterior form):
+            </p>
+            $$ \mathrm{EVOI}(\sigma) \;\approx\; k \cdot s(\sigma)\,\Psi\!\big(\delta / s(\sigma)\big), \qquad s(\sigma) = \tau\sqrt{\tau^2/(\tau^2+\sigma^2)} $$
+            <p>
+                where \( \tau \) is the channel's prior ROI sd, \( s(\sigma) \) the sd of the
+                preposterior mean (how far a test of precision \( \sigma \) can move the decision),
+                \( \Psi \) the unit-normal loss integral, and \( (k, \delta) \) are fitted to the two
+                MC anchors placed at the extremes of the grid's design precisions — so every candidate
+                interpolates inside the calibrated bracket, where the surrogate tracks the exact
+                preposterior MC to within ~15% even for distinctly non-Gaussian ROI posteriors.
+            </p>
+            <pre><code class="python">from mmm_framework.planning import suggest_experiment
+
+out = suggest_experiment(
+    mmm, "data.csv", "Sales", "TV",
+    margin=0.42,                 # enables the net-value axis
+    duration_min=6, duration_max=16,
+    intensity_min=-100,          # go-dark holdout …
+    intensity_max=100,           # … through +100% scaling
+)
+best = out["recommended"]
+print(best["net_value"], best["evoi_kpi"], best["treatment_geos"], out["cooldown"])</code></pre>
+            <p>
+                The front then reads the way a CFO wants it read: designs that are precise, powered,
+                fast, <em>and expected to create money net of their own cost</em> — with the designs that
+                learn a lot but destroy more than they teach visibly dominated.
+            </p>
+
+            <h2 id="tools">Reference — tools &amp; endpoints</h2>
+            <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr><th>Task</th><th>Agent tool</th><th>REST</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>List supported methods for the data</td>
+                        <td><code>list_experiment_methods</code></td>
+                        <td><code>POST /projects/{id}/experiment-design</code> (options in response)</td>
+                    </tr>
+                    <tr>
+                        <td>Design a test (any method)</td>
+                        <td><code>design_experiment_plan(method=…)</code></td>
+                        <td><code>POST /projects/{id}/experiment-design</code></td>
+                    </tr>
+                    <tr>
+                        <td>Ghost-ads power / users needed</td>
+                        <td><code>ghost_ads_power_calc</code> (<code>value_from_clv=True</code> for lifetime value)</td>
+                        <td><code>POST /projects/{id}/ghost-ads/power</code></td>
+                    </tr>
+                    <tr>
+                        <td>Model-anchored economics + A/A·A/B sim</td>
+                        <td><code>simulate_experiment</code></td>
+                        <td><code>POST /projects/{id}/experiment-design/simulate</code></td>
+                    </tr>
+                    <tr>
+                        <td>Pareto-front design optimizer</td>
+                        <td><code>suggest_experiment</code></td>
+                        <td><code>POST /projects/{id}/experiment-design/optimize</code></td>
+                    </tr>
+                    <tr>
+                        <td>EIG/EVOI priority grid</td>
+                        <td><code>compute_experiment_priorities</code></td>
+                        <td><code>GET /projects/{id}/experiment-priorities</code></td>
+                    </tr>
+                    <tr>
+                        <td>Pre-register / lifecycle</td>
+                        <td><code>plan_experiment</code>, <code>preregister_experiment</code></td>
+                        <td><code>POST /experiments</code> + <code>/experiments/{id}/transition</code></td>
+                    </tr>
+                    <tr>
+                        <td>Read out &amp; calibrate</td>
+                        <td><code>record_experiment_readout</code>, <code>apply_experiment_calibration</code></td>
+                        <td>— (spec-driven; next fit calibrates)</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+            <p>
+                Related reading: <a href="measurement-calibration.html">The Calibration Loop</a> (the
+                methodology of the loop), <a href="causal-08-designing-next-experiment.html">Designing
+                the Next Experiment</a> (notebook walkthrough),
+                <a href="blog-synthetic-control.html">Synthetic Control</a>,
+                <a href="blog-geo-experiments-tbr.html">Geo Experiments &amp; TBR</a>,
+                <a href="blog-switchback-experiments.html">Switchback Experiments</a> and
+                <a href="blog-calibrating-mmm-experiments.html">Calibrating MMMs with Experiments</a>
+                (research essays), and <a href="ltv-modeling.html">LTV Modeling</a> for valuing
+                acquisition experiments at customer lifetime worth.
+            </p>
+
+            <section class="cta-section">
+                <div class="cta-content">
+                    <h2>Close the loop</h2>
+                    <p>
+                        Fit the model, let the EIG/EVOI grid nominate the channel, let the optimizer
+                        price the design — then make the readout part of the next fit.
+                    </p>
+                    <div class="cta-buttons">
+                        <a href="measurement-calibration.html" class="btn btn-white">See the calibration loop</a>
+                        <a href="platform-overview.html" class="btn btn-outline-white">Explore the platform</a>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- KaTeX init -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

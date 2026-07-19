@@ -2526,6 +2526,8 @@ def experiment_optimizer(
     scaling_intensities: list[float] | None = None,
     include_holdout: bool = True,
     footprints: list[str] | None = None,
+    net_value_axis: bool = True,
+    response_horizon_weeks: int = 26,
     max_draws: int = 80,
     random_seed: int = 42,
 ) -> dict:
@@ -2561,6 +2563,8 @@ def experiment_optimizer(
             ),
             include_holdout=bool(include_holdout),
             footprints=tuple(footprints) if footprints else ("full", "half"),
+            net_value_axis=bool(net_value_axis),
+            response_horizon_weeks=int(response_horizon_weeks),
             max_draws=int(max_draws),
             random_seed=int(random_seed),
         )
@@ -2581,12 +2585,27 @@ def experiment_optimizer(
             else f"national flighting (±{_intensity:.0f}%, "
             f"{rec.get('block_weeks')}-week blocks)"
         )
+        if rec.get("net_value") is not None:
+            _nv = float(rec["net_value"])
+            _gain = rec.get("reallocation_gain")
+            tradeoff_line = (
+                f"- MDE ≈ {_mde:.2f} ROAS. **Net value of running this test ≈ "
+                f"{'+' if _nv >= 0 else '−'}${abs(_nv):,.0f}** over "
+                f"{out.get('response_horizon_weeks')} weeks — decayed, "
+                f"EVPI-capped reallocation gain"
+                + (f" ${_gain:,.0f}" if _gain is not None else "")
+                + " net of the short-term test loss."
+            )
+        else:
+            tradeoff_line = (
+                f"- MDE ≈ {_mde:.2f} ROAS; short-term tradeoff ≈ "
+                f"{_tradeoff:,.0f} ({rec.get('tradeoff_basis')})."
+            )
         lines += [
             f"- **{rec.get('design_key')} / {rec.get('mode')}** — "
             f"{_intensity:+.0f}% spend, {rec.get('footprint')} footprint, "
             f"**{rec.get('duration')}-week** test.",
-            f"- MDE ≈ {_mde:.2f} ROAS; short-term tradeoff ≈ "
-            f"{_tradeoff:,.0f} ({rec.get('tradeoff_basis')}).",
+            tradeoff_line,
             (
                 f"- **Power {rec['power']:.0%}** to detect the expected effect "
                 f"(target {float(out.get('power_target') or 0.8):.0%}) — "
@@ -2628,11 +2647,16 @@ def experiment_optimizer(
         lines.append("No feasible design found for this channel/data.")
     for _note in out.get("notes") or []:
         lines.append(f"- _{_note}_")
+    _cost_axis = (
+        "highest net value of testing"
+        if out.get("net_value_axis")
+        else "smallest short-term cost"
+    )
     lines.append(
         f"\nPareto front: {len(out.get('pareto_indices') or [])} non-dominated of "
         f"{out.get('n_candidates')} designs (lowest MDE × highest power "
-        f"[target {float(out.get('power_target') or 0.8):.0%}] × smallest "
-        "short-term cost × shortest duration). See the table for the full front."
+        f"[target {float(out.get('power_target') or 0.8):.0%}] × {_cost_axis} × "
+        "shortest duration). See the table for the full front."
     )
 
     op_out = _ok("\n".join(lines), {"experiment_optimization": out})
@@ -2653,6 +2677,8 @@ def experiment_optimizer(
                         "n_levels": (c.get("power_breakdown") or {}).get("n_levels"),
                         "tradeoff": c["tradeoff"],
                         "tradeoff_basis": c["tradeoff_basis"],
+                        "net_value": c.get("net_value"),
+                        "evoi_kpi": c.get("evoi_kpi"),
                         "forgone_kpi": c["forgone_kpi_median"],
                         "powered": c["powered"],
                         "recommended": c["is_recommended"],

@@ -195,6 +195,16 @@ def ghost_ads_power(design: GhostAdsDesign) -> dict:
     }
     if design.cost_per_user is not None:
         out["media_cost"] = float(design.cost_per_user * n_t)
+    if design.cost_per_user is not None and design.outcome == "binary":
+        # The WORST cost per incremental conversion the design can still
+        # certify: cost/user ÷ MDE lift/user (ITT basis — media is paid for
+        # every treated user, reached or not). A true CPA above this is
+        # indistinguishable from "the media did nothing"; invert the BOUND,
+        # never the point estimate (see planning.cpa for why).
+        from ..cpa import max_detectable_cpa
+
+        out["max_detectable_cpa"] = max_detectable_cpa(design.cost_per_user, mde_abs)
+        out["cpa_basis"] = "itt"
     if design.value_per_conversion is not None and design.outcome == "binary":
         out["incremental_value_at_mde"] = float(
             incremental * design.value_per_conversion
@@ -205,6 +215,27 @@ def ghost_ads_power(design: GhostAdsDesign) -> dict:
                 cost / (design.value_per_conversion * n_t)
             )
     return out
+
+
+def ghost_ads_users_for_cpa(design: GhostAdsDesign, target_cpa: float) -> int:
+    """Users required for ``target_cpa`` to be the design's **maximum
+    detectable cost per conversion** — i.e. big enough that a media buy whose
+    true CPA is ``target_cpa`` shows up as a detectable lift.
+
+    Since cost and conversions both scale with the treated arm, the implied
+    per-user lift is just ``cost_per_user / target_cpa`` — then the standard
+    users-for-MDE inversion applies. Requires ``cost_per_user`` and a binary
+    outcome.
+    """
+    if design.cost_per_user is None:
+        raise ValueError("ghost_ads_users_for_cpa requires cost_per_user")
+    if design.outcome != "binary":
+        raise ValueError("ghost_ads_users_for_cpa supports binary outcomes only")
+    if target_cpa <= 0:
+        raise ValueError("target_cpa must be positive")
+    return ghost_ads_users_for_mde(
+        design, target_lift_abs=design.cost_per_user / target_cpa
+    )
 
 
 def ghost_ads_power_at(design: GhostAdsDesign, lift_abs: float) -> float:
@@ -285,5 +316,6 @@ __all__ = [
     "ghost_ads_power",
     "ghost_ads_power_at",
     "ghost_ads_users_for_mde",
+    "ghost_ads_users_for_cpa",
     "ghost_ads_simulate",
 ]

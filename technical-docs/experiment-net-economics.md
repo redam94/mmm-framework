@@ -127,13 +127,29 @@ optimizer's shared BAU pass (`experiment_optimizer.py:499-502`) isn't duplicated
 ## 4. Wiring
 
 - **`planning/experiment_value.py`** — new (§2–§3).
-- **`planning/experiment_optimizer.py`** — DEFERRED: swapping the Pareto
-  `_tradeoff` axis for `−net_value` would require a per-candidate EVOI (a
-  preposterior Monte-Carlo per grid cell — prohibitive across a design grid).
-  The existing tradeoff axis already uses the net-$ downside when a margin is
-  known, and the *recommended* design gets its full net-value figure through
-  `experiment_economics`. Revisit if a cheap EVOI surrogate (e.g. Gaussian
-  EVOI ∝ posterior-variance reduction) is added.
+- **`planning/experiment_optimizer.py`** — SHIPPED (2026-07-19): the Pareto
+  cost axis IS `−net_value` when a margin is known. The per-candidate EVOI
+  that made this prohibitive is priced by a **calibrated Gaussian surrogate**
+  (`evoi.fit_evoi_surrogate` / `EvoiSurrogate`): the Raiffa–Schlaifer
+  preposterior form `EVOI(σ) ≈ k·s(σ)·Ψ(δ/s(σ))` with
+  `s(σ) = τ·sqrt(τ²/(τ²+σ²))` (sd of the preposterior mean), where `(k, δ)`
+  are fitted to TWO anchored preposterior-MC EVOIs placed at the extremes of
+  the grid's design precisions (`_evoi_anchor`, common random numbers across
+  the two anchors) — every candidate interpolates inside the calibrated
+  bracket, where the surrogate tracks the exact MC to ~±15% even on a bimodal
+  ROI posterior (extrapolation beyond the weak anchor under-estimates, which
+  is why anchors sit at the extremes). Each candidate's `sigma_exp = MDE/2.8`;
+  its surrogate EVOI is decayed/EVPI-capped through
+  `compute_experiment_net_value` (summary-only shim over the candidate's
+  already-computed opportunity-cost medians — zero extra posterior passes)
+  and the axis swap is ALL-OR-NOTHING (`_apply_net_value_axis`; any
+  unpriceable candidate leaves the whole grid on the legacy cost axis).
+  Payload: `net_value_axis`, `evoi_anchor` (anchors + k/δ/τ/EVPI provenance),
+  per-candidate `net_value`/`evoi_kpi`/`reallocation_gain`/`sigma_exp`,
+  `tradeoff_basis="net_value"` (tradeoff = −net_value, lower-better Pareto
+  convention). Knobs: `net_value_axis=True`, `response_horizon_weeks=26` on
+  grid/suggest/op/endpoint. FE DesignStudio plots the net value itself
+  (up = better), table/detail cards show signed $ net value.
 - **`agents/model_ops.py`** — `experiment_economics` op adds a
   `net_value: {...}` block to `dashboard["experiment_economics"]`. Also expose a
   focused `experiment_net_value` op (`allow_unfitted=False`).

@@ -339,7 +339,7 @@ def build_sitemap():
 GROUPS = [
     ("Start here", ["index.html", "getting-started.html", "platform-overview.html", "faq.html", "troubleshooting.html", "glossary.html"]),
     ("Learn the framework", ["modeling-guide.html", "real-data-guide.html", "interpreting-results.html", "reading-the-report.html", "data-prep-cookbook.html", "migration-guide.html", "business-stakeholders.html", "data-requirements.html"]),
-    ("Methodology & causal foundations", ["causal-inference.html", "bayesian-workflow.html", "scientific-modeling.html", "variable-selection.html", "measurement-calibration.html", "continuous-learning.html", "continuous-learning-math.html", "identification-assumptions.html", "technical-guide.html"]),
+    ("Methodology & causal foundations", ["causal-inference.html", "bayesian-workflow.html", "scientific-modeling.html", "variable-selection.html", "measurement-calibration.html", "experiment-playbook.html", "continuous-learning.html", "continuous-learning-math.html", "ltv-modeling.html", "identification-assumptions.html", "technical-guide.html"]),
     ("Platform (Augur)", ["platform-overview.html", "model-garden.html", "pricing.html", "data-connections.html", "trust.html", "security.html", "responsible-disclosure.html", "evaluator.html"]),
     ("Proof, demos & worked examples", ["demos.html", "mmm-walkthrough.html", "mmm-example-report.html", "causal-features-showcase.html", "pressure-testing.html", "scientific-workflow-demo.html", "scientific-workflow-simple.html", "business-readiness-report.html"]),
     ("Task workflows", ["workflow-budget-optimization.html", "workflow-channel-effectiveness.html", "workflow-forecasting.html", "workflow-calibration-decisions.html"]),

@@ -1561,14 +1561,26 @@ function ParetoScatter({
   // disagree with a candidate's actual basis.
   const tradeoffLabel = result.tradeoff_label ?? 'short-term cost';
   const isDollar = tradeoffLabel.includes('$');
+  // Net-value axis: the backend's tradeoff is −net_value (lower-better Pareto
+  // convention); plot the net value itself so up = better on the chart.
+  const netAxis = result.net_value_axis === true;
+  const yOf = (c: CandidateEval): number =>
+    netAxis ? (c.net_value ?? -c.tradeoff) : c.tradeoff;
   const powerPct = (c: CandidateEval): string =>
     c.power != null ? `${Math.round(c.power * 100)}%` : 'n/a';
+  const costText = (c: CandidateEval): string => {
+    if (netAxis) {
+      const nv = c.net_value ?? -c.tradeoff;
+      return `net ${nv >= 0 ? '+' : '−'}$${fmtInt(Math.abs(nv))}`;
+    }
+    return `${isDollar ? '$' : ''}${fmtInt(c.tradeoff)}`;
+  };
   const hover = (c: CandidateEval): string =>
     `${MODE_LABEL[c.mode]} · ${c.footprint} · ${fmtSignedPct(c.intensity_pct)} · ${
       c.duration
-    }w<br>MDE ${fmtNum(c.mde_roas)} · power ${powerPct(c)} · ${isDollar ? '$' : ''}${fmtInt(
-      c.tradeoff,
-    )}${c.powered ? ' · powered' : ' · underpowered'}`;
+    }w<br>MDE ${fmtNum(c.mde_roas)} · power ${powerPct(c)} · ${costText(c)}${
+      c.powered ? ' · powered' : ' · underpowered'
+    }`;
 
   // All candidates — dominated points are muted; the front is emphasized; the
   // recommended design carries a distinct star + annotation.
@@ -1579,7 +1591,7 @@ function ParetoScatter({
   const data: Data[] = [
     {
       x: dominated.map((c) => c.mde_roas),
-      y: dominated.map((c) => c.tradeoff),
+      y: dominated.map(yOf),
       text: dominated.map(hover),
       customdata: dominated.map((c) => c.index),
       type: 'scatter',
@@ -1598,7 +1610,7 @@ function ParetoScatter({
     },
     {
       x: front.map((c) => c.mde_roas),
-      y: front.map((c) => c.tradeoff),
+      y: front.map(yOf),
       text: front.map(hover),
       customdata: front.map((c) => c.index),
       type: 'scatter',
@@ -1624,7 +1636,7 @@ function ParetoScatter({
   if (recommended) {
     data.push({
       x: [recommended.mde_roas],
-      y: [recommended.tradeoff],
+      y: [yOf(recommended)],
       text: [hover(recommended)],
       customdata: [recommended.index],
       type: 'scatter',
@@ -1649,7 +1661,7 @@ function ParetoScatter({
   if (selected) {
     data.push({
       x: [selected.mde_roas],
-      y: [selected.tradeoff],
+      y: [yOf(selected)],
       type: 'scatter',
       mode: 'markers',
       name: 'selected',
@@ -1675,7 +1687,7 @@ function ParetoScatter({
           annotations: [
             {
               x: recommended.mde_roas,
-              y: recommended.tradeoff,
+              y: yOf(recommended),
               text: 'recommended',
               showarrow: true,
               arrowhead: 0,
@@ -1696,7 +1708,9 @@ function ParetoScatter({
       <h4 className="mb-1 text-sm font-semibold text-ink-900">
         Pareto front{' '}
         <span className="font-normal text-ink-400">
-          (lower-left is better — precise &amp; cheap)
+          {netAxis
+            ? '(upper-left is better — precise & net-positive to run)'
+            : '(lower-left is better — precise & cheap)'}
         </span>
       </h4>
       <Plot
@@ -1802,13 +1816,21 @@ function RecommendedCard({
       <div className="mt-3 grid grid-cols-2 gap-3">
         <Metric
           label={
-            r.tradeoff_basis === 'net_dollar'
-              ? 'Short-term cost ($)'
-              : r.tradeoff_basis === 'spend_at_risk'
-                ? 'Budget at risk ($)'
-                : 'Forgone KPI'
+            r.tradeoff_basis === 'net_value'
+              ? 'Net value of testing ($)'
+              : r.tradeoff_basis === 'net_dollar'
+                ? 'Short-term cost ($)'
+                : r.tradeoff_basis === 'spend_at_risk'
+                  ? 'Budget at risk ($)'
+                  : 'Forgone KPI'
           }
-          value={fmtInt(r.tradeoff)}
+          value={
+            r.tradeoff_basis === 'net_value'
+              ? `${(r.net_value ?? -r.tradeoff) >= 0 ? '+' : '−'}${fmtInt(
+                  Math.abs(r.net_value ?? -r.tradeoff),
+                )}`
+              : fmtInt(r.tradeoff)
+          }
         />
         <Metric label="Spend at risk" value={fmtInt(r.spend_at_risk)} />
       </div>
@@ -1878,11 +1900,13 @@ function RecommendedCard({
           </>
         )}{' '}
         · tradeoff basis:{' '}
-        {r.tradeoff_basis === 'net_dollar'
-          ? 'net $ vs BAU'
-          : r.tradeoff_basis === 'spend_at_risk'
-            ? '$ budget committed'
-            : 'forgone KPI'}
+        {r.tradeoff_basis === 'net_value'
+          ? 'net value (reallocation gain − test loss)'
+          : r.tradeoff_basis === 'net_dollar'
+            ? 'net $ vs BAU'
+            : r.tradeoff_basis === 'spend_at_risk'
+              ? '$ budget committed'
+              : 'forgone KPI'}
         {r.pct_of_window_kpi != null && (
           <> · {fmtPct(r.pct_of_window_kpi)} of the treated-window KPI</>
         )}
@@ -1984,7 +2008,10 @@ function ParetoTable({
             <th className="text-right" title="Statistical power to detect the model's expected effect">
               Power
             </th>
-            <th className="text-right" title="Short-term tradeoff: net $ when margin known, else forgone KPI">
+            <th
+              className="text-right"
+              title="With a margin: net value of testing (reallocation gain − test loss); else short-term cost (net $ / forgone KPI)"
+            >
               Tradeoff
             </th>
             <th className="text-right">Powered</th>
@@ -2021,10 +2048,16 @@ function ParetoTable({
                 {c.power != null ? `${Math.round(c.power * 100)}%` : '—'}
               </td>
               <td className="text-right num text-ink-700">
-                {c.tradeoff_basis === 'net_dollar' || c.tradeoff_basis === 'spend_at_risk'
-                  ? '$'
-                  : ''}
-                {fmtInt(c.tradeoff)}
+                {c.tradeoff_basis === 'net_value'
+                  ? `${(c.net_value ?? -c.tradeoff) >= 0 ? '+' : '−'}$${fmtInt(
+                      Math.abs(c.net_value ?? -c.tradeoff),
+                    )}`
+                  : `${
+                      c.tradeoff_basis === 'net_dollar' ||
+                      c.tradeoff_basis === 'spend_at_risk'
+                        ? '$'
+                        : ''
+                    }${fmtInt(c.tradeoff)}`}
               </td>
               <td className="text-right">
                 <span

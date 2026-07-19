@@ -293,6 +293,11 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/experiment-playbook.html</loc>
+        <lastmod>2026-07-19</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/faq.html</loc>
         <lastmod>2026-07-12</lastmod>
         <changefreq>monthly</changefreq>
@@ -321,7 +326,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/ltv-modeling.html</loc>
-        <lastmod>2026-07-14</lastmod>
+        <lastmod>2026-07-19</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>

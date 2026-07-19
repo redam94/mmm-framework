@@ -411,7 +411,110 @@ def test_suggest_experiment_end_to_end(tmp_path):
     for c in cands:
         assert c["power"] is None or 0.0 <= c["power"] <= 1.0
         assert c["power_shortfall"] >= 0.0
-    # JSON-safe across the boundary
+    # margin known → the cost axis upgrades to the net value of testing
+    # (gain − loss, $): every candidate priced, tradeoff = −net_value, and the
+    # fitted-surrogate provenance rides the payload.
+    assert out["net_value_axis"] is True
+    for c in cands:
+        assert c["tradeoff_basis"] == "net_value"
+        assert c["net_value"] is not None
+        assert c["tradeoff"] == pytest.approx(-c["net_value"])
+        assert c["evoi_kpi"] is not None and c["evoi_kpi"] >= 0
+        assert c["sigma_exp"] == pytest.approx(c["mde_roas"] / 2.8)
+    anch = out["evoi_anchor"]
+    assert anch and anch["evpi"] >= 0 and len(anch["anchors"]) >= 1
+    assert "net value" in out["tradeoff_label"]
+    # JSON-safe across the boundary (incl. the surrogate provenance)
     import json
 
     json.dumps(out, default=str)
+
+
+class TestNetValueAxis:
+    """The net-value Pareto axis: tradeoff → −(reallocation gain − test loss),
+    priced per candidate by the fitted Gaussian EVOI surrogate."""
+
+    @staticmethod
+    def _anchor(tau=0.5):
+        from mmm_framework.planning import fit_evoi_surrogate
+
+        # sharp design (se=0.1) worth 100 KPI units, weak (se=1.0) worth 20
+        sur = fit_evoi_surrogate(tau, [(0.1, 100.0), (1.0, 20.0)])
+        assert sur is not None
+        return {
+            "surrogate": sur,
+            "anchors": sur.sigma_anchors,
+            "evpi": 500.0,
+            "tau": tau,
+        }
+
+    @staticmethod
+    def _nv_cand(idx, mde, net_profit, ocd=None):
+        c = _cand(idx, mde, 100.0, 8)
+        c.net_profit_impact_median = net_profit
+        c.opportunity_cost_dollar_median = (
+            ocd if ocd is not None else max(0.0, -net_profit)
+        )
+        return c
+
+    def test_swaps_tradeoff_for_negative_net_value(self):
+        sharp = self._nv_cand(0, 0.28, -500.0)  # se=0.1: learns a lot, costs $500
+        blunt = self._nv_cand(1, 2.80, -50.0)  # se=1.0: learns little, costs $50
+        ok = EO._apply_net_value_axis(
+            [sharp, blunt],
+            self._anchor(),
+            channel="TV",
+            margin=2.0,
+            response_horizon_weeks=26,
+        )
+        assert ok
+        for c in (sharp, blunt):
+            assert c.tradeoff_basis == "net_value"
+            assert c.net_value is not None
+            assert c.tradeoff == pytest.approx(-c.net_value)
+            # net = decayed $ gain + signed test profit (negative here)
+            assert c.net_value == pytest.approx(
+                c.reallocation_gain + c.net_profit_impact_median
+            )
+            assert c.sigma_exp == pytest.approx(c.mde_roas / 2.8)
+        # the sharper design's surrogate EVOI is larger
+        assert sharp.evoi_kpi > blunt.evoi_kpi
+        # gain is in $ (margin × KPI units × decay) and capped sensibly
+        assert sharp.reallocation_gain > blunt.reallocation_gain > 0
+
+    def test_all_or_nothing_on_unpriceable_candidate(self):
+        good = self._nv_cand(0, 0.28, -100.0)
+        bad = self._nv_cand(1, float("inf"), -100.0)  # no MDE → no sigma_exp
+        ok = EO._apply_net_value_axis(
+            [good, bad],
+            self._anchor(),
+            channel="TV",
+            margin=2.0,
+            response_horizon_weeks=26,
+        )
+        assert not ok
+        # untouched — the mixed axis would corrupt the Pareto front
+        assert good.tradeoff_basis == "forgone_kpi" and good.net_value is None
+
+    def test_missing_loss_side_refuses(self):
+        c = self._nv_cand(0, 0.28, -100.0)
+        c.net_profit_impact_median = None
+        assert not EO._apply_net_value_axis(
+            [c], self._anchor(), channel="TV", margin=2.0, response_horizon_weeks=26
+        )
+
+    def test_money_saving_holdout_net_exceeds_gain(self):
+        # a holdout that SAVES money during the test: positive signed profit
+        c = self._nv_cand(0, 0.28, +200.0, ocd=0.0)
+        ok = EO._apply_net_value_axis(
+            [c], self._anchor(), channel="TV", margin=2.0, response_horizon_weeks=26
+        )
+        assert ok
+        assert c.net_value > c.reallocation_gain  # loss side is a bonus
+
+    def test_evoi_anchor_refuses_on_garbage_model(self):
+        # a model with no channel surface → anchor degrades to None (no crash)
+        out = EO._evoi_anchor(
+            object(), "TV", [0.5] * 10, 0.1, 1.0, max_draws=10, random_seed=0
+        )
+        assert out is None

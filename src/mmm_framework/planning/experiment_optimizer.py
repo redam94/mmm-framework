@@ -196,7 +196,8 @@ def _flighting_power_breakdown(
     )
     lo_mroas = (
         _power_at_effect(
-            estimand_ses.get("se_mroas", float("nan")), _lower_effect(posteriors["mroas"])
+            estimand_ses.get("se_mroas", float("nan")),
+            _lower_effect(posteriors["mroas"]),
         )
         if identified
         else float("nan")
@@ -361,6 +362,14 @@ class CandidateEval:
     power_target: float = DEFAULT_POWER_TARGET
     # flighting only: power per estimand {roas, contribution, mroas, ...}
     power_breakdown: dict | None = None
+    # net-value axis (filled by the post-pass when the EVOI anchor computes):
+    # the design's precision, its surrogate EVOI (KPI units), the decayed/
+    # EVPI-capped $ gain, and the netted decision figure gain − test loss.
+    sigma_exp: float | None = None
+    evoi_kpi: float | None = None
+    reallocation_gain: float | None = None
+    net_value: float | None = None
+    net_value_basis: str | None = None
     on_pareto: bool = False
     is_recommended: bool = False
     # runnable setup
@@ -409,6 +418,154 @@ def _tradeoff(oc, margin_known: bool) -> tuple[float, str]:
     return float(oc.spend_at_risk), "spend_at_risk"
 
 
+# ── Net-value axis (Gaussian EVOI surrogate) ──────────────────────────────────
+
+
+def _evoi_anchor(
+    mmm: Any,
+    channel: str,
+    effect_draws,
+    sigma_lo: float,
+    sigma_hi: float,
+    *,
+    max_draws: int,
+    random_seed: int,
+    n_steps: int = 400,
+) -> dict[str, Any] | None:
+    """TWO anchored preposterior-MC EVOIs (+ EVPI) for ``channel`` at the
+    extremes of the grid's design precisions — the expensive half of the
+    net-value axis, paid once per grid, then interpolated to every candidate
+    by the fitted Gaussian surrogate (``evoi.fit_evoi_surrogate``; anchoring at
+    the extremes keeps every candidate INSIDE the calibrated bracket, where the
+    surrogate tracks the MC EVOI to ~±15%).
+
+    ``effect_draws`` must be the incremental-ROAS posterior computed at the
+    SAME ``max_draws`` as the curves (the draw-pairing convention the priority
+    loopback uses); a length mismatch refuses rather than mispair."""
+    try:
+        from .budget import compute_response_curves, optimize_budget
+        from .evoi import compute_evoi_for_channel, compute_evpi, fit_evoi_surrogate
+
+        x = np.asarray(effect_draws, dtype=float)
+        x = x[np.isfinite(x)]
+        tau = float(x.std()) if x.size else 0.0
+        if tau <= _EPS or not math.isfinite(sigma_lo) or sigma_lo <= 0:
+            return None
+        curves = compute_response_curves(
+            mmm, max_draws=max_draws, random_seed=random_seed
+        )
+        if channel not in curves.channel_names:
+            return None
+        c = curves.channel_names.index(channel)
+        if x.shape[0] != curves.contributions.shape[0]:
+            return None  # not draw-paired with the curves — cannot reweight
+        opt = optimize_budget(curves=curves, random_seed=random_seed)
+        port = compute_evpi(
+            curves,
+            total_budget=opt.total_budget,
+            per_draw_alloc=opt.per_draw_alloc,
+            optimal_alloc=opt.optimal_alloc,
+            n_steps=n_steps,
+        )
+        # Common random numbers across the two anchors so the fitted ratio
+        # (which pins delta) isn't corrupted by independent MC noise.
+        rng = np.random.default_rng(random_seed)
+        D = curves.contributions.shape[0]
+        outcome_draws = (rng.integers(0, D, size=48), rng.standard_normal(48))
+        sigmas = [float(sigma_lo)]
+        if math.isfinite(sigma_hi) and sigma_hi > sigma_lo * (1.0 + 1e-6):
+            sigmas.append(float(sigma_hi))
+        anchors: list[tuple[float, float]] = []
+        for sig in sigmas:
+            v = compute_evoi_for_channel(
+                curves,
+                c,
+                x,
+                sig,
+                optimal_alloc=opt.optimal_alloc,
+                total_budget=opt.total_budget,
+                n_steps=n_steps,
+                outcome_draws=outcome_draws,
+            )
+            if port.evpi > 0:
+                v = min(v, port.evpi)
+            anchors.append((sig, float(v)))
+        surrogate = fit_evoi_surrogate(tau, anchors)
+        if surrogate is None:
+            return None
+        return {
+            "surrogate": surrogate,
+            "anchors": anchors,
+            "evpi": float(port.evpi),
+            "tau": tau,
+        }
+    except Exception:  # noqa: BLE001 — the axis just degrades to the cost axis
+        return None
+
+
+def _apply_net_value_axis(
+    cands: list[CandidateEval],
+    anchor: dict[str, Any],
+    *,
+    channel: str,
+    margin: float,
+    response_horizon_weeks: int,
+) -> bool:
+    """Swap the tradeoff objective for ``−net_value`` (net value = decayed,
+    EVPI-capped reallocation gain − signed test loss, in $) on EVERY candidate,
+    pricing each design's EVOI with the fitted Gaussian surrogate at its own
+    precision (``sigma_exp = MDE / 2.8``). All-or-nothing: if any candidate
+    can't be priced, the axis is left untouched (a mixed axis would corrupt the
+    front)."""
+    from types import SimpleNamespace
+
+    from .eig import channel_half_life
+    from .experiment_value import compute_experiment_net_value
+
+    half_life = channel_half_life(channel)
+    surrogate = anchor["surrogate"]
+    staged: list[tuple[CandidateEval, float, float, Any]] = []
+    for c in cands:
+        if not (math.isfinite(c.mde_roas) and c.mde_roas > 0):
+            return False
+        if c.net_profit_impact_median is None:
+            return False
+        se = c.mde_roas / _FACTOR
+        evoi_c = surrogate(se, evpi=anchor["evpi"])
+        oc_shim = SimpleNamespace(
+            draws=None,
+            margin_per_kpi=margin,
+            spend_delta=0.0,
+            net_profit_impact_median=c.net_profit_impact_median,
+            opportunity_cost_dollar_median=c.opportunity_cost_dollar_median,
+            opportunity_cost_dollar_p95=None,
+        )
+        nv = compute_experiment_net_value(
+            channel=channel,
+            evoi_kpi_units=evoi_c,
+            evpi_kpi_units=anchor["evpi"],
+            margin_per_kpi=margin,
+            response_horizon_weeks=response_horizon_weeks,
+            half_life_weeks=half_life,
+            model_anchored=True,
+            opportunity_cost_result=oc_shim,
+        )
+        if nv.net_value is None or not math.isfinite(nv.net_value):
+            return False
+        staged.append((c, se, evoi_c, nv))
+    if not staged:
+        return False
+    for c, se, evoi_c, nv in staged:
+        c.sigma_exp = float(se)
+        c.evoi_kpi = float(evoi_c)
+        c.reallocation_gain = nv.reallocation_gain
+        c.net_value = float(nv.net_value)
+        c.net_value_basis = nv.basis
+        c.tradeoff = float(-nv.net_value)  # lower-better Pareto convention
+        c.tradeoff_basis = "net_value"
+    return True
+
+
 def _mde_at(power_curve: list[dict], t: int) -> float:
     """MDE(ROAS) at duration ``t`` from a design's power curve — exact when ``t``
     is a curve point, else linearly interpolated (clamped to the curve range).
@@ -454,12 +611,24 @@ def evaluate_experiment_grid(
     price: float | None = None,
     kpi_kind: str = "revenue",
     power_target: float = DEFAULT_POWER_TARGET,
+    net_value_axis: bool = True,
+    response_horizon_weeks: int = 26,
     max_draws: int = 80,
     random_seed: int = 42,
 ) -> dict[str, Any]:
     """Evaluate a grid of candidate designs on FOUR objectives, all lower-better:
     MDE, power shortfall below ``power_target`` (default 80%), short-term cost,
     and duration.
+
+    When a margin is known and ``net_value_axis`` (default), the cost objective
+    is upgraded to the **net value of testing**: each candidate's EVOI (priced
+    by the Gaussian surrogate at its own design precision, from ONE anchored
+    preposterior-MC EVOI per grid) is decayed over ``response_horizon_weeks``,
+    capped at EVPI, converted to $, and netted against the candidate's signed
+    short-term test loss — the Pareto axis becomes ``−net_value`` and every
+    candidate carries ``net_value``/``evoi_kpi``/``reallocation_gain``. If the
+    anchor cannot compute (no draw pairing, degenerate posterior), the axis
+    degrades to the existing net-$ downside.
 
     The design space is bounded by RANGES the caller controls: durations in
     ``[duration_min, duration_max]`` weeks and signed spend variations in
@@ -677,6 +846,42 @@ def evaluate_experiment_grid(
                 "tests cannot form a valid high/low contrast."
             )
 
+    # ── Net-value axis: swap the cost objective for −(gain − loss) when a
+    # margin is known and the one-shot EVOI anchor computes. Done BEFORE the
+    # Pareto pass so the front and the knee rank on net value.
+    net_axis_applied = False
+    anchor: dict[str, float] | None = None
+    if net_value_axis and margin_known and cands and len(effect_draws) > 0:
+        ses = [
+            c.mde_roas / _FACTOR
+            for c in cands
+            if math.isfinite(c.mde_roas) and c.mde_roas > 0
+        ]
+        if ses and len(ses) == len(cands):
+            anchor = _evoi_anchor(
+                mmm,
+                channel,
+                effect_draws,
+                float(min(ses)),
+                float(max(ses)),
+                max_draws=max_draws,
+                random_seed=random_seed,
+            )
+            if anchor is not None:
+                net_axis_applied = _apply_net_value_axis(
+                    cands,
+                    anchor,
+                    channel=channel,
+                    margin=float(margin),
+                    response_horizon_weeks=int(response_horizon_weeks),
+                )
+    if net_axis_applied:
+        notes.append(
+            "Cost objective upgraded to NET VALUE: decayed, EVPI-capped "
+            "reallocation gain (Gaussian-surrogate EVOI at each design's own "
+            "precision) minus the signed short-term test loss."
+        )
+
     front = pareto_front(cands)
     for i in front:
         cands[i].on_pareto = True
@@ -687,7 +892,9 @@ def evaluate_experiment_grid(
     # Tradeoff-axis unit: a single comparable scale per result, except the
     # no-margin case can mix forgone-KPI (holdout) with $-committed (scaling).
     bases = {c.tradeoff_basis for c in cands}
-    if bases == {"net_dollar"}:
+    if bases == {"net_value"}:
+        tradeoff_label = "net value of testing ($, higher is better)"
+    elif bases == {"net_dollar"}:
         tradeoff_label = "short-term cost ($)"
     elif bases <= {"net_dollar", "spend_at_risk"}:
         tradeoff_label = "budget at risk ($)"
@@ -713,6 +920,20 @@ def evaluate_experiment_grid(
         "margin_known": margin_known,
         "tradeoff_label": tradeoff_label,
         "mixed_tradeoff_units": mixed,
+        "net_value_axis": net_axis_applied,
+        "response_horizon_weeks": int(response_horizon_weeks),
+        # JSON-safe provenance of the fitted surrogate (the callable stays out)
+        "evoi_anchor": (
+            {
+                "anchors": [list(a) for a in anchor["anchors"]],
+                "evpi": anchor["evpi"],
+                "tau": anchor["tau"],
+                "k": float(anchor["surrogate"].k),
+                "delta": float(anchor["surrogate"].delta),
+            }
+            if net_axis_applied and anchor is not None
+            else None
+        ),
         "power_target": float(power_target),
         "design_space": {
             "duration_min": int(min(durations)) if durations else duration_min,
@@ -964,6 +1185,8 @@ def suggest_experiment(
     include_holdout: bool = True,
     footprints: tuple[str, ...] = ("full", "half"),
     power_target: float = DEFAULT_POWER_TARGET,
+    net_value_axis: bool = True,
+    response_horizon_weeks: int = 26,
     max_draws: int = 80,
     random_seed: int = 42,
 ) -> dict[str, Any]:
@@ -972,6 +1195,11 @@ def suggest_experiment(
     × duration), over a design space bounded by the duration and spend-variation
     ranges. The recommended design carries its test/control groups (or
     flighting schedule), duration, intensity, and the adstock-derived cool-down.
+
+    With a known margin the cost axis is the **net value of testing** (see
+    :func:`evaluate_experiment_grid`) — gain from the learning minus the
+    short-term loss — so the front trades precision and power against the
+    dollars the test actually creates or destroys.
     """
     grid = evaluate_experiment_grid(
         mmm,
@@ -990,6 +1218,8 @@ def suggest_experiment(
         price=price,
         kpi_kind=kpi_kind,
         power_target=power_target,
+        net_value_axis=net_value_axis,
+        response_horizon_weeks=response_horizon_weeks,
         max_draws=max_draws,
         random_seed=random_seed,
     )

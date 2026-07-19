@@ -13,8 +13,10 @@ from mmm_framework.planning import (
     compute_evoi_for_channel,
     compute_evpi,
     compute_experiment_priorities,
+    fit_evoi_surrogate,
     optimize_budget,
     recommend_experiments,
+    surrogate_evoi,
 )
 
 MULTS = np.linspace(0.0, 2.0, 21)
@@ -190,3 +192,74 @@ class TestRecommendExperimentsMethods:
             recommend_experiments(
                 None, curves=decision_straddling_curves, method="vibes"
             )
+
+
+class TestEvoiSurrogate:
+    """The Gaussian (Raiffa–Schlaifer) surrogate that prices a GRID of design
+    precisions from at most two anchored preposterior MCs — the cheap EVOI the
+    experiment optimizer's net-value Pareto axis runs on."""
+
+    @staticmethod
+    def _roi_and_evpi(curves):
+        g1 = int(np.argmin(np.abs(curves.multipliers - 1.0)))
+        roi0 = curves.contributions[:, 0, g1] / curves.base_spend[0]
+        return roi0, compute_evpi(curves)
+
+    def test_two_anchor_fit_tracks_mc_inside_bracket(self, decision_straddling_curves):
+        """Fitted at the sigma extremes, the surrogate reproduces the MC EVOI
+        at an interior sigma to ~±20% — even on this bimodal posterior."""
+        curves = decision_straddling_curves
+        roi0, port = self._roi_and_evpi(curves)
+        tau = float(roi0.std())
+        sig_lo, sig_hi = tau / 2, 2 * tau
+        rng = np.random.default_rng(5)
+        od = (rng.integers(0, len(roi0), size=48), rng.standard_normal(48))
+        anchors = [
+            (s, compute_evoi_for_channel(curves, 0, roi0, float(s), outcome_draws=od))
+            for s in (sig_lo, sig_hi)
+        ]
+        sur = fit_evoi_surrogate(tau, anchors)
+        assert sur is not None
+        # exact at the anchors by construction
+        assert sur(sig_lo) == pytest.approx(anchors[0][1], rel=1e-6)
+        assert sur(sig_hi) == pytest.approx(anchors[1][1], rel=1e-6)
+        # interior point tracks a fresh MC evaluation
+        mid = tau
+        mc_mid = compute_evoi_for_channel(curves, 0, roi0, float(mid), outcome_draws=od)
+        assert sur(mid) == pytest.approx(mc_mid, rel=0.25)
+
+    def test_surrogate_monotone_in_precision(self, decision_straddling_curves):
+        curves = decision_straddling_curves
+        roi0, port = self._roi_and_evpi(curves)
+        tau = float(roi0.std())
+        anchors = [
+            (s, compute_evoi_for_channel(curves, 0, roi0, float(s)))
+            for s in (tau / 2, 2 * tau)
+        ]
+        sur = fit_evoi_surrogate(tau, anchors)
+        vals = [sur(s) for s in (tau / 4, tau / 2, tau, 2 * tau, 4 * tau)]
+        assert vals == sorted(vals, reverse=True)  # sharper design worth more
+        assert all(v >= 0 for v in vals)
+
+    def test_evpi_cap_applies(self):
+        sur = fit_evoi_surrogate(1.0, [(0.5, 100.0), (2.0, 10.0)])
+        assert sur(0.01, evpi=5.0) <= 5.0
+
+    def test_degenerate_inputs_refuse_or_zero(self):
+        assert fit_evoi_surrogate(0.0, [(0.5, 1.0)]) is None
+        assert fit_evoi_surrogate(1.0, [(0.5, 0.0), (2.0, -1.0)]) is None
+        assert fit_evoi_surrogate(1.0, []) is None
+        # single anchor degrades to the delta=0 (sd-ratio) scaling
+        sur = fit_evoi_surrogate(1.0, [(1.0, 3.0)])
+        assert sur is not None and sur.delta == 0.0
+        assert sur(1.0) == pytest.approx(3.0, rel=1e-9)
+        one = surrogate_evoi(3.0, 1.0, 0.5, 1.0)
+        assert sur(0.5) == pytest.approx(one, rel=1e-9)
+
+    def test_single_anchor_helper_scales_by_sd_ratio(self):
+        # at sigma_ref it returns the anchor; sharper > anchor; weaker < anchor
+        assert surrogate_evoi(10.0, 0.2, 0.2, 0.5) == pytest.approx(10.0)
+        assert surrogate_evoi(10.0, 0.2, 0.05, 0.5) > 10.0
+        assert surrogate_evoi(10.0, 0.2, 0.8, 0.5) < 10.0
+        assert surrogate_evoi(10.0, 0.2, 0.0, 0.5, evpi=11.0) <= 11.0
+        assert surrogate_evoi(0.0, 0.2, 0.1, 0.5) == 0.0

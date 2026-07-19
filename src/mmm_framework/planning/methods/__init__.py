@@ -27,6 +27,7 @@ from .ghost_ads import (
     ghost_ads_power,
     ghost_ads_power_at,
     ghost_ads_simulate,
+    ghost_ads_users_for_cpa,
     ghost_ads_users_for_mde,
 )
 from .switchback import switchback_design, switchback_power
@@ -233,6 +234,7 @@ __all__ = [
     "ghost_ads_power",
     "ghost_ads_power_at",
     "ghost_ads_users_for_mde",
+    "ghost_ads_users_for_cpa",
     "ghost_ads_simulate",
     "switchback_design",
     "switchback_power",
