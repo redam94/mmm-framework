@@ -135,7 +135,7 @@
             </ul>
         </aside>
 
-        <main class="content">
+        <main class="main-content">
             <h1>LTV Modeling</h1>
             <p class="lead">
                 A channel that acquires loyal, high-spending customers and a channel that acquires
@@ -374,15 +374,17 @@ series = new_customer_clv_series(transactions, clv_per_customer)
             </ul>
 
             <section class="cta-section">
-                <div class="cta-content">
+                <div class="container">
                     <h2>Value the customer, not the click</h2>
                     <p>
                         Upload a transaction log, ask the agent to build RFM, fit
                         <code>bayesian_clv</code>, and let your next acquisition experiment be
                         valued at lifetime worth.
                     </p>
-                    <a href="model-garden.html" class="btn btn-primary">Explore the Model Garden</a>
-                    <a href="measurement-calibration.html" class="btn btn-secondary">See the calibration loop</a>
+                    <div class="cta-buttons">
+                        <a href="model-garden.html" class="btn btn-white">Explore the Model Garden</a>
+                        <a href="measurement-calibration.html" class="btn btn-outline-white">See the calibration loop</a>
+                    </div>
                 </div>
             </section>
         </main>
