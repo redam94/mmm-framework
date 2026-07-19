@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LTV Modeling — Bayesian customer lifetime value in the measurement loop | MMM Framework</title>
+    <meta name="description" content="Transaction-level customer lifetime value as a Bayesian garden model: BG/NBD purchase dynamics + Gamma-Gamma monetary value, per-acquisition-channel CLV, and the bridges that let experiments and budget decisions value a customer at lifetime worth — not first purchase.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/ltv-modeling.html">
+    <meta property="og:title" content="LTV Modeling — Bayesian customer lifetime value in the measurement loop">
+    <meta property="og:description" content="BG/NBD + Gamma-Gamma lifetime value with full posterior uncertainty, per-channel segment CLV, and CLV-valued experiments.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/ltv-modeling.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LTV Modeling — Bayesian customer lifetime value in the measurement loop">
+    <meta name="twitter:description" content="BG/NBD + Gamma-Gamma lifetime value with full posterior uncertainty, per-channel segment CLV, and CLV-valued experiments.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta name="author" content="Matthew Reda">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/ltv-modeling.html",
+          "name": "LTV Modeling — Bayesian customer lifetime value in the measurement loop | MMM Framework",
+          "description": "Transaction-level customer lifetime value as a Bayesian garden model: BG/NBD purchase dynamics + Gamma-Gamma monetary value, per-acquisition-channel CLV, and the bridges that let experiments and budget decisions value a customer at lifetime worth — not first purchase.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-19",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/ltv-modeling.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/ltv-modeling.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/ltv-modeling.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "LTV Modeling",
+              "item": "https://redam94.github.io/mmm-framework/ltv-modeling.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Overview</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Why lifetime value</a></li>
+                <li><a href="#model">The model</a></li>
+            </ul>
+
+            <h3>Workflow</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#rfm">Transactions → RFM</a></li>
+                <li><a href="#fitting">Fitting BayesianCLV</a></li>
+                <li><a href="#segments">Segment CLV by channel</a></li>
+            </ul>
+
+            <h3>Into the loop</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#experiments">CLV-valued experiments</a></li>
+                <li><a href="#cac">CLV vs CAC</a></li>
+                <li><a href="#kpi">Cohort CLV as a KPI</a></li>
+            </ul>
+
+            <h3>Trust</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#validation">Validation on known truth</a></li>
+                <li><a href="#caveats">Honest caveats</a></li>
+            </ul>
+        </aside>
+
+        <main class="content">
+            <h1>LTV Modeling</h1>
+            <p class="lead">
+                A channel that acquires loyal, high-spending customers and a channel that acquires
+                one-time bargain hunters can look identical on cost-per-acquisition. They are not
+                identical businesses. This page covers the framework's Bayesian customer-lifetime-value
+                model — how it turns a raw transaction log into per-customer and per-acquisition-channel
+                value with full posterior uncertainty, and how that value flows back into experiments,
+                acquisition economics, and budget decisions.
+            </p>
+
+            <h2 id="overview">Why lifetime value</h2>
+            <p>
+                Most marketing measurement stops at the first conversion: an experiment reads out
+                incremental sign-ups, an MMM attributes first purchases. But the money is in what
+                happens afterwards — repeat purchases, retention, spend per order. Valuing every
+                conversion at the same short-term number systematically <em>over</em>-funds channels
+                that acquire cheap, low-quality customers and <em>under</em>-funds channels that
+                acquire durable ones.
+            </p>
+            <p>
+                The fix is to model the customer, not just the conversion. The framework's
+                <code>bayesian_clv</code> garden model estimates, for every customer:
+            </p>
+            <ul>
+                <li><strong>How many more purchases</strong> they will make over a horizon,</li>
+                <li><strong>What each future purchase is worth</strong>,</li>
+                <li><strong>Whether they are still "alive"</strong> (haven't silently churned),</li>
+            </ul>
+            <p>
+                and rolls those into a discounted <strong>customer lifetime value</strong> — as a
+                posterior distribution, not a point guess. Because it is a
+                <a href="model-garden.html">Model Garden</a> family, it rides the same fit / estimand /
+                report / serialization pipeline as every other model: no bespoke infrastructure.
+            </p>
+
+            <h2 id="model">The model — BG/NBD + Gamma-Gamma</h2>
+            <p>
+                The engine is the classic non-contractual "buy-till-you-die" pair
+                (Fader–Hardie–Lee 2005; Fader–Hardie 2013), made fully Bayesian:
+            </p>
+            <ul>
+                <li>
+                    <strong>BG/NBD purchase dynamics.</strong> Each customer purchases at a latent
+                    Poisson rate \( \lambda_i \sim \text{Gamma}(r, \alpha) \) and, after every
+                    purchase, drops out for good with probability
+                    \( p_i \sim \text{Beta}(a, b) \). Integrating the latents gives a closed-form
+                    likelihood in three per-customer statistics — frequency, recency, and age —
+                    so the graph has a handful of population parameters <em>regardless of how many
+                    customers you have</em>.
+                </li>
+                <li>
+                    <strong>Gamma-Gamma monetary value.</strong> Transaction values are
+                    \( z \sim \text{Gamma}(p, \nu_i) \) with a per-customer spend scale
+                    \( \nu_i \sim \text{Gamma}(q, \gamma) \), independent of purchase frequency
+                    (a checkable assumption). One-time buyers carry no repeat-value signal and
+                    shrink to the population mean.
+                </li>
+            </ul>
+            <p>
+                Per-customer quantities — \( P(\text{alive}) \), expected purchases over the horizon
+                (via the Gaussian hypergeometric conditional-expectation formula), expected value per
+                purchase, and their product, CLV — are deterministic functions of the population
+                posterior, so every one of them arrives with a credible interval.
+            </p>
+            <div class="info-box">
+                <strong>Why Bayesian rather than the usual MLE fit?</strong> Because the numbers feed
+                decisions. A posterior on CLV flows into the estimand engine, the report, and the
+                experiment-economics machinery exactly like an MMM's ROI does — including honest
+                uncertainty on "is Search's CLV really higher than Social's?"
+            </div>
+
+            <h2 id="rfm">From transactions to RFM</h2>
+            <p>
+                The model conditions on four per-customer sufficient statistics, computed from a raw
+                transaction log over a calibration window:
+            </p>
+            <pre><code class="python">from mmm_framework.ltv import transactions_to_rfm
+
+rfm = transactions_to_rfm(
+    transactions,                      # one row per purchase
+    customer_col="customer_id",
+    date_col="date",
+    value_col="value",                 # enables the monetary block
+    observation_end="2025-06-30",      # calibration cutoff
+    freq="W",                          # recency / age measured in weeks
+    segment_col="acquisition_channel", # carried through for segment CLV
+)
+# → one row per customer: frequency, recency, T, monetary, n_txn, segment</code></pre>
+            <p>
+                Conventions that matter: <em>frequency</em> counts <strong>repeat</strong> purchases
+                (the acquisition purchase itself carries no rate information under the model);
+                <em>monetary</em> is the mean of repeat values only (NaN for one-time buyers);
+                same-day duplicates merge into one purchase event; and the <em>segment</em> is the
+                first transaction's attribute — acquisition attribution. In chat, the agent tool
+                <code>build_rfm_from_transactions</code> performs this step on the loaded dataset and
+                makes the RFM table the working dataset.
+            </p>
+
+            <h2 id="fitting">Fitting BayesianCLV</h2>
+            <p>
+                <code>BayesianCLV</code> lives in the Model Garden as a non-MMM family
+                (<code>kind = "clv"</code> — no channels, no spend; each observation is a customer).
+                Its settable configuration covers the horizon, discounting, the monetary toggle, and
+                prior scales:
+            </p>
+            <pre><code class="python"># The example garden model (examples/garden_models/bayesian_clv.py)
+from bayesian_clv import BayesianCLV, rfm_panel, segment_model_params
+from mmm_framework.config import ModelConfig
+from mmm_framework.model import TrendConfig
+from mmm_framework.model.trend_config import TrendType
+
+clv_model = BayesianCLV(
+    rfm_panel(rfm),                    # wraps the RFM frame as a panel
+    ModelConfig(),
+    TrendConfig(type=TrendType.NONE),
+    model_params={
+        "horizon_periods": 52,         # CLV horizon (weeks)
+        "discount_rate_annual": 0.10,
+        **segment_model_params(rfm),   # per-channel segment CLV (below)
+    },
+)
+clv_model.fit(method="map")            # seconds; or full NUTS for final numbers
+clv_model.customer_value_summary()     # mean/total CLV, P(alive), CLV deciles</code></pre>
+            <p>
+                Because the per-customer latents are integrated out analytically, a MAP fit takes
+                seconds even on thousands of customers, and NUTS is comfortably tractable for final,
+                fully-calibrated numbers. The declared estimands — <code>mean_clv</code>,
+                <code>total_clv</code>, <code>mean_expected_purchases</code>,
+                <code>mean_p_alive</code> — surface through the standard estimand engine, and the
+                report renders a customer-value table via the latent-structure section.
+            </p>
+
+            <h2 id="segments">Segment CLV by acquisition channel</h2>
+            <p>
+                The decision-grade question is rarely "what is CLV?" — it is "<strong>whose</strong>
+                customers are worth more?" With a segment column configured, the model adds a
+                <code>segment_clv_&lt;channel&gt;</code> posterior per acquisition channel:
+            </p>
+            <pre><code class="python">clv_model.segment_clv_means()
+# → {"Search": 37.8, "Social": 14.7}   (posterior means; full HDIs in the summary)</code></pre>
+            <p>
+                On synthetic ground truth where Search is planted to acquire genuinely
+                higher-value customers, the fitted segment CLV recovers the planted ordering
+                decisively — that recovery is a pinned regression test, not a hope.
+            </p>
+
+            <h2 id="experiments">CLV-valued experiments</h2>
+            <p>
+                An acquisition experiment measured in conversions should value each conversion at
+                the lifetime value of the customer it brings in. The
+                <a href="blog-geo-holdout-eig.html">experiment toolkit's</a> ghost-ads power
+                calculator accepts the fitted model's CLV directly — in chat,
+                <code>ghost_ads_power_calc(value_from_clv=True, clv_segment="Search")</code> pulls
+                the segment's posterior CLV as <code>value_per_conversion</code>, so the economic
+                break-even lift reflects lifetime worth. For the geo/switchback methods and the
+                net-economics headline (<em>reallocation gain vs test loss</em>), the same bridge is
+                a usage pattern: pass the CLV as the margin per conversion-KPI.
+            </p>
+
+            <h2 id="cac">CLV vs CAC — blended acquisition economics</h2>
+            <pre><code class="python">from mmm_framework.ltv import clv_to_cac
+
+clv_to_cac(
+    {"Search": 37.8, "Social": 14.7},      # posterior segment CLV
+    {"Search": 25.0, "Social": 12.0},      # CAC = spend / new customers
+)
+#            clv   cac  clv_minus_cac  clv_to_cac
+# Search    37.8  25.0           12.8        1.51
+# Social    14.7  12.0            2.7        1.22</code></pre>
+            <p>
+                Search costs twice as much per acquisition — and still wins on net value, because its
+                customers are worth 2.6× as much over their lifetime. That inversion is invisible to
+                a CPA dashboard. CAC is deliberately an <em>input</em> here (spend ÷ new customers
+                from your channel reporting): the CLV model never sees spend, so the economics stay
+                an explicit, auditable join rather than a hidden modeling assumption.
+            </p>
+
+            <h2 id="kpi">Cohort CLV as a KPI</h2>
+            <p>
+                To point the <em>whole</em> measurement loop at lifetime value, collapse acquisitions
+                into a weekly cohort-value series and use it as the KPI an MMM or experiment targets:
+            </p>
+            <pre><code class="python">from mmm_framework.ltv import new_customer_clv_series
+
+series = new_customer_clv_series(transactions, clv_per_customer)
+# per week: new_customers, cohort_clv, mean_clv, n_unvalued
+# → feed `cohort_clv` to an MMM as a monetary KPI (margin_per_kpi = 1)</code></pre>
+            <p>
+                Media is then credited with the lifetime value of the customers it acquired that
+                week — closing the chain <em>spend → acquisitions → lifetime value</em>. The
+                <code>n_unvalued</code> column keeps the join honest: customers in the log but
+                missing from the CLV index are counted but contribute zero value, visibly.
+            </p>
+
+            <h2 id="validation">Validation on known truth</h2>
+            <p>
+                The model is tested the way everything in this framework is tested — against
+                synthetic worlds with a known answer key
+                (<code>mmm_framework.synth.dgp_clv.make_clv_world</code>): a simulator that follows
+                the exact BG/NBD + Gamma-Gamma generative story, with planted population parameters,
+                optional per-channel heterogeneity, and a calibration/holdout split.
+            </p>
+            <ul>
+                <li><strong>Parameter recovery</strong> — MAP estimates land on the planted
+                    \( r, \alpha, a, b, p, q, \gamma \) (e.g. \(r\): 0.84 vs true 0.80).</li>
+                <li><strong>Holdout prediction</strong> — predicted purchases over the holdout window
+                    match actuals in aggregate and rank customers correctly.</li>
+                <li><strong>Segment ordering</strong> — planted high-value channels recover as
+                    high-CLV segments.</li>
+            </ul>
+            <div class="warning-box">
+                <strong>A subtlety the tests pinned:</strong> in the BG/NBD story the dropout coin is
+                flipped after every <em>repeat</em> purchase — not after the acquisition purchase.
+                A simulator (or a mental model) that lets customers die at acquisition over-produces
+                one-time buyers and biases the purchase-rate parameters low by roughly 2×. If your
+                intuition about "expected repeats" disagrees with the model, check this convention
+                first.
+            </div>
+
+            <h2 id="caveats">Honest caveats</h2>
+            <ul>
+                <li><strong>Non-contractual assumption.</strong> BG/NBD models silent churn in
+                    always-on purchasing. Subscription businesses (observed churn) want a
+                    survival/retention model instead — the garden contract accepts one as its own
+                    family.</li>
+                <li><strong>Stationarity.</strong> CLV projections assume the fitted
+                    purchase/dropout/value process persists over the horizon. Pricing changes or
+                    product overhauls break that; refit after regime changes.</li>
+                <li><strong>Frequency–value independence.</strong> Gamma-Gamma assumes spend per
+                    order is independent of order frequency. Check the empirical correlation; if
+                    it is materially non-zero, treat monetary results with caution.</li>
+                <li><strong>Segment CLV is descriptive, not causal.</strong> "Search customers are
+                    worth more" does not mean "more Search spend creates high-value customers" —
+                    that claim needs an experiment, which is exactly what the CLV-valued
+                    experiment bridge is for.</li>
+            </ul>
+
+            <section class="cta-section">
+                <div class="cta-content">
+                    <h2>Value the customer, not the click</h2>
+                    <p>
+                        Upload a transaction log, ask the agent to build RFM, fit
+                        <code>bayesian_clv</code>, and let your next acquisition experiment be
+                        valued at lifetime worth.
+                    </p>
+                    <a href="model-garden.html" class="btn btn-primary">Explore the Model Garden</a>
+                    <a href="measurement-calibration.html" class="btn btn-secondary">See the calibration loop</a>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- KaTeX init -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false},
+                        {left: "$", right: "$", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

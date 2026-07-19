@@ -5,6 +5,7 @@ import type {
   DeckRequest,
   DesignRequest,
   ExperimentTransition,
+  GhostAdsPowerRequest,
   IdentifyRequest,
   OptimizeRequest,
   SimulateRequest,
@@ -101,6 +102,14 @@ export function useDesignOptions(projectId: string | null, channel: string | nul
 export function useComputeDesign(projectId: string | null) {
   return useMutation({
     mutationFn: (body: DesignRequest) => measurementService.computeDesign(projectId!, body),
+  });
+}
+
+/** Stateless ghost-ads (user-level RCT) power calculation. */
+export function useGhostAdsPower(projectId: string | null) {
+  return useMutation({
+    mutationFn: (body: GhostAdsPowerRequest) =>
+      measurementService.ghostAdsPower(projectId!, body),
   });
 }
 

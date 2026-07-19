@@ -154,9 +154,11 @@ def test_leaderboard_structure_and_ranking(geo_csv):
         seed=7,
     )
     assert lb["kind"] == "geo"
-    assert len(lb["methodologies"]) == 3
+    # The named-method registry (Phase 1) adds synthetic control / TBR / GBR to
+    # the geo leaderboard alongside the three legacy estimators.
     keys = {m["key"] for m in lb["methodologies"]}
-    assert keys == {"pooled_did", "per_pair_did", "regadj_geo"}
+    assert {"pooled_did", "per_pair_did", "regadj_geo"} <= keys
+    assert {"synthetic_control", "tbr", "gbr"} <= keys
     # valid methods sort ahead of invalid ones
     valids = [m["valid"] for m in lb["methodologies"]]
     assert valids == sorted(valids, reverse=True)

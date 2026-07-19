@@ -3372,6 +3372,7 @@ async def experiment_design_options_endpoint(project_id: str, channel: str):
 class ExperimentDesignRequest(BaseModel):
     channel: str
     design_key: str | None = None  # geo_lift | matched_market_did | national_flighting
+    method: str | None = None  # synthetic_control | tbr | gbr | did_mmt | regadj_geo
     # geo designs
     design: str = "scaling"  # holdout | scaling
     intensity_pct: float = 50.0
@@ -3398,8 +3399,11 @@ async def experiment_design_endpoint(project_id: str, body: ExperimentDesignRequ
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     dataset_path, kpi = _design_inputs(project_id, body.channel)
     try:
+        from mmm_framework.planning.design import _METHOD_TO_DESIGN_KEY
+
         design_key = (
             body.design_key
+            or (_METHOD_TO_DESIGN_KEY.get(body.method) if body.method else None)
             or design_options(dataset_path, kpi, body.channel)["recommended"]
         )
         if design_key == "national_flighting":
@@ -3421,11 +3425,87 @@ async def experiment_design_endpoint(project_id: str, body: ExperimentDesignRequ
             if body.n_pairs is not None:
                 kwargs["n_pairs"] = int(body.n_pairs)
         design = design_experiment(
-            dataset_path, kpi, body.channel, design_key=design_key, **kwargs
+            dataset_path,
+            kpi,
+            body.channel,
+            design_key=design_key,
+            method=body.method,
+            **kwargs,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse(content=safe_json_dumps_load(design))
+
+
+class GhostAdsPowerRequest(BaseModel):
+    users_reached: int
+    baseline_rate: float = 0.02
+    treated_fraction: float = 0.5
+    outcome: str = "binary"  # binary | count | revenue
+    baseline_mean: float | None = None
+    baseline_dispersion: float = 1.0
+    value_sd: float | None = None
+    alpha: float = 0.05
+    power_target: float = 0.80
+    two_sided: bool = True
+    exposure_rate: float = 1.0
+    cost_per_user: float | None = None
+    value_per_conversion: float | None = None
+    # optional extras
+    target_lift_abs: float | None = None  # -> users_required + power at this lift
+    simulate: bool = False  # binary only: empirical power/FPR check
+    n_sims: int = 2000
+    seed: int = 0
+
+
+@app.post("/projects/{project_id}/ghost-ads/power", dependencies=[_proj_write])
+async def ghost_ads_power_endpoint(project_id: str, body: GhostAdsPowerRequest):
+    """User-level ghost-ads power calculator — stateless (no dataset or model
+    load): two-proportion / count / revenue MDE, ITT vs treatment-on-treated
+    dilution, users-required inversion, and an optional simulation check of the
+    normal approximation."""
+    from mmm_framework.planning.methods import (
+        GhostAdsDesign,
+        ghost_ads_power,
+        ghost_ads_power_at,
+        ghost_ads_simulate,
+        ghost_ads_users_for_mde,
+    )
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    try:
+        design = GhostAdsDesign(
+            users_reached=body.users_reached,
+            baseline_rate=body.baseline_rate,
+            treated_fraction=body.treated_fraction,
+            outcome=body.outcome,
+            baseline_mean=body.baseline_mean,
+            baseline_dispersion=body.baseline_dispersion,
+            value_sd=body.value_sd,
+            alpha=body.alpha,
+            power_target=body.power_target,
+            two_sided=body.two_sided,
+            exposure_rate=body.exposure_rate,
+            cost_per_user=body.cost_per_user,
+            value_per_conversion=body.value_per_conversion,
+        )
+        result = ghost_ads_power(design)
+        if body.target_lift_abs:
+            result["users_required_for_target"] = ghost_ads_users_for_mde(
+                design, body.target_lift_abs
+            )
+            result["power_at_target"] = ghost_ads_power_at(
+                design, body.target_lift_abs
+            )
+        if body.simulate and body.outcome == "binary":
+            lift = body.target_lift_abs or result["mde_abs"]
+            result["simulation"] = ghost_ads_simulate(
+                design, lift, n_sims=body.n_sims, seed=body.seed
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse(content=safe_json_dumps_load(result))
 
 
 # ── Model-anchored experiment economics (async; loads the latest model) ───────

@@ -825,21 +825,44 @@ def flighting_design(
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
 
+# Which design family each named method's analysis runs on. Geo estimators
+# (synthetic control / TBR / GBR) analyze a randomized matched geo-lift design;
+# DiD-MMT is the matched-market (observational) variant.
+_METHOD_TO_DESIGN_KEY = {
+    "synthetic_control": "geo_lift",
+    "regadj_geo": "geo_lift",
+    "tbr": "geo_lift",
+    "gbr": "geo_lift",
+    "did_mmt": "matched_market_did",
+    "switchback": "national_flighting",
+}
+
+
 def design_options(dataset_path: str, kpi: str, channel: str) -> dict[str, Any]:
     """What designs the data supports: geo designs need >= 4 geographies."""
     frame = load_design_frame(dataset_path, kpi, channel)
     n_geos = len(frame["geos"])
+    n_weeks = len(frame["periods"])
     has_geo = n_geos >= 4
+    # Enumerate the named methods (synthetic control / TBR / GBR / DiD-MMT / …)
+    # with a per-method supported flag + gate reason for the UI.
+    try:
+        from .methods import methods_for_data
+
+        method_rows = methods_for_data(n_geos=n_geos, n_weeks=n_weeks)
+    except Exception:
+        method_rows = []
     return {
         "n_geos": n_geos,
         "geos": frame["geos"],
-        "n_weeks": len(frame["periods"]),
+        "n_weeks": n_weeks,
         "designs": (
             ["geo_lift", "matched_market_did", "national_flighting"]
             if has_geo
             else ["national_flighting"]
         ),
         "recommended": "geo_lift" if has_geo else "national_flighting",
+        "methods": method_rows,
     }
 
 
@@ -849,18 +872,68 @@ def design_experiment(
     channel: str,
     *,
     design_key: str | None = None,
+    method: str | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Dispatch to the right design family (auto-recommended when omitted)."""
+    """Dispatch to the right design family (auto-recommended when omitted).
+
+    ``method`` names the analysis methodology (``synthetic_control`` / ``tbr`` /
+    ``gbr`` / ``did_mmt``). It selects which estimator the read-out and economics
+    use and, when ``design_key`` is not given, infers the design family. The
+    chosen method's metadata is attached to the returned design dict.
+    """
+    if design_key is None and method is not None:
+        design_key = _METHOD_TO_DESIGN_KEY.get(method)
     if design_key is None:
         design_key = design_options(dataset_path, kpi, channel)["recommended"]
+    # A method with its OWN design generator (e.g. switchback's carryover-aware
+    # block schedule) takes over the whole build; kwargs are filtered to its
+    # signature so family-generic knobs don't crash it.
+    if method is not None:
+        try:
+            from .methods import get_method
+
+            spec = get_method(method)
+        except Exception:
+            spec = None
+        if spec is not None and spec.design_fn is not None:
+            import inspect
+
+            params = inspect.signature(spec.design_fn).parameters
+            kw = {k: v for k, v in kwargs.items() if k in params}
+            design = spec.design_fn(dataset_path, kpi, channel, **kw)
+            design.setdefault("method", method)
+            design.setdefault("method_name", spec.name)
+            design.setdefault("method_references", list(spec.references))
+            return design
     if design_key == "geo_lift":
-        return geo_lift_design(dataset_path, kpi, channel, randomize=True, **kwargs)
-    if design_key == "matched_market_did":
-        return geo_lift_design(dataset_path, kpi, channel, randomize=False, **kwargs)
-    if design_key == "national_flighting":
-        return flighting_design(dataset_path, kpi, channel, **kwargs)
-    raise ValueError(
-        f"Unknown design '{design_key}'. Valid: geo_lift, matched_market_did, "
-        "national_flighting"
-    )
+        design = geo_lift_design(dataset_path, kpi, channel, randomize=True, **kwargs)
+    elif design_key == "matched_market_did":
+        design = geo_lift_design(dataset_path, kpi, channel, randomize=False, **kwargs)
+    elif design_key == "national_flighting":
+        design = flighting_design(dataset_path, kpi, channel, **kwargs)
+    else:
+        raise ValueError(
+            f"Unknown design '{design_key}'. Valid: geo_lift, matched_market_did, "
+            "national_flighting"
+        )
+    if method is not None:
+        try:
+            from .methods import get_method
+
+            spec = get_method(method)
+            design["method"] = method
+            design["method_name"] = spec.name
+            design["method_references"] = list(spec.references)
+            # The analysis plan's estimator sentence was composed by the design
+            # family (default DiD) — swap it for the chosen method so the locked
+            # pre-registration text matches the estimator that will actually run.
+            plan = design.get("analysis_plan")
+            if isinstance(plan, str) and plan.startswith("Estimator:"):
+                _first, _, rest = plan.partition(". ")
+                design["analysis_plan"] = (
+                    f"Estimator: {spec.name} — {spec.description.rstrip('.')}. {rest}"
+                )
+        except Exception:
+            design["method"] = method
+    return design

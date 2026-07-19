@@ -1912,6 +1912,85 @@ def experiment_design(
     return out
 
 
+def clv_value(
+    mmm: Any,
+    results: Any = None,
+    *,
+    segment: str | None = None,
+    cac: dict | None = None,
+) -> dict:
+    """Customer-lifetime-value read-out from a fitted CLV model (Phase 5): the
+    posterior value-per-acquired-customer that acquisition experiments should
+    use as ``value_per_conversion``, per segment when the model has acquisition
+    segments, plus CLV−CAC economics when per-segment ``cac`` is supplied.
+
+    Requires the fitted model to be a CLV-kind garden model (``mean_clv`` in
+    the posterior)."""
+    post = getattr(getattr(mmm, "_trace", None), "posterior", None)
+    if post is None or "mean_clv" not in post:
+        return _err(
+            "The fitted model has no CLV posterior — fit the `bayesian_clv` "
+            "garden model (BG/NBD + Gamma-Gamma) on RFM data first "
+            "(`build_rfm_from_transactions` → `load_garden_model` → fit)."
+        )
+
+    mean_clv = float(post["mean_clv"].mean(("chain", "draw")).values)
+    payload: dict[str, Any] = {"mean_clv": mean_clv, "unit": "value/customer"}
+    lines = [
+        "### Customer lifetime value",
+        "",
+        f"- Mean CLV per acquired customer: **{mean_clv:,.2f}**",
+    ]
+    if "mean_p_alive" in post:
+        pa = float(post["mean_p_alive"].mean(("chain", "draw")).values)
+        payload["mean_p_alive"] = pa
+        lines.append(f"- Mean P(alive): {pa:.0%}")
+
+    segments: dict[str, float] = {}
+    if callable(getattr(mmm, "segment_clv_means", None)):
+        try:
+            segments = mmm.segment_clv_means()
+        except Exception:  # noqa: BLE001 — segments are optional
+            segments = {}
+    if segments:
+        payload["segment_clv"] = {k: float(v) for k, v in segments.items()}
+        lines.append("- Per acquisition segment:")
+        for name, v in sorted(segments.items(), key=lambda kv: -kv[1]):
+            lines.append(f"  - `{name}`: {v:,.2f}")
+    if segment is not None:
+        if segment not in segments:
+            return _err(
+                f"Unknown segment '{segment}' — the model has "
+                f"{sorted(segments) or 'no segments'}."
+            )
+        payload["value_per_conversion"] = float(segments[segment])
+        payload["segment"] = segment
+    else:
+        payload["value_per_conversion"] = mean_clv
+
+    if cac:
+        from mmm_framework.ltv import clv_to_cac as _c2c
+
+        base = segments or {"all": mean_clv}
+        table = _c2c(base, {str(k): float(v) for k, v in cac.items()})
+        payload["clv_to_cac"] = table.reset_index().to_dict(orient="records")
+        lines.append("")
+        lines.append("| Segment | CLV | CAC | CLV−CAC | CLV/CAC |")
+        lines.append("|---|---|---|---|---|")
+        for seg_name, row in table.iterrows():
+            lines.append(
+                f"| {seg_name} | {row['clv']:,.2f} | {row['cac']:,.2f} | "
+                f"{row['clv_minus_cac']:,.2f} | {row['clv_to_cac']:.2f} |"
+            )
+
+    lines.append(
+        "\nUse `value_per_conversion` in `ghost_ads_power_calc` (or as the "
+        "margin for an acquisition experiment's net economics) so the test is "
+        "valued on LIFETIME value, not first purchase."
+    )
+    return _ok("\n".join(lines), {"clv_value": payload})
+
+
 def experiment_priorities(
     mmm: Any,
     results: Any = None,
@@ -2022,6 +2101,14 @@ def _design_from_params(design_params: dict) -> dict:
             "design_params must carry dataset_path, kpi and channel "
             "(the kernel cannot read host state)."
         )
+    method = design_params.get("method")
+    if not design_params.get("design_key") and method:
+        from mmm_framework.planning.design import _METHOD_TO_DESIGN_KEY
+
+        design_params = {
+            **design_params,
+            "design_key": _METHOD_TO_DESIGN_KEY.get(method),
+        }
     key = (
         design_params.get("design_key")
         or design_options(dataset_path, kpi, channel)["recommended"]
@@ -2045,7 +2132,9 @@ def _design_from_params(design_params: dict) -> dict:
         )
         if design_params.get("n_pairs") is not None:
             kw["n_pairs"] = int(design_params["n_pairs"])
-    return design_experiment(dataset_path, kpi, channel, design_key=key, **kw)
+    return design_experiment(
+        dataset_path, kpi, channel, design_key=key, method=method, **kw
+    )
 
 
 def experiment_economics(
@@ -2114,6 +2203,7 @@ def experiment_economics(
 
     # ── Model-anchored expected effect, powered-to-detect verdict, OC (need a fit) ──
     evoi_channel: float | None = None
+    evpi_portfolio: float | None = None
     if mmm is not None:
         from mmm_framework.planning import (
             compute_experiment_priorities,
@@ -2220,6 +2310,8 @@ def experiment_economics(
                         payload["anchor"]["eig"] = float(row.eig)
                         payload["anchor"]["evoi"] = evoi_channel
                         payload["anchor"]["quadrant"] = row.quadrant
+                    if _portfolio and _portfolio.get("evpi") is not None:
+                        evpi_portfolio = float(_portfolio["evpi"])
                 except Exception as e:  # noqa: BLE001 — loopback is a refinement
                     payload["anchor"]["loopback_error"] = str(e)
         except Exception as e:  # noqa: BLE001
@@ -2227,6 +2319,7 @@ def experiment_economics(
             payload["anchor_error"] = str(e)
 
         # ── Opportunity cost / short-term risk ──
+        _oc_res = None
         try:
             oc = compute_opportunity_cost(
                 mmm,
@@ -2241,8 +2334,10 @@ def experiment_economics(
                 random_seed=random_seed,
                 contrib_bau=_bau,
                 contrib_exp=_exp,
+                return_draws=True,
             )
             payload["opportunity_cost"] = oc.to_dict()
+            _oc_res = oc
             lines.append(
                 f"- Short-term risk: forgo ≈ {oc.forgone_kpi_median:,.0f} KPI "
                 f"({(oc.pct_of_window_kpi or 0):.1%} of the treated window), "
@@ -2261,6 +2356,51 @@ def experiment_economics(
                 )
         except Exception as e:  # noqa: BLE001
             payload["opportunity_cost_error"] = str(e)
+
+        # ── Net value: reallocation gain vs test loss (the headline figure) ──
+        try:
+            from mmm_framework.planning import compute_experiment_net_value
+            from mmm_framework.planning.eig import channel_half_life
+
+            nv = compute_experiment_net_value(
+                channel=channel,
+                evoi_kpi_units=evoi_channel,
+                evpi_kpi_units=evpi_portfolio,
+                opportunity_cost_result=_oc_res,
+                response_horizon_weeks=int(getattr(mmm, "n_periods", 0) or 0) or 26,
+                half_life_weeks=channel_half_life(channel),
+                model_anchored=bool(payload.get("anchor", {}).get("evoi") is not None),
+            )
+            payload["net_value"] = nv.to_dict()
+            if nv.net_value is not None:
+                cur = "$" if nv.unit == "$" else ""
+                headline = (
+                    f"- **Net value of this test: {cur}{nv.net_value:+,.0f} "
+                    f"{'' if cur else nv.unit} — expected reallocation gain "
+                    f"{cur}{nv.reallocation_gain:,.0f} vs test loss "
+                    f"{cur}{(nv.test_loss or 0):,.0f}**"
+                )
+                if nv.prob_net_positive is not None:
+                    headline += f" ({nv.prob_net_positive:.0%} chance net-positive)"
+                lines.append(headline + ".")
+                if nv.breakeven_horizon_weeks is not None:
+                    lines.append(
+                        "- Break-even: "
+                        + (
+                            "immediately (the test itself is not expected to "
+                            "lose money)."
+                            if nv.breakeven_horizon_weeks <= 0
+                            else f"the learning repays the test cost in ≈ "
+                            f"{nv.breakeven_horizon_weeks:.0f} weeks."
+                        )
+                    )
+                elif nv.basis != "insufficient":
+                    lines.append(
+                        "- ⚠️ Break-even: the decayed learning value never "
+                        "repays the test loss within 10× the horizon."
+                    )
+        except Exception as e:  # noqa: BLE001
+            payload["net_value_error"] = str(e)
 
     # ── A/A & A/B methodology comparison (runs pre-fit too — needs no model) ──
     if run_simulation:
@@ -3897,6 +4037,7 @@ OPS = {
     "experiment_design": experiment_design,
     "experiment_priorities": experiment_priorities,
     "experiment_economics": experiment_economics,
+    "clv_value": clv_value,
     "experiment_optimizer": experiment_optimizer,
     "identify_structural_parameters": identify_structural_parameters,
     "slide_deck_notes": slide_deck_notes,

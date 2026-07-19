@@ -77,7 +77,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-14",
+          "dateModified": "2026-07-19",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/blog-switchback-experiments.html#breadcrumb"
           },
@@ -269,6 +269,11 @@
                     <li>Switch faster under weak carryover and positive noise autocorrelation; switch slower under strong carryover or negative autocorrelation — the optimal cadence flips with the regime.</li>
                     <li>Use switchbacks for fast levers (bidding, pacing, pricing, matching); use geo experiments for durable brand media, where long adstock makes temporal switching collapse.</li>
                 </ul>
+            </div>
+
+            <div class="note">
+                <h4>🧰 This method ships in the framework</h4>
+                <p>Switchback is a first-class named method in the experiment toolkit (<code>switchback</code> in the <code>planning.methods</code> registry): a block-randomized on/off schedule whose block length defaults to the channel's fitted adstock washout, an analysis burn-in at block boundaries, and power that is honest to both carryover and autocorrelation (the AR(1) design effect on detrended levels, plus A/A calibration on your own history). A user-level companion — the ghost-ads power calculator — covers the individually-randomized case.</p>
             </div>
 
             <h2 id="references">References</h2>

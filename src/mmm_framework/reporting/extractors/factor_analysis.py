@@ -31,6 +31,12 @@ _FAMILY = {
         "Class sizes",
         "class_profile_summary",
     ),
+    "clv": (
+        "Customer Lifetime Value",
+        "Customer value profile",
+        "Value estimands",
+        "customer_value_summary",
+    ),
 }
 _DEFAULT_FAMILY = ("Latent Structure", "Latent summary", "Estimands", None)
 
@@ -69,7 +75,11 @@ class FactorAnalysisExtractor(DataExtractor):
         family-specific method first, then any of the known summary methods, so a
         model that names its method differently still renders."""
         candidates = [method] if method else []
-        candidates += ["factor_loadings_summary", "class_profile_summary"]
+        candidates += [
+            "factor_loadings_summary",
+            "class_profile_summary",
+            "customer_value_summary",
+        ]
         for name in candidates:
             if not name:
                 continue

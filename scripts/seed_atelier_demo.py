@@ -152,6 +152,36 @@ MODELS: list[dict] = [
             "endorsement table."
         ),
     },
+    {
+        "name": "bayesian_clv",
+        "title": "Bayesian Customer Lifetime Value",
+        "source_file": "bayesian_clv.py",
+        "module": "bayesian_clv",
+        "class_name": "BayesianCLV",
+        "kind": "clv",
+        "tags": ["clv", "ltv", "bg-nbd", "gamma-gamma", "non-mmm", "customers"],
+        "session_title": "Customer lifetime value — BG/NBD + Gamma-Gamma (non-MMM)",
+        "recommended_fit": {"method": "map"},
+        "docs": (
+            "# Bayesian Customer Lifetime Value\n\n"
+            'A non-MMM family (`__garden_model_kind__ = "clv"`) for '
+            "transaction-level customer value: **BG/NBD** purchase/dropout "
+            "dynamics + **Gamma-Gamma** monetary value over per-customer RFM "
+            "summaries (frequency, recency, age, mean repeat value).\n\n"
+            "## Model\n"
+            "Per-customer latents (purchase rate, dropout probability, spend "
+            "scale) are integrated out analytically — the graph has a handful "
+            "of population parameters regardless of customer count, so MAP "
+            "fits in seconds and NUTS is comfortably tractable.\n\n"
+            "## Declared estimands\n"
+            "`mean_clv`, `total_clv`, `mean_expected_purchases`, "
+            "`mean_p_alive`, plus one `segment_clv_<channel>` per acquisition "
+            "segment. `customer_value_summary()` gives the value table the "
+            "family-agnostic report renders; `get_clv_value` serves "
+            "`value_per_conversion` to acquisition experiments so they are "
+            "valued on LIFETIME worth, not first purchase."
+        ),
+    },
 ]
 
 
@@ -1242,15 +1272,257 @@ def _lca_turns(h) -> list[tuple[str, str]]:
     ]
 
 
+def _fit_clv(model_def, row, fast: bool):
+    channels = {
+        "Search": {"share": 0.4, "lam_mult": 1.3, "value_mult": 2.0},
+        "Social": {"share": 0.6, "lam_mult": 0.8, "value_mult": 0.6},
+    }
+    spec = {
+        "kpi": "frequency",
+        "media_channels": [
+            {"name": c} for c in ("recency", "T", "monetary", "segment_code")
+        ],
+        "model_params": {
+            "horizon_periods": 52,
+            "segment_column": "segment_code",
+            "segment_labels": ["Search", "Social"],
+        },
+        "estimands": [
+            "mean_clv",
+            "total_clv",
+            "mean_p_alive",
+            "segment_clv_Search",
+            "segment_clv_Social",
+        ],
+        "garden_ref": _garden_ref(row),
+        "inference": {"method": "map"},
+    }
+    run_id = _new_run_id(model_def["name"])
+
+    config_rows = [
+        {"setting": "Data", "value": "per-customer RFM (from a transaction log)"},
+        {"setting": "Purchase dynamics", "value": "BG/NBD (latents integrated out)"},
+        {"setting": "Monetary value", "value": "Gamma-Gamma (repeat values)"},
+        {"setting": "CLV horizon", "value": "52 weeks"},
+        {"setting": "Segments", "value": "acquisition channel (Search / Social)"},
+    ]
+
+    def _segment_fig(seg: dict):
+        return _bar_fig(
+            "CLV per acquired customer, by acquisition channel",
+            list(seg.keys()),
+            [seg[k] for k in seg],
+            ylab="posterior mean CLV",
+        )
+
+    if fast:
+        headline = {
+            "mean_clv": 23.5,
+            "mean_p_alive": 0.67,
+            "segments": {"Search": 37.8, "Social": 14.7},
+            "cac": {"Search": 25.0, "Social": 12.0},
+        }
+        figs = [
+            ("Segment CLV", _segment_fig(headline["segments"])),
+            (
+                "CLV distribution",
+                _bar_fig(
+                    "CLV percentiles across customers",
+                    ["p50", "p80", "p90", "p99"],
+                    [6.6, 21.6, 45.6, 201.5],
+                    ylab="CLV",
+                ),
+            ),
+        ]
+        return {
+            "headline": headline,
+            "dashboard": _dashboard(run_id, model_def, spec, None, "frequency", [], {}),
+            "spec": spec,
+            "dataset_path": None,
+            "figures": figs,
+            "tables": [_config_table(model_def, row, spec, config_rows)],
+        }
+
+    import numpy as np
+    import pandas as pd
+    from bayesian_clv import BayesianCLV, rfm_panel, segment_model_params
+    from mmm_framework.config import ModelConfig
+    from mmm_framework.ltv import (
+        clv_to_cac,
+        new_customer_clv_series,
+        transactions_to_rfm,
+    )
+    from mmm_framework.model import TrendConfig
+    from mmm_framework.model.trend_config import TrendType
+    from mmm_framework.synth.dgp_clv import make_clv_world
+
+    world = make_clv_world(seed=11, n_customers=1500, channels=channels)
+    rfm = transactions_to_rfm(
+        world.transactions,
+        value_col="value",
+        observation_end=world.observation_end,
+        segment_col="acquisition_channel",
+    )
+    panel = rfm_panel(rfm)
+    dataset_path = _write_panel_csv(panel, OUT_DIR / "clv_dataset.csv", "frequency")
+    mp = {"horizon_periods": 52, **segment_model_params(rfm)}
+    mmm = BayesianCLV(
+        panel, ModelConfig(), TrendConfig(type=TrendType.NONE), model_params=mp
+    )
+    mmm.fit(method="map", random_seed=11)
+
+    ests = mmm.evaluate_estimands()
+    summary = mmm.customer_value_summary()
+    segments = mmm.segment_clv_means()
+    cac = {"Search": 25.0, "Social": 12.0}
+    econ = clv_to_cac(segments, cac)
+    _render_report(mmm, model_def["name"])
+
+    clv_pc = pd.Series(
+        mmm._trace.posterior["clv"].mean(("chain", "draw")).values, index=rfm.index
+    )
+    cohort = new_customer_clv_series(world.transactions, clv_pc)
+
+    headline = {
+        "mean_clv": float(ests["mean_clv"].mean) if "mean_clv" in ests else None,
+        "mean_p_alive": (
+            float(ests["mean_p_alive"].mean) if "mean_p_alive" in ests else None
+        ),
+        "segments": segments,
+        "cac": cac,
+    }
+    est_serial = _est_dict(ests)
+    dashboard = _dashboard(
+        run_id,
+        model_def,
+        spec,
+        dataset_path,
+        "frequency",
+        [],
+        est_serial,
+        latent_summary=summary.to_dict(orient="records"),
+    )
+    clv_mean = clv_pc.to_numpy()
+    figs = [
+        ("Segment CLV", _segment_fig(segments)),
+        (
+            "CLV distribution",
+            _bar_fig(
+                "CLV percentiles across customers",
+                ["p50", "p80", "p90", "p99"],
+                [float(np.quantile(clv_mean, q)) for q in (0.5, 0.8, 0.9, 0.99)],
+                ylab="CLV",
+            ),
+        ),
+        (
+            "Weekly cohort CLV",
+            _line_fig(
+                "Lifetime value of each week's acquired cohort",
+                [str(p.date()) for p in cohort.index],
+                list(cohort["cohort_clv"]),
+                xlab="acquisition week",
+                ylab="cohort CLV",
+            ),
+        ),
+    ]
+    from mmm_framework.agents.tables import records_to_table_json
+
+    tables = [
+        _df_table(summary.round(2), "Customer value profile", f"garden:{row['name']}"),
+        records_to_table_json(
+            econ.round(2).reset_index().to_dict(orient="records"),
+            title="CLV vs CAC by acquisition channel",
+            source=f"garden:{row['name']}",
+            group="results",
+        ),
+        _config_table(model_def, row, spec, config_rows),
+    ]
+    est_table = _estimands_table(
+        est_serial, "Declared estimands", f"garden:{row['name']}"
+    )
+    if est_table:
+        tables.insert(0, est_table)
+    return {
+        "headline": headline,
+        "dashboard": dashboard,
+        "spec": spec,
+        "dataset_path": dataset_path,
+        "figures": figs,
+        "tables": tables,
+    }
+
+
+def _clv_turns(h) -> list[tuple[str, str]]:
+    seg = h.get("segments") or {}
+    cac = h.get("cac") or {}
+    seg_lines = (
+        "\n".join(
+            f"- `{name}`: CLV **{_fmt(v, 1)}** per acquired customer"
+            + (f" (CAC {_fmt(cac[name], 0)})" if name in cac else "")
+            for name, v in sorted(seg.items(), key=lambda kv: -(kv[1] or 0))
+        )
+        or "- (segment CLV realized from the fitted posterior)"
+    )
+    return [
+        (
+            "human",
+            "We have a raw transaction log. Search and Social have similar "
+            "cost-per-acquisition — are their customers actually worth the same?",
+        ),
+        (
+            "ai",
+            "That's a lifetime-value question, not a CPA question. Plan:\n"
+            "→ `build_rfm_from_transactions()` — collapse the log to per-customer "
+            "RFM (frequency, recency, age, mean repeat value), keeping each "
+            "customer's acquisition channel\n"
+            "→ `load_garden_model('bayesian_clv')` — BG/NBD + Gamma-Gamma "
+            "lifetime value\n"
+            "→ fit, then compare **CLV per acquired customer by channel**.",
+        ),
+        ("human", "Do it."),
+        (
+            "ai",
+            "→ `build_rfm_from_transactions(segment_col='acquisition_channel')`\n"
+            "→ `load_garden_model('bayesian_clv')`  *(sets `spec['garden_ref']`)*\n"
+            "→ `fit_mmm_model(...)`  *(MAP — the per-customer latents are "
+            "integrated out, so this takes seconds)*\n\n"
+            f"Fitted ✅. Mean CLV **{_fmt(h.get('mean_clv'), 1)}** per customer; "
+            f"**{_fmt((h.get('mean_p_alive') or 0) * 100, 0)}%** of the book is "
+            "still active. By acquisition channel:\n"
+            f"{seg_lines}\n\n"
+            "Similar CPA, very different customers.",
+        ),
+        ("human", "So should we shift budget toward Search?"),
+        (
+            "ai",
+            "→ `get_clv_value(cac={'Search': 25, 'Social': 12})`\n\n"
+            "On **CLV − CAC**, Search wins decisively despite costing ~2× per "
+            "acquisition — its customers repeat more and spend more per order. "
+            "Two caveats before moving budget:\n"
+            "1. Segment CLV is **descriptive** — to claim more Search spend "
+            "*creates* high-value customers, run an acquisition experiment "
+            "(`ghost_ads_power_calc(value_from_clv=True, clv_segment='Search')` "
+            "values the test at lifetime worth).\n"
+            "2. CLV projections assume the purchase/dropout process is "
+            "stationary over the horizon — refit after pricing or product "
+            "changes.\n\n"
+            "The segment-CLV chart, the CLV-vs-CAC table, and the weekly "
+            "cohort-value series are in the **Results** tab.",
+        ),
+    ]
+
+
 _TURN_FNS = {
     "awareness_structural_mmm": _awareness_turns,
     "bayesian_cfa": _cfa_turns,
     "bayesian_lca": _lca_turns,
+    "bayesian_clv": _clv_turns,
 }
 _FIT_FNS = {
     "awareness_structural_mmm": _fit_awareness,
     "bayesian_cfa": _fit_cfa,
     "bayesian_lca": _fit_lca,
+    "bayesian_clv": _fit_clv,
 }
 
 
@@ -1285,9 +1557,9 @@ def seed(fast: bool, real_compat: bool) -> None:
     project = store.create_project(
         PROJECT_NAME,
         description=(
-            "Showcase of the Atelier custom models in the Oracle: three published "
+            "Showcase of the Atelier custom models in the Oracle: four published "
             "Model Garden models (awareness structural MMM, Bayesian CFA, Bayesian "
-            "LCA) loaded, fitted, and interrogated by the agent."
+            "LCA, Bayesian CLV) loaded, fitted, and interrogated by the agent."
         ),
     )
     pid = project["project_id"]
