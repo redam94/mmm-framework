@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -160,7 +164,34 @@
 
             <p>This is not a subtle bias. When the true qualities are close together — exactly the situation when comparing hundreds of minor variations on one model — the ranking is driven almost entirely by noise, and the winner's measured edge is close to pure artifact. Its performance will not replicate, its "significant" coefficients carry no evidential weight, and decisions calibrated to its point estimates are calibrated to luck.</p>
 
+            <div class="interactive-box">
+                <h4>Pick the winner, watch it regress</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Every candidate spec estimates the <em>same</em> true effect (the dotted line), differing only by luck. Ranking picks the largest estimate — the <span style="color:var(--color-warning);font-weight:600;">winner</span> (★) — which is almost always sitting above the truth. Re-run the winning spec on fresh data and its replication value (◇) falls back toward the line. Drag the number of specs you screened and hit <em>Resample</em>: more candidates, higher winner, bigger the drop.</p>
+                <div class="control-row">
+                    <label>Candidate specs screened &nbsp;(m)</label>
+                    <input type="range" id="wcM" min="3" max="300" step="1" value="60">
+                    <span class="value" id="wcMVal">60</span>
+                    <button type="button" class="viz-btn" id="wcResample">↻ Resample the search</button>
+                </div>
+                <div class="control-row">
+                    <label>Estimation noise &nbsp;(σ)</label>
+                    <input type="range" id="wcSig" min="0.2" max="2" step="0.1" value="1">
+                    <span class="value" id="wcSigVal">1.0</span>
+                </div>
+                <div class="chart-container chart-themed" id="wcScatter" style="height:320px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">True effect &tau;</span><span class="val" id="wcTrue">+1.00</span></div>
+                    <div class="stat"><span class="lbl">Winner (in-sample)</span><span class="val" id="wcWin">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Replication draw</span><span class="val" id="wcRep">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Expected shrinkage</span><span class="val" id="wcShrink">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">The winner's <em>selected</em> estimate is biased upward — it is the largest sum of true quality and luck. Its true value is just &tau;, so on replication it regresses by the whole gap between the star and the line. The exaggeration is manufactured by the selection, not the estimator.</p>
+            </div>
+
             <p>Naming the problem "multiple comparisons" makes it sound like a technicality about p-values. It is better understood as a statement about estimation: <strong>selection converts honest estimates into dishonest ones</strong>. Any fix that leaves the estimates untouched and only adjusts the significance threshold is treating the symptom.</p>
+
+            <div class="chart-container chart-themed" id="wcBiasCurve" style="height:340px;"></div>
+            <p class="chart-caption">The expected selection bias — how far above the truth the winner sits, in units of the estimation noise σ — climbs relentlessly with the number of candidates screened. It is the expected maximum of <em>m</em> mean-zero errors: near <strong>2σ</strong> by a hundred specs and still rising past three hundred. Screen more, and the winner you crown is exaggerated by more.</p>
 
             <h2 id="forking-paths">The Garden of Forking Paths</h2>
             <p>How much multiplicity does a model search actually contain? The raw arithmetic is bad enough: with \( m \) independent tests each run at level \( \alpha \),</p>
@@ -301,6 +332,110 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var TAU = 1.0;                 // the shared true effect of every candidate spec
+        var wcSeed = 20260409;         // deterministic search draw
+
+        // --- Figure 1: the winner's curse ---
+        BV.register(function () {
+            var p = BV.palette();
+            var m = parseInt(document.getElementById('wcM').value, 10);
+            var sigma = parseFloat(document.getElementById('wcSig').value);
+            var rng = BV.mulberry32(wcSeed);
+
+            var xs = [], ys = [], winIdx = 0, winVal = -Infinity;
+            for (var j = 0; j < m; j++) {
+                var est = TAU + sigma * BV.randn(rng);
+                xs.push(j + 1); ys.push(est);
+                if (est > winVal) { winVal = est; winIdx = j; }
+            }
+            // Fresh independent replication of the WINNING spec (same true value τ).
+            var repVal = TAU + sigma * BV.randn(rng);
+
+            var traces = [
+                {
+                    type: 'scatter', mode: 'markers', name: 'candidate estimates',
+                    x: xs, y: ys,
+                    marker: { color: BV.band(p.accent, 0.75), size: 8, line: { color: p.surface, width: 0.7 } },
+                    hovertemplate: 'spec %{x}<br>estimate = %{y:.2f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', name: 'winner (selected)',
+                    x: [winIdx + 1], y: [winVal],
+                    marker: { color: p.warning, size: 18, symbol: 'star', line: { color: p.surface, width: 1.2 } },
+                    hovertemplate: 'winner = %{y:.2f} (in-sample)<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', name: "winner's replication",
+                    x: [winIdx + 1], y: [repVal],
+                    marker: { color: p.danger, size: 15, symbol: 'diamond-open', line: { color: p.danger, width: 2.2 } },
+                    hovertemplate: 'replication = %{y:.2f}<extra></extra>'
+                }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'candidate spec #', range: [0, m + 1] },
+                yaxis: { title: 'estimated effect' },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 60, r: 20, t: 34, b: 48 },
+                shapes: [{ type: 'line', x0: 0, x1: m + 1, y0: TAU, y1: TAU, line: { color: p.muted, width: 1.6, dash: 'dot' } }],
+                annotations: [{ x: m + 1, y: TAU, xanchor: 'right', yanchor: 'bottom', text: 'true τ = +1.00', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('wcScatter', traces, layout, BV.config);
+
+            document.getElementById('wcWin').textContent = (winVal >= 0 ? '+' : '') + winVal.toFixed(2);
+            var repEl = document.getElementById('wcRep');
+            repEl.textContent = (repVal >= 0 ? '+' : '') + repVal.toFixed(2);
+            var shrink = winVal - TAU;
+            var sEl = document.getElementById('wcShrink');
+            sEl.textContent = '−' + shrink.toFixed(2);
+            sEl.className = 'val' + (shrink > 0.6 ? ' warn' : '');
+        });
+        document.getElementById('wcResample').addEventListener('click', function () {
+            wcSeed = (wcSeed * 1664525 + 1013904223) >>> 0;
+            BV.redraw();
+        });
+        BV.sliders([
+            { id: 'wcM', value: 'wcMVal', fmt: function (v) { return String(v); } },
+            { id: 'wcSig', value: 'wcSigVal', fmt: function (v) { return v.toFixed(1); } }
+        ], BV.redraw);
+
+        // --- Figure 2 (static): expected max-of-m bias vs m ---
+        // E[max of m standard normals], estimated by deterministic Monte Carlo.
+        function expectedMax(m, reps, rng) {
+            var acc = 0;
+            for (var r = 0; r < reps; r++) {
+                var mx = -Infinity;
+                for (var i = 0; i < m; i++) { var z = BV.randn(rng); if (z > mx) mx = z; }
+                acc += mx;
+            }
+            return acc / reps;
+        }
+        BV.register(function () {
+            var p = BV.palette();
+            var ms = [2, 3, 5, 8, 12, 20, 30, 50, 80, 120, 200, 300];
+            var rng = BV.mulberry32(12345);
+            var bias = ms.map(function (m) { return expectedMax(m, 1000, rng); });
+            var traces = [{
+                type: 'scatter', mode: 'lines+markers', x: ms, y: bias,
+                line: { color: p.primary, width: 3 }, marker: { color: p.primaryDark, size: 7 },
+                hovertemplate: 'm=%{x}<br>bias ≈ %{y:.2f}σ<extra></extra>', showlegend: false
+            }];
+            var layout = BV.layout({
+                xaxis: { title: 'number of candidates screened (m)', type: 'log', dtick: 1 },
+                yaxis: { title: 'expected winner bias  (units of σ)', range: [0, 3] },
+                margin: { l: 64, r: 20, t: 18, b: 50 }, showlegend: false,
+                shapes: [{ type: 'line', x0: 2, x1: 300, y0: 2, y1: 2, line: { color: p.muted, width: 1, dash: 'dot' } }],
+                annotations: [{ x: Math.log10(300), y: 2, xanchor: 'right', yanchor: 'bottom', text: '2σ', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('wcBiasCurve', traces, layout, BV.config);
+        });
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

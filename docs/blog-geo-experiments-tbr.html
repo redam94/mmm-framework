@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -217,6 +221,30 @@
             <p>its posterior obtained by drawing from the two \( t \)-distributions and dividing, with posterior medians as point estimates. One clean special case: with zero pretest spend the counterfactual cost is zero with certainty, so \( \Delta_{\text{cost}}(t) \) is the observed cumulative spend and the iROAS posterior is exactly a scaled, shifted \( t \)-distribution.</p>
             <p>TBR is explicitly a simplified cousin of CausalImpact (Brodersen et al., 2015): the same train-on-pretest, extrapolate, difference logic, but a single static regression on one control aggregate in place of a state-space model with local level, trend, seasonality, and covariate selection. The trade is right exactly when there is one clean control series and nothing to select among.</p>
 
+            <div class="interactive-box">
+                <h4>Reading a lift, and pricing the design that measures it</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The control aggregate (blue) predicts the treatment aggregate in the pretest; that fit is extrapolated into the shaded test window as a counterfactual (dashed, with a 95% predictive band) and the post-period gap is the lift. More treatment geos shrink the residual noise and tighten every interval; a bigger per-period lift is easier to detect. The readout turns the closed-form posterior scale into a <strong>minimum detectable effect</strong> and the power against the effect you dialed in.</p>
+                <div class="control-row">
+                    <label>True per-period lift</label>
+                    <input type="range" id="tbrLift" min="0" max="8" step="0.25" value="3">
+                    <span class="value" id="tbrLiftVal">3.00</span>
+                </div>
+                <div class="control-row">
+                    <label>Number of treatment geos</label>
+                    <input type="range" id="tbrGeo" min="2" max="60" step="1" value="20">
+                    <span class="value" id="tbrGeoVal">20</span>
+                </div>
+                <div class="chart-container chart-themed" id="tbrChart" style="height:330px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Estimated cumulative lift</span><span class="val" id="tbrLiftEst">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">MDE (80% power, per period)</span><span class="val" id="tbrMde">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Power vs this lift</span><span class="val" id="tbrPow">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="tbrVerdict">&mdash;</span></div>
+                </div>
+                <div class="chart-container chart-themed" id="tbrPower" style="height:250px;"></div>
+                <p class="chart-caption" style="margin-bottom:0;">Power against per-period lift for the current design; the dot marks your dialed-in effect and the dotted line the 80%-power MDE. All of it is conditional on stationarity &mdash; the pretest treatment&ndash;control relationship holding through the test.</p>
+            </div>
+
             <details class="deep-dive">
                 <summary><span class="deep-dive-tag">Deep dive</span>The closed-form posterior scale of the cumulative effect</summary>
                 <div class="deep-dive-body">
@@ -305,6 +333,123 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var ZC = 1.959964, Z80 = 0.841621, nPre = 26, Ttest = 8, ALPHA = 20, BETA = 1.0;
+        function xctrl(t) { return 80 + 0.6 * t + 6 * Math.sin(2 * Math.PI * t / 12); }
+        var PREt = [], TESTt = [], ALLt = [];
+        for (var t = 1; t <= nPre; t++) PREt.push(t);
+        for (var t = nPre + 1; t <= nPre + Ttest; t++) TESTt.push(t);
+        ALLt = PREt.concat(TESTt);
+        // (X'X)^-1 pieces on the (deterministic) pretest control
+        var Sx = 0, Sxx = 0, nn = PREt.length;
+        PREt.forEach(function (t) { var x = xctrl(t); Sx += x; Sxx += x * x; });
+        var det = nn * Sxx - Sx * Sx;
+        var vA = Sxx / det, vB = nn / det, vAB = -Sx / det;
+        var xbarT = 0; TESTt.forEach(function (t) { xbarT += xctrl(t); }); xbarT /= Ttest;
+
+        function sigmaOf(N) { return 3.0 * Math.sqrt(20 / N); }
+        function scaleS(N) {
+            var s = sigmaOf(N);
+            return Ttest * s * Math.sqrt(vA + 2 * xbarT * vAB + vB * xbarT * xbarT + 1 / Ttest);
+        }
+        function power(lift, N) {
+            var tc = lift * Ttest, S = scaleS(N);
+            return BV.normCdf(tc / S - ZC) + BV.normCdf(-tc / S - ZC);
+        }
+
+        // --- Figure 1: TBR counterfactual (interactive) ---
+        BV.register(function () {
+            var p = BV.palette();
+            var lift = parseFloat(document.getElementById('tbrLift').value);
+            var N = parseFloat(document.getElementById('tbrGeo').value);
+            var sigma = sigmaOf(N);
+            var rng = BV.mulberry32(33);
+            // realized pretest fit
+            var pre = [];
+            PREt.forEach(function (t) { var x = xctrl(t); pre.push({ x: x, y: ALPHA + BETA * x + sigma * BV.randn(rng) }); });
+            var mx = Sx / nn, my = 0; pre.forEach(function (o) { my += o.y; }); my /= nn;
+            var sxy = 0, sxx2 = 0; pre.forEach(function (o) { sxy += (o.x - mx) * (o.y - my); sxx2 += (o.x - mx) * (o.x - mx); });
+            var bhat = sxy / sxx2, ahat = my - bhat * mx;
+            var ts = [], yc = [], yt = [], up = [], lo = [], estCum = 0;
+            ALLt.forEach(function (t) {
+                var x = xctrl(t), isTest = t > nPre;
+                var y = ALPHA + BETA * x + (isTest ? lift : 0) + sigma * BV.randn(rng);
+                var yhat = ahat + bhat * x;
+                var psd = sigma * Math.sqrt(1 + vA + 2 * x * vAB + vB * x * x);
+                ts.push(t); yc.push(x); yt.push(y); up.push(yhat + ZC * psd); lo.push(yhat - ZC * psd);
+                if (isTest) estCum += y - yhat;
+            });
+            var traces = [
+                { x: ts, y: up, mode: 'lines', line: { width: 0 }, showlegend: false, hoverinfo: 'skip' },
+                { x: ts, y: lo, mode: 'lines', line: { width: 0 }, fill: 'tonexty', fillcolor: BV.band(p.accent, 0.15), showlegend: false, hoverinfo: 'skip' },
+                { x: ts, y: yc, mode: 'lines', name: 'control aggregate', line: { color: p.accentDark, width: 1.6 } },
+                { x: ts, y: ALLt.map(function (t) { return ahat + bhat * xctrl(t); }), mode: 'lines', name: 'counterfactual', line: { color: p.accent, width: 2, dash: 'dash' } },
+                { x: ts, y: yt, mode: 'lines', name: 'treatment aggregate', line: { color: p.primary, width: 2.5 } }
+            ];
+            var layout = BV.layout({
+                margin: { l: 54, r: 16, t: 30, b: 40 },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                xaxis: { title: 'week', dtick: 6 },
+                yaxis: { title: 'response' },
+                shapes: [
+                    { type: 'rect', x0: nPre + 0.5, x1: nPre + Ttest, yref: 'paper', y0: 0, y1: 1, fillcolor: BV.band(p.primary, 0.07), line: { width: 0 }, layer: 'below' },
+                    { type: 'line', x0: nPre + 0.5, x1: nPre + 0.5, yref: 'paper', y0: 0, y1: 1, line: { color: p.muted, width: 1, dash: 'dot' } }
+                ],
+                annotations: [{ x: nPre + 0.5, y: 1, yref: 'paper', yanchor: 'bottom', xanchor: 'left', text: ' test window', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('tbrChart', traces, layout, BV.config);
+
+            var S = scaleS(N), halfw = ZC * S;
+            var mdeCum = (ZC + Z80) * S, mdePer = mdeCum / Ttest;
+            var pw = power(lift, N);
+            document.getElementById('tbrLiftEst').textContent = estCum.toFixed(1) + ' ± ' + halfw.toFixed(1);
+            document.getElementById('tbrMde').textContent = mdePer.toFixed(2);
+            var pel = document.getElementById('tbrPow');
+            pel.textContent = Math.round(pw * 100) + '%';
+            pel.className = 'val' + (pw >= 0.8 ? ' ok' : (pw < 0.5 ? ' warn' : ''));
+            var vd = document.getElementById('tbrVerdict');
+            if (pw >= 0.8) { vd.textContent = 'well powered'; vd.className = 'val ok'; }
+            else if (pw >= 0.5) { vd.textContent = 'marginal'; vd.className = 'val'; }
+            else { vd.textContent = 'underpowered'; vd.className = 'val warn'; }
+        });
+
+        // --- Figure 2: power curve (reads current design) ---
+        BV.register(function () {
+            var p = BV.palette();
+            var lift = parseFloat(document.getElementById('tbrLift').value);
+            var N = parseFloat(document.getElementById('tbrGeo').value);
+            var S = scaleS(N), mdePer = (ZC + Z80) * S / Ttest;
+            var xs = BV.linspace(0, 8, 120);
+            var ys = xs.map(function (l) { return power(l, N) * 100; });
+            var traces = [
+                { x: xs, y: ys, mode: 'lines', name: 'power', line: { color: p.primary, width: 2.5 }, hovertemplate: 'lift %{x:.2f}<br>power %{y:.0f}%<extra></extra>' },
+                { x: [lift], y: [power(lift, N) * 100], mode: 'markers', showlegend: false, marker: { color: p.danger, size: 12, line: { color: p.surface, width: 1.5 } }, hovertemplate: 'your lift %{x:.2f}<br>power %{y:.0f}%<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                margin: { l: 50, r: 16, t: 14, b: 40 },
+                showlegend: false,
+                xaxis: { title: 'true per-period lift', range: [0, 8] },
+                yaxis: { title: 'power, %', range: [0, 100], dtick: 25 },
+                shapes: [
+                    { type: 'line', x0: 0, x1: 8, y0: 80, y1: 80, line: { color: p.border, width: 1, dash: 'dash' } },
+                    { type: 'line', x0: mdePer, x1: mdePer, y0: 0, y1: 80, line: { color: p.muted, width: 1, dash: 'dot' } }
+                ],
+                annotations: [{ x: 0.1, y: 82, xanchor: 'left', yanchor: 'bottom', text: '80% power', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('tbrPower', traces, layout, BV.config);
+        });
+
+        BV.sliders([
+            { id: 'tbrLift', value: 'tbrLiftVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'tbrGeo', value: 'tbrGeoVal', fmt: function (v) { return String(v); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

@@ -28,8 +28,26 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .dagfig { width: 100%; height: 190px; display: block; }
+        .dagfig .node { fill: var(--color-surface); stroke: var(--color-text-muted); stroke-width: 1.6; }
+        .dagfig .node.exposure { stroke: var(--color-primary); stroke-width: 2.2; }
+        .dagfig .node.outcome { stroke: var(--color-accent); stroke-width: 2.2; }
+        .dagfig .node.covar { stroke: var(--color-warning); }
+        .dagfig .node.unmeasured { stroke: var(--color-danger); stroke-dasharray: 3 2.5; }
+        .dagfig .nlab { fill: var(--color-text); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; }
+        .dagfig .edge { stroke: var(--color-text-muted); stroke-width: 1.7; fill: none; }
+        .dagfig .edge.bias { stroke: var(--color-danger); stroke-dasharray: 4 3; }
+        .dagfig .arrowhead { fill: var(--color-text-muted); }
+        .dagfig .arrowhead.bias { fill: var(--color-danger); }
+        .dag-solo { max-width: 430px; margin: 1.6rem auto 0.4rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1rem 1.1rem 0.7rem; }
+    </style>
     <!-- seo:augmented (structured data + social cards) -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="The Table 2 Fallacy in Media Mix Models">
@@ -73,7 +91,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-14",
+          "dateModified": "2026-07-18",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy-mmm.html#breadcrumb"
           },
@@ -173,6 +191,11 @@
 
             <p>That third one is not academic. Media budgets are set by planners who react to expected demand — they flight spend into strong seasons, cut it in weak ones, and chase the very sales they are trying to explain. Spend is therefore <em>endogenous</em>, and an observational regression coefficient absorbs the demand signal the planner was responding to. Google's own MMM group documented the sharpest case: paid search spend is targeted at high-intent queries that would have converted anyway, so a naive MMM over-credits search unless the selection is corrected (Chen, Chan, Perry, Jin, Sun, Wang, and Koehler, 2018). And the field-experiment literature is bleak about how much signal observational advertising data even contains: across twenty-five large experiments, Lewis and Rao (2015) found individual sales so volatile relative to ad cost that ROI confidence intervals routinely spanned more than 100 percentage points — the "unfavorable economics" that make observational point estimates fragile.</p>
 
+            <div class="dag-solo">
+                <svg class="dagfig" id="dagBackdoor" viewBox="0 0 260 180" role="img" aria-label="DAG: latent demand is a common cause of media spend and sales, opening a back-door path"></svg>
+                <p class="chart-caption" style="margin:0.3rem 0 0;">The MMM back-door. Latent <strong>demand</strong> (red, unmeasured) drives both how much a planner <em>spends</em> and how much the business <em>sells</em>, so the spend&ndash;sales association <span style="font-family:'JetBrains Mono',monospace;">X &rarr; Y</span> is contaminated by the path <span style="font-family:'JetBrains Mono',monospace;">X &larr; demand &rarr; Y</span>. The channel coefficient is causal only if that path is blocked &mdash; which observational spend cannot guarantee.</p>
+            </div>
+
             <div class="note">
                 <h4>💡 The honest reading of an MMM table</h4>
                 <p>Channel coefficients are causal <em>conditional on an identification story you are asserting</em>, most credibly when that story is backed by experiments. Control coefficients are adjustment terms with no such story attached. Treat the first as estimates to be calibrated and the second as nuisance parameters — never as a second column of "effects."</p>
@@ -222,6 +245,24 @@
             <p>Return to the row everyone wants to read: price. Its coefficient looks like an elasticity, has a tight Bayesian credible interval, and is nearly always reported as though the model measured price sensitivity. It did not. Price in an MMM is set strategically — discounted during promotional windows, moved with competitor pricing, correlated with the very seasonality and promotion terms sitting beside it in the equation. Its coefficient absorbs whatever the model failed to specify about demand, promotion timing, and competitive response.</p>
 
             <p>The Bayesian machinery makes this worse in a specific, seductive way. A narrow posterior on the price coefficient signals <em>statistical</em> precision — the data pin down that conditional slope tightly — but says nothing about whether the slope is the causal quantity. You can have a razor-sharp credible interval around a badly confounded number. It is <em>precise nonsense</em>: confident about the wrong thing.</p>
+
+            <div class="interactive-box">
+                <h4>One table, four coefficients, one identified</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Every row below comes out of the <em>same</em> MMM with the <em>same</em> tidy credible interval. Only <strong>TV</strong> is anchored by a geo experiment, so its coefficient stays put. <strong>Paid search</strong> is demand-chasing &mdash; its slope inflates as latent demand drives both the queries and the sales. <strong>Price</strong> and <strong>seasonality</strong> are adjustment terms with no causal warrant; they drift too. Drag the latent-demand confounding and watch three of the four rows wander away from their true structural values (open diamonds) while their intervals stay just as narrow.</p>
+                <div class="control-row">
+                    <label>Latent-demand confounding &nbsp;(&delta;)</label>
+                    <input type="range" id="t2mDelta" min="0" max="1" step="0.05" value="0.55">
+                    <span class="value" id="t2mDeltaVal">0.55</span>
+                </div>
+                <div class="chart-container chart-themed" id="t2mForest" style="height:300px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">True search &beta;</span><span class="val" id="t2mTrue">+0.90</span></div>
+                    <div class="stat"><span class="lbl">Reported search &beta;&#770;</span><span class="val" id="t2mEst">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Over-credited by</span><span class="val" id="t2mFactor">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="t2mVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Green = the one coefficient with an identification argument (experiment-anchored TV). Amber/red rows carry the same confident interval around a confounded number &mdash; precise nonsense. The demand-chaser&rsquo;s ROI is over-credited exactly when demand is strongest, which is exactly when a planner leans on the model.</p>
+            </div>
 
             <div class="warning">
                 <h4>⚠️ A tight interval on a confounder is not evidence</h4>
@@ -282,6 +323,111 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // --- Reusable little DAG renderer (CSS-themed, so no JS redraw needed) ---
+        function drawDag(id, nodes, edges) {
+            var svg = document.getElementById(id);
+            if (!svg) return;
+            var nm = {};
+            nodes.forEach(function (n) { nm[n.id] = n; });
+            var aId = id + '-a', abId = id + '-ab';
+            var s = '<defs>'
+                + '<marker id="' + aId + '" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>'
+                + '<marker id="' + abId + '" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead bias" d="M0,0 L10,5 L0,10 z"/></marker>'
+                + '</defs>';
+            edges.forEach(function (e) {
+                var A = nm[e.from], B = nm[e.to];
+                var dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+                var x1 = A.x + ux * (A.r + 1), y1 = A.y + uy * (A.r + 1);
+                var x2 = B.x - ux * (B.r + 7), y2 = B.y - uy * (B.r + 7);
+                var bias = e.cls === 'bias';
+                s += '<line class="edge' + (bias ? ' bias' : '') + '" x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1)
+                    + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" marker-end="url(#' + (bias ? abId : aId) + ')"/>';
+            });
+            nodes.forEach(function (n) {
+                s += '<circle class="node ' + (n.cls || '') + '" cx="' + n.x + '" cy="' + n.y + '" r="' + n.r + '"/>';
+                s += '<text class="nlab" x="' + n.x + '" y="' + (n.y + 0.5) + '" text-anchor="middle" dominant-baseline="central">' + n.label + '</text>';
+            });
+            svg.innerHTML = s;
+        }
+
+        function initDags() {
+            drawDag('dagBackdoor',
+                [{ id: 'D', x: 130, y: 34, r: 18, cls: 'unmeasured', label: 'demand' },
+                 { id: 'X', x: 48, y: 140, r: 20, cls: 'exposure', label: 'spend' },
+                 { id: 'Y', x: 212, y: 140, r: 20, cls: 'outcome', label: 'sales' }],
+                [{ from: 'D', to: 'X', cls: 'bias' }, { from: 'D', to: 'Y', cls: 'bias' }, { from: 'X', to: 'Y' }]);
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDags);
+        } else { initDags(); }
+
+        // --- Interactive: the MMM coefficient table, only one row identified ---
+        // Rows bottom→top; each has a true structural value + a confounding drift.
+        var ROWS = [
+            { key: 'Seasonality (control)',      truth: 1.00, drift: -0.65, ci: 0.11, role: 'control' },
+            { key: 'Price (control)',            truth: -1.20, drift: 1.35, ci: 0.10, role: 'control' },
+            { key: 'Paid search (channel)',      truth: 0.90, drift: 1.80, ci: 0.09, role: 'chaser' },
+            { key: 'TV (channel, experiment)',   truth: 1.80, drift: 0.00, ci: 0.13, role: 'identified' }
+        ];
+
+        BV.register(function () {
+            var p = BV.palette();
+            var d = parseFloat(document.getElementById('t2mDelta').value);
+            var cats = ROWS.map(function (r) { return r.key; });
+            var reported = ROWS.map(function (r) { return r.truth + d * r.drift; });
+            var colorFor = function (r, rep) {
+                if (r.role === 'identified') return p.primary;
+                if (r.role === 'chaser') return Math.abs(rep - r.truth) > 0.4 ? p.danger : p.warning;
+                return p.warning;
+            };
+            var repColors = ROWS.map(function (r, i) { return colorFor(r, reported[i]); });
+
+            var traces = [
+                {
+                    type: 'scatter', mode: 'markers', name: 'true structural value',
+                    x: ROWS.map(function (r) { return r.truth; }), y: cats,
+                    marker: { symbol: 'diamond-open', color: p.muted, size: 13, line: { width: 1.6, color: p.muted } },
+                    hovertemplate: 'true = %{x:.2f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', name: 'reported estimate',
+                    x: reported, y: cats,
+                    error_x: { type: 'data', array: ROWS.map(function (r) { return r.ci; }), color: p.muted, thickness: 2, width: 8 },
+                    marker: { color: repColors, size: 15, line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: '%{y}<br>reported = %{x:.2f}<extra></extra>'
+                }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'coefficient estimate', range: [-1.9, 3.1], zeroline: true, zerolinewidth: 2, zerolinecolor: p.text },
+                yaxis: { categoryorder: 'array', categoryarray: cats },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 186, r: 20, t: 30, b: 46 }
+            });
+            Plotly.react('t2mForest', traces, layout, BV.config);
+
+            var search = ROWS[2], rep = search.truth + d * search.drift;
+            var factor = rep / search.truth;
+            var est = document.getElementById('t2mEst');
+            est.textContent = (rep >= 0 ? '+' : '') + rep.toFixed(2);
+            est.className = 'val' + (Math.abs(rep - search.truth) > 0.4 ? ' warn' : '');
+            document.getElementById('t2mFactor').textContent = factor.toFixed(2) + '×';
+            var v = document.getElementById('t2mVerdict');
+            if (factor > 1.8) { v.textContent = 'badly over-credited'; v.className = 'val warn'; }
+            else if (factor > 1.2) { v.textContent = 'inflated'; v.className = 'val'; }
+            else { v.textContent = '≈ ok'; v.className = 'val ok'; }
+        });
+
+        BV.sliders([
+            { id: 't2mDelta', value: 't2mDeltaVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

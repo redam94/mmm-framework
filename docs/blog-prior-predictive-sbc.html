@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -182,6 +186,24 @@ for s in range(n_sims):
             <h2 id="innocuous-absurd">Innocuous Priors, Absurd Data</h2>
             <p>The payoff is that a prior which looks harmless on the parameter scale can be deranged on the outcome scale — and you cannot see this by looking at the priors individually. The canonical demonstration is Gabry and colleagues' (2019) air-pollution model, where the outcome is on a log scale. A vague prior, coefficients \( \sim \mathcal{N}(0, 100) \), generates prior predictive datasets they describe as "completely impossible for this application." Tightening to a <em>weakly informative</em> prior helps but is not automatically safe: even priors that look reasonable per parameter, when simulated jointly, still produced pollution concentrations above 22,000 &mu;g/m&sup3; — a physically absurd number. The workflow paper (Gelman et al., 2020) paraphrases the failure memorably as fake datasets "where the pollution is denser than a black hole."</p>
 
+            <div class="interactive-box">
+                <h4>An innocuous coefficient prior, simulated forward</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A one-channel model on an index where baseline sales sit at 100. The channel enters as \(y_t = 100 + \beta\,z_t\), with a standardized spend series \(z_t\) and a coefficient prior \(\beta \sim \mathcal{N}(0,\,\sigma)\). Widen the prior and watch the simulated sales fan (median, 50% and 90% bands over 240 prior draws) balloon past every sane bound — negative sales, a single channel swinging revenue by multiples of the base. No one prior looks guilty on the \(\beta\) scale; the crime shows up only on the outcome scale.</p>
+                <div class="control-row">
+                    <label>Coefficient prior width &nbsp;(σ)</label>
+                    <input type="range" id="ppSigma" min="2" max="100" step="2" value="8">
+                    <span class="value" id="ppSigmaVal">8</span>
+                </div>
+                <div class="chart-container chart-themed" id="ppFan" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Implied sales (90% band)</span><span class="val" id="ppRange">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Peak channel share of base</span><span class="val" id="ppShare">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Draws implying impossible data</span><span class="val" id="ppBad">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="ppVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">&ldquo;Impossible&rdquo; here means a draw whose synthetic series goes negative somewhere, or whose channel contribution exceeds the entire baseline &mdash; more than 100% of revenue from one channel. A weakly-informative σ keeps the fan physically plausible; a vague one does not.</p>
+            </div>
+
             <p>The lesson is structural, not anecdotal. The prior predictive distribution reflects the <em>interplay</em> between the prior and the likelihood, so you cannot understand it by fixing all but one parameter and varying that one — you have to assess the prior as a joint, multivariate object. A related trap that only appears in aggregate: many independently "weak" priors can be jointly <em>strong</em>. Gelman and colleagues (2020) note that independent priors on a few dozen regression weights can imply a prior that strongly favors high \( R^2 \) — the model is quietly convinced, before seeing anything, that its predictors explain almost all the variance. No single prior looks guilty; the crime is in the sum.</p>
 
             <div class="note">
@@ -231,6 +253,28 @@ histogram(ranks)   # flat = calibrated; shape = a specific, diagnosable failure<
                     <tr><td>Spikes at ranks 0 and \( L \)</td><td>Autocorrelation — the MCMC draws are not thinned to near-independence</td></tr>
                 </tbody>
             </table>
+
+            <div class="interactive-box">
+                <h4>Reading the rank histogram, by miscalibration type</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">1,200 simulated fits of a one-parameter model, each ranking the true value among 59 posterior draws. When the posterior is exactly right the ranks are <strong>uniform</strong> &mdash; every bar inside the shaded binomial band. Distort the posterior and each pathology draws its signature shape: too <em>narrow</em> a posterior pushes the truth into the tails (∪); too <em>wide</em> traps it in the middle (∩); a shifted posterior tilts the histogram into a ramp.</p>
+                <div class="control-row">
+                    <label>Posterior width &nbsp;(× exact)</label>
+                    <input type="range" id="sbcRatio" min="0.4" max="2" step="0.05" value="1">
+                    <span class="value" id="sbcRatioVal">1.00</span>
+                </div>
+                <div class="control-row">
+                    <label>Posterior bias &nbsp;(shift)</label>
+                    <input type="range" id="sbcBias" min="-1.2" max="1.2" step="0.1" value="0">
+                    <span class="value" id="sbcBiasVal">0.0</span>
+                </div>
+                <div class="chart-container chart-themed" id="sbcHist" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Histogram shape</span><span class="val" id="sbcShape">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Bins outside the band</span><span class="val" id="sbcOut">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Diagnosis</span><span class="val" id="sbcDiag">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">A flat histogram is the only pass. Set the width to 1.0 and the bias to 0 for the calibrated case; every other setting is a computation whose posterior is systematically wrong in a way SBC names precisely.</p>
+            </div>
 
             <p>Two of Talts and colleagues' worked examples are worth internalizing because they recur constantly in practice. First, a deliberately misspecified prior — generate with a wide prior, fit with a narrow one — produces a textbook \( \cup \)-shape, the posterior too confident because the fitting prior refuses to let it spread. Second, and more consequentially, the classic "eight schools" hierarchical model fit in its <em>centered</em> parameterization produces a biased, asymmetric histogram: the sampler cannot navigate the funnel-shaped geometry near the group-variance parameter, so it systematically mis-estimates it. Switch to the <em>non-centered</em> parameterization and the histogram flattens. Same model, same data-generating process, different code — and only SBC catches that the first version was silently wrong. This is the single most important thing SBC buys you: hierarchical funnels are exactly the geometry a geo-hierarchical MMM lives in.</p>
 
@@ -299,6 +343,178 @@ histogram(ranks)   # flat = calibrated; shape = a specific, diagnosable failure<
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // Fixed standardized weekly spend series (mean 0, sd 1) — same for every draw.
+        var WEEKS = 24, DRAWS = 240, BASE = 100;
+        var rawSpend = [];
+        for (var t = 0; t < WEEKS; t++) {
+            // a seasonal ramp with two flights, deterministic
+            rawSpend.push(1 + 0.55 * Math.sin(2 * Math.PI * t / 12) + (t === 6 || t === 7 ? 1.1 : 0) + (t === 17 ? 0.9 : 0));
+        }
+        var sMean = BV.mean(rawSpend);
+        var sSd = Math.sqrt(BV.mean(rawSpend.map(function (v) { return (v - sMean) * (v - sMean); })));
+        var Z = rawSpend.map(function (v) { return (v - sMean) / sSd; });   // standardized spend
+        // Pre-drawn standard-normal betas, scaled by sigma at draw time (reproducible).
+        var betaZ = [];
+        (function () { var rng = BV.mulberry32(20240714); for (var d = 0; d < DRAWS; d++) betaZ.push(BV.randn(rng)); })();
+
+        // --- Figure A: prior predictive fan ---
+        BV.register(function () {
+            var p = BV.palette();
+            var sigma = parseFloat(document.getElementById('ppSigma').value);
+            var weeks = []; for (var t = 0; t < WEEKS; t++) weeks.push(t + 1);
+
+            // Per-week quantiles across draws; also global stats.
+            var q05 = [], q25 = [], q50 = [], q75 = [], q95 = [];
+            var allY = [], shares = [];
+            var bad = 0;
+            var perDraw = [];
+            for (var d = 0; d < DRAWS; d++) {
+                var beta = betaZ[d] * sigma;
+                var series = [], minY = Infinity, maxContrib = 0;
+                for (var t = 0; t < WEEKS; t++) {
+                    var contrib = beta * Z[t];
+                    var y = BASE + contrib;
+                    series.push(y); allY.push(y);
+                    if (y < minY) minY = y;
+                    if (Math.abs(contrib) > maxContrib) maxContrib = Math.abs(contrib);
+                }
+                perDraw.push(series);
+                shares.push(maxContrib / BASE);
+                if (minY < 0 || maxContrib > BASE) bad++;
+            }
+            for (var t2 = 0; t2 < WEEKS; t2++) {
+                var col = perDraw.map(function (s) { return s[t2]; }).sort(function (a, b) { return a - b; });
+                q05.push(BV.quantile(col, 0.05)); q25.push(BV.quantile(col, 0.25));
+                q50.push(BV.quantile(col, 0.50)); q75.push(BV.quantile(col, 0.75));
+                q95.push(BV.quantile(col, 0.95));
+            }
+            allY.sort(function (a, b) { return a - b; });
+            shares.sort(function (a, b) { return a - b; });
+            var gLo = BV.quantile(allY, 0.05), gHi = BV.quantile(allY, 0.95);
+            var pad = 0.08 * (gHi - gLo || 1);
+            var yLo = Math.min(gLo - pad, -5), yHi = gHi + pad;
+
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: weeks, y: q95, line: { width: 0 }, showlegend: false, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: weeks, y: q05, fill: 'tonexty', fillcolor: BV.band(p.accent, 0.16), line: { width: 0 }, name: '90% band', hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: weeks, y: q75, line: { width: 0 }, showlegend: false, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: weeks, y: q25, fill: 'tonexty', fillcolor: BV.band(p.accent, 0.28), line: { width: 0 }, name: '50% band', hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: weeks, y: q50, name: 'median sales', line: { color: p.accentDark, width: 2.5 }, hovertemplate: 'wk %{x}<br>median %{y:.0f}<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'week', dtick: 4, range: [0.5, WEEKS + 0.5] },
+                yaxis: { title: 'simulated sales (index, base = 100)', range: [yLo, yHi] },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 66, r: 20, t: 30, b: 48 },
+                shapes: [
+                    { type: 'rect', x0: 0.5, x1: WEEKS + 0.5, y0: yLo, y1: 0, fillcolor: BV.band(p.danger, 0.12), line: { width: 0 }, layer: 'below' },
+                    { type: 'line', x0: 0.5, x1: WEEKS + 0.5, y0: 0, y1: 0, line: { color: p.danger, width: 1, dash: 'dot' } },
+                    { type: 'line', x0: 0.5, x1: WEEKS + 0.5, y0: BASE, y1: BASE, line: { color: p.muted, width: 1, dash: 'dot' } }
+                ],
+                annotations: [{ x: 1, y: 0, xanchor: 'left', yanchor: yLo < -3 ? 'bottom' : 'top', text: ' sales < 0 is impossible', showarrow: false, font: { size: 11, color: p.danger } }]
+            });
+            Plotly.react('ppFan', traces, layout, BV.config);
+
+            document.getElementById('ppRange').textContent = Math.round(gLo) + ' – ' + Math.round(gHi);
+            document.getElementById('ppShare').textContent = Math.round(BV.quantile(shares, 0.95) * 100) + '%';
+            var badPct = bad / DRAWS;
+            var be = document.getElementById('ppBad');
+            be.textContent = Math.round(badPct * 100) + '%';
+            be.className = 'val' + (badPct > 0.15 ? ' warn' : (badPct < 0.02 ? ' ok' : ''));
+            var ve = document.getElementById('ppVerdict');
+            if (badPct > 0.15) { ve.textContent = 'reject the prior'; ve.className = 'val warn'; }
+            else if (badPct < 0.02) { ve.textContent = 'plausible'; ve.className = 'val ok'; }
+            else { ve.textContent = 'borderline'; ve.className = 'val'; }
+        });
+        BV.sliders([{ id: 'ppSigma', value: 'ppSigmaVal', fmt: function (v) { return String(Math.round(v)); } }], BV.redraw);
+
+        // --- Figure B: SBC rank histogram by miscalibration type ---
+        var SIMS = 1200, L = 59, NBINS = 20;   // (L+1)=60 divisible by 20 → 3 ranks/bin
+        // Pre-draw the ground truths and their exact-posterior summaries (reproducible).
+        var TAU = 1.0, SNOISE = 0.7;
+        var likPrec = 1 / (SNOISE * SNOISE), priPrec = 1 / (TAU * TAU);
+        var postPrec = priPrec + likPrec, sdCorrect = 1 / Math.sqrt(postPrec);
+        var sims = [];
+        (function () {
+            var rng = BV.mulberry32(8675309);
+            for (var i = 0; i < SIMS; i++) {
+                var thetaTrue = BV.randn(rng) * TAU;
+                var y = thetaTrue + BV.randn(rng) * SNOISE;
+                var muCorrect = y * likPrec / postPrec;
+                // L standard-normal jitters for the posterior draws of this sim
+                var zs = []; for (var l = 0; l < L; l++) zs.push(BV.randn(rng));
+                sims.push({ theta: thetaTrue, mu: muCorrect, zs: zs });
+            }
+        })();
+
+        BV.register(function () {
+            var p = BV.palette();
+            var ratio = parseFloat(document.getElementById('sbcRatio').value);
+            var bias = parseFloat(document.getElementById('sbcBias').value);
+            var counts = new Array(NBINS).fill(0);
+            var binSize = (L + 1) / NBINS;   // 3
+            for (var i = 0; i < SIMS; i++) {
+                var s = sims[i];
+                var mu = s.mu + bias * sdCorrect, sd = ratio * sdCorrect;
+                var rank = 0;
+                for (var l = 0; l < L; l++) { if (mu + sd * s.zs[l] < s.theta) rank++; }
+                counts[Math.floor(rank / binSize)]++;
+            }
+            var centers = [], mid = [];
+            for (var b = 0; b < NBINS; b++) { centers.push(b * binSize + (binSize - 1) / 2); }
+
+            var expected = SIMS / NBINS;
+            var sdBin = Math.sqrt(SIMS * (1 / NBINS) * (1 - 1 / NBINS));
+            var lo = expected - 2 * sdBin, hi = expected + 2 * sdBin;
+            var outside = 0;
+            var barCols = counts.map(function (c) {
+                if (c < lo || c > hi) { outside++; return p.danger; }
+                return p.primary;
+            });
+
+            var traces = [{
+                type: 'bar', x: centers, y: counts, marker: { color: barCols },
+                width: binSize * 0.92, hovertemplate: 'rank ≈ %{x:.0f}<br>%{y} sims<extra></extra>', showlegend: false
+            }];
+            var layout = BV.layout({
+                xaxis: { title: 'rank of true value among 59 posterior draws', range: [-1, L + 1] },
+                yaxis: { title: 'simulated fits per bin', range: [0, Math.max(hi * 1.35, Math.max.apply(null, counts) * 1.1)] },
+                margin: { l: 62, r: 20, t: 18, b: 48 },
+                shapes: [
+                    { type: 'rect', x0: -1, x1: L + 1, y0: lo, y1: hi, fillcolor: BV.band(p.success, 0.16), line: { width: 0 }, layer: 'below' },
+                    { type: 'line', x0: -1, x1: L + 1, y0: expected, y1: expected, line: { color: p.muted, width: 1.5, dash: 'dash' } }
+                ],
+                annotations: [{ x: L, y: hi, xanchor: 'right', yanchor: 'bottom', text: '95% uniform band', showarrow: false, font: { size: 11, color: p.success } }]
+            });
+            Plotly.react('sbcHist', traces, layout, BV.config);
+
+            var shape, cls;
+            if (Math.abs(bias) >= 0.4 && ratio >= 0.82 && ratio <= 1.25) { shape = 'ramp — biased'; cls = 'val warn'; }
+            else if (ratio < 0.82) { shape = '∪ under-dispersed'; cls = 'val warn'; }
+            else if (ratio > 1.25) { shape = '∩ over-dispersed'; cls = 'val warn'; }
+            else if (Math.abs(bias) >= 0.4) { shape = 'ramp — biased'; cls = 'val warn'; }
+            else { shape = 'flat — uniform'; cls = 'val ok'; }
+            var se = document.getElementById('sbcShape'); se.textContent = shape; se.className = cls;
+            var oe = document.getElementById('sbcOut'); oe.textContent = outside + ' of ' + NBINS;
+            oe.className = 'val' + (outside > 3 ? ' warn' : (outside === 0 ? ' ok' : ''));
+            var de = document.getElementById('sbcDiag');
+            if (shape.indexOf('∪') === 0) { de.textContent = 'posterior too confident'; de.className = 'val warn'; }
+            else if (shape.indexOf('∩') === 0) { de.textContent = 'posterior too wide'; de.className = 'val warn'; }
+            else if (shape.indexOf('ramp') === 0) { de.textContent = 'systematic bias'; de.className = 'val warn'; }
+            else { de.textContent = 'calibrated'; de.className = 'val ok'; }
+        });
+        BV.sliders([
+            { id: 'sbcRatio', value: 'sbcRatioVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'sbcBias', value: 'sbcBiasVal', fmt: function (v) { return v.toFixed(1); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

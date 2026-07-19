@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -182,6 +186,25 @@ for outcome in [y_raw, log(y)]:            # which outcome scale?
                 report(outcome, controls, window)  # stop and publish
 # With enough forks, a p &lt; 0.05 is near-certain even if the effect is zero.</code></pre>
 
+            <div class="interactive-box">
+                <h4>The garden, simulated</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Every point is one honest analysis of data where <strong>the true effect is exactly zero</strong>. Under the null, p-values are uniform on [0,&nbsp;1], so each dot lands anywhere with equal chance. Keep the smallest one and call it a finding: with enough forks, a dot slips into the red 5% band almost every time. Drag the number of paths and hit <em>Resample</em> &mdash; nothing here is cheating, and significance still appears.</p>
+                <div class="control-row">
+                    <label>Analyses you&rsquo;d accept &nbsp;(forks)</label>
+                    <input type="range" id="phK" min="1" max="30" step="1" value="12">
+                    <span class="value" id="phKVal">12</span>
+                    <button type="button" class="viz-btn" id="phResample">↻ Resample the garden</button>
+                </div>
+                <div class="chart-container chart-themed" id="phGarden" style="height:300px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">P(≥1 &ldquo;significant&rdquo;)</span><span class="val" id="phProb">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">False positives this draw</span><span class="val" id="phCount">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Smallest p</span><span class="val" id="phMin">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="phVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">The curve <span style="font-family:'JetBrains Mono',monospace;">1&nbsp;&minus;&nbsp;0.95<sup>k</sup></span> reaches the Simmons&ndash;Nelson&ndash;Simonsohn figure of ~61% at around 18 forks. Their real demonstration hit 61% with just four everyday degrees of freedom &mdash; two outcomes, an optional covariate, optional extra data, a subgroup split.</p>
+            </div>
+
             <h2 id="how-much">How Much Evidence Is p = 0.05?</h2>
             <p>Now the deeper problem. Suppose there is no p-hacking at all — one pre-registered test, honestly reported, coming back at exactly \( p = 0.05 \). How much should that move your belief? Much less than the ritual implies, and there is a clean way to see it. Because \( p = P(\text{data} \mid H_0) \) is not \( P(H_0 \mid \text{data}) \), converting one to the other requires Bayes' theorem — and that conversion has a startling lower bound.</p>
 
@@ -203,6 +226,24 @@ for outcome in [y_raw, log(y)]:            # which outcome scale?
                 </tbody>
             </table>
 
+            <div class="interactive-box">
+                <h4>The napkin calculator</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The Sellke&ndash;Bayarri&ndash;Berger bound turns any p-value into the <em>most</em> evidence it can carry. Drag your p-value and read off the best-case Bayes factor and the minimum posterior probability the null still holds &mdash; starting from even odds and tuning the prior maximally in the effect&rsquo;s favor. The shaded band is the region where the null keeps a hefty chance of being true no matter what your p-value did.</p>
+                <div class="control-row">
+                    <label>Observed p-value</label>
+                    <input type="range" id="sbP" min="0.001" max="0.1" step="0.001" value="0.05">
+                    <span class="value" id="sbPVal">0.050</span>
+                </div>
+                <div class="chart-container chart-themed" id="sbChart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Max Bayes factor (H₁)</span><span class="val" id="sbBF">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Best odds against H₀</span><span class="val" id="sbOdds">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Min posterior P(H₀)</span><span class="val" id="sbPost">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Reading</span><span class="val" id="sbRead">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At <span style="font-family:'JetBrains Mono',monospace;">p&nbsp;=&nbsp;0.05</span> the null still holds a ~29% posterior chance and the evidence is barely 2.5&nbsp;:&nbsp;1 &mdash; the case for the 0.005 threshold. This is a <em>lower</em> bound on P(H₀): realistic priors leave the null even more likely.</p>
+            </div>
+
             <p>Read the top row again. A result that just cleared the most celebrated threshold in science offers, <em>at best</em>, odds of about two and a half to one against the null — and leaves the null with roughly a 29% chance of being true even before you account for any of the flexibility in the previous section. Two-and-a-half-to-one is the kind of edge you would not bet a mortgage on. It is emphatically not "the effect is real." The bound is generous, too: it is the <em>most</em> evidence \( p = 0.05 \) can supply, achieved only by tuning the prior in the alternative's favor; realistic priors give less.</p>
 
             <details class="deep-dive">
@@ -220,6 +261,33 @@ for outcome in [y_raw, log(y)]:            # which outcome scale?
                 <p>Let \( \pi \) be the prior probability that a hypothesis is true, \( \alpha \) the significance threshold, and \( 1-\beta \) the power. Among all the times you declare significance, the fraction that are false alarms is</p>
                 $$ \mathrm{FPR} \;=\; \frac{\alpha\,(1-\pi)}{\alpha\,(1-\pi) + (1-\beta)\,\pi}. $$
                 <p>The value of a "significant" result is not fixed at 5% — it slides with the base rate \( \pi \) and the power.</p>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Where the false alarms come from</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Run 1,000 tests. The base rate sets how many hypotheses are actually true; power sets how many true ones you catch; the threshold sets how many nulls sneak through. The bars show the split among the results you&rsquo;d <strong>declare significant</strong> &mdash; <span style="color:var(--color-success);font-weight:600;">real effects</span> versus <span style="color:var(--color-danger);font-weight:600;">false alarms</span>. In exploratory work, where true effects are rare and power is mediocre, the red bar wins.</p>
+                <div class="control-row">
+                    <label>Base rate &nbsp;(π true)</label>
+                    <input type="range" id="frPi" min="0.02" max="0.9" step="0.02" value="0.1">
+                    <span class="value" id="frPiVal">0.10</span>
+                </div>
+                <div class="control-row">
+                    <label>Power &nbsp;(1&minus;β)</label>
+                    <input type="range" id="frPow" min="0.1" max="0.99" step="0.01" value="0.5">
+                    <span class="value" id="frPowVal">0.50</span>
+                </div>
+                <div class="control-row">
+                    <label>Threshold &nbsp;(α)</label>
+                    <input type="range" id="frAlpha" min="0.005" max="0.1" step="0.005" value="0.05">
+                    <span class="value" id="frAlphaVal">0.050</span>
+                </div>
+                <div class="chart-container chart-themed" id="frChart" style="height:300px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Real effects found</span><span class="val ok" id="frTP">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">False alarms</span><span class="val warn" id="frFP">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">False-discovery rate</span><span class="val" id="frFPR">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">This is Ioannidis&rsquo; arithmetic. At π&nbsp;=&nbsp;0.1 and 50% power, nearly <strong>half</strong> of your &ldquo;p&nbsp;&lt;&nbsp;0.05&rdquo; findings are already false &mdash; and dropping the power or the base rate pushes it toward three in four.</p>
             </div>
 
             <p>Ioannidis (2005) made this the centerpiece of the most-downloaded paper in the history of <em>PLoS Medicine</em>, "Why Most Published Research Findings Are False." His positive-predictive-value framing adds a bias term, but the skeleton is the formula above: when true effects are uncommon and power is mediocre — the normal condition in exploratory work — most claimed discoveries are false, and no amount of hitting \( p \lt 0.05 \) rescues them. Colquhoun (2014) put concrete numbers on the everyday case. A result observed sitting right at \( p \approx 0.05 \) carries a false-positive risk of at least about 26% even under a generous even-odds prior — reassuringly close to the 29% from the Sellke&ndash;Bayarri&ndash;Berger calibration by a completely different route. And if only, say, one in ten of your tested hypotheses is actually true, the false-discovery rate among your \( p \lt 0.05 \) "findings" climbs to roughly three in four.</p>
@@ -278,6 +346,129 @@ for outcome in [y_raw, log(y)]:            # which outcome scale?
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // --- Figure 1: garden of forking paths ---
+        var phSeed = 7;
+        BV.register(function () {
+            var p = BV.palette();
+            var k = parseInt(document.getElementById('phK').value, 10);
+            var rng = BV.mulberry32(phSeed);
+            var xs = [], ys = [], colors = [], below = 0, minP = 1;
+            for (var i = 1; i <= k; i++) {
+                var pv = rng();
+                xs.push(i); ys.push(pv);
+                var sig = pv < 0.05;
+                if (sig) below++;
+                if (pv < minP) minP = pv;
+                colors.push(sig ? p.danger : BV.band(p.accent, 0.85));
+            }
+            var traces = [{
+                type: 'scatter', mode: 'markers', x: xs, y: ys,
+                marker: { color: colors, size: 12, line: { color: p.surface, width: 1 } },
+                hovertemplate: 'analysis %{x}<br>p = %{y:.3f}<extra></extra>'
+            }];
+            var layout = BV.layout({
+                xaxis: { title: 'analysis (fork) #', range: [0.3, k + 0.7], dtick: k > 15 ? 5 : 2 },
+                yaxis: { title: 'p-value', range: [0, 1], dtick: 0.25 },
+                margin: { l: 60, r: 20, t: 18, b: 48 }, showlegend: false,
+                shapes: [{ type: 'rect', x0: 0.3, x1: k + 0.7, y0: 0, y1: 0.05, fillcolor: BV.band(p.danger, 0.12), line: { width: 0 }, layer: 'below' }],
+                annotations: [{ x: 0.5, y: 0.05, xanchor: 'left', yanchor: 'bottom', text: ' p < 0.05', showarrow: false, font: { size: 11, color: p.danger } }]
+            });
+            Plotly.react('phGarden', traces, layout, BV.config);
+
+            var prob = 1 - Math.pow(0.95, k);
+            document.getElementById('phProb').textContent = Math.round(prob * 100) + '%';
+            document.getElementById('phProb').className = 'val' + (prob > 0.5 ? ' warn' : '');
+            document.getElementById('phCount').textContent = String(below);
+            document.getElementById('phMin').textContent = minP.toFixed(3);
+            var v = document.getElementById('phVerdict');
+            if (below > 0) { v.textContent = '“significant”!'; v.className = 'val warn'; }
+            else { v.textContent = 'nothing (yet)'; v.className = 'val ok'; }
+        });
+        document.getElementById('phResample').addEventListener('click', function () {
+            phSeed = (phSeed * 1664525 + 1013904223) >>> 0;   // LCG step for a fresh draw
+            BV.redraw();
+        });
+        BV.sliders([{ id: 'phK', value: 'phKVal', fmt: function (v) { return String(v); } }], BV.redraw);
+
+        // --- Figure 2: Sellke–Bayarri–Berger calibration ---
+        function bBound(pp) { return -Math.E * pp * Math.log(pp); }         // max BF for H1
+        function postH0(pp) { var B = bBound(pp); return B / (1 + B); }      // min P(H0)
+        BV.register(function () {
+            var p = BV.palette();
+            var p0 = parseFloat(document.getElementById('sbP').value);
+            var xs = BV.linspace(0.001, 0.1, 220);
+            var post = xs.map(function (x) { return postH0(x) * 100; });
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: xs, y: post, name: 'min P(H₀)', line: { color: p.accent, width: 3 }, hovertemplate: 'p=%{x:.3f}<br>min P(H₀)=%{y:.0f}%<extra></extra>' },
+                { type: 'scatter', mode: 'markers', x: [p0], y: [postH0(p0) * 100], showlegend: false, marker: { color: p.danger, size: 13, line: { color: p.surface, width: 1.5 } }, hovertemplate: 'p=%{x:.3f}<br>%{y:.0f}%<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'observed p-value', range: [0, 0.1] },
+                yaxis: { title: 'minimum posterior P(H₀ true), %', range: [0, 45] },
+                margin: { l: 62, r: 20, t: 18, b: 48 }, showlegend: false,
+                shapes: [
+                    { type: 'rect', x0: 0, x1: 0.1, y0: 25, y1: 45, fillcolor: BV.band(p.danger, 0.08), line: { width: 0 }, layer: 'below' },
+                    { type: 'line', x0: p0, x1: p0, y0: 0, y1: postH0(p0) * 100, line: { color: p.danger, width: 1, dash: 'dot' } }
+                ],
+                annotations: [{ x: 0.052, y: 43, xanchor: 'left', yanchor: 'top', text: 'null still likely', showarrow: false, font: { size: 11, color: p.danger } }]
+            });
+            Plotly.react('sbChart', traces, layout, BV.config);
+
+            var B = bBound(p0), post0 = postH0(p0);
+            document.getElementById('sbBF').textContent = B.toFixed(2);
+            document.getElementById('sbOdds').textContent = (1 / B).toFixed(1) + ' : 1';
+            document.getElementById('sbPost').textContent = Math.round(post0 * 100) + '%';
+            var r = document.getElementById('sbRead');
+            if (B < 0.13) { r.textContent = 'strong-ish'; r.className = 'val ok'; }
+            else if (B < 0.33) { r.textContent = 'weak'; r.className = 'val'; }
+            else { r.textContent = 'barely anything'; r.className = 'val warn'; }
+        });
+        BV.sliders([{ id: 'sbP', value: 'sbPVal', fmt: function (v) { return v.toFixed(3); } }], BV.redraw);
+
+        // --- Figure 3: false-positive risk ---
+        BV.register(function () {
+            var p = BV.palette();
+            var pi = parseFloat(document.getElementById('frPi').value);
+            var pow = parseFloat(document.getElementById('frPow').value);
+            var alpha = parseFloat(document.getElementById('frAlpha').value);
+            var N = 1000;
+            var nTrue = N * pi, nFalse = N * (1 - pi);
+            var TP = nTrue * pow, FP = nFalse * alpha;
+            var FN = nTrue - TP, TN = nFalse - FP;
+            var fdr = FP / (TP + FP || 1);
+
+            var traces = [
+                { type: 'bar', orientation: 'h', y: ['not significant', 'declared significant'], x: [FN, TP], name: 'real effect', marker: { color: p.success }, hovertemplate: '%{x:.0f} real effects<extra></extra>' },
+                { type: 'bar', orientation: 'h', y: ['not significant', 'declared significant'], x: [TN, FP], name: 'no effect', marker: { color: p.danger }, hovertemplate: '%{x:.0f} nulls<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                barmode: 'stack',
+                xaxis: { title: 'number of tests (out of 1,000)' },
+                yaxis: { automargin: true },
+                legend: { orientation: 'h', y: 1.18, x: 0 },
+                margin: { l: 130, r: 20, t: 30, b: 48 }
+            });
+            Plotly.react('frChart', traces, layout, BV.config);
+
+            document.getElementById('frTP').textContent = Math.round(TP);
+            document.getElementById('frFP').textContent = Math.round(FP);
+            var f = document.getElementById('frFPR');
+            f.textContent = Math.round(fdr * 100) + '%';
+            f.className = 'val' + (fdr > 0.5 ? ' warn' : (fdr < 0.2 ? ' ok' : ''));
+        });
+        BV.sliders([
+            { id: 'frPi', value: 'frPiVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'frPow', value: 'frPowVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'frAlpha', value: 'frAlphaVal', fmt: function (v) { return v.toFixed(3); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

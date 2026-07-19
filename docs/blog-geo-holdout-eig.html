@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -191,6 +195,29 @@
 
             <p>The EIG has several equivalent forms — as a posterior-to-prior log ratio, as mutual information, as a likelihood-to-marginal log ratio — and each suggests a different estimator. The likelihood form above is the convenient one for MMMs, where the parameter vector is large but the outcome (a panel of geo-week sales) is comparatively low-dimensional.</p>
 
+            <div class="interactive-box">
+                <h4>How big a holdout?</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Hold out a fraction \( h \) of \( G=50 \) geos and cut their spend. The effect estimate's precision scales with \( h(1-h) \) &mdash; both a treated and a control group are needed &mdash; so the information a Gaussian effect earns, \( \mathrm{EIG}=\tfrac12\log_2\!\big(1+\kappa\,s_\beta^2\,h(1-h)\big) \), peaks at a <em>half</em> split. Net the forgone value of the dark geos against it and the recommended holdout pulls back below one-half. Slide the split to move the marker; widen the effect-size prior to see a bigger test become worth taking.</p>
+                <div class="control-row">
+                    <label>Holdout fraction&nbsp; h</label>
+                    <input type="range" id="ghH" min="0.02" max="0.9" step="0.01" value="0.3">
+                    <span class="value" id="ghHVal">0.30</span>
+                </div>
+                <div class="control-row">
+                    <label>Effect-size prior sd&nbsp; s<sub>β</sub></label>
+                    <input type="range" id="ghS" min="0.2" max="3" step="0.1" value="1.2">
+                    <span class="value" id="ghSVal">1.2</span>
+                </div>
+                <div class="chart-container chart-themed" id="ghChart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">EIG at h</span><span class="val" id="ghEig">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Net value at h</span><span class="val" id="ghNet">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Recommended holdout</span><span class="val" id="ghRec">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="ghVerd">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Too small a holdout starves the signal; too large sacrifices revenue faster than it buys bits. The information-optimal split is a half, but once the value at risk is priced in, the net-value peak sits nearer a third &mdash; and moves toward a half as the effect you are chasing grows more uncertain.</p>
+            </div>
+
             <h2 id="targeting">Aiming at What You Care About</h2>
             <p>The plain EIG rewards information about <em>all</em> of \( \theta \) — including main effects the model has already learned well from observational variation. A test chosen that way spends budget re-confirming what you know. The fix is to name the decision-relevant subset \( \psi \subset \theta \) — say, the TV&times;search interaction and the marginal ROAS it implies — and target the <em>marginal</em> EIG:</p>
             $$ \mathrm{EIG}_{\psi}(\xi) \;=\; \mathbb{E}_{p(\psi, y \mid \xi)}\!\left[ \log \frac{p(\psi \mid y, \xi)}{p(\psi)} \right], $$
@@ -269,6 +296,71 @@ for n in range(N):                      # outer: joint draws
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var KAPPA = 8.0;         // precision constant (bundles G and geo-week noise)
+        var LAMBDA = 0.95;       // forgone value per unit holdout fraction, in bits-equivalent
+        function eigBits(h, s) { return 0.5 * Math.log2(1 + KAPPA * s * s * h * (1 - h)); }
+        function netVal(h, s) { return eigBits(h, s) - LAMBDA * h; }
+        function recommend(s) {
+            var best = -Infinity, hb = 0.02;
+            for (var h = 0.02; h <= 0.9001; h += 0.005) { var u = netVal(h, s); if (u > best) { best = u; hb = h; } }
+            return hb;
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var h0 = parseFloat(document.getElementById('ghH').value);
+            var s = parseFloat(document.getElementById('ghS').value);
+            var hs = BV.linspace(0.02, 0.92, 160);
+            var eig = hs.map(function (h) { return eigBits(h, s); });
+            var net = hs.map(function (h) { return netVal(h, s); });
+            var hRec = recommend(s);
+
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: hs, y: eig, name: 'expected information gain', line: { color: p.accent, width: 3 }, hovertemplate: 'h=%{x:.2f}<br>EIG=%{y:.2f} bits<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: hs, y: net, name: 'net of holdout cost', line: { color: p.primary, width: 3 }, hovertemplate: 'h=%{x:.2f}<br>net=%{y:.2f} bits<extra></extra>' },
+                { type: 'scatter', mode: 'markers', x: [h0], y: [eigBits(h0, s)], showlegend: false, marker: { color: p.danger, size: 12, line: { color: p.surface, width: 1.5 } }, hovertemplate: 'current h=%{x:.2f}<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'holdout fraction  h', range: [0, 0.95], dtick: 0.2 },
+                yaxis: { title: 'value (bits)' },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 56, r: 20, t: 34, b: 48 },
+                shapes: [
+                    { type: 'line', x0: 0.5, x1: 0.5, y0: 0, y1: 1, yref: 'paper', line: { color: p.muted, width: 1, dash: 'dot' } },
+                    { type: 'line', x0: hRec, x1: hRec, y0: 0, y1: 1, yref: 'paper', line: { color: p.primaryDark, width: 1.6, dash: 'dash' } }
+                ],
+                annotations: [
+                    { x: 0.5, y: 1, yref: 'paper', yanchor: 'bottom', text: 'info-optimal ½', showarrow: false, font: { size: 10, color: p.muted } },
+                    { x: hRec, y: 0.06, yref: 'paper', yanchor: 'bottom', text: ' recommended', showarrow: false, xanchor: 'left', font: { size: 10, color: p.primaryDark } }
+                ]
+            });
+            Plotly.react('ghChart', traces, layout, BV.config);
+
+            document.getElementById('ghEig').textContent = eigBits(h0, s).toFixed(2) + ' bits';
+            var nv = netVal(h0, s);
+            var nEl = document.getElementById('ghNet');
+            nEl.textContent = nv.toFixed(2) + ' bits';
+            nEl.className = 'val' + (nv <= 0 ? ' warn' : '');
+            document.getElementById('ghRec').textContent = 'h ≈ ' + hRec.toFixed(2);
+            var vEl = document.getElementById('ghVerd');
+            if (hRec < 0.08) { vEl.textContent = 'barely worth it'; vEl.className = 'val warn'; }
+            else if (Math.abs(h0 - hRec) < 0.05) { vEl.textContent = 'well-sized'; vEl.className = 'val ok'; }
+            else if (h0 > hRec + 0.05) { vEl.textContent = 'over-holding'; vEl.className = 'val'; }
+            else { vEl.textContent = 'under-holding'; vEl.className = 'val'; }
+        });
+
+        BV.sliders([
+            { id: 'ghH', value: 'ghHVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'ghS', value: 'ghSVal', fmt: function (v) { return v.toFixed(1); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

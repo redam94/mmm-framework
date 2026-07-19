@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -185,6 +189,24 @@ for t in range(T):
                 <p>A common misreading: the sampled \( \hat\theta_k \) is <em>not</em> a simulated click or conversion. It is a statistically plausible value of the arm's underlying success <em>rate</em> — the algorithm asks "if this were the true rate, what would I do?", not "what might happen next?". Sampling outcomes instead of parameters is a different, much worse algorithm.</p>
             </div>
 
+            <div class="interactive-box">
+                <h4>Play the bandit</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Three creatives with hidden true conversion rates of <strong>0.30</strong>, <strong>0.60</strong>, and <strong>0.45</strong> (dotted lines). Each arm carries a \( \mathrm{Beta}(\alpha,\beta) \) posterior over its rate. A <em>pull</em> draws one sample from every arm, plays the arm with the highest draw, observes a 0/1 reward, and does the two-counter update — watch B&rsquo;s posterior sharpen and crowd out the others. The regret readout tracks reward lost against the unknown best arm, next to an even-split baseline that never stops exploring.</p>
+                <div class="control-row">
+                    <button type="button" class="viz-btn" id="tsPull">▶ Pull once</button>
+                    <button type="button" class="viz-btn" id="tsPull10">▶ Pull ×10</button>
+                    <button type="button" class="viz-btn" id="tsReset">↻ Reset</button>
+                </div>
+                <div class="chart-container chart-themed" id="tsPost" style="height:330px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Pulls&nbsp; A · B · C</span><span class="val" id="tsPulls">0 · 0 · 0</span></div>
+                    <div class="stat"><span class="lbl">Believes best</span><span class="val" id="tsBelief">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Regret (Thompson)</span><span class="val" id="tsRegT">0.00</span></div>
+                    <div class="stat"><span class="lbl">Regret (even split)</span><span class="val" id="tsRegU">0.00</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Probability matching sends traffic to each arm in proportion to its posterior chance of being best, so the losing arm A starves while the plausible contender keeps some share &mdash; and Thompson regret grows far slower than the even-split baseline&rsquo;s straight line.</p>
+            </div>
+
             <h2 id="greedy-ucb">Greedy, UCB, and the Case for Sampling</h2>
             <p>Why not just be greedy? Because greedy assigns zero value to uncertainty: if an early lucky streak flatters a mediocre arm, greedy plays it forever and never collects the data that would correct the mistake. The standard patch, \( \epsilon \)-greedy "dithering," forces a random action some fixed fraction of the time — fixing the lock-in but exploring <em>uniformly</em>, wasting budget on arms the posterior has already ruled out.</p>
 
@@ -289,6 +311,119 @@ for t in range(T):
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var TRUE = [0.30, 0.60, 0.45];              // hidden true rates
+        var NAMES = ['A', 'B', 'C'];
+        var BEST = 1, MAXR = TRUE[BEST];             // best arm + its rate
+        var UNIF_STEP = MAXR - (TRUE[0] + TRUE[1] + TRUE[2]) / 3;  // expected per-pull regret of even split
+
+        var seed0 = 13;
+        var state, rng;
+        function reset() {
+            state = { a: [1, 1, 1], b: [1, 1, 1], n: [0, 0, 0], pulls: 0, regT: 0 };
+            rng = BV.mulberry32(seed0);
+        }
+        reset();
+        // Pre-seed the opening view so the posteriors are already differentiated on load
+        // (a flat all-uniform start reads as empty). Reset returns to the flat priors.
+        var SEED_PULLS = 16;
+        function seedInitial() { for (var _s = 0; _s < SEED_PULLS; _s++) pullOnce(); }
+        seedInitial();
+
+        // Gamma(k,1) for INTEGER k>=1 via sum of exponentials; Beta(a,b)=Ga/(Ga+Gb).
+        function gammaInt(k, r) { var s = 0; for (var i = 0; i < k; i++) s += -Math.log(r() || 1e-12); return s; }
+        function betaSample(a, b, r) { var ga = gammaInt(a, r), gb = gammaInt(b, r); return ga / (ga + gb); }
+
+        function pullOnce() {
+            var draws = [betaSample(state.a[0], state.b[0], rng),
+                         betaSample(state.a[1], state.b[1], rng),
+                         betaSample(state.a[2], state.b[2], rng)];
+            var k = draws[0] >= draws[1] ? (draws[0] >= draws[2] ? 0 : 2) : (draws[1] >= draws[2] ? 1 : 2);
+            var reward = rng() < TRUE[k] ? 1 : 0;
+            state.a[k] += reward; state.b[k] += 1 - reward;
+            state.n[k] += 1; state.pulls += 1;
+            state.regT += MAXR - TRUE[k];
+        }
+
+        // Beta pdf on a grid, area-normalized numerically (log-space to avoid overflow).
+        function betaDensity(a, b, xs) {
+            var logs = xs.map(function (x) {
+                if (x <= 0 || x >= 1) return -Infinity;
+                return (a - 1) * Math.log(x) + (b - 1) * Math.log(1 - x);
+            });
+            var mx = -Infinity, i;
+            for (i = 0; i < logs.length; i++) if (logs[i] > mx) mx = logs[i];
+            var ys = logs.map(function (l) { return isFinite(l) ? Math.exp(l - mx) : 0; });
+            var area = 0;
+            for (i = 1; i < xs.length; i++) area += 0.5 * (ys[i] + ys[i - 1]) * (xs[i] - xs[i - 1]);
+            if (area > 0) for (i = 0; i < ys.length; i++) ys[i] /= area;
+            return ys;
+        }
+
+        // P(arm k is best), Monte-Carlo with a state-derived seed (deterministic per render).
+        function beliefProbs() {
+            var r = BV.mulberry32((state.pulls * 2654435761 + 12345) >>> 0);
+            var counts = [0, 0, 0], S = 1500;
+            for (var s = 0; s < S; s++) {
+                var d0 = betaSample(state.a[0], state.b[0], r),
+                    d1 = betaSample(state.a[1], state.b[1], r),
+                    d2 = betaSample(state.a[2], state.b[2], r);
+                var k = d0 >= d1 ? (d0 >= d2 ? 0 : 2) : (d1 >= d2 ? 1 : 2);
+                counts[k]++;
+            }
+            return counts.map(function (c) { return c / S; });
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var cols = [p.accent, p.primary, p.warning];
+            var xs = BV.linspace(0.001, 0.999, 160);
+            var traces = [];
+            for (var k = 0; k < 3; k++) {
+                var ys = betaDensity(state.a[k], state.b[k], xs);
+                traces.push({
+                    type: 'scatter', mode: 'lines', x: xs, y: ys,
+                    name: 'arm ' + NAMES[k] + ' (n=' + state.n[k] + ')',
+                    line: { color: cols[k], width: 2.5 },
+                    fill: 'tozeroy', fillcolor: BV.band(cols[k], 0.14),
+                    hovertemplate: 'arm ' + NAMES[k] + '<br>rate %{x:.2f}<extra></extra>'
+                });
+            }
+            var shapes = TRUE.map(function (t, k) {
+                return { type: 'line', x0: t, x1: t, y0: 0, y1: 1, yref: 'paper',
+                         line: { color: cols[k], width: 1.2, dash: 'dot' } };
+            });
+            var layout = BV.layout({
+                xaxis: { title: 'success rate θ', range: [0, 1], dtick: 0.2 },
+                yaxis: { title: 'posterior density', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 60, r: 20, t: 30, b: 48 }, shapes: shapes
+            });
+            Plotly.react('tsPost', traces, layout, BV.config);
+
+            document.getElementById('tsPulls').textContent = state.n[0] + ' · ' + state.n[1] + ' · ' + state.n[2];
+            var bel = beliefProbs();
+            var bk = bel[0] >= bel[1] ? (bel[0] >= bel[2] ? 0 : 2) : (bel[1] >= bel[2] ? 1 : 2);
+            var belEl = document.getElementById('tsBelief');
+            belEl.textContent = state.pulls === 0 ? 'nothing yet' : NAMES[bk] + ': ' + Math.round(bel[bk] * 100) + '%';
+            belEl.className = 'val' + (state.pulls > 0 && bk === BEST && bel[bk] > 0.7 ? ' ok' : '');
+            document.getElementById('tsRegT').textContent = state.regT.toFixed(2);
+            var regU = state.pulls * UNIF_STEP;
+            document.getElementById('tsRegU').textContent = regU.toFixed(2);
+            var rt = document.getElementById('tsRegT');
+            rt.className = 'val' + (state.pulls > 0 && state.regT < regU ? ' ok' : '');
+        });
+
+        document.getElementById('tsPull').addEventListener('click', function () { pullOnce(); BV.redraw(); });
+        document.getElementById('tsPull10').addEventListener('click', function () { for (var i = 0; i < 10; i++) pullOnce(); BV.redraw(); });
+        document.getElementById('tsReset').addEventListener('click', function () { reset(); BV.redraw(); });
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

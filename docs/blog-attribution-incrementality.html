@@ -28,8 +28,25 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .dagfig { width: 100%; height: 190px; display: block; }
+        .dagfig .node { fill: var(--color-surface); stroke: var(--color-text-muted); stroke-width: 1.6; }
+        .dagfig .node.exposure { stroke: var(--color-primary); stroke-width: 2.2; }
+        .dagfig .node.outcome { stroke: var(--color-accent); stroke-width: 2.2; }
+        .dagfig .node.unmeasured { stroke: var(--color-danger); stroke-dasharray: 3 2.5; }
+        .dagfig .nlab { fill: var(--color-text); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; }
+        .dagfig .edge { stroke: var(--color-text-muted); stroke-width: 1.7; fill: none; }
+        .dagfig .edge.bias { stroke: var(--color-danger); stroke-dasharray: 4 3; }
+        .dagfig .arrowhead { fill: var(--color-text-muted); }
+        .dagfig .arrowhead.bias { fill: var(--color-danger); }
+        .dag-solo { max-width: 430px; margin: 1.6rem auto 0.4rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1rem 1.1rem 0.7rem; }
+    </style>
     <!-- seo:augmented (structured data + social cards) -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Attribution Is Not Incrementality">
@@ -73,7 +90,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-14",
+          "dateModified": "2026-07-18",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/blog-attribution-incrementality.html#breadcrumb"
           },
@@ -171,12 +188,44 @@
             <h2 id="conditioning">Conditioning on the Outcome</h2>
             <p>The deepest reason attribution and incrementality diverge is statistical, and it has a name in the causal-inference literature: <strong>selection on the outcome</strong>. Attribution begins from the set of converters and looks backward at the ads they saw. By construction, it conditions on the very event — conversion — whose cause it is trying to establish. That is a collider-like conditioning that opens spurious associations between exposure and purchase even when the ad did nothing.</p>
             <p>Consider the causal graph. Let \( U \) be a buyer's latent purchase intent, unobserved. Intent drives two things: it makes a person more likely to convert, and it makes them more likely to be exposed to relevant ads, because ad platforms optimize delivery toward people who look like converters, and because high-intent people search, browse, and click on category-relevant content that triggers retargeting. So \( U \) is a common cause of both exposure \( W \) and outcome \( Y \). The exposure–conversion association we observe is a mixture of any true causal path \( W \to Y \) and the back-door path \( W \leftarrow U \to Y \). Attribution reads the whole mixture as if it were the causal path. Incrementality, done with randomization, severs the back-door by making \( W \) independent of \( U \).</p>
+            <div class="dag-solo">
+                <svg class="dagfig" id="dagIntent" viewBox="0 0 260 180" role="img" aria-label="DAG: latent intent is a common cause of ad exposure and conversion, creating a back-door path"></svg>
+                <p class="chart-caption" style="margin:0.3rem 0 0;">Latent purchase <strong>intent</strong> (red, unobserved) makes a person both more likely to be <em>exposed</em> to relevant ads and more likely to <em>convert</em>. The observed exposure&ndash;conversion link mixes the true causal path <span style="font-family:'JetBrains Mono',monospace;">W &rarr; Y</span> with the back-door <span style="font-family:'JetBrains Mono',monospace;">W &larr; intent &rarr; Y</span>. Attribution reads the whole mixture as causal; randomization severs the back-door.</p>
+            </div>
+
             <p>This is the formal content of the <a href="blog-activity-bias.html">activity bias</a> that Lewis, Rao, and Reiley documented in a trio of controlled experiments. People do "more of everything" in bursts — on the day someone is exposed to an ad, they are also more likely to search for the brand, view unrelated pages, and even sign up at a competitor, for reasons that have nothing to do with the ad. Because exposure coincides with a general spike of activity, any observational or matched-control method that lines up "exposed" against "recent history" over-credits the ad for behavior that was going to happen regardless. The bias is not a quirk of one dataset; it is a structural feature of how online behavior clusters in time.</p>
 
             <h2 id="overstate">Why Attribution Overstates, and Where</h2>
             <p>The direction of the bias is not random. Selection on the outcome inflates credit most for the touchpoints that sit <em>closest to conversion</em>, because those are the touchpoints most contaminated by pre-existing intent. Two channels are the canonical offenders.</p>
             <p><strong>Retargeting</strong> shows ads to people who have already visited the site or added to cart — that is, to people already deep in the funnel and disproportionately likely to buy anyway. A last-touch or even a data-driven model sees the retargeting impression immediately before a high rate of conversion and awards it enormous credit. But much of that conversion was baked in before the retargeting ad ever served. The ad frequently <em>intercepts</em> intent rather than <em>creating</em> it.</p>
             <p><strong>Branded and paid search</strong> is the same phenomenon in a different costume. When someone types your brand name into a search engine, they have already decided to find you; the paid search ad that appears at the top merely collects a click that an organic link would often have collected for free. Attribution credits the paid click with the ensuing purchase. Incrementality asks whether the purchase would have happened without the paid ad — and for brand terms, the answer is frequently "yes, almost all of it."</p>
+
+            <div class="interactive-box">
+                <h4>Attributed credit vs. incremental lift</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Last-touch attribution partitions the conversions that <em>happened</em> &mdash; a fixed slice per channel. Incrementality asks how many of those slices would have happened <em>anyway</em>. Drag the organic baseline (the share of demand that converts with no ad, e.g. branded search a buyer would have found for free): lower-funnel channels keep their fat attributed bar while their incremental bar collapses toward zero, and upper-funnel channels barely move. Pick a channel to read its over-crediting.</p>
+                <div class="control-row">
+                    <label>Organic / baseline propensity &nbsp;(&rho;)</label>
+                    <input type="range" id="atRho" min="0" max="1" step="0.02" value="0.6">
+                    <span class="value" id="atRhoVal">0.60</span>
+                </div>
+                <div class="control-row">
+                    <label>Channel to inspect</label>
+                    <select id="atChan" class="viz-select" style="flex:1;min-width:0;padding:0.3rem 0.5rem;border-radius:8px;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);font-family:inherit;font-size:0.9rem;">
+                        <option value="0">Branded search</option>
+                        <option value="1">Retargeting</option>
+                        <option value="2">Prospecting display</option>
+                        <option value="3">Upper-funnel video</option>
+                    </select>
+                </div>
+                <div class="chart-container chart-themed" id="atChart" style="height:320px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Attributed credit</span><span class="val" id="atAttr">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Incremental lift</span><span class="val" id="atIncr">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Over-credited by</span><span class="val" id="atFactor">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="atVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Incremental share = attributed × (1 &minus; &rho; × funnel-position weight). The channels attribution loves &mdash; branded search, retargeting &mdash; are the most baseline-contaminated, so their attributed-to-incremental gap is widest exactly where budgets are largest.</p>
+            </div>
 
             <div class="warning">
                 <h4>⚠️ The gap is largest exactly where the money is</h4>
@@ -255,6 +304,106 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // --- Reusable little DAG renderer (CSS-themed, so no JS redraw needed) ---
+        function drawDag(id, nodes, edges) {
+            var svg = document.getElementById(id);
+            if (!svg) return;
+            var nm = {};
+            nodes.forEach(function (n) { nm[n.id] = n; });
+            var aId = id + '-a', abId = id + '-ab';
+            var s = '<defs>'
+                + '<marker id="' + aId + '" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>'
+                + '<marker id="' + abId + '" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead bias" d="M0,0 L10,5 L0,10 z"/></marker>'
+                + '</defs>';
+            edges.forEach(function (e) {
+                var A = nm[e.from], B = nm[e.to];
+                var dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+                var x1 = A.x + ux * (A.r + 1), y1 = A.y + uy * (A.r + 1);
+                var x2 = B.x - ux * (B.r + 7), y2 = B.y - uy * (B.r + 7);
+                var bias = e.cls === 'bias';
+                s += '<line class="edge' + (bias ? ' bias' : '') + '" x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1)
+                    + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" marker-end="url(#' + (bias ? abId : aId) + ')"/>';
+            });
+            nodes.forEach(function (n) {
+                s += '<circle class="node ' + (n.cls || '') + '" cx="' + n.x + '" cy="' + n.y + '" r="' + n.r + '"/>';
+                s += '<text class="nlab" x="' + n.x + '" y="' + (n.y + 0.5) + '" text-anchor="middle" dominant-baseline="central">' + n.label + '</text>';
+            });
+            svg.innerHTML = s;
+        }
+
+        function initDags() {
+            drawDag('dagIntent',
+                [{ id: 'U', x: 130, y: 34, r: 18, cls: 'unmeasured', label: 'intent' },
+                 { id: 'W', x: 48, y: 140, r: 20, cls: 'exposure', label: 'W' },
+                 { id: 'Y', x: 212, y: 140, r: 20, cls: 'outcome', label: 'Y' }],
+                [{ from: 'U', to: 'W', cls: 'bias' }, { from: 'U', to: 'Y', cls: 'bias' }, { from: 'W', to: 'Y' }]);
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDags);
+        } else { initDags(); }
+
+        // --- Interactive: attributed credit vs incremental lift per channel ---
+        // Attributed = fixed last-touch share of observed conversions.
+        // Incremental = attributed × (1 − ρ × funnel weight): lower-funnel channels
+        // are more baseline-contaminated, so ρ guts their incremental first.
+        var CHANS = [
+            { name: 'Branded search',     attr: 35, w: 1.00 },
+            { name: 'Retargeting',        attr: 28, w: 0.90 },
+            { name: 'Prospecting display', attr: 22, w: 0.35 },
+            { name: 'Upper-funnel video', attr: 15, w: 0.08 }
+        ];
+        function incrOf(c, rho) { return c.attr * Math.max(0, 1 - rho * c.w); }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var rho = parseFloat(document.getElementById('atRho').value);
+            var names = CHANS.map(function (c) { return c.name; });
+            var attr = CHANS.map(function (c) { return c.attr; });
+            var incr = CHANS.map(function (c) { return incrOf(c, rho); });
+
+            var traces = [
+                { type: 'bar', name: 'attributed credit', x: names, y: attr, marker: { color: BV.band(p.accent, 0.85) },
+                  hovertemplate: '%{x}<br>attributed %{y:.0f}%<extra></extra>' },
+                { type: 'bar', name: 'incremental lift', x: names, y: incr, marker: { color: p.primary },
+                  hovertemplate: '%{x}<br>incremental %{y:.1f}%<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                barmode: 'group',
+                xaxis: { title: '' },
+                yaxis: { title: 'share of conversions, %', range: [0, 40] },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 62, r: 20, t: 30, b: 62 }
+            });
+            Plotly.react('atChart', traces, layout, BV.config);
+
+            var idx = parseInt(document.getElementById('atChan').value, 10);
+            var c = CHANS[idx], a = c.attr, iv = incrOf(c, rho);
+            var factor = iv > 0.01 ? a / iv : Infinity;
+            document.getElementById('atAttr').textContent = a.toFixed(0) + '%';
+            var incrEl = document.getElementById('atIncr');
+            incrEl.textContent = iv.toFixed(1) + '%';
+            incrEl.className = 'val' + (iv < a * 0.4 ? ' warn' : ' ok');
+            var fEl = document.getElementById('atFactor');
+            fEl.textContent = isFinite(factor) ? factor.toFixed(1) + '×' : '∞';
+            fEl.className = 'val' + (factor > 2 ? ' warn' : '');
+            var v = document.getElementById('atVerdict');
+            if (!isFinite(factor) || factor > 3) { v.textContent = 'mostly baseline'; v.className = 'val warn'; }
+            else if (factor > 1.5) { v.textContent = 'over-credited'; v.className = 'val'; }
+            else { v.textContent = 'largely incremental'; v.className = 'val ok'; }
+        });
+
+        BV.sliders([
+            { id: 'atRho', value: 'atRhoVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+        document.getElementById('atChan').addEventListener('change', BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

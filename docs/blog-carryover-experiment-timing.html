@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -200,7 +204,33 @@
                 </tbody>
             </table>
 
+            <div class="interactive-box">
+                <h4>Adstock washout, and the cost of testing too soon</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A four-week flight (shaded bars) accumulates adstock \( a_t = x_t + \alpha\,a_{t-1} \); after it ends the stock decays as \( \alpha^k \) (curve, as % of peak). The <span style="color:var(--color-success);font-weight:600;">green</span> marker is the earliest clean start &mdash; when the residual drops below 5%. Slide your <em>next</em> test earlier than that and the leftover carryover (<span style="color:var(--color-danger);font-weight:600;">red</span>) contaminates its baseline. Drag the retention rate and the start week.</p>
+                <div class="control-row">
+                    <label>Retention rate &nbsp;(α)</label>
+                    <input type="range" id="woAlpha" min="0.3" max="0.95" step="0.05" value="0.7">
+                    <span class="value" id="woAlphaVal">0.70</span>
+                </div>
+                <div class="control-row">
+                    <label>Start next test &nbsp;(weeks after flight)</label>
+                    <input type="range" id="woStart" min="1" max="34" step="1" value="6">
+                    <span class="value" id="woStartVal">6</span>
+                </div>
+                <div class="chart-container chart-themed" id="woDecay" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Half-life</span><span class="val" id="woHalf">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Washout to &lt;5%</span><span class="val" id="woWash">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Residual at chosen start</span><span class="val" id="woResid">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Next test</span><span class="val" id="woVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">The contaminating residual scales with the <em>previous</em> test's effect, not the next one's &mdash; so a small expected lift following a large test needs a tighter tolerance than 5%. Start before the green marker and the second readout silently absorbs a slice of the first test's answer.</p>
+            </div>
+
             <p>The table assumes weekly data and geometric decay; the half-life is \( \ln(0.5)/\ln(\alpha) \) and the washout column is \( \ln(0.05)/\ln(\alpha) \), rounded up. The nonlinearity is the point. Moving the retention rate from 0.5 to 0.8 does not roughly double the required spacing — it triples it. A search channel with fast decay supports a test nearly every month; a brand channel at \( \alpha = 0.9 \) supports perhaps two clean sequential tests a year. Testing calendars that allocate the same cadence to every channel are implicitly assuming every channel has the same retention rate.</p>
+
+            <div class="chart-container chart-themed" id="woCurve" style="height:340px;"></div>
+            <p class="chart-caption">Weeks to a 5% residual, \( \ln(0.05)/\ln(\alpha) \), and the half-life \( \ln(0.5)/\ln(\alpha) \), across the retention rate. The washout curve steepens sharply as \( \alpha \to 1 \): the marked points are the table's rows, and the gap between them widens far faster than \( \alpha \) does. Moving from \( \alpha = 0.5 \) to \( 0.8 \) roughly <strong>triples</strong> the required spacing rather than doubling it &mdash; which is why one testing cadence cannot fit every channel.</p>
 
             <details class="deep-dive">
                 <summary><span class="deep-dive-tag">Deep dive</span>From retention rate to washout length</summary>
@@ -280,6 +310,100 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+        var FLIGHT = 4, NW = 44;   // 4-week flight, weeks 1..NW (flight = weeks 1..4)
+
+        // --- Figure A: adstock washout + contamination ---
+        BV.register(function () {
+            var p = BV.palette();
+            var alpha = parseFloat(document.getElementById('woAlpha').value);
+            var startK = parseInt(document.getElementById('woStart').value, 10);   // weeks after flight end
+
+            // unnormalized adstock recursion a_t = x_t + alpha*a_{t-1}
+            var weeks = [], a = [], prev = 0;
+            for (var t = 1; t <= NW; t++) {
+                var x = (t <= FLIGHT) ? 1 : 0;
+                var cur = x + alpha * prev;
+                a.push(cur); weeks.push(t); prev = cur;
+            }
+            var peak = Math.max.apply(null, a);
+            var pct = a.map(function (v) { return 100 * v / peak; });   // % of peak
+            var flightEnd = FLIGHT;                                     // week index of flight end (peak)
+
+            var washoutWeeks = Math.ceil(Math.log(0.05) / Math.log(alpha));
+            var cleanWeek = flightEnd + washoutWeeks;
+            var startWeek = flightEnd + startK;
+            var residual = Math.pow(alpha, startK);                     // fraction of peak still live
+
+            // contamination band: from flight end to chosen start, only if residual > 5%
+            var shapes = [
+                { type: 'line', x0: 0.5, x1: NW + 0.5, y0: 5, y1: 5, line: { color: p.muted, width: 1, dash: 'dot' } },
+                { type: 'line', x0: cleanWeek, x1: cleanWeek, y0: 0, y1: 100, line: { color: p.success, width: 2, dash: 'dash' } },
+                { type: 'line', x0: startWeek, x1: startWeek, y0: 0, y1: 100, line: { color: residual > 0.05 ? p.danger : p.success, width: 2 } }
+            ];
+            if (residual > 0.05) {
+                shapes.push({ type: 'rect', x0: flightEnd, x1: startWeek, y0: 0, y1: 100 * residual, fillcolor: BV.band(p.danger, 0.14), line: { width: 0 }, layer: 'below' });
+            }
+            var flightWeeks = [1, 2, 3, 4];
+            var traces = [
+                { type: 'bar', x: flightWeeks, y: [100, 100, 100, 100], name: 'spend flight', marker: { color: BV.band(p.muted, 0.32) }, width: 0.7, hovertemplate: 'spend week %{x}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: weeks, y: pct, name: 'adstock stock', line: { color: p.primary, width: 3 }, hovertemplate: 'wk %{x}<br>%{y:.1f}% of peak<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'week', dtick: 4, range: [0.5, NW + 0.5] },
+                yaxis: { title: 'live adstock (% of peak)', range: [0, 106] },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 62, r: 20, t: 30, b: 48 }, bargap: 0.3,
+                shapes: shapes,
+                annotations: [
+                    { x: cleanWeek, y: 100, xanchor: 'left', yanchor: 'top', text: ' clean start', showarrow: false, font: { size: 11, color: p.success } },
+                    { x: startWeek, y: 62, xanchor: startWeek > cleanWeek ? 'left' : 'right', yanchor: 'bottom', text: 'next test', showarrow: false, font: { size: 11, color: residual > 0.05 ? p.danger : p.success } }
+                ]
+            });
+            Plotly.react('woDecay', traces, layout, BV.config);
+
+            var half = Math.log(0.5) / Math.log(alpha);
+            document.getElementById('woHalf').textContent = half.toFixed(1) + ' wk';
+            document.getElementById('woWash').textContent = washoutWeeks + ' wk';
+            var re = document.getElementById('woResid');
+            re.textContent = (residual * 100).toFixed(1) + '%';
+            re.className = 'val' + (residual > 0.05 ? ' warn' : ' ok');
+            var vd = document.getElementById('woVerdict');
+            if (residual > 0.05) { vd.textContent = 'contaminated'; vd.className = 'val warn'; }
+            else { vd.textContent = 'clean baseline'; vd.className = 'val ok'; }
+        });
+        BV.sliders([
+            { id: 'woAlpha', value: 'woAlphaVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'woStart', value: 'woStartVal', fmt: function (v) { return String(v); } }
+        ], BV.redraw);
+
+        // --- Figure B: washout weeks vs alpha (static) ---
+        BV.register(function () {
+            var p = BV.palette();
+            var xs = BV.linspace(0.3, 0.95, 160);
+            var wash = xs.map(function (a) { return Math.log(0.05) / Math.log(a); });
+            var half = xs.map(function (a) { return Math.log(0.5) / Math.log(a); });
+            var pts = [0.3, 0.5, 0.7, 0.8, 0.9];
+            var ptY = pts.map(function (a) { return Math.log(0.05) / Math.log(a); });
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: xs, y: wash, name: 'weeks to <5% residual', line: { color: p.danger, width: 3 }, hovertemplate: 'α=%{x:.2f}<br>%{y:.1f} wk<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: xs, y: half, name: 'half-life', line: { color: p.accent, width: 2, dash: 'dash' }, hovertemplate: 'α=%{x:.2f}<br>%{y:.1f} wk<extra></extra>' },
+                { type: 'scatter', mode: 'markers', x: pts, y: ptY, name: 'table rows', marker: { color: p.primaryDark, size: 9, line: { color: p.surface, width: 1.5 } }, hovertemplate: 'α=%{x:.2f}<br>washout ≈ %{y:.1f} wk<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'retention rate  α', range: [0.3, 0.96] },
+                yaxis: { title: 'weeks', range: [0, 62] },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 56, r: 20, t: 30, b: 48 }
+            });
+            Plotly.react('woCurve', traces, layout, BV.config);
+        });
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

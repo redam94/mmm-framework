@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -155,6 +159,9 @@
 
             <p>Picture a brand launching a new always-on campaign DMA by DMA: ten markets in January, fifteen more in April, another dozen in September, and a set of markets with no launch planned. Every market that starts, stays on. Six months in, the CMO asks the obvious question: what did the launch do to sales? The design is a <em>staggered adoption</em> panel, and it is one of the most common structures in applied measurement — which makes it worth understanding exactly when the standard tools work and when they quietly invert the answer.</p>
 
+            <div class="chart-container chart-themed" id="rolloutCal" style="height:260px;"></div>
+            <p class="chart-caption">A staggered-adoption calendar: each launch wave turns on in a different month and stays on, alongside a never-launched holdout. This timing structure is exactly what breaks a single two-way-fixed-effects coefficient once effects differ by wave or build over time.</p>
+
             <h2 id="classic-did">The Classic 2&times;2 and Parallel Trends</h2>
             <p>Difference-in-differences begins with two groups and two periods. One group receives treatment between the periods; the other never does. Each group's before&ndash;after change removes anything fixed about that group; differencing the two changes removes the shared time trend:</p>
             $$ \hat{\beta}_{DD} = \big(\bar{Y}_{\text{treat,after}} - \bar{Y}_{\text{treat,before}}\big) - \big(\bar{Y}_{\text{control,after}} - \bar{Y}_{\text{control,before}}\big). $$
@@ -169,6 +176,24 @@
             <div class="note">
                 <h4>💡 The failure is heterogeneity, not staggering alone</h4>
                 <p>If every market had exactly the same effect at every point in time, TWFE would be fine — in that special case all the estimands discussed below, and TWFE's \( \beta \), coincide. The problem is the interaction of staggered timing with effects that vary by cohort or evolve with exposure. If you would not be willing to assert a constant, instantaneous, permanent effect, you need the machinery below.</p>
+            </div>
+
+            <div class="interactive-box">
+                <h4>When a single coefficient inverts the answer</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A population panel with an early wave and a late wave (plus a never-treated group). The green markers are the clean, cohort-averaged event study &mdash; leads at zero, lags rising as the effect builds. The dashed lines compare the heterogeneity-robust <strong>true ATT</strong> (green) against the <strong>TWFE</strong> single coefficient (red). Slide up the dynamics-and-heterogeneity strength: TWFE uses already-treated markets as controls, differences away their still-growing effect, and drifts far below the true ATT &mdash; understating by half or more an effect that is unambiguously positive (the same mechanism that, in less forgiving panels, drives the coefficient outright negative).</p>
+                <div class="control-row">
+                    <label>Effect dynamics &amp; cohort heterogeneity</label>
+                    <input type="range" id="sdHet" min="0" max="2" step="0.1" value="0.8">
+                    <span class="value" id="sdHetVal">0.80</span>
+                </div>
+                <div class="chart-container chart-themed" id="sdEvent" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">True ATT (heterogeneity-robust)</span><span class="val ok" id="sdAtt">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">TWFE coefficient</span><span class="val" id="sdTwfe">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">TWFE error</span><span class="val" id="sdDiff">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Sign of TWFE</span><span class="val" id="sdFlag">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At zero the effect is constant and homogeneous, so TWFE equals the true ATT. Every step away is dynamics or heterogeneity &mdash; the exact conditions under which the negative-weight pathology bites.</p>
             </div>
 
             <h2 id="group-time-att">The Building Block: ATT(g,t)</h2>
@@ -271,6 +296,118 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // --- Figure 1: staggered rollout calendar (static heatmap) ---
+        var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var ROWS = ['No launch (holdout)', 'Sep wave · 12 mkts', 'Apr wave · 15 mkts', 'Jan wave · 10 mkts'];
+        var STARTS = [99, 8, 3, 0]; // first-treated month index per row (99 = never)
+        BV.register(function () {
+            var p = BV.palette();
+            var z = ROWS.map(function (_, r) {
+                return MONTHS.map(function (_, c) { return c >= STARTS[r] ? 1 : 0; });
+            });
+            var traces = [{
+                type: 'heatmap', z: z, x: MONTHS, y: ROWS,
+                xgap: 3, ygap: 3, showscale: false,
+                colorscale: [[0, BV.band(p.muted, 0.16)], [1, p.primary]],
+                zmin: 0, zmax: 1,
+                hovertemplate: '%{y}<br>%{x}: %{customdata}<extra></extra>',
+                customdata: z.map(function (row) { return row.map(function (v) { return v ? 'campaign on' : 'baseline'; }); })
+            }];
+            var layout = BV.layout({
+                margin: { l: 150, r: 16, t: 14, b: 36 },
+                xaxis: { title: '', side: 'bottom' },
+                yaxis: { title: '', automargin: true }
+            });
+            Plotly.react('rolloutCal', traces, layout, BV.config);
+        });
+
+        // --- Figure 2: TWFE vs true ATT under heterogeneity (interactive) ---
+        var T = 12, G_EARLY = 4, G_LATE = 8, BASE = 3, M_EARLY = 1.9, M_LATE = 0.5;
+        function tau(g, e, d) { var m = g === G_EARLY ? M_EARLY : M_LATE; return BASE + d * e * m; }
+        function twfe(d) {
+            // 3 units: early, late, never; population (no noise)
+            var units = [G_EARLY, G_LATE, Infinity];
+            var Y = [], D = [];
+            for (var u = 0; u < 3; u++) {
+                Y.push([]); D.push([]);
+                for (var t = 1; t <= T; t++) {
+                    var g = units[u], treated = t >= g;
+                    D[u].push(treated ? 1 : 0);
+                    Y[u].push(treated ? tau(g, t - g, d) : 0);
+                }
+            }
+            function demean(A) {
+                var rows = A.length, cols = A[0].length, rm = [], cm = new Array(cols).fill(0), gm = 0;
+                for (var i = 0; i < rows; i++) { var s = 0; for (var j = 0; j < cols; j++) { s += A[i][j]; cm[j] += A[i][j]; gm += A[i][j]; } rm.push(s / cols); }
+                for (var j = 0; j < cols; j++) cm[j] /= rows;
+                gm /= (rows * cols);
+                var out = [];
+                for (var i = 0; i < rows; i++) { out.push([]); for (var j = 0; j < cols; j++) out[i].push(A[i][j] - rm[i] - cm[j] + gm); }
+                return out;
+            }
+            var Yd = demean(Y), Dd = demean(D), num = 0, den = 0;
+            for (var i = 0; i < 3; i++) for (var j = 0; j < T; j++) { num += Yd[i][j] * Dd[i][j]; den += Dd[i][j] * Dd[i][j]; }
+            return num / den;
+        }
+        function trueATT(d) {
+            var s = 0, n = 0, units = [G_EARLY, G_LATE];
+            units.forEach(function (g) { for (var t = g; t <= T; t++) { s += tau(g, t - g, d); n++; } });
+            return s / n;
+        }
+        function eventStudy(d) {
+            var es = [], xs = [];
+            for (var e = -3; e <= 8; e++) {
+                xs.push(e);
+                if (e < 0) { es.push(0); continue; }
+                var vals = [];
+                if (G_EARLY + e <= T) vals.push(tau(G_EARLY, e, d));
+                if (G_LATE + e <= T) vals.push(tau(G_LATE, e, d));
+                es.push(vals.reduce(function (a, b) { return a + b; }, 0) / vals.length);
+            }
+            return { x: xs, y: es };
+        }
+        BV.register(function () {
+            var p = BV.palette();
+            var d = parseFloat(document.getElementById('sdHet').value);
+            var es = eventStudy(d), b = twfe(d), att = trueATT(d);
+            var xr = [-3.4, 8.4];
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: xr, y: [att, att], name: 'true ATT', line: { color: p.success, width: 2, dash: 'dash' } },
+                { type: 'scatter', mode: 'lines', x: xr, y: [b, b], name: 'TWFE coefficient', line: { color: p.danger, width: 2, dash: 'dash' } },
+                { type: 'scatter', mode: 'lines+markers', x: es.x, y: es.y, name: 'cohort-averaged event study', line: { color: p.primary, width: 2.5 }, marker: { size: 6, color: p.primary } }
+            ];
+            var layout = BV.layout({
+                margin: { l: 54, r: 16, t: 30, b: 44 },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                xaxis: { title: 'event time (0 = launch)', dtick: 1, zeroline: false },
+                yaxis: { title: 'effect on sales' },
+                shapes: [
+                    { type: 'line', x0: xr[0], x1: xr[1], y0: 0, y1: 0, line: { color: p.border, width: 1 } },
+                    { type: 'line', x0: -0.5, x1: -0.5, yref: 'paper', y0: 0, y1: 1, line: { color: p.muted, width: 1, dash: 'dot' } }
+                ]
+            });
+            Plotly.react('sdEvent', traces, layout, BV.config);
+
+            document.getElementById('sdAtt').textContent = att.toFixed(2);
+            var tw = document.getElementById('sdTwfe');
+            tw.textContent = b.toFixed(2);
+            tw.className = 'val' + (b < 0 ? ' warn' : '');
+            var diff = b - att;
+            document.getElementById('sdDiff').textContent = diff.toFixed(2);
+            var fl = document.getElementById('sdFlag');
+            if (b < 0) { fl.textContent = 'NEGATIVE — sign flip!'; fl.className = 'val warn'; }
+            else if (Math.abs(diff) < 0.05) { fl.textContent = 'matches ATT'; fl.className = 'val ok'; }
+            else { fl.textContent = 'positive but biased'; fl.className = 'val'; }
+        });
+        BV.sliders([{ id: 'sdHet', value: 'sdHetVal', fmt: function (v) { return v.toFixed(2); } }], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

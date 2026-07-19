@@ -28,8 +28,21 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .bedtl { display: flex; flex-wrap: wrap; gap: 0; margin: 1.6rem 0 2rem; border-top: 2px solid var(--color-border); padding-top: 1.1rem; }
+        .bedtl .ev { flex: 1 1 150px; min-width: 140px; position: relative; padding: 0 0.9rem; }
+        .bedtl .ev::before { content: ''; position: absolute; top: -1.2rem; left: 0.9rem; width: 11px; height: 11px; border-radius: 50%; background: var(--color-primary); border: 2px solid var(--color-surface); }
+        .bedtl .ev.hl::before { background: var(--color-accent); }
+        .bedtl .yr { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 0.95rem; color: var(--color-accent); display: block; }
+        .bedtl .ttl { font-weight: 600; font-size: 0.9rem; color: var(--color-text); display: block; margin: 0.15rem 0; }
+        .bedtl .dsc { font-size: 0.82rem; color: var(--color-text-muted); line-height: 1.35; }
+    </style>
     <!-- seo:augmented (structured data + social cards) -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="From Lindley to Deep Adaptive Design: 65 Years of Bayesian Experimental Design">
@@ -154,6 +167,17 @@
 
             <p>The history of Bayesian experimental design (BED) is unusual among statistical ideas: the theory arrived essentially finished, and everything since has been a fight with an integral. That fight — what made the objective intractable, which estimators broke the deadlock, and how the field leapt from optimizing designs to training design <em>policies</em> — is the fastest way to understand the modern toolkit.</p>
 
+            <div class="bedtl" aria-label="Timeline of Bayesian experimental design">
+                <div class="ev hl"><span class="yr">1948</span><span class="ttl">Shannon</span><span class="dsc">Information as a statistical quantity.</span></div>
+                <div class="ev hl"><span class="yr">1956</span><span class="ttl">Lindley</span><span class="dsc">EIG defined; the design rule stated.</span></div>
+                <div class="ev"><span class="yr">1979–95</span><span class="ttl">Bernardo; Chaloner–Verdinelli</span><span class="dsc">Decision-theoretic framing; the review.</span></div>
+                <div class="ev"><span class="yr">2018</span><span class="ttl">Rainforth et al.</span><span class="dsc">Nested-MC pathologies made precise.</span></div>
+                <div class="ev hl"><span class="yr">2019–20</span><span class="ttl">Foster et al.</span><span class="dsc">Variational &amp; contrastive EIG bounds.</span></div>
+                <div class="ev hl"><span class="yr">2021</span><span class="ttl">Deep Adaptive Design</span><span class="dsc">The loop amortized into a policy network.</span></div>
+            </div>
+
+            <p>The chart below turns Lindley's central object into something you can move: a prior over a parameter, a design knob that sets how precise your measurement is, and the tighter posterior the experiment is expected to produce. The gap between the two — the area of uncertainty the experiment removes — <em>is</em> the expected information gain.</p>
+
             <h2 id="the-measure">1956: A Measure of What an Experiment Is Worth</h2>
             <p>Shannon's 1948 theory established that information is a statistical quantity — defined relative to a distribution, and measured by an essentially unique functional of it. Lindley's move, eight years later, was to point this machinery at an <em>experiment</em> rather than a message: the transmitted signal is your knowledge of a parameter \( \theta \) before the experiment, the received signal your knowledge after, and the difference is what the experiment told you.</p>
             <p>The move required a commitment unfashionable at the time: a prior distribution. Lindley argued priors are not optional here, for a reason that is self-evident once stated — if the prior concentrates on a single value of \( \theta \), no experiment can be informative, because nothing is left to learn. Experimental information is a relation between an experiment and a state of knowledge, not a property of the experiment alone.</p>
@@ -181,6 +205,25 @@
                     <p>and under near-ignorance the comparison of two experiments reduces to comparing determinants of their dispersion matrices — the D-optimality criterion. Outside the conjugate world, evaluating the measure means integrating over outcomes an expression that itself contains an integral over parameters — and in 1956 no machinery for that existed. The theory was finished; the computation had not begun.</p>
                 </div>
             </details>
+
+            <div class="interactive-box">
+                <h4>What an experiment is worth, in one picture</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Take Lindley's conjugate Gaussian case: a prior \( \theta \sim \mathcal{N}(0,\tau^2) \) with \( \tau=1 \), and one measurement whose precision you control through the signal-to-noise ratio \( \tau^2/\sigma^2 \). The expected posterior narrows to sd \( \tau/\sqrt{1+\tau^2/\sigma^2} \), and the experiment's worth is exactly \( \mathrm{EIG}=\tfrac12\ln(1+\tau^2/\sigma^2) \). Slide the precision: the shaded prior shrinks to the sharp expected posterior, and the EIG curve on the right marks where you are &mdash; with visible diminishing returns.</p>
+                <div class="control-row">
+                    <label>Measurement precision&nbsp; τ²/σ²</label>
+                    <input type="range" id="eigSnr" min="0.1" max="30" step="0.1" value="4">
+                    <span class="value" id="eigSnrVal">4.0</span>
+                </div>
+                <div class="chart-container chart-themed" id="eigDens" style="height:300px;"></div>
+                <div class="chart-container chart-themed" id="eigCurve" style="height:230px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">EIG (nats)</span><span class="val" id="eigNats">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">EIG (bits)</span><span class="val" id="eigBits">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Prior sd</span><span class="val" id="eigPrior">1.00</span></div>
+                    <div class="stat"><span class="lbl">Expected posterior sd</span><span class="val" id="eigPost">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Because the Gaussian posterior width does not depend on the outcome, the <em>expected</em> posterior is the actual posterior width every time &mdash; and \( \tfrac12\ln(1+\tau^2/\sigma^2) \) is Lindley's 1956 closed form, the same \( j_n \) that grows without bound yet buys ever less per unit of precision.</p>
+            </div>
 
             <h2 id="why-information-won">Why Information Won the Argument with Fisher Information</h2>
             <p>Lindley's objective was not the only candidate. Classical optimal design maximizes a functional of the <strong>Fisher information matrix</strong> (FIM) — determinant, trace, or smallest eigenvalue: the "alphabetic" D-, A-, and E-optimality criteria. Bernardo (1979) and Chaloner and Verdinelli (1995) placed both approaches in one decision-theoretic frame — choose the design maximizing the expected utility of the data, for some posterior functional as the utility. The entropy (log-score) utility gives the EIG; Fisher-information gain is another member of the family.</p>
@@ -282,6 +325,66 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var TAU = 1.0;                                   // prior sd
+        function postSd(snr) { return TAU / Math.sqrt(1 + snr); }   // snr = tau^2/sigma^2
+        function eigNats(snr) { return 0.5 * Math.log(1 + snr); }
+        function gauss(x, sd) { return Math.exp(-0.5 * x * x / (sd * sd)) / (sd * Math.sqrt(2 * Math.PI)); }
+
+        // Figure A: prior vs expected posterior densities.
+        BV.register(function () {
+            var p = BV.palette();
+            var snr = parseFloat(document.getElementById('eigSnr').value);
+            var sPost = postSd(snr);
+            var xs = BV.linspace(-3.2, 3.2, 220);
+            var prior = xs.map(function (x) { return gauss(x, TAU); });
+            var post = xs.map(function (x) { return gauss(x, sPost); });
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: xs, y: prior, name: 'prior  (sd ' + TAU.toFixed(2) + ')', line: { color: p.muted, width: 2 }, fill: 'tozeroy', fillcolor: BV.band(p.muted, 0.16), hovertemplate: 'prior<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: xs, y: post, name: 'expected posterior  (sd ' + sPost.toFixed(2) + ')', line: { color: p.accent, width: 2.6 }, fill: 'tozeroy', fillcolor: BV.band(p.accent, 0.18), hovertemplate: 'posterior<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'parameter θ', range: [-3.2, 3.2] },
+                yaxis: { title: 'density', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 56, r: 20, t: 34, b: 46 }
+            });
+            Plotly.react('eigDens', traces, layout, BV.config);
+
+            var nats = eigNats(snr), bits = nats / Math.log(2);
+            document.getElementById('eigNats').textContent = nats.toFixed(2);
+            document.getElementById('eigBits').textContent = bits.toFixed(2);
+            document.getElementById('eigPost').textContent = sPost.toFixed(2);
+        });
+
+        // Figure B: EIG traced against the precision knob, with the current point marked.
+        BV.register(function () {
+            var p = BV.palette();
+            var snr = parseFloat(document.getElementById('eigSnr').value);
+            var xs = BV.linspace(0.1, 30, 200);
+            var ys = xs.map(function (v) { return eigNats(v) / Math.log(2); });
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: xs, y: ys, name: 'EIG', line: { color: p.primary, width: 3 }, hovertemplate: 'τ²/σ²=%{x:.1f}<br>EIG=%{y:.2f} bits<extra></extra>' },
+                { type: 'scatter', mode: 'markers', x: [snr], y: [eigNats(snr) / Math.log(2)], showlegend: false, marker: { color: p.danger, size: 12, line: { color: p.surface, width: 1.5 } }, hovertemplate: 'here: %{y:.2f} bits<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'measurement precision  τ²/σ²', range: [0, 30] },
+                yaxis: { title: 'EIG (bits)', rangemode: 'tozero' },
+                showlegend: false,
+                margin: { l: 56, r: 20, t: 16, b: 46 },
+                shapes: [{ type: 'line', x0: snr, x1: snr, y0: 0, y1: eigNats(snr) / Math.log(2), line: { color: p.danger, width: 1, dash: 'dot' } }]
+            });
+            Plotly.react('eigCurve', traces, layout, BV.config);
+        });
+
+        BV.sliders([{ id: 'eigSnr', value: 'eigSnrVal', fmt: function (v) { return v.toFixed(1); } }], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

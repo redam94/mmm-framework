@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -189,6 +193,9 @@
 
             <p>The middle row deserves the emphasis, because it is the one where the standard advice actively misleads. When two chains sit in two modes, each one looks healthy in isolation — good within-chain mixing, stable traces, no divergences. Only the <em>between</em>-chain comparison catches it, which is precisely why R-hat is computed across multiple independently-initialized chains in the first place. Doubling the draws does nothing: the chains converge ever more confidently to their separate answers. In mixture and latent-structure models this is generic, not exotic — permute the class labels or flip the sign of a latent factor <em>and</em> its loadings, and the likelihood is exactly unchanged (Stephens, 2000). The posterior genuinely has \( k! \) or \( 2^k \) copies of every mode, and a gradient-based chain started near one copy will stay there.</p>
 
+            <div class="chart-container chart-themed" id="wsfTraces" style="height:320px;"></div>
+            <p class="chart-caption">Two four-hundred-iteration traces, two chains each. <strong>Left:</strong> a healthy fit &mdash; both chains explore the same region, so between-chain variance matches within-chain variance and \( \hat R \approx 1.00 \). <strong>Right:</strong> textbook multimodality &mdash; each chain mixes cleanly on its own but sits in a <em>different</em> mode, so \( \hat R \approx 1.9 \) even though no single trace looks pathological. Only the between-chain comparison catches it, which is exactly why \( \hat R \) is computed across independently-initialized chains.</p>
+
             <div class="note">
                 <h4>💡 The wall-clock diagnostic</h4>
                 <p>There is a fourth signal the diagnostics tables never list: time. A model whose warmup will not settle, or whose sampling pace is an order of magnitude slower than a comparable model, is exhibiting the same geometry problems before any threshold trips. Treat "this is inexplicably slow" as a divergence-class symptom, not an infrastructure complaint — the folk theorem applies to runtime too.</p>
@@ -212,6 +219,25 @@ results.approximate                     # True — never final inference</code><
             <p>The rung where failed fits actually get fixed is the model itself, and the fixes are boringly repeatable. The canonical example is the hierarchical funnel. In a <em>centered</em> parameterization, group effects \( \theta_g \sim \mathcal{N}(\mu, \tau) \) create a geometry where the plausible scale of every \( \theta_g \) depends on \( \tau \): as \( \tau \to 0 \) the posterior narrows into a funnel neck whose curvature defeats any fixed step size (Betancourt &amp; Girolami, 2015). The <em>non-centered</em> form,</p>
             $$ \theta_g \;=\; \mu + \tau \,\eta_g, \qquad \eta_g \sim \mathcal{N}(0, 1), $$
             <p>is algebraically the same model with the dependence between location and scale removed from the prior — and it routinely converts a divergence-riddled fit into a clean one. Which form samples better depends on how strongly the data constrain each group (Papaspiliopoulos, Roberts &amp; Sk&ouml;ld, 2007): well-measured groups favor centered, weakly-measured groups favor non-centered. The point is that the cure was a reparameterization, not a sampler setting.</p>
+
+            <div class="interactive-box">
+                <h4>Neal's funnel: why centered fails and non-centered fixes it</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Each dot is a draw of \( (x, v) \) where \( v \sim \mathcal{N}(0, \sigma_v) \) and \( x \sim \mathcal{N}(0, e^{v/2}) \) &mdash; the geometry a hierarchical variance creates. Deepen the funnel and its neck (bottom) pinches to a width no fixed integrator step can resolve: in the <strong>centered</strong> parameterization the sampler is flung out and <span style="color:var(--color-danger);font-weight:600;">diverges</span> there, biasing exactly the region it can't enter. Toggle to <strong>non-centered</strong> \( x = e^{v/2}\eta \) &mdash; same posterior, regularized geometry, divergences gone.</p>
+                <div class="control-row">
+                    <label>Funnel depth &nbsp;(σ of log τ)</label>
+                    <input type="range" id="nfDepth" min="1" max="4" step="0.25" value="3">
+                    <span class="value" id="nfDepthVal">3.00</span>
+                    <button type="button" class="viz-btn" id="nfToggle">⇄ Switch to non-centered</button>
+                </div>
+                <div class="chart-container chart-themed" id="nfFunnel" style="height:360px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Parameterization</span><span class="val" id="nfParam">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Divergences</span><span class="val" id="nfDiv">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Neck width (x-scale at base)</span><span class="val" id="nfNeck">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Sampler verdict</span><span class="val" id="nfVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Divergences cluster where the sampler is repelled, not at random &mdash; more draws only avoid the same neck. The fix is the reparameterization, not <span style="font-family:'JetBrains Mono',monospace;">target_accept</span>.</p>
+            </div>
             <p>Multimodality has its own family of identification fixes. Label switching in a mixture is removed by an ordering constraint or a post-hoc relabeling rule (Stephens, 2000). Sign reflection in a latent factor — the \( (F, \lambda) \leftrightarrow (-F, -\lambda) \) symmetry — is removed by anchoring one loading positive. And the anchor has to be chosen where the data have leverage: in our own structural mediation work, a factor anchored on a loading the data held near zero still escaped into its reflected mode (the positivity constraint costs nothing at zero), showing up as a split R-hat of 1.755 with individually clean chains; re-anchoring on a loading the data held firmly nonzero dropped R-hat to 1.08. Ridges respond to the same logic: when two parameters can trade off — a carryover rate against an autoregressive coefficient, a scale against a loading — the fix is a prior or constraint that breaks the trade, or an experiment that informs one side of it.</p>
 
             <div class="warning">
@@ -286,6 +312,94 @@ results.diagnostics["log_marginal_likelihood"]            # model evidence (see 
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // --- Figure A: Neal's funnel, centered vs non-centered ---
+        var NF_N = 500, NF_THRESH = 0.15;   // local x-scale below which a centered step diverges
+        var nfCentered = true;
+        // Pre-draw standard normals so the scatter is reproducible and only rescales with depth.
+        var vZ = [], xZ = [];
+        (function () { var rng = BV.mulberry32(1701); for (var i = 0; i < NF_N; i++) { vZ.push(BV.randn(rng)); xZ.push(BV.randn(rng)); } })();
+
+        BV.register(function () {
+            var p = BV.palette();
+            var depth = parseFloat(document.getElementById('nfDepth').value);
+            var okX = [], okY = [], divX = [], divY = [], nDiv = 0;
+            for (var i = 0; i < NF_N; i++) {
+                var v = vZ[i] * depth;
+                var scale = Math.exp(v / 2);
+                var x = xZ[i] * scale;
+                var divergent = nfCentered && scale < NF_THRESH;
+                if (divergent) { divX.push(x); divY.push(v); nDiv++; }
+                else { okX.push(x); okY.push(v); }
+            }
+            var traces = [
+                { type: 'scatter', mode: 'markers', x: okX, y: okY, name: 'accepted draw', marker: { color: BV.band(p.accent, 0.7), size: 5, line: { width: 0 } }, hovertemplate: 'x=%{x:.2f}<br>v=%{y:.2f}<extra></extra>' }
+            ];
+            if (divX.length) traces.push({ type: 'scatter', mode: 'markers', x: divX, y: divY, name: 'divergence', marker: { color: p.danger, size: 7, line: { color: p.surface, width: 1 }, symbol: 'x' }, hovertemplate: 'divergence<br>x=%{x:.2f}<br>v=%{y:.2f}<extra></extra>' });
+            var layout = BV.layout({
+                xaxis: { title: 'group effect  x', range: [-10, 10] },
+                yaxis: { title: 'log scale  v = log τ', range: [-9, 9] },
+                legend: { orientation: 'h', y: 1.13, x: 0 },
+                margin: { l: 60, r: 20, t: 30, b: 48 }
+            });
+            Plotly.react('nfFunnel', traces, layout, BV.config);
+
+            var neck = Math.exp(-2.33 * depth / 2);   // x-scale at ~1st percentile of v
+            document.getElementById('nfParam').textContent = nfCentered ? 'centered' : 'non-centered';
+            var dv = document.getElementById('nfDiv');
+            dv.textContent = String(nDiv);
+            dv.className = 'val' + (nDiv > 0 ? ' warn' : ' ok');
+            document.getElementById('nfNeck').textContent = neck < 0.01 ? neck.toExponential(1) : neck.toFixed(3);
+            var vd = document.getElementById('nfVerdict');
+            if (!nfCentered) { vd.textContent = 'geometry regularized'; vd.className = 'val ok'; }
+            else if (nDiv > 0) { vd.textContent = 'biased at the neck'; vd.className = 'val warn'; }
+            else { vd.textContent = 'shallow — fine'; vd.className = 'val ok'; }
+        });
+        BV.sliders([{ id: 'nfDepth', value: 'nfDepthVal', fmt: function (v) { return v.toFixed(2); } }], BV.redraw);
+        document.getElementById('nfToggle').addEventListener('click', function () {
+            nfCentered = !nfCentered;
+            this.textContent = nfCentered ? '⇄ Switch to non-centered' : '⇄ Switch to centered';
+            BV.redraw();
+        });
+
+        // --- Figure B: healthy vs multimodal traces (static) ---
+        function arTrace(mean, seed) {
+            var rng = BV.mulberry32(seed), y = mean, out = [];
+            for (var t = 0; t < 400; t++) { y = mean + 0.6 * (y - mean) + BV.randn(rng) * 0.34; out.push(y); }
+            return out;
+        }
+        BV.register(function () {
+            var p = BV.palette();
+            var iters = []; for (var t = 0; t < 400; t++) iters.push(t);
+            var hA = arTrace(0, 11), hB = arTrace(0, 22);
+            var mA = arTrace(-1.2, 33), mB = arTrace(1.2, 44);
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: iters, y: hA, name: 'chain 1', line: { color: p.primary, width: 1 }, xaxis: 'x', yaxis: 'y', hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: iters, y: hB, name: 'chain 2', line: { color: p.accent, width: 1 }, xaxis: 'x', yaxis: 'y', hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: iters, y: mA, showlegend: false, line: { color: p.primary, width: 1 }, xaxis: 'x2', yaxis: 'y2', hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: iters, y: mB, showlegend: false, line: { color: p.accent, width: 1 }, xaxis: 'x2', yaxis: 'y2', hoverinfo: 'skip' }
+            ];
+            var layout = BV.layout({
+                xaxis: { domain: [0, 0.46], title: 'iteration', dtick: 200 },
+                yaxis: { title: 'sampled value', range: [-2.4, 2.4] },
+                xaxis2: { domain: [0.54, 1], title: 'iteration', anchor: 'y2', dtick: 200 },
+                yaxis2: { range: [-2.4, 2.4], anchor: 'x2' },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 58, r: 16, t: 34, b: 48 },
+                annotations: [
+                    { x: 0.20, y: 1.16, xref: 'paper', yref: 'paper', xanchor: 'center', text: 'healthy · R̂ ≈ 1.00', showarrow: false, font: { size: 12, color: p.success } },
+                    { x: 0.80, y: 1.16, xref: 'paper', yref: 'paper', xanchor: 'center', text: 'multimodal · R̂ ≈ 1.9', showarrow: false, font: { size: 12, color: p.danger } }
+                ]
+            });
+            Plotly.react('wsfTraces', traces, layout, BV.config);
+        });
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

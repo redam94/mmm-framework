@@ -1677,6 +1677,9 @@ tbody tr:last-child td {
    Plotly's own margins provide the breathing room. */
 .chart-container.js-plotly-plot {
     padding: 0;
+    /* Two-class specificity beats Plotly's injected `.js-plotly-plot { background:#fff }`
+       rule, so the plot area follows the theme surface in dark mode. */
+    background: var(--color-surface);
 }
 
 .chart-grid {
@@ -1685,6 +1688,64 @@ tbody tr:last-child td {
     gap: 2rem;
     margin: 2rem 0;
 }
+
+/* Blog research figures (blogviz.js) — caption + optional readout row.
+   blogviz charts are theme-aware (they read the CSS tokens and re-render on
+   theme change), so they must NOT get the legacy white card that the older
+   PT-based pages rely on. `.chart-themed` opts a container out of that hack
+   and follows the surface token in both themes. Higher specificity than the
+   global `[data-theme="dark"] .js-plotly-plot` rule, so it wins regardless of
+   source order — and it only touches containers that explicitly carry it. */
+[data-theme="dark"] .chart-themed.js-plotly-plot {
+    background: var(--color-surface);
+}
+.chart-caption {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    line-height: 1.55;
+    margin: 0.4rem 0 1.75rem;
+    padding-left: 0.9rem;
+    border-left: 3px solid var(--color-primary);
+}
+.chart-caption strong { color: var(--color-text); }
+.viz-readout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    margin: 1rem 0 0.25rem;
+}
+.viz-readout .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.viz-readout .stat .lbl {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+}
+.viz-readout .stat .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--color-primary-dark);
+}
+.viz-readout .stat .val.warn { color: var(--color-danger); }
+.viz-readout .stat .val.ok { color: var(--color-success); }
+.viz-btn {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.45rem 1rem;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--color-primary);
+    background: transparent;
+    color: var(--color-primary-dark);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+.viz-btn:hover { background: var(--color-primary); color: #fff; }
 
 .chart-box {
     background: var(--color-surface);

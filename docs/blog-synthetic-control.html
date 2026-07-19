@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -185,6 +189,23 @@ def sc_weights(X0, x1):
 
             <p>The canonical illustration is California's Proposition 99, a 1988 cigarette tax studied with state-level data from 1970 to 2000 and 38 donor states. The convex program puts non-zero weight on only five states, tracks California closely through 1988 without overfitting, then diverges: by 2000, actual California sits roughly 25 packs per capita per year below its synthetic counterpart, and the gap widens over time (Abadie, Diamond, &amp; Hainmueller, 2010).</p>
 
+            <div class="interactive-box">
+                <h4>Building the counterfactual from a donor blend</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The treated market's sales (green) against its <em>synthetic control</em> (dashed) &mdash; a convex blend of donor markets, here <strong>45% A · 25% B · 30% C</strong>, fit to reproduce the pre-period trajectory. They track closely before the intervention (the pre-period RMSPE measures how closely); after it, the gap opens and grows. Drag the true effect and watch the post-period divergence &mdash; the gap <em>is</em> the estimated lift.</p>
+                <div class="control-row">
+                    <label>True effect size &nbsp;(per-period lift)</label>
+                    <input type="range" id="scTau" min="0" max="35" step="1" value="15">
+                    <span class="value" id="scTauVal">15</span>
+                </div>
+                <div class="chart-container chart-themed" id="scLevels" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Estimated lift (avg post gap)</span><span class="val" id="scLift">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Final-period gap</span><span class="val" id="scFinal">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Pre-period fit (RMSPE)</span><span class="val" id="scRmspe">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Because the weights are non-negative and sum to one, the synthetic control interpolates inside the donor hull &mdash; and any failure to match shows up as a visible pre-period gap, not hidden behind extrapolation.</p>
+            </div>
+
             <h2 id="when-it-applies">When the Method Applies</h2>
             <p>Synthetic control's transparency cuts both ways: a bad application is visible in a way a bad regression is not. Abadie (2021) catalogs the conditions a credible application must satisfy, and they translate directly into marketing terms.</p>
             <ul>
@@ -228,6 +249,9 @@ def sc_weights(X0, x1):
                 <p>and the permutation p-value is the fraction of units — treated unit included — whose ratio is at least as large as the treated unit's:</p>
                 $$ p \;=\; \frac{1}{J+1} \sum_{j=1}^{J+1} \mathbf{1}\!\left\{ r_j \ge r_1 \right\}. $$
             </div>
+
+            <div class="chart-container chart-themed" id="scPlacebo" style="height:340px;"></div>
+            <p class="chart-caption">In-space placebo inference: the gap between each unit and its own synthetic control. Every donor reassigned as &ldquo;treated&rdquo; (grey) hovers near zero throughout, while the actually-treated market (green) is flat pre-intervention and diverges sharply after &mdash; an RMSPE ratio more extreme than any placebo, which is the permutation p-value.</p>
 
             <p>Donors whose pre-period fit is hopeless are typically dropped from the placebo distribution before computing the p-value (a common screen keeps units whose pre-period RMSPE is within a small multiple of the treated unit's), and one-sided variants buy power when the direction of the effect is known in advance. In the Proposition 99 study, California's year-2000 effect of roughly &minus;25 packs per capita was more extreme than every one of the 34 surviving placebo runs — a permutation p-value near 0.03.</p>
             <p>Two diagnostics belong in every application. <strong>Backdating</strong> (an in-time placebo) reruns the analysis with the intervention date moved earlier: a credible synthetic control should show near-zero "effects" in periods when nothing happened, as the West Germany reunification analysis does when backdated a decade. <strong>Leave-one-out</strong> refits the synthetic control dropping each positively-weighted donor in turn: if the conclusion flips when a single donor exits, that donor deserves scrutiny — it may have had its own idiosyncratic shock. Interval estimates exist too: test inversion over hypothesized effect sizes (Firpo &amp; Possebom, 2018) and prediction intervals (Cattaneo, Feng, &amp; Titiunik, 2021).</p>
@@ -310,6 +334,99 @@ def sc_weights(X0, x1):
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var Tn = 40, T0 = 28;
+        function d1(t) { return 100 + 0.9 * t + 7 * Math.sin(2 * Math.PI * t / 12); }
+        function d2(t) { return 125 + 0.35 * t + 5 * Math.cos(2 * Math.PI * t / 6 + 0.5); }
+        function d3(t) { return 88 + 1.15 * t + 6 * Math.sin(2 * Math.PI * t / 12 + 1.1); }
+        var W = [0.45, 0.25, 0.30];
+        function synth(t) { return W[0] * d1(t) + W[1] * d2(t) + W[2] * d3(t); }
+        function effect(t, tau) { return t > T0 ? tau * Math.min(1, (t - T0) / 6) : 0; }
+
+        // --- Figure 1: treated vs synthetic control (interactive) ---
+        BV.register(function () {
+            var p = BV.palette();
+            var tau = parseFloat(document.getElementById('scTau').value);
+            var rng = BV.mulberry32(17);
+            var ts = [], treated = [], syn = [], gaps = [];
+            var preSq = 0, preN = 0, postSum = 0, postN = 0, finalGap = 0;
+            for (var t = 1; t <= Tn; t++) {
+                var s = synth(t);
+                var noise = 2.0 * BV.randn(rng);
+                var y = s + noise + effect(t, tau);
+                ts.push(t); treated.push(y); syn.push(s);
+                var gap = y - s; gaps.push(gap);
+                if (t <= T0) { preSq += gap * gap; preN++; }
+                else { postSum += gap; postN++; finalGap = gap; }
+            }
+            var rmspe = Math.sqrt(preSq / preN);
+            var avgLift = postSum / postN;
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: ts, y: syn, name: 'synthetic control', line: { color: p.accent, width: 2, dash: 'dash' } },
+                { type: 'scatter', mode: 'lines', x: ts, y: treated, name: 'treated market', line: { color: p.primary, width: 2.5 } }
+            ];
+            var layout = BV.layout({
+                margin: { l: 54, r: 16, t: 30, b: 44 },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                xaxis: { title: 'period', dtick: 8 },
+                yaxis: { title: 'sales per capita' },
+                shapes: [
+                    { type: 'rect', x0: T0, x1: Tn, yref: 'paper', y0: 0, y1: 1, fillcolor: BV.band(p.primary, 0.07), line: { width: 0 }, layer: 'below' },
+                    { type: 'line', x0: T0, x1: T0, yref: 'paper', y0: 0, y1: 1, line: { color: p.muted, width: 1, dash: 'dot' } }
+                ],
+                annotations: [{ x: T0, y: 1, yref: 'paper', yanchor: 'bottom', xanchor: 'left', text: ' intervention', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('scLevels', traces, layout, BV.config);
+
+            document.getElementById('scLift').textContent = avgLift.toFixed(1);
+            document.getElementById('scFinal').textContent = finalGap.toFixed(1);
+            var rm = document.getElementById('scRmspe');
+            rm.textContent = rmspe.toFixed(2);
+            rm.className = 'val' + (rmspe < 3 ? ' ok' : ' warn');
+        });
+        BV.sliders([{ id: 'scTau', value: 'scTauVal', fmt: function (v) { return String(v); } }], BV.redraw);
+
+        // --- Figure 2: placebo gap plot (static) ---
+        BV.register(function () {
+            var p = BV.palette();
+            var rng = BV.mulberry32(91);
+            var traces = [];
+            for (var k = 0; k < 14; k++) {
+                var amp = 1.2 + 3.4 * rng(), per = 5 + 9 * rng(), ph = 6.28 * rng(), lvl = (rng() - 0.5) * 3;
+                var xs = [], ys = [];
+                for (var t = 1; t <= Tn; t++) {
+                    xs.push(t);
+                    ys.push(lvl + amp * Math.sin(2 * Math.PI * t / per + ph) + 0.9 * BV.randn(rng));
+                }
+                traces.push({ type: 'scatter', mode: 'lines', x: xs, y: ys, showlegend: false, line: { color: BV.band(p.muted, 0.5), width: 1 }, hoverinfo: 'skip' });
+            }
+            // treated gap: flat pre, diverging post (fixed representative effect)
+            var tx = [], tg = [], rng2 = BV.mulberry32(17);
+            for (var t = 1; t <= Tn; t++) {
+                tx.push(t);
+                tg.push(2.0 * BV.randn(rng2) + effect(t, 18));
+            }
+            traces.push({ type: 'scatter', mode: 'lines', x: tx, y: tg, name: 'treated market', line: { color: p.primary, width: 3 } });
+            var layout = BV.layout({
+                margin: { l: 54, r: 16, t: 30, b: 44 },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                xaxis: { title: 'period', dtick: 8 },
+                yaxis: { title: 'gap: unit − synthetic' },
+                shapes: [
+                    { type: 'rect', x0: T0, x1: Tn, yref: 'paper', y0: 0, y1: 1, fillcolor: BV.band(p.primary, 0.07), line: { width: 0 }, layer: 'below' },
+                    { type: 'line', x0: 1, x1: Tn, y0: 0, y1: 0, line: { color: p.border, width: 1 } },
+                    { type: 'line', x0: T0, x1: T0, yref: 'paper', y0: 0, y1: 1, line: { color: p.muted, width: 1, dash: 'dot' } }
+                ]
+            });
+            Plotly.react('scPlacebo', traces, layout, BV.config);
+        });
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

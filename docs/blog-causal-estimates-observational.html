@@ -28,8 +28,25 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .dagfig { width: 100%; height: 190px; display: block; }
+        .dagfig .node { fill: var(--color-surface); stroke: var(--color-text-muted); stroke-width: 1.6; }
+        .dagfig .node.exposure { stroke: var(--color-primary); stroke-width: 2.2; }
+        .dagfig .node.outcome { stroke: var(--color-accent); stroke-width: 2.2; }
+        .dagfig .node.covar { stroke: var(--color-warning); stroke-width: 2.2; }
+        .dagfig .nlab { fill: var(--color-text); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; }
+        .dagfig .edge { stroke: var(--color-text-muted); stroke-width: 1.7; fill: none; }
+        .dagfig .edge.blocked { stroke: var(--color-warning); stroke-dasharray: 5 3; }
+        .dagfig .arrowhead { fill: var(--color-text-muted); }
+        .dagfig .arrowhead.blocked { fill: var(--color-warning); }
+        .dag-solo { max-width: 430px; margin: 1.6rem auto 0.4rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1rem 1.1rem 0.7rem; }
+    </style>
     <!-- seo:augmented (structured data + social cards) -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Uncovering Causal Estimates from Non-Experimental Data">
@@ -163,6 +180,24 @@
             $$ \underbrace{E[Y_i \mid D_i = 1] - E[Y_i \mid D_i = 0]}_{\text{naive comparison}} \;=\; \underbrace{E[Y_{1i} - Y_{0i} \mid D_i = 1]}_{\text{ATT}} \;+\; \underbrace{E[Y_{0i} \mid D_i = 1] - E[Y_{0i} \mid D_i = 0]}_{\text{selection bias}}. $$
             <p>The first term is the average treatment effect on the treated — the quantity we want. The second is selection bias: the systematic difference in <em>baseline</em> outcomes between the groups. People who take the treatment are rarely like people who don't, and the naive comparison mixes that pre-existing difference into the estimate (Angrist &amp; Pischke, 2009). Randomization solves the problem by force, making \( D_i \) independent of the potential outcomes so the second term is exactly zero. Every strategy below is a different way of zeroing it <em>without</em> randomizing. The potential-outcomes machinery itself, and its structural-causal-model counterpart, are developed at more length in the <a href="causal-inference.html">causal inference guide</a>.</p>
 
+            <div class="interactive-box">
+                <h4>Naive comparison vs. back-door adjustment</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The true effect is fixed at <span style="font-family:'JetBrains Mono',monospace;">&tau; = 1.0</span>. A confounder <span style="font-family:'JetBrains Mono',monospace;">Z</span> pushes units into treatment <em>and</em> lifts their baseline outcome, so the naive treated-minus-control gap carries the selection-bias term. Drag the confounder&rsquo;s strength: the naive estimate marches away from the truth, while adjusting for <span style="font-family:'JetBrains Mono',monospace;">Z</span> holds the estimate on target &mdash; as long as <span style="font-family:'JetBrains Mono',monospace;">Z</span> is observed and the model is right.</p>
+                <div class="control-row">
+                    <label>Confounder strength &nbsp;(c)</label>
+                    <input type="range" id="coC" min="0" max="1.5" step="0.05" value="0.7">
+                    <span class="value" id="coCVal">0.70</span>
+                </div>
+                <div class="chart-container chart-themed" id="coChart" style="height:320px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Naive estimate</span><span class="val" id="coNaive">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Adjusted estimate</span><span class="val" id="coAdj">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">True effect &tau;</span><span class="val" id="coTrue">1.00</span></div>
+                    <div class="stat"><span class="lbl">Naive bias</span><span class="val" id="coBias">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Naive gap = &tau; + selection bias (proportional to confounder strength); the back-door adjustment <span style="font-family:'JetBrains Mono',monospace;">&Sigma;<sub>z</sub> P(Y|X,z)P(z)</span> subtracts it. The adjusted line stays flat on &tau; only because <span style="font-family:'JetBrains Mono',monospace;">Z</span> is measured here &mdash; an <em>unmeasured</em> confounder leaves the naive curve with nothing to close it.</p>
+            </div>
+
             <h2 id="selection-on-observables">Selection on Observables</h2>
             <p>The most direct route asserts that treatment looks random once you condition on the right observed covariates.</p>
 
@@ -196,6 +231,11 @@
                 <li><strong>Chain</strong> \( A \rightarrow B \rightarrow C \): \( B \) is a mediator — conditioning on it blocks the causal path itself. Leave it alone.</li>
                 <li><strong>Collider</strong> \( A \rightarrow B \leftarrow C \): the path is already blocked — conditioning on \( B \) <em>opens</em> it. Leave it alone.</li>
             </ul>
+            <div class="dag-solo">
+                <svg class="dagfig" id="dagBackdoor" viewBox="0 0 260 180" role="img" aria-label="DAG: Z is a common cause of treatment and outcome; adjusting for Z blocks the back-door path"></svg>
+                <p class="chart-caption" style="margin:0.3rem 0 0;">The fork <span style="font-family:'JetBrains Mono',monospace;">X &larr; Z &rarr; Y</span>. The observed confounder <strong>Z</strong> (amber) opens a back-door path that biases the naive <span style="font-family:'JetBrains Mono',monospace;">X &rarr; Y</span> comparison; conditioning on <strong>Z</strong> (amber dashed edges) blocks it, and the adjustment formula recovers the causal effect.</p>
+            </div>
+
             <p>A set \( Z \) satisfying the backdoor criterion — it blocks every path from treatment into the outcome that enters the treatment through an arrow pointing at it, without touching mediators or colliders — licenses the adjustment formula</p>
             $$ P(Y \mid \mathrm{do}(X = x)) \;=\; \sum_z P(Y \mid X = x, Z = z)\, P(Z = z). $$
             <p>Just as valuable is the negative verdict: when no valid adjustment set exists among the variables you observe, the graph says so explicitly, and the honest conclusion is that selection-on-observables cannot work with your data. That is the cue to reach for one of the designs below, each of which imports exogenous variation from somewhere else.</p>
@@ -349,6 +389,94 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // --- DAG renderer with a generic "special" edge class (here: blocked) ---
+        function drawDag(id, nodes, edges) {
+            var svg = document.getElementById(id);
+            if (!svg) return;
+            var nm = {};
+            nodes.forEach(function (n) { nm[n.id] = n; });
+            var aId = id + '-a', sId = id + '-s';
+            var s = '<defs>'
+                + '<marker id="' + aId + '" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>'
+                + '<marker id="' + sId + '" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead blocked" d="M0,0 L10,5 L0,10 z"/></marker>'
+                + '</defs>';
+            edges.forEach(function (e) {
+                var A = nm[e.from], B = nm[e.to];
+                var dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+                var x1 = A.x + ux * (A.r + 1), y1 = A.y + uy * (A.r + 1);
+                var x2 = B.x - ux * (B.r + 7), y2 = B.y - uy * (B.r + 7);
+                var special = e.cls === 'blocked';
+                s += '<line class="edge' + (special ? ' blocked' : '') + '" x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1)
+                    + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" marker-end="url(#' + (special ? sId : aId) + ')"/>';
+            });
+            nodes.forEach(function (n) {
+                s += '<circle class="node ' + (n.cls || '') + '" cx="' + n.x + '" cy="' + n.y + '" r="' + n.r + '"/>';
+                s += '<text class="nlab" x="' + n.x + '" y="' + (n.y + 0.5) + '" text-anchor="middle" dominant-baseline="central">' + n.label + '</text>';
+            });
+            svg.innerHTML = s;
+        }
+        function initDags() {
+            drawDag('dagBackdoor',
+                [{ id: 'Z', x: 130, y: 34, r: 18, cls: 'covar', label: 'Z' },
+                 { id: 'X', x: 48, y: 140, r: 20, cls: 'exposure', label: 'X' },
+                 { id: 'Y', x: 212, y: 140, r: 20, cls: 'outcome', label: 'Y' }],
+                [{ from: 'Z', to: 'X', cls: 'blocked' }, { from: 'Z', to: 'Y', cls: 'blocked' }, { from: 'X', to: 'Y' }]);
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDags);
+        } else { initDags(); }
+
+        // --- Interactive: naive vs back-door-adjusted estimate ---
+        var TAU = 1.0;
+        function naiveAt(c) { return TAU + 1.35 * c; }   // selection bias grows with confounding
+        function adjAt(c)   { return TAU + 0.03 * c; }    // adjustment recovers τ (tiny residual)
+
+        BV.register(function () {
+            var p = BV.palette();
+            var c0 = parseFloat(document.getElementById('coC').value);
+            var xs = BV.linspace(0, 1.5, 120);
+            var naive = xs.map(naiveAt);
+            var adj = xs.map(adjAt);
+            var traces = [
+                { type: 'scatter', mode: 'lines', name: 'naive comparison', x: xs, y: naive,
+                  line: { color: p.danger, width: 3 }, hovertemplate: 'c=%{x:.2f}<br>naive=%{y:.2f}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', name: 'back-door adjusted', x: xs, y: adj,
+                  line: { color: p.primary, width: 3 }, hovertemplate: 'c=%{x:.2f}<br>adjusted=%{y:.2f}<extra></extra>' },
+                { type: 'scatter', mode: 'markers', showlegend: false, x: [c0, c0], y: [naiveAt(c0), adjAt(c0)],
+                  marker: { color: [p.danger, p.primary], size: 13, line: { color: p.surface, width: 1.5 } },
+                  hovertemplate: '%{y:.2f}<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'confounder strength (c)', range: [0, 1.5] },
+                yaxis: { title: 'estimated effect', range: [0, 3.1] },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 62, r: 20, t: 30, b: 48 },
+                shapes: [{ type: 'line', x0: 0, x1: 1.5, y0: TAU, y1: TAU, line: { color: p.muted, width: 1.5, dash: 'dot' } }],
+                annotations: [{ x: 1.48, y: TAU, xanchor: 'right', yanchor: 'bottom', text: 'true τ = 1.0', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('coChart', traces, layout, BV.config);
+
+            var nv = naiveAt(c0), av = adjAt(c0), bias = nv - TAU;
+            var nEl = document.getElementById('coNaive');
+            nEl.textContent = nv.toFixed(2);
+            nEl.className = 'val' + (bias > 0.25 ? ' warn' : '');
+            var aEl = document.getElementById('coAdj');
+            aEl.textContent = av.toFixed(2);
+            aEl.className = 'val ok';
+            document.getElementById('coBias').textContent = (bias >= 0 ? '+' : '') + bias.toFixed(2);
+        });
+
+        BV.sliders([
+            { id: 'coC', value: 'coCVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

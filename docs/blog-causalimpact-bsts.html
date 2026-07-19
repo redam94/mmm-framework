@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -221,6 +225,23 @@
             $$ \phi_t^{(\tau)} \;=\; y_t - \tilde{y}_t^{(\tau)}, $$
             <p>and the collection over draws is a full posterior for the effect at each time point — the time-series generalization of the difference-in-differences contrast. The <strong>cumulative impact</strong> \( \sum_{t'=n+1}^{t} \phi_{t'}^{(\tau)} \) totals the effect from launch; it is the headline number for <em>flow</em> outcomes like weekly sales or daily clicks, but meaningless for <em>stock</em> outcomes like subscriber counts, where summing levels double-counts. For stocks, the <strong>running average</strong> \( \tfrac{1}{t-n}\sum_{t'=n+1}^{t} \phi_{t'}^{(\tau)} \) is the interpretable summary. Each quantity is reported as a posterior mean with a central 95% credible interval, and an effect is called significant when that interval excludes zero.</p>
 
+            <div class="interactive-box">
+                <h4>Observed minus counterfactual, pointwise and cumulative</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The <strong>top panel</strong> shows the observed series (green) against the counterfactual forecast (dashed) with its 95% credible band; the band <em>fans out</em> with horizon, because a random-walk trend admits more alternate histories the further from the last pre-period point. The <strong>bottom panel</strong> accumulates the pointwise gap into the cumulative effect. Slide the true intervention effect toward zero and the cumulative interval swallows the zero line &mdash; the honest read of &ldquo;no detectable effect.&rdquo;</p>
+                <div class="control-row">
+                    <label>True intervention effect &nbsp;(per week)</label>
+                    <input type="range" id="ciTau" min="-10" max="40" step="1" value="18">
+                    <span class="value" id="ciTauVal">18</span>
+                </div>
+                <div class="chart-container chart-themed" id="ciChart" style="height:440px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Pointwise effect (final week)</span><span class="val" id="ciPoint">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Cumulative effect</span><span class="val" id="ciCum">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Interval excludes zero?</span><span class="val" id="ciSig">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Report cumulative impact for a flow like weekly sales &mdash; and treat any tool that shows constant-width uncertainty at week&nbsp;18 as overconfident, not more precise.</p>
+            </div>
+
             <h3 id="widening-uncertainty">Why the bands widen — and why that is correct</h3>
             <p>Every CausalImpact plot shares a visual signature: the interval around the counterfactual fans out as the post-period lengthens. This is not a defect. The local linear trend's slope is a random walk, so uncertainty about where the series <em>would have gone</em> compounds with horizon — the further from the last pre-period observation, the more alternate histories are consistent with the data. The paper's simulations confirm the consequence: absolute estimation error grows with campaign length, and structural breaks accelerate the decay. The design implication: measure over the shortest window the business question allows, and treat any tool reporting constant-width uncertainty at month six as overconfident, not more precise.</p>
 
@@ -290,6 +311,74 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var ZC = 1.959964, Nw = 48, n0 = 30;
+        function seas(t) { return 8 * Math.sin(2 * Math.PI * t / 12); }
+        function cf(t) { return 200 + 1.4 * t + seas(t); }
+        function hw(t) { if (t <= n0) return 4; var h = t - n0; return 4 + 3.2 * Math.sqrt(h) + 0.25 * h; }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var tau = parseFloat(document.getElementById('ciTau').value);
+            var rng = BV.mulberry32(21);
+            var ts = [], obs = [], cfm = [], up = [], lo = [];
+            for (var t = 1; t <= Nw; t++) {
+                var base = cf(t), eff = t > n0 ? tau : 0;
+                ts.push(t);
+                obs.push(base + eff + 3.5 * BV.randn(rng));
+                cfm.push(base);
+                up.push(base + hw(t)); lo.push(base - hw(t));
+            }
+            var ct = [], cmean = [], cup = [], clo = [], cvar = 0, csum = 0;
+            for (var i = 0; i < Nw; i++) {
+                var t = ts[i];
+                if (t > n0) {
+                    csum += obs[i] - cfm[i];
+                    cvar += Math.pow(hw(t) / ZC, 2);
+                    ct.push(t); cmean.push(csum);
+                    var chw = ZC * Math.sqrt(cvar);
+                    cup.push(csum + chw); clo.push(csum - chw);
+                }
+            }
+            var traces = [
+                { x: ts, y: up, mode: 'lines', line: { width: 0 }, showlegend: false, hoverinfo: 'skip', yaxis: 'y' },
+                { x: ts, y: lo, mode: 'lines', line: { width: 0 }, fill: 'tonexty', fillcolor: BV.band(p.accent, 0.16), showlegend: false, hoverinfo: 'skip', yaxis: 'y' },
+                { x: ts, y: cfm, mode: 'lines', name: 'counterfactual', line: { color: p.accent, width: 2, dash: 'dash' }, yaxis: 'y' },
+                { x: ts, y: obs, mode: 'lines', name: 'observed', line: { color: p.primary, width: 2.5 }, yaxis: 'y' },
+                { x: ct, y: cup, mode: 'lines', line: { width: 0 }, showlegend: false, hoverinfo: 'skip', yaxis: 'y2' },
+                { x: ct, y: clo, mode: 'lines', line: { width: 0 }, fill: 'tonexty', fillcolor: BV.band(p.primary, 0.16), showlegend: false, hoverinfo: 'skip', yaxis: 'y2' },
+                { x: ct, y: cmean, mode: 'lines', name: 'cumulative effect', line: { color: p.primaryDark, width: 2.5 }, yaxis: 'y2' }
+            ];
+            var layout = BV.layout({
+                margin: { l: 62, r: 16, t: 30, b: 44 },
+                legend: { orientation: 'h', y: 1.1, x: 0 },
+                xaxis: { title: 'week', anchor: 'y2', domain: [0, 1] },
+                yaxis: { title: 'weekly sales', domain: [0.42, 1.0] },
+                yaxis2: { title: 'cumulative', domain: [0, 0.30], anchor: 'x' },
+                shapes: [
+                    { type: 'line', x0: n0 + 0.5, x1: n0 + 0.5, yref: 'paper', y0: 0, y1: 1, line: { color: p.muted, width: 1, dash: 'dot' } },
+                    { type: 'line', x0: 1, x1: Nw, y0: 0, y1: 0, yref: 'y2', line: { color: p.border, width: 1 } }
+                ],
+                annotations: [{ x: n0 + 0.5, y: 1, yref: 'paper', yanchor: 'bottom', xanchor: 'left', text: ' intervention', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('ciChart', traces, layout, BV.config);
+
+            var effFinal = obs[Nw - 1] - cfm[Nw - 1], hwEnd = hw(Nw);
+            var cumTot = cmean[cmean.length - 1], cumHw = cup[cup.length - 1] - cumTot;
+            document.getElementById('ciPoint').textContent = effFinal.toFixed(0) + ' ± ' + hwEnd.toFixed(0);
+            document.getElementById('ciCum').textContent = cumTot.toFixed(0) + ' ± ' + cumHw.toFixed(0);
+            var sg = document.getElementById('ciSig');
+            if (Math.abs(cumTot) > cumHw) { sg.textContent = 'yes — significant'; sg.className = 'val ok'; }
+            else { sg.textContent = 'no — not detected'; sg.className = 'val warn'; }
+        });
+        BV.sliders([{ id: 'ciTau', value: 'ciTauVal', fmt: function (v) { return String(v); } }], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

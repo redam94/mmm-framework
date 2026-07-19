@@ -28,8 +28,31 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .dag-triptych { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin: 1.75rem 0 0.5rem; }
+        @media (max-width: 720px) { .dag-triptych { grid-template-columns: 1fr; } }
+        .dag-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.1rem 1rem 1rem; text-align: center; }
+        .dag-card h4 { margin: 0 0 0.15rem; font-size: 1rem; }
+        .dag-card .role-tag { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); display: block; margin-bottom: 0.6rem; }
+        .dag-card .gloss { font-size: 0.8rem; color: var(--color-text-muted); margin: 0.6rem 0 0; line-height: 1.5; text-align: left; }
+        .dagfig { width: 100%; height: 148px; display: block; }
+        .dagfig .node { fill: var(--color-surface); stroke: var(--color-text-muted); stroke-width: 1.6; }
+        .dagfig .node.exposure { stroke: var(--color-primary); stroke-width: 2.2; }
+        .dagfig .node.outcome { stroke: var(--color-accent); stroke-width: 2.2; }
+        .dagfig .node.covar { stroke: var(--color-warning); }
+        .dagfig .node.unmeasured { stroke: var(--color-danger); stroke-dasharray: 3 2.5; }
+        .dagfig .nlab { fill: var(--color-text); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; }
+        .dagfig .edge { stroke: var(--color-text-muted); stroke-width: 1.7; fill: none; }
+        .dagfig .edge.bias { stroke: var(--color-danger); stroke-dasharray: 4 3; }
+        .dagfig .arrowhead { fill: var(--color-text-muted); }
+        .dagfig .arrowhead.bias { fill: var(--color-danger); }
+    </style>
     <!-- seo:augmented (structured data + social cards) -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="The Table 2 Fallacy: When a Coefficient Isn't an Effect">
@@ -73,7 +96,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-14",
+          "dateModified": "2026-07-18",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/blog-table-2-fallacy.html#breadcrumb"
           },
@@ -201,6 +224,28 @@
                 </tbody>
             </table>
 
+            <div class="dag-triptych">
+                <div class="dag-card">
+                    <h4>Confounder</h4>
+                    <span class="role-tag">common cause of X and Y</span>
+                    <svg class="dagfig" id="dagConfounder" viewBox="0 0 200 148" role="img" aria-label="DAG: Z is a common cause of X and Y, with X causing Y"></svg>
+                    <p class="gloss">Adjusting for <strong>Z</strong> cleans <strong>X&rsquo;s</strong> estimate, but Z&rsquo;s own coefficient still absorbs whatever confounds the Z&ndash;Y path.</p>
+                </div>
+                <div class="dag-card">
+                    <h4>Mediator</h4>
+                    <span class="role-tag">X causes Z causes Y</span>
+                    <svg class="dagfig" id="dagMediator" viewBox="0 0 200 148" role="img" aria-label="DAG: X causes Z which causes Y, plus a direct X to Y path"></svg>
+                    <p class="gloss">Putting <strong>Z</strong> in the model turns X&rsquo;s coefficient into a <em>direct</em> effect; Z&rsquo;s own coefficient is confounded by X&ndash;Z&ndash;Y common causes.</p>
+                </div>
+                <div class="dag-card">
+                    <h4>Competing exposure</h4>
+                    <span class="role-tag">affects Y, off the X&ndash;Y path</span>
+                    <svg class="dagfig" id="dagCompeting" viewBox="0 0 200 148" role="img" aria-label="DAG: Z affects Y off the X to Y path, with an unmeasured U opening a back-door for Z"></svg>
+                    <p class="gloss"><strong>Z</strong> needs its <em>own</em> adjustment set. The unmeasured <strong>U</strong> (red) opens a back-door for Z that the X-focused model never blocked.</p>
+                </div>
+            </div>
+            <p class="chart-caption">The same covariate, three structural roles &mdash; each corrupts a naïve causal reading of its coefficient in a different way. Green = exposure, blue = outcome, amber = the covariate in question, red-dashed = an unmeasured cause. Only <strong>X&rsquo;s</strong> coefficient carries the identification argument the model was built for.</p>
+
             <p>The unifying point is the one from the back-door discussion: the adjustment set that de-confounds the primary exposure is, in general, the <em>wrong</em> adjustment set for a secondary variable. If \( Z \) is a competing exposure — say, both a treatment and a smoking history predict a disease, and smoking is in the model to clean up the treatment estimate — then interpreting the smoking coefficient causally requires blocking smoking's back-door paths, which the treatment-focused model made no attempt to do. If \( Z \) is a confounder, its coefficient absorbs whatever confounds \( Z \)'s relationship with \( Y \). If \( Z \) is a mediator, we are back in the total-versus-direct trap, with the added twist of &ldquo;mutual adjustment&rdquo;: exposure and mediator each adjust the other, and both coefficients drift from any interpretable estimand. Westreich and Greenland call this the problem of <em>mutual adjustment for mediators and confounders</em> — the model adjusts variables for one another with no coherent per-variable identification in mind.</p>
 
             <h2 id="colliders">Colliders and Overadjustment</h2>
@@ -223,6 +268,29 @@
             $$ \hat{\beta}_Z \;\to\; \beta_Z \;+\; \gamma \cdot \frac{\operatorname{Cov}(U, Z \mid X)}{\operatorname{Var}(Z \mid X)}. $$
 
             <p>The second term is pure omitted-variable bias, and its sign is the sign of \( \gamma \) times the partial covariance of \( U \) and \( Z \). If \( U \) raises \( Y \) (\( \gamma &gt; 0 \)) and is positively associated with \( Z \), the bias inflates \( \hat{\beta}_Z \) upward; if \( U \) and \( Z \) move in opposite directions, or \( \gamma &lt; 0 \), the bias pulls the coefficient down — and if the bias term is larger in magnitude than \( \beta_Z \) itself, the reported coefficient <em>changes sign</em>. A protective factor can appear harmful, or vice versa, entirely as an artifact of a back-door path the exposure-focused model was never designed to close. The exposure coefficient in the same table is, meanwhile, perfectly clean. That is the fallacy in one picture: two rows, identical typography, one identified and one arbitrary.</p>
+
+            <div class="interactive-box">
+                <h4>Watch a coefficient flip sign</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Both rows come out of the <em>same</em> regression with the <em>same</em> tight credible interval. The exposure&rsquo;s estimate (top) is clean and stays put. The confounder&rsquo;s estimate (bottom) inherits the omitted-variable-bias term <span style="font-family:'JetBrains Mono',monospace;">&gamma;&middot;Cov(U,&thinsp;Z&thinsp;|&thinsp;X)/Var(Z&thinsp;|&thinsp;X)</span>. Drag the unmeasured path <span style="font-family:'JetBrains Mono',monospace;">U&rarr;Y</span> and the U&ndash;Z association, and the reported coefficient slides &mdash; through zero, into the wrong sign &mdash; while its interval stays just as narrow.</p>
+                <div class="control-row">
+                    <label>Strength of U&rarr;Y &nbsp;(&gamma;)</label>
+                    <input type="range" id="t2gamma" min="-2" max="2" step="0.1" value="-1.4">
+                    <span class="value" id="t2gammaVal">-1.4</span>
+                </div>
+                <div class="control-row">
+                    <label>Assoc. of U and Z &nbsp;(&rho;)</label>
+                    <input type="range" id="t2rho" min="-0.9" max="0.9" step="0.05" value="0.65">
+                    <span class="value" id="t2rhoVal">0.65</span>
+                </div>
+                <div class="chart-container chart-themed" id="t2forest" style="height:280px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">True &beta;<sub>Z</sub></span><span class="val" id="t2true">+0.50</span></div>
+                    <div class="stat"><span class="lbl">Reported &beta;&#770;<sub>Z</sub></span><span class="val" id="t2est">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">OVB term</span><span class="val" id="t2bias">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="t2verdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">The exposure coefficient <strong>X&#770;</strong> is fixed at its identified value (+0.80). The confounder&rsquo;s true structural effect is +0.50, marked by the dotted line. Everything to the <em>left of zero</em> is a sign flip: a protective factor reported as harmful, with a confident-looking interval that is, in Greenland&rsquo;s phrase, precise nonsense.</p>
+            </div>
 
             <p>Hünermund and Louw (2025) push this further and argue it is the generic case, not a corner. Even a <em>valid</em> control variable is typically endogenous and represents a superposition of several causal mechanisms acting jointly on the outcome; its coefficient has no clean structural meaning to recover. Their recommendation is blunt: refrain from interpreting the marginal effects of controls, and either mark them as non-causal or omit them from the table entirely.</p>
 
@@ -279,6 +347,119 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // --- Reusable little DAG renderer (CSS-themed, so no JS redraw needed) ---
+        function drawDag(id, nodes, edges) {
+            var svg = document.getElementById(id);
+            if (!svg) return;
+            var nm = {};
+            nodes.forEach(function (n) { nm[n.id] = n; });
+            var aId = id + '-a', abId = id + '-ab';
+            var s = '<defs>'
+                + '<marker id="' + aId + '" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>'
+                + '<marker id="' + abId + '" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead bias" d="M0,0 L10,5 L0,10 z"/></marker>'
+                + '</defs>';
+            edges.forEach(function (e) {
+                var A = nm[e.from], B = nm[e.to];
+                var dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+                var x1 = A.x + ux * (A.r + 1), y1 = A.y + uy * (A.r + 1);
+                var x2 = B.x - ux * (B.r + 7), y2 = B.y - uy * (B.r + 7);
+                var bias = e.cls === 'bias';
+                s += '<line class="edge' + (bias ? ' bias' : '') + '" x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1)
+                    + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" marker-end="url(#' + (bias ? abId : aId) + ')"/>';
+            });
+            nodes.forEach(function (n) {
+                s += '<circle class="node ' + (n.cls || '') + '" cx="' + n.x + '" cy="' + n.y + '" r="' + n.r + '"/>';
+                s += '<text class="nlab" x="' + n.x + '" y="' + (n.y + 0.5) + '" text-anchor="middle" dominant-baseline="central">' + n.label + '</text>';
+            });
+            svg.innerHTML = s;
+        }
+
+        function initDags() {
+            drawDag('dagConfounder',
+                [{ id: 'Z', x: 100, y: 30, r: 16, cls: 'covar', label: 'Z' },
+                 { id: 'X', x: 42, y: 116, r: 16, cls: 'exposure', label: 'X' },
+                 { id: 'Y', x: 158, y: 116, r: 16, cls: 'outcome', label: 'Y' }],
+                [{ from: 'Z', to: 'X' }, { from: 'Z', to: 'Y' }, { from: 'X', to: 'Y' }]);
+            drawDag('dagMediator',
+                [{ id: 'X', x: 34, y: 80, r: 16, cls: 'exposure', label: 'X' },
+                 { id: 'Z', x: 100, y: 34, r: 16, cls: 'covar', label: 'Z' },
+                 { id: 'Y', x: 166, y: 80, r: 16, cls: 'outcome', label: 'Y' }],
+                [{ from: 'X', to: 'Z' }, { from: 'Z', to: 'Y' }, { from: 'X', to: 'Y' }]);
+            drawDag('dagCompeting',
+                [{ id: 'X', x: 40, y: 116, r: 16, cls: 'exposure', label: 'X' },
+                 { id: 'Y', x: 160, y: 116, r: 16, cls: 'outcome', label: 'Y' },
+                 { id: 'Z', x: 98, y: 66, r: 16, cls: 'covar', label: 'Z' },
+                 { id: 'U', x: 98, y: 22, r: 15, cls: 'unmeasured', label: 'U' }],
+                [{ from: 'X', to: 'Y' }, { from: 'Z', to: 'Y' }, { from: 'U', to: 'Z', cls: 'bias' }, { from: 'U', to: 'Y', cls: 'bias' }]);
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDags);
+        } else { initDags(); }
+
+        // --- Interactive: the omitted-variable sign flip ---
+        var BETA_X = 0.80, CI_X = 0.10, BETA_Z_TRUE = 0.50, CI_Z = 0.09;
+        var CAT_Z = 'Confounder  Ẑ  (reported)', CAT_X = 'Exposure  X̂  (identified)';
+
+        BV.register(function () {
+            var p = BV.palette();
+            var gamma = parseFloat(document.getElementById('t2gamma').value);
+            var rho = parseFloat(document.getElementById('t2rho').value);
+            var bias = gamma * rho * 0.6;
+            var betaZ = BETA_Z_TRUE + bias;
+            var flipped = betaZ < 0;
+            var zColor = flipped ? p.danger : p.warning;
+
+            var traces = [
+                {
+                    type: 'scatter', mode: 'markers', x: [BETA_X], y: [CAT_X],
+                    error_x: { type: 'data', array: [CI_X], color: p.primary, thickness: 2.5, width: 9 },
+                    marker: { color: p.primary, size: 16, line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: 'X&#770; = %{x:.2f} &plusmn; ' + CI_X.toFixed(2) + ' &mdash; identified<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', x: [betaZ], y: [CAT_Z],
+                    error_x: { type: 'data', array: [CI_Z], color: zColor, thickness: 2.5, width: 9 },
+                    marker: { color: zColor, size: 16, line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: 'Z&#770; = %{x:.2f} &plusmn; ' + CI_Z.toFixed(2) + ' &mdash; reported<extra></extra>'
+                }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'coefficient estimate', range: [-1.45, 1.65], zeroline: true, zerolinewidth: 2, zerolinecolor: p.text },
+                yaxis: { categoryorder: 'array', categoryarray: [CAT_Z, CAT_X] },
+                margin: { l: 176, r: 20, t: 22, b: 46 }, showlegend: false,
+                shapes: [
+                    { type: 'rect', x0: -1.45, x1: 0, y0: -0.5, y1: 1.5, fillcolor: BV.band(p.danger, 0.08), line: { width: 0 }, layer: 'below' },
+                    { type: 'line', x0: BETA_Z_TRUE, x1: BETA_Z_TRUE, y0: -0.5, y1: 1.5, line: { color: p.muted, width: 1.5, dash: 'dot' } }
+                ],
+                annotations: [
+                    { x: BETA_Z_TRUE, y: 1.5, yanchor: 'bottom', text: 'true β<sub>Z</sub> = +0.50', showarrow: false, font: { size: 11, color: p.muted } },
+                    { x: -0.72, y: -0.42, yanchor: 'top', text: 'sign-flip zone', showarrow: false, font: { size: 11, color: p.danger } }
+                ]
+            });
+            Plotly.react('t2forest', traces, layout, BV.config);
+
+            var est = document.getElementById('t2est');
+            est.textContent = (betaZ >= 0 ? '+' : '') + betaZ.toFixed(2);
+            est.className = 'val' + (flipped ? ' warn' : '');
+            document.getElementById('t2bias').textContent = (bias >= 0 ? '+' : '') + bias.toFixed(2);
+            var v = document.getElementById('t2verdict');
+            if (flipped) { v.textContent = 'sign flipped'; v.className = 'val warn'; }
+            else if (Math.abs(bias) > 0.15) { v.textContent = 'biased'; v.className = 'val'; }
+            else { v.textContent = '≈ ok'; v.className = 'val ok'; }
+        });
+
+        BV.sliders([
+            { id: 't2gamma', value: 't2gammaVal', fmt: function (v) { return (v >= 0 ? '+' : '') + v.toFixed(1); } },
+            { id: 't2rho', value: 't2rhoVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

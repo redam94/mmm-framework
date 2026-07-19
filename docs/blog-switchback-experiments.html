@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -186,6 +190,30 @@
 
             <p>Their ride-sharing simulation shows what this buys in coverage, the number that actually matters for a decision. Adding burn-in to the difference-in-means estimator cut the bias from about 2.64 to 0.09 and lifted the confidence-interval coverage from 78% toward a healthy 92% — turning an over-confident, mis-centered interval into a usable one.</p>
 
+            <div class="interactive-box">
+                <h4>The block-length dial</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A single system over \( T=96 \) periods, re-randomized on/off at each block boundary (seeded). Treatment carries over for \( m \) periods after every switch, so the <span style="color:var(--color-danger);font-weight:600;">shaded</span> periods right after a flip are contaminated and bias the naive difference. <strong>Short blocks</strong> switch often (low variance) but spend most of their length settling (high bias); <strong>long blocks</strong> measure cleanly but give few randomizations (high variance). The lower panel traces that bias&ndash;variance trade — the total-error minimum sits near block length \( m+1 \).</p>
+                <div class="control-row">
+                    <label>Block length&nbsp; ℓ</label>
+                    <input type="range" id="sbL" min="1" max="24" step="1" value="4">
+                    <span class="value" id="sbLVal">4</span>
+                </div>
+                <div class="control-row">
+                    <label>Carryover order&nbsp; m</label>
+                    <input type="range" id="sbM" min="0" max="12" step="1" value="3">
+                    <span class="value" id="sbMVal">3</span>
+                </div>
+                <div class="chart-container chart-themed" id="sbSched" style="height:200px;"></div>
+                <div class="chart-container chart-themed" id="sbTradeoff" style="height:260px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Effective switches</span><span class="val" id="sbSw">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Carryover contamination</span><span class="val" id="sbContam">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Bias (rel.)</span><span class="val" id="sbBias">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Variance (rel.)</span><span class="val" id="sbVar">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Contamination falls as blocks grow — but variance rises with them, because there are fewer independent switches. The sweet spot aligns the block length to the carryover order, \( \ell \approx m+1 \), exactly the minimax rule from the design table below.</p>
+            </div>
+
             <h2 id="design-based">Inference Without a Model</h2>
             <p>A quietly radical feature of the modern switchback literature is that it is <em>design-based</em>. Potential outcomes are treated as fixed but unknown; the only randomness is the assignment path the coin flips generated. This lineage — Fisher, Neyman, Kempthorne, Rubin — buys you inference that does not depend on getting an outcome model right.</p>
 
@@ -264,6 +292,121 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var T = 96;              // horizon
+        var A_V = 6.0;           // variance scale (∝ 1/#blocks): min of MSE lands near ℓ = m+1
+        var SEED = 424242;
+
+        // Build a seeded on/off schedule with blocks of length l; mark carryover-contaminated periods.
+        function schedule(l, m) {
+            var rng = BV.mulberry32(SEED);
+            var W = new Array(T), t, blockArm = null, sinceBlock = 0;
+            for (t = 0; t < T; t++) {
+                if (t % l === 0) blockArm = rng() < 0.5 ? 1 : 0;   // re-randomize at each block boundary
+                W[t] = blockArm;
+            }
+            var switches = 0;
+            for (t = 1; t < T; t++) if (W[t] !== W[t - 1]) switches++;
+            // Period t is contaminated if a switch occurred within the last m periods.
+            var contam = new Array(T), contamCount = 0;
+            for (t = 0; t < T; t++) {
+                var c = false;
+                for (var k = 1; k <= m; k++) { if (t - k >= 0 && W[t - k] !== W[t - k + 1]) { c = true; break; } }
+                contam[t] = c; if (c) contamCount++;
+            }
+            return { W: W, switches: switches, contam: contam, contamFrac: contamCount / T };
+        }
+
+        function stats(l, m) {
+            var sc = schedule(l, m);
+            var bias = sc.contamFrac;                 // naive DiM folds contaminated periods -> bias ∝ fraction
+            var variance = A_V * l / T;               // fewer switches at large l -> higher variance
+            return { switches: sc.switches, contamFrac: sc.contamFrac, bias: bias, variance: variance, mse: bias * bias + variance, sc: sc };
+        }
+
+        // Figure A: the schedule strip with contaminated bands.
+        BV.register(function () {
+            var p = BV.palette();
+            var l = parseInt(document.getElementById('sbL').value, 10);
+            var m = parseInt(document.getElementById('sbM').value, 10);
+            var s = stats(l, m), W = s.sc.W, contam = s.sc.contam;
+            var xs = [], ys = [];
+            for (var t = 0; t < T; t++) { xs.push(t); ys.push(W[t]); }
+            var traces = [{
+                type: 'scatter', mode: 'lines', x: xs, y: ys, line: { color: p.primary, width: 2, shape: 'hv' },
+                fill: 'tozeroy', fillcolor: BV.band(p.primary, 0.16), name: 'treatment on/off',
+                hovertemplate: 'period %{x}<br>arm %{y}<extra></extra>'
+            }];
+            // contaminated runs -> red bands
+            var shapes = [], i = 0;
+            while (i < T) {
+                if (contam[i]) { var j = i; while (j < T && contam[j]) j++;
+                    shapes.push({ type: 'rect', x0: i - 0.5, x1: j - 0.5, y0: 0, y1: 1, yref: 'paper', fillcolor: BV.band(p.danger, 0.26), line: { width: 0 }, layer: 'above' }); i = j; }
+                else i++;
+            }
+            var layout = BV.layout({
+                xaxis: { title: 'period t', range: [-0.5, T - 0.5] },
+                yaxis: { title: 'arm', range: [-0.12, 1.18], tickvals: [0, 1], ticktext: ['off', 'on'] },
+                showlegend: false, margin: { l: 56, r: 20, t: 16, b: 46 }, shapes: shapes,
+                annotations: [{ x: 2, y: 1.16, yref: 'paper', xanchor: 'left', text: 'red = carryover-contaminated', showarrow: false, font: { size: 10, color: p.danger } }]
+            });
+            Plotly.react('sbSched', traces, layout, BV.config);
+
+            document.getElementById('sbSw').textContent = String(s.switches);
+            var cEl = document.getElementById('sbContam');
+            cEl.textContent = Math.round(s.contamFrac * 100) + '%';
+            cEl.className = 'val' + (s.contamFrac > 0.35 ? ' warn' : (s.contamFrac < 0.15 ? ' ok' : ''));
+            var bEl = document.getElementById('sbBias');
+            bEl.textContent = s.bias.toFixed(2);
+            bEl.className = 'val' + (l <= m ? ' warn' : '');
+            var vEl = document.getElementById('sbVar');
+            vEl.textContent = s.variance.toFixed(2);
+            vEl.className = 'val' + (s.variance > 0.55 ? ' warn' : '');
+        });
+
+        // Figure B: bias² / variance / total error vs block length, with the current ℓ marked.
+        BV.register(function () {
+            var p = BV.palette();
+            var l = parseInt(document.getElementById('sbL').value, 10);
+            var m = parseInt(document.getElementById('sbM').value, 10);
+            var ls = [], b2 = [], vv = [], ms = [];
+            for (var q = 1; q <= 24; q++) { var s = stats(q, m); ls.push(q); b2.push(s.bias * s.bias); vv.push(s.variance); ms.push(s.mse); }
+            // argmin MSE
+            var lstar = 1, best = Infinity;
+            for (var idx = 0; idx < ms.length; idx++) if (ms[idx] < best) { best = ms[idx]; lstar = ls[idx]; }
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: ls, y: b2, name: 'bias²', line: { color: p.danger, width: 2.4 }, hovertemplate: 'ℓ=%{x}<br>bias²=%{y:.3f}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: ls, y: vv, name: 'variance', line: { color: p.accent, width: 2.4 }, hovertemplate: 'ℓ=%{x}<br>var=%{y:.3f}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: ls, y: ms, name: 'total error (MSE)', line: { color: p.primaryDark, width: 3 }, hovertemplate: 'ℓ=%{x}<br>MSE=%{y:.3f}<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'block length ℓ', range: [1, 24], dtick: 4 },
+                yaxis: { title: 'error', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.18, x: 0 },
+                margin: { l: 56, r: 20, t: 30, b: 46 },
+                shapes: [
+                    { type: 'line', x0: l, x1: l, y0: 0, y1: 1, yref: 'paper', line: { color: p.warning, width: 2, dash: 'dot' } },
+                    { type: 'line', x0: lstar, x1: lstar, y0: 0, y1: 1, yref: 'paper', line: { color: p.primaryDark, width: 1.4, dash: 'dash' } }
+                ],
+                annotations: [
+                    { x: l, y: 1, yref: 'paper', yanchor: 'bottom', text: 'ℓ now', showarrow: false, font: { size: 10, color: p.warning } },
+                    { x: lstar, y: 0.08, yref: 'paper', yanchor: 'bottom', xanchor: 'left', text: ' MSE min', showarrow: false, font: { size: 10, color: p.primaryDark } }
+                ]
+            });
+            Plotly.react('sbTradeoff', traces, layout, BV.config);
+        });
+
+        BV.sliders([
+            { id: 'sbL', value: 'sbLVal', fmt: function (v) { return String(v); } },
+            { id: 'sbM', value: 'sbMVal', fmt: function (v) { return String(v); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

@@ -23,6 +23,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -198,6 +202,24 @@
 
             <p>Matching fares no better, and for the same structural reason. Propensity score matching promises to pair each exposed user with an observably similar unexposed one. But in display advertising, exposure is determined by visiting particular pages at particular times — so the &ldquo;similar&rdquo; unexposed user is someone who looked alike on the covariates yet, in that moment, was doing something different online. The matched groups differ in precisely the unobserved dimension that drives the outcome. This is the selection problem in its purest form: units select into treatment on the very trait the treatment is supposed to move. The assumptions that would license a causal reading here belong to the same family this site catalogs for aggregate models on the <a href="identification-assumptions.html">identification assumptions</a> page — and in this setting they are simply false.</p>
 
+            <div class="interactive-box">
+                <h4>The wider the activity overlap, the wilder the estimate</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The randomized truth is fixed: advertising lifted brand searches by <strong>5.4%</strong>. The observational estimate compares exposed users to unexposed ones &mdash; but exposure is a marker of being active online, and active users search more anyway. Drag the activity&ndash;exposure correlation. As exposure and &ldquo;active today&rdquo; become nearly the same variable, the observational lift explodes toward the paper&rsquo;s 1,198% while the true incremental line stays flat along the floor.</p>
+                <div class="control-row">
+                    <label>Activity&ndash;exposure correlation &nbsp;(r)</label>
+                    <input type="range" id="abR" min="0" max="0.98" step="0.02" value="0.85">
+                    <span class="value" id="abRVal">0.85</span>
+                </div>
+                <div class="chart-container chart-themed" id="abChart" style="height:330px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Observational lift</span><span class="val warn" id="abObs">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">True incremental lift</span><span class="val ok" id="abTrue">5.4%</span></div>
+                    <div class="stat"><span class="lbl">Inflation factor</span><span class="val" id="abInfl">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Reading</span><span class="val" id="abRead">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Observed lift = 5.4% + (1,198% &minus; 5.4%) · r<sup>2.2</sup>. At r &asymp; 0.85 the estimate lands near 840% &mdash; roughly the same order as Lewis&ndash;Rao&ndash;Reiley&rsquo;s fully-controlled 872%, still ~155× the experimental truth. The gap is bias, not variance: more users only sharpen the wrong number.</p>
+            </div>
+
             <div class="warning">
                 <h4>⚠️ More data makes it worse, not better</h4>
                 <p>Activity bias is a bias problem, not a variance problem. Scaling from thousands of users to millions shrinks the standard errors around the <em>wrong number</em>, turning a flattering estimate into a flattering estimate with four significant digits. No sample size rescues an identification strategy that conflates exposure with activity — precision is not validity.</p>
@@ -244,5 +266,51 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var TRUE_LIFT = 5.4, OBS_MAX = 1198;
+        function obsAt(r) { return TRUE_LIFT + (OBS_MAX - TRUE_LIFT) * Math.pow(r, 2.2); }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var r0 = parseFloat(document.getElementById('abR').value);
+            var xs = BV.linspace(0, 0.98, 140);
+            var obs = xs.map(obsAt);
+            var truth = xs.map(function () { return TRUE_LIFT; });
+            var traces = [
+                { type: 'scatter', mode: 'lines', name: 'observational lift', x: xs, y: obs,
+                  line: { color: p.danger, width: 3 }, hovertemplate: 'r=%{x:.2f}<br>observed %{y:.0f}%<extra></extra>' },
+                { type: 'scatter', mode: 'lines', name: 'true incremental (RCT)', x: xs, y: truth,
+                  line: { color: p.primary, width: 3 }, hovertemplate: 'true 5.4%<extra></extra>' },
+                { type: 'scatter', mode: 'markers', showlegend: false, x: [r0], y: [obsAt(r0)],
+                  marker: { color: p.danger, size: 13, line: { color: p.surface, width: 1.5 } },
+                  hovertemplate: 'r=%{x:.2f}<br>observed %{y:.0f}%<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'activity–exposure correlation (r)', range: [0, 0.99] },
+                yaxis: { title: 'measured brand-search lift, %', range: [0, 1260] },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 64, r: 20, t: 30, b: 48 }
+            });
+            Plotly.react('abChart', traces, layout, BV.config);
+
+            var ov = obsAt(r0), infl = ov / TRUE_LIFT;
+            document.getElementById('abObs').textContent = Math.round(ov) + '%';
+            document.getElementById('abInfl').textContent = Math.round(infl) + '×';
+            var rd = document.getElementById('abRead');
+            if (infl > 50) { rd.textContent = 'wildly inflated'; rd.className = 'val warn'; }
+            else if (infl > 5) { rd.textContent = 'inflated'; rd.className = 'val'; }
+            else { rd.textContent = 'near truth'; rd.className = 'val ok'; }
+        });
+
+        BV.sliders([
+            { id: 'abR', value: 'abRVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+    })();
+    </script>
 </body>
 </html>
