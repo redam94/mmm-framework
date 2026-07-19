@@ -141,7 +141,7 @@ optimizer's shared BAU pass (`experiment_optimizer.py:499-502`) isn't duplicated
   `suggest_experiment` surface the net figure as the **headline decision line**
   ("Expected net value of this test: +$X (78% chance net-positive); break-even in
   N weeks").
-- **`api/main.py`** — rides the existing `experiment_economics` payload
+- **`src/mmm_framework/api/main.py`** — rides the existing `experiment_economics` payload
   (`experiment-design/simulate`); no new endpoint required.
 - **Frontend** — `DesignStudio.tsx` `OpportunityCostPanel` gains a **net-value
   headline card** (gain vs loss bar + P(net>0) + break-even) above the existing

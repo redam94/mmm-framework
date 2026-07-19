@@ -1,15 +1,15 @@
 # StructuralNestedMMM — a multi-mediator structural MMM
 
 **Status:** design spec (2026-07-09) → implemented alongside this document.
-**Where:** `mmm_extensions/models/structural.py` + `mmm_extensions/components/latent_states.py`
-+ new config classes in `mmm_extensions/config.py`.
+**Where:** `src/mmm_framework/mmm_extensions/models/structural.py` + `src/mmm_framework/mmm_extensions/components/latent_states.py`
++ new config classes in `src/mmm_framework/mmm_extensions/config.py`.
 **Motivating example:** TV → *awareness* (binary survey, weekly varying sample size, strong
 week-to-week persistence); Display + Social + awareness + price + a latent demand trend →
 *consideration* (Likert survey); consideration + demand + direct-response channels → *sales*.
 
 ## 1. Why the existing NestedMMM is not enough
 
-The current `NestedMMM` (`mmm_extensions/models/nested.py`) hardcodes exactly one structural
+The current `NestedMMM` (`src/mmm_framework/mmm_extensions/models/nested.py`) hardcodes exactly one structural
 shape: `mediator = intercept + Σ β·sat(media)`, Gaussian point observation (or a survey path
 that clips an *unbounded linear* latent into [0,1] as a binomial probability — the documented
 scale-mismatch root cause of the PyMC-6 mediation under-recovery, see
@@ -35,7 +35,7 @@ calibration, approximate fits, extended-report duck-typing).
 
 ## 2. Config layer
 
-New frozen dataclasses in `mmm_extensions/config.py` (sibling system to `MediatorConfig` —
+New frozen dataclasses in `src/mmm_framework/mmm_extensions/config.py` (sibling system to `MediatorConfig` —
 the old classes are untouched; `NestedMMM` keeps its byte-identical graph).
 
 ```python

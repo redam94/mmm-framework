@@ -152,6 +152,6 @@ recommended-setup card + front table). Tests:
 4. `simulation.py`.
 5. `model_ops.experiment_economics`.
 6. `agents/tools.py`.
-7. `sessions.update_artifact_payload` + `api/main.py` endpoints.
+7. `sessions.update_artifact_payload` + `src/mmm_framework/api/main.py` endpoints.
 8. Frontend.
 9. Tests + docs.

@@ -102,7 +102,7 @@ Both readouts now have an explicit knob:
   `change_note` per version), writes `agent_prefit_readout.html` via
   `workspace.report_path`, and sets `dashboard_data["prefit_report_path"]`.
 - REST: `GET /prefit-report` (+ `/prefit-report/download`) in
-  `api/main.py`, same `_serve_report` pattern (thread-scoped via
+  `src/mmm_framework/api/main.py`, same `_serve_report` pattern (thread-scoped via
   `?thread_id=`).
 
 ## Gotchas

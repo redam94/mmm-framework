@@ -278,7 +278,7 @@ p-value is small on a real effect / ~uniform on a null.
 - **`agents/tools.py`** — `design_experiment_plan` surfaces the chosen method +
   the available-methods list; new lightweight `list_experiment_methods` tool.
 - **`agents/model_ops.py`** — `experiment_economics` design dict carries `method`.
-- **`api/main.py`** — `GET .../experiment-design/options` returns named methods;
+- **`src/mmm_framework/api/main.py`** — `GET .../experiment-design/options` returns named methods;
   `POST .../experiment-design` accepts `method`. Loose JSON (M11) → no schema
   break.
 - **Frontend** — `DesignStudio.tsx`: a method picker (with data-gating

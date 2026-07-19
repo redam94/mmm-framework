@@ -220,9 +220,9 @@ results = model.fit(
 )
 
 # Get contributions with uncertainty
-contributions = model.compute_contributions()
-print(contributions.mean_contributions)
-print(contributions.hdi_contributions)  # 94% credible intervals
+contributions = model.compute_counterfactual_contributions()
+print(contributions.total_contributions)
+print(contributions.contribution_hdi_low)  # lower bound, 94% credible intervals
 ```
 
 ### Fluent Configuration API
@@ -413,16 +413,16 @@ from mmm_framework.mmm_extensions import (
 single_pack = (
     OutcomeConfigBuilder("single_pack", column="sales_single")
     .with_positive_media_effects(sigma=0.5)
-    .include_trend()
-    .include_seasonality()
+    .with_trend()
+    .with_seasonality()
     .build()
 )
 
 multipack = (
     OutcomeConfigBuilder("multipack", column="sales_multi")
     .with_positive_media_effects(sigma=0.5)
-    .include_trend()
-    .include_seasonality()
+    .with_trend()
+    .with_seasonality()
     .build()
 )
 

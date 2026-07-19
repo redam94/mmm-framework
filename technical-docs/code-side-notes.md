@@ -32,7 +32,7 @@ _Last updated: 2026-06-12._
    defers it deliberately — this note is a reminder that the docs promise it).
 
 5. **`technical-docs/agent-knowledge-workspace.md` §9 claims "All new routes require
-   the existing X-API-Key dep" — false** against current `api/main.py` (see #4).
+   the existing X-API-Key dep" — false** against current `src/mmm_framework/api/main.py` (see #4).
    Fix the doc or (better) make it true.
 
 6. **Container egress on macOS dev is recorded as `open:unenforced-macos-dev`**
