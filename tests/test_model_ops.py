@@ -41,6 +41,8 @@ def test_ops_registry_complete():
         "experiment_economics",
         "experiment_optimizer",
         "identify_structural_parameters",
+        # CLV value read-out (Phase-5 LTV loop wiring)
+        "clv_value",
         # Validation / verification ops (Phase 1)
         "posterior_predictive_checks",
         "simulation_based_calibration",

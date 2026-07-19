@@ -20,6 +20,7 @@ import type {
   DesignRequest,
   ExperimentAnchor,
   ExperimentEconomicsPayload,
+  ExperimentNetValuePayload,
   ExperimentOptimizationPayload,
   ExperimentSimulation,
   ExperimentVerdict,
@@ -77,6 +78,9 @@ export function DesignStudio({
 }) {
   const [channel, setChannel] = useState<string>(defaultChannel ?? channels[0] ?? '');
   const [designKey, setDesignKey] = useState<DesignKey | null>(null);
+  // named analysis methodology (synthetic_control / tbr / gbr / did_mmt);
+  // null = the design family's default estimator (pooled/per-pair DiD)
+  const [method, setMethod] = useState<string | null>(null);
   const [duration, setDuration] = useState(8);
   const [geoDesign, setGeoDesign] = useState<'holdout' | 'scaling'>('scaling');
   const [intensity, setIntensity] = useState(50);
@@ -94,6 +98,7 @@ export function DesignStudio({
     if (open) {
       setChannel(defaultChannel ?? channels[0] ?? '');
       setDesign(null);
+      setMethod(null);
       setError(null);
       setRegistered(null);
       setSelectedCandidate(null);
@@ -150,6 +155,7 @@ export function DesignStudio({
         amplitude_pct: amplitude,
         block_weeks: blockWeeks,
         seed: s,
+        ...(method ? { method } : {}),
       });
       setSeed(s);
       setDesign(result);
@@ -355,7 +361,7 @@ export function DesignStudio({
             {(options.data?.designs ?? []).map((key) => (
               <button
                 key={key}
-                onClick={() => { setDesignKey(key); setDesign(null); setSelectedCandidate(null); }}
+                onClick={() => { setDesignKey(key); setMethod(null); setDesign(null); setSelectedCandidate(null); }}
                 className={`block w-full rounded-lg border px-3 py-2 text-left transition-colors ${
                   effectiveKey === key
                     ? 'border-sage-600 bg-sage-100/60'
@@ -381,6 +387,42 @@ export function DesignStudio({
             )}
           </div>
         </div>
+
+        {/* ── Analysis method (named estimator from the planning.methods registry) ── */}
+        {(() => {
+          const family = isGeo ? 'geo' : 'switchback';
+          const rows = (options.data?.methods ?? []).filter((m) => m.family === family);
+          if (rows.length === 0) return null;
+          return (
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium text-ink-700">Analysis method</span>
+              <select
+                value={method ?? ''}
+                onChange={(e) => {
+                  setMethod(e.target.value || null);
+                  setDesign(null);
+                  setSelectedCandidate(null);
+                }}
+                className="w-full rounded-md border border-line-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+              >
+                <option value="">
+                  {isGeo ? 'Default (matched-pair DiD)' : 'Default (on/off contrast)'}
+                </option>
+                {rows.map((m) => (
+                  <option key={m.key} value={m.key} disabled={!m.supported}>
+                    {m.name}
+                    {!m.supported && m.reason ? ` — ${m.reason}` : ''}
+                  </option>
+                ))}
+              </select>
+              {method && (
+                <span className="mt-1 block text-xs text-ink-400">
+                  {rows.find((m) => m.key === method)?.description}
+                </span>
+              )}
+            </label>
+          );
+        })()}
 
         {/* ── Family-specific parameters ── */}
         {isGeo ? (
@@ -649,6 +691,11 @@ export function DesignStudio({
               <h4 className="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-400">
                 Analysis plan (locked at pre-registration)
               </h4>
+              {design.method_name && (
+                <p className="mb-1 text-xs font-medium text-ink-700">
+                  Method: {design.method_name}
+                </p>
+              )}
               <p className="text-xs leading-relaxed text-ink-600">{design.analysis_plan}</p>
             </div>
 
@@ -804,6 +851,10 @@ function SimulationPanels({
 
       {result && (
         <>
+          {result.net_value && result.net_value.net_value != null && (
+            <NetValueCard nv={result.net_value} />
+          )}
+
           {result.opportunity_cost ? (
             <OpportunityCostPanel
               oc={result.opportunity_cost}
@@ -823,6 +874,66 @@ function SimulationPanels({
           {result.simulation && <MethodologyPanel sim={result.simulation} />}
         </>
       )}
+    </div>
+  );
+}
+
+/** Phase-3 headline: reallocation gain (decayed, EVPI-capped) − test loss. */
+function NetValueCard({ nv }: { nv: ExperimentNetValuePayload }) {
+  const dollar = nv.unit === '$';
+  const fmt = (v: number | null | undefined) =>
+    v == null ? '—' : `${dollar ? '$' : ''}${Math.round(v).toLocaleString()}${dollar ? '' : ' KPI'}`;
+  const positive = (nv.net_value ?? 0) > 0;
+  const gain = nv.reallocation_gain ?? 0;
+  const loss = Math.max(nv.test_loss ?? 0, 0);
+  const total = Math.max(gain + loss, 1e-9);
+  return (
+    <div
+      className={`rounded-lg border px-4 py-3 ${
+        positive ? 'border-sage-300 bg-sage-100/50' : 'border-rust-300 bg-rust-100/30'
+      }`}
+    >
+      <div className="flex items-baseline justify-between">
+        <h4 className="text-sm font-semibold text-ink-900">Is this test worth running?</h4>
+        <span className={`num text-lg font-semibold ${positive ? 'text-sage-800' : 'text-rust-800'}`}>
+          {(nv.net_value ?? 0) >= 0 ? '+' : '−'}
+          {fmt(Math.abs(nv.net_value ?? 0))}
+        </span>
+      </div>
+      {/* gain-vs-loss bar */}
+      <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-full bg-line-200">
+        <div className="h-full bg-sage-600" style={{ width: `${(100 * gain) / total}%` }} />
+        <div className="h-full bg-rust-500" style={{ width: `${(100 * loss) / total}%` }} />
+      </div>
+      <p className="mt-2 text-xs text-ink-600">
+        Expected reallocation gain <span className="num text-sage-800">{fmt(gain)}</span> (EVOI,
+        decay-adjusted{nv.decay_factor != null ? ` ×${nv.decay_factor.toFixed(2)}` : ''}
+        {nv.evpi_cap != null ? ', EVPI-capped' : ''}) vs expected test loss{' '}
+        <span className="num text-rust-800">{fmt(loss)}</span>
+        {nv.prob_net_positive != null && (
+          <>
+            {' '}— <span className="num font-medium">{Math.round(nv.prob_net_positive * 100)}%</span>{' '}
+            chance net-positive
+          </>
+        )}
+        .
+      </p>
+      <p className="mt-1 text-xs text-ink-400">
+        {nv.breakeven_horizon_weeks == null
+          ? nv.basis !== 'insufficient'
+            ? 'The decayed learning value never repays the test loss within 10× the horizon.'
+            : ''
+          : nv.breakeven_horizon_weeks <= 0
+            ? 'Break-even immediately — the test itself is not expected to lose money.'
+            : `Break-even in ≈ ${Math.round(nv.breakeven_horizon_weeks)} weeks of reallocation value.`}{' '}
+        Basis: {nv.basis === 'model_anchored' ? 'model-anchored realized precision' : nv.basis}.
+        {nv.net_value_p5 != null && nv.net_value_p95 != null && (
+          <>
+            {' '}
+            90% interval [{fmt(nv.net_value_p5)}, {fmt(nv.net_value_p95)}].
+          </>
+        )}
+      </p>
     </div>
   );
 }

@@ -103,6 +103,9 @@ class OpportunityCostResult:
     extrapolation_warning: bool
     warnings: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # per-draw arrays (opt-in via return_draws=True; NOT serialized) — the
+    # net-value module reuses these for its distribution, no extra passes.
+    draws: dict | None = field(default=None, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
         def _clean(v: Any) -> Any:
@@ -110,7 +113,7 @@ class OpportunityCostResult:
                 return float(v) if np.isfinite(v) else None
             return v
 
-        return {k: _clean(v) for k, v in self.__dict__.items()}
+        return {k: _clean(v) for k, v in self.__dict__.items() if k != "draws"}
 
 
 # ── Geo / window resolution (F2, F3, F6) ──────────────────────────────────────
@@ -346,6 +349,7 @@ def compute_opportunity_cost(
     random_seed: int | None = 42,
     contrib_bau: np.ndarray | None = None,
     contrib_exp: np.ndarray | None = None,
+    return_draws: bool = False,
 ) -> OpportunityCostResult:
     """Short-term risk of running ``design`` on the fitted model ``mmm``.
 
@@ -542,4 +546,9 @@ def compute_opportunity_cost(
         extrapolation_warning=extrapolation_warning,
         warnings=warnings,
         notes=notes,
+        draws=(
+            {"kpi_delta": kpi_delta, "kpi_delta_carry": kpi_delta_carry}
+            if return_draws
+            else None
+        ),
     )

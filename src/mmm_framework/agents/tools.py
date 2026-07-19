@@ -5907,10 +5907,308 @@ def compute_experiment_priorities(
 
 
 @tool
+def list_experiment_methods(
+    state: Annotated[dict, InjectedState],
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """List the named experiment methodologies (synthetic control, TBR, GBR,
+    DiD-MMT, …) with a one-line description and — when a dataset is loaded —
+    whether the current data supports each (geo count / pre-period length).
+
+    Use this to choose a `method` for `design_experiment_plan`. The method
+    selects which estimator the read-out and economics use; the geo methods run
+    on a randomized matched geo-lift design, DiD-MMT on matched markets.
+    """
+    import os as _os
+
+    from mmm_framework.planning.methods import list_methods, methods_for_data
+
+    _activate_thread(config)
+    n_geos = n_weeks = 0
+    dataset_path = state.get("dataset_path")
+    kpi = (state.get("model_spec") or {}).get("kpi")
+    if dataset_path and _os.path.exists(dataset_path) and kpi:
+        try:
+            from mmm_framework.planning.design import load_design_frame
+
+            spec = state.get("model_spec") or {}
+            chans = spec.get("media_channels") or []
+            channel = chans[0] if chans else None
+            if channel:
+                frame = load_design_frame(dataset_path, kpi, channel)
+                n_geos = len(frame["geos"])
+                n_weeks = len(frame["periods"])
+        except Exception:
+            pass
+
+    if n_geos or n_weeks:
+        rows = methods_for_data(n_geos=n_geos, n_weeks=n_weeks)
+        lines = [
+            f"### Experiment methods (data: {n_geos} geos, {n_weeks} weeks)",
+            "",
+        ]
+        for r in rows:
+            mark = "✅" if r["supported"] else f"⛔ {r['reason']}"
+            lines.append(f"- **{r['name']}** (`{r['key']}`) — {mark}")
+            lines.append(f"  {r['description']}")
+    else:
+        lines = ["### Experiment methods", ""]
+        for m in list_methods():
+            lines.append(f"- **{m.name}** (`{m.key}`) — {m.description}")
+        lines.append("")
+        lines.append("_Load a dataset to see which methods your data supports._")
+
+    return _simple_msg("\n".join(lines), tool_call_id)
+
+
+@tool
+def build_rfm_from_transactions(
+    state: Annotated[dict, InjectedState],
+    customer_col: str = "customer_id",
+    date_col: str = "date",
+    value_col: str = None,
+    observation_end: str = None,
+    freq: str = "W",
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Collapse the loaded TRANSACTION LOG (one row per purchase) into per-customer
+    RFM summaries — frequency (repeat purchases), recency, T (customer age) and
+    monetary (mean repeat value) — and make the RFM table the session's working
+    dataset, ready for the `bayesian_clv` garden model (BG/NBD + Gamma-Gamma
+    customer lifetime value).
+
+    `value_col` enables the monetary/Gamma-Gamma block; `observation_end`
+    (YYYY-MM-DD) is the calibration cutoff (defaults to the last transaction);
+    `freq` is the time unit for recency/T ('D'/'W'/'M')."""
+    import os as _os
+
+    import pandas as _pd
+
+    from mmm_framework.ltv import transactions_to_rfm
+
+    _activate_thread(config)
+    dataset_path = state.get("dataset_path")
+    if not dataset_path or not _os.path.exists(dataset_path):
+        return _simple_msg(
+            "No dataset loaded — upload the transaction log first.", tool_call_id
+        )
+    try:
+        df = _pd.read_csv(dataset_path)
+        for col in (customer_col, date_col):
+            if col not in df.columns:
+                return _simple_msg(
+                    f"Column '{col}' not in the dataset (have "
+                    f"{list(df.columns)[:12]}…) — set customer_col/date_col.",
+                    tool_call_id,
+                )
+        rfm = transactions_to_rfm(
+            df,
+            customer_col=customer_col,
+            date_col=date_col,
+            value_col=value_col,
+            observation_end=observation_end,
+            freq=freq,
+        )
+    except ValueError as exc:
+        return _simple_msg(f"Could not build RFM: {exc}", tool_call_id)
+
+    n = len(rfm)
+    repeat = int((rfm["frequency"] > 0).sum())
+    lines = [
+        "### RFM built from the transaction log",
+        "",
+        f"- {n:,} customers ({repeat:,} repeat buyers, "
+        f"{n - repeat:,} one-time) from {len(df):,} transactions",
+        f"- Mean frequency {rfm['frequency'].mean():.2f} repeats; mean age "
+        f"{rfm['T'].mean():.1f} {freq}",
+    ]
+    if "monetary" in rfm.columns:
+        lines.append(
+            f"- Mean repeat-transaction value "
+            f"{rfm['monetary'].dropna().mean():,.2f} (monetary block enabled)"
+        )
+    lines.append(
+        "\nThe RFM table is now the working dataset — fit customer lifetime "
+        "value with the `bayesian_clv` garden model "
+        "(`load_garden_model('bayesian_clv')` → `fit_mmm_model`)."
+    )
+    cmd = _persist_external_dataset(
+        rfm.reset_index(),
+        source_label="rfm_from_transactions",
+        state=state,
+        config=config,
+        tool_call_id=tool_call_id,
+    )
+    # prepend the RFM summary to the persistence message
+    msgs = cmd.update.get("messages") or []
+    if msgs:
+        msgs[0].content = "\n".join(lines) + "\n\n" + str(msgs[0].content)
+    return cmd
+
+
+@tool
+def get_clv_value(
+    segment: str = None,
+    cac: dict = None,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Read the fitted CLV model's value-per-acquired-customer (mean CLV, per
+    acquisition segment when the model has segments) — the number acquisition
+    experiments should use as `value_per_conversion` so they are valued on
+    LIFETIME value, not first purchase. Pass `cac` ({segment: acquisition
+    cost}) for the CLV−CAC / CLV÷CAC economics table. Requires a fitted
+    `bayesian_clv` garden model."""
+    _activate_thread(config)
+    args = {}
+    if segment is not None:
+        args["segment"] = segment
+    if cac:
+        args["cac"] = {str(k): float(v) for k, v in cac.items()}
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op("clv_value", args)
+    return _modelop_command(res, {}, tool_call_id)
+
+
+@tool
+def ghost_ads_power_calc(
+    users_reached: int,
+    baseline_rate: float = 0.02,
+    treated_fraction: float = 0.5,
+    outcome: str = "binary",
+    baseline_mean: float = None,
+    value_sd: float = None,
+    exposure_rate: float = 1.0,
+    target_lift_abs: float = None,
+    alpha: float = 0.05,
+    power_target: float = 0.80,
+    cost_per_user: float = None,
+    value_per_conversion: float = None,
+    value_from_clv: bool = False,
+    clv_segment: str = None,
+    config: InjectedConfig = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Ghost-ads (user-level RCT) power calculator — STANDALONE, needs no
+    dataset or fitted model. Randomization is per user via the ad server:
+    treated users see the real ad, ghost/PSA users a placebo.
+
+    Given the audience size, baseline conversion rate (or per-user mean for
+    `outcome='count'|'revenue'`), and the treated/ghost split, returns the
+    minimum detectable lift (absolute + relative), the users required to detect
+    `target_lift_abs`, and the intent-to-treat vs treatment-on-treated MDE when
+    only `exposure_rate` of randomized users are actually reached. Flags the
+    rare-event regime where the normal approximation is optimistic (validated
+    by simulation).
+
+    `value_from_clv=True` pulls `value_per_conversion` from the fitted CLV
+    model (mean CLV, or `clv_segment`'s CLV) so the economic break-even values
+    a conversion at LIFETIME value, not first purchase."""
+    from mmm_framework.planning.methods import (
+        GhostAdsDesign,
+        ghost_ads_power,
+        ghost_ads_power_at,
+        ghost_ads_simulate,
+        ghost_ads_users_for_mde,
+    )
+
+    _activate_thread(config)
+    clv_note = None
+    if value_from_clv and value_per_conversion is None:
+        try:
+            op_args = {"segment": clv_segment} if clv_segment else {}
+            clv_res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+                "clv_value", op_args
+            )
+            payload = (clv_res.get("dashboard") or {}).get("clv_value") or {}
+            vpc = payload.get("value_per_conversion")
+            if clv_res.get("error") or vpc is None:
+                return _simple_msg(
+                    "Could not read a CLV value from the fitted model — "
+                    + str(clv_res.get("error") or "no CLV posterior")
+                    + " Fit `bayesian_clv` first or pass value_per_conversion.",
+                    tool_call_id,
+                )
+            value_per_conversion = float(vpc)
+            clv_note = (
+                f"- Conversion valued at **lifetime value** "
+                f"{value_per_conversion:,.2f}"
+                + (f" (segment `{clv_segment}`)" if clv_segment else " (mean CLV)")
+                + ", from the fitted CLV model."
+            )
+        except Exception as exc:  # noqa: BLE001 — degrade to plain calculator
+            return _simple_msg(
+                f"CLV lookup failed ({exc}) — pass value_per_conversion "
+                "explicitly or fit the `bayesian_clv` model.",
+                tool_call_id,
+            )
+    try:
+        design = GhostAdsDesign(
+            users_reached=int(users_reached),
+            baseline_rate=float(baseline_rate),
+            treated_fraction=float(treated_fraction),
+            outcome=outcome,
+            baseline_mean=baseline_mean,
+            value_sd=value_sd,
+            alpha=float(alpha),
+            power_target=float(power_target),
+            exposure_rate=float(exposure_rate),
+            cost_per_user=cost_per_user,
+            value_per_conversion=value_per_conversion,
+        )
+        res = ghost_ads_power(design)
+    except ValueError as exc:
+        return _simple_msg(f"Invalid ghost-ads design: {exc}", tool_call_id)
+
+    base_label = "conversion rate" if outcome == "binary" else f"per-user {outcome}"
+    lines = [
+        "### Ghost-ads power — user-level incrementality",
+        "",
+        f"- Audience: {res['users_reached']:,} users "
+        f"({res['n_treated']:,.0f} treated / {res['n_ghost']:,.0f} ghost)",
+        f"- Baseline {base_label}: {res['baseline']:.4g}",
+        f"- **MDE: {res['mde_abs']:.4g} absolute "
+        f"({res['mde_rel']:.1%} relative lift)** at {power_target:.0%} power, "
+        f"alpha={alpha}",
+        f"- Incremental conversions at the MDE: ≈ {res['incremental_at_mde']:,.0f}",
+    ]
+    if clv_note:
+        lines.append(clv_note)
+    if exposure_rate < 1.0:
+        lines.append(
+            f"- Dilution: only {exposure_rate:.0%} of randomized users are "
+            f"reached → ITT MDE {res['itt_mde']:.4g}, treatment-on-treated MDE "
+            f"{res['tot_mde']:.4g}"
+        )
+    if res.get("rare_event_regime"):
+        sim = ghost_ads_simulate(design, res["mde_abs"], n_sims=2000, seed=0)
+        lines.append(
+            f"- ⚠️ Rare-event regime (few expected conversions/arm) — the normal "
+            f"approximation is optimistic; simulated power at the analytic MDE "
+            f"is {sim['empirical_power']:.0%} (target {power_target:.0%})."
+        )
+    if target_lift_abs:
+        need = ghost_ads_users_for_mde(design, float(target_lift_abs))
+        pw = ghost_ads_power_at(design, float(target_lift_abs))
+        lines.append(
+            f"- To detect a {float(target_lift_abs):.4g} absolute lift: "
+            f"**{need:,} users needed** (current audience gives {pw:.0%} power)"
+        )
+    if res.get("breakeven_lift_abs") is not None:
+        lines.append(
+            f"- Economic break-even lift (media cost vs conversion value): "
+            f"{res['breakeven_lift_abs']:.4g} absolute"
+        )
+    return _simple_msg("\n".join(lines), tool_call_id)
+
+
+@tool
 def design_experiment_plan(
     channel: str,
     state: Annotated[dict, InjectedState],
     design_key: str = None,
+    method: str = None,
     duration: int = 8,
     intensity_pct: float = 50.0,
     geo_design: str = "scaling",
@@ -5969,7 +6267,13 @@ def design_experiment_plan(
             tool_call_id,
         )
     try:
-        key = design_key or design_options(dataset_path, kpi, channel)["recommended"]
+        from mmm_framework.planning.design import _METHOD_TO_DESIGN_KEY
+
+        key = (
+            design_key
+            or (_METHOD_TO_DESIGN_KEY.get(method) if method else None)
+            or design_options(dataset_path, kpi, channel)["recommended"]
+        )
         if key == "national_flighting":
             _fl_kw: dict = dict(
                 duration=int(duration),
@@ -5993,12 +6297,16 @@ def design_experiment_plan(
             if n_pairs is not None:
                 kwargs["n_pairs"] = int(n_pairs)
             design = design_experiment(
-                dataset_path, kpi, channel, design_key=key, **kwargs
+                dataset_path, kpi, channel, design_key=key, method=method, **kwargs
             )
     except ValueError as exc:
         return _simple_msg(f"Could not design the experiment: {exc}", tool_call_id)
 
     lines = [f"### Experiment design — `{channel}` ({design['design_type']})", ""]
+    if design.get("method_name"):
+        refs = design.get("method_references") or []
+        ref_txt = f" (see {refs[0]})" if refs else ""
+        lines += [f"- Analysis method: **{design['method_name']}**{ref_txt}", ""]
     if design["design_key"] in ("geo_lift", "matched_market_did"):
         pairs = ", ".join(
             f"{p['treatment']}→T / {p['control']}→C (r={p['correlation']:.2f})"
@@ -6077,6 +6385,8 @@ def design_experiment_plan(
                 design_params["n_pairs"] = int(n_pairs)
             if levels:
                 design_params["levels"] = [float(m) for m in levels]
+            if method:
+                design_params["method"] = method
             eco_res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
                 "experiment_economics",
                 {
@@ -7425,6 +7735,10 @@ TOOLS = [
     run_budget_optimizer,
     recommend_lift_experiments,
     compute_experiment_priorities,
+    list_experiment_methods,
+    ghost_ads_power_calc,
+    build_rfm_from_transactions,
+    get_clv_value,
     design_experiment_plan,
     simulate_experiment,
     suggest_experiment,
@@ -7538,6 +7852,10 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "run_budget_optimizer",
         "recommend_lift_experiments",
         "compute_experiment_priorities",
+        "list_experiment_methods",
+        "ghost_ads_power_calc",
+        "build_rfm_from_transactions",
+        "get_clv_value",
         "design_experiment_plan",
         "simulate_experiment",
         "suggest_experiment",

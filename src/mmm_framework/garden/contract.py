@@ -143,10 +143,13 @@ def has_latent_structure(obj: Any) -> bool:
     to :func:`is_mmm_model` — a hybrid family (an MMM that ALSO estimates a latent
     factor, e.g. ``LatentFactorMMM``) is both ``is_mmm_model`` *and*
     ``has_latent_structure``, so its report shows the channel/ROI sections **and**
-    a factor-loadings section. A pure CFA/LCA is non-MMM and has latent structure;
-    a plain MMM has neither method, so the latent section stays off."""
-    return callable(getattr(obj, "factor_loadings_summary", None)) or callable(
-        getattr(obj, "class_profile_summary", None)
+    a factor-loadings section. A pure CFA/LCA/CLV is non-MMM and has latent
+    structure; a plain MMM has none of these methods, so the latent section
+    stays off."""
+    return (
+        callable(getattr(obj, "factor_loadings_summary", None))
+        or callable(getattr(obj, "class_profile_summary", None))
+        or callable(getattr(obj, "customer_value_summary", None))
     )
 
 

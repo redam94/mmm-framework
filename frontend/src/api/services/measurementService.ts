@@ -167,6 +167,21 @@ export interface CoveragePayload {
 
 export type DesignKey = 'geo_lift' | 'matched_market_did' | 'national_flighting';
 
+/** A named analysis methodology from the planning.methods registry, with a
+ * per-dataset supported flag + gate reason (geo count / pre-period length). */
+export interface ExperimentMethodRow {
+  key: string;
+  name: string;
+  family: 'geo' | 'national' | 'user' | 'switchback';
+  min_geos: number;
+  needs_panel: boolean;
+  min_pre_weeks: number;
+  references: string[];
+  description: string;
+  supported: boolean;
+  reason: string;
+}
+
 export interface DesignOptions {
   n_geos: number;
   geos: string[];
@@ -174,11 +189,15 @@ export interface DesignOptions {
   designs: DesignKey[];
   recommended: DesignKey;
   kpi: string;
+  /** named methods (synthetic_control / tbr / gbr / did_mmt / …) */
+  methods?: ExperimentMethodRow[];
 }
 
 export interface DesignRequest {
   channel: string;
   design_key?: DesignKey;
+  /** named analysis methodology; selects the estimator and infers design_key */
+  method?: string;
   design?: 'holdout' | 'scaling';
   intensity_pct?: number;
   n_pairs?: number;
@@ -233,6 +252,10 @@ export interface ExperimentDesignPayload {
   /** model-anchored expected effect + verdict, attached when a fit is available */
   model_anchor?: Record<string, unknown>;
   se_source?: 'placebo_calibrated' | 'analytic';
+  /** named analysis methodology (synthetic_control / tbr / gbr / did_mmt) */
+  method?: string;
+  method_name?: string;
+  method_references?: string[];
   balance?: BalanceRow[];
   // geo designs
   randomized?: boolean;
@@ -262,6 +285,59 @@ export interface ExperimentDesignPayload {
     historical_spend_cv: number;
     scheduled_window_cv: number;
     exogenous_share: number;
+  };
+}
+
+// ── Ghost ads (user-level RCT power calculator) ───────────────────────────────
+
+export interface GhostAdsPowerRequest {
+  users_reached: number;
+  baseline_rate?: number;
+  treated_fraction?: number;
+  outcome?: 'binary' | 'count' | 'revenue';
+  baseline_mean?: number | null;
+  baseline_dispersion?: number;
+  value_sd?: number | null;
+  alpha?: number;
+  power_target?: number;
+  two_sided?: boolean;
+  exposure_rate?: number;
+  cost_per_user?: number | null;
+  value_per_conversion?: number | null;
+  target_lift_abs?: number | null;
+  simulate?: boolean;
+  n_sims?: number;
+  seed?: number;
+}
+
+export interface GhostAdsPowerPayload {
+  outcome: string;
+  users_reached: number;
+  n_treated: number;
+  n_ghost: number;
+  baseline: number;
+  se_null: number;
+  mde_abs: number;
+  mde_rel: number;
+  itt_mde: number;
+  tot_mde: number;
+  exposure_rate: number;
+  incremental_at_mde: number;
+  alpha: number;
+  power_target: number;
+  two_sided: boolean;
+  rare_event_regime: boolean;
+  media_cost?: number;
+  incremental_value_at_mde?: number;
+  breakeven_lift_abs?: number;
+  users_required_for_target?: number;
+  power_at_target?: number;
+  simulation?: {
+    empirical_power: number;
+    empirical_fpr: number;
+    analytic_power: number;
+    n_sims: number;
+    true_lift_abs: number;
   };
 }
 
@@ -401,12 +477,39 @@ export interface ExperimentEconomicsPayload {
   anchor: ExperimentAnchor | null;
   opportunity_cost: OpportunityCost | null;
   simulation: ExperimentSimulation | null;
+  /** Phase-3 headline: reallocation gain − test loss, netted */
+  net_value?: ExperimentNetValuePayload | null;
   // surfaced when a sub-step fails but the overall job succeeds
   note?: string;
   anchor_error?: string;
   opportunity_cost_error?: string;
   simulation_error?: string;
+  net_value_error?: string;
   design?: ExperimentDesignPayload;
+}
+
+/** Net experiment economics: E[reallocation gain] − E[test loss]. */
+export interface ExperimentNetValuePayload {
+  channel: string;
+  unit: '$' | 'KPI units';
+  basis: 'model_anchored' | 'evoi_bounded' | 'insufficient';
+  test_loss: number | null;
+  test_loss_p5: number | null;
+  test_loss_p95: number | null;
+  net_profit_during_test: number | null;
+  evoi_raw: number | null;
+  evpi_cap: number | null;
+  decay_factor: number | null;
+  reallocation_gain: number | null;
+  net_value: number | null;
+  net_value_p5: number | null;
+  net_value_p95: number | null;
+  prob_net_positive: number | null;
+  breakeven_horizon_weeks: number | null;
+  horizon_weeks: number;
+  half_life_weeks: number | null;
+  margin_per_kpi: number | null;
+  warnings: string[];
 }
 
 export interface SimulateRequest {
@@ -709,6 +812,18 @@ export const measurementService = {
   ): Promise<ExperimentDesignPayload> {
     const { data } = await apiClient.post<ExperimentDesignPayload>(
       `/projects/${projectId}/experiment-design`,
+      body,
+    );
+    return data;
+  },
+
+  /** Stateless user-level ghost-ads power calculation (no dataset / model). */
+  async ghostAdsPower(
+    projectId: string,
+    body: GhostAdsPowerRequest,
+  ): Promise<GhostAdsPowerPayload> {
+    const { data } = await apiClient.post<GhostAdsPowerPayload>(
+      `/projects/${projectId}/ghost-ads/power`,
       body,
     );
     return data;

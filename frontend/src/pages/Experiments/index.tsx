@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Compass, FlaskConical, FolderOpen, Plus } from 'lucide-react';
+import { Compass, FlaskConical, FolderOpen, Ghost, Plus } from 'lucide-react';
 import { Button, EmptyState, SectionHeader, Tabs } from '../../components/ui';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentRegistry, useExperimentPriorities } from '../../api/hooks/useMeasurement';
@@ -9,6 +9,7 @@ import { LifecycleBoard } from './LifecycleBoard';
 import { RetestSchedule } from './RetestSchedule';
 import { ExperimentDrawer } from './ExperimentDrawer';
 import { LogExperimentModal } from './LogExperimentModal';
+import { GhostAdsCalculator } from './GhostAdsCalculator';
 import { DesignStudio } from './DesignStudio';
 
 type View = 'matrix' | 'board' | 'schedule';
@@ -27,6 +28,7 @@ export function ExperimentsPage() {
   const [view, setView] = useState<View>('matrix');
   const [showLog, setShowLog] = useState(false);
   const [showDesigner, setShowDesigner] = useState(false);
+  const [showGhostAds, setShowGhostAds] = useState(false);
 
   const registry = useExperimentRegistry(projectId);
   const prioritiesQuery = useExperimentPriorities(projectId);
@@ -72,6 +74,14 @@ export function ExperimentsPage() {
         subtitle="Plan, pre-register, run, and calibrate — prioritized by what learning is worth."
         actions={
           <>
+            <Button
+              variant="secondary"
+              onClick={() => setShowGhostAds(true)}
+              disabled={!projectId}
+              title="User-level RCT power calculator — standalone, no dataset or model needed"
+            >
+              <Ghost className="h-4 w-4" /> Ghost ads
+            </Button>
             <Button variant="secondary" onClick={() => setShowLog(true)} disabled={!projectId}>
               <Plus className="h-4 w-4" /> Log experiment
             </Button>
@@ -140,6 +150,7 @@ export function ExperimentsPage() {
       />
 
       {showLog && <LogExperimentModal onClose={() => setShowLog(false)} />}
+      {showGhostAds && <GhostAdsCalculator onClose={() => setShowGhostAds(false)} />}
 
       <DesignStudio
         open={showDesigner}

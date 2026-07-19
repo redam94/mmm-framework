@@ -77,7 +77,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-10",
+          "dateModified": "2026-07-19",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/blog-geo-experiments-tbr.html#breadcrumb"
           },
@@ -317,6 +317,11 @@
                     <li>Validity rests on stationarity of the pretest treatment&ndash;control relationship. Under a sustained trend, TBR biases and under-covers; TBR-OR helps there but fails outright at low correlation.</li>
                     <li>Protect the assumption by design — tightly tracking controls, scheduling around known drift, a cooldown just long enough for the lift curve to flatten — then feed the readout back into the model that plans the next test.</li>
                 </ul>
+            </div>
+
+            <div class="note">
+                <h4>🧰 This method ships in the framework</h4>
+                <p>Time-based regression is a first-class named method in the experiment toolkit (<code>tbr</code> in the <code>planning.methods</code> registry), with a two-tier engine: a fast conjugate Gaussian counterfactual inside the A/A·A/B power-simulation loop, and a full Bayesian structural time-series (CausalImpact-style local level + control regression) for the headline read-out with pointwise and cumulative credible bands. Selectable in the Design Studio's method picker next to synthetic control, GBR, and matched-market DiD.</p>
             </div>
 
             <h2 id="references">References</h2>

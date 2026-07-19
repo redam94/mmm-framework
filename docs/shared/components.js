@@ -78,6 +78,7 @@
                 { href: 'measurement-calibration.html', label: 'Calibration Loop' },
                 { href: 'continuous-learning.html', label: 'Continuous Learning' },
                 { href: 'continuous-learning-math.html', label: 'Continuous Learning · Math' },
+                { href: 'ltv-modeling.html', label: 'LTV / Customer Value' },
                 { href: 'identification-assumptions.html', label: 'Identification Assumptions' },
                 { href: 'technical-guide.html', label: 'Technical Guide' }
             ]
@@ -237,6 +238,7 @@
         'scientific-modeling.html': TIER_ANALYST,
         'measurement-calibration.html': TIER_ANALYST,
         'continuous-learning.html': TIER_ANALYST,
+        'ltv-modeling.html': TIER_ANALYST,
         'identification-assumptions.html': TIER_ANALYST,
         'pressure-testing.html': TIER_ANALYST,
         'data-requirements.html': TIER_ANALYST,

@@ -55,6 +55,7 @@ from .evoi import EvoiResult, compute_evoi_for_channel, compute_evpi
 from .experiments import recommend_experiments
 from .priority import ChannelPriority, compute_experiment_priorities
 from .opportunity_cost import OpportunityCostResult, compute_opportunity_cost
+from .experiment_value import ExperimentNetValue, compute_experiment_net_value
 from .design_anchor import (
     model_anchored_effect,
     powered_to_detect,
@@ -72,6 +73,13 @@ from .experiment_optimizer import (
     pareto_front,
     suggest_experiment,
 )
+
+# Importing the method registry registers the named experiment methods and wires
+# the new geo estimators (synthetic control / TBR / GBR) into the simulation
+# leaderboard. Kept last so simulation/design are already loaded (methods import
+# from them). Any submodule import of ``planning`` runs this, so the estimators
+# are always registered regardless of import path.
+from . import methods  # noqa: E402,F401
 
 __all__ = [
     "design_experiment",
@@ -119,6 +127,8 @@ __all__ = [
     "DEFAULT_HALF_LIVES_WEEKS",
     "OpportunityCostResult",
     "compute_opportunity_cost",
+    "ExperimentNetValue",
+    "compute_experiment_net_value",
     "model_anchored_effect",
     "powered_to_detect",
     "realized_sigma_exp_for_anchor",
