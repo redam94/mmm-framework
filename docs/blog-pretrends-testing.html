@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -73,7 +77,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-14",
+          "dateModified": "2026-07-18",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/blog-pretrends-testing.html#breadcrumb"
           },
@@ -174,6 +178,30 @@
                 <p>Insignificant leads can mean the trends are genuinely parallel, or they can mean the pre-period is too short and too noisy to detect the trend that is quietly biasing you. The two are observationally identical in the point estimates and distinguishable only by <em>power</em>. Eyeballing a flat pre-trend plot, or reporting a large \( F \)-test \( p \)-value, tells you nothing about which world you are in unless you also report how large a trend the test could have caught.</p>
             </div>
 
+            <div class="interactive-box">
+                <h4>A pre-trend the test can't see, biasing the effect it can't ignore</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Treated and control groups sit apart in level and drift apart by a small <em>differential linear trend</em>. A genuine treatment effect of <strong>+8</strong> switches on at period&nbsp;0 (dashed line = the treated group's no-effect counterfactual). Raise the noise and the pre-period leads look flat to the eye and to the test &mdash; yet the same trend keeps accumulating past period&nbsp;0 and contaminates the difference-in-differences estimate. The readout shows the pre-trend test on <em>this</em> sample and the power it actually had.</p>
+                <div class="control-row">
+                    <label>Differential pre-trend slope &nbsp;(per period)</label>
+                    <input type="range" id="ptSlope" min="-0.4" max="0.4" step="0.02" value="0.12">
+                    <span class="value" id="ptSlopeVal">0.12</span>
+                </div>
+                <div class="control-row">
+                    <label>Noise level &nbsp;(σ)</label>
+                    <input type="range" id="ptNoise" min="0.3" max="4" step="0.1" value="1.4">
+                    <span class="value" id="ptNoiseVal">1.4</span>
+                    <button type="button" class="viz-btn" id="ptResample">↻ Resample</button>
+                </div>
+                <div class="chart-container chart-themed" id="ptChart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Pre-trend test (this sample)</span><span class="val" id="ptVerdict">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Power vs this trend</span><span class="val" id="ptPower">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">DiD estimate (true = 8)</span><span class="val" id="ptDid">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Bias from the trend</span><span class="val" id="ptBias">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">A trend too small for the pre-test to reliably reject still shoves the DiD estimate off the true +8. Turn up the noise and watch the <em>power</em> collapse: the test tends to &ldquo;pass&rdquo; precisely when it is least able to protect you.</p>
+            </div>
+
             <h2 id="distortion">Testing Distorts Inference</h2>
             <p>The second problem is deeper and less intuitive. Even setting power aside, the act of <em>conditioning</em> on having passed the pre-test changes the sampling distribution of the treatment estimator. Because the leads and the lags are estimated from overlapping data and are statistically correlated, selecting the samples in which \( \hat\beta_{\mathrm{pre}} \) happened to look small is not selecting a random subset of the world — it is selecting a subset correlated with the pre-period noise, and that correlation leaks into the post-period estimate.</p>
             <p>Formally, the object we actually report is not the unconditional estimator \( \hat\beta_{\mathrm{post}} \) but the estimator <em>conditional on passing</em>:</p>
@@ -198,6 +226,9 @@
                 <h4>Definition: The 50%-power trend as a yardstick</h4>
                 <p>Let \( \gamma \) index a family of hypothesized linear pre-trends (slope per period). The 50%-power slope \( \gamma_{0.5} \) solves \( \Pr(\text{reject} \mid \text{trend } \gamma_{0.5}) = 0.5 \). Report it next to your estimated effect. A pre-test that only reliably catches a trend an order of magnitude larger than the effect you are claiming is not a safeguard — it is decoration.</p>
             </div>
+
+            <div class="chart-container chart-themed" id="esChart" style="height:340px;"></div>
+            <p class="chart-caption">A textbook &ldquo;clean&rdquo; event study: every pre-treatment lead (grey) is individually insignificant &mdash; but look at the <em>width</em> of those intervals. Insignificant-and-wide is low power, not evidence of parallel trends; the lags (green) show the real, growing effect the design was built to measure.</p>
 
             <h2 id="honest">Sensitivity, Not Testing</h2>
             <p>The more thorough answer abandons the binary test for a <em>sensitivity analysis</em>. Rambachan and Roth (2023), "A More Credible Approach to Parallel Trends," reframes the whole problem. Instead of asking "is parallel trends true or false," you posit that the post-treatment violation of parallel trends is <em>restricted</em> — bounded by what you saw in the pre-period — and report the entire set of treatment effects consistent with that restriction. The estimand becomes <em>partially identified</em>, and the deliverable is an interval of intervals rather than a point with a green checkmark.</p>
@@ -258,6 +289,119 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var ZC = 1.959964;
+
+        // --- Figure 1: pre-trend power vs DiD bias ---
+        var PRE = [], POST = [];
+        for (var t = -14; t <= -1; t++) PRE.push(t);
+        for (var t = 0; t <= 9; t++) POST.push(t);
+        var ALL = PRE.concat(POST);
+        var TAU = 8, GAP0 = 15, TBAR_PRE = -7.5, TBAR_POST = 4.5;
+        var SXX_PRE = 0;
+        PRE.forEach(function (t) { SXX_PRE += (t - TBAR_PRE) * (t - TBAR_PRE); });
+        function ctrl(t) { return 120 + 1.6 * t; }
+        var ptSeed = 11;
+
+        BV.register(function () {
+            var p = BV.palette();
+            var g = parseFloat(document.getElementById('ptSlope').value);
+            var sig = parseFloat(document.getElementById('ptNoise').value);
+            var rng = BV.mulberry32(ptSeed);
+            var cSeries = [], tSeries = [], cf = [];
+            ALL.forEach(function (t) {
+                var c = ctrl(t) + sig * BV.randn(rng);
+                var eff = t >= 0 ? TAU : 0;
+                var y = ctrl(t) + GAP0 + g * t + eff + sig * BV.randn(rng);
+                cSeries.push(c); tSeries.push(y); cf.push(ctrl(t) + GAP0 + g * t);
+            });
+            // realized pre-trend test on the difference series
+            var dPre = [];
+            for (var i = 0; i < PRE.length; i++) dPre.push(tSeries[i] - cSeries[i]);
+            var dbar = BV.mean(dPre), num = 0;
+            for (var i = 0; i < PRE.length; i++) num += (PRE[i] - TBAR_PRE) * (dPre[i] - dbar);
+            var ghat = num / SXX_PRE;
+            var sigd = sig * Math.SQRT2, se = sigd / Math.sqrt(SXX_PRE);
+            var pval = 2 * (1 - BV.normCdf(Math.abs(ghat / se)));
+            var power = BV.normCdf(g / se - ZC) + BV.normCdf(-g / se - ZC);
+            // DiD estimate on this sample
+            function mrange(a, lo, hi) { var s = 0; for (var i = lo; i < hi; i++) s += a[i]; return s / (hi - lo); }
+            var did = (mrange(tSeries, PRE.length, ALL.length) - mrange(tSeries, 0, PRE.length))
+                    - (mrange(cSeries, PRE.length, ALL.length) - mrange(cSeries, 0, PRE.length));
+            var bias = g * (TBAR_POST - TBAR_PRE);
+
+            var traces = [
+                { type: 'scatter', mode: 'lines+markers', x: ALL, y: cSeries, name: 'control', line: { color: p.accent, width: 2 }, marker: { size: 5, color: p.accent } },
+                { type: 'scatter', mode: 'lines+markers', x: ALL, y: tSeries, name: 'treated', line: { color: p.primary, width: 2.5 }, marker: { size: 5, color: p.primary } },
+                { type: 'scatter', mode: 'lines', x: ALL, y: cf, name: 'treated, no-effect counterfactual', line: { color: p.primaryDark, width: 1.5, dash: 'dot' } }
+            ];
+            var layout = BV.layout({
+                margin: { l: 54, r: 16, t: 30, b: 44 },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                xaxis: { title: 'period (relative to treatment)', dtick: 5 },
+                yaxis: { title: 'outcome' },
+                shapes: [
+                    { type: 'rect', x0: -0.5, x1: 9.5, yref: 'paper', y0: 0, y1: 1, fillcolor: BV.band(p.warning, 0.08), line: { width: 0 }, layer: 'below' },
+                    { type: 'line', x0: -0.5, x1: -0.5, yref: 'paper', y0: 0, y1: 1, line: { color: p.muted, width: 1, dash: 'dot' } }
+                ],
+                annotations: [{ x: 0, y: 1, yref: 'paper', yanchor: 'bottom', xanchor: 'left', text: 'treatment on', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('ptChart', traces, layout, BV.config);
+
+            var vv = document.getElementById('ptVerdict');
+            if (pval >= 0.05) { vv.textContent = 'passed (p = ' + pval.toFixed(2) + ')'; vv.className = 'val'; }
+            else { vv.textContent = 'rejected (p = ' + pval.toFixed(2) + ')'; vv.className = 'val warn'; }
+            var pw = document.getElementById('ptPower');
+            pw.textContent = Math.round(power * 100) + '%';
+            pw.className = 'val' + (power < 0.5 ? ' warn' : (power > 0.8 ? ' ok' : ''));
+            document.getElementById('ptDid').textContent = did.toFixed(1);
+            var bel = document.getElementById('ptBias');
+            bel.textContent = (bias >= 0 ? '+' : '') + bias.toFixed(1) + '  (' + Math.round(Math.abs(bias) / TAU * 100) + '% of effect)';
+            bel.className = 'val' + (Math.abs(bias) > 1.5 ? ' warn' : '');
+        });
+        document.getElementById('ptResample').addEventListener('click', function () {
+            ptSeed = (ptSeed * 1664525 + 1013904223) >>> 0;
+            BV.redraw();
+        });
+        BV.sliders([
+            { id: 'ptSlope', value: 'ptSlopeVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'ptNoise', value: 'ptNoiseVal', fmt: function (v) { return v.toFixed(1); } }
+        ], BV.redraw);
+
+        // --- Figure 2: low-power event study (static) ---
+        BV.register(function () {
+            var p = BV.palette();
+            var rng = BV.mulberry32(4);
+            var xs = [], ys = [], es = [], cols = [];
+            [-5, -4, -3, -2].forEach(function (k) { xs.push(k); ys.push(0.3 * BV.randn(rng)); es.push(1.35); cols.push(p.muted); });
+            xs.push(-1); ys.push(0); es.push(0); cols.push(p.danger);
+            [0, 1, 2, 3, 4, 5].forEach(function (k) { xs.push(k); ys.push(1.1 * (k + 1) - 0.4); es.push(0.7); cols.push(p.primary); });
+            var traces = [{
+                type: 'scatter', mode: 'markers', x: xs, y: ys,
+                marker: { color: cols, size: 9, line: { color: p.surface, width: 1 } },
+                error_y: { type: 'data', array: es, color: p.border, thickness: 1.5, width: 4 },
+                hovertemplate: 'event time %{x}<br>coef %{y:.2f}<extra></extra>'
+            }];
+            var layout = BV.layout({
+                margin: { l: 54, r: 16, t: 16, b: 44 },
+                showlegend: false,
+                xaxis: { title: 'event time (0 = treatment)', dtick: 1, zeroline: false },
+                yaxis: { title: 'estimated coefficient' },
+                shapes: [{ type: 'line', x0: -5.4, x1: 5.4, y0: 0, y1: 0, line: { color: p.border, width: 1 } }],
+                annotations: [
+                    { x: -3.5, y: 2.4, text: 'leads: wide, straddle 0', showarrow: false, font: { size: 11, color: p.muted } },
+                    { x: 3.5, y: 2.4, text: 'lags: real, growing', showarrow: false, font: { size: 11, color: p.primaryDark } }
+                ]
+            });
+            Plotly.react('esChart', traces, layout, BV.config);
+        });
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

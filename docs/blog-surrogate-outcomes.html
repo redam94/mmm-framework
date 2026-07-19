@@ -28,8 +28,26 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .dag-solo { max-width: 420px; margin: 1.5rem auto 0.4rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 1.1rem 1rem 0.8rem; }
+        .dagfig { width: 100%; height: 172px; display: block; }
+        .dagfig .node { fill: var(--color-surface); stroke: var(--color-text-muted); stroke-width: 1.6; }
+        .dagfig .node.exposure { stroke: var(--color-primary); stroke-width: 2.2; }
+        .dagfig .node.outcome { stroke: var(--color-accent); stroke-width: 2.2; }
+        .dagfig .node.covar { stroke: var(--color-warning); }
+        .dagfig .node.unmeasured { stroke: var(--color-danger); stroke-dasharray: 3 2.5; }
+        .dagfig .nlab { fill: var(--color-text); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; }
+        .dagfig .edge { stroke: var(--color-text-muted); stroke-width: 1.7; fill: none; }
+        .dagfig .edge.bias { stroke: var(--color-danger); stroke-dasharray: 4 3; }
+        .dagfig .arrowhead { fill: var(--color-text-muted); }
+        .dagfig .arrowhead.bias { fill: var(--color-danger); }
+    </style>
     <!-- seo:augmented (structured data + social cards) -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Measuring the Long Run: Surrogate Outcomes in Media">
@@ -73,7 +91,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-14",
+          "dateModified": "2026-07-18",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/blog-surrogate-outcomes.html#breadcrumb"
           },
@@ -169,6 +187,11 @@
                 <p>In words: once you know the surrogate, learning whether the unit was treated tells you nothing more about the long-run outcome. The entire causal effect of \( W \) on \( Y^{L} \) is <em>routed through</em> \( S \) — the surrogate is a complete mediator. Prentice's paper is often summarized as four criteria (treatment affects the surrogate; treatment affects the true endpoint; the surrogate predicts the endpoint given treatment; and full capture), but the last is the binding one and the others are its scaffolding.</p>
             </div>
 
+            <div class="dag-solo">
+                <svg class="dagfig" id="dagSurrogate" viewBox="0 0 320 172" role="img" aria-label="DAG: treatment W causes surrogate S which causes outcome Y, with a red-dashed direct path from W to Y and an unmeasured confounder U of S and Y"></svg>
+            </div>
+            <p class="chart-caption">Prentice validity demands that <strong>all</strong> of treatment <span style="font-family:'JetBrains Mono',monospace;">W</span>&rsquo;s influence on the long-run outcome <span style="font-family:'JetBrains Mono',monospace;">Y</span> flow through the surrogate <span style="font-family:'JetBrains Mono',monospace;">S</span> (the black path). The red-dashed edges are the killers: a <em>direct</em> path <span style="font-family:'JetBrains Mono',monospace;">W&rarr;Y</span> the surrogate never sees, or an unmeasured <span style="font-family:'JetBrains Mono',monospace;">U</span> confounding the <span style="font-family:'JetBrains Mono',monospace;">S&ndash;Y</span> association. Either one voids the criterion &mdash; and is exactly what the surrogate paradox exploits.</p>
+
             <p>The strength of this condition is also its problem. Full mediation says there is <em>no</em> path from treatment to the long-run outcome that bypasses the surrogate. A single short-term metric almost never earns that. Immediate conversions do not capture the brand-memory effects of an impression; this month's sales do not capture the habit a customer is forming. Prentice himself was cautious about how rarely real markers meet the bar, and the subsequent literature has been a long catalogue of ways single surrogates fail. The failure has a sharp form worth its own section.</p>
 
             <h2 id="paradox">The Surrogate Paradox</h2>
@@ -177,6 +200,29 @@
             <div class="warning">
                 <h4>⚠️ A treatment can improve the surrogate, harm the true outcome, and lie the whole time</h4>
                 <p>Formally (VanderWeele, 2013): a treatment may have a <em>positive</em> average effect on the surrogate, the surrogate may have a <em>positive</em> effect on the true endpoint, and yet the treatment may have a <em>negative</em> effect on the true endpoint. Every pairwise association you can measure looks reassuring, and the net effect is the opposite of what those associations imply. Marginal correlation between surrogate and outcome — the thing dashboards actually show — is no protection at all.</p>
+            </div>
+
+            <div class="interactive-box">
+                <h4>The proxy agrees early, then betrays you</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Treatment raises a short-term surrogate the dashboard tracks (<span style="color:var(--color-primary);font-weight:600;">blue</span>). Early on the true long-run outcome (<span style="color:var(--color-danger);font-weight:600;">the other line</span>) rides right along with it, so the surrogate looks like a faithful stand-in. But a slow <em>hidden</em> path — eroding trust, pulled-forward demand, churny acquisitions — accrues over the horizon. Turn it negative and the surrogate keeps climbing while the truth turns down and crosses into loss.</p>
+                <div class="control-row">
+                    <label>Surrogate&rarr;outcome strength &nbsp;(b)</label>
+                    <input type="range" id="spB" min="0" max="1.6" step="0.05" value="0.9">
+                    <span class="value" id="spBVal">0.90</span>
+                </div>
+                <div class="control-row">
+                    <label>Hidden path W&rarr;outcome &nbsp;(d)</label>
+                    <input type="range" id="spD" min="-3" max="1" step="0.1" value="-1.6">
+                    <span class="value" id="spDVal">-1.6</span>
+                </div>
+                <div class="chart-container chart-themed" id="spTraj" style="height:330px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Surrogate says</span><span class="val" id="spSurr">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">True long-run effect</span><span class="val" id="spTrue">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Signs agree?</span><span class="val" id="spAgree">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="spVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Both effects are positive when the hidden path is benign — the surrogate is a good guide. Push <span style="font-family:'JetBrains Mono',monospace;">d</span> below <span style="font-family:'JetBrains Mono',monospace;">−b</span> and you enter the paradox: surrogate up, truth down, every measurable correlation still reassuring. That gap is a year of budget aimed the wrong way.</p>
             </div>
 
             <p>How does this happen? The paradox arises when the treatment reaches the outcome through more than one path and those paths carry different signs, or when the surrogate–outcome association is confounded rather than causal. An ad-load increase might raise short-term revenue (one positive path) while eroding user trust and future engagement (a negative path the surrogate never sees). Because the surrogate captures only the first path, optimizing it maximizes the wrong sum. VanderWeele's contribution was to derive sufficient conditions under which a surrogate is "consistent" — provably free of the paradox — even when the treatment has a direct effect on the outcome not routed through the surrogate. Those conditions (monotonicity of effects, sign restrictions) are exactly the kind of structural assumptions that are hard to verify and easy to violate in messy media systems.</p>
@@ -264,6 +310,113 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // --- Little DAG renderer (CSS-themed, no JS redraw needed) ---
+        function drawDag(id, nodes, edges) {
+            var svg = document.getElementById(id);
+            if (!svg) return;
+            var nm = {};
+            nodes.forEach(function (n) { nm[n.id] = n; });
+            var aId = id + '-a', abId = id + '-ab';
+            var s = '<defs>'
+                + '<marker id="' + aId + '" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>'
+                + '<marker id="' + abId + '" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead bias" d="M0,0 L10,5 L0,10 z"/></marker>'
+                + '</defs>';
+            edges.forEach(function (e) {
+                var A = nm[e.from], B = nm[e.to];
+                var dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+                var x1 = A.x + ux * (A.r + 1), y1 = A.y + uy * (A.r + 1);
+                var x2 = B.x - ux * (B.r + 7), y2 = B.y - uy * (B.r + 7);
+                var bias = e.cls === 'bias';
+                s += '<line class="edge' + (bias ? ' bias' : '') + '" x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1)
+                    + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" marker-end="url(#' + (bias ? abId : aId) + ')"/>';
+            });
+            nodes.forEach(function (n) {
+                s += '<circle class="node ' + (n.cls || '') + '" cx="' + n.x + '" cy="' + n.y + '" r="' + n.r + '"/>';
+                s += '<text class="nlab" x="' + n.x + '" y="' + (n.y + 0.5) + '" text-anchor="middle" dominant-baseline="central">' + n.label + '</text>';
+            });
+            svg.innerHTML = s;
+        }
+        function initDags() {
+            drawDag('dagSurrogate',
+                [{ id: 'W', x: 40, y: 118, r: 17, cls: 'exposure', label: 'W' },
+                 { id: 'S', x: 160, y: 118, r: 17, cls: 'covar', label: 'S' },
+                 { id: 'Y', x: 280, y: 118, r: 17, cls: 'outcome', label: 'Y' },
+                 { id: 'U', x: 220, y: 34, r: 15, cls: 'unmeasured', label: 'U' }],
+                [{ from: 'W', to: 'S' }, { from: 'S', to: 'Y' },
+                 { from: 'W', to: 'Y', cls: 'bias' },
+                 { from: 'U', to: 'S', cls: 'bias' }, { from: 'U', to: 'Y', cls: 'bias' }]);
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDags);
+        } else { initDags(); }
+
+        // --- Interactive: the surrogate paradox over a horizon ---
+        // a = treatment's effect on the surrogate (fixed positive, the visible signal).
+        // Surrogate-implied outcome path accrues fast (τs); hidden direct path accrues slow (τL).
+        var A_SURR = 1.0, TAU_S = 12, TAU_L = 55, HORIZON = 130;
+        BV.register(function () {
+            var p = BV.palette();
+            var b = parseFloat(document.getElementById('spB').value);
+            var d = parseFloat(document.getElementById('spD').value);
+            var ts = BV.linspace(0, HORIZON, 90);
+            var surr = ts.map(function (t) { return A_SURR * b * (1 - Math.exp(-t / TAU_S)); });
+            var truth = ts.map(function (t) {
+                return A_SURR * b * (1 - Math.exp(-t / TAU_S)) + d * (1 - Math.exp(-t / TAU_L));
+            });
+            var surrFinal = A_SURR * b;
+            var trueFinal = A_SURR * b + d;
+            var yLo = Math.min(-0.2, trueFinal - 0.3), yHi = Math.max(0.6, surrFinal + 0.3);
+
+            var traces = [
+                {
+                    type: 'scatter', mode: 'lines', name: 'surrogate (short-term proxy)',
+                    x: ts, y: surr, line: { color: p.primary, width: 3 },
+                    hovertemplate: 'week %{x:.0f}<br>surrogate = %{y:.2f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', name: 'true long-run outcome',
+                    x: ts, y: truth, line: { color: p.danger, width: 3 },
+                    hovertemplate: 'week %{x:.0f}<br>true outcome = %{y:.2f}<extra></extra>'
+                }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'weeks since treatment', range: [0, HORIZON] },
+                yaxis: { title: 'cumulative effect', range: [yLo, yHi] },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 60, r: 20, t: 34, b: 48 },
+                shapes: [
+                    { type: 'rect', x0: 0, x1: HORIZON, y0: yLo, y1: 0, fillcolor: BV.band(p.danger, 0.08), line: { width: 0 }, layer: 'below' },
+                    { type: 'line', x0: 0, x1: HORIZON, y0: 0, y1: 0, line: { color: p.text, width: 1.4 } }
+                ],
+                annotations: [{ x: 4, y: yLo, xanchor: 'left', yanchor: 'bottom', text: 'long-run loss', showarrow: false, font: { size: 11, color: p.danger } }]
+            });
+            Plotly.react('spTraj', traces, layout, BV.config);
+
+            document.getElementById('spSurr').textContent = (surrFinal >= 0 ? '+' : '') + surrFinal.toFixed(2);
+            var tEl = document.getElementById('spTrue');
+            tEl.textContent = (trueFinal >= 0 ? '+' : '') + trueFinal.toFixed(2);
+            tEl.className = 'val' + (trueFinal < 0 ? ' warn' : ' ok');
+            var agree = (surrFinal > 0) === (trueFinal > 0);
+            var aEl = document.getElementById('spAgree');
+            aEl.textContent = agree ? 'yes' : 'no';
+            aEl.className = 'val' + (agree ? ' ok' : ' warn');
+            var vEl = document.getElementById('spVerdict');
+            if (surrFinal > 0 && trueFinal < 0) { vEl.textContent = 'paradox!'; vEl.className = 'val warn'; }
+            else if (trueFinal < surrFinal - 0.05) { vEl.textContent = 'over-optimistic'; vEl.className = 'val'; }
+            else { vEl.textContent = 'proxy holds'; vEl.className = 'val ok'; }
+        });
+        BV.sliders([
+            { id: 'spB', value: 'spBVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'spD', value: 'spDVal', fmt: function (v) { return (v >= 0 ? '+' : '') + v.toFixed(1); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

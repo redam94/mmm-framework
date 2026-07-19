@@ -23,6 +23,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -154,6 +158,22 @@
             <h2 id="correlation-cause">1. Mistaking Correlation for Cause</h2>
             <p><strong>What it looks like.</strong> A regression of revenue on media spend reports, with a clean fit and a significant coefficient, that paid search "drives" a startling share of sales. It is mostly measuring the media plan: budgets were set against demand forecasts, so the demand that causes the sales also caused the spend. Three mechanisms produce this family of errors. <em>Confounding</em>: a common cause moves both predictor and outcome, the way regional culture drives both Waffle House density and divorce rates in McElreath's running example. <em>Selection</em>: the raw treated-versus-untreated gap is the true effect on the treated <em>plus</em> a selection term, which can be large enough to flip the sign — why hospitals look dangerous in observational data. <em>Omitted variables</em>: the bias from a left-out variable is the product of its effect on the outcome and its correlation with what you kept — predictable in direction, and rarely small.</p>
 
+            <div class="interactive-box">
+                <h4>Simpson&rsquo;s paradox: the pooled line lies</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Each point is a market. Pool them and fit one line and <em>more spend looks like more sales</em> &mdash; a clean, significant, upward slope. But the markets fall into three demand tiers (a confounder), and <em>within every tier</em> extra spend is associated with <em>fewer</em> sales. The aggregate slope is an artifact of which tier spends more, not of what spend does. Reveal the groups and watch the fitted trend flip sign.</p>
+                <div class="control-row">
+                    <button type="button" class="viz-btn" id="spToggle">Reveal the groups</button>
+                </div>
+                <div class="chart-container chart-themed" id="spChart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Pooled slope</span><span class="val" id="spPooled">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Within-group slope</span><span class="val" id="spWithin">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">View</span><span class="val" id="spView">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="spVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Same points, opposite conclusions. The naive regression measures the demand tiers it forgot to condition on; the within-tier slope is the honest one. Only the causal question &mdash; <em>why does a market spend what it spends?</em> &mdash; tells you which line to trust.</p>
+            </div>
+
             <div class="note">
                 <h4>💡 The 160x lesson</h4>
                 <p>Lewis, Rao, and Reiley (2011) compared observational estimates of online display-ad effectiveness against a randomized experiment on the same campaigns: the observational methods overstated the causal effect by roughly a factor of 160. The mechanism — activity bias — is that people who see ads are simply more active online across the board, and no covariate set repairs it. "We controlled for everything" is not an identification strategy.</p>
@@ -176,6 +196,9 @@
             <h2 id="overfitting-underfitting">3. Overfitting and the R-Squared Trap</h2>
             <p><strong>What it looks like.</strong> McElreath frames model complexity as a strait between two monsters: Scylla, the overfit model that learns the noise, and Charybdis, the underfit model that misses the signal. The current pushes toward Scylla, because in-sample fit <em>always</em> improves with more parameters — even randomly generated predictors raise R-squared. The demonstration: a fifth-degree polynomial through seven data points achieves an R-squared of 0.99 and predicts negative brain volumes between the observations. The marketing version: enough flexible controls that the fit chart is immaculate while ROAS estimates swing wildly between refits — flexibility spent memorizing this dataset's accidents.</p>
             <p><strong>Why it survives review.</strong> Because the number reviewers ask for is the one that rewards the failure. "How well does it fit?" is answered in-sample, and in-sample the overfit model wins every time. Absent an out-of-sample discipline, complexity is indistinguishable from insight.</p>
+
+            <div class="chart-container chart-themed" id="ofChart" style="height:360px;"></div>
+            <p class="chart-caption">McElreath&rsquo;s hominin data: brain volume vs. body mass for seven species. The degree-6 polynomial threads every point exactly &mdash; R&sup2; = 1.00 &mdash; yet it swings to <strong>negative brain volumes</strong> between the observations (shaded region below zero). The straight line explains far less in-sample and is far more trustworthy out of it. Perfect fit is a symptom, not a triumph.</p>
             <p><strong>The remedy.</strong> Two families. First, regularizing priors — informative, mildly skeptical priors on effect sizes, the Bayesian counterpart of ridge and lasso. Second, score models on <em>estimated out-of-sample</em> predictive accuracy rather than fit: WAIC, or in practice PSIS-LOO cross-validation, whose Pareto-k diagnostic also flags observations where the approximation itself is straining (Vehtari, Gelman, and Gabry, 2017).</p>
 
             <div class="warning">
@@ -278,5 +301,159 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        function ols(pts) {
+            var n = pts.length, sx = 0, sy = 0;
+            pts.forEach(function (q) { sx += q[0]; sy += q[1]; });
+            var mx = sx / n, my = sy / n, sxy = 0, sxx = 0;
+            pts.forEach(function (q) { sxy += (q[0] - mx) * (q[1] - my); sxx += (q[0] - mx) * (q[0] - mx); });
+            var m = sxx > 0 ? sxy / sxx : 0;
+            return { m: m, b: my - m * mx };
+        }
+
+        // --- Figure 1: Simpson's paradox ---------------------------------------
+        // Three demand tiers; within each, spend↔sales is negative, but the tier
+        // centres march up-and-right, so the pooled slope is positive.
+        var GROUP_NAMES = ['low-demand markets', 'mid-demand markets', 'high-demand markets'];
+        var groupPts = [[], [], []];
+        (function build() {
+            var rng = BV.mulberry32(11);
+            for (var g = 0; g < 3; g++) {
+                var cx = 2.2 + 3.0 * g, cy = 3.0 + 3.0 * g;
+                for (var i = 0; i < 14; i++) {
+                    var dx = (rng() - 0.5) * 2.4;
+                    var y = cy - 0.9 * dx + BV.randn(rng) * 0.35;
+                    groupPts[g].push([cx + dx, y]);
+                }
+            }
+        })();
+        var allPts = groupPts[0].concat(groupPts[1], groupPts[2]);
+        var xLo = Math.min.apply(null, allPts.map(function (q) { return q[0]; })) - 0.4;
+        var xHi = Math.max.apply(null, allPts.map(function (q) { return q[0]; })) + 0.4;
+        var pooledFit = ols(allPts);
+        var groupFits = groupPts.map(ols);
+        var withinAvg = BV.mean(groupFits.map(function (f) { return f.m; }));
+
+        var spGrouped = false;
+
+        BV.register(function () {
+            var p = BV.palette();
+            var gcols = [p.accent, p.warning, p.primary];
+            var traces = [];
+            if (!spGrouped) {
+                traces.push({
+                    type: 'scatter', mode: 'markers', name: 'markets', x: allPts.map(function (q) { return q[0]; }),
+                    y: allPts.map(function (q) { return q[1]; }),
+                    marker: { color: BV.band(p.muted, 0.85), size: 9, line: { color: p.surface, width: 1 } },
+                    hovertemplate: 'spend %{x:.1f}<br>sales %{y:.1f}<extra></extra>'
+                });
+                traces.push({
+                    type: 'scatter', mode: 'lines', name: 'pooled fit', x: [xLo, xHi],
+                    y: [pooledFit.b + pooledFit.m * xLo, pooledFit.b + pooledFit.m * xHi],
+                    line: { color: p.danger, width: 3 }, hovertemplate: 'pooled slope %{text}<extra></extra>', text: ['', '']
+                });
+            } else {
+                groupPts.forEach(function (pts, g) {
+                    traces.push({
+                        type: 'scatter', mode: 'markers', name: GROUP_NAMES[g], x: pts.map(function (q) { return q[0]; }),
+                        y: pts.map(function (q) { return q[1]; }),
+                        marker: { color: gcols[g], size: 9, line: { color: p.surface, width: 1 } },
+                        hovertemplate: GROUP_NAMES[g] + '<br>spend %{x:.1f}, sales %{y:.1f}<extra></extra>'
+                    });
+                });
+                groupPts.forEach(function (pts, g) {
+                    var f = groupFits[g];
+                    var lo = Math.min.apply(null, pts.map(function (q) { return q[0]; }));
+                    var hi = Math.max.apply(null, pts.map(function (q) { return q[0]; }));
+                    traces.push({
+                        type: 'scatter', mode: 'lines', showlegend: false, x: [lo, hi],
+                        y: [f.b + f.m * lo, f.b + f.m * hi], line: { color: gcols[g], width: 2.5, dash: 'solid' },
+                        hoverinfo: 'skip'
+                    });
+                });
+                traces.push({
+                    type: 'scatter', mode: 'lines', name: 'pooled fit', x: [xLo, xHi],
+                    y: [pooledFit.b + pooledFit.m * xLo, pooledFit.b + pooledFit.m * xHi],
+                    line: { color: p.danger, width: 2, dash: 'dot' }, hoverinfo: 'skip'
+                });
+            }
+            var layout = BV.layout({
+                xaxis: { title: 'media spend (standardized)', range: [xLo, xHi] },
+                yaxis: { title: 'sales (standardized)' },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 60, r: 20, t: 30, b: 48 }
+            });
+            Plotly.react('spChart', traces, layout, BV.config);
+
+            var pEl = document.getElementById('spPooled');
+            pEl.textContent = (pooledFit.m >= 0 ? '+' : '') + pooledFit.m.toFixed(2);
+            pEl.className = 'val warn';
+            var wEl = document.getElementById('spWithin');
+            wEl.textContent = (withinAvg >= 0 ? '+' : '') + withinAvg.toFixed(2);
+            wEl.className = 'val ok';
+            document.getElementById('spView').textContent = spGrouped ? 'by group' : 'pooled';
+            var v = document.getElementById('spVerdict');
+            v.textContent = 'sign reversal';
+            v.className = 'val warn';
+        });
+
+        document.getElementById('spToggle').addEventListener('click', function () {
+            spGrouped = !spGrouped;
+            this.textContent = spGrouped ? 'Pool the markets' : 'Reveal the groups';
+            BV.redraw();
+        });
+
+        // --- Figure 2: overfit polynomial (McElreath hominin brain data) --------
+        var HOM = [[37, 438], [35.5, 452], [34.5, 612], [41.5, 521], [55.5, 752], [61, 871], [53.5, 1350]];
+        var sx = HOM.map(function (d) { return d[0] / 10; });      // scale for numerical stability
+        var sy = HOM.map(function (d) { return d[1]; });
+        function lagrange(massRaw) {
+            var xt = massRaw / 10, total = 0;
+            for (var i = 0; i < sx.length; i++) {
+                var term = sy[i];
+                for (var j = 0; j < sx.length; j++) {
+                    if (j !== i) term *= (xt - sx[j]) / (sx[i] - sx[j]);
+                }
+                total += term;
+            }
+            return total;
+        }
+        var linFit = ols(HOM);
+
+        BV.register(function () {
+            var p = BV.palette();
+            var grid = BV.linspace(34, 61.5, 260);
+            var poly = grid.map(lagrange);
+            var lin = grid.map(function (x) { return linFit.b + linFit.m * x; });
+            var traces = [
+                { type: 'scatter', mode: 'lines', name: 'degree-6 fit (R² = 1.00)', x: grid, y: poly,
+                  line: { color: p.danger, width: 2.5 }, hovertemplate: 'mass %{x:.0f}<br>predicted %{y:.0f} cc<extra></extra>' },
+                { type: 'scatter', mode: 'lines', name: 'straight-line fit', x: grid, y: lin,
+                  line: { color: p.primary, width: 2.5, dash: 'dash' }, hovertemplate: 'mass %{x:.0f}<br>predicted %{y:.0f} cc<extra></extra>' },
+                { type: 'scatter', mode: 'markers', name: 'species (data)', x: HOM.map(function (d) { return d[0]; }),
+                  y: HOM.map(function (d) { return d[1]; }),
+                  marker: { color: p.text, size: 10, line: { color: p.surface, width: 1.5 } },
+                  hovertemplate: 'mass %{x} kg<br>brain %{y} cc<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'body mass (kg)', range: [34, 61.5] },
+                yaxis: { title: 'brain volume (cc)', range: [-700, 1650] },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 66, r: 20, t: 30, b: 48 },
+                shapes: [
+                    { type: 'rect', xref: 'paper', x0: 0, x1: 1, y0: -700, y1: 0, fillcolor: BV.band(p.danger, 0.09), line: { width: 0 }, layer: 'below' },
+                    { type: 'line', x0: 34, x1: 61.5, y0: 0, y1: 0, line: { color: p.muted, width: 1.5, dash: 'dot' } }
+                ],
+                annotations: [{ x: 34.5, y: -350, xanchor: 'left', text: 'impossible: negative volume', showarrow: false, font: { size: 11, color: p.danger } }]
+            });
+            Plotly.react('ofChart', traces, layout, BV.config);
+        });
+    })();
+    </script>
 </body>
 </html>

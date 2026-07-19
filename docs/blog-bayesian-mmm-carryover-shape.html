@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -175,6 +179,29 @@
             $$ w^{d}_m(l;\, \alpha_m, \theta_m) \;=\; \alpha_m^{\,(l - \theta_m)^2}, \qquad 0 \lt \alpha_m \lt 1, \quad 0 \le \theta_m \le L-1, $$
             <p>where \( \theta_m \) is the delay of the peak effect: the weight is maximized at lag \( l = \theta_m \) rather than at \( l = 0 \). The form is proportional to a normal density centered at \( \theta_m \) — the Gaussian radial kernel familiar from local regression — and setting \( \theta_m = 0 \) recovers geometric decay, so the delayed form nests the simple one. With the same retention rate, geometric adstock decays monotonically from lag zero while delayed adstock rises to a pulse around its peak lag and then falls away. In the paper's simulations and its real application the window is \( L = 13 \) weeks, long enough that the truncated weights are negligible. The <a href="math-01-adstock.html">adstock mathematics page</a> works through these forms, their normalization, and their implementation in this framework in more detail.</p>
 
+            <div class="interactive-box">
+                <h4>Carryover in motion: a three-week flight</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A channel runs for three weeks (shaded bars), then goes dark. The lines are the adstocked pressure the model actually regresses on. <strong>Geometric</strong> decay peaks the week spend lands and falls monotonically; <strong>delayed</strong> adstock keeps building <em>after the flight ends</em>, peaking around lag&nbsp;θ. Both responses are normalized to their own peak so you can compare shape. Drag the retention rate and the delay.</p>
+                <div class="control-row">
+                    <label>Retention rate &nbsp;(α)</label>
+                    <input type="range" id="csAlpha" min="0.1" max="0.9" step="0.05" value="0.6">
+                    <span class="value" id="csAlphaVal">0.60</span>
+                </div>
+                <div class="control-row">
+                    <label>Peak delay &nbsp;(θ, weeks)</label>
+                    <input type="range" id="csTheta" min="0" max="8" step="1" value="3">
+                    <span class="value" id="csThetaVal">3</span>
+                </div>
+                <div class="chart-container chart-themed" id="csAdstock" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">1-week retention</span><span class="val" id="csRet">60%</span></div>
+                    <div class="stat"><span class="lbl">Geometric half-life</span><span class="val" id="csHalf">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Delayed peak</span><span class="val" id="csPeak">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Effect after flight ends</span><span class="val" id="csTail">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">This is exactly why the ROAS numerator (below) must be summed past the end of the flight, through week&nbsp;<span style="font-family:'JetBrains Mono',monospace;">t₁&nbsp;+&nbsp;L&nbsp;&minus;&nbsp;1</span>: truncating at the last spend week discards the carryover tail and understates every channel with real adstock.</p>
+            </div>
+
             <h2 id="shape">Shape: The Hill Function</h2>
             <p>Saturation is modeled with the Hill function, borrowed from pharmacology, where it originated as an empirical model of receptor binding (Hill, 1910; Gesztelyi et&nbsp;al., 2012):</p>
             $$ \mathrm{Hill}(x;\, \mathcal{K}_m, \mathcal{S}_m) \;=\; \frac{1}{1 + \left(x / \mathcal{K}_m\right)^{-\mathcal{S}_m}}, \qquad x \ge 0 . $$
@@ -182,11 +209,42 @@
             $$ \beta_m\, \mathrm{Hill}_m(x) \;=\; \beta_m \;-\; \frac{\mathcal{K}_m^{\mathcal{S}_m}\, \beta_m}{x^{\mathcal{S}_m} + \mathcal{K}_m^{\mathcal{S}_m}} . $$
             <p>A leaner alternative is the one-parameter <strong>reach transformation</strong> of Jin, Shobowale, Koehler, and Case (2012), \( R = a - b/(G + b/a) \), which maps onto \( \beta\mathrm{Hill} \) exactly when \( \mathcal{S} = 1 \) (take \( a = \beta \), \( b = \mathcal{K}\beta \)). Estimating reach instead of the full Hill form trades away the S-shape option for fewer parameters and better identifiability — a trade that, as we'll see, the data often endorses. The framework's <a href="math-02-saturation.html">saturation mathematics page</a> covers the Hill family alongside the logistic and other curvature choices; sigmoids, normal-CDF integrals, and monotone splines are viable too, and share the identifiability issue discussed below.</p>
 
+            <div class="interactive-box">
+                <h4>Shape, and why average ROAS isn&rsquo;t marginal ROAS</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The βHill curve (β&nbsp;=&nbsp;1) with a movable &ldquo;current spend.&rdquo; The <span style="color:var(--color-accent);font-weight:600;">dashed secant</span> from the origin is average return per dollar&mdash;the intuition behind <strong>ROAS</strong>. The <span style="color:var(--color-danger);font-weight:600;">solid tangent</span> is what the <em>next</em> dollar buys&mdash;<strong>marginal ROAS</strong>. Push spend up the curve and watch the tangent flatten toward zero while the secant stays stubbornly positive: that gap is how a saturated channel keeps a healthy average ROAS long after its marginal ROAS has collapsed.</p>
+                <div class="control-row">
+                    <label>Half-saturation &nbsp;(𝒦)</label>
+                    <input type="range" id="hK" min="0.2" max="1.5" step="0.05" value="0.6">
+                    <span class="value" id="hKVal">0.60</span>
+                </div>
+                <div class="control-row">
+                    <label>Shape / slope &nbsp;(𝒮)</label>
+                    <input type="range" id="hS" min="0.4" max="4" step="0.1" value="1.6">
+                    <span class="value" id="hSVal">1.6</span>
+                </div>
+                <div class="control-row">
+                    <label>Current spend &nbsp;(x)</label>
+                    <input type="range" id="hX" min="0.1" max="2.5" step="0.05" value="1.4">
+                    <span class="value" id="hXVal">1.40</span>
+                </div>
+                <div class="chart-container chart-themed" id="hillChart" style="height:360px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Curve shape</span><span class="val" id="hShape">S-shaped</span></div>
+                    <div class="stat"><span class="lbl">Average return (∝ ROAS)</span><span class="val" id="hAvg">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Marginal (∝ mROAS)</span><span class="val" id="hMarg">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Marginal ÷ average</span><span class="val" id="hRatio">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">𝒮&nbsp;&gt;&nbsp;1 gives the S-shape (convex then concave); 𝒮&nbsp;&le;&nbsp;1 is concave throughout. Budget decisions live on the tangent; reporting tends to quote the secant &mdash; and conflating them, as the post argues, is how saturated channels keep winning budget.</p>
+            </div>
+
             <h2 id="composition-order">Which Transform Comes First?</h2>
             <p>The combined model composes the two transforms in a fixed order: adstock first, then Hill — carryover accumulates raw spend into adstocked pressure, and saturation is applied to the accumulated quantity. Jin et&nbsp;al. note this ordering is appropriate when spend in any single period is small relative to the cumulative spend in the window, so that saturation is a property of sustained pressure rather than of a single week's flight. The reverse composition — saturate each week's spend, then let the saturated effect carry over — is the natural choice when weekly bursts are large enough to saturate on their own. The order is a modeling assumption, not a discovery: choose it to match how the channel is actually bought, because it changes what the shape parameters mean.</p>
 
             <h2 id="identifiability">Weak Identification, Priors, and Calibration</h2>
             <p>The uncomfortable core of the paper is that the flexible \( \beta \)Hill form is <strong>essentially unidentifiable</strong> from typical MMM data. Two failure modes are demonstrated directly. First, within a finite observed spend range, very different parameter triples produce nearly the same curve: a curve with \( (\mathcal{K} = 0.5,\, \mathcal{S} = 1,\, \beta = 0.3) \) is matched almost exactly by \( (\mathcal{K} = 0.95,\, \mathcal{S} = 0.748,\, \beta = 0.393) \), the two diverging only beyond the observed range. Second, when the half-saturation point lies outside the range of spend the advertiser has ever tried, curves that agree inside the range can disagree arbitrarily outside it. The consequence is sharp: the model cannot extrapolate the response curve beyond observed spend, even when it fits beautifully within it.</p>
+
+            <div class="chart-container chart-themed" id="identChart" style="height:380px;"></div>
+            <p class="chart-caption">Two parameter triples from the paper: <span style="font-family:'JetBrains Mono',monospace;">(𝒦=0.5, 𝒮=1, β=0.3)</span> and <span style="font-family:'JetBrains Mono',monospace;">(𝒦=0.95, 𝒮=0.748, β=0.393)</span>. Inside the observed spend range (shaded) the two curves are visually indistinguishable &mdash; the data cannot tell them apart. Past the last dollar anyone has ever spent, they diverge without bound. The <strong>curve is identified within range; the parameters, and any extrapolation, are not.</strong></p>
 
             <div class="note">
                 <h4>💡 The curve is identified; the parameters are not</h4>
@@ -269,6 +327,151 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+        var LAGS = 13, WEEKS = 17, FLIGHT = [1, 2, 3];   // spend weeks (1-indexed)
+
+        function weightsGeom(alpha) {
+            var w = []; for (var l = 0; l < LAGS; l++) w.push(Math.pow(alpha, l)); return w;
+        }
+        function weightsDelayed(alpha, theta) {
+            var w = []; for (var l = 0; l < LAGS; l++) w.push(Math.pow(alpha, (l - theta) * (l - theta))); return w;
+        }
+        function normalize(w) { var s = w.reduce(function (a, b) { return a + b; }, 0); return w.map(function (x) { return x / s; }); }
+        function convolve(spend, w) {   // normalized adstock response
+            var wn = normalize(w), out = [];
+            for (var t = 0; t < WEEKS; t++) {
+                var acc = 0;
+                for (var l = 0; l < LAGS; l++) { var s = spend[t - l]; if (s) acc += wn[l] * s; }
+                out.push(acc);
+            }
+            return out;
+        }
+
+        // --- Figure A: adstock flight response ---
+        BV.register(function () {
+            var p = BV.palette();
+            var alpha = parseFloat(document.getElementById('csAlpha').value);
+            var theta = parseFloat(document.getElementById('csTheta').value);
+            var spend = []; for (var t = 0; t < WEEKS; t++) spend.push(FLIGHT.indexOf(t) >= 0 ? 1 : 0);
+
+            var geom = convolve(spend, weightsGeom(alpha));
+            var del = convolve(spend, weightsDelayed(alpha, theta));
+            var gMax = Math.max.apply(null, geom), dMax = Math.max.apply(null, del);
+            var geomN = geom.map(function (v) { return v / gMax; });
+            var delN = del.map(function (v) { return v / dMax; });
+            var weeks = []; for (var i = 0; i < WEEKS; i++) weeks.push(i);
+
+            var traces = [
+                { type: 'bar', x: FLIGHT, y: [1, 1, 1], name: 'spend flight', marker: { color: BV.band(p.muted, 0.35) }, width: 0.6, hovertemplate: 'spend week %{x}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: weeks, y: geomN, name: 'geometric', line: { color: p.primary, width: 3 }, hovertemplate: 'geometric · wk %{x}<br>%{y:.2f}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: weeks, y: delN, name: 'delayed (θ=' + theta + ')', line: { color: p.danger, width: 3 }, hovertemplate: 'delayed · wk %{x}<br>%{y:.2f}<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'week', dtick: 2, range: [-0.5, WEEKS - 0.5] },
+                yaxis: { title: 'response (normalized to peak)', range: [0, 1.12] },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 62, r: 20, t: 30, b: 48 }, bargap: 0.4,
+                shapes: [{ type: 'line', x0: 3.5, x1: 3.5, y0: 0, y1: 1.12, line: { color: p.muted, width: 1.5, dash: 'dot' } }],
+                annotations: [{ x: 3.5, y: 1.1, xanchor: 'left', yanchor: 'top', text: ' flight ends', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('csAdstock', traces, layout, BV.config);
+
+            var half = Math.log(0.5) / Math.log(alpha);
+            var peakWk = delN.indexOf(1);   // week index of delayed peak
+            var lastFlight = FLIGHT[FLIGHT.length - 1];
+            var tailShare = del.slice(lastFlight + 1).reduce(function (a, b) { return a + b; }, 0) / del.reduce(function (a, b) { return a + b; }, 0);
+            document.getElementById('csRet').textContent = Math.round(alpha * 100) + '%';
+            document.getElementById('csHalf').textContent = half.toFixed(1) + ' wk';
+            document.getElementById('csPeak').textContent = 'week ' + peakWk;
+            document.getElementById('csTail').textContent = Math.round(tailShare * 100) + '%';
+        });
+        BV.sliders([
+            { id: 'csAlpha', value: 'csAlphaVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'csTheta', value: 'csThetaVal', fmt: function (v) { return String(v); } }
+        ], BV.redraw);
+
+        // --- Figure B: identifiability twins (static) ---
+        function betaHill(x, K, S, beta) { var xs = Math.pow(x, S); return beta * xs / (xs + Math.pow(K, S)); }
+        BV.register(function () {
+            var p = BV.palette();
+            var xs = BV.linspace(0, 2, 240);
+            var c1 = xs.map(function (x) { return betaHill(x, 0.5, 1.0, 0.3); });
+            var c2 = xs.map(function (x) { return betaHill(x, 0.95, 0.748, 0.393); });
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: xs, y: c1, name: '𝒦=0.5, 𝒮=1, β=0.3', line: { color: p.primary, width: 3 } },
+                { type: 'scatter', mode: 'lines', x: xs, y: c2, name: '𝒦=0.95, 𝒮=0.748, β=0.393', line: { color: p.accent, width: 3, dash: 'dash' } }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'channel spend (normalized)', range: [0, 2] },
+                yaxis: { title: 'response  β·Hill(x)', range: [0, 0.42] },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 62, r: 20, t: 30, b: 48 },
+                shapes: [{ type: 'rect', x0: 0, x1: 1, y0: 0, y1: 0.42, fillcolor: BV.band(p.primary, 0.08), line: { width: 0 }, layer: 'below' }],
+                annotations: [
+                    { x: 0.5, y: 0.4, yanchor: 'top', text: 'observed spend range', showarrow: false, font: { size: 11, color: p.muted } },
+                    { x: 1.55, y: 0.4, yanchor: 'top', text: 'extrapolation →', showarrow: false, font: { size: 11, color: p.danger } }
+                ]
+            });
+            Plotly.react('identChart', traces, layout, BV.config);
+        });
+
+        // --- Figure C: Hill explorer, average vs marginal ---
+        function hill(x, K, S) { var xs = Math.pow(x, S); return xs / (xs + Math.pow(K, S)); }
+        function hillPrime(x, K, S) {
+            var xc = Math.max(x, 1e-9), kn = Math.pow(K, S);
+            return S * kn * Math.pow(xc, S - 1) / Math.pow(Math.pow(xc, S) + kn, 2);
+        }
+        BV.register(function () {
+            var p = BV.palette();
+            var K = parseFloat(document.getElementById('hK').value);
+            var S = parseFloat(document.getElementById('hS').value);
+            var x0 = parseFloat(document.getElementById('hX').value);
+            var xs = BV.linspace(0, 2.5, 260);
+            var ys = xs.map(function (x) { return hill(x, K, S); });
+            var y0 = hill(x0, K, S), m = hillPrime(x0, K, S), avg = y0 / x0;
+
+            // tangent line clipped to plot
+            var tx = BV.linspace(Math.max(0, x0 - 0.9), Math.min(2.5, x0 + 0.9), 2);
+            var ty = tx.map(function (x) { return y0 + m * (x - x0); });
+
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: xs, y: ys, name: 'βHill (β=1)', line: { color: p.primary, width: 3 }, hovertemplate: 'x=%{x:.2f}<br>Hill=%{y:.3f}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: [0, x0], y: [0, y0], name: 'average (∝ ROAS)', line: { color: p.accent, width: 2, dash: 'dash' }, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: tx, y: ty, name: 'marginal (∝ mROAS)', line: { color: p.danger, width: 2.5 }, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'markers', x: [x0], y: [y0], showlegend: false, marker: { color: p.primaryDark, size: 11, line: { color: p.surface, width: 1.5 } }, hovertemplate: 'current spend x=%{x:.2f}<extra></extra>' },
+                { type: 'scatter', mode: 'markers', x: [K], y: [0.5], showlegend: false, marker: { color: p.muted, size: 8, symbol: 'x' }, hovertemplate: 'half-saturation 𝒦=' + K.toFixed(2) + '<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'channel spend (normalized)', range: [0, 2.5] },
+                yaxis: { title: 'saturated response', range: [0, 1.05] },
+                legend: { orientation: 'h', y: 1.15, x: 0 },
+                margin: { l: 60, r: 20, t: 32, b: 48 },
+                shapes: [
+                    { type: 'line', x0: x0, x1: x0, y0: 0, y1: y0, line: { color: p.primaryDark, width: 1, dash: 'dot' } },
+                    { type: 'line', x0: 0, x1: 2.5, y0: 0.5, y1: 0.5, line: { color: p.muted, width: 1, dash: 'dot' } }
+                ]
+            });
+            Plotly.react('hillChart', traces, layout, BV.config);
+
+            document.getElementById('hShape').textContent = S > 1 ? 'S-shaped' : (S < 1 ? 'concave' : 'concave (𝒮=1)');
+            document.getElementById('hAvg').textContent = avg.toFixed(2);
+            document.getElementById('hMarg').textContent = m.toFixed(2);
+            var ratio = m / avg;
+            var rEl = document.getElementById('hRatio');
+            rEl.textContent = (ratio * 100).toFixed(0) + '%';
+            rEl.className = 'val' + (ratio < 0.35 ? ' warn' : (ratio > 0.9 ? ' ok' : ''));
+        });
+        BV.sliders([
+            { id: 'hK', value: 'hKVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'hS', value: 'hSVal', fmt: function (v) { return v.toFixed(1); } },
+            { id: 'hX', value: 'hXVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

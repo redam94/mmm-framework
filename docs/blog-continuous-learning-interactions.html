@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -170,6 +174,24 @@
             <p><strong>Parametric interaction terms.</strong> The standard Bayesian MMM already handles the two nonlinearities that break linear regression — carryover (adstock) and saturation. Interactions enter the same mean function as cross-terms on the transformed spends:</p>
             $$ \mathbb{E}[y_t] \;=\; \mu \;+\; \sum_{m} \beta_m\, f_m(x_{m,t}) \;+\; \sum_{m \lt m'} \gamma_{mm'}\, f_m(x_{m,t})\, f_{m'}(x_{m',t}), $$
             <p>where \( f_m \) is channel \( m \)'s adstock-then-saturation transform and \( \gamma_{mm'} \) is a synergy (positive) or cannibalization (negative) coefficient. The market-response literature catalogues multiplicative and other non-additive functional forms of exactly this kind (Hanssens, Parsons, &amp; Schultz, 2001) — interaction as a modeled quantity, not an experimental cell.</p>
+
+            <div class="interactive-box">
+                <h4>How one interaction term moves the budget</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The heatmap is the joint response of two channels over their (saturating) spend. Channel&nbsp;1 is the stronger performer, so with no interaction the money tilts its way. Drag the interaction coefficient γ: <strong>synergy</strong> (γ&nbsp;&gt;&nbsp;0) rewards feeding <em>both</em> channels and pulls the optimal split toward balance; <strong>cannibalization</strong> (γ&nbsp;&lt;&nbsp;0) punishes overlap and concentrates spend. The ★ is the true optimum along the budget line; the ○ is the allocation you&rsquo;d pick if you ignored interactions and trusted the γ&nbsp;=&nbsp;0 model.</p>
+                <div class="control-row">
+                    <label>Interaction coefficient &nbsp;(γ)</label>
+                    <input type="range" id="clG" min="-0.9" max="0.9" step="0.05" value="0.5">
+                    <span class="value" id="clGVal">+0.50</span>
+                </div>
+                <div class="chart-container chart-themed" id="clHeat" style="height:380px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Interaction</span><span class="val" id="clKind">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Optimal split (ch1/ch2)</span><span class="val" id="clOpt">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Naïve split (γ=0)</span><span class="val" id="clNaive">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Lost response</span><span class="val" id="clRegret">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Ignoring a real interaction is not a rounding error: the naïve split (○) can sit well off the true ridge (★), and the gap between them is response left on the table. A positive γ warps the surface toward the diagonal; a negative γ carves a valley along it, pushing the optimum into a corner.</p>
+            </div>
             <p><strong>Nonparametric surrogates.</strong> Alternatively, place a Gaussian process over the response surface. A GP with a non-additive kernel represents interactions of every order implicitly, through the covariance function; there is nothing to enumerate, only a smooth surface to infer from wherever data happen to sit (Rasmussen &amp; Williams, 2006). Reduced-rank constructions such as Hilbert-space GPs keep this tractable at MMM data sizes (Solin &amp; S&auml;rkk&auml;, 2020).</p>
 
             <div class="note">
@@ -217,6 +239,24 @@
             <div class="warning">
                 <h4>⚠️ Shrinkage is not identification</h4>
                 <p>A horseshoe prior makes many interaction terms cheap to <em>carry</em>; it does not make them cheap to <em>learn</em>. A coefficient the data pattern cannot distinguish from zero simply stays at its prior, however elegant that prior is. Learning \( \gamma_{mm'} \) requires variation in which the two channels move jointly and independently of everything else — which observational flighting almost never provides. That variation must be designed. Shrinkage buys you the right to wait; experiments pay the bill.</p>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Each designed experiment pays down the uncertainty</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Start from the shrinkage prior on one interaction γ — centered at zero, wide, straddling both signs. Every round of joint-perturbation experiment delivers a noisy read of γ; Bayes updates fold them in, and the credible band contracts toward the truth. Drag the number of rounds and watch the interval narrow until it clears zero — the point at which you have actually <em>identified</em> the synergy, not merely assumed it away.</p>
+                <div class="control-row">
+                    <label>Rounds of experiment</label>
+                    <input type="range" id="seqR" min="0" max="14" step="1" value="4">
+                    <span class="value" id="seqRVal">4</span>
+                </div>
+                <div class="chart-container chart-themed" id="seqTrace" style="height:330px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Posterior mean γ</span><span class="val" id="seqMean">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Posterior sd</span><span class="val" id="seqSd">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">95% interval</span><span class="val" id="seqCI">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Sign identified?</span><span class="val" id="seqSign">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">The band is the 95% credible interval for the true interaction (dotted line, γ&nbsp;=&nbsp;+0.45). Zero rounds is the prior; a handful of <em>targeted</em> joint flights — the ones EIG-maximization proposes — is enough to pull the interval off zero. That is shrinkage handing off to identification.</p>
             </div>
 
             <h2 id="the-closed-loop">The Closed Loop</h2>
@@ -276,6 +316,134 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var B1 = 1.0, B2 = 0.7;                    // channel main-effect strengths (ch1 stronger)
+        function sat(x) { return 1 - Math.exp(-3 * x); }
+        function resp(x1, x2, g) { var s1 = sat(x1), s2 = sat(x2); return B1 * s1 + B2 * s2 + g * s1 * s2; }
+        // Best channel-1 share along the unit budget line x1+x2=1, for interaction g.
+        function bestShare(g) {
+            var bt = 0, bv = -Infinity;
+            for (var i = 0; i <= 200; i++) { var t = i / 200; var v = resp(t, 1 - t, g); if (v > bv) { bv = v; bt = t; } }
+            return bt;
+        }
+
+        // --- Figure 1: two-channel response surface with an interaction slider ---
+        BV.register(function () {
+            var p = BV.palette();
+            var g = parseFloat(document.getElementById('clG').value);
+            var nb = 44;
+            var axis = BV.linspace(0, 1, nb);
+            var z = [];
+            for (var iy = 0; iy < nb; iy++) {
+                var row = [];
+                for (var ix = 0; ix < nb; ix++) { row.push(resp(axis[ix], axis[iy], g)); }
+                z.push(row);
+            }
+            var line = BV.linspace(0, 1, 60);
+            var tStar = bestShare(g), tNaive = bestShare(0);
+
+            var traces = [
+                {
+                    type: 'heatmap', x: axis, y: axis, z: z, showscale: true,
+                    colorscale: [[0, p.bgAlt], [0.5, p.primaryLight], [1, p.primaryDark]],
+                    colorbar: { title: { text: 'response', font: { color: p.muted, size: 11 } }, thickness: 12, tickfont: { color: p.muted, size: 10 }, outlinewidth: 0, len: 0.9 },
+                    hovertemplate: 'ch1 %{x:.2f} · ch2 %{y:.2f}<br>response %{z:.2f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', name: 'budget line',
+                    x: line, y: line.map(function (t) { return 1 - t; }),
+                    line: { color: p.text, width: 1.6, dash: 'dot' }, hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'markers', name: 'optimal mix ★',
+                    x: [tStar], y: [1 - tStar],
+                    marker: { color: p.warning, size: 18, symbol: 'star', line: { color: p.surface, width: 1.3 } },
+                    hovertemplate: 'optimal: ch1 %{x:.0%}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', name: 'naïve (γ=0) ○',
+                    x: [tNaive], y: [1 - tNaive],
+                    marker: { color: p.surface, size: 14, symbol: 'circle', line: { color: p.danger, width: 2.4 } },
+                    hovertemplate: 'naïve: ch1 %{x:.0%}<extra></extra>'
+                }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'channel 1 spend', range: [0, 1], constrain: 'domain' },
+                yaxis: { title: 'channel 2 spend', range: [0, 1], scaleanchor: 'x', scaleratio: 1 },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 60, r: 20, t: 32, b: 48 }
+            });
+            Plotly.react('clHeat', traces, layout, BV.config);
+
+            var kind = document.getElementById('clKind');
+            if (g > 0.02) { kind.textContent = 'synergy +' + g.toFixed(2); kind.className = 'val ok'; }
+            else if (g < -0.02) { kind.textContent = 'cannibal. ' + g.toFixed(2); kind.className = 'val warn'; }
+            else { kind.textContent = 'none'; kind.className = 'val'; }
+            document.getElementById('clOpt').textContent = Math.round(tStar * 100) + ' / ' + Math.round((1 - tStar) * 100);
+            document.getElementById('clNaive').textContent = Math.round(tNaive * 100) + ' / ' + Math.round((1 - tNaive) * 100);
+            var rTrue = resp(tStar, 1 - tStar, g), rNaive = resp(tNaive, 1 - tNaive, g);
+            var regret = rTrue > 0 ? (rTrue - rNaive) / rTrue * 100 : 0;
+            var rEl = document.getElementById('clRegret');
+            rEl.textContent = regret < 0.05 ? '0%' : '−' + regret.toFixed(1) + '%';
+            rEl.className = 'val' + (regret > 2 ? ' warn' : '');
+        });
+        BV.sliders([{ id: 'clG', value: 'clGVal', fmt: function (v) { return (v >= 0 ? '+' : '') + v.toFixed(2); } }], BV.redraw);
+
+        // --- Figure 2: sequential learning contracts the interaction CI ---
+        var GAMMA0 = 0.45, PRIOR_SD = 0.6, OBS_SD = 0.45, MAXR = 14;
+        BV.register(function () {
+            var p = BV.palette();
+            var R = parseInt(document.getElementById('seqR').value, 10);
+            var rng = BV.mulberry32(31);
+            var reads = [];
+            for (var i = 0; i < MAXR; i++) { reads.push(GAMMA0 + OBS_SD * BV.randn(rng)); }
+
+            var rounds = [], mean = [], upper = [], lower = [];
+            var sumY = 0, curMean = 0, curSd = PRIOR_SD;
+            for (var r = 0; r <= R; r++) {
+                if (r > 0) sumY += reads[r - 1];
+                var prec = 1 / (PRIOR_SD * PRIOR_SD) + r / (OBS_SD * OBS_SD);
+                curMean = (sumY / (OBS_SD * OBS_SD)) / prec;
+                curSd = Math.sqrt(1 / prec);
+                rounds.push(r); mean.push(curMean);
+                upper.push(curMean + 1.96 * curSd); lower.push(curMean - 1.96 * curSd);
+            }
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: rounds, y: upper, line: { width: 0 }, showlegend: false, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines', x: rounds, y: lower, fill: 'tonexty', fillcolor: BV.band(p.accent, 0.20), line: { width: 0 }, showlegend: false, name: '95% CI', hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'lines+markers', x: rounds, y: mean, name: 'posterior mean γ', line: { color: p.accentDark, width: 3 }, marker: { color: p.accentDark, size: 6 }, hovertemplate: 'round %{x}<br>γ̂ = %{y:.2f}<extra></extra>' },
+                { type: 'scatter', mode: 'markers', x: [R], y: [curMean], showlegend: false, marker: { color: p.warning, size: 15, symbol: 'star', line: { color: p.surface, width: 1.2 } }, hovertemplate: 'now: γ̂ = %{y:.2f}<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'rounds of experiment', range: [-0.3, MAXR + 0.3], dtick: 2 },
+                yaxis: { title: 'interaction coefficient γ', range: [-1.3, 1.4] },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 62, r: 20, t: 32, b: 48 },
+                shapes: [
+                    { type: 'line', x0: -0.3, x1: MAXR + 0.3, y0: GAMMA0, y1: GAMMA0, line: { color: p.muted, width: 1.6, dash: 'dot' } },
+                    { type: 'line', x0: -0.3, x1: MAXR + 0.3, y0: 0, y1: 0, line: { color: p.text, width: 1.3 } }
+                ],
+                annotations: [{ x: MAXR + 0.3, y: GAMMA0, xanchor: 'right', yanchor: 'bottom', text: 'true γ = +0.45', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('seqTrace', traces, layout, BV.config);
+
+            var lo = curMean - 1.96 * curSd, hi = curMean + 1.96 * curSd;
+            document.getElementById('seqMean').textContent = (curMean >= 0 ? '+' : '') + curMean.toFixed(2);
+            document.getElementById('seqSd').textContent = curSd.toFixed(2);
+            document.getElementById('seqCI').textContent = '[' + lo.toFixed(2) + ', ' + hi.toFixed(2) + ']';
+            var identified = lo > 0;
+            var sEl = document.getElementById('seqSign');
+            sEl.textContent = identified ? 'yes — γ > 0' : 'not yet';
+            sEl.className = 'val' + (identified ? ' ok' : ' warn');
+        });
+        BV.sliders([{ id: 'seqR', value: 'seqRVal', fmt: function (v) { return String(v); } }], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>

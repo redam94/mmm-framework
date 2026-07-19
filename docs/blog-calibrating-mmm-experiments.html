@@ -28,6 +28,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
     <!-- seo:augmented (structured data + social cards) -->
@@ -191,6 +195,29 @@
             $$ \underbrace{\tau_{\text{post}}}_{\text{posterior precision}} \;=\; \underbrace{\tau_{\text{prior}}}_{\text{experiment}} \;+\; \underbrace{\tau_{\text{data}}}_{\text{observational likelihood}}, \qquad \mu_{\text{post}} \;=\; \frac{\tau_{\text{prior}}\,\mu_{\text{prior}} + \tau_{\text{data}}\,\mu_{\text{data}}}{\tau_{\text{prior}} + \tau_{\text{data}}}. $$
             <p>The posterior mean is a precision-weighted average of the experiment and the data. When spend is collinear and barely varies, the observational likelihood carries little precision in the channel's direction — \( \tau_{\text{data}} \) is small — so a reasonably tight experiment prior dominates. Meridian frames these priors as <em>guardrails</em> for exactly this reason: they pull a noisy, weakly-identified estimate toward a value that was actually measured. Jin and colleagues (2017) put the flip side plainly in their own simulation — with a small sample, "prior distributions have a big impact on the posteriors and may lead to biased estimates." That is a warning about bad priors and, read the other way, a mandate for good ones.</p>
 
+            <div class="interactive-box">
+                <h4>The experiment is the prior: precision-weighting a channel's ROAS</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The observational model, fit to years of collinear spend, believes this channel returns a ROAS near <strong>2.6</strong> &mdash; but weakly, with a wide, biased posterior (the <span style="color:var(--color-primary);font-weight:600;">grey</span> curve is fixed). A geo experiment supplies a second, unbiased Gaussian belief (<span style="color:var(--color-accent);font-weight:600;">blue</span>). Their precision-weighted product is the calibrated posterior (<span style="color:var(--color-danger);font-weight:600;">red</span>). Drag the experiment's estimate and its standard error: as the test gets sharper, the posterior slides toward it and narrows.</p>
+                <div class="control-row">
+                    <label>Experiment estimate &nbsp;(ROAS)</label>
+                    <input type="range" id="calMu" min="0.5" max="4.5" step="0.1" value="1.6">
+                    <span class="value" id="calMuVal">1.6</span>
+                </div>
+                <div class="control-row">
+                    <label>Experiment std error &nbsp;(SE)</label>
+                    <input type="range" id="calSe" min="0.1" max="2" step="0.05" value="0.5">
+                    <span class="value" id="calSeVal">0.50</span>
+                </div>
+                <div class="chart-container chart-themed" id="calDens" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Experiment prior (mean ± sd)</span><span class="val" id="calPrior">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Posterior mean</span><span class="val" id="calPostMu">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Posterior sd</span><span class="val" id="calPostSd">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Uncertainty reduction</span><span class="val" id="calRed">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Precision adds: \(\tau_{\text{post}} = \tau_{\text{data}} + \tau_{\text{exp}}\). Because the collinear observational likelihood carries little precision in this channel's direction, even a moderately tight experiment moves the posterior a long way &mdash; and shrinks its width, which is where the decision-relevant payoff lives.</p>
+            </div>
+
             <div class="note">
                 <h4>💡 Calibration buys precision, not just accuracy</h4>
                 <p>The payoff shows up in the width of the intervals, not only their center. Zhang and colleagues (2023) report that an uncalibrated geo-hierarchical MMM produced posterior ROAS estimates whose standard deviation was roughly <em>five times</em> that of the same model calibrated with an experiment prior. Sharper intervals change decisions: a budget reallocation you would not make on a factor-of-five-wide ROAS becomes defensible once the experiment has tightened it. This is the same logic by which a geo-level model already beats a national-only one (Sun et al., 2017) — more identifying variation, tighter credible intervals, safer decisions.</p>
@@ -251,6 +278,64 @@
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // Fixed observational (model-only) belief: overstated and wide.
+        var MU_OBS = 2.6, SD_OBS = 1.0;
+        function gauss(x, mu, sd) { return Math.exp(-0.5 * ((x - mu) / sd) * ((x - mu) / sd)) / (sd * Math.sqrt(2 * Math.PI)); }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var muExp = parseFloat(document.getElementById('calMu').value);
+            var seExp = parseFloat(document.getElementById('calSe').value);
+
+            var tauObs = 1 / (SD_OBS * SD_OBS), tauExp = 1 / (seExp * seExp);
+            var tauPost = tauObs + tauExp;
+            var sdPost = 1 / Math.sqrt(tauPost);
+            var muPost = (tauObs * MU_OBS + tauExp * muExp) / tauPost;
+
+            var xs = BV.linspace(0, 6, 260);
+            var obs = xs.map(function (x) { return gauss(x, MU_OBS, SD_OBS); });
+            var exp = xs.map(function (x) { return gauss(x, muExp, seExp); });
+            var post = xs.map(function (x) { return gauss(x, muPost, sdPost); });
+
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: xs, y: obs, name: 'model likelihood (obs.)', line: { color: p.primary, width: 2, dash: 'dot' }, hovertemplate: 'ROAS %{x:.2f}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: xs, y: exp, name: 'experiment (prior)', line: { color: p.accent, width: 2, dash: 'dash' }, hovertemplate: 'ROAS %{x:.2f}<extra></extra>' },
+                { type: 'scatter', mode: 'lines', x: xs, y: post, name: 'calibrated posterior', line: { color: p.danger, width: 3 }, fill: 'tozeroy', fillcolor: BV.band(p.danger, 0.12), hovertemplate: 'ROAS %{x:.2f}<extra></extra>' }
+            ];
+            var ymax = Math.max.apply(null, post.concat(exp).concat(obs)) * 1.12;
+            var layout = BV.layout({
+                xaxis: { title: 'channel ROAS ($ return per $ spent)', range: [0, 6] },
+                yaxis: { title: 'density', range: [0, ymax], showticklabels: false },
+                legend: { orientation: 'h', y: 1.15, x: 0 },
+                margin: { l: 52, r: 20, t: 32, b: 48 },
+                shapes: [
+                    { type: 'line', x0: 1, x1: 1, y0: 0, y1: ymax, line: { color: p.muted, width: 1, dash: 'dot' } },
+                    { type: 'line', x0: muPost, x1: muPost, y0: 0, y1: gauss(muPost, muPost, sdPost), line: { color: p.danger, width: 1.5, dash: 'dot' } }
+                ],
+                annotations: [{ x: 1, y: ymax, xanchor: 'left', yanchor: 'top', text: ' break-even', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('calDens', traces, layout, BV.config);
+
+            document.getElementById('calPrior').textContent = muExp.toFixed(2) + ' ± ' + seExp.toFixed(2);
+            document.getElementById('calPostMu').textContent = muPost.toFixed(2);
+            document.getElementById('calPostSd').textContent = sdPost.toFixed(2);
+            var red = 1 - sdPost / SD_OBS;
+            var re = document.getElementById('calRed');
+            re.textContent = Math.round(red * 100) + '%';
+            re.className = 'val' + (red > 0.5 ? ' ok' : (red < 0.15 ? ' warn' : ''));
+        });
+        BV.sliders([
+            { id: 'calMu', value: 'calMuVal', fmt: function (v) { return v.toFixed(1); } },
+            { id: 'calSe', value: 'calSeVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>
