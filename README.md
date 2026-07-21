@@ -55,7 +55,7 @@ This framework is designed around different principles:
 
 - **FastAPI Backend** — the MMM Agent API (`mmm_framework.api.main:app`) with OpenAPI documentation
 - **React Frontend** — the supported modern UI (Vite + TypeScript) for the full measurement loop
-- **Async Job Processing** — non-blocking model fitting (agent API runs fits in-kernel; the legacy REST API uses Redis + ARQ)
+- **Async Job Processing** — non-blocking model fitting (the agent API runs fits in-kernel; no external queue required)
 - **LangGraph Integration** — AI-assisted modeling and interpretation with multiple LLM providers
 
 ## Architecture
@@ -70,20 +70,19 @@ This framework is designed around different principles:
 └────────────────────────────┬────────────────────────────────────────┘
                              │ HTTP
 ┌────────────────────────────▼────────────────────────────────────────┐
-│                         FastAPI Backend                              │
+│                    FastAPI Backend (Agent API)                       │
 │   ┌──────────────┐ ┌──────────────┐ ┌──────────────────────────┐   │
-│   │  /data/*     │ │  /configs/*  │ │  /models/*               │   │
-│   │  Upload/List │ │  CRUD        │ │  Fit/Status/Results      │   │
+│   │  /chat       │ │  /projects/* │ │  /models/*               │   │
+│   │  Agent SSE   │ │  Experiments │ │  Saved fits/Dashboards   │   │
 │   └──────────────┘ └──────────────┘ └──────────────────────────┘   │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
-          ┌──────────────────┼──────────────────┐
-          │                  │                  │
-          ▼                  ▼                  ▼
-    ┌──────────┐      ┌──────────┐      ┌──────────────┐
-    │  Redis   │◄────►│   ARQ    │─────►│  PyMC Model  │
-    │  Queue   │      │  Worker  │      │   Fitting    │
-    └──────────┘      └──────────┘      └──────────────┘
+                             ▼
+                  ┌────────────────────┐
+                  │  Session Kernels   │
+                  │  (PyMC model fits  │
+                  │   run in-process)  │
+                  └────────────────────┘
 ```
 
 ## Installation
@@ -91,7 +90,7 @@ This framework is designed around different principles:
 ### Prerequisites
 
 - **Python 3.12+** — all that's needed for the library (`pip install mmm-framework`)
-- **Redis** and **uv** — only required to run the full application (API + worker + UI) or to develop the framework
+- **uv** — only required to run the full application (API + UI) or to develop the framework
 
 ### Quick Install
 
@@ -102,8 +101,8 @@ pip install mmm-framework
 ```
 
 That's everything you need to build, fit, and analyze models in Python. To run the
-full application (FastAPI backend + ARQ worker + Streamlit/React UI) or to develop
-the framework, install from source instead:
+full application (FastAPI backend + React UI) or to develop the framework, install
+from source instead:
 
 ```bash
 # Clone the repository
@@ -112,7 +111,7 @@ cd mmm-framework
 
 # Install with uv (recommended)
 uv sync                  # core library
-uv sync --group app      # + app (Streamlit/React) dependencies
+uv sync --group app      # + app extras (slide decks, Atelier lint endpoints)
 ```
 
 ### Development Install
@@ -153,24 +152,6 @@ npm run dev        # Vite dev server; proxies /api/* → http://localhost:8000
 - **React UI**: http://localhost:5173 (Vite default)
 - **API Documentation**: http://localhost:8000/docs
 - **API Health Check**: http://localhost:8000/health
-
-<details>
-<summary><b>Legacy Streamlit UI (deprecated)</b></summary>
-
-The original Streamlit frontend in `app/` is **deprecated**. It targets the
-separate legacy REST API (`api/main.py` + the ARQ worker), lags the current
-feature set (experiments, model garden, estimands, branding, …), and is kept
-only for reference — it may be removed in a future release. New work should use
-the React UI above.
-
-```bash
-redis-server                                   # Terminal 1: Redis
-cd api && uvicorn main:app --reload            # Terminal 2: legacy REST API (port 8000)
-cd api && arq worker.WorkerSettings            # Terminal 3: ARQ worker
-cd app && streamlit run Home.py                # Terminal 4: Streamlit UI (port 8501)
-```
-
-</details>
 
 ## Usage
 
@@ -1439,44 +1420,19 @@ where $\alpha \in [0, 1)$ controls decay rate.
 
 ### Endpoints
 
+The agent API is self-documenting — browse the full OpenAPI surface at
+`http://localhost:8000/docs`. Representative endpoints:
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/health` | Health check with Redis and worker status |
-| `POST` | `/data/upload` | Upload MFF data file |
-| `GET` | `/data` | List uploaded datasets |
-| `GET` | `/data/{id}` | Get dataset details |
-| `POST` | `/configs` | Create model configuration |
-| `GET` | `/configs` | List configurations |
-| `GET` | `/configs/{id}` | Get configuration details |
-| `POST` | `/models/fit` | Start async model fitting |
-| `GET` | `/models/{id}/status` | Get fitting progress |
-| `GET` | `/models/{id}/results` | Get fitted model results |
-| `GET` | `/models/{id}/contributions` | Get channel contributions |
-| `POST` | `/models/{id}/predict` | Generate predictions |
-
-### Example: Fit a Model via API
-
-```bash
-# Upload data
-curl -X POST "http://localhost:8000/data/upload" \
-  -F "file=@data.csv"
-
-# Create configuration
-curl -X POST "http://localhost:8000/configs" \
-  -H "Content-Type: application/json" \
-  -d @config.json
-
-# Start fitting
-curl -X POST "http://localhost:8000/models/fit" \
-  -H "Content-Type: application/json" \
-  -d '{"data_id": "abc123", "config_id": "xyz789"}'
-
-# Check status
-curl "http://localhost:8000/models/{model_id}/status"
-
-# Get results
-curl "http://localhost:8000/models/{model_id}/results"
-```
+| `GET` | `/health` | Health check |
+| `POST` | `/chat` | Agent chat (SSE stream; fits, analyses, reports) |
+| `GET/POST` | `/sessions` | List / create agent sessions |
+| `GET` | `/projects` | List projects |
+| `GET` | `/projects/{id}/experiment-priorities` | EIG/EVOI experiment ranking |
+| `POST` | `/projects/{id}/experiment-design` | Design a geo/flighting experiment |
+| `GET` | `/models` | List saved model fits |
+| `GET` | `/models/{id}/dashboard` | Fitted-model dashboard payload |
 
 ## Methodological Foundation
 
@@ -1555,14 +1511,7 @@ mmm-framework/
 │       ├── builders.py         # Fluent builders + factory functions
 │       ├── components/         # PyMC/PyTensor building blocks
 │       └── models/             # NestedMMM, MultivariateMMM, CombinedMMM
-├── api/                        # Legacy REST API (deprecated; Streamlit target)
-│   ├── main.py                 # Application factory
-│   ├── routes/                 # API route handlers
-│   ├── schemas.py              # Pydantic models
-│   ├── redis_service.py        # Redis connection management
-│   └── worker.py               # ARQ worker settings
-├── frontend/                   # React/TypeScript UI (modern, supported)
-├── app/                        # Streamlit frontend (legacy, deprecated)
+├── frontend/                   # React/TypeScript UI
 ├── examples/                   # Usage examples
 ├── tests/                      # Test suite
 ├── pyproject.toml              # Project configuration
@@ -1582,14 +1531,13 @@ mmm-framework/
 ### Backend
 
 - `fastapi>=0.124` — API framework
-- `redis>=7.1` — Queue backend
-- `arq>=0.25` — Async job queue
+- `redis>=7.1` — Optional shared rate-limit backend
 - `pydantic>=2.12` — Data validation
 - `uvicorn>=0.38` — ASGI server
 
 ### Frontend
 
-- `streamlit>=1.52` — Web application
+- React + TypeScript (Vite) — `frontend/`
 - `plotly>=6.5` — Interactive visualization
 - `httpx>=0.28` — HTTP client
 

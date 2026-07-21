@@ -175,7 +175,7 @@ print(panel.n_obs, "observations,", panel.n_channels, "channels")</code></pre>
                     <span class="prompt">$</span> uv sync<br>
                     <span class="comment"># or, with pip</span><br>
                     <span class="prompt">$</span> pip install -e .<br><br>
-                    <span class="comment"># add dev + app tooling (tests, API backend, Streamlit)</span><br>
+                    <span class="comment"># add dev + app tooling (tests, slide decks, Atelier lint)</span><br>
                     <span class="prompt">$</span> uv sync --group dev --group app
                 </div>
             </div>
@@ -397,29 +397,12 @@ print(results.diagnostics["log_marginal_likelihood"])  # model evidence, for Bay
             <h2 id="webapp">Web app &amp; agent</h2>
 
             <div class="note">
-                <h4>Which backend am I running?</h4>
+                <h4>No queue to stand up</h4>
                 <p style="margin-bottom:0;">
-                    The <strong>modern React app talks to the agent API, which runs fits in-kernel — no
-                    Redis, no worker</strong>. Only the <strong>legacy Streamlit</strong> app needs Redis
-                    + an ARQ worker. If you're on the React path, none of the Redis fixes below apply. See
+                    The <strong>React app talks to the agent API, which runs fits in-kernel — no
+                    Redis, no worker</strong>. See
                     <a href="getting-started.html#api-backend">Running the Web Application</a>.
                 </p>
-            </div>
-
-            <div class="symptom">Redis connection refused (legacy Streamlit path)</div>
-            <p>Start a local Redis server before the legacy REST API and worker:</p>
-            <div class="terminal-block">
-                <div class="terminal-content">
-                    <span class="prompt">$</span> redis-server
-                </div>
-            </div>
-
-            <div class="symptom">Jobs submitted but never finish (legacy Streamlit path)</div>
-            <p>The ARQ worker that processes fitting jobs isn't running. Start it:</p>
-            <div class="terminal-block">
-                <div class="terminal-content">
-                    <span class="prompt">$</span> cd api &amp;&amp; arq worker.WorkerSettings
-                </div>
             </div>
 
             <div class="symptom">Agent uses the wrong LLM, or auth fails</div>

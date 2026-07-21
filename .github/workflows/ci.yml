@@ -33,7 +33,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Ruff (lint)
-        run: uv run ruff check src api
+        run: uv run ruff check src
 
       # NOTE: `black --check` is intentionally not gated yet — the tree predates
       # the current black version and needs a one-time reformat first. Run

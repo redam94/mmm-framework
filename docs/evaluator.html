@@ -166,7 +166,7 @@
             <ul>
                 <li><strong>Stable</strong> &mdash; the core modeling surface: <code>BayesianMMM</code>, results classes, the fluent builders, Pydantic configs, the adstock/saturation/seasonality/trend transforms, and the MFF data loader.</li>
                 <li><strong>Beta</strong> &mdash; the active surface: reporting, analysis, serialization, the FastAPI endpoints, the React web UI, the AI agent workspace, the measurement-loop planning engine, and the pre-fit EDA module.</li>
-                <li><strong>Experimental</strong> &mdash; subject to change: the extension models (NestedMMM, MultivariateMMM, CombinedMMM), the DAG model builder, the Excel config workflow, and the legacy Streamlit UI.</li>
+                <li><strong>Experimental</strong> &mdash; subject to change: the extension models (NestedMMM, MultivariateMMM, CombinedMMM), the DAG model builder, and the Excel config workflow.</li>
             </ul>
             <p>
                 Until 1.0, minor versions (<code>0.x.0</code>) may break experimental modules; stable APIs are preserved on a best-effort basis with deprecation warnings. After 1.0 the project commits to strict <a href="https://semver.org" target="_blank" rel="noopener">SemVer</a>.
@@ -233,7 +233,7 @@
         <div class="container">
             <h2>Security &amp; Deployment</h2>
             <p>
-                The framework is self-hosted: a Python library, a FastAPI agent backend that runs model fits in-process (no Redis or worker required), and a React frontend that you run on your own infrastructure. (Redis and an ARQ worker are needed only by the deprecated legacy Streamlit REST API; Redis is otherwise an optional shared rate-limit backend that defaults to in-memory.) There is no hosted SaaS offering, which means no client data leaves your environment by default.
+                The framework is self-hosted: a Python library, a FastAPI agent backend that runs model fits in-process (no Redis or worker required), and a React frontend that you run on your own infrastructure. (Redis is an optional shared rate-limit backend that defaults to in-memory.) There is no hosted SaaS offering, which means no client data leaves your environment by default.
             </p>
             <p>
                 The AI agent workspace introduces an LLM data flow that deserves separate scrutiny&mdash;which provider sees what, sandboxing of agent-executed code, and the configuration options (including fully local models via LM Studio). That is covered on the dedicated <a href="security.html">security page</a> rather than duplicated here.

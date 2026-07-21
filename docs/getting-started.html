@@ -459,7 +459,6 @@
             <ul class="sidebar-nav">
                 <li><a href="#project-structure">Project Structure</a></li>
                 <li><a href="#api-backend">Web Application</a></li>
-                <li><a href="#streamlit-app">Streamlit (Legacy)</a></li>
             </ul>
 
             <h3>Next Steps</h3>
@@ -547,11 +546,8 @@
                     services only matter if you also run the <a href="#api-backend">web app</a>:
                 </p>
                 <ul>
-                    <li><strong>React&nbsp;+ agent API (modern, recommended):</strong> <em>no Redis.</em>
+                    <li><strong>React&nbsp;+ agent API:</strong> <em>no Redis, no external worker.</em>
                         The agent API runs fits in-kernel, so there is no separate job queue to stand up.</li>
-                    <li><strong>Streamlit (legacy):</strong> needs <strong>Redis&nbsp;+ ARQ</strong> for the
-                        asynchronous job queue that keeps the UI responsive while MCMC sampling runs in the
-                        background. A local Redis instance is sufficient.</li>
                 </ul>
             </div>
 
@@ -600,7 +596,7 @@
             </div>
 
             <h3>Install App Dependencies</h3>
-            <p>If you want to use the web application (API backend plus the React or Streamlit frontend):</p>
+            <p>If you want to use the web application (API backend plus the React frontend):</p>
             <div class="terminal-block">
                 <div class="terminal-header">
                     <span class="terminal-dot red"></span>
@@ -608,7 +604,7 @@
                     <span class="terminal-dot green"></span>
                 </div>
                 <div class="terminal-content">
-                    <span class="comment"># Install app dependencies (API backend + Streamlit frontend)</span><br>
+                    <span class="comment"># Install app extras (slide decks, Atelier lint endpoints)</span><br>
                     <span class="prompt">$</span> uv sync --group app<br><br>
                     <span class="comment"># For development (includes testing tools)</span><br>
                     <span class="prompt">$</span> uv sync --group dev --group app<br><br>
@@ -1169,7 +1165,7 @@ hierarchical = (
                 <span class="indent"><span class="indent"><span class="file">data_loader.py</span> — MFF parsing and validation</span></span><br>
                 <span class="indent"><span class="indent"><span class="file">analysis.py</span> — Analysis utilities</span></span><br>
                 <span class="indent"><span class="indent"><span class="file">serialization.py</span> — Save/load functionality</span></span><br>
-                <span class="indent"><span class="indent"><span class="file">jobs.py</span> — Async job management with ARQ</span></span><br>
+                <span class="indent"><span class="indent"><span class="file">jobs.py</span> — Async job management (multiprocessing)</span></span><br>
                 <span class="indent"><span class="indent"><span class="folder">builders/</span> — Modular builder classes</span></span><br>
                 <span class="indent"><span class="indent"><span class="indent"><span class="file">base.py</span> — Shared mixins and protocols</span></span></span><br>
                 <span class="indent"><span class="indent"><span class="indent"><span class="file">prior.py</span> — Prior, adstock, saturation builders</span></span></span><br>
@@ -1208,25 +1204,8 @@ hierarchical = (
                 <span class="indent"><span class="indent"><span class="indent"><span class="indent"><span class="file">combined.py</span> — CombinedMMM</span></span></span></span><br>
                 <span class="indent"><span class="indent"><span class="indent"><span class="folder">components/</span> — PyMC/PyTensor blocks</span></span></span><br>
                 <span class="indent"><span class="indent"><span class="indent"><span class="indent"><span class="file">cross_effects.py, variable_selection.py, transforms.py</span></span></span></span></span><br>
-                <span class="indent"><span class="folder">api/</span> — FastAPI backend</span><br>
-                <span class="indent"><span class="indent"><span class="file">main.py</span> — Application factory and health endpoints</span></span><br>
-                <span class="indent"><span class="indent"><span class="folder">routes/</span> — API route handlers</span></span><br>
-                <span class="indent"><span class="indent"><span class="file">schemas.py</span> — Pydantic request/response models</span></span><br>
-                <span class="indent"><span class="indent"><span class="file">redis_service.py</span> — Redis connection management</span></span><br>
-                <span class="indent"><span class="indent"><span class="file">worker.py</span> — ARQ worker settings</span></span><br>
-                <span class="indent"><span class="folder">app/</span> — Streamlit frontend</span><br>
-                <span class="indent"><span class="indent"><span class="file">Home.py</span> — Main entry point and dashboard</span></span><br>
-                <span class="indent"><span class="indent"><span class="file">api_client.py</span> — HTTP client for backend API</span></span><br>
-                <span class="indent"><span class="indent"><span class="folder">pages/</span> — Multipage app modules</span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">1_Data_Management.py</span> — Upload and manage datasets</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">2_Configuration.py</span> — Build model configurations</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">3_Model_Fitting.py</span> — Submit and monitor jobs</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">4_Results.py</span> — View diagnostics and contributions</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">5_Scenarios.py</span> — What-if analysis and optimization</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="folder">components/</span> — Reusable UI components</span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">__init__.py</span> — Component exports</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">common.py</span> — Formatters, session state, CSS</span></span></span><br>
-                <span class="indent"><span class="indent"><span class="indent"><span class="file">charts.py</span> — Plotly visualization functions</span></span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">api/</span> — FastAPI agent backend (chat, sessions, projects)</span></span><br>
+                <span class="indent"><span class="folder">frontend/</span> — React/TypeScript UI (Vite)</span><br>
                 <span class="indent"><span class="folder">examples/</span> — Usage examples</span><br>
                 <span class="indent"><span class="indent"><span class="file">ex_builder.py</span> — Builder pattern demonstrations</span></span><br>
                 <span class="indent"><span class="indent"><span class="file">ex_config.py</span> — Configuration examples</span></span><br>
@@ -1247,18 +1226,11 @@ hierarchical = (
 
             <h2 id="api-backend">Running the Web Application</h2>
             <p>
-                Two frontends are available, and they target <em>different</em> backends. The modern
-                <strong>React app talks to the agent API, which runs fits in-kernel — so it needs no
-                Redis and no separate worker</strong>. The legacy Streamlit app targets the older REST
-                API plus its Redis&nbsp;+ ARQ job queue. Pick one path; you do not need both backends.
-            </p>
-
-            <h3>Option 1: React Web App + Agent API (modern, recommended)</h3>
-            <p>
-                The React frontend is where the full measurement loop lives—Program, Experiments,
-                Performance, and the AI agent workspace. Take the
-                <a href="platform-overview.html">platform tour</a> for a guided look around.
-                <strong>No Redis, no worker</strong> — just two terminals:
+                The <strong>React app talks to the agent API, which runs fits in-kernel — so it needs
+                no Redis and no separate worker</strong>. The React frontend is where the full
+                measurement loop lives—Program, Experiments, Performance, and the AI agent workspace.
+                Take the <a href="platform-overview.html">platform tour</a> for a guided look around.
+                Just two terminals:
             </p>
             <div class="terminal-block">
                 <div class="terminal-header">
@@ -1275,58 +1247,8 @@ hierarchical = (
                 </div>
             </div>
 
-            <h3 id="streamlit-app">Option 2: Streamlit (legacy, deprecated)</h3>
             <p>
-                The original Streamlit interface remains available as a secondary surface. It targets the
-                separate legacy REST API and <strong>requires Redis&nbsp;+ an ARQ worker</strong> for its
-                asynchronous job queue. Start the three backend services first, then the UI:
-            </p>
-            <div class="quick-start-grid">
-                <div class="quick-start-card">
-                    <h4><span class="step-number">1</span> Start Redis</h4>
-                    <p>The legacy job queue requires Redis running locally.</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> redis-server
-                        </div>
-                    </div>
-                </div>
-                <div class="quick-start-card">
-                    <h4><span class="step-number">2</span> Start legacy REST API</h4>
-                    <p>The Streamlit backend (port 8000).</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> cd api<br>
-                            <span class="prompt">$</span> uvicorn main:app --reload
-                        </div>
-                    </div>
-                </div>
-                <div class="quick-start-card">
-                    <h4><span class="step-number">3</span> Start ARQ worker</h4>
-                    <p>Processes model-fitting jobs off the queue.</p>
-                    <div class="terminal-block" style="margin: 0.5rem 0;">
-                        <div class="terminal-content" style="padding: 0.75rem;">
-                            <span class="prompt">$</span> cd api<br>
-                            <span class="prompt">$</span> arq worker.WorkerSettings
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="terminal-block">
-                <div class="terminal-header">
-                    <span class="terminal-dot red"></span>
-                    <span class="terminal-dot yellow"></span>
-                    <span class="terminal-dot green"></span>
-                </div>
-                <div class="terminal-content">
-                    <span class="comment"># Terminal 4: Streamlit UI (port 8501)</span><br>
-                    <span class="prompt">$</span> cd app<br>
-                    <span class="prompt">$</span> streamlit run Home.py
-                </div>
-            </div>
-
-            <p>
-                Either frontend gives you an interactive interface for the complete MMM workflow:
+                The web app gives you an interactive interface for the complete MMM workflow:
             </p>
 
             <div class="concept-grid">
