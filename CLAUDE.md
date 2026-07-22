@@ -298,7 +298,7 @@ from mmm_framework import BayesianMMM
 from mmm_framework.builders import ModelConfigBuilder
 
 config = ModelConfigBuilder().with_kpi("sales").build()
-model = BayesianMMM(X_media, y, channel_names, config)
+model = BayesianMMM(panel=panel_data, model_config=config)
 results = model.fit(draws=2000, tune=1000)
 
 # Data loading
@@ -308,18 +308,18 @@ data = loader.load("data.csv")
 
 # Report generation
 from mmm_framework.reporting import MMMReportGenerator, ReportConfig
-generator = MMMReportGenerator()
-html = generator.generate_report(results, config)
+report = MMMReportGenerator(model=model, results=results, config=ReportConfig())
+report.to_html("mmm_report.html")
 
 # Model serialization
 from mmm_framework import MMMSerializer
-serializer = MMMSerializer()
-serializer.save(model, results, "model.pkl")
-model, results = serializer.load("model.pkl")
+MMMSerializer.save(model, "model_dir")
+model = MMMSerializer.load("model_dir", panel=panel_data)
 
 # Analysis
-from mmm_framework.analysis import MarginalAnalysisResult
-analysis = MarginalAnalysisResult.from_model(model, results)
+from mmm_framework.analysis import MMMAnalyzer
+analyzer = MMMAnalyzer(model)
+marginal = analyzer.compute_marginal_contributions(spend_increase_pct=10)
 ```
 
 ## Troubleshooting

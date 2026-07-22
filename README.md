@@ -187,10 +187,8 @@ config = (
 
 # Fit the model
 model = BayesianMMM(
-    X_media=panel_data.media,
-    y=panel_data.kpi,
-    channel_names=panel_data.channel_names,
-    config=config,
+    panel=panel_data,
+    model_config=config,
 )
 
 results = model.fit(
@@ -201,9 +199,9 @@ results = model.fit(
 )
 
 # Get contributions with uncertainty
-contributions = model.compute_contributions()
-print(contributions.mean_contributions)
-print(contributions.hdi_contributions)  # 94% credible intervals
+contributions = model.compute_counterfactual_contributions()
+print(contributions.channel_contributions)
+print(contributions.contribution_hdi_low, contributions.contribution_hdi_high)  # 94% credible intervals
 ```
 
 ### Fluent Configuration API
