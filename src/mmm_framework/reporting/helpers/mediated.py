@@ -221,9 +221,9 @@ def compute_cross_effects(
         raise ValueError("Model does not support cross-effect analysis")
 
     # Try model's built-in method
-    if hasattr(model, "get_cross_effect_summary"):
+    if hasattr(model, "get_cross_effects_summary"):
         try:
-            result = model.get_cross_effect_summary()
+            result = model.get_cross_effects_summary()
             if result is not None and len(result) > 0:
                 return result
         except Exception as e:

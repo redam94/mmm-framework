@@ -195,7 +195,6 @@ results = model.fit(
     draws=2000,
     tune=1000,
     chains=4,
-    nuts_sampler="numpyro",  # 4-10x faster than CPU PyMC
 )
 
 # Get contributions with uncertainty
@@ -264,10 +263,10 @@ from mmm_framework.mmm_extensions import (
 # Build a model with awareness mediation and product cannibalization
 config = (
     CombinedModelConfigBuilder()
-    .with_mediator(awareness_mediator(decay=0.9))
+    .add_mediator(awareness_mediator())
     .with_outcomes("single_pack", "multipack")
-    .with_cross_effect(
-        cannibalization_effect("multipack", "single_pack", promo_col="multi_promo")
+    .add_cross_effect(
+        cannibalization_effect("multipack", "single_pack", promotion_column="multi_promo")
     )
     .build()
 )
@@ -392,16 +391,16 @@ from mmm_framework.mmm_extensions import (
 single_pack = (
     OutcomeConfigBuilder("single_pack", column="sales_single")
     .with_positive_media_effects(sigma=0.5)
-    .include_trend()
-    .include_seasonality()
+    .with_trend()
+    .with_seasonality()
     .build()
 )
 
 multipack = (
     OutcomeConfigBuilder("multipack", column="sales_multi")
     .with_positive_media_effects(sigma=0.5)
-    .include_trend()
-    .include_seasonality()
+    .with_trend()
+    .with_seasonality()
     .build()
 )
 
@@ -449,7 +448,7 @@ model = MultivariateMMM(
 results = model.fit()
 
 # Analyze cross-effects
-cross_effects = model.get_cross_effect_summary()
+cross_effects = model.get_cross_effects_summary()
 print(cross_effects)
 
 # Get correlation matrix
@@ -540,13 +539,12 @@ halo = halo_effect("premium", "value")  # Premium brand lifts value brand
 All extended models provide structured result containers:
 
 ```python
-# Mediation decomposition
-effects = model.get_mediation_effects()
-for e in effects:
-    print(e.to_dict())
+# Mediation decomposition (returns a pd.DataFrame)
+effects_df = model.get_mediation_effects()
+print(effects_df)
 
 # Cross-effect summary with HDI
-cross_df = model.get_cross_effect_summary()
+cross_df = model.get_cross_effects_summary()
 # Returns: source, target, effect_type, mean, sd, hdi_3%, hdi_97%
 
 # Correlation matrix for multivariate outcomes
@@ -1189,7 +1187,7 @@ Extended models have more parameters and thus higher risk of weak identification
 | Cross-effects | ~1.1x per effect |
 | Partial observation | ~1.2x (masking overhead) |
 
-For complex models, use `nuts_sampler="numpyro"` for 4-10x speedup.
+For complex models, configure `ModelConfigBuilder().bayesian_numpyro().build()` for 4-10x speedup via NumPyro/JAX sampling.
 
 ## Mathematical Specification: Variable Selection Priors
 
@@ -1481,7 +1479,7 @@ The framework explicitly addresses common identification problems:
 ### Recommendations
 
 - **Development iteration**: Use `Ridge(positive=True)` with differential evolution for transformation search
-- **Production models**: Use `nuts_sampler="numpyro"` for 4-10x speedup over CPU PyMC
+- **Production models**: Use `ModelConfigBuilder().bayesian_numpyro().build()` for 4-10x speedup via NumPyro/JAX
 - **GPU acceleration**: Additional 4x gains available with JAX on GPU
 
 ## Project Structure
