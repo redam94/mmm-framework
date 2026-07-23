@@ -81,9 +81,7 @@ autodoc_mock_imports = [
     # Heavy numerical packages
     "numba",
     # Optional heavy dependencies
-    "streamlit",
     "redis",
-    "arq",
     "fastapi",
     "uvicorn",
     "plotly",

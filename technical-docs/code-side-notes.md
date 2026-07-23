@@ -65,13 +65,10 @@ _Last updated: 2026-06-12._
     (the real pattern, used by the aurora builder and `nbs/demos/real_data_onboarding.ipynb`).
     Update the example so it demonstrates the shipped generator.
 
-13. **Two `/projects` APIs exist and answer differently.** The top-level Models API
-    (`api/main.py`, run as `cd api && uvicorn main:app`) serves a StorageService-backed
-    project registry; the agent API (`uvicorn mmm_framework.api.main:app`) serves the
-    sessions-store projects the React app and `scripts/seed_demo_project.py` use. CLAUDE.md's
-    React run instructions point at the former, which shows an empty project list after
-    seeding (hit during screenshot capture 2026-06-12). Fix the run instructions and/or
-    unify the registries.
+13. ~~**Two `/projects` APIs exist and answer differently.**~~ **Resolved** — the legacy
+    top-level `api/` directory (Models API) was removed (commit 87ecda1). Only one API now
+    exists: `uvicorn mmm_framework.api.main:app`. The sessions-store `/projects` endpoint is
+    the canonical one.
 
 14. **Duplicate prior-predictive APIs**: `BayesianMMM.get_prior()` (base.py:1597) and
     `BayesianMMM.sample_prior_predictive()` (base.py:2180) overlap. Docs were

@@ -41,12 +41,11 @@ Quick Example
 
    # Load data
    loader = MFFLoader(config=mff_config)
-   panel = loader.load("data.csv")
+   panel = loader.load("data.csv").build_panel()
 
-   # Build configuration
+   # Build configuration (sampler settings; KPI/media spec lives in mff_config)
    config = (
        ModelConfigBuilder()
-       .with_kpi("sales")
        .build()
    )
 

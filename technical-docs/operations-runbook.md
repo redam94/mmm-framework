@@ -9,7 +9,7 @@ On-call reference for running the MMM platform. Pair with
 |---------|-------|------|
 | Agent API (canonical) | `uv run uvicorn mmm_framework.api.main:app --host 0.0.0.0 --port 8000` | 8000 |
 | React UI | `cd frontend && npm run dev` | 5173 |
-| Legacy REST API (deprecated) | `cd api && uvicorn main:app` + `arq worker.WorkerSettings` + Redis | 8000 |
+| Legacy REST API (removed) | top-level `api/` directory deleted — do not use | — |
 
 The agent API runs fits in-kernel — no Redis/worker required for the canonical path.
 

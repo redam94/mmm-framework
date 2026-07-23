@@ -114,7 +114,7 @@ Technical Foundation
 --------------------
 
 The framework is built on **PyMC-Marketing** for Bayesian modeling, with a complete
-technical stack including FastAPI backends, Streamlit frontends, and comprehensive
+technical stack including a FastAPI backend, React/TypeScript frontend, and comprehensive
 testing infrastructure.
 
 It supports sophisticated modeling scenarios including:
