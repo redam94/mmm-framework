@@ -168,6 +168,11 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-testing-no-difference.html</loc>
+        <lastmod>2026-07-23</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/blog-thompson-sampling.html</loc>
         <lastmod>2026-07-19</lastmod>
         <changefreq>monthly</changefreq>
@@ -179,7 +184,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/blog.html</loc>
-        <lastmod>2026-07-18</lastmod>
+        <lastmod>2026-07-23</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>

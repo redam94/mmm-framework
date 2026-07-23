@@ -365,6 +365,7 @@ SERIES = [
         "blog-modeling-pitfalls.html", "blog-multiple-comparisons.html",
         "blog-p-hacking-evidence.html",
         "blog-p-values-across-models.html",
+        "blog-testing-no-difference.html",
         "blog-prior-predictive-sbc.html",
         "blog-when-sampling-fails.html",
         "blog-lindley-to-dad.html", "blog-geo-holdout-eig.html",

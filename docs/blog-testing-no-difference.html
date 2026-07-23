@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proving Nothing Happened: Testing for No Difference | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="A non-significant test cannot show that two groups are the same — absence of evidence is not evidence of absence. How to actually establish 'no difference': minimum detectable effects, TOST equivalence testing, Bayesian ROPE + HDI decisions, and Bayes factors that quantify evidence for the null.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-testing-no-difference.html">
+    <meta property="og:title" content="Proving Nothing Happened: Testing for No Difference">
+    <meta property="og:description" content="p &gt; 0.05 is silence, not absence. The frequentist route to 'no difference' runs through equivalence margins and TOST; the Bayesian route through ROPE probabilities and Bayes factors — and both demand more than the underpowered holdout that usually makes the claim.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-testing-no-difference.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Proving Nothing Happened: Testing for No Difference">
+    <meta name="twitter:description" content="p &gt; 0.05 is silence, not absence. The frequentist route to 'no difference' runs through equivalence margins and TOST; the Bayesian route through ROPE probabilities and Bayes factors — and both demand more than the underpowered holdout that usually makes the claim.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-testing-no-difference.html",
+          "name": "Proving Nothing Happened: Testing for No Difference | MMM Framework",
+          "description": "A non-significant test cannot show that two groups are the same — absence of evidence is not evidence of absence. How to actually establish 'no difference': minimum detectable effects, TOST equivalence testing, Bayesian ROPE + HDI decisions, and Bayes factors that quantify evidence for the null.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-23",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-testing-no-difference.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-testing-no-difference.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Proving Nothing Happened: Testing for No Difference",
+          "datePublished": "2026-07-23",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-testing-no-difference.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-testing-no-difference.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Proving Nothing Happened: Testing for No Difference",
+              "item": "https://redam94.github.io/mmm-framework/blog-testing-no-difference.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#asymmetry">A Machine That Cannot Say "Same"</a></li>
+                <li><a href="#power">What a Null Result Rules Out</a></li>
+                <li><a href="#equivalence">Flipping the Null: TOST</a></li>
+                <li><a href="#cost">The Price of Proving Nothing</a></li>
+                <li><a href="#bayes">ROPE, HDIs, and Bayes Factors</a></li>
+                <li><a href="#choosing">Which Tool for Which Claim</a></li>
+                <li><a href="#media">What It Means for Media</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Proving Nothing Happened: Testing for No Difference</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-23">July 23, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Practice</span>
+            </p>
+            <p class="lead">The most expensive sentence in measurement is usually some version of "the difference wasn't significant, so there's no difference." A brand pauses a channel in ten markets for six weeks, the holdout&ndash;control gap comes back at p&nbsp;=&nbsp;0.41, and the deck concludes the channel does nothing. The cheaper creative "performed the same" as the expensive one. The new bidding strategy "didn't hurt" conversion. Every one of these claims asserts an <em>absence</em> — and the test that produced it is structurally incapable of supporting that claim. A significance test can reject "no difference"; it can never affirm it, because a large p-value conflates two states the decision desperately needs to distinguish: <em>the difference is genuinely negligible</em> and <em>the data are too noisy to tell</em>. Distinguishing them is a solved problem — twice over. Frequentist statistics solves it by flipping the hypotheses: pre-specify the largest difference that would still count as "the same," then <em>reject</em> the hypothesis that the difference exceeds it (equivalence testing, TOST). Bayesian statistics solves it by putting posterior mass on the claim itself: the probability that the difference lies inside a region of practical equivalence, or a Bayes factor quantifying how much the data favor the null. Both solutions share an uncomfortable feature the naive reading hides: proving nothing happened takes <em>more</em> evidence than proving something did.</p>
+
+            <h2 id="asymmetry">A Machine That Cannot Say "Same"</h2>
+            <p>The asymmetry is built into the logic of significance testing, not a quirk of its misuse. A null-hypothesis test starts by assuming no difference, computes how surprising the observed gap would be under that assumption, and reports the surprise as p. Small p: the data are hard to reconcile with "no difference," reject. Large p: the data are <em>compatible</em> with no difference — along with a continuum of non-zero differences the same data are equally compatible with. Fisher (1935), who built the machine, was explicit about its one-way valve: "the null hypothesis is never proved or established, but is possibly disproved, in the course of experimentation." The test is an alarm, and an alarm that stays silent is not a certificate that nothing is burning — the battery may simply be dead.</p>
+
+            <p>The battery, here, is power. When a test has an 80% chance of detecting the effect you care about, silence carries some information. When it has a 20% chance, silence is the <em>expected outcome whether or not the effect exists</em>, and reading it as absence is reading tea leaves. Altman and Bland (1995) compressed the point into the most-cited three-word slogan in applied statistics — absence of evidence is not evidence of absence — and Greenland and colleagues (2016) rank the inversion ("no significant difference" read as "no difference") among the most common and most damaging p-value misinterpretations. It survives because the sentence <em>sounds</em> like a finding. It is a description of the test, not the world.</p>
+
+            <div class="warning">
+                <h4>⚠️ One p-value, two worlds</h4>
+                <p>p&nbsp;=&nbsp;0.41 arises from a difference of 0.1% measured with a standard error of 0.12% — a tight estimate of a genuinely negligible gap — and from a difference of 8% measured with a standard error of 10% — total ignorance across a range where fortunes change hands. The p-value cannot tell these apart because it was never designed to; it measures incompatibility with zero, not proximity to it. The confidence interval tells them apart instantly, which is why every route to an honest "no difference" claim, frequentist or Bayesian, runs through the <em>width</em> of the estimate rather than the verdict of the test.</p>
+            </div>
+
+            <p>There is also a subtler failure mode on the same road: treating "A was significant, B was not" as if the pair of verdicts established that A and B differ — the Gelman&ndash;Stern fallacy, covered in <a href="blog-p-values-across-models.html">a companion post</a>. This post is about the direct version: one comparison, one non-significant result, and the leap from silence to sameness.</p>
+
+            <h2 id="power">What a Null Result Rules Out</h2>
+            <p>The first honest question to ask of any non-significant result is: <em>what could this test have seen?</em> The minimum detectable effect (MDE) at 80% power is roughly \( 2.8 \times \mathrm{SE} \) — the sum of the significance threshold (1.96) and the power requirement (0.84), times the standard error. If a holdout test's standard error on lift is 4 percentage points, the test was built to notice a 11-point swing, and "no significant loss" is compatible with losing 8 points of sales — an outcome that would be catastrophic for the decision the test is supposedly informing. Stating the MDE next to every null result is the cheapest inferential hygiene available, and it is remarkable how many "the test showed no impact" slides cannot survive it.</p>
+
+            <p>Advertising is the canonical domain where this bites, because the signal-to-noise ratio of ad effects on sales is brutally low. Lewis and Rao (2015) analyzed twenty-five large digital ad experiments — millions of users each, run at firms with excellent data — and showed that even at that scale, confidence intervals on advertising ROI routinely spanned from strongly negative to wildly positive. Individual-level purchase variance is enormous relative to any plausible per-impression effect, so the experiments that would settle "does this campaign pay back" need sample sizes that most advertisers cannot buy. The corollary for smaller tests is grim: a six-week, ten-market holdout is <em>almost guaranteed</em> to return "no significant difference" for any channel that isn't heroic or terrible — and that silence gets reported as a finding.</p>
+
+            <div class="interactive-box">
+                <h4>The go-dark test, replayed 400 times</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A channel is paused and the true cost is a real sales loss (set by the first slider). Each dot is one replication of the same holdout test: the estimated lift difference, colored by what a significance reader would conclude. With realistic noise, most replications read <strong>"no significant difference"</strong> — and each one becomes a slide claiming the channel does nothing. Tighten the standard error (more markets, longer test) and watch the silence turn into detection.</p>
+                <div class="control-row">
+                    <label>True loss from pausing (pp of sales)</label>
+                    <input type="range" id="hdLoss" min="-8" max="0" step="0.25" value="-3">
+                    <span class="value" id="hdLossVal">&minus;3.0</span>
+                </div>
+                <div class="control-row">
+                    <label>Standard error of the test (pp)</label>
+                    <input type="range" id="hdSE" min="0.5" max="4" step="0.1" value="2">
+                    <span class="value" id="hdSEVal">2.0</span>
+                    <button type="button" class="viz-btn" id="hdResample">↻ Resample</button>
+                </div>
+                <div class="chart-container chart-themed" id="hdChart" style="height:300px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Reads "no sig. difference"</span><span class="val" id="hdNull">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Detects the loss</span><span class="val" id="hdPower">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">MDE at 80% power</span><span class="val" id="hdMDE">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="hdVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults — a genuine 3-point loss measured with a 2-point standard error — roughly two replications in three return "no significant difference." The test's MDE is 5.6 points: it was never built to see a 3-point loss. The silence is a property of the design, manufactured before the first week of data arrived.</p>
+            </div>
+
+            <p>One tempting patch does not work: computing "observed power" after the fact — the power the test would have had if the observed estimate were the truth. Hoenig and Heisey (2001) showed that observed power is a deterministic function of the p-value and adds exactly nothing: every non-significant result has low observed power, by arithmetic, so "the result was null and observed power was low" is one fact stated twice. Power calculations belong to <em>design</em>, run against effect sizes that matter for the decision. After the data arrive, the honest summary of what the study ruled out is the confidence interval — and if the interval contains both zero and differences that would change the decision, the study is inconclusive, full stop.</p>
+
+            <h2 id="equivalence">Flipping the Null: TOST</h2>
+            <p>If "no difference" is the claim you actually want to establish, frequentist logic has a clean fix: make "there <em>is</em> a difference" the null hypothesis, so that the machinery's one-way valve points in the direction you need. The catch is that "no difference exactly" is unprovable — no finite sample can distinguish a true difference of zero from one of 0.0001 — so the claim must first be made falsifiable by choosing an <strong>equivalence margin</strong> \( \Delta \): the largest difference that would still count, for this decision, as "the same." Then test two one-sided null hypotheses (Schuirmann, 1987):</p>
+            $$ H_{01}: \delta \le -\Delta \qquad \text{and} \qquad H_{02}: \delta \ge +\Delta, $$
+            <p>each at level \( \alpha \). Reject both and you have affirmatively concluded \( -\Delta \lt \delta \lt +\Delta \): the difference, whatever it is, is too small to matter. This is the <strong>two one-sided tests</strong> procedure — TOST — and it is the standard of evidence behind every generic drug on the market: bioequivalence approval requires demonstrating that generic and brand pharmacokinetics agree within a pre-registered margin (the FDA's 80&ndash;125% window), not that a difference test came back silent. Lakens (2017; Lakens, Scheel, and Isager, 2018) did the field service of translating the machinery into a practical workflow for everyday two-group comparisons.</p>
+
+            <p>TOST has a convenient dual form: rejecting both one-sided hypotheses at \( \alpha = 0.05 \) is exactly the statement that the <strong>90% confidence interval lies entirely inside \( (-\Delta, +\Delta) \)</strong>. That makes the full inferential situation visible in one picture — an interval, a zero line, and two margin lines — with four possible verdicts, not two. The difference can be significant <em>and</em> equivalent (a real but trivial difference, precisely measured); significant and not equivalent (a difference that matters); non-significant and equivalent (the honest "no difference"); or non-significant and not equivalent — the underpowered quadrant, where the only defensible conclusion is that the data don't know. The naive reading collapses the last two quadrants into one, and they could not be more different.</p>
+
+            <div class="interactive-box">
+                <h4>Four verdicts, one picture</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The estimated difference between two groups with its 90% interval (thick, the TOST interval) and 95% interval (thin). The shaded band is the equivalence region \( (-\Delta, +\Delta) \). Equivalence is declared when the thick interval sits entirely inside the band; a difference is declared when the thin interval excludes zero. Move the estimate, its precision, and the margin — and find all four quadrants, including the two the naive reading can't tell apart.</p>
+                <div class="control-row">
+                    <label>Observed difference (pp)</label>
+                    <input type="range" id="eqD" min="-6" max="6" step="0.1" value="0.6">
+                    <span class="value" id="eqDVal">0.6</span>
+                </div>
+                <div class="control-row">
+                    <label>Standard error (pp)</label>
+                    <input type="range" id="eqSE" min="0.2" max="3" step="0.05" value="0.7">
+                    <span class="value" id="eqSEVal">0.70</span>
+                </div>
+                <div class="control-row">
+                    <label>Equivalence margin &Delta; (pp)</label>
+                    <input type="range" id="eqM" min="0.5" max="4" step="0.1" value="2">
+                    <span class="value" id="eqMVal">2.0</span>
+                </div>
+                <div class="chart-container chart-themed" id="eqChart" style="height:240px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">p, difference test</span><span class="val" id="eqPN">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">p, TOST equivalence</span><span class="val" id="eqPT">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">90% CI</span><span class="val" id="eqCI">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="eqVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults the difference test is silent (p&nbsp;&asymp;&nbsp;0.39) <em>and</em> TOST affirms equivalence (p&nbsp;&asymp;&nbsp;0.023): the interval is narrow enough to bound the difference inside &plusmn;2. Now triple the standard error: the difference test is still silent — same naive conclusion — but equivalence fails. Same p&nbsp;&gt;&nbsp;0.05, opposite epistemic states.</p>
+            </div>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Why 90%, not 95% — and where the margin comes from</summary>
+                <div class="deep-dive-body">
+                    <p>TOST at \( \alpha = 0.05 \) uses a 90% interval, and this is not a discount. The procedure is an intersection-union test: equivalence is declared only when <em>both</em> one-sided tests reject, and the overall type-I error of an intersection-union test is the maximum of the component errors, not their sum — the worst case sits at a boundary (\( \delta = \pm\Delta \)) where only one of the two tests is ever close to rejecting. So each side runs at the full \( \alpha \), which packages into the \( 1 - 2\alpha \) interval. No multiplicity correction is needed, and using a 95% interval would make the test needlessly conservative (Wellek, 2010, treats the general theory).</p>
+                    <p>The margin is where the statistics stops and the subject matter starts. In pharmacology it comes from clinical judgment about therapeutic windows; in psychology Lakens and colleagues (2018) recommend the smallest effect size of interest, anchored to theory or to what the field can measure; in commerce it should come from economics — the point at which the difference would change the decision. A margin chosen <em>after</em> seeing the data is not a margin, it is a rationalization: the same forking-paths logic that <a href="blog-p-hacking-evidence.html">invalidates a hunted p-value</a> invalidates a hunted \( \Delta \). Pre-register it, and derive it from the decision, not from what the test can deliver.</p>
+                </div>
+            </details>
+
+            <h2 id="cost">The Price of Proving Nothing</h2>
+            <p>Equivalence has an arithmetic that surprises people who are used to sizing difference tests: it usually costs <em>more</em>. To detect a difference of size \( \Delta \) with 80% power you need \( \Delta / \mathrm{SE} \approx 2.8 \). To declare equivalence within \( \pm\Delta \) when the true difference is exactly zero you need \( \Delta / \mathrm{SE} \approx 2.93 \) — the 90% interval, of half-width \( 1.645\,\mathrm{SE} \), must fit inside the band with room for sampling noise. Similar, so far. But the true difference is rarely exactly zero, and here the cost curve turns vicious: the 90% interval has to fit into the band left over between the truth and the nearer margin, so the required sample grows like the inverse square of that remaining gap — roughly three times the detection budget when the truth sits at half the margin, and more than twelve times at three-quarters. Proving that a difference is negligible is cheap only when it is negligible with room to spare.</p>
+
+            <div class="interactive-box">
+                <h4>Detecting a difference vs. certifying its absence</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Two power curves against sample size (log scale), for the same margin \( \Delta \). One is the standard difference test's power to detect a true difference of exactly \( \Delta \). The other is TOST's power to <em>declare equivalence</em> when the true difference is some fraction of the margin (second slider). Slide the truth toward the margin and watch the equivalence curve march right — the certificate of absence gets expensive precisely when absence is least true.</p>
+                <div class="control-row">
+                    <label>Equivalence margin &Delta; (pp)</label>
+                    <input type="range" id="pwM" min="1" max="5" step="0.25" value="2">
+                    <span class="value" id="pwMVal">2.0</span>
+                </div>
+                <div class="control-row">
+                    <label>True difference, as % of the margin</label>
+                    <input type="range" id="pwF" min="0" max="90" step="5" value="50">
+                    <span class="value" id="pwFVal">50%</span>
+                </div>
+                <div class="chart-container chart-themed" id="pwChart" style="height:320px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">n for 80%: detect &Delta;</span><span class="val" id="pwNDet">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">n for 80%: equivalence</span><span class="val" id="pwNEq">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Cost ratio</span><span class="val" id="pwRatio">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="pwVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">With the truth at half the margin, certifying "no difference that matters" costs about 3&times; the sample of detecting a full-margin difference; at 75% of the margin, over 12&times;. TOST also has an honest floor the naive reading lacks: below a minimum n (where 1.645&thinsp;&times;&thinsp;SE &gt; &Delta;), its power is exactly zero — a too-small study <em>cannot</em> conclude equivalence, whereas the naive reading gets more confident of "no difference" the less data it has.</p>
+            </div>
+
+            <p>That last property deserves a sentence of appreciation, because it is the whole point. Under the naive reading, shrinking the sample <em>helps</em> the "no difference" conclusion — noise manufactures silence, and silence gets read as sameness. Under TOST, shrinking the sample destroys the conclusion: with \( 1.645\,\mathrm{SE} \gt \Delta \) the 90% interval cannot fit inside the band no matter where it lands, and the procedure simply refuses to certify. A method for proving absence must get harder to satisfy as the data get worse. That is the test of whether your "no difference" pipeline is real.</p>
+
+            <h2 id="bayes">ROPE, HDIs, and Bayes Factors</h2>
+            <p>The Bayesian toolkit attacks the same problem from the other side: instead of engineering a rejection machine that points the right way, put a posterior distribution on the difference and interrogate it directly. Two instruments dominate practice, and they answer subtly different questions.</p>
+
+            <p>The first is the Bayesian sibling of TOST. Define a <strong>region of practical equivalence</strong> (ROPE) around zero — the same decision-derived \( \pm\Delta \) as before — and read the posterior against it (Kruschke, 2018). The continuous summary is \( P(|\delta| \lt \Delta \mid \text{data}) \), the posterior probability that the difference is negligible: a number a stakeholder can use directly. The discrete decision rule mirrors TOST's geometry: <em>accept</em> practical equivalence when the 95% highest-density interval falls entirely inside the ROPE, <em>reject</em> it when the HDI falls entirely outside, and withhold judgment otherwise. The correspondence with the frequentist picture is close enough that with flat priors the two procedures nearly coincide — which is reassuring, because it means the substance was never frequentist-vs-Bayesian; it was <em>bounding the difference</em> vs. reading silence.</p>
+
+            <p>The second instrument has no frequentist counterpart at all: the <strong>Bayes factor</strong>, which compares how well two models predicted the data — a point null \( \delta = 0 \) against an alternative that spreads \( \delta \) over a prior (Rouder et al., 2009; Jeffreys, 1961). Where a p-value can only fail to reject the null, \( \mathrm{BF}_{01} \) can accumulate <em>evidence for it</em>: data tightly concentrated near zero are genuinely better predicted by the null model than by an alternative that wagered on effects that never materialized. For the normal case the computation collapses to one line via the Savage&ndash;Dickey ratio — the posterior density at zero over the prior density at zero (Wagenmakers et al., 2010) — and Dienes (2014) makes the practical case: a Bayes factor turns a non-significant result from a shrug into a graded statement, distinguishing "the data support no effect" (\( \mathrm{BF}_{01} \gt 3 \)) from "the data are simply insensitive" (\( \mathrm{BF}_{01} \approx 1 \)).</p>
+
+            <div class="interactive-box">
+                <h4>One dataset, three Bayesian readings</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The posterior for the difference (solid) under a zero-centered prior (dashed), with the ROPE shaded and the 95% HDI drawn beneath the curve. The two dots at zero are the Savage&ndash;Dickey ratio: posterior density over prior density at \( \delta = 0 \) equals \( \mathrm{BF}_{01} \). Move the data and the prior; watch the three readouts — ROPE probability, HDI decision, Bayes factor — agree, disagree, and expose their sensitivities. In particular: widen the alternative's prior with the data held fixed and watch \( \mathrm{BF}_{01} \) grow — the Jeffreys&ndash;Lindley effect. A vague alternative is a bad gambler, and the null wins by forfeit.</p>
+                <div class="control-row">
+                    <label>Observed difference (pp)</label>
+                    <input type="range" id="byD" min="-4" max="4" step="0.1" value="0.8">
+                    <span class="value" id="byDVal">0.8</span>
+                </div>
+                <div class="control-row">
+                    <label>Standard error (pp)</label>
+                    <input type="range" id="bySE" min="0.3" max="3" step="0.05" value="1">
+                    <span class="value" id="bySEVal">1.00</span>
+                </div>
+                <div class="control-row">
+                    <label>Prior scale of the alternative &tau;</label>
+                    <input type="range" id="byTau" min="0.5" max="15" step="0.25" value="3">
+                    <span class="value" id="byTauVal">3.0</span>
+                </div>
+                <div class="control-row">
+                    <label>ROPE half-width &Delta; (pp)</label>
+                    <input type="range" id="byM" min="0.5" max="4" step="0.1" value="2">
+                    <span class="value" id="byMVal">2.0</span>
+                </div>
+                <div class="chart-container chart-themed" id="byChart" style="height:320px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">P(|&delta;| &lt; &Delta; | data)</span><span class="val" id="byRope">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">95% HDI vs ROPE</span><span class="val" id="byHdi">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">BF<sub>01</sub> (Savage&ndash;Dickey)</span><span class="val" id="byBF">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="byVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults the three readings tell one nuanced story: 91% of the posterior sits in the ROPE (probably negligible), the HDI still pokes past the boundary (don't certify yet), and BF<sub>01</sub>&nbsp;&asymp;&nbsp;2.4 (weak evidence for the null). Now set &tau; to 15: the data haven't changed, but BF<sub>01</sub> climbs past 10 — "strong evidence for the null" conjured purely by widening the alternative — because the Bayes factor is partly a referendum on the alternative you wrote down. The ROPE probability barely moves; it is a statement about the posterior, not a model contest.</p>
+            </div>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>When the Bayes factor and the ROPE disagree</summary>
+                <div class="deep-dive-body">
+                    <p>The two instruments formalize different questions, and the figure lets you drive them apart. The Bayes factor is a <em>model comparison</em>: it asks whether the data were better predicted by "exactly zero" or by a specific spread of alternatives, so it rewards the null whenever the alternative wasted prior mass on effects the data ruled out — including when the estimate is small but clearly nonzero. The ROPE probability is an <em>estimation</em> statement: it asks where the difference actually lies, margin in hand, and it does not care whether zero-exactly was a good bet. Kruschke and Liddell (2018) argue the estimation framing serves decisions better; Tendeiro and Kiers (2019) catalogue the ways null-hypothesis Bayes factors get misused in practice — vague default priors that guarantee null-friendly verdicts, and BF thresholds read as posterior probabilities. A useful discipline: if you cannot defend the alternative's prior as a genuine prediction of effect sizes, you are not entitled to the Bayes factor's verdict for the null; the ROPE, whose only subjective input is the same decision margin TOST already required, is the sturdier default for applied work. The Bayes factor earns its keep where its question is the real one — cumulative evidence for a theory that predicts <em>no effect</em> — and there it does something nothing frequentist can: it can be monitored as data accrue and stopped when the evidence is strong, without the error-rate contortions optional stopping inflicts on p-values (Rouder, 2014).</p>
+                </div>
+            </details>
+
+            <h2 id="choosing">Which Tool for Which Claim</h2>
+            <p>The instruments line up by the claim you need to make, and by what you must specify in advance to be entitled to it.</p>
+
+            <div class="definition">
+                <h4>Definition: four claims of absence, four instruments</h4>
+                <p><strong>"The study couldn't have seen it anyway."</strong> Report the MDE and the confidence interval. This is not a finding of absence; it is a confession of insensitivity, and it should be stated whenever the interval spans decision-relevant differences. Required in advance: nothing (which is why it is the floor, not the ceiling).</p>
+                <p><strong>"The difference is bounded inside what matters."</strong> TOST, or equivalently the 90% CI inside \( (-\Delta, +\Delta) \); its one-sided cousin, the non-inferiority test, when only one direction can hurt you. Required in advance: the margin. This is the regulatory standard for a reason — it is the weakest claim that still asserts something about the world.</p>
+                <p><strong>"The difference is probably negligible, with probability attached."</strong> Posterior \( P(|\delta| \lt \Delta) \) and the HDI-vs-ROPE decision. Same margin as TOST, plus a prior on the difference — and in exchange you get the number stakeholders actually want, plus clean sequential monitoring. This is the framework-native reading.</p>
+                <p><strong>"The data are evidence that the effect is truly absent."</strong> The Bayes factor against a defensible alternative. Required in advance: an alternative prior you are willing to own as a scientific prediction. The strongest claim, the most assumptions, the most abusable — and the only one that supports "this mechanism does not exist" rather than "this difference is small."</p>
+            </div>
+
+            <p>Two disciplines apply across all four. The margin is a decision quantity, fixed before the data are seen — a margin tuned after the fact inherits every pathology of <a href="blog-p-hacking-evidence.html">the garden of forking paths</a>. And a null claim earned in one analysis does not survive <a href="blog-multiple-comparisons.html">selection across many</a>: screen twenty channels for "no loss when cut" and the winning null is as cursed as the winning effect.</p>
+
+            <pre><code># illustrative
+# WRONG: silence read as sameness
+p = ttest(holdout, control).p          # p = 0.41
+# "no significant loss — cut the channel"   &lt;- underpowered silence, not absence
+
+# RIGHT, floor: say what the test could see
+mde = 2.8 * se                          # the smallest loss this test could detect
+ci  = (d - 1.96 * se, d + 1.96 * se)    # spans break-even?  then it's inconclusive
+
+# RIGHT, frequentist: equivalence within a pre-registered margin
+p_tost = max(1 - cdf((d + margin) / se),    # H01: loss beyond -margin
+             cdf((d - margin) / se))        # H02: gain beyond +margin
+equivalent = p_tost &lt; 0.05             # == 90% CI inside (-margin, +margin)
+
+# RIGHT, Bayesian: probability the difference is negligible
+p_rope = P(abs(delta) &lt; margin | data)  # posterior mass in the ROPE
+bf01   = post_pdf_at_0 / prior_pdf_at_0 # Savage-Dickey: evidence FOR the null</code></pre>
+
+            <h2 id="media">What It Means for Media</h2>
+            <p>Media measurement produces claims of absence at an industrial rate, and almost all of them are the naive kind. "We went dark in Denver and nothing happened." "The cheaper creative performed the same." "Cutting the retargeting budget had no effect on conversions." Each one is a budget decision wearing a p-value, and each one should be re-read with the machinery above — starting with the question the <a href="blog-geo-experiments-tbr.html">geo test's design</a> already answered: what loss could this test have detected? Six weeks and ten markets typically buys an MDE of several points of sales; a channel driving a 2&ndash;3% lift — a perfectly good channel — will read "no significant difference" most of the time. Lewis and Rao's arithmetic says this is not a fixable sloppiness but the default condition of ad measurement: the tests that would separate "nothing" from "normal-sized effect" are bigger than the tests people run. Silence is cheap; <em>bounded</em> silence costs markets and weeks.</p>
+
+            <p>The saving grace is that media, unlike psychology, gets its equivalence margin handed to it by accounting. Pausing a channel saves its spend \( S \); the pause is profitable exactly when the forgone contribution margin is smaller than \( S \), so the break-even lift \( \Delta^* = S / m \) (with \( m \) the margin per incremental unit) <em>is</em> the non-inferiority margin — not a convention borrowed from pharmacology but the number the CFO already owns. "Going dark was fine" then becomes a testable, one-sided claim: the lower confidence bound on the loss stays inside break-even, or the posterior probability that the loss exceeds \( \Delta^* \) is small. This framework runs the Bayesian version natively: the <a href="blog-calibrating-mmm-experiments.html">experiment feeds the model</a>, the model's posterior prices the pause against the saved spend — a holdout can be net-<em>positive</em> once saved dollars are counted — and the design tools state the assurance of reaching a verdict before a single market goes dark, so an underpowered test is declined rather than run and misread. And when the posterior can only say "somewhere between fine and painful," the honest output is that interval plus the <a href="blog-carryover-experiment-timing.html">longer, wider test</a> that would shrink it — because adstock smears a pause's cost past a short window, biasing exactly these tests toward comforting silence.</p>
+
+            <p>The deepest habit worth breaking is grammatical. "No significant difference" is a sentence about a test; "the difference is between &minus;1.2 and +0.8 points, inside break-even" is a sentence about the world. Decisions deserve the second kind. If the analysis cannot produce one — no margin, no bound, no posterior — then it has not found that nothing happened. It has found nothing, which is not the same thing at all.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>A significance test is a one-way valve: it can reject "no difference" but never affirm it. p &gt; 0.05 conflates "genuinely negligible" with "too noisy to tell" — and only the confidence interval distinguishes them.</li>
+                    <li>Read every null result against its minimum detectable effect (&asymp; 2.8 &times; SE at 80% power). An underpowered test returns "no significant difference" <em>by design</em>, whatever the truth; Lewis&ndash;Rao shows ad experiments live in this regime by default. Post-hoc "observed power" is a function of p and adds nothing.</li>
+                    <li>To claim absence, flip the null: pre-register an equivalence margin &Delta; and run TOST — equivalence is declared when the 90% CI sits inside (&minus;&Delta;, +&Delta;). Four verdicts replace two; "non-significant and not equivalent" is the inconclusive quadrant the naive reading hides.</li>
+                    <li>Proving nothing costs more than finding something: equivalence at a truth of half the margin needs ~3&times; the sample of detecting a full-margin effect, and TOST's power drops to exactly zero when the data are too thin — the naive reading, perversely, only gets more confident.</li>
+                    <li>The Bayesian pair: ROPE probability P(|&delta;| &lt; &Delta;) with the HDI decision rule (the estimation answer, sturdy and margin-driven), and the Bayes factor BF<sub>01</sub> (the only tool that accrues evidence <em>for</em> the null — but partly a referendum on the alternative's prior; vague alternatives forfeit to the null via Jeffreys&ndash;Lindley).</li>
+                    <li>Margins are decision quantities fixed in advance — in media they come from economics: break-even lift &Delta;* = saved spend / unit margin turns "going dark was fine" into a one-sided non-inferiority claim the CFO can audit.</li>
+                    <li>A defensible absence claim states a bound, not a verdict: "the loss is inside break-even with 95% probability," never "the difference wasn't significant."</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Altman, D. G., &amp; Bland, J. M. (1995). <em>Absence of Evidence Is Not Evidence of Absence</em>. BMJ, 311(7003).</li>
+                <li>Fisher, R. A. (1935). <em>The Design of Experiments</em>. Oliver &amp; Boyd.</li>
+                <li>Greenland, S., Senn, S. J., Rothman, K. J., Carlin, J. B., Poole, C., Goodman, S. N., &amp; Altman, D. G. (2016). <em>Statistical Tests, P Values, Confidence Intervals, and Power: A Guide to Misinterpretations</em>. European Journal of Epidemiology, 31(4).</li>
+                <li>Hoenig, J. M., &amp; Heisey, D. M. (2001). <em>The Abuse of Power: The Pervasive Fallacy of Power Calculations for Data Analysis</em>. The American Statistician, 55(1).</li>
+                <li>Schuirmann, D. J. (1987). <em>A Comparison of the Two One-Sided Tests Procedure and the Power Approach for Assessing the Equivalence of Average Bioavailability</em>. Journal of Pharmacokinetics and Biopharmaceutics, 15(6).</li>
+                <li>Lakens, D. (2017). <em>Equivalence Tests: A Practical Primer for t Tests, Correlations, and Meta-Analyses</em>. Social Psychological and Personality Science, 8(4).</li>
+                <li>Lakens, D., Scheel, A. M., &amp; Isager, P. M. (2018). <em>Equivalence Testing for Psychological Research: A Tutorial</em>. Advances in Methods and Practices in Psychological Science, 1(2).</li>
+                <li>Wellek, S. (2010). <em>Testing Statistical Hypotheses of Equivalence and Noninferiority</em> (2nd ed.). Chapman &amp; Hall/CRC.</li>
+                <li>Kruschke, J. K. (2018). <em>Rejecting or Accepting Parameter Values in Bayesian Estimation</em>. Advances in Methods and Practices in Psychological Science, 1(2).</li>
+                <li>Kruschke, J. K., &amp; Liddell, T. M. (2018). <em>The Bayesian New Statistics: Hypothesis Testing, Estimation, Meta-Analysis, and Power Analysis from a Bayesian Perspective</em>. Psychonomic Bulletin &amp; Review, 25(1).</li>
+                <li>Rouder, J. N., Speckman, P. L., Sun, D., Morey, R. D., &amp; Iverson, G. (2009). <em>Bayesian t Tests for Accepting and Rejecting the Null Hypothesis</em>. Psychonomic Bulletin &amp; Review, 16(2).</li>
+                <li>Wagenmakers, E.-J., Lodewyckx, T., Kuriyal, H., &amp; Grasman, R. (2010). <em>Bayesian Hypothesis Testing for Psychologists: A Tutorial on the Savage&ndash;Dickey Method</em>. Cognitive Psychology, 60(3).</li>
+                <li>Dienes, Z. (2014). <em>Using Bayes to Get the Most out of Non-Significant Results</em>. Frontiers in Psychology, 5.</li>
+                <li>Rouder, J. N. (2014). <em>Optional Stopping: No Problem for Bayesians</em>. Psychonomic Bulletin &amp; Review, 21(2).</li>
+                <li>Tendeiro, J. N., &amp; Kiers, H. A. L. (2019). <em>A Review of Issues About Null Hypothesis Bayesian Testing</em>. Psychological Methods, 24(6).</li>
+                <li>Lewis, R. A., &amp; Rao, J. M. (2015). <em>The Unfavorable Economics of Measuring the Returns to Advertising</em>. The Quarterly Journal of Economics, 130(4).</li>
+                <li>Jeffreys, H. (1961). <em>Theory of Probability</em> (3rd ed.). Oxford University Press.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        function p2(z) { return 2 * (1 - BV.normCdf(Math.abs(z))); }
+        function fmtP(p) {
+            if (p < 0.0001) return '< 0.0001';
+            if (p < 0.01) return p.toFixed(4);
+            if (p < 0.1) return p.toFixed(3);
+            return p.toFixed(2);
+        }
+
+        // --- Figure 1: the go-dark holdout, replayed ---
+        var hdSeed = 7;
+        BV.register(function () {
+            var p = BV.palette();
+            var loss = parseFloat(document.getElementById('hdLoss').value);
+            var se = parseFloat(document.getElementById('hdSE').value);
+            var rng = BV.mulberry32(hdSeed);
+            var SIMS = 400;
+            var xNull = [], yNull = [], xDet = [], yDet = [], xPos = [], yPos = [];
+            for (var i = 0; i < SIMS; i++) {
+                var est = loss + se * BV.randn(rng);
+                var y = rng();
+                var sig = Math.abs(est) / se > 1.96;
+                if (!sig) { xNull.push(est); yNull.push(y); }
+                else if (est < 0) { xDet.push(est); yDet.push(y); }
+                else { xPos.push(est); yPos.push(y); }
+            }
+            var xmin = Math.min(loss - 4 * se, -4), xmax = Math.max(4, loss + 4 * se);
+            var traces = [
+                { type: 'scatter', mode: 'markers', x: xNull, y: yNull, name: '"no significant difference"', marker: { color: BV.band(p.muted, 0.65), size: 5 }, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'markers', x: xDet, y: yDet, name: 'loss detected', marker: { color: BV.band(p.danger, 0.8), size: 5 }, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'markers', x: xPos, y: yPos, name: 'significant "gain" (sign error)', marker: { color: BV.band(p.warning, 0.9), size: 5 }, hoverinfo: 'skip' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'estimated lift difference (pp), one replication each', range: [xmin, xmax] },
+                yaxis: { visible: false, range: [-0.08, 1.08] },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 24, r: 20, t: 34, b: 48 },
+                shapes: [
+                    { type: 'line', x0: 0, x1: 0, y0: -0.05, y1: 1.05, line: { color: p.muted, width: 1.5, dash: 'dot' } },
+                    { type: 'line', x0: loss, x1: loss, y0: -0.05, y1: 1.05, line: { color: p.danger, width: 2 } }
+                ],
+                annotations: [
+                    { x: 0, y: 1.05, yanchor: 'bottom', text: 'zero', showarrow: false, font: { size: 11, color: p.muted } },
+                    { x: loss, y: -0.05, yanchor: 'top', text: 'true loss', showarrow: false, font: { size: 11, color: p.danger } }
+                ]
+            });
+            Plotly.react('hdChart', traces, layout, BV.config);
+
+            var shareNull = xNull.length / SIMS, power = xDet.length / SIMS;
+            var el = document.getElementById('hdNull');
+            el.textContent = Math.round(100 * shareNull) + '%';
+            el.className = 'val' + (shareNull > 0.5 ? ' warn' : '');
+            document.getElementById('hdPower').textContent = Math.round(100 * power) + '%';
+            document.getElementById('hdMDE').textContent = (2.8 * se).toFixed(1) + ' pp';
+            var v = document.getElementById('hdVerdict');
+            if (loss === 0) { v.textContent = 'nothing to find'; v.className = 'val'; }
+            else if (shareNull > 0.5) { v.textContent = 'silence by design'; v.className = 'val warn'; }
+            else if (power > 0.8) { v.textContent = 'a test that can see'; v.className = 'val ok'; }
+            else { v.textContent = 'coin-flip detection'; v.className = 'val warn'; }
+        });
+        document.getElementById('hdResample').addEventListener('click', function () {
+            hdSeed = (hdSeed * 1664525 + 1013904223) >>> 0;
+            BV.redraw();
+        });
+        BV.sliders([
+            { id: 'hdLoss', value: 'hdLossVal', fmt: function (v) { return (v < 0 ? '−' : '') + Math.abs(v).toFixed(1); } },
+            { id: 'hdSE', value: 'hdSEVal', fmt: function (v) { return v.toFixed(1); } }
+        ], BV.redraw);
+
+        // --- Figure 2: four verdicts (TOST vs NHST) ---
+        BV.register(function () {
+            var p = BV.palette();
+            var d = parseFloat(document.getElementById('eqD').value);
+            var se = parseFloat(document.getElementById('eqSE').value);
+            var M = parseFloat(document.getElementById('eqM').value);
+            var pN = p2(d / se);
+            var p1 = 1 - BV.normCdf((d + M) / se);
+            var p2t = BV.normCdf((d - M) / se);
+            var pT = Math.max(p1, p2t);
+            var ci90 = 1.645 * se, ci95 = 1.96 * se;
+            var xr = Math.max(M + 1.5, Math.abs(d) + ci95 + 1, 4);
+
+            var traces = [
+                {
+                    type: 'scatter', mode: 'markers', x: [d], y: ['difference'],
+                    error_x: { type: 'constant', value: ci95, color: BV.band(p.primary, 0.45), thickness: 2, width: 0 },
+                    marker: { color: p.primary, size: 1, opacity: 0 }, showlegend: false, hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'markers', x: [d], y: ['difference'],
+                    error_x: { type: 'constant', value: ci90, color: p.primary, thickness: 5, width: 9 },
+                    marker: { color: p.primary, size: 13, line: { color: p.surface, width: 1.5 } },
+                    showlegend: false,
+                    hovertemplate: 'd = %{x:.2f}<br>90% CI ± ' + ci90.toFixed(2) + '<br>95% CI ± ' + ci95.toFixed(2) + '<extra></extra>'
+                }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'difference between groups (pp)', range: [-xr, xr], zeroline: false },
+                yaxis: { visible: false },
+                margin: { l: 24, r: 20, t: 30, b: 48 }, showlegend: false,
+                shapes: [
+                    { type: 'rect', x0: -M, x1: M, y0: -0.5, y1: 0.5, fillcolor: BV.band(p.accent, 0.10), line: { width: 0 } },
+                    { type: 'line', x0: 0, x1: 0, y0: -0.5, y1: 0.5, line: { color: p.muted, width: 1, dash: 'dot' } },
+                    { type: 'line', x0: -M, x1: -M, y0: -0.5, y1: 0.5, line: { color: p.accent, width: 1.5, dash: 'dash' } },
+                    { type: 'line', x0: M, x1: M, y0: -0.5, y1: 0.5, line: { color: p.accent, width: 1.5, dash: 'dash' } }
+                ],
+                annotations: [
+                    { x: -M, y: 0.5, yanchor: 'bottom', text: '−Δ', showarrow: false, font: { size: 12, color: p.accent } },
+                    { x: M, y: 0.5, yanchor: 'bottom', text: '+Δ', showarrow: false, font: { size: 12, color: p.accent } },
+                    { x: 0, y: -0.5, yanchor: 'top', text: '0', showarrow: false, font: { size: 11, color: p.muted } }
+                ]
+            });
+            Plotly.react('eqChart', traces, layout, BV.config);
+
+            var elN = document.getElementById('eqPN');
+            elN.textContent = fmtP(pN);
+            elN.className = 'val' + (pN < 0.05 ? ' ok' : '');
+            var elT = document.getElementById('eqPT');
+            elT.textContent = fmtP(pT);
+            elT.className = 'val' + (pT < 0.05 ? ' ok' : ' warn');
+            document.getElementById('eqCI').textContent = '[' + (d - ci90).toFixed(1) + ', ' + (d + ci90).toFixed(1) + ']';
+            var sig = pN < 0.05, eqv = pT < 0.05;
+            var v = document.getElementById('eqVerdict');
+            if (sig && !eqv) { v.textContent = 'a difference that may matter'; v.className = 'val ok'; }
+            else if (sig && eqv) { v.textContent = 'different, but trivially'; v.className = 'val ok'; }
+            else if (!sig && eqv) { v.textContent = 'equivalent — bounded inside ±Δ'; v.className = 'val ok'; }
+            else { v.textContent = 'inconclusive — too noisy to say'; v.className = 'val warn'; }
+        });
+        BV.sliders([
+            { id: 'eqD', value: 'eqDVal', fmt: function (v) { return v.toFixed(1); } },
+            { id: 'eqSE', value: 'eqSEVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'eqM', value: 'eqMVal', fmt: function (v) { return v.toFixed(1); } }
+        ], BV.redraw);
+
+        // --- Figure 3: power to detect vs power to certify absence ---
+        var SIGMA_UNIT = 20; // SE = 20/sqrt(n): n=100 -> 2pp
+        function seAt(n) { return SIGMA_UNIT / Math.sqrt(n); }
+        function powDetect(M, n) { return BV.normCdf(M / seAt(n) - 1.96); }
+        function powEquiv(M, delta, n) {
+            var se = seAt(n);
+            var a = BV.normCdf((M - delta) / se - 1.645);
+            var b = BV.normCdf((M + delta) / se - 1.645);
+            return Math.max(0, a + b - 1);
+        }
+        function nFor(fn, target) {
+            for (var ln = Math.log10(5); ln <= 5; ln += 0.01) {
+                var n = Math.pow(10, ln);
+                if (fn(n) >= target) return Math.ceil(n);
+            }
+            return null;
+        }
+        BV.register(function () {
+            var p = BV.palette();
+            var M = parseFloat(document.getElementById('pwM').value);
+            var f = parseFloat(document.getElementById('pwF').value) / 100;
+            var delta = f * M;
+            var logNs = BV.linspace(Math.log10(5), 5, 200);
+            var ns = logNs.map(function (l) { return Math.pow(10, l); });
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: ns, y: ns.map(function (n) { return powDetect(M, n); }), name: 'detect a difference of Δ', line: { color: p.primary, width: 2.5 }, hovertemplate: 'n=%{x:.0f}<br>power=%{y:.2f}<extra>detect</extra>' },
+                { type: 'scatter', mode: 'lines', x: ns, y: ns.map(function (n) { return powEquiv(M, delta, n); }), name: 'certify equivalence within ±Δ', line: { color: p.accent, width: 2.5 }, hovertemplate: 'n=%{x:.0f}<br>power=%{y:.2f}<extra>equivalence</extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'sample size n (log scale)', type: 'log', range: [Math.log10(5), 5] },
+                yaxis: { title: 'power', range: [0, 1.02] },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 52, r: 20, t: 34, b: 48 },
+                shapes: [{ type: 'line', x0: 5, x1: 100000, y0: 0.8, y1: 0.8, line: { color: p.muted, width: 1, dash: 'dash' } }],
+                annotations: [{ x: Math.log10(7), y: 0.8, yanchor: 'bottom', xanchor: 'left', text: '80%', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('pwChart', traces, layout, BV.config);
+
+            var nDet = nFor(function (n) { return powDetect(M, n); }, 0.8);
+            var nEq = nFor(function (n) { return powEquiv(M, delta, n); }, 0.8);
+            document.getElementById('pwNDet').textContent = nDet ? nDet.toLocaleString() : '—';
+            var eqEl = document.getElementById('pwNEq');
+            eqEl.textContent = nEq ? nEq.toLocaleString() : 'unreachable';
+            eqEl.className = 'val' + (nEq && nDet && nEq > 3 * nDet ? ' warn' : '');
+            var rEl = document.getElementById('pwRatio');
+            if (nDet && nEq) {
+                var ratio = nEq / nDet;
+                rEl.textContent = ratio.toFixed(1) + '×';
+                rEl.className = 'val' + (ratio > 3 ? ' warn' : '');
+            } else { rEl.textContent = '—'; rEl.className = 'val warn'; }
+            var v = document.getElementById('pwVerdict');
+            if (!nEq) { v.textContent = 'absence out of reach'; v.className = 'val warn'; }
+            else if (nEq / nDet > 5) { v.textContent = 'absence is expensive here'; v.className = 'val warn'; }
+            else { v.textContent = 'comparable budgets'; v.className = 'val ok'; }
+        });
+        BV.sliders([
+            { id: 'pwM', value: 'pwMVal', fmt: function (v) { return v.toFixed(1); } },
+            { id: 'pwF', value: 'pwFVal', fmt: function (v) { return Math.round(v) + '%'; } }
+        ], BV.redraw);
+
+        // --- Figure 4: posterior + ROPE + Savage–Dickey Bayes factor ---
+        function normPdf(x, mu, sd) {
+            return Math.exp(-0.5 * Math.pow((x - mu) / sd, 2)) / (sd * Math.sqrt(2 * Math.PI));
+        }
+        BV.register(function () {
+            var p = BV.palette();
+            var d = parseFloat(document.getElementById('byD').value);
+            var se = parseFloat(document.getElementById('bySE').value);
+            var tau = parseFloat(document.getElementById('byTau').value);
+            var M = parseFloat(document.getElementById('byM').value);
+
+            var v = 1 / (1 / (se * se) + 1 / (tau * tau));
+            var m = v * d / (se * se);
+            var sd = Math.sqrt(v);
+            var bf01 = normPdf(d, 0, se) / normPdf(d, 0, Math.sqrt(se * se + tau * tau));
+            var pRope = BV.normCdf((M - m) / sd) - BV.normCdf((-M - m) / sd);
+            var lo = m - 1.96 * sd, hi = m + 1.96 * sd;
+
+            var xr = Math.max(M + 1.5, Math.abs(m) + 4 * sd, 5);
+            var xs = BV.linspace(-xr, xr, 320);
+            var postY = xs.map(function (x) { return normPdf(x, m, sd); });
+            var priorY = xs.map(function (x) { return normPdf(x, 0, tau); });
+            var peak = normPdf(m, m, sd);
+
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: xs, y: priorY, name: 'prior N(0, τ²)', line: { color: p.muted, width: 2, dash: 'dash' }, hoverinfo: 'name' },
+                { type: 'scatter', mode: 'lines', x: xs, y: postY, name: 'posterior for δ', line: { color: p.primary, width: 2.5 }, fill: 'tozeroy', fillcolor: BV.band(p.primary, 0.15), hoverinfo: 'name' },
+                { type: 'scatter', mode: 'lines', x: [lo, hi], y: [-0.055 * peak, -0.055 * peak], name: '95% HDI', line: { color: p.primary, width: 5 }, hovertemplate: '95% HDI [' + lo.toFixed(2) + ', ' + hi.toFixed(2) + ']<extra></extra>' },
+                { type: 'scatter', mode: 'markers', x: [0, 0], y: [normPdf(0, m, sd), normPdf(0, 0, tau)], name: 'Savage–Dickey densities at 0', marker: { color: [p.primary, p.muted], size: 10, line: { color: p.surface, width: 1.5 } }, hovertemplate: 'density at zero: %{y:.3f}<extra></extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'difference δ (pp)', range: [-xr, xr], zeroline: false },
+                yaxis: { title: 'density', showticklabels: false, range: [-0.12 * peak, 1.12 * peak] },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 46, r: 20, t: 40, b: 48 },
+                shapes: [
+                    { type: 'rect', x0: -M, x1: M, y0: 0, y1: 1.06 * peak, fillcolor: BV.band(p.accent, 0.10), line: { width: 0 } },
+                    { type: 'line', x0: -M, x1: -M, y0: 0, y1: 1.06 * peak, line: { color: p.accent, width: 1.5, dash: 'dash' } },
+                    { type: 'line', x0: M, x1: M, y0: 0, y1: 1.06 * peak, line: { color: p.accent, width: 1.5, dash: 'dash' } },
+                    { type: 'line', x0: 0, x1: 0, y0: 0, y1: 1.06 * peak, line: { color: p.muted, width: 1, dash: 'dot' } }
+                ],
+                annotations: [
+                    { x: -M, y: 1.06 * peak, yanchor: 'bottom', text: '−Δ', showarrow: false, font: { size: 12, color: p.accent } },
+                    { x: M, y: 1.06 * peak, yanchor: 'bottom', text: '+Δ', showarrow: false, font: { size: 12, color: p.accent } }
+                ]
+            });
+            Plotly.react('byChart', traces, layout, BV.config);
+
+            var ropeEl = document.getElementById('byRope');
+            ropeEl.textContent = (100 * pRope).toFixed(1) + '%';
+            ropeEl.className = 'val' + (pRope > 0.95 ? ' ok' : '');
+            var hdiEl = document.getElementById('byHdi');
+            var inside = lo > -M && hi < M, outside = hi < -M || lo > M;
+            if (inside) { hdiEl.textContent = 'inside — accept equivalence'; hdiEl.className = 'val ok'; }
+            else if (outside) { hdiEl.textContent = 'outside — reject equivalence'; hdiEl.className = 'val ok'; }
+            else { hdiEl.textContent = 'overlaps — undecided'; hdiEl.className = 'val warn'; }
+            var bfEl = document.getElementById('byBF');
+            var bfLabel;
+            if (bf01 >= 10) bfLabel = 'strong for null';
+            else if (bf01 >= 3) bfLabel = 'moderate for null';
+            else if (bf01 > 1) bfLabel = 'leans null (anecdotal)';
+            else if (bf01 > 1 / 3) bfLabel = 'leans difference (anecdotal)';
+            else if (bf01 > 0.1) bfLabel = 'moderate for a difference';
+            else bfLabel = 'strong for a difference';
+            bfEl.textContent = (bf01 >= 100 ? bf01.toFixed(0) : bf01.toPrecision(2)) + ' — ' + bfLabel;
+            bfEl.className = 'val' + (bf01 >= 3 || bf01 <= 1 / 3 ? ' ok' : ' warn');
+            var vEl = document.getElementById('byVerdict');
+            var agree = (inside && bf01 >= 3) || (outside && bf01 <= 1 / 3);
+            if (agree) { vEl.textContent = 'tools agree'; vEl.className = 'val ok'; }
+            else if ((inside && bf01 <= 1 / 3) || (outside && bf01 >= 3)) { vEl.textContent = 'tools disagree — check the prior'; vEl.className = 'val warn'; }
+            else { vEl.textContent = 'graded, not settled'; vEl.className = 'val'; }
+        });
+        BV.sliders([
+            { id: 'byD', value: 'byDVal', fmt: function (v) { return v.toFixed(1); } },
+            { id: 'bySE', value: 'bySEVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'byTau', value: 'byTauVal', fmt: function (v) { return v.toFixed(1); } },
+            { id: 'byM', value: 'byMVal', fmt: function (v) { return v.toFixed(1); } }
+        ], BV.redraw);
+    })();
+    </script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
