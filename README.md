@@ -201,9 +201,9 @@ results = model.fit(
 )
 
 # Get contributions with uncertainty
-contributions = model.compute_contributions()
-print(contributions.mean_contributions)
-print(contributions.hdi_contributions)  # 94% credible intervals
+contributions = model.compute_counterfactual_contributions()
+print(contributions.total_contributions)
+print(contributions.contribution_hdi_low)  # lower bound of 94% HDI
 ```
 
 ### Fluent Configuration API
@@ -359,13 +359,13 @@ model = NestedMMM(
 
 results = model.fit(draws=2000, tune=1000)
 
-# Decompose effects
+# Decompose effects — returns a DataFrame
 mediation_effects = model.get_mediation_effects()
-for channel_effect in mediation_effects:
-    print(f"{channel_effect.channel}:")
-    print(f"  Direct: {channel_effect.direct_effect:.3f}")
-    print(f"  Indirect via awareness: {channel_effect.indirect_effects['brand_awareness']:.3f}")
-    print(f"  Proportion mediated: {channel_effect.proportion_mediated:.1%}")
+for _, row in mediation_effects.iterrows():
+    print(f"{row['channel']}:")
+    print(f"  Direct: {row['direct_effect']:.3f}")
+    print(f"  Indirect via awareness: {row['indirect_via_brand_awareness']:.3f}")
+    print(f"  Proportion mediated: {row['proportion_mediated']:.1%}")
 ```
 
 #### Mediator Types
@@ -451,7 +451,7 @@ model = MultivariateMMM(
 results = model.fit()
 
 # Analyze cross-effects
-cross_effects = model.get_cross_effect_summary()
+cross_effects = model.get_cross_effects_summary()
 print(cross_effects)
 
 # Get correlation matrix
@@ -542,13 +542,12 @@ halo = halo_effect("premium", "value")  # Premium brand lifts value brand
 All extended models provide structured result containers:
 
 ```python
-# Mediation decomposition
+# Mediation decomposition — returns a DataFrame
 effects = model.get_mediation_effects()
-for e in effects:
-    print(e.to_dict())
+print(effects)
 
 # Cross-effect summary with HDI
-cross_df = model.get_cross_effect_summary()
+cross_df = model.get_cross_effects_summary()
 # Returns: source, target, effect_type, mean, sd, hdi_3%, hdi_97%
 
 # Correlation matrix for multivariate outcomes
