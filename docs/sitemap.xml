@@ -123,6 +123,11 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-p-values-across-models.html</loc>
+        <lastmod>2026-07-23</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/blog-pretrends-testing.html</loc>
         <lastmod>2026-07-19</lastmod>
         <changefreq>monthly</changefreq>
@@ -179,7 +184,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/business-readiness-report.html</loc>
-        <lastmod>2026-07-10</lastmod>
+        <lastmod>2026-07-21</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -289,7 +294,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/evaluator.html</loc>
-        <lastmod>2026-07-10</lastmod>
+        <lastmod>2026-07-21</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -305,13 +310,13 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/getting-started.html</loc>
-        <lastmod>2026-07-12</lastmod>
+        <lastmod>2026-07-21</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/glossary.html</loc>
-        <lastmod>2026-07-10</lastmod>
+        <lastmod>2026-07-21</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -397,7 +402,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/platform-overview.html</loc>
-        <lastmod>2026-07-02</lastmod>
+        <lastmod>2026-07-21</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
@@ -489,7 +494,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/troubleshooting.html</loc>
-        <lastmod>2026-07-17</lastmod>
+        <lastmod>2026-07-21</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>

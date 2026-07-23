@@ -31,7 +31,7 @@ ORG_ID = f"{SITE}/#organization"
 SITE_ID = f"{SITE}/#website"
 SENTINEL = "<!-- seo:augmented (structured data + social cards) -->"
 DEFAULT_IMG = f"{SITE}/assets/mmm-framework-social-preview.png"
-TODAY = "2026-07-14"
+TODAY = "2026-07-23"
 EXCLUDE = {"TEMPLATE.html", "TEMPLATE-SIDEBAR.html", "404.html"}
 BLOG_PREFIX = "blog-"  # blog-*.html posts emit BlogPosting nodes (index: blog.html)
 
@@ -364,6 +364,7 @@ SERIES = [
         "blog-surrogate-outcomes.html",
         "blog-modeling-pitfalls.html", "blog-multiple-comparisons.html",
         "blog-p-hacking-evidence.html",
+        "blog-p-values-across-models.html",
         "blog-prior-predictive-sbc.html",
         "blog-when-sampling-fails.html",
         "blog-lindley-to-dad.html", "blog-geo-holdout-eig.html",

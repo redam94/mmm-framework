@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Smaller P-Value Is Not More Signal | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Ranking variables by p-value across two regressions compares sample sizes, noise levels, and predictor variation — not effects — and when both variables are plausibly null, the contest is exactly a coin toss. Why significance cannot measure signal or select variables, and the comparisons that can.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-p-values-across-models.html">
+    <meta property="og:title" content="A Smaller P-Value Is Not More Signal">
+    <meta property="og:description" content="Comparing p-values across regressions confuses effect size with sample size, noise, and collinearity — and between two near-null variables it is exactly a coin toss. What to compare instead.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-p-values-across-models.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="A Smaller P-Value Is Not More Signal">
+    <meta name="twitter:description" content="Comparing p-values across regressions confuses effect size with sample size, noise, and collinearity — and between two near-null variables it is exactly a coin toss. What to compare instead.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-p-values-across-models.html",
+          "name": "A Smaller P-Value Is Not More Signal | MMM Framework",
+          "description": "Ranking variables by p-value across two regressions compares sample sizes, noise levels, and predictor variation — not effects — and when both variables are plausibly null, the contest is exactly a coin toss. Why significance cannot measure signal or select variables, and the comparisons that can.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-23",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-p-values-across-models.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-p-values-across-models.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "A Smaller P-Value Is Not More Signal",
+          "datePublished": "2026-07-23",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-p-values-across-models.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-p-values-across-models.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "A Smaller P-Value Is Not More Signal",
+              "item": "https://redam94.github.io/mmm-framework/blog-p-values-across-models.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#anatomy">What a t-Statistic Is Made Of</a></li>
+                <li><a href="#difference">Significant vs. Not Is Not a Test</a></li>
+                <li><a href="#rulers">Different Regressions, Different Rulers</a></li>
+                <li><a href="#selection">Choosing Variables by Coin Toss</a></li>
+                <li><a href="#meaning">What "More Signal" Could Mean</a></li>
+                <li><a href="#instead">How to Compare Properly</a></li>
+                <li><a href="#media">What It Means for Media</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">A Smaller P-Value Is Not More Signal</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-23">July 23, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Practice</span>
+            </p>
+            <p class="lead">Every measurement team has seen the slide. Search shows p &lt; 0.001 in this year's revenue model; TV managed only p = 0.21 in last year's model; therefore search "carries more signal" and the budget should follow. The comparison feels rigorous because both numbers came from regressions, and it is meaningless for two separate reasons. First, a p-value is not a measure of how much signal a variable carries — it is a measure of how incompatible one estimate is with zero, on a scale set by that regression's own sample size, outcome noise, predictor variation, and collinearity, a scale that changes every time the model does. Comparing p-values across regressions compares the rulers, not the things measured. Second, even when the rulers happen to match, a pair of p-values still is not a comparison: the difference between "significant" and "not significant" is not itself statistically significant. And in the regime where the comparison is most tempting — two weak variables, the null entirely plausible for both — it stops being a comparison at all: which one posts the lower p-value is, exactly, a coin toss.</p>
+
+            <h2 id="anatomy">What a t-Statistic Is Made Of</h2>
+            <p>Start with what the number is actually made of, because the argument is arithmetic before it is philosophy. In a linear regression, the p-value attached to a coefficient \( \beta_j \) is a monotone transform of its t-statistic — sorting variables by p-value <em>is</em> sorting them by \( |t| \). And the t-statistic factors cleanly:</p>
+            $$ t_j \;=\; \frac{\hat\beta_j}{\widehat{\mathrm{SE}}(\hat\beta_j)}, \qquad \widehat{\mathrm{SE}}(\hat\beta_j) \;=\; \frac{\hat\sigma}{\sqrt{n}\; s_{x_j} \sqrt{1-R_j^2}}, $$
+            <p>up to a degrees-of-freedom correction, where \( \hat\sigma \) is the residual standard deviation of the outcome, \( n \) the number of observations, \( s_{x_j} \) the standard deviation of the predictor in the sample, and \( R_j^2 \) how well the <em>other</em> covariates predict this one — the collinearity term, whose reciprocal \( 1/(1-R_j^2) \) is the familiar variance inflation factor. Rearranged:</p>
+            $$ t_j \;=\; \underbrace{\frac{\hat\beta_j}{\hat\sigma}}_{\text{effect per unit of noise}} \;\times\; \underbrace{s_{x_j}}_{\text{how much } x_j \text{ varied}} \;\times\; \underbrace{\sqrt{n}}_{\text{how long you watched}} \;\times\; \underbrace{\sqrt{1-R_j^2}}_{\text{how un-collinear it was}}. $$
+
+            <div class="warning">
+                <h4>⚠️ Five dials, one effect</h4>
+                <p>The t-statistic — and therefore the p-value — moves with five quantities: the effect size \( \hat\beta_j \), the outcome noise \( \hat\sigma \), the sample size \( n \), the predictor's variation \( s_{x_j} \), and its collinearity with everything else \( R_j^2 \). Only the first is the thing you mean by "signal." The other four are properties of the <em>design</em>: what you measured, for how long, how much the variable happened to move, and what else you put in the model. Two regressions differ in all four, so the ordering of two p-values can freely invert the ordering of the two effects.</p>
+            </div>
+
+            <p>Within a single model, sorting the coefficient table by significance stars at least holds \( \hat\sigma \) and \( n \) fixed — though it still rewards the variables that happened to vary more and penalizes the collinear ones, and it still doesn't test any variable <em>against</em> another. Across two models, nothing is held fixed. A variable with double the effect can post a p-value a thousand times larger simply because its regression had a noisier outcome, a shorter window, or a co-moving covariate. The figure below makes that concrete: channel B's effect is 1.5&times; channel A's, and its p-value is worse by three orders of magnitude.</p>
+
+            <div class="interactive-box">
+                <h4>The bigger effect loses</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Two channels from two different regressions, both predictors scaled to unit variance so the coefficients are in comparable units. Channel A is fixed: effect 0.30, a three-year weekly window (n&nbsp;=&nbsp;156), quiet outcome, no collinearity &mdash; p&nbsp;&asymp;&nbsp;0.0002. Channel B starts with a <strong>bigger effect</strong> (0.45) but one year of data, a noisier outcome, and a co-flighted partner channel. Drag B's design dials and watch its p-value swing wildly while its effect never changes.</p>
+                <div class="control-row">
+                    <label>B: true-scale effect &beta;</label>
+                    <input type="range" id="f1B" min="0" max="0.6" step="0.01" value="0.45">
+                    <span class="value" id="f1BVal">0.45</span>
+                </div>
+                <div class="control-row">
+                    <label>B: sample size n</label>
+                    <input type="range" id="f1N" min="26" max="312" step="2" value="52">
+                    <span class="value" id="f1NVal">52</span>
+                </div>
+                <div class="control-row">
+                    <label>B: outcome noise &sigma;</label>
+                    <input type="range" id="f1Sig" min="0.5" max="3" step="0.05" value="2">
+                    <span class="value" id="f1SigVal">2.00</span>
+                </div>
+                <div class="control-row">
+                    <label>B: collinearity R&sup2;<sub>j</sub></label>
+                    <input type="range" id="f1Rho" min="0" max="0.95" step="0.05" value="0.6">
+                    <span class="value" id="f1RhoVal">0.60</span>
+                </div>
+                <div class="chart-container chart-themed" id="f1Chart" style="height:280px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">p (channel A)</span><span class="val ok" id="f1PA">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">p (channel B)</span><span class="val" id="f1PB">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Effect ratio B : A</span><span class="val" id="f1Ratio">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="f1Verdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Normal-approximation tests for clarity. At the defaults, B's effect is 1.5&times; A's while its p-value is ~1,500&times; larger &mdash; every bit of the reversal is design: a quarter of the data, twice the noise, and a variance inflation factor of 2.5. Nothing about the channels themselves differs in the direction the p-values suggest.</p>
+            </div>
+
+            <h2 id="difference">Significant vs. Not Is Not a Test</h2>
+            <p>Suppose the designs really were identical — same outcome, same window, same controls, same variation. Reading "A significant, B not, therefore A &gt; B" is <em>still</em> wrong, and this failure has its own literature. Gelman and Stern (2006) put it in the title of their paper: <em>the difference between "significant" and "not significant" is not itself statistically significant</em>. Their example takes ten seconds to absorb. One study estimates an effect of 25 with standard error 10 — z&nbsp;=&nbsp;2.5, comfortably significant. A second, independent study estimates 10 with standard error 10 — z&nbsp;=&nbsp;1.0, nowhere near the line. The comparison everyone wants to make is "the first effect is real, the second isn't." But the difference between the two estimates is \( 15 \pm \sqrt{10^2 + 10^2} \approx 15 \pm 14 \): barely one standard error from zero, p&nbsp;&asymp;&nbsp;0.29. The data are entirely consistent with the two effects being <em>identical</em>. The verdicts differ; the evidence for a difference is nil.</p>
+
+            <p>This is not a rare slip by careless analysts. Nieuwenhuis, Forstmann, and Wagenmakers (2011) audited every article across five top journals — <em>Science</em>, <em>Nature</em>, <em>Nature Neuroscience</em>, <em>Neuron</em>, and the <em>Journal of Neuroscience</em> — over two years. Of 157 papers that compared two effects, 78, almost exactly half, did it by comparing significance verdicts rather than testing the difference. Half of the papers, in the most selective journals in science, making a comparison that the arithmetic does not support. There is no reason to expect marketing analytics to do better, and some reason to expect worse: media models produce more coefficients per analysis and face more pressure to rank them.</p>
+
+            <div class="interactive-box">
+                <h4>The Gelman&ndash;Stern demonstration</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Two independent estimates, each with standard error 10. The curves are their sampling distributions; the shaded curve is the distribution of their <strong>difference</strong> (standard error &radic;200&nbsp;&asymp;&nbsp;14). At the defaults one estimate is significant and the other is not &mdash; yet the difference curve comfortably straddles zero. Drag the estimates and watch how far apart they must be before the <em>comparison</em> itself clears the bar.</p>
+                <div class="control-row">
+                    <label>Estimate A (SE = 10)</label>
+                    <input type="range" id="gsA" min="0" max="50" step="1" value="25">
+                    <span class="value" id="gsAVal">25</span>
+                </div>
+                <div class="control-row">
+                    <label>Estimate B (SE = 10)</label>
+                    <input type="range" id="gsB" min="0" max="50" step="1" value="10">
+                    <span class="value" id="gsBVal">10</span>
+                </div>
+                <div class="chart-container chart-themed" id="gsChart" style="height:320px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">p (A vs zero)</span><span class="val" id="gsPA">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">p (B vs zero)</span><span class="val" id="gsPB">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">p (A vs B)</span><span class="val" id="gsPD">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="gsVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At 25 vs 10, the verdicts split (&ldquo;significant&rdquo; vs &ldquo;not&rdquo;) while the test of the difference reads p&nbsp;&asymp;&nbsp;0.29 &mdash; no evidence the effects differ at all. With SE&nbsp;=&nbsp;10 on both sides, the estimates need to sit roughly 28 apart before the comparison itself is significant.</p>
+            </div>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>The test the two p-values are impersonating</summary>
+                <div class="deep-dive-body">
+                    <p>For two coefficients in the <em>same</em> regression, the difference has variance \( \mathrm{Var}(\hat\beta_1 - \hat\beta_2) = V_{11} + V_{22} - 2V_{12} \) — the covariance term matters, and with collinear predictors it can dominate. For coefficients from two models fit to the <em>same sample</em> (say, the same outcome with and without a covariate), the estimates are correlated across models, and the honest comparison needs the machinery of Clogg, Petkova, and Haritou (1995). Only for genuinely independent samples does the simple form apply, \( z = (\hat\beta_1 - \hat\beta_2)\,/\,\sqrt{\mathrm{SE}_1^2 + \mathrm{SE}_2^2} \) — the estimator Paternoster and colleagues (1998) had to remind an entire field to use. A related cousin: judging the comparison by whether two 95% confidence intervals overlap is also wrong, just in the conservative direction (Schenker and Gentleman, 2001). Overlapping intervals can hide a significant difference; split verdicts can hide an absent one. In every case the fix is the same — compute a statistic <em>for the difference</em>, with its own uncertainty.</p>
+                </div>
+            </details>
+
+            <h2 id="rulers">Different Regressions, Different Rulers</h2>
+            <p>There is a deeper problem than the missing difference test, and it is what makes the cross-model version of this mistake unfixable by a formula. A p-value has exactly one calibration: <em>under its own null hypothesis, within its own model, it is uniformly distributed</em>. That is the entire promise. The moment you carry the number outside that model, the guarantee evaporates — there is no sense in which p&nbsp;=&nbsp;0.01 "means the same thing" in a regression with 52 noisy observations as in one with 500 quiet ones. Goodman (2008) lists this among his dozen p-value misconceptions: studies with the same p-value do not provide the same evidence, and Greenland and colleagues (2016), in their catalogue of misinterpretations, single out precisely the practice this post is about — treating two results as "conflicting" because their p-values land on opposite sides of 0.05.</p>
+
+            <p>The cleanest way to feel this is to hold the true effect fixed and let the design move. Because \( t = \delta\sqrt{n} \) for a standardized effect \( \delta \), the p-value is partly a sample-size readout: a weak effect observed patiently will always out-significance a strong effect observed briefly. Push it further and you reach Lindley's (1957) paradox — at a large enough sample size, a result sitting exactly at p&nbsp;=&nbsp;0.05 is <em>evidence for the null</em> under any reasonable Bayesian reading, because the effect required to produce that p-value has shrunk to something the alternative never predicted. Same digits, opposite conclusion. A number whose meaning inverts with n cannot rank variables across models with different n.</p>
+
+            <div class="interactive-box">
+                <h4>A p-value is partly a sample-size readout</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Two true effects, one 2.5&times; stronger than the other, and the p-value each would produce as the sample grows. The strong effect is measured on a short window; the weak one on a long window. Drag the two sample sizes: the weaker signal &ldquo;wins&rdquo; whenever it is watched long enough &mdash; which is precisely why the digits cannot be compared across designs.</p>
+                <div class="control-row">
+                    <label>n for the strong effect (&delta; = 0.25)</label>
+                    <input type="range" id="szNA" min="20" max="200" step="4" value="40">
+                    <span class="value" id="szNAVal">40</span>
+                </div>
+                <div class="control-row">
+                    <label>n for the weak effect (&delta; = 0.10)</label>
+                    <input type="range" id="szNB" min="100" max="2000" step="20" value="600">
+                    <span class="value" id="szNBVal">600</span>
+                </div>
+                <div class="chart-container chart-themed" id="szChart" style="height:320px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">p, strong effect</span><span class="val" id="szPS">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">p, weak effect</span><span class="val" id="szPW">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="szVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults the 2.5&times;-weaker effect posts p&nbsp;&asymp;&nbsp;0.014 while the stronger one posts p&nbsp;&asymp;&nbsp;0.11. Ranking by p-value here ranks patience, not signal. Both curves eventually cross any threshold you like &mdash; every nonzero effect becomes &ldquo;significant&rdquo; if you wait.</p>
+            </div>
+
+            <p>And even this understates the problem, because two regressions rarely differ only in n and &sigma;. They differ in covariate sets — and conditioning changes what the coefficient <em>is</em>. A channel's coefficient adjusted for branded search answers a different causal question than the same channel's coefficient adjusted for price and seasonality alone; that is the <a href="blog-table-2-fallacy.html">Table 2 fallacy</a>, and it means that across specifications, even a formally correct difference test may be comparing answers to different questions. The p-value comparison fails twice over: the rulers differ, and so do the quantities being measured.</p>
+
+            <h2 id="selection">Choosing Variables by Coin Toss</h2>
+            <p>The most consequential place this ranking gets used is not a slide but model construction. Stepwise procedures, "drop the insignificant controls," keeping whichever of two candidate variables looks stronger — all of them use p-values to decide <em>which variables to include</em>. If a p-value measured information content, this is exactly where it would earn its keep. Instead, the procedure degenerates in the one regime where variable selection is genuinely in doubt: candidates that carry little information, where the null is entirely plausible. There, the choice is not approximately random. It is exactly random.</p>
+
+            <div class="warning">
+                <h4>⚠️ The coin-toss regime</h4>
+                <p>Recall the p-value's one calibration: <em>under its own null, it is uniformly distributed</em>. Now let that guarantee work against you. If two candidate variables are both true nulls — in the same regression or in two different ones — their p-values are two draws from Uniform(0,&nbsp;1), and for independent draws</p>
+                $$ P(p_1 \lt p_2) \;=\; \tfrac{1}{2}, $$
+                <p>exactly — no approximation, no asymptotics, and <em>regardless of how the two designs differ</em>, because uniformity is the one property both numbers share. The same symmetry holds for two exchangeable null candidates within one model. Which variable posts the lower t-statistic is a fair coin, and picking the "winner" for inclusion is flipping it. The perversity is that the coin is fairest precisely when the decision is hardest: the less information the candidates carry, the closer the contest is to pure chance — the analyst reaches for the p-value to break a tie, and the p-value breaks it by tossing a coin out of sight.</p>
+            </div>
+
+            <p>Signal buys surprisingly little edge. Suppose variable A has a genuine effect while B is pure noise, and A's design gives it an expected t-statistic of 1.0 — a real but weak signal, the everyday case for marginal controls and small channels. The probability A wins the p-value contest is only about 64%. At an expected t of 0.5 it is 54% — a coin with a nearly invisible bend. Even a variable whose expected t is 2.0, <em>averaging</em> right at the significance line, loses to pure noise about one contest in seven. A selection rule that picks the noise variable over the real one 15% to 46% of the time is not measuring information; it is sampling its own error term.</p>
+
+            <div class="interactive-box">
+                <h4>The contest, replayed 700 times</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Each dot is one replication of the same two regressions: A's p-value against B's. Dots above the diagonal are contests A "wins" (its p-value is the smaller one); below it, B wins. Set both true signals to zero and the cloud splits the diagonal exactly &mdash; a fair coin, whatever the designs. Give A a real but weak signal and watch how little the odds move. The exact win probability is computed alongside the draw.</p>
+                <div class="control-row">
+                    <label>True signal of A &nbsp;(expected t)</label>
+                    <input type="range" id="ctA" min="0" max="3" step="0.1" value="1">
+                    <span class="value" id="ctAVal">1.0</span>
+                </div>
+                <div class="control-row">
+                    <label>True signal of B &nbsp;(expected t)</label>
+                    <input type="range" id="ctB" min="0" max="3" step="0.1" value="0">
+                    <span class="value" id="ctBVal">0.0</span>
+                    <button type="button" class="viz-btn" id="ctResample">↻ Resample</button>
+                </div>
+                <div class="chart-container chart-themed" id="ctChart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">A wins, this draw</span><span class="val" id="ctWin">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">P(A wins), exact</span><span class="val" id="ctExact">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Edge over a coin</span><span class="val" id="ctEdge">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="ctVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults &mdash; a real signal with expected t&nbsp;=&nbsp;1.0 against pure noise &mdash; the real variable wins only ~64% of contests. Both signals at zero is the theorem: exactly 50&ndash;50, because two null p-values are two independent uniforms no matter what the two regressions look like.</p>
+            </div>
+
+            <p>With more than two candidates the lottery compounds into something worse: it manufactures winners. The smallest of \( m \) null p-values follows a \( \mathrm{Beta}(1, m) \) distribution, with expectation \( 1/(m+1) \) — screen twenty pure-noise candidates and the <em>best</em> p-value averages 0.048, arriving just under the threshold on schedule, from nothing. Freedman (1983) built the canonical demonstration: 100 observations, 50 regressors of pure noise, every true coefficient zero. The full regression "explains" \( R^2 \approx 0.5 \) — exactly what the overfitting arithmetic \( E[R^2] = k/(n-1) \) predicts. Drop the variables with weak t-statistics, refit the survivors, and the second-pass equation looks publishable: a highly significant overall F-test and individually significant coefficients, in data that contained no relationships at all. Every step used the p-value exactly as the significance-based selection recipe prescribes.</p>
+
+            <p>And the damage outlives the selection step. The surviving model's standard errors and p-values are computed as if the specification had been fixed in advance, when it was in fact chosen by the data — so the reported inference is invalid, generically too optimistic (Berk et al., 2013). The surviving coefficients are biased away from zero, because clearing a significance bar selects for lucky noise on top of any real effect — the <a href="blog-multiple-comparisons.html">winner's curse</a> again, now baked into the model rather than the slide. Harrell (2015) catalogues the full wreckage of stepwise selection: inflated \( R^2 \), coefficients biased away from zero, standard errors biased low, p-values without their nominal meaning. P-value selection fails coming and going — near the null the choice is a coin toss, and far from it the reporting that follows the choice is broken.</p>
+
+            <p>The alternatives are the same ones the rest of this post keeps arriving at. Choose variables on causal and substantive grounds — a control enters because the <a href="blog-table-2-fallacy-mmm.html">causal structure</a> says it must, not because a star appeared. Shrink instead of selecting: a hierarchical or regularizing prior keeps every candidate in the model and lets the data pull the weak ones toward zero, replacing a sequence of coin-toss in/out verdicts with partial pooling. And when inclusion is genuinely about predictive value, measure that directly — the cross-validated \( \Delta \)ELPD with its standard error is a comparison statistic; a pair of significance verdicts is not.</p>
+
+            <h2 id="meaning">What "More Signal" Could Mean</h2>
+            <p>"Which variable carries more signal?" is a fair question — it just needs to be asked precisely, because it has at least three defensible meanings, each with its own honest metric. None of them is a p-value.</p>
+
+            <div class="definition">
+                <h4>Definition: three versions of "more signal"</h4>
+                <p><strong>A bigger effect.</strong> If signal means causal importance, the metric is the effect size on a decision-relevant scale — an elasticity, an incremental-sales-per-dollar — with its uncertainty interval. Comparable only when the two effects are expressed in the same units against the same kind of outcome.</p>
+                <p><strong>More variance explained.</strong> If signal means "how much of this dataset's movement the variable accounts for," the metrics are partial \( R^2 \), \( \Delta R^2 \), or a Shapley-style variance decomposition that handles correlated predictors gracefully (Gr&ouml;mping, 2007). Note what these measure: a joint property of the effect <em>and</em> how much the variable moved in this sample. A variable held nearly constant explains almost nothing, however strong its causal effect.</p>
+                <p><strong>Better prediction.</strong> If signal means out-of-sample predictive value, the metric is the change in expected log predictive density from adding or dropping the variable, estimated by cross-validation with a standard error on the <em>difference</em> (Vehtari, Gelman, and Gabry, 2017) — a paired comparison on shared data, which is exactly what two marginal p-values are not.</p>
+            </div>
+
+            <p>The distinctions matter because they come apart in practice. An always-on channel can have a large causal effect (meaning one), explain almost no variance in the training window because it never moved (meaning two), and add nothing to prediction for the same reason (meaning three). A p-value collapses all three meanings into a single design-contaminated number and invites you to read whichever meaning flatters the narrative. The ASA's statement on p-values (Wasserstein and Lazar, 2016) says the quiet part as principle five: <em>a p-value does not measure the size of an effect or the importance of a result</em>. Importance-ranking is precisely the job people keep handing it.</p>
+
+            <h2 id="instead">How to Compare Properly</h2>
+            <p>If the comparison matters enough to put on a slide, it matters enough to estimate. The right tool depends on how the two variables relate to the data.</p>
+
+            <p><strong>Same dataset:</strong> put both variables in one model and estimate the contrast \( \Delta = \beta_1 - \beta_2 \) directly, with a standard error that includes the covariance — or, in a Bayesian fit, read the posterior of \( \Delta \) off the joint draws. <strong>Same sample, different specifications:</strong> the estimates are correlated across models; use the Clogg&ndash;Petkova&ndash;Haritou machinery rather than pretending independence. <strong>Genuinely independent datasets:</strong> the two-sample z-statistic on the difference — and better still, a hierarchical model that treats both estimates as draws from a common structure, which partial-pools the comparison and damps the <a href="blog-multiple-comparisons.html">winner's-curse exaggeration</a> that raw pairwise contrasts inherit. <strong>Different outcomes:</strong> translate both effects onto one decision scale first — per-dollar incremental revenue, say — or concede that no comparison exists. A p-value from a revenue model and a p-value from an awareness model share no scale on which "smaller" means anything.</p>
+
+            <pre><code># illustrative
+# WRONG: rank "signal" by stars from two separate fits
+m1 = fit(revenue ~ search + controls_2024)     # search: p = 0.001
+m2 = fit(awareness ~ tv + controls_2023)       # tv:     p = 0.21
+# "search matters more" — this compares rulers, not effects
+
+# RIGHT (same data): one model, estimate the contrast itself
+m = fit(kpi ~ search + tv + controls)
+diff    = m.beta["search"] - m.beta["tv"]
+se_diff = sqrt(V["search","search"] + V["tv","tv"] - 2 * V["search","tv"])
+
+# RIGHT (independent samples): test the difference, not the verdicts
+z = (b1 - b2) / sqrt(se1**2 + se2**2)
+
+# RIGHT (Bayesian): the comparison is one line of the joint posterior
+p_search_beats_tv = mean(draws["beta_search"] - draws["beta_tv"] > 0)</code></pre>
+
+            <p>The Bayesian version deserves the emphasis it gets in this framework, because it makes the correct comparison the <em>easy</em> one. A joint posterior over all channels prices in every covariance automatically; "does search beat TV, and by how much?" is a subtraction over draws, reported as a distribution. There is no intermediate step where each channel gets a lone verdict against zero, so there is nothing to launder into a ranking.</p>
+
+            <h2 id="media">What It Means for Media</h2>
+            <p>Media measurement is unusually exposed to this mistake because it is unusually fond of cross-model comparisons. This year's MMM against last year's. The agency's model against the in-house one. Brand A's TV coefficient against brand B's. A channel's significance in the revenue model against another's in the awareness model. Every one of these crosses a boundary — different windows (n), different KPIs (&sigma;), different control sets (different estimands) — across which p-values do not travel.</p>
+
+            <p>Two design terms from the t-statistic's anatomy do disproportionate damage in MMMs. The first is \( s_{x_j} \), the predictor's variation: an always-on channel with near-constant spend has almost no variance in the training window, so its standard error explodes and its p-value is large <em>no matter what the channel truly does</em>. Its "insignificance" is a fact about the media plan, not the media. The cure is designed variation — flighting the channel through deliberate levels, or <a href="blog-calibrating-mmm-experiments.html">calibrating to a geo experiment</a> that supplies the variation the plan never did. The second is \( R_j^2 \): channels that flight together — a launch week that lights up TV, social, and display at once — inflate one another's variance until every one of them reads "not significant," even when all of them work. Reading those p-values as "little signal in each channel" gets the diagnosis exactly backwards: the data contain good evidence about the channels' <em>sum</em> and poor evidence about the split, which is an argument for de-correlating future spend, not for cutting the channels.</p>
+
+            <p>This framework's posture follows from the arithmetic. Channels are estimated jointly, so any comparison between them is a posterior contrast with the covariance priced in — reported as "the probability search out-earns TV per incremental dollar, with the interval," not as a pair of verdicts. Effects live on the ROI scale, where two channels' numbers share units by construction. And when a comparison is genuinely under-identified — collinear flights, constant spend — the honest output is a wide contrast interval and a <a href="blog-continuous-learning-interactions.html">recommendation for the experiment</a> that would narrow it, rather than a significance table whose ordering quietly re-ranks the design. The p-value's cousin failures — <a href="blog-p-hacking-evidence.html">how little evidence one carries</a>, and <a href="blog-multiple-comparisons.html">what selecting the best of many does to it</a> — are covered in companion posts; this one's lesson is narrower and, in practice, violated more often: whatever a single p-value is worth, <em>two of them from two regressions are not a comparison</em>.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>A p-value is a monotone readout of \( t = (\hat\beta/\hat\sigma) \cdot s_x \cdot \sqrt{n} \cdot \sqrt{1-R_j^2} \) — one part effect, four parts design. Across two regressions, the design terms differ freely, so the p-value ordering can invert the effect ordering.</li>
+                    <li>Even under identical designs, "A significant, B not" is not evidence that A and B differ: the difference between significant and not significant is not itself significant (Gelman&ndash;Stern). Half of the papers in top neuroscience journals that made this comparison made it wrong.</li>
+                    <li>P-values are calibrated only within their own model; the same digits carry different evidence at different sample sizes (Goodman, Lindley). There is no scale on which p-values from different regressions are comparable.</li>
+                    <li>When both variables are plausibly null, the contest is exactly a fair coin: two null p-values are independent Uniform(0,1) draws, so \( P(p_1 \lt p_2) = 1/2 \) regardless of the designs. A real signal with expected t = 1.0 beats pure noise only ~64% of the time; even expected t = 2.0 loses one contest in seven.</li>
+                    <li>Selecting variables by significance therefore selects noise: the best of 20 null p-values averages 0.048 (a Beta(1, m) order statistic), Freedman's 50-noise-variable regression yields a "publishable" model after screening, and post-selection standard errors and p-values are invalid anyway (Berk et al., Harrell). Choose variables causally, shrink instead of selecting, and judge predictive value by ΔELPD.</li>
+                    <li>"More signal" has three honest meanings — bigger effect, more variance explained, better prediction — with three honest metrics: effect sizes with intervals on a shared scale, partial \( R^2 \)/Shapley decompositions, and \( \Delta \)ELPD with its standard error. None is a p-value.</li>
+                    <li>To compare two variables, estimate the comparison: a contrast in a joint model, a Clogg-style cross-model test, a two-sample z on the difference, or the posterior of \( \beta_1 - \beta_2 \).</li>
+                    <li>In MMMs, "not significant" is often a fact about the plan — constant spend, co-flighted channels — not the channel. The fix is designed variation and joint posterior contrasts, not a significance ranking.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Gelman, A., &amp; Stern, H. (2006). <em>The Difference Between "Significant" and "Not Significant" Is Not Itself Statistically Significant</em>. The American Statistician, 60(4).</li>
+                <li>Nieuwenhuis, S., Forstmann, B. U., &amp; Wagenmakers, E.-J. (2011). <em>Erroneous Analyses of Interactions in Neuroscience: A Problem of Significance</em>. Nature Neuroscience, 14(9).</li>
+                <li>Wasserstein, R. L., &amp; Lazar, N. A. (2016). <em>The ASA Statement on p-Values: Context, Process, and Purpose</em>. The American Statistician, 70(2).</li>
+                <li>Greenland, S., Senn, S. J., Rothman, K. J., Carlin, J. B., Poole, C., Goodman, S. N., &amp; Altman, D. G. (2016). <em>Statistical Tests, P Values, Confidence Intervals, and Power: A Guide to Misinterpretations</em>. European Journal of Epidemiology, 31(4).</li>
+                <li>Goodman, S. N. (2008). <em>A Dirty Dozen: Twelve P-Value Misconceptions</em>. Seminars in Hematology, 45(3).</li>
+                <li>Lindley, D. V. (1957). <em>A Statistical Paradox</em>. Biometrika, 44(1/2).</li>
+                <li>Freedman, D. A. (1983). <em>A Note on Screening Regression Equations</em>. The American Statistician, 37(2).</li>
+                <li>Berk, R., Brown, L., Buja, A., Zhang, K., &amp; Zhao, L. (2013). <em>Valid Post-Selection Inference</em>. The Annals of Statistics, 41(2).</li>
+                <li>Harrell, F. E. Jr. (2015). <em>Regression Modeling Strategies</em> (2nd ed., &sect;4.3 on stepwise selection). Springer.</li>
+                <li>Clogg, C. C., Petkova, E., &amp; Haritou, A. (1995). <em>Statistical Methods for Comparing Regression Coefficients Between Models</em>. American Journal of Sociology, 100(5).</li>
+                <li>Paternoster, R., Brame, R., Mazerolle, P., &amp; Piquero, A. (1998). <em>Using the Correct Statistical Test for the Equality of Regression Coefficients</em>. Criminology, 36(4).</li>
+                <li>Schenker, N., &amp; Gentleman, J. F. (2001). <em>On Judging the Significance of Differences by Examining the Overlap Between Confidence Intervals</em>. The American Statistician, 55(3).</li>
+                <li>Gr&ouml;mping, U. (2007). <em>Estimators of Relative Importance in Linear Regression Based on Variance Decomposition</em>. The American Statistician, 61(2).</li>
+                <li>Vehtari, A., Gelman, A., &amp; Gabry, J. (2017). <em>Practical Bayesian Model Evaluation Using Leave-One-Out Cross-Validation and WAIC</em>. Statistics and Computing, 27(5).</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        function p2(z) { return 2 * (1 - BV.normCdf(Math.abs(z))); }
+        function fmtP(p) {
+            if (p < 0.0001) return '< 0.0001';
+            if (p < 0.01) return p.toFixed(4);
+            if (p < 0.1) return p.toFixed(3);
+            return p.toFixed(2);
+        }
+
+        // --- Figure 1: anatomy of the t-statistic (forest plot) ---
+        var A = { beta: 0.30, n: 156, sigma: 1.0, rho2: 0 };
+        function seOf(sigma, n, rho2) { return sigma / (Math.sqrt(n) * Math.sqrt(1 - rho2)); }
+        BV.register(function () {
+            var p = BV.palette();
+            var bB = parseFloat(document.getElementById('f1B').value);
+            var nB = parseInt(document.getElementById('f1N').value, 10);
+            var sB = parseFloat(document.getElementById('f1Sig').value);
+            var rB = parseFloat(document.getElementById('f1Rho').value);
+
+            var seA = seOf(A.sigma, A.n, A.rho2), seB = seOf(sB, nB, rB);
+            var pA = p2(A.beta / seA), pB = p2(bB / seB);
+            var ciA = 1.96 * seA, ciB = 1.96 * seB;
+
+            var xmin = Math.min(-0.35, bB - ciB - 0.1);
+            var xmax = Math.max(1.0, bB + ciB + 0.1);
+            var traces = [
+                {
+                    type: 'scatter', mode: 'markers', x: [A.beta], y: ['Channel A'],
+                    error_x: { type: 'constant', value: ciA, color: p.accent, thickness: 2.5, width: 7 },
+                    marker: { color: p.accent, size: 13, line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: 'β = %{x:.2f} ± ' + ciA.toFixed(2) + '<extra>A</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', x: [bB], y: ['Channel B'],
+                    error_x: { type: 'constant', value: ciB, color: p.primary, thickness: 2.5, width: 7 },
+                    marker: { color: p.primary, size: 13, line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: 'β = %{x:.2f} ± ' + ciB.toFixed(2) + '<extra>B</extra>'
+                }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'coefficient (both predictors unit-variance)', range: [xmin, xmax], zeroline: false },
+                yaxis: { automargin: true, categoryorder: 'array', categoryarray: ['Channel B', 'Channel A'] },
+                margin: { l: 90, r: 20, t: 26, b: 48 }, showlegend: false,
+                shapes: [{ type: 'line', x0: 0, x1: 0, y0: -0.5, y1: 1.5, line: { color: p.muted, width: 1, dash: 'dot' } }],
+                annotations: [
+                    { x: A.beta, y: 'Channel A', yshift: 22, text: 'p = ' + fmtP(pA), showarrow: false, font: { size: 11, color: p.accent } },
+                    { x: bB, y: 'Channel B', yshift: 22, text: 'p = ' + fmtP(pB), showarrow: false, font: { size: 11, color: p.primary } }
+                ]
+            });
+            Plotly.react('f1Chart', traces, layout, BV.config);
+
+            document.getElementById('f1PA').textContent = fmtP(pA);
+            var pbEl = document.getElementById('f1PB');
+            pbEl.textContent = fmtP(pB);
+            pbEl.className = 'val' + (pB > 0.05 ? ' warn' : ' ok');
+            document.getElementById('f1Ratio').textContent = A.beta > 0 ? (bB / A.beta).toFixed(1) + ' : 1' : '—';
+            var v = document.getElementById('f1Verdict');
+            if (bB > A.beta && pB > pA) { v.textContent = 'bigger effect, worse p'; v.className = 'val warn'; }
+            else if (bB < A.beta && pB < pA) { v.textContent = 'smaller effect, better p'; v.className = 'val warn'; }
+            else { v.textContent = 'orderings agree (luck)'; v.className = 'val'; }
+        });
+        BV.sliders([
+            { id: 'f1B', value: 'f1BVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'f1N', value: 'f1NVal', fmt: function (v) { return String(v); } },
+            { id: 'f1Sig', value: 'f1SigVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'f1Rho', value: 'f1RhoVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+
+        // --- Figure 2: Gelman–Stern (significant vs not is not a test) ---
+        BV.register(function () {
+            var p = BV.palette();
+            var SE = 10, estA = parseFloat(document.getElementById('gsA').value);
+            var estB = parseFloat(document.getElementById('gsB').value);
+            var d = estA - estB, seD = Math.SQRT2 * SE;
+            var pA = p2(estA / SE), pB = p2(estB / SE), pD = p2(d / seD);
+
+            function pdf(xs, mu, sd) {
+                return xs.map(function (x) {
+                    return Math.exp(-0.5 * Math.pow((x - mu) / sd, 2)) / (sd * Math.sqrt(2 * Math.PI));
+                });
+            }
+            var xs = BV.linspace(-45, 75, 260);
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: xs, y: pdf(xs, estA, SE), name: 'A: ' + estA + ' ± 10', line: { color: p.accent, width: 2.5 }, hoverinfo: 'name' },
+                { type: 'scatter', mode: 'lines', x: xs, y: pdf(xs, estB, SE), name: 'B: ' + estB + ' ± 10', line: { color: p.primary, width: 2.5 }, hoverinfo: 'name' },
+                { type: 'scatter', mode: 'lines', x: xs, y: pdf(xs, d, seD), name: 'difference A − B', line: { color: p.warning, width: 2.5 }, fill: 'tozeroy', fillcolor: BV.band(p.warning, 0.18), hoverinfo: 'name' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'estimate', range: [-45, 75] },
+                yaxis: { title: 'sampling density', showticklabels: false },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 52, r: 20, t: 34, b: 48 },
+                shapes: [{ type: 'line', x0: 0, x1: 0, y0: 0, y1: 0.042, line: { color: p.muted, width: 1.5, dash: 'dot' } }],
+                annotations: [{ x: 0, y: 0.042, yanchor: 'bottom', text: 'zero', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('gsChart', traces, layout, BV.config);
+
+            function verdictify(el, pv) {
+                el.textContent = fmtP(pv) + (pv < 0.05 ? ' ✓' : ' ✗');
+                el.className = 'val' + (pv < 0.05 ? ' ok' : ' warn');
+            }
+            verdictify(document.getElementById('gsPA'), pA);
+            verdictify(document.getElementById('gsPB'), pB);
+            var pdEl = document.getElementById('gsPD');
+            pdEl.textContent = fmtP(pD);
+            pdEl.className = 'val' + (pD < 0.05 ? ' ok' : ' warn');
+            var v = document.getElementById('gsVerdict');
+            var split = (pA < 0.05) !== (pB < 0.05);
+            if (split && pD >= 0.05) { v.textContent = 'verdicts split, no difference'; v.className = 'val warn'; }
+            else if (pD < 0.05) { v.textContent = 'a real comparison'; v.className = 'val ok'; }
+            else { v.textContent = 'nothing distinguishable'; v.className = 'val'; }
+        });
+        BV.sliders([
+            { id: 'gsA', value: 'gsAVal', fmt: function (v) { return String(v); } },
+            { id: 'gsB', value: 'gsBVal', fmt: function (v) { return String(v); } }
+        ], BV.redraw);
+
+        // --- Figure 3: p as a sample-size readout ---
+        var D_STRONG = 0.25, D_WEAK = 0.10;
+        BV.register(function () {
+            var p = BV.palette();
+            var nA = parseInt(document.getElementById('szNA').value, 10);
+            var nB = parseInt(document.getElementById('szNB').value, 10);
+            var logNs = BV.linspace(Math.log10(20), Math.log10(2000), 160);
+            var ns = logNs.map(function (l) { return Math.pow(10, l); });
+            function curve(delta) {
+                return ns.map(function (n) { return Math.max(p2(delta * Math.sqrt(n)), 1e-16); });
+            }
+            var pS = p2(D_STRONG * Math.sqrt(nA)), pW = p2(D_WEAK * Math.sqrt(nB));
+            var traces = [
+                { type: 'scatter', mode: 'lines', x: ns, y: curve(D_STRONG), name: 'strong effect (δ = 0.25)', line: { color: p.accent, width: 2.5 }, hovertemplate: 'n=%{x:.0f}<br>p=%{y:.2}<extra>strong</extra>' },
+                { type: 'scatter', mode: 'lines', x: ns, y: curve(D_WEAK), name: 'weak effect (δ = 0.10)', line: { color: p.primary, width: 2.5 }, hovertemplate: 'n=%{x:.0f}<br>p=%{y:.2}<extra>weak</extra>' },
+                { type: 'scatter', mode: 'markers', x: [nA], y: [Math.max(pS, 1e-5)], showlegend: false, marker: { color: p.accent, size: 13, symbol: 'diamond', line: { color: p.surface, width: 1.5 } }, hovertemplate: 'n=%{x:.0f}<br>p=' + fmtP(pS) + '<extra>strong, measured</extra>' },
+                { type: 'scatter', mode: 'markers', x: [nB], y: [Math.max(pW, 1e-5)], showlegend: false, marker: { color: p.primary, size: 13, symbol: 'diamond', line: { color: p.surface, width: 1.5 } }, hovertemplate: 'n=%{x:.0f}<br>p=' + fmtP(pW) + '<extra>weak, measured</extra>' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'sample size n (log scale)', type: 'log', range: [Math.log10(20), Math.log10(2000)] },
+                yaxis: { title: 'two-sided p-value (log scale)', type: 'log', range: [-5, 0], exponentformat: 'power' },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 62, r: 20, t: 34, b: 48 },
+                shapes: [{ type: 'line', x0: 20, x1: 2000, y0: 0.05, y1: 0.05, line: { color: p.danger, width: 1, dash: 'dash' } }],
+                annotations: [{ x: Math.log10(24), y: Math.log10(0.05), xanchor: 'left', yanchor: 'bottom', text: 'p = 0.05', showarrow: false, font: { size: 11, color: p.danger } }]
+            });
+            Plotly.react('szChart', traces, layout, BV.config);
+
+            document.getElementById('szPS').textContent = fmtP(pS);
+            var wEl = document.getElementById('szPW');
+            wEl.textContent = fmtP(pW);
+            var v = document.getElementById('szVerdict');
+            if (pW < pS) { v.textContent = 'weaker effect, smaller p'; v.className = 'val warn'; }
+            else { v.textContent = 'orderings agree (this time)'; v.className = 'val'; }
+        });
+        BV.sliders([
+            { id: 'szNA', value: 'szNAVal', fmt: function (v) { return String(v); } },
+            { id: 'szNB', value: 'szNBVal', fmt: function (v) { return String(v); } }
+        ], BV.redraw);
+
+        // --- Figure 4: the variable-selection coin toss ---
+        function phiPdf(x) { return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI); }
+        function pWin(tA, tB) {
+            // P(|N(tA,1)| > |N(tB,1)|) by numeric integration over b = |z_B|
+            var steps = 800, hi = 9, h = hi / steps, tot = 0;
+            for (var i = 0; i < steps; i++) {
+                var b = (i + 0.5) * h;
+                var fB = phiPdf(b - tB) + phiPdf(b + tB);
+                var sA = 1 - (BV.normCdf(b - tA) - BV.normCdf(-b - tA));
+                tot += fB * sA * h;
+            }
+            return tot;
+        }
+        var ctSeed = 11;
+        BV.register(function () {
+            var p = BV.palette();
+            var tA = parseFloat(document.getElementById('ctA').value);
+            var tB = parseFloat(document.getElementById('ctB').value);
+            var rng = BV.mulberry32(ctSeed);
+            var SIMS = 700, xW = [], yW = [], xL = [], yL = [], wins = 0;
+            for (var i = 0; i < SIMS; i++) {
+                var pA = p2(tA + BV.randn(rng)), pB = p2(tB + BV.randn(rng));
+                if (pA < pB) { wins++; xW.push(pA); yW.push(pB); }
+                else { xL.push(pA); yL.push(pB); }
+            }
+            var traces = [
+                { type: 'scatter', mode: 'markers', x: xW, y: yW, name: 'A wins', marker: { color: BV.band(p.accent, 0.75), size: 5 }, hoverinfo: 'skip' },
+                { type: 'scatter', mode: 'markers', x: xL, y: yL, name: 'B wins', marker: { color: BV.band(p.primary, 0.75), size: 5 }, hoverinfo: 'skip' }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'p-value of A', range: [0, 1], dtick: 0.25 },
+                yaxis: { title: 'p-value of B', range: [0, 1], dtick: 0.25 },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 58, r: 20, t: 34, b: 48 },
+                shapes: [{ type: 'line', x0: 0, y0: 0, x1: 1, y1: 1, line: { color: p.muted, width: 1.5, dash: 'dash' } }],
+                annotations: [
+                    { x: 0.8, y: 0.16, text: 'B more “significant”', showarrow: false, font: { size: 11, color: p.primary } },
+                    { x: 0.2, y: 0.9, text: 'A more “significant”', showarrow: false, font: { size: 11, color: p.accent } }
+                ]
+            });
+            Plotly.react('ctChart', traces, layout, BV.config);
+
+            var exact = pWin(tA, tB);
+            document.getElementById('ctWin').textContent = Math.round(100 * wins / SIMS) + '%';
+            document.getElementById('ctExact').textContent = (100 * exact).toFixed(1) + '%';
+            var edge = 100 * (exact - 0.5);
+            document.getElementById('ctEdge').textContent = (edge >= 0 ? '+' : '') + edge.toFixed(1) + ' pp';
+            var v = document.getElementById('ctVerdict');
+            var dev = Math.abs(exact - 0.5);
+            if (dev < 0.02) { v.textContent = 'a fair coin'; v.className = 'val warn'; }
+            else if (dev < 0.15) { v.textContent = 'a barely loaded coin'; v.className = 'val warn'; }
+            else if (dev < 0.3) { v.textContent = 'a biased coin'; v.className = 'val'; }
+            else { v.textContent = 'a real ranking'; v.className = 'val ok'; }
+        });
+        document.getElementById('ctResample').addEventListener('click', function () {
+            ctSeed = (ctSeed * 1664525 + 1013904223) >>> 0;
+            BV.redraw();
+        });
+        BV.sliders([
+            { id: 'ctA', value: 'ctAVal', fmt: function (v) { return v.toFixed(1); } },
+            { id: 'ctB', value: 'ctBVal', fmt: function (v) { return v.toFixed(1); } }
+        ], BV.redraw);
+    })();
+    </script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
