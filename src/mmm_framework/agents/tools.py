@@ -7729,6 +7729,8 @@ TOOLS = [
     run_cross_validation,
     # Simulation-based calibration (inference-engine calibration)
     *[t for t in CAUSAL_TOOLS if t.name == "run_calibration_check"],
+    # Interval-coverage check (does the 90% interval cover 90%?)
+    *[t for t in CAUSAL_TOOLS if t.name == "run_coverage_check"],
     run_budget_scenario,
     run_marginal_analysis,
     # Decision layer: learnings -> budget + next experiment

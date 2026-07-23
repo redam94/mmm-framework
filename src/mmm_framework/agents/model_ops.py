@@ -3504,6 +3504,201 @@ def simulation_based_calibration(
 simulation_based_calibration.allow_unfitted = True
 
 
+def recovery_coverage_check(
+    mmm: Any,
+    results: Any = None,
+    *,
+    spec: dict | None = None,
+    dataset_path: str | None = None,
+    n_sims: int = 24,
+    L: int = 150,
+    sampler: str = "numpyro",
+    truth: str = "auto",
+    level: float = 0.9,
+    seed: int = 0,
+    params: list[str] | None = None,
+    max_render: int = 3,
+) -> dict:
+    """Interval-coverage check: does the X% credible interval contain the truth
+    X% of the time? Fixes every parameter at a known θ* (the fitted posterior
+    mean, or a prior draw pre-fit), simulates ``n_sims`` datasets from the model
+    at θ*, refits each, and counts how often each reported interval contains the
+    truth — for scalar parameters AND per-channel contributions. Decomposes any
+    failure into bias (posterior location off) vs overconfidence (intervals too
+    narrow).
+
+    EXPENSIVE: one refit per simulation (like SBC). Under-coverage here is a
+    mechanical problem (approximate fit, sampler, over-tight priors); this check
+    deliberately CANNOT see real-world misspecification — data are simulated
+    from the model itself. Deterministic markdown + coverage charts + a
+    failure-mode guide; the LLM interpretation is added host-side."""
+    from mmm_framework.diagnostics.coverage import (
+        failure_mode_guide,
+        run_recovery_coverage,
+    )
+    from mmm_framework.validation.charts import diagnostics as vch
+
+    model = mmm
+    fitted = model is not None and getattr(model, "_trace", None) is not None
+    resolved_truth = truth
+    if truth == "auto":
+        resolved_truth = "posterior_mean" if fitted else "prior"
+    if model is None or (resolved_truth == "prior" and spec and dataset_path):
+        try:
+            from mmm_framework.agents.fitting import build_model
+
+            model = build_model(spec, dataset_path)
+        except Exception as e:  # noqa: BLE001
+            if model is None:
+                return _err(f"Could not build the model for the coverage check: {e}")
+    if model is None:
+        return _err(
+            "The coverage check needs a fitted model (truth=posterior_mean) or "
+            "the active spec + dataset (truth=prior). Configure and/or fit first."
+        )
+    if resolved_truth == "posterior_mean" and not fitted:
+        return _err(
+            "truth='posterior_mean' needs a fitted model. Fit first, or pass "
+            "truth='prior' to check coverage at a prior draw."
+        )
+
+    approximate = bool(getattr(results, "approximate", False))
+
+    try:
+        cov = run_recovery_coverage(
+            model,
+            truth=resolved_truth,
+            n_sims=int(n_sims),
+            sampler=str(sampler),
+            L=int(L),
+            seed=int(seed),
+            params=params,
+        )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Recovery coverage run failed: {e}")
+
+    dash = cov.to_dashboard()
+    lv = cov.headline_level
+    n_under = sum(
+        1
+        for t in cov.targets
+        if (c := t.coverage_at(lv)) is not None and c.verdict == "under"
+    )
+    verdict = (
+        f"✅ no demonstrable under-coverage at the {lv:.0%} level"
+        if cov.all_nominal
+        else f"⚠️ {n_under}/{len(cov.targets)} target(s) under-cover at the {lv:.0%} level"
+    )
+    lines = [
+        "### Interval coverage (recovery at a fixed truth)",
+        "",
+        f"**{verdict}** — {cov.n_sims_effective} simulate→refit rounds at "
+        f"truth={cov.truth_source}, sampler={cov.sampler}.",
+        "",
+    ]
+    if approximate:
+        lines.append(
+            "> **Your current fit is approximate (MAP/ADVI/Pathfinder)** — its "
+            "uncertainty is not calibrated *by construction*, which alone can "
+            "turn a nominal 90% interval into ~50% coverage. This check refits "
+            f"with `{cov.sampler}`; re-fit the production model with NUTS "
+            "before trusting any interval.\n"
+        )
+    worst = cov.worst()
+    if worst is not None and (wc := worst.coverage_at(lv)) is not None:
+        lines.append(
+            f"Worst target: **{worst.name}** — {wc.coverage:.0%} of {lv:.0%} "
+            f"intervals covered the truth [{wc.ci_low:.0%}–{wc.ci_high:.0%}]"
+            + (f"; diagnosis: {worst.verdict}." if worst.verdict != "ok" else ".")
+        )
+        lines.append("")
+    for c in cov.caveats:
+        lines.append(f"- ⚠ {c}")
+    lines.append("")
+    lines.append(failure_mode_guide())
+    content = "\n".join(lines)
+
+    ordered = sorted(
+        cov.targets,
+        key=lambda t: (c.coverage if (c := t.coverage_at(lv)) else 1.0),
+    )
+    plots = []
+    try:
+        plots.append(
+            {
+                "title": f"Empirical coverage at {lv:.0%}",
+                "figure": _fig_json(
+                    vch.create_recovery_coverage_chart(
+                        [t.to_dashboard() for t in ordered], level=lv
+                    )
+                ),
+            }
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    for t in ordered[: int(max_render)]:
+        try:
+            plots.append(
+                {
+                    "title": f"Coverage calibration — {t.name}",
+                    "figure": _fig_json(
+                        vch.create_coverage_calibration_curve(t.to_dashboard())
+                    ),
+                }
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+    import pandas as _pd
+
+    rows = []
+    for t in ordered:
+        row: dict[str, Any] = {"target": t.name, "kind": t.kind}
+        for st in t.levels:
+            row[f"cov@{st.level:.0%}"] = round(st.coverage, 3)
+        c90 = t.coverage_at(lv)
+        if c90 is not None:
+            row["mc_interval"] = f"[{c90.ci_low:.0%}, {c90.ci_high:.0%}]"
+        row["bias_z"] = round(t.bias_z, 2)
+        row["z_spread"] = round(t.z_spread, 2)
+        row["verdict"] = t.verdict
+        rows.append(row)
+
+    out = _ok(content, {"coverage": dash})
+    out["tables"] = [
+        df_to_table_json(
+            _pd.DataFrame(rows),
+            title="Interval coverage by target",
+            source="recovery_coverage_check",
+            group="validation",
+        )
+    ]
+    out["plots"] = plots
+    out["assumption"] = {
+        "key": "coverage_check",
+        "value": dash,
+        "rationale": (
+            "Recovery coverage at a fixed truth (simulate→refit). "
+            + (
+                "No demonstrable under-coverage — reported intervals behave "
+                "nominally under the model's own assumptions."
+                if cov.all_nominal
+                else "Under-coverage detected — see per-target verdicts; do not "
+                "take reported credible intervals at face value."
+            )
+        ),
+        "category": "other",
+        "change_note": (
+            f"n_sims={int(n_sims)}, truth={cov.truth_source}, sampler={sampler}"
+        ),
+    }
+    return out
+
+
+# The prior-truth path runs pre-fit (builds from the active spec, like SBC).
+recovery_coverage_check.allow_unfitted = True
+
+
 def residual_diagnostics(mmm: Any, results: Any = None) -> dict:
     """Residual diagnostics: autocorrelation (Durbin-Watson / Ljung-Box),
     heteroscedasticity (Breusch-Pagan) and normality (Shapiro / Jarque-Bera) of
@@ -4036,6 +4231,7 @@ OPS = {
     "check_pacing": check_pacing,
     "posterior_predictive_checks": posterior_predictive_checks,
     "simulation_based_calibration": simulation_based_calibration,
+    "recovery_coverage_check": recovery_coverage_check,
     "residual_diagnostics": residual_diagnostics,
     "channel_diagnostics": channel_diagnostics,
     "refutation_suite": refutation_suite,

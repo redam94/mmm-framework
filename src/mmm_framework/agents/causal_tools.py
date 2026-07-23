@@ -896,6 +896,68 @@ def run_calibration_check(
     return _modelop_command(res, state or {}, tool_call_id, persist_check="sbc")
 
 
+@tool
+def run_coverage_check(
+    n_sims: int = 16,
+    posterior_draws: int = 150,
+    sampler: str = "numpyro",
+    truth: str = "auto",
+    config: InjectedConfig = None,
+    state: Annotated[dict, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Check interval COVERAGE: does the 90% credible interval contain the true
+    value 90% of the time? Call this when the user asks about coverage, whether
+    the HDIs/credible intervals are too narrow, why a true value fell outside
+    an interval, or reports something like "my 90% interval only covered 50%".
+
+    Fixes every parameter at a known truth θ* (the fitted posterior mean, or a
+    prior draw before fitting), simulates `n_sims` datasets from the model at
+    θ*, refits each, and counts how often each reported interval contains the
+    truth — for parameters AND per-channel contributions — with Monte-Carlo
+    error bars. Decomposes failures into bias (posterior location off) vs
+    overconfidence (intervals too narrow), and returns a failure-mode guide
+    (approximate fits, over-tight priors, misspecification, confounding,
+    estimand mismatch).
+
+    Note the scope: data are simulated FROM the model, so this detects
+    mechanical/inference problems, NOT real-world misspecification — pair it
+    with `run_refutation_suite` / posterior predictive checks for that.
+    EXPENSIVE — one refit per simulation; keep `n_sims` modest in chat (the
+    Validation tab's Coverage job runs a thorough version in the background).
+
+    Args:
+        n_sims: simulate→refit rounds (16 flags gross failures; ≥40 for a
+            sharper read).
+        posterior_draws: posterior draws kept per refit.
+        sampler: refit sampler — "numpyro" (NUTS, judge the real posterior) or
+            "advi" (fast, but ADVI itself under-covers).
+        truth: "auto" (posterior mean if fitted, else prior draw),
+            "posterior_mean", or "prior".
+    """
+    from mmm_framework.agents.tools import _KERNELS, _modelop_command, _normalized_spec
+    from mmm_framework.agents.runtime import set_current_thread, get_current_thread
+
+    set_current_thread(_thread_id_from(config))
+    spec = _normalized_spec((state or {}).get("model_spec"))
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "recovery_coverage_check",
+        {
+            "n_sims": int(n_sims),
+            "L": int(posterior_draws),
+            "sampler": str(sampler),
+            "truth": str(truth),
+            "spec": spec if spec.get("kpi") else None,
+            "dataset_path": (state or {}).get("dataset_path"),
+        },
+    )
+    _assumption = res.pop("assumption", None) if isinstance(res, dict) else None
+    tid = _thread_id_from(config)
+    if _assumption and tid and not res.get("error"):
+        sessions_store.record_assumption(thread_id=tid, **_assumption)
+    return _modelop_command(res, state or {}, tool_call_id, persist_check="coverage")
+
+
 # ── 7. Leave-one-out decomposition (Step 8, sensitivity) ─────────────────────
 
 
@@ -1286,6 +1348,7 @@ CAUSAL_TOOLS = [
     mark_workflow_step,
     prior_predictive_check,
     run_calibration_check,
+    run_coverage_check,
     leave_one_out_decomposition,
     define_analysis_plan,
     check_spec_divergence,

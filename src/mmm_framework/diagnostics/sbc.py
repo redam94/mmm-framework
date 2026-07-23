@@ -49,6 +49,8 @@ from typing import Any, Callable
 import numpy as np
 from scipy import stats
 
+from .coverage import CoverageLevelStat, coverage_from_ranks
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Pure statistics (no PyMC) — directly unit-tested on a conjugate model
 # ─────────────────────────────────────────────────────────────────────────────
@@ -268,6 +270,16 @@ class SBCParamStat:
     dispersion_z: float
     miscalibration: float
     calibrated: bool
+    # Empirical central-interval coverage read off the ranks (user language for
+    # the same information the histogram carries): "the 90% interval covered
+    # the truth X% of the time [MC error]".
+    coverage: list[CoverageLevelStat] = field(default_factory=list)
+
+    def coverage_at(self, level: float) -> CoverageLevelStat | None:
+        for st in self.coverage:
+            if abs(st.level - level) < 1e-9:
+                return st
+        return None
 
     def to_dashboard(self, *, max_ranks: int = 0) -> dict[str, Any]:
         """JSON/msgpack-safe summary (numpy scalars cast to float/int)."""
@@ -288,6 +300,7 @@ class SBCParamStat:
             "dispersion_z": float(self.dispersion_z),
             "miscalibration": float(self.miscalibration),
             "calibrated": bool(self.calibrated),
+            "coverage": [st.to_dashboard() for st in self.coverage],
         }
         if max_ranks:
             out["int_ranks"] = [int(r) for r in self.int_ranks[:max_ranks]]
@@ -325,9 +338,16 @@ class SBCResult:
         ]
         for p in sorted(self.params, key=lambda q: q.miscalibration, reverse=True):
             flag = "ok" if p.calibrated else f"⚠ {p.shape}"
+            cov90 = p.coverage_at(0.9)
+            cov_txt = (
+                f", 90% interval covers {cov90.coverage:.0%} "
+                f"[{cov90.ci_low:.0%}–{cov90.ci_high:.0%}]"
+                if cov90 is not None
+                else ""
+            )
             lines.append(
                 f"  - {p.name}: {flag} (χ² p={p.chi2_pvalue:.3f}, "
-                f"miscal={p.miscalibration:.3f})"
+                f"miscal={p.miscalibration:.3f}{cov_txt})"
             )
         return "\n".join(lines)
 
@@ -392,6 +412,7 @@ def compute_param_stat(
         dispersion_z=shp["dispersion_z"],
         miscalibration=miscal,
         calibrated=calibrated,
+        coverage=coverage_from_ranks(r, L),
     )
 
 
@@ -528,7 +549,7 @@ def _scalar_param_names(model: Any) -> list[str]:
     return out
 
 
-def _fit_swapped(
+def _sample_swapped(
     swapped_model: Any,
     *,
     sampler: str,
@@ -536,9 +557,10 @@ def _fit_swapped(
     tune: int,
     chains: int,
     seed: int,
-) -> dict[str, np.ndarray]:
-    """Refit the observation-swapped model and return pooled posterior draws per
-    free RV. ``sampler``: ``numpyro``/``nuts`` (NUTS) or ``advi``/``fullrank_advi``."""
+) -> Any:
+    """Refit the observation-swapped model and return the InferenceData.
+    ``sampler``: ``numpyro``/``nuts`` (NUTS) or ``advi``/``fullrank_advi``.
+    Shared by SBC and the recovery-coverage loop (:mod:`.coverage`)."""
     import pymc as pm
 
     draws_per_chain = max(int(np.ceil(L / max(chains, 1))), 25)
@@ -558,6 +580,23 @@ def _fit_swapped(
                 random_seed=seed,
                 compute_convergence_checks=False,
             )
+    return idata
+
+
+def _fit_swapped(
+    swapped_model: Any,
+    *,
+    sampler: str,
+    L: int,
+    tune: int,
+    chains: int,
+    seed: int,
+) -> dict[str, np.ndarray]:
+    """Refit the observation-swapped model and return pooled posterior draws per
+    free RV (raveled — SBC only needs scalars)."""
+    idata = _sample_swapped(
+        swapped_model, sampler=sampler, L=L, tune=tune, chains=chains, seed=seed
+    )
     post = idata.posterior
     return {n: np.asarray(post[n].values).ravel() for n in post.data_vars}
 

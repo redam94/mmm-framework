@@ -19,6 +19,7 @@ const CHECKS: { id: ValidationCheck; label: string; hint: string; slow?: boolean
   { id: 'channels', label: 'Channels', hint: 'VIF / collinearity' },
   { id: 'refutation', label: 'Refutation', hint: 'Confounding robustness' },
   { id: 'cross_validation', label: 'Cross-validation', hint: 'Out-of-time (slow, refits)', slow: true },
+  { id: 'coverage', label: 'Coverage', hint: 'Do 90% intervals cover 90%? (slow, refits)', slow: true },
 ];
 
 // Labels for history rows — includes chat-only checks (SBC, prior predictive)

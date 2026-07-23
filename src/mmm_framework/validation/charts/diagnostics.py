@@ -1506,6 +1506,153 @@ def create_cv_actual_vs_predicted_chart(
     return fig
 
 
+def create_recovery_coverage_chart(
+    targets: list[dict],
+    *,
+    level: float = 0.9,
+    title: str | None = None,
+) -> go.Figure:
+    """Per-target empirical interval coverage at one nominal level, with the
+    Monte-Carlo (Jeffreys) error bar and the nominal line.
+
+    ``targets`` are ``RecoveryTargetStat.to_dashboard()`` dicts (or SBC
+    per-param dicts with a ``coverage`` list). Bars below the nominal line with
+    an error bar that clears it are genuine under-coverage, not MC noise.
+    """
+    names: list[str] = []
+    covs: list[float] = []
+    lo_err: list[float] = []
+    hi_err: list[float] = []
+    colors: list[str] = []
+    for t in targets:
+        stat = next(
+            (
+                s
+                for s in t.get("levels", t.get("coverage", []))
+                if abs(float(s.get("level", -1)) - level) < 1e-9
+            ),
+            None,
+        )
+        if stat is None or not stat.get("n"):
+            continue
+        names.append(str(t.get("name", "?")))
+        c = float(stat["coverage"])
+        covs.append(100.0 * c)
+        lo_err.append(100.0 * max(0.0, c - float(stat["ci_low"])))
+        hi_err.append(100.0 * max(0.0, float(stat["ci_high"]) - c))
+        colors.append(
+            "#c97067"
+            if stat.get("verdict") == "under"
+            else ("#d4a86a" if stat.get("verdict") == "over" else "#6abf8a")
+        )
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=names,
+            y=covs,
+            marker_color=colors,
+            error_y=dict(
+                type="data",
+                symmetric=False,
+                array=hi_err,
+                arrayminus=lo_err,
+                color="#555555",
+            ),
+            text=[f"{c:.0f}%" for c in covs],
+            textposition="outside",
+            name="Empirical coverage",
+        )
+    )
+    fig.add_hline(
+        y=100.0 * level,
+        line_dash="dash",
+        line_color="steelblue",
+        annotation_text=f"nominal {level:.0%}",
+        annotation_position="top right",
+    )
+    fig.update_layout(
+        title=dict(
+            text=title or f"Does the {level:.0%} interval cover {level:.0%}?",
+            x=0.5,
+            xanchor="center",
+        ),
+        yaxis_title="Empirical coverage (%)",
+        yaxis=dict(range=[0, 112]),
+        height=400,
+        autosize=True,
+        showlegend=False,
+    )
+    return fig
+
+
+def create_coverage_calibration_curve(
+    target: dict,
+    *,
+    title: str | None = None,
+) -> go.Figure:
+    """Nominal vs empirical coverage across all checked levels for one target.
+
+    A well-calibrated target tracks the 45° line within its MC error band;
+    a curve sagging below the diagonal means every interval is too narrow.
+    """
+    stats_ = sorted(
+        (s for s in target.get("levels", target.get("coverage", [])) if s.get("n")),
+        key=lambda s: float(s["level"]),
+    )
+    nominal = [100.0 * float(s["level"]) for s in stats_]
+    empirical = [100.0 * float(s["coverage"]) for s in stats_]
+    lo = [100.0 * float(s["ci_low"]) for s in stats_]
+    hi = [100.0 * float(s["ci_high"]) for s in stats_]
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=[0, 100],
+            y=[0, 100],
+            mode="lines",
+            line=dict(color="#999999", dash="dash"),
+            name="perfect calibration",
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=nominal + nominal[::-1],
+            y=hi + lo[::-1],
+            fill="toself",
+            fillcolor="rgba(106,143,168,0.18)",
+            line=dict(color="rgba(255,255,255,0)"),
+            name="MC error",
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=nominal,
+            y=empirical,
+            mode="lines+markers",
+            line=dict(color="#6a8fa8"),
+            name="empirical",
+            hovertemplate="nominal %{x:.0f}% → empirical %{y:.1f}%<extra></extra>",
+        )
+    )
+    name = target.get("name", "")
+    fig.update_layout(
+        title=dict(
+            text=title or f"Coverage calibration — {name}",
+            x=0.5,
+            xanchor="center",
+        ),
+        xaxis_title="Nominal interval level (%)",
+        yaxis_title="Empirical coverage (%)",
+        xaxis=dict(range=[40, 100]),
+        yaxis=dict(range=[0, 105]),
+        height=380,
+        autosize=True,
+        showlegend=False,
+    )
+    return fig
+
+
 __all__ = [
     "create_residual_panel",
     "create_acf_chart",
@@ -1520,6 +1667,8 @@ __all__ = [
     "create_pit_ecdf",
     "create_sbc_rank_histogram",
     "create_sbc_ecdf_difference",
+    "create_recovery_coverage_chart",
+    "create_coverage_calibration_curve",
     "create_cv_fold_metrics_chart",
     "create_cv_coverage_chart",
     "create_cv_actual_vs_predicted_chart",

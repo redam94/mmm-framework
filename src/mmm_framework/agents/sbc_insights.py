@@ -56,6 +56,17 @@ def _pname(p: dict[str, Any]) -> str:
     return str(p.get("name", "?"))
 
 
+def _cov90(p: dict[str, Any]) -> str:
+    """Format the empirical 90%-interval coverage read off the SBC ranks."""
+    for st in p.get("coverage", []) or []:
+        if abs(float(st.get("level", -1)) - 0.9) < 1e-9 and st.get("n"):
+            return (
+                f"90% interval covers {st['coverage']:.0%} "
+                f"[{st['ci_low']:.0%}–{st['ci_high']:.0%}]"
+            )
+    return ""
+
+
 def _deterministic_interpretation(sbc: dict[str, Any]) -> str:
     """A grounded, always-valid interpretation built from the SBC numbers."""
     params = sbc.get("params", []) or []
@@ -97,17 +108,19 @@ def _deterministic_interpretation(sbc: dict[str, Any]) -> str:
         read, fix = _SHAPE_READ.get(
             p.get("shape", "uniform"), ("unclassified", "Inspect the plots.")
         )
+        cov = _cov90(p)
+        cov_txt = f"; {cov}" if cov else ""
         if p.get("calibrated", False):
             lines.append(
                 f"- `{_pname(p)}` — ✅ {read} "
-                f"(χ² p={p.get('chi2_pvalue', float('nan')):.2f})."
+                f"(χ² p={p.get('chi2_pvalue', float('nan')):.2f}{cov_txt})."
             )
         else:
             lines.append(
                 f"- `{_pname(p)}` — ⚠️ {read} "
                 f"(χ² p={p.get('chi2_pvalue', float('nan')):.2f}, "
                 f"mean-rank {p.get('mean_norm_rank', 0.5):.2f}, "
-                f"miscal {p.get('miscalibration', 0):.2f}). **Fix:** {fix}"
+                f"miscal {p.get('miscalibration', 0):.2f}{cov_txt}). **Fix:** {fix}"
             )
 
     caveats = sbc.get("caveats") or []
@@ -145,12 +158,13 @@ def _facts(sbc: dict[str, Any]) -> str:
     for p in sorted(
         sbc.get("params", []), key=lambda q: q.get("miscalibration", 0.0), reverse=True
     ):
+        cov = _cov90(p)
         lines.append(
             f"  - {p.get('name')}: shape={p.get('shape')}, "
             f"chi2_p={p.get('chi2_pvalue'):.3f}, "
             f"mean_rank={p.get('mean_norm_rank'):.3f}, "
             f"miscalibration={p.get('miscalibration'):.3f}, "
-            f"calibrated={p.get('calibrated')}"
+            f"calibrated={p.get('calibrated')}" + (f", {cov}" if cov else "")
         )
     for c in sbc.get("caveats", []) or []:
         lines.append(f"caveat: {c}")

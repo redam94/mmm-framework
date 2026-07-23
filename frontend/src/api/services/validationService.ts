@@ -14,7 +14,8 @@ export type ValidationCheck =
   | 'residuals'
   | 'channels'
   | 'refutation'
-  | 'cross_validation';
+  | 'cross_validation'
+  | 'coverage';
 
 export interface ValidationResult {
   content: string | null;

@@ -15,6 +15,12 @@ from .convergence import (
     is_converged,
     warn_if_not_converged,
 )
+from .coverage import (
+    RecoveryCoverageResult,
+    coverage_from_ranks,
+    failure_mode_guide,
+    run_recovery_coverage,
+)
 from .learning import (
     parameter_learning,
     plot_parameter_learning,
@@ -25,16 +31,20 @@ from .snapshot import compute_fit_diagnostics
 
 __all__ = [
     "ConvergenceWarning",
+    "RecoveryCoverageResult",
     "SBCResult",
     "annotate_convergence",
     "compute_convergence",
     "compute_fit_diagnostics",
     "convergence_flags",
+    "coverage_from_ranks",
+    "failure_mode_guide",
     "is_converged",
     "parameter_learning",
     "plot_parameter_learning",
     "plot_prior_posterior_overlay",
     "run_mmm_sbc",
+    "run_recovery_coverage",
     "run_sbc",
     "warn_if_not_converged",
 ]

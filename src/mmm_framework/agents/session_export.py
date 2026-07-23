@@ -427,6 +427,15 @@ def _map_calibration_check(args: dict) -> dict:
     }
 
 
+def _map_coverage_check(args: dict) -> dict:
+    return {
+        "n_sims": int(args.get("n_sims", 16)),
+        "L": int(args.get("posterior_draws", 150)),
+        "sampler": str(args.get("sampler", "numpyro")),
+        "truth": str(args.get("truth", "auto")),
+    }
+
+
 def _map_prior_predictive(args: dict) -> dict:
     return {"n_samples": int(args.get("n_samples", 500))}
 
@@ -512,6 +521,11 @@ _OP_TOOLS: dict[str, tuple[str, Callable[[dict], dict | None], str | None]] = {
         _map_calibration_check,
         "spec=spec, dataset_path=dataset_path",
     ),
+    "run_coverage_check": (
+        "recovery_coverage_check",
+        _map_coverage_check,
+        "spec=spec, dataset_path=dataset_path",
+    ),
     "prior_predictive_check": (
         "prior_predictive_check",
         _map_prior_predictive,
@@ -530,7 +544,9 @@ _EDA_TOOLS = frozenset({"run_eda", "validate_data", "detect_outliers"})
 # Ops that legitimately run BEFORE any fit (allow_unfitted: they build an
 # unfitted model from spec + dataset). Pre-fit they replay against
 # `session_spec` (the session's first fitted spec) instead of being demoted.
-_PREFIT_OPS = frozenset({"prior_predictive_check", "run_calibration_check"})
+_PREFIT_OPS = frozenset(
+    {"prior_predictive_check", "run_calibration_check", "run_coverage_check"}
+)
 
 # Mirrors agents/eda_tools.py::EDA_ANALYSES (not imported — eda_tools pulls
 # langchain at module scope and this module must stay import-light for the

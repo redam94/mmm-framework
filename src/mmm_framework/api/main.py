@@ -4030,6 +4030,9 @@ _VALIDATION_CHECKS: dict[str, tuple[str, dict]] = {
     # Simulation-Based Calibration (Talts 2018) — expensive (one refit per sim);
     # the background-job path so the chat turn never blocks on it.
     "sbc": ("simulation_based_calibration", {"n_sims": 100, "L": 100}),
+    # Interval coverage at a fixed truth (posterior mean) — also one refit per
+    # sim; answers "does the 90% interval contain the truth 90% of the time?".
+    "coverage": ("recovery_coverage_check", {"n_sims": 40, "L": 150}),
 }
 
 
