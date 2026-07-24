@@ -230,6 +230,230 @@ def pictures_in_region(slide, left, top, width, height, *, tol_in: float = 0.3):
     return _match
 
 
+def normalize_run_boundaries(slide) -> int:
+    """Insert a missing space at run boundaries that would render run-together.
+
+    The designed template styles inline labels as separate runs (e.g. a small
+    bold ``"What to do "`` followed by the body text). Two of those label runs
+    were authored *without* their trailing space, so every renderer shows
+    ``"What to doHold spend…"``. This inserts a single space wherever two
+    adjacent runs of **different font size** butt a letter/digit directly
+    against a letter/digit — which can only ever be a missing separator, never
+    intentional intra-word styling at equal size. Returns the number of fixes.
+    """
+    n = 0
+    for sh in slide.shapes:
+        if not getattr(sh, "has_text_frame", False):
+            continue
+        for para in sh.text_frame.paragraphs:
+            runs = para.runs
+            for a, b in zip(runs, runs[1:]):
+                if not a.text or not b.text:
+                    continue
+                if (
+                    a.text[-1].isalnum()
+                    and b.text[0].isalnum()
+                    and (a.font.size or 0) != (b.font.size or 0)
+                ):
+                    a.text = a.text + " "
+                    n += 1
+    return n
+
+
+def set_body_after_label(shape, body: str) -> bool:
+    """Replace the text *after* an inline label run (e.g. ``"What to do "``)
+    while keeping the label and both runs' designed formatting. Extra runs are
+    dropped. Returns ``False`` when the shape has no label+body structure."""
+    if not shape.has_text_frame:
+        return False
+    paras = shape.text_frame.paragraphs
+    if not paras or len(paras[0].runs) < 2:
+        return False
+    first = paras[0]
+    for extra in list(paras[1:]):
+        extra._p.getparent().remove(extra._p)
+    label = first.runs[0]
+    if label.text and not label.text.endswith(" "):
+        label.text = label.text + " "
+    first.runs[1].text = str(body)
+    for r in list(first.runs[2:]):
+        r._r.getparent().remove(r._r)
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Status styling (READ/ACTION pills)
+# ---------------------------------------------------------------------------
+
+# the template's READ ↔ ACTION vocabulary (see builder._read_action)
+READ_TO_ACTION = {
+    "confidently profitable": "scale",
+    "high upside, unproven": "test",
+    "near break-even": "hold",
+    "below break-even": "reduce",
+}
+
+
+def _fill_rgb(shape):
+    """A shape's solid-fill RGB, or None."""
+    try:
+        from pptx.enum.dml import MSO_FILL_TYPE
+
+        if shape.fill.type == MSO_FILL_TYPE.SOLID:
+            return shape.fill.fore_color.rgb
+    except Exception:
+        pass
+    return None
+
+
+def _set_fill_rgb(shape, rgb) -> None:
+    try:
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = rgb
+    except Exception:
+        pass
+
+
+def _first_run_color(shape):
+    try:
+        return shape.text_frame.paragraphs[0].runs[0].font.color.rgb
+    except Exception:
+        return None
+
+
+def set_text_color(shape, rgb) -> None:
+    """Set every run's font colour in the shape."""
+    if rgb is None or not shape.has_text_frame:
+        return
+    for para in shape.text_frame.paragraphs:
+        for run in para.runs:
+            try:
+                run.font.color.rgb = rgb
+            except Exception:
+                pass
+
+
+def find_pill_parts(slide, text_shape) -> tuple[Any, Any]:
+    """The rounded-rect background and dot ellipse that decorate ``text_shape``.
+
+    The template draws each status pill as three stacked shapes: a pale
+    ``roundRect`` background, a small ``ellipse`` dot, and the text. Both
+    decorations are text-free and geometrically contain / sit inside the text
+    shape's row. Returns ``(background, dot)`` — either may be ``None``.
+    """
+    t_l, t_t = _emu(text_shape.left), _emu(text_shape.top)
+    t_b = t_t + _emu(text_shape.height)
+    t_cy = (t_t + t_b) / 2
+    bg = dot = None
+    for sh in slide.shapes:
+        if sh is text_shape or (
+            getattr(sh, "has_text_frame", False) and sh.text_frame.text.strip()
+        ):
+            continue
+        left, top = _emu(sh.left), _emu(sh.top)
+        right, bottom = left + _emu(sh.width), top + _emu(sh.height)
+        if not (top <= t_cy <= bottom):
+            continue
+        try:
+            prst_name = sh._element.spPr.prstGeom.attrib.get("prst")
+        except Exception:
+            prst_name = None
+        w_in = _emu(sh.width) / 914400
+        h_in = _emu(sh.height) / 914400
+        # pill decorations are row-sized — never the big card behind the table
+        if prst_name == "roundRect" and h_in < 0.7 and left <= t_l and right >= t_l:
+            bg = sh
+        elif prst_name == "ellipse" and w_in < 0.2 and left < t_l:
+            dot = sh
+    return bg, dot
+
+
+def harvest_status_styles(prs) -> dict[str, dict[str, Any]]:
+    """Read the per-status design (text/dot colour + pill background colour +
+    background padding) from the template's own scorecard and deep-dive pills,
+    keyed by normalized status/action text."""
+    styles: dict[str, dict[str, Any]] = {}
+    vocab = set(READ_TO_ACTION) | set(READ_TO_ACTION.values())
+    for slide in prs.slides:
+        for sh in iter_text_shapes(slide):
+            key = _norm(sh.text_frame.text)
+            if key not in vocab:
+                continue
+            bg, dot = find_pill_parts(slide, sh)
+            found = {
+                "text_rgb": _first_run_color(sh),
+                "bg_rgb": _fill_rgb(bg) if bg is not None else None,
+                "dot_rgb": _fill_rgb(dot) if dot is not None else None,
+            }
+            # merge: a later, richer sighting (e.g. a deep-dive pill with a
+            # background) fills fields an earlier plain-text sighting lacked
+            cur = styles.setdefault(key, found)
+            for k, v in found.items():
+                if cur.get(k) is None and v is not None:
+                    cur[k] = v
+    # unify READ and ACTION entries: an action inherits its read-status colours
+    for read, action in READ_TO_ACTION.items():
+        if read in styles and action not in styles:
+            styles[action] = styles[read]
+        if action in styles and read not in styles:
+            styles[read] = styles[action]
+    return styles
+
+
+def restyle_status_shape(slide, text_shape, status: str, styles: dict) -> None:
+    """Recolour a filled READ/ACTION cell (text + pill background + dot) to the
+    design colours of its *new* status."""
+    st = styles.get(_norm(status))
+    if not st:
+        return
+    set_text_color(text_shape, st.get("text_rgb"))
+    bg, dot = find_pill_parts(slide, text_shape)
+    if bg is not None and st.get("bg_rgb") is not None:
+        _set_fill_rgb(bg, st["bg_rgb"])
+    if dot is not None and st.get("dot_rgb") is not None:
+        _set_fill_rgb(dot, st["dot_rgb"])
+
+
+def hug_pill_background(slide, text_shape, pad_in: float = 0.10) -> None:
+    """Resize a pill's rounded-rect background to hug its (possibly resized)
+    text shape, keeping the background's left edge."""
+    from pptx.util import Emu, Inches
+
+    bg, _dot = find_pill_parts(slide, text_shape)
+    if bg is None:
+        return
+    new_right = _emu(text_shape.left) + _emu(text_shape.width) + int(Inches(pad_in))
+    bg.width = Emu(max(int(Inches(0.3)), new_right - _emu(bg.left)))
+
+
+def delete_backing_card(slide, shape, max_h_in: float = 2.0) -> int:
+    """Delete the text-free card frame(s) (roundRect/rect decor) drawn behind
+    ``shape`` — used when blanking a templated card so no empty outline is left.
+    Never touches the big page-panel cards (height filter). Returns count."""
+    cx = _emu(shape.left) + _emu(shape.width) // 2
+    cy = _emu(shape.top) + _emu(shape.height) // 2
+    doomed = []
+    for sh in slide.shapes:
+        if sh is shape or (
+            getattr(sh, "has_text_frame", False) and sh.text_frame.text.strip()
+        ):
+            continue
+        try:
+            prst_name = sh._element.spPr.prstGeom.attrib.get("prst")
+        except Exception:
+            continue
+        if prst_name not in ("roundRect", "rect"):
+            continue
+        if _emu(sh.height) / 914400 > max_h_in:
+            continue
+        left, top = _emu(sh.left), _emu(sh.top)
+        if left <= cx <= left + _emu(sh.width) and top <= cy <= top + _emu(sh.height):
+            doomed.append(sh)
+    for sh in doomed:
+        delete_shape(sh)
+    return len(doomed)
+
+
 def delete_shape(shape) -> None:
     shape._element.getparent().remove(shape._element)
 
@@ -257,4 +481,12 @@ __all__ = [
     "pictures_in_region",
     "delete_shape",
     "delete_slide",
+    "normalize_run_boundaries",
+    "set_body_after_label",
+    "READ_TO_ACTION",
+    "set_text_color",
+    "find_pill_parts",
+    "harvest_status_styles",
+    "restyle_status_shape",
+    "hug_pill_background",
 ]

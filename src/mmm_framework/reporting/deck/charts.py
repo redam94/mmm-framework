@@ -60,6 +60,20 @@ def _palette(overrides: dict[str, str] | None) -> dict[str, str]:
     return p
 
 
+def _money(v: float | None, currency: str = "$") -> str:
+    """Compact money label ("$1.2M"); shared with the deck builder."""
+    if v is None or not np.isfinite(v):
+        return "—"
+    av = abs(v)
+    if av >= 1e9:
+        return f"{currency}{v/1e9:.1f}B"
+    if av >= 1e6:
+        return f"{currency}{v/1e6:.1f}M"
+    if av >= 1e3:
+        return f"{currency}{v/1e3:.1f}K"
+    return f"{currency}{v:,.0f}"
+
+
 def _finish(fig) -> bytes:
     """Serialize a figure to PNG bytes (pyplot-free, so no global figure registry
     to close — the Figure is GC'd)."""
@@ -278,41 +292,235 @@ def roi_forest_png(
     return _finish(fig)
 
 
+# components that are background structure (not media, not the intercept) —
+# drawn hatched, matching the template's "not causally identified" legend
+_BACKGROUND_NAMES = {
+    "Trend",
+    "Seasonality",
+    "Events",
+    "Price & Promotion",
+    "Geo",
+    "Product",
+    "Controls",
+}
+
+# waterfall palette, themed to the template legend (slide 5 swatches)
+_WF_BASELINE = "#C9C2AC"  # tan — "Baseline"
+_WF_HATCH_EDGE = "#6C8FAD"  # steel blue — "Control variables"
+_WF_TOTAL = "#2A3528"  # near-black green — "Total revenue"
+_WF_MEDIA = [
+    "#5A7A3A",
+    "#3A5A75",
+    "#8A6408",
+    "#7A3525",
+    "#4A6D2A",
+    "#6E5A8A",
+    "#2F6B5E",
+    "#B0713A",
+    "#5E5E5E",
+    "#9C8A3A",
+]
+
+
+def _is_background(name: str, media_keys: set[str] | None) -> bool:
+    """Background (hatched, "not causally identified") vs causal/media.
+
+    The extractors emit background components from a CLOSED vocabulary
+    (:data:`_BACKGROUND_NAMES` + the ``Control:`` prefix), while media/pathway
+    names are open-ended — raw channel names, but also the extended models'
+    decorated keys ("Via awareness", "tv (direct)", "Cross-outcome effects").
+    So classification defaults to *causal*: only the known background
+    vocabulary is hatched. ``media_keys`` can only ADD certainty (a name listed
+    there is never background), never demote an unknown name to background —
+    demoting would hatch every mediated pathway of a NestedMMM as "not causal"
+    and re-anchor its floor into the baseline bar."""
+    if name == "Baseline":
+        return False
+    if media_keys is not None and name in media_keys:
+        return False
+    return name in _BACKGROUND_NAMES or name.startswith("Control:")
+
+
+def waterfall_entries(
+    component_totals: dict[str, float],
+    series: dict[str, Any] | None = None,
+    media_keys: list[str] | None = None,
+    total_label: str = "Total revenue",
+    max_background: int = 5,
+) -> tuple[list[tuple[str, float, str]], bool]:
+    """The waterfall's ``(name, value, kind)`` entries + whether any background
+    block was re-anchored. Kinds: ``baseline`` / ``background`` / ``media`` /
+    ``total``. Pure data prep, split out of :func:`decomposition_png` so the
+    re-anchoring arithmetic is testable.
+
+    Mean-centred regressors (z-scored controls, Fourier seasonality) sum to
+    ≈ 0 over the window *by construction* — displayed raw they all read "+0".
+    Given a component's per-period ``series``, its block is **re-anchored to
+    the component's weakest period**: the block shows the lift above that
+    floor, and the floor itself (× n periods) moves into the baseline bar — so
+    the waterfall still sums exactly to the modelled total.
+    """
+    totals = {str(k): float(v) for k, v in component_totals.items()}
+    media_set = set(map(str, media_keys)) if media_keys is not None else None
+
+    baseline = totals.get("Baseline", 0.0)
+    background: list[tuple[str, float]] = []
+    media: list[tuple[str, float]] = []
+    re_anchored = False
+    for name, total in totals.items():
+        if name == "Baseline":
+            continue
+        if _is_background(name, media_set):
+            block = total
+            s = (
+                np.asarray(series.get(name), dtype=float)
+                if series and name in series
+                else None
+            )
+            if s is not None and s.size > 1 and np.all(np.isfinite(s)):
+                floor = float(s.min())
+                block = float((s - floor).sum())
+                baseline += floor * s.size
+                if abs(block - total) > 1e-9:
+                    re_anchored = True
+            if name.startswith("Control: "):
+                pretty = name.removeprefix("Control: ").replace("_", " ").strip()
+                pretty = pretty[:1].upper() + pretty[1:]
+            else:
+                pretty = name
+            background.append((pretty, block))
+        else:
+            media.append((name, total))
+
+    background.sort(key=lambda kv: -abs(kv[1]))
+    if len(background) > max_background:
+        head, tail = background[: max_background - 1], background[max_background - 1 :]
+        background = head + [("Other controls", float(sum(v for _, v in tail)))]
+    media.sort(key=lambda kv: -abs(kv[1]))
+
+    grand_total = baseline + sum(v for _, v in background) + sum(v for _, v in media)
+
+    entries: list[tuple[str, float, str]] = [("Baseline", baseline, "baseline")]
+    entries += [(n, v, "background") for n, v in background]
+    entries += [(n, v, "media") for n, v in media]
+    entries += [(total_label, grand_total, "total")]
+    return entries, re_anchored
+
+
 def decomposition_png(
     component_totals: dict[str, float],
     *,
+    series: dict[str, Any] | None = None,
+    media_keys: list[str] | None = None,
+    currency: str = "$",
+    total_label: str = "Total revenue",
+    kpi_name: str = "Revenue",
     palette: dict[str, str] | None = None,
     width: float = 8.0,
     height: float = 4.8,
+    max_background: int = 5,
 ) -> bytes:
-    """Horizontal bar of total contribution by component (base + channels),
-    sorted, with share-of-total labels."""
+    """Waterfall of the KPI decomposition, matching the template's designed
+    chart: tan baseline, **hatched** background blocks (seasonality, trend,
+    controls — "not causally identified"), solid media blocks, dark total.
+    See :func:`waterfall_entries` for the block arithmetic."""
     p = _palette(palette)
-    items = sorted(component_totals.items(), key=lambda kv: kv[1])
-    names = [k for k, _ in items]
-    vals = np.array([v for _, v in items], dtype=float)
-    total = float(np.sum(np.abs(vals))) or 1.0
-    y = np.arange(len(names))
+    entries, re_anchored = waterfall_entries(
+        component_totals,
+        series=series,
+        media_keys=media_keys,
+        total_label=total_label,
+        max_background=max_background,
+    )
+    grand_total = entries[-1][1]
 
     fig = Figure(figsize=(width, height))
     ax = fig.subplots()
-    colors = [_BAR_COLORS[i % len(_BAR_COLORS)] for i in range(len(names))]
-    ax.barh(y, vals, color=colors, alpha=0.9)
-    for yi, v in zip(y, vals):
+    scale = max(abs(grand_total), 1e-9)
+    cum = 0.0
+    media_i = 0
+    y_lo, y_hi = 0.0, 0.0
+    for i, (name, v, kind) in enumerate(entries):
+        if kind == "baseline":
+            bottom, h = 0.0, v
+            cum = v
+            ax.bar(
+                i,
+                h,
+                bottom=bottom,
+                width=0.62,
+                color=_WF_BASELINE,
+                edgecolor="#A99F87",
+                linewidth=0.8,
+            )
+        elif kind == "total":
+            bottom, h = 0.0, v
+            ax.bar(
+                i, h, bottom=bottom, width=0.62, color=_WF_TOTAL, edgecolor=_WF_TOTAL
+            )
+        elif kind == "background":
+            bottom, h = (cum, v) if v >= 0 else (cum + v, -v)
+            ax.bar(
+                i,
+                h,
+                bottom=bottom,
+                width=0.62,
+                facecolor="white",
+                edgecolor=_WF_HATCH_EDGE,
+                hatch="///",
+                linewidth=1.0,
+            )
+            cum += v
+        else:
+            bottom, h = (cum, v) if v >= 0 else (cum + v, -v)
+            ax.bar(
+                i,
+                h,
+                bottom=bottom,
+                width=0.62,
+                color=_WF_MEDIA[media_i % len(_WF_MEDIA)],
+                edgecolor="white",
+                linewidth=0.5,
+            )
+            media_i += 1
+            cum += v
+        top = bottom + h
+        label_y = top + 0.015 * scale if v >= 0 else bottom - 0.045 * scale
+        y_lo, y_hi = min(y_lo, bottom, label_y), max(y_hi, top, label_y)
         ax.text(
-            v + (0.01 * total if v >= 0 else -0.01 * total),
-            yi,
-            f"{v/total:+.0%}",
-            va="center",
-            ha="left" if v >= 0 else "right",
+            i,
+            label_y,
+            _money(v, currency),
+            ha="center",
+            va="bottom",
             fontsize=8,
-            color=p["muted"],
+            color="#3A4838",
+            fontweight="bold" if kind in ("baseline", "total") else "normal",
         )
-    ax.set_yticks(y)
-    ax.set_yticklabels(names)
-    ax.set_xlabel("Total contribution (KPI units)")
-    ax.set_title("KPI decomposition by component", fontsize=12, fontweight="bold")
+
+    ax.set_xticks(np.arange(len(entries)))
+    ax.set_xticklabels([e[0] for e in entries], rotation=30, ha="right", fontsize=8.5)
+    ax.set_ylabel(f"Contribution ({currency})")
+    ax.set_ylim(y_lo - 0.02 * scale, y_hi + 0.08 * scale)
+    ax.yaxis.set_major_formatter(lambda v, _pos: _money(v, currency))
+    ax.set_title(
+        f"{kpi_name} decomposition — how the total builds",
+        fontsize=12,
+        fontweight="bold",
+    )
     _style_ax(ax, p)
+    if re_anchored:
+        fig.subplots_adjust(bottom=0.28)
+        fig.text(
+            0.005,
+            0.005,
+            "Hatched: seasonality & controls shown as lift above each component's weakest period "
+            "(their net over the window is ≈ 0 by construction) — associational, not causal.",
+            fontsize=7,
+            color=p["muted"],
+            ha="left",
+            va="bottom",
+        )
     return _finish(fig)
 
 
@@ -407,6 +615,7 @@ __all__ = [
     "saturation_zones_png",
     "roi_forest_png",
     "decomposition_png",
+    "waterfall_entries",
     "fit_png",
     "reallocation_png",
 ]

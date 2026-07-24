@@ -78,6 +78,107 @@ def test_decomposition_png_is_valid():
     assert png.startswith(_PNG_MAGIC)
 
 
+# ---------------------------------------------------------------------------
+# decomposition waterfall arithmetic (the "+0% controls" fix)
+# ---------------------------------------------------------------------------
+
+
+def _wf_series(n: int = 104) -> dict[str, np.ndarray]:
+    rng = np.random.default_rng(7)
+    series = {
+        "Baseline": np.full(n, 700.0),
+        "Trend": np.linspace(0.0, 60.0, n),
+        "Seasonality": 40.0 * np.sin(np.linspace(0, 12.56, n)),
+        "Control: holiday": rng.normal(0, 12, n),
+        "Control: weather": rng.normal(0, 6, n),
+        "TV": np.abs(rng.normal(40, 9, n)),
+        "Search": np.abs(rng.normal(50, 10, n)),
+    }
+    # centre the associational components like a real z-scored fit
+    for k in ("Seasonality", "Control: holiday", "Control: weather"):
+        series[k] = series[k] - series[k].mean()
+    return series
+
+
+def test_waterfall_reanchors_centered_controls():
+    """z-scored controls sum to ~0 over the window; the waterfall must show
+    their swing (lift above the weakest period), not a zero block."""
+    series = _wf_series()
+    totals = {k: float(v.sum()) for k, v in series.items()}
+    assert abs(totals["Control: holiday"]) < 1e-6  # ~0 by construction
+
+    entries, re_anchored = charts.waterfall_entries(
+        totals, series=series, media_keys=["TV", "Search"]
+    )
+    assert re_anchored
+    by_name = {n: (v, kind) for n, v, kind in entries}
+    # controls become visible, positive, hatched-background blocks
+    assert by_name["Holiday"][0] > 1.0 and by_name["Holiday"][1] == "background"
+    assert by_name["Weather"][0] > 1.0 and by_name["Weather"][1] == "background"
+    assert by_name["Seasonality"][0] > 1.0
+    # media keep their raw totals, solid
+    assert by_name["TV"] == (pytest.approx(totals["TV"]), "media")
+    # the waterfall still closes exactly on the modelled total
+    total_entry = entries[-1]
+    assert total_entry[2] == "total"
+    assert total_entry[1] == pytest.approx(sum(totals.values()))
+    parts = sum(v for _n, v, kind in entries if kind != "total")
+    assert parts == pytest.approx(total_entry[1])
+
+
+def test_waterfall_aggregates_small_background_components():
+    series = _wf_series()
+    for i in range(8):  # many small controls -> "Other controls" bucket
+        s = np.random.default_rng(i).normal(0, 2, 104)
+        series[f"Control: extra_{i}"] = s - s.mean()
+    totals = {k: float(v.sum()) for k, v in series.items()}
+    entries, _ = charts.waterfall_entries(
+        totals, series=series, media_keys=["TV", "Search"], max_background=5
+    )
+    bg = [n for n, _v, kind in entries if kind == "background"]
+    assert len(bg) == 5 and "Other controls" in bg
+    assert entries[-1][1] == pytest.approx(sum(totals.values()))
+
+
+def test_waterfall_keeps_extended_model_pathways_solid():
+    """Extended models emit decorated component keys ("Via <mediator>",
+    "<ch> (direct)") that are NOT raw channel names — they are causal media
+    pathways and must render solid, never hatched/re-anchored background."""
+    n = 52
+    rng = np.random.default_rng(3)
+    series = {
+        "Baseline": np.full(n, 100.0),
+        "Via awareness": np.abs(rng.normal(20, 4, n)),
+        "tv (direct)": np.full(n, 17.5),  # flat series: re-anchoring would zero it
+        "search (direct)": np.abs(rng.normal(12, 3, n)),
+        "Seasonality": np.sin(np.linspace(0, 6.28, n)),
+    }
+    totals = {k: float(v.sum()) for k, v in series.items()}
+    entries, _ = charts.waterfall_entries(
+        totals, series=series, media_keys=["tv", "search"]  # raw names only
+    )
+    kinds = {name: kind for name, v, kind in entries}
+    assert kinds["Via awareness"] == "media"
+    assert kinds["tv (direct)"] == "media"
+    assert kinds["search (direct)"] == "media"
+    assert kinds["Seasonality"] == "background"
+    # media blocks keep their raw totals (no weakest-period re-anchor)
+    by_name = {name: v for name, v, _k in entries}
+    assert by_name["tv (direct)"] == pytest.approx(totals["tv (direct)"])
+    assert entries[-1][1] == pytest.approx(sum(totals.values()))
+
+
+def test_waterfall_totals_only_still_renders():
+    # legacy call shape (no series): blocks are the raw totals
+    entries, re_anchored = charts.waterfall_entries(
+        {"Baseline": 100.0, "Seasonality": 0.0, "TV": 20.0}
+    )
+    assert not re_anchored
+    assert entries[-1][1] == pytest.approx(120.0)
+    png = charts.decomposition_png({"Baseline": 100.0, "Seasonality": 0.0, "TV": 20.0})
+    assert png.startswith(_PNG_MAGIC)
+
+
 def test_fit_png_is_valid():
     n = 52
     actual = np.linspace(100, 140, n) + np.random.RandomState(0).normal(0, 5, n)

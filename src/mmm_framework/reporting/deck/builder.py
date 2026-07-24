@@ -25,7 +25,8 @@ from typing import Any
 import numpy as np
 from pptx.util import Inches
 
-from . import charts, template as T
+from . import charts, template as T, textfit
+from .charts import _money
 
 
 def default_template_path() -> Path:
@@ -47,19 +48,6 @@ def _pct(samples: np.ndarray, hdi_prob: float) -> tuple[float, float]:
     lo = float(np.percentile(samples, (1 - hdi_prob) / 2 * 100))
     hi = float(np.percentile(samples, (1 + hdi_prob) / 2 * 100))
     return lo, hi
-
-
-def _money(v: float | None, currency: str = "$") -> str:
-    if v is None or not np.isfinite(v):
-        return "—"
-    av = abs(v)
-    if av >= 1e9:
-        return f"{currency}{v/1e9:.1f}B"
-    if av >= 1e6:
-        return f"{currency}{v/1e6:.1f}M"
-    if av >= 1e3:
-        return f"{currency}{v/1e3:.1f}K"
-    return f"{currency}{v:,.0f}"
 
 
 def _read_action(mean: float, lo: float, hi: float, be: float) -> tuple[str, str]:
@@ -122,6 +110,116 @@ def _portfolio_metrics(
     return out
 
 
+def _standfirst_text(r: dict, z: Any, be: float, currency: str) -> str:
+    """Deterministic per-channel standfirst, used when no AI narrative is
+    supplied — never leaves the template's example-model prose on a real deck."""
+    mroi = z.current_mroi if z is not None else float("nan")
+    mroi_s = f"{mroi:.2f}" if np.isfinite(mroi) else "—"
+    clause = {
+        "Scale": "The case to add budget holds across the plausible range.",
+        "Test": "High potential but a wide range — prove it with a controlled test "
+        "before scaling.",
+        "Hold": "No clear case to scale or cut on current evidence.",
+        "Reduce": "On current evidence it returns less than it costs.",
+    }[r["action"]]
+    return (
+        f"{r['channel']} returns {currency}{r['roi_mean']:.2f} per {currency}1 "
+        f"(80% range {r['roi_lo']:.2f}–{r['roi_hi']:.2f}); the next dollar returns "
+        f"{mroi_s}. {clause}"
+    )
+
+
+def _what_to_do_text(r: dict, z: Any, be: float) -> str:
+    """Deterministic "What to do" advice grounded in the channel's own numbers
+    (action, marginal return, carryover) — replaces the template example."""
+    hl = r.get("half_life")
+    mroi = z.current_mroi if z is not None else float("nan")
+    action = r["action"]
+    if action == "Scale":
+        # Scale is assigned from the AVERAGE-ROI interval; the marginal dollar
+        # may still be under water — never claim it clears break-even unless it does
+        if np.isfinite(mroi) and mroi >= be:
+            txt = "Increase weight stepwise and re-check saturation after each step — the marginal dollar still clears break-even."
+        else:
+            mroi_s = f" (currently {mroi:.2f})" if np.isfinite(mroi) else ""
+            txt = (
+                "Scale carefully: the average return is confidently profitable, but "
+                f"the marginal dollar is already below break-even{mroi_s} — favour "
+                "efficiency moves over straight budget increases."
+            )
+    elif action == "Test":
+        txt = "Fund at the current level and run a matched-market test — the range is too wide to commit more on model evidence alone."
+    elif action == "Hold":
+        if hl is not None and hl > 4:
+            txt = (
+                f"Hold spend and keep it continuous — the ~{hl:.0f}-week carryover "
+                "means gaps waste effect already paid for."
+            )
+        else:
+            txt = "Hold spend at the current level and revisit when a test or new data moves the estimate — decay is quick enough to re-flight freely."
+    else:  # Reduce
+        mroi_s = f"{mroi:.2f}" if np.isfinite(mroi) else "below break-even"
+        txt = (
+            f"Step spend down toward the efficient range and redeploy the savings — "
+            f"the marginal dollar returns {mroi_s}."
+        )
+    return txt
+
+
+def _headline_text(pf: dict, rows: list[dict], currency: str) -> str | None:
+    """Deterministic S2 headline when no AI synthesis is supplied."""
+    if "share" in pf and np.isfinite(pf["share"][0]):
+        share = pf["share"][0]
+        if "blended_roi" in pf and np.isfinite(pf["blended_roi"][0]):
+            return (
+                f"Marketing drives {share:.0%} of revenue at "
+                f"{currency}{pf['blended_roi'][0]:.2f} back per {currency}1"
+            )
+        return f"Marketing drives {share:.0%} of revenue"
+    if "blended_roi" in pf and np.isfinite(pf["blended_roi"][0]):
+        return f"Marketing returns {currency}{pf['blended_roi'][0]:.2f} per {currency}1"
+    return None
+
+
+def _headline_standfirst(pf: dict, rows: list[dict], be: float) -> str | None:
+    """Deterministic S2 standfirst: where the blended return sits and the top
+    reallocation move implied by the scorecard.
+
+    "Move budget toward X" is only claimed when X actually earns it (Scale, or
+    a profitable Test candidate) — never toward the least-bad channel of an
+    all-below-break-even portfolio, which would contradict the scorecard."""
+    if not rows:
+        return None
+    worst = min(rows, key=lambda r: r["roi_mean"])
+    parts = []
+    if "blended_roi" in pf and np.isfinite(pf["blended_roi"][0]):
+        m = pf["blended_roi"][0]
+        rel = "above" if m > be * 1.02 else "below" if m < be * 0.98 else "at"
+        parts.append(f"The blended return sits {rel} break-even.")
+    fundable = [r for r in rows if r["action"] == "Scale"] or [
+        r for r in rows if r["action"] == "Test" and r["roi_mean"] > be
+    ]
+    if fundable:
+        best = max(fundable, key=lambda r: r["roi_mean"])
+        if best is not worst:
+            toward = (
+                f"toward {best['channel']} ({best['roi_mean']:.2f})"
+                if best["action"] == "Scale"
+                else f"toward testing {best['channel']} ({best['roi_mean']:.2f})"
+            )
+            parts.append(
+                f"The gain is not in spending more — it is in moving budget from "
+                f"{worst['channel']} ({worst['roi_mean']:.2f}) {toward}."
+            )
+    else:
+        parts.append(
+            f"No channel clears break-even with confidence on current evidence — "
+            f"the first move is trimming {worst['channel']} "
+            f"({worst['roi_mean']:.2f}) and funding tests before adding budget."
+        )
+    return " ".join(parts) or None
+
+
 def _cluster_rows(shapes, gap_in: float = 0.3) -> list[list]:
     """Group shapes into visual rows by their top coordinate."""
     from pptx.util import Inches
@@ -142,9 +240,16 @@ def _cluster_rows(shapes, gap_in: float = 0.3) -> list[list]:
     return rows
 
 
-def _fill_scorecard(slide, rows: list[dict], currency: str, be: float) -> None:
+def _fill_scorecard(
+    slide, rows: list[dict], currency: str, be: float, styles: dict | None = None
+) -> list:
     """Fill the channel scorecard (positional: columns by header left, rows by
-    top), filling one model channel per template row and blanking the rest."""
+    top), filling one model channel per template row and blanking the rest.
+
+    Recolours each row's READ pill + ACTION text to the *filled* status's
+    design colours (the template rows are coloured for the example model).
+    Returns the READ pill text shapes so the pill backgrounds can be resized
+    after the global text-fit pass."""
     from pptx.util import Inches
 
     cols = {}
@@ -161,7 +266,7 @@ def _fill_scorecard(slide, rows: list[dict], currency: str, be: float) -> None:
             cols[key] = T._emu(sh.left)
     head = T.find_by_label(slide, "CHANNEL")
     if head is None or "channel" not in cols:
-        return
+        return []
     header_top = T._emu(head.top)
     tol = int(Inches(0.6))
 
@@ -174,6 +279,7 @@ def _fill_scorecard(slide, rows: list[dict], currency: str, be: float) -> None:
     ]
     row_groups = _cluster_rows(data)
 
+    pill_shapes = []
     for i, group in enumerate(row_groups):
         # assign each shape in the row to its nearest column
         cell = {}
@@ -196,18 +302,37 @@ def _fill_scorecard(slide, rows: list[dict], currency: str, be: float) -> None:
                 T.set_text(cell["range"], f"{lo:.2f} – {hi:.2f}")
             if "read" in cell:
                 T.set_text(cell["read"], read)
+                if styles:
+                    T.restyle_status_shape(slide, cell["read"], read, styles)
+                pill_shapes.append(cell["read"])
             if "action" in cell:
                 T.set_text(cell["action"], action)
-        else:  # blank the template's extra rows
+                if styles:
+                    T.restyle_status_shape(slide, cell["action"], action, styles)
+        else:  # blank the template's extra rows AND its now-orphaned pill decor
             for sh in group:
+                if T._norm(sh.text_frame.text) in T.READ_TO_ACTION:
+                    bg, dot = T.find_pill_parts(slide, sh)
+                    for decor in (bg, dot):
+                        if decor is not None:
+                            T.delete_shape(decor)
                 T.set_text(sh, "")
+    return pill_shapes
 
 
 def _fill_channel_slide(
-    slide, r: dict, z: Any, currency: str, be: float, narrative: str | None
-) -> None:
+    slide,
+    r: dict,
+    z: Any,
+    currency: str,
+    be: float,
+    narrative: str | None,
+    styles: dict | None = None,
+) -> list:
     """Fill one per-channel deep-dive slide (channel name, action pill, the five
-    metric cards, the optional AI narrative, and the saturation/zone chart)."""
+    metric cards, the narrative standfirst, the "What to do" advice, and the
+    saturation/zone chart). Returns pill text shapes for post-fit resizing."""
+    pill_shapes = []
     # channel name = the prominent text near the top-left
     for sh in T.iter_text_shapes(slide):
         if T._emu(sh.top) < int(Inches(1.2)) and T._emu(sh.left) < int(Inches(2.0)):
@@ -218,6 +343,9 @@ def _fill_channel_slide(
     for sh in T.iter_text_shapes(slide):  # action pill (Scale/Test/Hold/Reduce)
         if T._norm(sh.text_frame.text) in ("scale", "test", "hold", "reduce"):
             T.set_text(sh, action)
+            if styles:
+                T.restyle_status_shape(slide, sh, action, styles)
+            pill_shapes.append(sh)
             break
 
     mroi = z.current_mroi if z is not None else float("nan")
@@ -251,12 +379,19 @@ def _fill_channel_slide(
         ),
     )
 
-    # optional AI narrative (PR 3): the wide standfirst near the top
-    if narrative:
-        for sh in T.iter_text_shapes(slide):
-            if T._emu(sh.top) < int(Inches(2.2)) and T._emu(sh.width) > int(Inches(8)):
-                T.set_text(sh, narrative)
-                break
+    # the wide standfirst near the top: AI narrative when supplied, else a
+    # deterministic sentence — never the template's example-model prose
+    standfirst = narrative or _standfirst_text(r, z, be, currency)
+    for sh in T.iter_text_shapes(slide):
+        if T._emu(sh.top) < int(Inches(2.2)) and T._emu(sh.width) > int(Inches(8)):
+            T.set_text(sh, standfirst)
+            break
+
+    # the "What to do" advice line at the bottom — grounded in this channel's
+    # numbers (the template's example advice can contradict the filled data)
+    wtd = T.find_by_prefix(slide, "What to do")
+    if wtd is not None:
+        T.set_body_after_label(wtd, _what_to_do_text(r, z, be))
 
     # the saturation/zone chart on the left panel — rendered to fit the box's
     # exact aspect ratio (no squish).
@@ -271,6 +406,218 @@ def _fill_channel_slide(
             )
         except Exception:
             pass
+    return pill_shapes
+
+
+def _recommend_moves(rows: list[dict], currency: str) -> list[tuple[str, str]]:
+    """Up to three (lead, body) recommendation cards for the S2 "WHAT WE
+    RECOMMEND" band, from the scorecard's action buckets."""
+
+    def _names(chs):
+        return " · ".join(c["channel"] for c in chs[:3])
+
+    def _fmt(chs):
+        return ", ".join(f"{c['channel']} {c['roi_mean']:.2f}" for c in chs[:3])
+
+    buckets = {
+        a: sorted((r for r in rows if r["action"] == a), key=lambda r: -r["roi_mean"])
+        for a in ("Scale", "Reduce", "Test", "Hold")
+    }
+    cards: list[tuple[str, str]] = []
+    if buckets["Scale"]:
+        chs = buckets["Scale"]
+        cards.append(
+            (
+                f"Scale {_names(chs)} ",
+                f"— the whole credible range clears break-even ({_fmt(chs)}); "
+                "additional budget keeps earning.",
+            )
+        )
+    if buckets["Reduce"]:
+        chs = buckets["Reduce"]
+        spend = sum(c["spend"] for c in chs)
+        cards.append(
+            (
+                f"Reduce {_names(chs)} ",
+                f"— {_money(spend, currency)} of spend returning under a dollar "
+                f"across the range ({_fmt(chs)}); trim and redeploy.",
+            )
+        )
+    if buckets["Test"]:
+        chs = buckets["Test"]
+        cards.append(
+            (
+                f"Test {_names(chs)} ",
+                f"— attractive central returns ({_fmt(chs)}) but ranges too wide "
+                "to fund on faith; prove them with controlled tests.",
+            )
+        )
+    if len(cards) < 3 and buckets["Hold"]:
+        chs = buckets["Hold"]
+        cards.append(
+            (
+                f"Hold {_names(chs)} ",
+                f"— near break-even ({_fmt(chs)}); keep steady until a test or "
+                "more data moves the estimate.",
+            )
+        )
+    return cards[:3]
+
+
+def _fill_recommend_cards(slide, rows: list[dict], currency: str) -> None:
+    """Fill the S2 "WHAT WE RECOMMEND" band's three cards from the model —
+    the template ships example-model recommendations ("Scale Video …") that
+    would otherwise survive into every client deck."""
+    anchor = T.find_by_label(slide, "WHAT WE RECOMMEND")
+    if anchor is None:
+        return
+    a_bot = T._emu(anchor.top) + T._emu(anchor.height)
+    cards = [
+        sh
+        for sh in T.iter_text_shapes(slide)
+        if T._emu(sh.top) > a_bot and T._emu(sh.top) < a_bot + int(Inches(1.0))
+    ]
+    cards.sort(key=lambda sh: T._emu(sh.left))
+    recs = _recommend_moves(rows, currency)
+    for i, sh in enumerate(cards[:3]):
+        if i < len(recs):
+            lead, body = recs[i]
+            if not T.set_body_after_label(sh, body):
+                T.set_text(sh, lead + body)
+                continue
+            sh.text_frame.paragraphs[0].runs[0].text = lead
+        else:
+            T.delete_backing_card(slide, sh)
+            T.set_text(sh, "")
+
+
+def _fill_moves_slide(slide, rows: list[dict], currency: str, be: float) -> None:
+    """Fill the "reallocation in four moves" quadrants (S10) with the model's
+    actual channel buckets — the template ships example-model channels."""
+
+    def _fmt(chs: list[dict]) -> str:
+        return ", ".join(f"{c['channel']} {c['roi_mean']:.2f}" for c in chs)
+
+    buckets = {
+        a: [r for r in rows if r["action"] == a]
+        for a in ("Scale", "Test", "Hold", "Reduce")
+    }
+    rationale = {
+        "Scale": lambda chs: (
+            f"The credible range clears break-even ({_fmt(chs)}) and the marginal "
+            "dollar still earns — additional budget keeps paying back."
+        ),
+        "Test": lambda chs: (
+            f"Attractive central returns ({_fmt(chs)}) but the ranges are too wide "
+            "to fund on faith — a controlled test settles it."
+        ),
+        "Hold": lambda chs: (
+            f"Near break-even ({_fmt(chs)}) with no clear case to scale or cut — "
+            "keep steady until a test or more data moves the estimate."
+        ),
+        "Reduce": lambda chs: (
+            f"Below break-even across the plausible range ({_fmt(chs)}) — trim "
+            "toward the efficient level and redeploy the savings."
+        ),
+    }
+    for action, chs in buckets.items():
+        anchor = T.find_by_label(slide, action)
+        if anchor is None:
+            continue
+        below = T.shapes_below(slide, anchor, left_tol_in=0.4, max_n=2)
+        if len(below) < 2:
+            continue
+        if chs:
+            T.set_text(below[0], " · ".join(c["channel"] for c in chs))
+            T.set_text(below[1], rationale[action](chs))
+        else:
+            T.set_text(below[0], "—")
+            T.set_text(below[1], "No channels in this bucket this cycle.")
+
+
+def _recommend_tests(rows: list[dict]) -> list[tuple[str, str]]:
+    """Up to three deterministic experiment recommendations from the scorecard:
+    prove the highest unproven upside, de-risk the biggest cut, then tighten
+    the next-widest range."""
+    recs: list[tuple[str, str]] = []
+    used: set[str] = set()
+    tests = sorted(
+        (r for r in rows if r["action"] == "Test"), key=lambda r: -r["roi_hi"]
+    )
+    reduces = sorted(
+        (r for r in rows if r["action"] == "Reduce"), key=lambda r: -r["spend"]
+    )
+    if tests:
+        r = tests[0]
+        used.add(r["channel"])
+        recs.append(
+            (
+                f"Geo holdout on {r['channel']}",
+                f"Highest unproven upside (central {r['roi_mean']:.2f}, range "
+                f"{r['roi_lo']:.2f}–{r['roi_hi']:.2f}). A matched-market holdout "
+                "settles whether to scale or stand down.",
+            )
+        )
+    if reduces:
+        r = reduces[0]
+        used.add(r["channel"])
+        recs.append(
+            (
+                f"Spend-down test on {r['channel']}",
+                f"Confirms {r['channel']} can be cut without losing revenue before "
+                f"budget moves — its range sits below break-even (central "
+                f"{r['roi_mean']:.2f}).",
+            )
+        )
+    # widest remaining credible interval = the read most worth buying
+    rest = sorted(
+        (r for r in rows if r["channel"] not in used),
+        key=lambda r: -(r["roi_hi"] - r["roi_lo"]),
+    )
+    for r in rest:
+        if len(recs) >= 3:
+            break
+        recs.append(
+            (
+                f"Incrementality test on {r['channel']}",
+                f"Central {r['roi_mean']:.2f} with an 80% range of "
+                f"{r['roi_lo']:.2f}–{r['roi_hi']:.2f}; a clean read decides "
+                f"whether {r['channel']} earns a bigger role in the next plan.",
+            )
+        )
+    return recs[:3]
+
+
+def _fill_tests_slide(slide, rows: list[dict]) -> None:
+    """Fill the numbered recommended-tests triplets (S22) from the model."""
+    recs = _recommend_tests(rows)
+    for i in range(3):
+        num = T.find_by_label(slide, f"{i + 1:02d}")
+        if num is None:
+            continue
+        n_top, n_right = T._emu(num.top), T._emu(num.left) + T._emu(num.width)
+        title = body = None
+        for sh in T.iter_text_shapes(slide):
+            if sh is num or T._emu(sh.left) < n_right:
+                continue
+            if abs(T._emu(sh.top) - n_top) <= int(Inches(0.15)):
+                title = sh
+        if title is not None:
+            below = T.shapes_below(slide, title, left_tol_in=0.3, max_n=1)
+            body = below[0] if below else None
+        if i < len(recs):
+            t, b = recs[i]
+            if title is not None:
+                T.set_text(title, t)
+            if body is not None:
+                T.set_text(body, b)
+        else:
+            # blank the unused triplet AND its card frame (else an empty
+            # outlined card is left behind)
+            T.delete_backing_card(slide, num)
+            for sh in (num, title, body):
+                if sh is not None:
+                    T.set_text(sh, "")
 
 
 def build_pptx(
@@ -351,6 +698,10 @@ def build_pptx(
 
     prs = Presentation(str(template_path))
     slides = list(prs.slides)
+    # per-status design colours, read from the template's own pills before any
+    # fill overwrites them
+    styles = T.harvest_status_styles(prs)
+    pills: list[tuple[Any, Any]] = []  # (slide, pill text shape) to resize later
 
     # ---- S0: cover ----
     if len(slides) > 0:
@@ -384,20 +735,29 @@ def build_pptx(
                 else f"80% range {currency}{lo:.2f} – {currency}{hi:.2f}"
             )
             T.fill_card(s, "BLENDED RETURN PER $1", f"{currency}{m:.2f}", rng)
-        if "headline" in insights or "standfirst" in insights:
-            h = T.find_by_label(s, "THE HEADLINE")
-            if h is not None:
-                # below the eyebrow: [0] = the big title, [1] = the standfirst para
-                below = T.shapes_below(s, h, left_tol_in=2.0, max_n=2)
-                if below and insights.get("headline"):
-                    T.set_text(below[0], insights["headline"])
-                if len(below) > 1 and insights.get("standfirst"):
-                    T.set_text(below[1], insights["standfirst"])
+        # headline + standfirst: AI insights when supplied, else a deterministic
+        # summary — the template's example-model claims never survive a fill
+        headline = insights.get("headline") or _headline_text(pf, rows, currency)
+        standfirst = insights.get("standfirst") or _headline_standfirst(
+            pf, rows, eff_be
+        )
+        h = T.find_by_label(s, "THE HEADLINE")
+        if h is not None:
+            # below the eyebrow: [0] = the big title, [1] = the standfirst para
+            below = T.shapes_below(s, h, left_tol_in=2.0, max_n=2)
+            if below and headline:
+                T.set_text(below[0], headline)
+            if len(below) > 1 and standfirst:
+                T.set_text(below[1], standfirst)
+        if rows:
+            _fill_recommend_cards(s, rows, currency)
 
     # ---- S5: channel scorecard ----
     sc = next((s for s in slides if T.find_by_label(s, "CHANNEL SCORECARD")), None)
     if sc is not None:
-        _fill_scorecard(sc, rows, currency, eff_be)
+        pills += [
+            (sc, sh) for sh in _fill_scorecard(sc, rows, currency, eff_be, styles)
+        ]
 
     # ---- S6 / S7: ROI and marginal-ROI forests ----
     roi_dict = {
@@ -444,7 +804,7 @@ def build_pptx(
         except Exception:
             pass
 
-    # ---- S4: decomposition ----
+    # ---- S4: decomposition (waterfall; hatched control/seasonal swings) ----
     if bundle is not None and getattr(bundle, "component_totals", None):
         s4 = next(
             (
@@ -456,12 +816,47 @@ def build_pptx(
         )
         if s4 is not None:
             comp = bundle.component_totals
+            comp_series = getattr(bundle, "component_time_series", None)
+            media_keys = list(getattr(bundle, "channel_names", None) or []) or [
+                r["channel"] for r in roi_records
+            ]
             try:
                 T.replace_image_fit(
-                    s4, lambda w, h: charts.decomposition_png(comp, width=w, height=h)
+                    s4,
+                    lambda w, h: charts.decomposition_png(
+                        comp,
+                        series=comp_series,
+                        media_keys=media_keys,
+                        currency=currency,
+                        total_label=f"Total {kpi_name.lower()}",
+                        kpi_name=kpi_name,
+                        width=w,
+                        height=h,
+                    ),
                 )
             except Exception:
                 pass
+
+    # ---- S10 / S22: reallocation moves + recommended tests ----
+    s10 = next((s for s in slides if T.find_by_label(s, "WHERE TO MOVE BUDGET")), None)
+    if s10 is not None and rows:
+        _fill_moves_slide(s10, rows, currency, eff_be)
+    s22 = next((s for s in slides if T.find_by_label(s, "RECOMMENDED TESTS")), None)
+    if s22 is not None and rows:
+        _fill_tests_slide(s22, rows)
+
+    # ---- S11: flighting plan — neutralize the example-model prose (the chart
+    # itself stays illustrative; the standfirst must not name example channels)
+    s11 = next((s for s in slides if T.find_by_label(s, "THE FLIGHTING PLAN")), None)
+    if s11 is not None:
+        sf = T.find_by_prefix(s11, "The recommended plan")
+        if sf is not None:
+            T.set_text(
+                sf,
+                "The recommended plan smooths burst-heavy flighting into steadier "
+                "weekly weight and protects continuity on carryover channels — at "
+                "the same annual budget. Weekly shapes are illustrative.",
+            )
 
     # ---- S12-18: per-channel deep-dive slides (fill N, delete extras) ----
     deep = [
@@ -474,23 +869,37 @@ def build_pptx(
     for j, (idx, s) in enumerate(deep):
         if j < len(rows):
             r = rows[j]
-            _fill_channel_slide(
-                s,
-                r,
-                zones.get(r["channel"]),
-                currency,
-                eff_be,
-                insights.get(f"channel:{r['channel']}"),
-            )
+            pills += [
+                (s, sh)
+                for sh in _fill_channel_slide(
+                    s,
+                    r,
+                    zones.get(r["channel"]),
+                    currency,
+                    eff_be,
+                    insights.get(f"channel:{r['channel']}"),
+                    styles,
+                )
+            ]
             used_idx.add(idx)
     # delete the unused deep-dive slides (highest index first to keep indices valid)
     for idx, _ in sorted(deep, key=lambda t: -t[0]):
         if idx not in used_idx:
             T.delete_slide(prs, idx)
 
-    # Clear the template's cached shrink-to-fit scale on every text box so
-    # PowerPoint recomputes the fit for the actual (possibly substituted) font —
-    # fixes the one-character text wrapping on filled AND untouched slides.
+    # ---- final layout passes (order matters) ----
+    # 1. repair run-together label runs (two template paragraphs were authored
+    #    without their separating space);
+    # 2. make every text shape hold its text explicitly — widen single-line
+    #    labels / set reduced run sizes — because Google Slides and friends
+    #    never recompute PPT's shrink-on-overflow autofit;
+    # 3. resize pill backgrounds to hug their (possibly grown) status text;
+    # 4. drop the cached autofit scale so PowerPoint re-fits with actual fonts.
+    for s in prs.slides:
+        T.normalize_run_boundaries(s)
+    textfit.fit_presentation_text(prs)
+    for s, sh in pills:
+        T.hug_pill_background(s, sh)
     for s in prs.slides:
         T.clear_autofit_scale(s)
 
