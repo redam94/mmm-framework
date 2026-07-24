@@ -2,13 +2,14 @@ import json
 import os
 from typing import Literal
 
-from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 
 from mmm_framework.agents.context import cap_text, manage_context
 from mmm_framework.agents.state import AgentState
 from mmm_framework.agents.tools import TOOLS
+from mmm_framework.agents.workflow_guard import next_paused_step, plan_pause
 
 # Per-turn caps on the state blobs re-injected into the system message every
 # turn. These don't accumulate, but unbounded they can each dominate a request.
@@ -139,8 +140,8 @@ def create_agent_graph(
             "context_summary_count": summary_count,
         }
 
-    def should_continue(state: AgentState) -> Literal["tools", END]:
-        """Determine if we should call tools or wait for user input."""
+    def should_continue(state: AgentState) -> Literal["tools", "pause", END]:
+        """Route the agent's output: run tools, pause the turn, or wait for input."""
         messages = state["messages"]
         # A UI-driven state write (e.g. Data Studio commit, spec edit) can apply
         # as_node="agent" to a thread that has never chatted — no messages yet.
@@ -149,10 +150,22 @@ def create_agent_graph(
             return END
         last_message = messages[-1]
 
-        if getattr(last_message, "tool_calls", None):
-            return "tools"
+        if not getattr(last_message, "tool_calls", None):
+            return END
 
-        return END
+        # Structural workflow-step guard: stop a weak model from auto-running the
+        # whole modeling pipeline off a single high-level ask. Applies only to the
+        # orchestrator / single-agent graph — NEVER the expert sub-agent, which is
+        # handed one task and must run it end-to-end. Counting is scoped to the
+        # bound (executable) toolset so a rejected heavy call can't burn the
+        # budget. See agents.workflow_guard.
+        if (
+            role != "expert"
+            and next_paused_step(messages, valid_tools=_valid_tool_names) is not None
+        ):
+            return "pause"
+
+        return "tools"
 
     # Build the graph
     workflow = StateGraph(AgentState)
@@ -210,12 +223,64 @@ def create_agent_graph(
             # still answers every call (with its generic error for invalid ones).
             return _cap_tool_output(_stock_tool_node.invoke(state))
 
+    def pause_node(state: AgentState):
+        """End the turn early when the workflow-step guard trips.
+
+        The turn still advances exactly one step: any non-milestone calls plus
+        the first milestone that fits this turn's remaining budget are RUN (via
+        ``tools_node``, so orchestrator invalid-tool correction still applies);
+        every deferred milestone is answered with a "not executed" ToolMessage —
+        keeping the history valid (Anthropic 400s on an AIMessage whose tool_calls
+        lack an answering ToolMessage) — and the turn ends on a plain assistant
+        message explaining the pause. The graph then routes straight to END.
+        """
+        messages = list(state["messages"])
+        last = messages[-1]
+        run_calls, defer_calls, step_label = plan_pause(
+            messages, valid_tools=_valid_tool_names
+        )
+
+        ran_msgs: list = []
+        if run_calls:
+            shim = last.model_copy(update={"tool_calls": run_calls})
+            sub_state = {**state, "messages": messages[:-1] + [shim]}
+            result = tools_node(sub_state)
+            ran_msgs = list(result["messages"] if isinstance(result, dict) else result)
+
+        deferred = [
+            ToolMessage(
+                tool_call_id=c.get("id", ""),
+                name=c.get("name", "unknown"),
+                content=(
+                    "⏸ Not executed — paused for confirmation. This turn's "
+                    "workflow-step budget is spent, so control was returned to the "
+                    "user before starting the next step. Re-issue this call only if "
+                    "the user asks to continue."
+                ),
+            )
+            for c in defer_calls
+        ]
+        pause_text = (
+            f"I paused before **{step_label}**. I take the modeling workflow one "
+            f"step per message so you can steer between steps.\n\n"
+            f"- Reply **continue** and I'll do just that next step.\n"
+            f"- Say **run the whole workflow** (or **do everything**) and I'll "
+            f"carry the pipeline through without pausing.\n"
+            f"- Or tell me to do something different."
+        )
+        return {"messages": ran_msgs + deferred + [AIMessage(content=pause_text)]}
+
     workflow.add_node("agent", agent_node)
     workflow.add_node("tools", tools_node)
+    workflow.add_node("pause", pause_node)
 
     workflow.add_edge(START, "agent")
-    workflow.add_conditional_edges("agent", should_continue)
+    workflow.add_conditional_edges(
+        "agent", should_continue, {"tools": "tools", "pause": "pause", END: END}
+    )
     workflow.add_edge("tools", "agent")
+    # A paused turn hands control back to the user — do NOT loop back to the agent.
+    workflow.add_edge("pause", END)
 
     # Compile the graph
     return workflow.compile(checkpointer=checkpointer)
