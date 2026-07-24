@@ -98,6 +98,7 @@ so a first fit needs no data-loading code:
    :maxdepth: 2
    :caption: Getting Started
 
+   getting_started
    introduction
    scientific_modeling
 
