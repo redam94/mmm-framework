@@ -73,7 +73,7 @@ class Branding(BaseModel):
 def resolve_branding(thread_id: str | None) -> dict[str, Any] | None:
     """The effective branding for a session: project branding, falling back to
     the global defaults. Returns a plain dict (or None)."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     try:
         project_id = sessions_store.resolve_project_id(thread_id)

@@ -246,13 +246,18 @@ def unconsumed_prior_path(parts: list[str], value, spec: dict) -> str | None:
                         f"`priors.{group}.<name>.*` keys: {', '.join(sorted(allowed))}."
                     )
             return None
-        if group != "seasonality":  # seasonality falls through to normal validation
+        # seasonality AND trend fall through to normal validation: the
+        # extension graphs consume both since the 2026-07-08 temporal wiring
+        # (BaseExtendedMMM builds the spec's trend/seasonality via
+        # components/temporal.py) — rejecting priors.trend.* here was a false
+        # negative caught by the 2026-07-24 v1.0 contract audit.
+        if group not in ("seasonality", "trend"):
             return (
                 f"`priors.{group}.*` won't apply to this DAG-routed **{ext}** "
                 "model — its media/control priors come from the causal DAG, not "
                 "the spec. Set priors.mediator/outcome/cross_effect.<name>.<key> "
-                "(or priors.seasonality.*), or fit a plain MMM. Inspect the "
-                "model's actual priors with `prior_predictive_check`."
+                "(or priors.seasonality.* / priors.trend.*), or fit a plain MMM. "
+                "Inspect the model's actual priors with `prior_predictive_check`."
             )
 
     def _leaves(p: list[str], v) -> list[list[str]]:
@@ -366,7 +371,10 @@ _TREND_TYPES = {"linear", "piecewise", "spline", "gaussian_process", "none"}
 _SEASONALITY_KEYS = {"yearly", "monthly", "weekly"}
 _LIKELIHOOD_KEYS = {"family", "link", "params"}
 _ADSTOCK_KEYS = {"type", "l_max"}
-_ADSTOCK_TYPES = {"geometric", "weibull", "delayed"}
+# "none" disables the transform (AdstockType.NONE) — the library supported it
+# but the spec registry didn't, so a raw write silently coerced to geometric
+# (v1.0 contract audit).
+_ADSTOCK_TYPES = {"geometric", "weibull", "delayed", "none"}
 _SATURATION_KEYS = {"type"}
 _SATURATION_TYPES = {
     "hill",
@@ -375,6 +383,7 @@ _SATURATION_TYPES = {
     "michaelis-menten",
     "tanh",
     "root",
+    "none",
 }
 _MEASUREMENT_UNITS = {"spend", "impressions", "clicks", "other"}
 _CHANNEL_SCALAR_FIELDS = {"name", "measurement_unit", "spend_column", "cpm", "cpc"}
@@ -385,6 +394,10 @@ _ENUM_TOP_VALUES = {
     "kpi_level": {"national", "geo"},
     "time_granularity": {"weekly", "daily", "monthly"},
     "media_prior_mode": {"coefficient", "roi"},
+    # Consumed by _model_config_from_spec (functional form). Was missing from
+    # the registry until the 2026-07-24 v1.0 contract audit — update_model_setting
+    # rejected a setting the builder honors.
+    "specification": {"additive", "multiplicative"},
 }
 # Consumed but free-form: validated downstream at build time (dataset loader,
 # garden manifest, CONFIG_SCHEMA, Estimand.from_dict, ExperimentMeasurement).
@@ -676,6 +689,8 @@ def _mff_config_from_spec(spec: dict):
             ab.weibull().with_max_lag(l_max)
         elif adstock_type == "delayed":
             ab.delayed().with_max_lag(l_max)
+        elif adstock_type == "none":
+            ab.none()
         else:
             ab.geometric().with_max_lag(l_max)
         if "adstock_alpha" in ch_priors:
@@ -694,6 +709,8 @@ def _mff_config_from_spec(spec: dict):
             sb.tanh()
         elif sat_type == "root":
             sb.root()
+        elif sat_type == "none":
+            sb.none()
         else:
             sb.hill()
         if "saturation_kappa" in ch_priors:
@@ -749,6 +766,13 @@ def _mff_config_from_spec(spec: dict):
     for control in spec.get("control_variables", []):
         cv_name = control["name"]
         cv_builder = ControlVariableConfigBuilder(cv_name).national()
+        # Causal role (confounder | precision). The registry has always
+        # accepted this write; it was silently dropped here until the
+        # 2026-07-24 v1.0 contract audit — now it reaches the config, driving
+        # back-door reporting + the explicit-prior-on-confounder warning.
+        cv_role = str(control.get("role") or "").strip().lower()
+        if cv_role:
+            cv_builder.with_causal_role(cv_role)
         cv_priors = control_priors_cfg.get(cv_name, {})
         if cv_priors.get("allow_negative", True) is False:
             cv_builder.positive_only()

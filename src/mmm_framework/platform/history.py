@@ -21,7 +21,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any
 
-from mmm_framework.api import sessions as sessions_store
+from mmm_framework.platform import sessions as sessions_store
 from mmm_framework.planning.eig import (
     channel_half_life,
     reexperiment_due,

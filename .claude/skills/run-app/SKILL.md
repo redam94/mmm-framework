@@ -1,6 +1,6 @@
 ---
 name: run-app
-description: Launch and drive the MMM Framework app — the FastAPI agent API (src/mmm_framework/api, uvicorn :8000) plus the React/Vite frontend (frontend/, :5173) — and walk through it in a real browser. The repo's verified launch recipe; use it WHENEVER the user asks to run, start, launch, serve, preview, or open the app / dev server / frontend / backend / UI, or to walk through, drive, screenshot, smoke-test, or verify a change in the running app — especially the Atelier / Model Garden page. Encodes the working ports, the dev auth bypass, the Python-Playwright driver, and the by-port shutdown.
+description: Launch and drive the MMM Framework app — the FastAPI agent API (server/src/mmm_framework_server, uvicorn :8000) plus the React/Vite frontend (frontend/, :5173) — and walk through it in a real browser. The repo's verified launch recipe; use it WHENEVER the user asks to run, start, launch, serve, preview, or open the app / dev server / frontend / backend / UI, or to walk through, drive, screenshot, smoke-test, or verify a change in the running app — especially the Atelier / Model Garden page. Encodes the working ports, the dev auth bypass, the Python-Playwright driver, and the by-port shutdown.
 ---
 
 # Run the MMM Framework app
@@ -17,7 +17,7 @@ From the repo root:
 ```bash
 # Backend — agent API on :8000 (isolated workspace; in-process kernel)
 MMM_AGENT_WORKSPACE=/tmp/mmm_ws MMM_AGENT_KERNEL=inprocess \
-  uv run uvicorn mmm_framework.api.main:app --port 8000 --log-level warning
+  uv run uvicorn mmm_framework_server.main:app --port 8000 --log-level warning
 # Frontend — Vite dev server on :5173 (proxies /api -> :8000)
 cd frontend && npm run dev
 ```

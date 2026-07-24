@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 from fastapi import HTTPException
 
-from mmm_framework.api import connection_sync
-from mmm_framework.api import sessions as ss
+from mmm_framework.platform import connection_sync
+from mmm_framework.platform import sessions as ss
 
 
 @pytest.fixture()
@@ -155,7 +155,7 @@ def test_default_writer_unique_per_connection(tmp_path, monkeypatch):
 
 
 def test_schedule_endpoint(db):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = ss.create_project("P")["project_id"]
     conn = ss.create_data_connection(pid, "c", "gcs", {"bucket": "b"})

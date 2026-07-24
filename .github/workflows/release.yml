@@ -1,0 +1,68 @@
+# Release pipeline: push a `v*` tag → build the core `mmm-framework` package,
+# publish it to PyPI, and create the GitHub release with the artifacts attached.
+#
+# PyPI auth uses **trusted publishing** (OIDC — no long-lived token in repo
+# secrets): configure once at https://pypi.org/manage/project/mmm-framework/settings/publishing/
+# with owner=redam94, repository=mmm-framework, workflow=release.yml,
+# environment=pypi. Until that is configured, the publish job fails cleanly and
+# a maintainer can publish the built artifacts locally with twine.
+#
+# Only the core library ships to PyPI. `mmm-framework-server` (server/) is the
+# deployable web app — it is released via the deploy/ images, not the index.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Build sdist + wheel (core package)
+        run: uv build
+      - name: Sanity-check the artifacts
+        run: |
+          ls -l dist/
+          test -f dist/mmm_framework-*.whl
+          test -f dist/mmm_framework-*.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # OIDC trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "mmm-framework $GITHUB_REF_NAME" \
+            --generate-notes

@@ -2,7 +2,8 @@ MMM Framework Documentation
 ===========================
 
 **MMM Framework** is a production-ready Bayesian Marketing Mix Modeling framework
-extending PyMC-Marketing with advanced capabilities for modeling marketing effectiveness.
+built on a standalone PyMC 6 engine — it does not subclass or depend on
+PyMC-Marketing — with advanced capabilities for modeling marketing effectiveness.
 
 The framework emphasizes:
 
@@ -14,7 +15,20 @@ The framework emphasizes:
 Installation
 ------------
 
-Install mmm-framework using UV (recommended):
+Install the modeling library from PyPI:
+
+.. code-block:: bash
+
+   # Lean modeling core — business logic only (no web/LLM deps)
+   pip install mmm-framework
+
+   # Optional: the LangGraph oracle-agent / LLM stack
+   pip install "mmm-framework[agents]"
+
+The FastAPI web app ships as the separate ``mmm-framework-server`` workspace
+package and is not part of the library install.
+
+For development, install from source:
 
 .. code-block:: bash
 
@@ -22,8 +36,11 @@ Install mmm-framework using UV (recommended):
    git clone https://github.com/redam94/mmm-framework.git
    cd mmm-framework
 
-   # Install with UV
+   # Full dev workspace: core + [agents] + the API server package
    uv sync
+
+   # Lean library only
+   uv sync --no-dev
 
    # Or with pip
    pip install -e .
@@ -31,28 +48,51 @@ Install mmm-framework using UV (recommended):
 Quick Example
 -------------
 
+The library bundles ready-to-model example datasets (with sealed answer keys),
+so a first fit needs no data-loading code:
+
 .. code-block:: python
 
    from mmm_framework import (
-       MFFLoader,
-       ModelConfigBuilder,
+       load_example,
+       load_example_answer_key,
        BayesianMMM,
+       ModelConfigBuilder,
+       TrendConfig,
+       TrendType,
    )
 
-   # Load data
-   loader = MFFLoader(config=mff_config)
-   panel = loader.load("data.csv")
+   # 1. Load a bundled example — 104 weeks of national weekly data, ready to model.
+   panel = load_example("national")
+   print(panel.summary())
 
-   # Build configuration
-   config = (
+   # 2. Configure inference (fast JAX/NumPyro sampler) and a linear trend.
+   model_config = (
        ModelConfigBuilder()
-       .with_kpi("sales")
+       .bayesian_numpyro()      # ~3x faster than PyMC at equal draws
+       .with_chains(4)
+       .with_draws(500)         # small + fast for a first run
+       .with_tune(500)
        .build()
    )
+   trend_config = TrendConfig(type=TrendType.LINEAR)
 
-   # Fit model
-   model = BayesianMMM(panel, config)
-   results = model.fit(draws=1000, tune=500)
+   # 3. Fit. On a laptop this national model takes roughly 15-25 seconds.
+   mmm = BayesianMMM(panel, model_config, trend_config)
+   results = mmm.fit(random_seed=42)
+   print("max R-hat:", round(results.diagnostics["rhat_max"], 3))   # ~1.0 = converged
+
+   # 4. The headline: each channel's return on ad spend (contribution / spend).
+   decomp = mmm.compute_component_decomposition()
+   roi = (decomp.media_by_channel.sum() / panel.X_media.sum()).sort_values(ascending=False)
+   print("\nEstimated ROI by channel:")
+   print(roi.round(2))
+
+   # 5. This example ships a SEALED answer key — grade the estimate against truth.
+   truth = load_example_answer_key("national")["true_roas"]
+   print("\nchannel   estimated   true")
+   for ch in roi.index:
+       print(f"  {ch:<8} {roi[ch]:>8.2f}   {truth[ch]:>5.2f}")
 
 .. toctree::
    :maxdepth: 2

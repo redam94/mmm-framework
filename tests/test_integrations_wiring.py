@@ -16,7 +16,7 @@ def _message(result: Command) -> str:
 
 
 def test_catalog_endpoint_payload():
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     out = asyncio.run(M.integrations_catalog_endpoint())
     kinds = {d["kind"] for d in out["data_sources"]}

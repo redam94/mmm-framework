@@ -7,7 +7,7 @@ in part once the Postgres + object-store migration lands (action plan P1a/P1b).
 
 | State | Location | Criticality |
 |-------|----------|-------------|
-| Sessions, auth (users/orgs/tokens), run_metrics, langgraph checkpoints | one SQLite file (`src/mmm_framework/api/sessions.db`) | **critical** |
+| Sessions, auth (users/orgs/tokens), run_metrics, langgraph checkpoints | one SQLite file (`src/mmm_framework/platform/sessions.db`) | **critical** |
 | Fitted models, plots, tables, KB | agent workspace (`$MMM_AGENT_WORKSPACE`, default `./agent_workspace`) | high |
 | Uploaded client datasets | storage dir (local FS today) | high |
 | Audit chain | `mmm_audit` log + off-host shipper (if configured) | medium |
@@ -28,10 +28,10 @@ The SQLite store has an online, WAL-consistent backup (safe while running):
 
 ```bash
 # one-off
-python -m mmm_framework.api.backup backup /backups/sessions-$(date +%F).db
+python -m mmm_framework.platform.backup backup /backups/sessions-$(date +%F).db
 
 # hourly cron (example)
-0 * * * * cd /app && python -m mmm_framework.api.backup backup \
+0 * * * * cd /app && python -m mmm_framework.platform.backup backup \
     /backups/sessions-$(date +\%F-\%H).db && \
     find /backups -name 'sessions-*.db' -mtime +14 -delete
 ```
@@ -46,7 +46,7 @@ loss is recoverable. Verify backups by periodically restoring into a scratch pat
 
 ```bash
 # stop the API + worker first
-python -m mmm_framework.api.backup restore /backups/sessions-2026-06-25.db
+python -m mmm_framework.platform.backup restore /backups/sessions-2026-06-25.db
 # restore the workspace + dataset dirs from their backups, then restart
 ```
 

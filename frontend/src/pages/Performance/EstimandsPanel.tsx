@@ -309,7 +309,7 @@ export function EstimandsPanel({ projectId }: { projectId: string }) {
       <EmptyState
         icon={LineChart}
         title="No estimands yet"
-        description="Estimands are captured when a model is fitted. Fit a model in the Workspace, or backfill existing models with: python -m mmm_framework.api.backfill --what estimands"
+        description="Estimands are captured when a model is fitted. Fit a model in the Workspace, or backfill existing models with: python -m mmm_framework.platform.backfill --what estimands"
       />
     );
   }

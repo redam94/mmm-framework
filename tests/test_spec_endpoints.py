@@ -22,7 +22,7 @@ def _body(resp) -> dict:
 @pytest.fixture()
 def app_main(monkeypatch):
     """main.py with its module-level checkpointer swapped for an in-memory one."""
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     monkeypatch.setattr(M, "memory", MemorySaver())
     return M
@@ -193,7 +193,7 @@ async def test_resolve_unknown_path_is_404(app_main):
 
 class TestFoldDashboardUpdate:
     def _M(self):
-        from mmm_framework.api import main as M
+        from mmm_framework_server import main as M
 
         return M
 

@@ -11,7 +11,7 @@ import {
 import { usePortfolio } from '../../api/hooks/usePortfolio';
 import type { NextAction } from '../../api/services/portfolioService';
 
-type ActionType = NextAction['type'] | 'retest';
+type ActionType = NextAction['type'];
 
 const ACTION_STYLE: Record<ActionType, { icon: typeof FlaskConical; ring: string; iconColor: string }> = {
   calibrate: { icon: Scale, ring: 'border-rust-600/30 bg-rust-100/40', iconColor: 'text-rust-600' },

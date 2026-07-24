@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture &amp; Flow Diagrams | MMM Framework</title>
+    <meta name="description" content="How the MMM Framework fits together at v1.0.0: the lean modeling core, the agents extra, the FastAPI server package, the React UI, and the session kernel — with dependency, data-flow, request-flow, and measurement-loop diagrams.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/architecture.html">
+    <meta property="og:title" content="Architecture &amp; Flow Diagrams | MMM Framework">
+    <meta property="og:description" content="Dependency architecture, model-building data flow, application request flow, and the measurement loop — the four diagrams that explain how the MMM Framework is put together.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/architecture.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Mermaid for the diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* =====================================================================
+           Architecture page-scoped layer. Diagrams sit in a light figure card
+           (mermaid's neutral theme draws dark text and edges, so in dark mode
+           the card stays light — the same approach the site takes for Plotly
+           charts). Everything else uses the shared tokens.
+           ===================================================================== */
+
+        .arch-figure {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.75rem 0;
+            text-align: center;
+            overflow-x: auto;
+        }
+        .arch-figure .mermaid {
+            background: transparent;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+        }
+        .arch-figure .mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+        .arch-figure figcaption {
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+        }
+        /* Mermaid's neutral theme is drawn for a light canvas; float the
+           figure on a light card in dark mode so edges and labels stay
+           legible (mirrors the shared [data-theme="dark"] .js-plotly-plot rule). */
+        [data-theme="dark"] .arch-figure {
+            background: #ffffff;
+            border-color: #ffffff;
+        }
+        [data-theme="dark"] .arch-figure figcaption {
+            color: #5a6b5a;
+        }
+
+        /* Compact mapping table */
+        table.arch-map td, table.arch-map th { padding: 0.55rem 0.75rem; }
+        table.arch-map td:last-child { white-space: nowrap; }
+        @media (max-width: 720px) {
+            table.arch-map td:last-child { white-space: normal; }
+        }
+
+        /* Small takeaway list under each diagram */
+        .arch-takeaways {
+            margin: 1rem 0 2rem;
+            padding: 1rem 1.25rem 1rem 2.4rem;
+            background: var(--tint-primary-06);
+            border-left: 3px solid var(--color-primary);
+            border-radius: 0 8px 8px 0;
+        }
+        .arch-takeaways li { margin-bottom: 0.4rem; }
+        .arch-takeaways li:last-child { margin-bottom: 0; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Architecture &amp; Flow Diagrams | MMM Framework">
+    <meta name="twitter:description" content="Dependency architecture, model-building data flow, application request flow, and the measurement loop — the four diagrams that explain how the MMM Framework is put together.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta name="author" content="Matthew Reda">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/architecture.html",
+          "name": "Architecture & Flow Diagrams | MMM Framework",
+          "description": "How the MMM Framework fits together at v1.0.0: the lean modeling core, the agents extra, the FastAPI server package, the React UI, and the session kernel — with dependency, data-flow, request-flow, and measurement-loop diagrams.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-23",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/architecture.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/architecture.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/architecture.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Architecture & Flow Diagrams",
+              "item": "https://redam94.github.io/mmm-framework/architecture.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Overview</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">What ships at v1.0.0</a></li>
+                <li><a href="#install-matrix">Install what you need</a></li>
+            </ul>
+
+            <h3>Diagrams</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#dependency-architecture">Package architecture</a></li>
+                <li><a href="#model-data-flow">Model-building data flow</a></li>
+                <li><a href="#request-flow">Application request flow</a></li>
+                <li><a href="#measurement-loop">The measurement loop</a></li>
+            </ul>
+
+            <h3>Reference</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#where-things-live">Where things live</a></li>
+                <li><a href="#next">Where to go next</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Architecture &amp; Flow Diagrams</h1>
+            <p class="lead">
+                One repository, several deliberately separable layers. At v1.0.0 the framework is a
+                <strong>uv workspace</strong> with a lean modeling core and optional application layers
+                on top — install exactly as much of the platform as you need.
+            </p>
+
+            <p>
+                The split is simple to state: <code>pip install mmm-framework</code> gives you the
+                <strong>business logic only</strong> — the Bayesian modeling engine on the PyMC&nbsp;6 stack,
+                with reporting, validation, planning, and estimands, and nothing that phones an LLM or
+                serves HTTP. The <code>mmm-framework[agents]</code> extra adds the <strong>LangGraph
+                oracle</strong> (langgraph / langchain, plus <code>httpx</code>, <code>pypdf</code>, and
+                <code>python-docx</code> for knowledge-base ingestion). The web application is its own
+                package: <strong><code>mmm-framework-server</code></strong> (repo directory
+                <code>server/</code>, Python package <code>mmm_framework_server</code>) is the FastAPI app,
+                run with <code>uvicorn mmm_framework_server.main:app</code>. The <code>frontend/</code>
+                directory holds the React UI that talks to it over HTTP and SSE.
+            </p>
+
+            <p>
+                One rename matters if you knew the pre-1.0 layout: the former
+                <code>mmm_framework.api</code> <em>service</em> modules — the sessions store, run history,
+                pacing, scorecard, triangulation, backfill, backup, and friends — are now
+                <strong><code>mmm_framework.platform</code></strong>. They are dependency-light and shared
+                by both the agents layer and the server, so the core package can carry them without
+                dragging in a web stack. A lean-import gate test
+                (<code>tests/test_lean_imports.py</code>) pins the invariant: importing the core must not
+                pull the agent or server dependencies.
+            </p>
+
+            <h2 id="install-matrix">Install what you need</h2>
+            <pre><code class="language-bash"># Modeling core only — PyMC 6 stack, no LLM, no web server
+pip install mmm-framework
+
+# Core + the LangGraph oracle agent (langgraph/langchain, httpx, pypdf, python-docx)
+pip install "mmm-framework[agents]"
+
+# The FastAPI application (depends on mmm-framework[agents])
+pip install mmm-framework-server
+uvicorn mmm_framework_server.main:app --host 0.0.0.0 --port 8000
+
+# Optional data-integration extras for the core
+pip install "mmm-framework[gcp]"   # GCS + BigQuery readers
+pip install "mmm-framework[s3]"    # S3 object store</code></pre>
+
+            <div class="note">
+                <h4>💡 Who this page is for</h4>
+                <p>
+                    Technical evaluators and developers deciding what to deploy where. If you want the
+                    guided product tour instead, start with the
+                    <a href="platform-overview.html">Platform Overview</a>; if you want to fit a model in
+                    ten minutes, start with <a href="getting-started.html">Getting Started</a>.
+                </p>
+            </div>
+
+            <!-- ============================================================ -->
+            <h2 id="dependency-architecture">1 · Package &amp; dependency architecture</h2>
+
+            <p>
+                Dependencies point in exactly one direction: the server depends on the core with the
+                agents extra, the agents extra depends on the core, and the core depends on nothing
+                above it. The React frontend is not a Python dependency at all — it speaks HTTP and SSE
+                to the server. The session kernel image is a deploy artifact built <em>from</em> the lean
+                core (plus <code>ipykernel</code>, <code>python-pptx</code>, and <code>matplotlib</code>
+                for in-kernel deck and chart rendering) and deliberately carries no LLM or web stack:
+                user code executed in a session never has the credentials or the libraries to call out.
+            </p>
+
+            <figure class="arch-figure">
+                <div class="mermaid">
+graph TD
+    FE["frontend/<br/><small>React + Vite UI</small>"]
+    SRV["mmm-framework-server<br/><small>FastAPI app · repo server/ · package mmm_framework_server</small>"]
+    AGENTS["mmm-framework with the agents extra<br/><small>LangGraph oracle · langgraph, langchain, httpx, pypdf, python-docx</small>"]
+    CORE["mmm-framework — the core<br/><small>model · transforms · config + builders · reporting · validation<br/>planning · estimands · diagnostics · eda · synth · platform · auth core</small>"]
+    KERNEL["session kernel image<br/><small>lean core + ipykernel + python-pptx + matplotlib<br/>no LLM or web stack</small>"]
+    GCP["gcp extra<br/><small>GCS + BigQuery</small>"]
+    S3["s3 extra<br/><small>S3 object store</small>"]
+
+    FE -->|"HTTP + SSE"| SRV
+    SRV -->|"depends on"| AGENTS
+    AGENTS -->|"depends on"| CORE
+    KERNEL -->|"built from"| CORE
+    GCP -.->|"optional extra of"| CORE
+    S3 -.->|"optional extra of"| CORE
+
+    style FE fill:#e6f0f7,stroke:#4a6d8a
+    style SRV fill:#f7f0e6,stroke:#8a6d4a
+    style AGENTS fill:#f0e6f7,stroke:#6d4a8a
+    style CORE fill:#f0f7e6,stroke:#6d8a4a
+    style KERNEL fill:#e6f7f0,stroke:#4a8a6d
+                </div>
+                <figcaption>Solid arrows are hard dependencies; dotted arrows are optional extras. Nothing in the core depends outward.</figcaption>
+            </figure>
+
+            <ul class="arch-takeaways">
+                <li><strong>The core is embeddable.</strong> <code>pip install mmm-framework</code> in a
+                    notebook or a batch pipeline gives you the full modeling engine with no agent or web
+                    baggage — the lean-import gate test keeps it that way.</li>
+                <li><strong>The agents layer is an extra, not a fork.</strong> The lazy
+                    <code>agents/__init__</code> means the langchain-free agent modules import without
+                    the extra; only the LLM-facing modules need it.</li>
+                <li><strong>The kernel image is intentionally blind.</strong> Session code runs against
+                    the lean core in a sandbox with a scrubbed environment — no API keys, no web client
+                    libraries.</li>
+            </ul>
+
+            <!-- ============================================================ -->
+            <h2 id="model-data-flow">2 · Model-building data flow</h2>
+
+            <p>
+                The modeling pipeline is a straight line from data to a fitted posterior, then a fan-out
+                into everything you do with one. Data arrives as an MFF (Master Flat File) CSV, a wide
+                CSV, or a bundled <code>load_example()</code> dataset; <code>MFFLoader</code> validates it
+                (schema, cadence, coverage) and produces a <code>PanelDataset</code>; <code>BayesianMMM</code>
+                builds the PyMC graph — adstock, then saturation, then trend, seasonality, and controls,
+                then the likelihood — and fits it with full NUTS (PyMC or numpyro), an approximate method
+                for fast iteration (MAP, ADVI, pathfinder, Laplace), or tempered SMC, which is exact.
+                Everything downstream consumes the same <code>MMMResults</code> object.
+            </p>
+
+            <figure class="arch-figure">
+                <div class="mermaid">
+graph LR
+    subgraph IN["Data in"]
+        MFF["MFF CSV<br/><small>long format</small>"]
+        WIDE["wide CSV"]
+        EX["load_example()"]
+    end
+    LOAD["MFFLoader<br/><small>validation · cadence checks</small>"]
+    PANEL["PanelDataset"]
+    MODEL["BayesianMMM<br/><small>adstock → saturation → trend, seasonality, controls → likelihood<br/>fit: NUTS / numpyro · approximate MAP, ADVI, pathfinder, Laplace · SMC exact</small>"]
+    RES["MMMResults<br/><small>posterior · diagnostics · estimands</small>"]
+    subgraph OUT["Fan-out"]
+        REP["MMMReportGenerator<br/><small>Augur HTML readout</small>"]
+        IREP["InteractiveReportGenerator<br/><small>recompute-in-browser report</small>"]
+        SER["MMMSerializer<br/><small>persisted model directory</small>"]
+        ANA["analysis + estimands<br/><small>ROI · marginal ROAS · counterfactuals</small>"]
+        VAL["validation<br/><small>backtests · SBC · refutation</small>"]
+    end
+
+    MFF --> LOAD
+    WIDE --> LOAD
+    EX --> LOAD
+    LOAD --> PANEL
+    PANEL --> MODEL
+    MODEL --> RES
+    RES --> REP
+    RES --> IREP
+    RES --> SER
+    RES --> ANA
+    RES --> VAL
+
+    style IN fill:#e6f0f7,stroke:#4a6d8a
+    style OUT fill:#f0f7e6,stroke:#6d8a4a
+    style MODEL fill:#f7f0e6,stroke:#8a6d4a
+                </div>
+                <figcaption>One results object feeds every downstream surface — reports, persistence, analysis, and validation never re-fit.</figcaption>
+            </figure>
+
+            <ul class="arch-takeaways">
+                <li><strong>Validation happens at the door.</strong> <code>MFFLoader</code> rejects
+                    malformed panels (cadence gaps, duplicate cells, missing dims) before a model ever
+                    sees them.</li>
+                <li><strong>Approximate fits are first-class but labelled.</strong> A MAP or ADVI
+                    <code>MMMResults</code> is a drop-in for iteration, and every downstream surface —
+                    reports, serialization, run history — carries the <em>approximate</em> flag so
+                    uncalibrated uncertainty is never mistaken for a full posterior.</li>
+                <li><strong>The fan-out is symmetric.</strong> Reports, the interactive report, the
+                    serializer, analysis, and the validation suite all read the same posterior; there is
+                    no second code path for "the numbers in the report."</li>
+            </ul>
+
+            <!-- ============================================================ -->
+            <h2 id="request-flow">3 · Application request flow</h2>
+
+            <p>
+                When the full application is deployed, a chat turn traces a single round trip. The React
+                UI (dev port 5173) opens an SSE stream against the FastAPI server's <code>/chat</code>
+                endpoint (port 8000); the server resumes the LangGraph agent from its checkpoint; the
+                agent — held to one workflow step per user turn by the workflow-step guard — calls tools;
+                heavy work (including model fits) runs inside the per-session kernel, which can be
+                in-process, a subprocess, or a sandboxed container; durable state lands in the SQLite
+                sessions store under <code>mmm_framework.platform.sessions</code>. Results stream back as
+                typed SSE events and render into the workspace tabs.
+            </p>
+
+            <figure class="arch-figure">
+                <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as React UI (port 5173)
+    participant API as FastAPI server (port 8000)
+    participant Agent as LangGraph agent
+    participant Tools as Tools layer
+    participant Kernel as Session kernel
+    participant Store as platform.sessions (SQLite)
+
+    User->>UI: Ask a question in the Oracle
+    UI->>API: POST /chat — SSE stream opens
+    API->>Agent: Resume thread from checkpoint
+    Note over Agent: Workflow-step guard —<br/>one pipeline milestone per turn
+    Agent->>Tools: Tool call (EDA, build, fit, report, ...)
+    Tools->>Kernel: execute_python — fits run in-kernel
+    Kernel-->>Tools: stdout, plots, tables
+    Tools->>Store: Persist artifacts, experiments, run metrics
+    Store-->>API: Session state and artifact refs
+    API-->>UI: SSE events — messages, plots, tables, artifacts
+    UI-->>User: Rendered in the workspace tabs
+                </div>
+                <figcaption>The kernel does the compute; the store keeps the durable record; the UI only ever sees typed SSE events.</figcaption>
+            </figure>
+
+            <ul class="arch-takeaways">
+                <li><strong>Fits run in the kernel, not in a queue.</strong> There is no Redis worker or
+                    external job service to operate — the kernel is the compute boundary, and it scales
+                    from in-process (dev) to a sandboxed container (hosted) without changing the flow.</li>
+                <li><strong>The agent is throttled by design.</strong> The workflow-step guard stops an
+                    orchestrator from auto-running the whole nine-step pipeline off one high-level ask;
+                    the user advances the workflow one milestone at a time.</li>
+                <li><strong>Everything the UI shows is replayable.</strong> Plots, tables, and report
+                    artifacts are content-addressed and session-scoped in the store, so a reloaded
+                    session reconstructs its workspace without re-running anything.</li>
+            </ul>
+
+            <!-- ============================================================ -->
+            <h2 id="measurement-loop">4 · The measurement loop</h2>
+
+            <p>
+                The product story is not a one-off model fit — it is an adaptive measurement cycle. A
+                fitted, calibration-aware MMM (T₀) tells you where the posterior is weakest; expected
+                information gain and expected value of information rank which experiment to run next
+                (T₁); experiments are designed and pre-registered with a full lifecycle —
+                draft → planned → running → completed → calibrated (T₂); completed readouts enter the
+                next refit as in-graph experiment likelihoods, not post-hoc adjustments (T₃); the
+                calibrated model drives budget allocation (T₄); and information decay triggers re-tests
+                as the market drifts (T₅), feeding the next round of priorities. The experiment registry
+                and its lifecycle live in <code>mmm_framework.platform.sessions</code>.
+            </p>
+
+            <figure class="arch-figure">
+                <div class="mermaid">
+graph LR
+    T0["T₀ · Fit<br/><small>Bayesian MMM with calibration</small>"]
+    T1["T₁ · Prioritize<br/><small>EIG / EVOI per channel</small>"]
+    T2["T₂ · Design + pre-register<br/><small>geo lift · DiD · flighting<br/>draft → planned → running → completed → calibrated</small>"]
+    T3["T₃ · Calibrated refit<br/><small>experiment likelihoods in-graph</small>"]
+    T4["T₄ · Allocate<br/><small>budget optimizer</small>"]
+    T5["T₅ · Re-evaluate<br/><small>information decay triggers re-tests</small>"]
+
+    T0 --> T1
+    T1 --> T2
+    T2 --> T3
+    T3 --> T4
+    T4 --> T5
+    T5 -->|"new priorities"| T1
+
+    style T0 fill:#f0f7e6,stroke:#6d8a4a
+    style T3 fill:#f0f7e6,stroke:#6d8a4a
+    style T1 fill:#e6f0f7,stroke:#4a6d8a
+    style T5 fill:#e6f0f7,stroke:#4a6d8a
+    style T2 fill:#f7f0e6,stroke:#8a6d4a
+    style T4 fill:#f7f0e6,stroke:#8a6d4a
+                </div>
+                <figcaption>The loop closes at T₅ → T₁: yesterday's answers decay, and the model itself nominates the next experiment.</figcaption>
+            </figure>
+
+            <ul class="arch-takeaways">
+                <li><strong>Experiments are pre-registered, not retrofitted.</strong> The lifecycle
+                    registry enforces legal transitions and audits every readout, so a calibrated number
+                    has a paper trail from draft onward.</li>
+                <li><strong>Calibration is in the likelihood.</strong> A completed experiment constrains
+                    the refit as an in-graph likelihood term on the matching estimand — the posterior
+                    moves for the right structural reason.</li>
+                <li><strong>The loop is the deliverable.</strong> EIG/EVOI priorities, design economics,
+                    and decay-triggered re-tests turn a static report into a standing measurement
+                    program.</li>
+            </ul>
+
+            <!-- ============================================================ -->
+            <h2 id="where-things-live">Where things live</h2>
+
+            <p>
+                A quick map from subsystem to import path. Everything in the first column below the
+                double rule ships in the core package; the last two rows are the agents extra and the
+                separate server package.
+            </p>
+
+            <table class="arch-map">
+                <thead>
+                    <tr><th>Subsystem</th><th>Import path</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Core modeling (engine, transforms, configuration)</td><td><code>mmm_framework.model</code> · <code>.transforms</code> · <code>.builders</code> · <code>.config</code></td></tr>
+                    <tr><td>Data loading and panels</td><td><code>mmm_framework.data_loader</code> · <code>.dataset</code> · <code>.datasets</code></td></tr>
+                    <tr><td>Inference results</td><td><code>mmm_framework.model.results</code></td></tr>
+                    <tr><td>Estimands (named, serializable causal quantities)</td><td><code>mmm_framework.estimands</code></td></tr>
+                    <tr><td>Reporting (Augur readout, interactive report, decks)</td><td><code>mmm_framework.reporting</code></td></tr>
+                    <tr><td>Validation and diagnostics (backtests, SBC, coverage, refutation)</td><td><code>mmm_framework.validation</code> · <code>.diagnostics</code></td></tr>
+                    <tr><td>Experiment planning (EIG/EVOI, design, economics, optimizer)</td><td><code>mmm_framework.planning</code></td></tr>
+                    <tr><td>Platform services (sessions store, run history, pacing, scorecard, triangulation, backfill, backup)</td><td><code>mmm_framework.platform</code></td></tr>
+                    <tr><td>Agent — LangGraph oracle (requires the <code>agents</code> extra)</td><td><code>mmm_framework.agents</code></td></tr>
+                    <tr><td>Server — FastAPI application (separate package)</td><td><code>mmm_framework_server.main</code></td></tr>
+                </tbody>
+            </table>
+
+            <!-- ============================================================ -->
+            <h2 id="next">Where to go next</h2>
+
+            <p>
+                The shapes on this page are frozen by contract: the request/response schemas and artifact
+                formats the diagrams gesture at are specified in
+                <a href="api-contracts.html">API Contracts</a>, and every server endpoint is documented in
+                the <a href="rest-api.html">REST API reference</a>. For the guided product walkthrough see
+                the <a href="platform-overview.html">Platform Overview</a>, and to fit your first model,
+                <a href="getting-started.html">Getting Started</a>.
+            </p>
+
+            <section class="cta-section">
+                <div class="container">
+                    <h2>See it in motion</h2>
+                    <p>The diagrams are the map — the contracts and the quickstart are the territory.</p>
+                    <div class="cta-buttons">
+                        <a href="api-contracts.html" class="btn btn-white">API Contracts</a>
+                        <a href="rest-api.html" class="btn btn-outline-white">REST API Reference</a>
+                        <a href="getting-started.html" class="btn btn-outline-white">Getting Started</a>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+
+        // Smooth scrolling for sidebar links
+        document.querySelectorAll('.sidebar-nav a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href.startsWith('#')) {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }
+            });
+        });
+
+        // Active section highlighting in sidebar
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+                    const activeLink = document.querySelector(`.sidebar-nav a[href="#${entry.target.id}"]`);
+                    if (activeLink) activeLink.classList.add('active');
+                }
+            });
+        }, { threshold: 0.3, rootMargin: '-100px 0px -50% 0px' });
+
+        document.querySelectorAll('h2[id], h3[id]').forEach(section => observer.observe(section));
+    </script>
+</body>
+</html>

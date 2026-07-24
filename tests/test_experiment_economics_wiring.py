@@ -19,7 +19,7 @@ def geo_csv(tmp_path_factory):
 
 
 def test_update_artifact_payload_roundtrip(tmp_path, monkeypatch):
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -71,7 +71,7 @@ def test_economics_op_prefit_is_json_safe(geo_csv):
 def test_safe_json_dumps_strips_native_nan():
     """Review finding 1: native float('nan')/inf must not survive into the JSON
     (they would make JSONResponse(allow_nan=False) 500)."""
-    from mmm_framework.api.main import safe_json_dumps
+    from mmm_framework_server.main import safe_json_dumps
 
     s = safe_json_dumps(
         {"a": float("nan"), "b": [1.0, float("inf")], "c": {"d": float("-inf")}}
@@ -88,7 +88,7 @@ def test_insufficient_windows_payload_renders_through_jsonresponse(geo_csv):
     from fastapi.responses import JSONResponse
 
     from mmm_framework.agents import model_ops as mo
-    from mmm_framework.api.main import safe_json_dumps_load
+    from mmm_framework_server.main import safe_json_dumps_load
 
     path, key = geo_csv
     res = mo.experiment_economics(
@@ -142,9 +142,9 @@ async def test_simulate_job_lifecycle_done_and_cross_project_404(
 ):
     import json as _j
 
-    from mmm_framework.api import history as H
-    from mmm_framework.api import main as M
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import history as H
+    from mmm_framework_server import main as M
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -186,9 +186,9 @@ async def test_simulate_job_writes_error_when_no_saved_model(
 ):
     import json as _j
 
-    from mmm_framework.api import history as H
-    from mmm_framework.api import main as M
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import history as H
+    from mmm_framework_server import main as M
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -219,9 +219,9 @@ def test_optimizer_op_requires_model():
 async def test_optimize_job_lifecycle_done_and_404(tmp_path, monkeypatch, geo_csv):
     import json as _j
 
-    from mmm_framework.api import history as H
-    from mmm_framework.api import main as M
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import history as H
+    from mmm_framework_server import main as M
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -340,9 +340,9 @@ def test_identify_op_requires_model():
 async def test_identify_job_lifecycle_done_and_404(tmp_path, monkeypatch, geo_csv):
     import json as _j
 
-    from mmm_framework.api import history as H
-    from mmm_framework.api import main as M
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import history as H
+    from mmm_framework_server import main as M
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -361,9 +361,7 @@ async def test_identify_job_lifecycle_done_and_404(tmp_path, monkeypatch, geo_cs
     def _fake_op(_tid, _rn, _spec, _dpath, op_name, op_kwargs):
         seen_kwargs.update(op_kwargs, __op__=op_name)
         return {
-            "dashboard": {
-                "structural_identification": {"channel": "TV", "n_levels": 3}
-            }
+            "dashboard": {"structural_identification": {"channel": "TV", "n_levels": 3}}
         }
 
     monkeypatch.setattr(M, "_load_and_run_op", _fake_op)
@@ -398,9 +396,9 @@ async def test_identify_defaults_omit_optional_design_knobs(
     the documented 0.5/1/1.5 levels and the adstock cool-down block)."""
     import json as _j
 
-    from mmm_framework.api import history as H
-    from mmm_framework.api import main as M
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import history as H
+    from mmm_framework_server import main as M
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()

@@ -1,7 +1,7 @@
 import { apiClient } from '../client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-// Mirrors mmm_framework.api.portfolio_benchmark.build_portfolio_benchmark.
+// Mirrors mmm_framework.platform.portfolio_benchmark.build_portfolio_benchmark.
 
 /** A brand's standing for one channel relative to the whole portfolio. */
 export interface VsPortfolio {

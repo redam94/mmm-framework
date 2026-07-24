@@ -1,6 +1,6 @@
 import { apiClient } from '../client';
 
-/** One captured cell run (mirrors api/main.py _notebook_cell_sync output). */
+/** One captured cell run (mirrors mmm_framework_server/main.py _notebook_cell_sync output). */
 export interface NotebookOutput {
   stdout: string;
   plots: { id: string; title: string }[];

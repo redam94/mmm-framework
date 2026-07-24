@@ -1,7 +1,7 @@
 """Org/user persistence — same SQLite DB the session store already uses.
 
 This module is intentionally self-contained (stdlib ``sqlite3`` only): it points
-at ``src/mmm_framework/api/sessions.db`` by default (``MMM_SESSIONS_DB`` env var
+at ``src/mmm_framework/platform/sessions.db`` by default (``MMM_SESSIONS_DB`` env var
 overrides the location) but accepts a ``db_path`` override so it can be
 unit-tested against a throwaway file without importing the (heavier) agent app. It *augments* the existing ``users`` / ``projects`` tables
 and adds ``organizations`` / ``org_members`` — it never drops anything.
@@ -20,12 +20,16 @@ from typing import Any, Iterator
 
 
 def _resolve_default_db_path() -> Path:
-    # Same MMM_SESSIONS_DB override as api/sessions.py:resolve_db_path —
-    # duplicated (not imported) to keep this module stdlib-self-contained.
+    # Same MMM_SESSIONS_DB override + legacy-path fallback as
+    # platform/sessions.py:resolve_db_path — duplicated (not imported) to keep
+    # this module stdlib-self-contained. Must stay in lockstep.
     env = os.environ.get("MMM_SESSIONS_DB", "").strip()
     if env:
         return Path(env).expanduser()
-    return Path(__file__).resolve().parents[1] / "api" / "sessions.db"
+    legacy = Path(__file__).resolve().parents[1] / "api" / "sessions.db"
+    if legacy.exists():
+        return legacy
+    return Path(__file__).resolve().parents[1] / "platform" / "sessions.db"
 
 
 # Default to the same DB file the session/measurement-loop store owns.

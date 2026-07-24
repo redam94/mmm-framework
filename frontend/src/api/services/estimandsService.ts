@@ -4,7 +4,7 @@ import { apiClient } from '../client';
  * Project estimands for the Performance page — the declarative causal lens
  * (contribution ROI, marginal ROAS, incremental contribution, …) realized for
  * every fitted model and grouped into (estimand × KPI) comparability clusters
- * by the backend. Mirrors api/estimands.py.
+ * by the backend. Mirrors mmm_framework/platform/estimands.py.
  */
 
 /** Evidence vs the no-effect reference (1.0 for ratios, 0 otherwise). */

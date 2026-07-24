@@ -169,12 +169,12 @@
 
             <h3>Org boundary on storage</h3>
             <p>
-                Every storage record is stamped with an <code>org_id</code> at save time, and all list queries are org-scoped, so one tenant's listing can never include another's data (<code>api/storage.py:107-110/181-182/424-427/505-508</code> stamping; <code>:122-146/207-222/357-378/456-477/564-585</code> scoped list filters). A per-record <code>assert_org_owns</code> helper raises <strong>404</strong> on any mismatch (<code>storage.py:637-657</code>). Legacy records created before tenancy existed default to a fixed <code>DEFAULT_ORG_ID</code> (<code>storage.py:26</code>), and a one-time, idempotent backfill attaches orphan projects and users to a default organization (<code>storage.py:660-696</code>; <code>src/mmm_framework/auth/store.py:298-345</code>).
+                Every storage record is stamped with an <code>org_id</code> at save time, and all list queries are org-scoped, so one tenant's listing can never include another's data (org stamping and scoped list filters in the sessions store, <code>src/mmm_framework/platform/sessions.py</code>). A per-record <code>assert_org_owns</code> helper raises <strong>404</strong> on any mismatch (<code>src/mmm_framework/platform/sessions.py</code>). Legacy records created before tenancy existed default to a fixed <code>DEFAULT_ORG_ID</code>, and a one-time, idempotent backfill attaches orphan projects and users to a default organization (<code>src/mmm_framework/auth/store.py:298-345</code>).
             </p>
 
             <h3>Per-request authorization</h3>
             <p>
-                Project-scoped routes mount a <code>require_project_access(min_role)</code> dependency (<code>src/mmm_framework/auth/deps.py:141-157</code>). The agent API wires this dependency at 22 enforcement call-sites, and the root Models API routes wire it too. Roles are ordered (viewer → analyst → owner); a route can require a minimum.
+                Project-scoped routes mount a <code>require_project_access(min_role)</code> dependency (<code>src/mmm_framework/auth/deps.py:141-157</code>). The agent API wires this dependency at 22 enforcement call-sites. Roles are ordered (viewer → analyst → owner); a route can require a minimum.
             </p>
 
             <h3>IDOR-safe 404s</h3>
@@ -194,7 +194,7 @@
                 <ul>
                     <li><strong>Enforcement is gated on auth being enabled.</strong> The org checks short-circuit for the single-tenant dev principal (<code>deps.py:129-130</code>), and the org-scoped list/assert helpers only activate when a non-<code>None</code> org is passed — i.e. for a real, non-dev principal. With auth off (the default install), there is one implicit tenant and these checks are no-ops. See section&nbsp;6.</li>
                     <li><strong>Isolation is enforced in application code, not by the datastore.</strong> <code>org_id</code> is stored in plaintext JSON sidecar files alongside the data, and the SQLite store has no row-level database ACLs or foreign-key-enforced tenancy. Correctness depends on each route actually mounting the access dependency. This is a code-level boundary, audited at the call-sites named above — not a database-enforced one.</li>
-                    <li><strong>Hosted chat sessions add a capability layer.</strong> Under <code>MMM_AGENT_HOSTED=1</code>, the chat <code>thread_id</code> is treated as a bearer capability: the API refuses the guessable default and any client-invented or unknown <code>thread_id</code>, requiring a server-minted session, and refuses to drive another org's existing session (<code>src/mmm_framework/api/main.py:450-465</code> rejects non-server-minted IDs with 403; <code>:467-473</code> runs <code>ensure_project_access</code> on an existing session's project). In the default/dev posture, <code>thread_id</code>s are accepted and auto-created.</li>
+                    <li><strong>Hosted chat sessions add a capability layer.</strong> Under <code>MMM_AGENT_HOSTED=1</code>, the chat <code>thread_id</code> is treated as a bearer capability: the API refuses the guessable default and any client-invented or unknown <code>thread_id</code>, requiring a server-minted session, and refuses to drive another org's existing session (<code>server/src/mmm_framework_server/main.py:450-465</code> rejects non-server-minted IDs with 403; <code>:467-473</code> runs <code>ensure_project_access</code> on an existing session's project). In the default/dev posture, <code>thread_id</code>s are accepted and auto-created.</li>
                 </ul>
             </div>
         </div>
@@ -214,7 +214,7 @@
 
             <h3>Fail-closed isolation gate</h3>
             <p>
-                A <code>_verify_isolation</code> gate (<code>container_kernel.py:373-403</code>) <strong>refuses to spawn</strong> a kernel unless read-only rootfs, cap-drop&nbsp;ALL, a memory cap, and a denied-egress posture are all present in the launch command. This gate is automatically required in the hosted profile (or via <code>MMM_KERNEL_REQUIRE_SANDBOX</code>). The hosted profile itself (<code>MMM_AGENT_HOSTED=1</code>, <code>profile.py:29-65</code>) is a single fail-closed switch: it force-upgrades the kernel to <code>container</code>, requires a complete sandbox, denies egress, drops CWD from the download roots, and the boot-time guard (<code>api/main.py:156-158</code>) refuses to start the server on a non-sandboxed kernel.
+                A <code>_verify_isolation</code> gate (<code>container_kernel.py:373-403</code>) <strong>refuses to spawn</strong> a kernel unless read-only rootfs, cap-drop&nbsp;ALL, a memory cap, and a denied-egress posture are all present in the launch command. This gate is automatically required in the hosted profile (or via <code>MMM_KERNEL_REQUIRE_SANDBOX</code>). The hosted profile itself (<code>MMM_AGENT_HOSTED=1</code>, <code>profile.py:29-65</code>) is a single fail-closed switch: it force-upgrades the kernel to <code>container</code>, requires a complete sandbox, denies egress, drops CWD from the download roots, and the boot-time guard (<code>mmm_framework_server/main.py:156-158</code>) refuses to start the server on a non-sandboxed kernel.
             </p>
 
             <div class="warning-box">
@@ -235,7 +235,7 @@
 
             <h3>No hardcoded credentials</h3>
             <p>
-                LLM/provider keys and cloud credentials are read from environment variables or Application Default Credentials only — <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, <code>GOOGLE_API_KEY</code>, Vertex ADC, S3 keys via settings (<code>api/config.py:33-44</code>; <code>src/mmm_framework/auth/config.py:34</code> for the signing secret). A repository grep for hardcoded high-entropy api-key / secret / password literals returned no matches.
+                LLM/provider keys and cloud credentials are read from environment variables or Application Default Credentials only — <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, <code>GOOGLE_API_KEY</code>, Vertex ADC, S3 keys via environment variables (<code>src/mmm_framework/auth/config.py:34</code> for the signing secret). A repository grep for hardcoded high-entropy api-key / secret / password literals returned no matches.
             </p>
 
             <h3>Kernel environment scrubbing</h3>
@@ -254,7 +254,7 @@
                     <li><strong>Env-scrub does not block the cloud metadata server.</strong> On a cloud VM, Application Default Credentials are obtainable from <code>169.254.169.254</code> regardless of environment — that is an <em>egress</em> control (the container tier), not an env control. The <code>subprocess</code> tier is defense-in-depth, not a hosting green-light.</li>
                     <li><strong>The opt-out and the in-process case.</strong> <code>MMM_KERNEL_SCRUB_ENV=0</code> returns the full <code>os.environ</code> (debug only, <code>kernels.py:336-341</code>), and the <code>inprocess</code> kernel shares the API process environment entirely — no scrub is possible there.</li>
                     <li><strong>macOS dev egress is open.</strong> On macOS dev boxes the <code>tcp</code> transport leaves egress open and unenforced, recorded as posture <code>open:unenforced-macos-dev</code> and audited at WARNING (<code>container_kernel.py:187-190</code>). Egress-deny applies to the container kernel only; <code>inprocess</code>/<code>subprocess</code> kernels have full host network.</li>
-                    <li><strong>Protect your <code>.env</code>.</strong> Secrets load from a <code>.env</code> file if present (<code>api/config.py:16-20</code>; <code>auth/config.py:24</code>). CORS <code>allow_credentials</code> defaults <code>True</code> with localhost dev origins (<code>api/config.py:64-72</code>) — review CORS before exposing the API.</li>
+                    <li><strong>Protect your <code>.env</code>.</strong> Secrets load from environment variables (a <code>.env</code> file if present; <code>auth/config.py:24</code>). CORS <code>allow_credentials</code> defaults <code>True</code> with localhost dev origins (<code>server/src/mmm_framework_server/main.py</code>, <code>MMM_CORS_ORIGINS</code>) — review CORS before exposing the API.</li>
                 </ul>
             </div>
         </div>
@@ -291,7 +291,7 @@
                 <h4>⚠️ Tamper-evident, not tamper-proof</h4>
                 <ul>
                     <li>The JSONL is local. The chain makes on-host pre-shipping tampering <em>detectable</em>; true tamper <em>resistance</em> requires the documented off-host shipper to durable storage (<code>audit_sink.py:7-9</code>).</li>
-                    <li>The sink is installed by the API app at startup via <code>install_audit_sink()</code> (<code>:109-128</code>; called from the FastAPI lifespan, <code>src/mmm_framework/api/main.py:167-169</code>). That install is <strong>best-effort</strong> — a failure is logged and swallowed rather than blocking boot — and it only runs when the API process starts; a standalone/library use of the framework that does not boot the API does not get the sink.</li>
+                    <li>The sink is installed by the API app at startup via <code>install_audit_sink()</code> (<code>:109-128</code>; called from the FastAPI lifespan, <code>server/src/mmm_framework_server/main.py:167-169</code>). That install is <strong>best-effort</strong> — a failure is logged and swallowed rather than blocking boot — and it only runs when the API process starts; a standalone/library use of the framework that does not boot the API does not get the sink.</li>
                 </ul>
             </div>
         </div>
@@ -332,15 +332,18 @@
         <div class="container">
             <h2>7. Data Handling — Retention, Deletion &amp; Storage Backends</h2>
             <p>
+                <em>Paths in this section were updated for the 1.0 packaging split; line-number citations predating the split were re-anchored or removed.</em>
+            </p>
+            <p>
                 There is no vendor SaaS: you run every component on infrastructure you control, and all agent and platform state lives on local disk (per-session workspaces, per-project knowledge-base sources, dataset uploads). The deeper data-flow inventory — what reaches an LLM/embedding provider and what stays local — is detailed on the <a href="security.html#main-content">Security &amp; AI Governance</a> page.
             </p>
-            <h3>Storage backends <span class="status-pill status-partial">Partial</span></h3>
+            <h3>Storage backends <span class="status-pill status-impl">Implemented</span></h3>
             <p>
-                A <code>storage_backend</code> setting supports <code>local</code> (default) or <code>s3</code> (<code>api/config.py:37-44</code>), with the local backend provisioning its directory at startup (<code>api/storage.py:48-57</code>). <strong>Honest limitation:</strong> the S3 backend is <em>declared in settings but not yet implemented</em> — <code>StorageService</code> read/write paths all use the local <code>storage_path</code>; there is no S3 code path present today. Treat S3 as a configured-but-not-wired option.
+                The default backend is the local filesystem. An S3 backend is <strong>implemented and opt-in</strong>: <code>src/mmm_framework/storage/object_store.py::S3ObjectStore</code>, installed via the <code>[s3]</code> extra (<code>pip install "mmm-framework[s3]"</code> or <code>uv sync --extra s3</code>).
             </p>
             <h3>Retention &amp; deletion <span class="status-pill status-partial">Partial</span></h3>
             <p>
-                A <code>data_retention_days</code> setting (default 30, <code>api/config.py:52</code>) drives cleanup, and <code>cleanup_old_jobs</code> purges Redis job records older than the cutoff (<code>api/worker.py:1268-1292</code>). <strong>Honest limitation:</strong> retention currently purges only Redis <em>job</em> records — it does <strong>not</strong> auto-delete stored datasets, models, or results on disk. Deletion of data and models is <strong>on-demand</strong> via the <code>delete_*</code> methods on the storage service. If you require time-based deletion of stored data, that is an operational task on the disk store today, not an automatic sweep.
+                Job and session state lives in the sessions SQLite store (<code>src/mmm_framework/platform/sessions.py</code>; location via <code>MMM_SESSIONS_DB</code>) and in per-session workspace directories under <code>MMM_AGENT_WORKSPACE</code>. There is no background worker: Redis, where present, is only the optional shared rate-limit backend. <strong>Honest limitation:</strong> there is <strong>no automatic time-based sweep</strong> — stored datasets, models, and results are not auto-deleted. Deletion is <strong>on-demand</strong> (deleting sessions/projects and removing workspace directories). If you require time-based deletion of stored data, that is an operational task on the disk store today.
             </p>
         </div>
     </section>
@@ -352,7 +355,7 @@
                 Output that crosses the kernel boundary is treated as untrusted egress. Captured Plotly figures and tabular tool output are schema-filtered to an allowed-key set, hard size-capped (<code>MMM_PLOT_MAX_BYTES</code> default 5&nbsp;MiB, <code>MMM_TABLE_MAX_BYTES</code> default 1&nbsp;MiB), and content-addressed with IDs <strong>salted by <code>thread_id</code></strong> so identical payloads neither dedup nor become guessable across sessions (<code>src/mmm_framework/agents/workspace.py:77-158</code>). The size cap rejects (raises) rather than truncating.
             </p>
             <p>
-                File-download serving is <strong>TOCTOU-safe and path-traversal-guarded</strong> (<code>src/mmm_framework/api/main.py:2723-2792</code>): the resolved path must sit inside an allowlisted root, the realpath is opened with <code>O_NOFOLLOW|O_CLOEXEC</code> (rejecting a symlinked final component), the fd is confirmed to be a regular file (<code>S_ISREG</code>), and the response streams from that exact validated fd; traversal guards <code>is_within</code>/<code>safe_join</code> back it (<code>workspace.py:202-226</code>).
+                File-download serving is <strong>TOCTOU-safe and path-traversal-guarded</strong> (<code>server/src/mmm_framework_server/main.py:2723-2792</code>): the resolved path must sit inside an allowlisted root, the realpath is opened with <code>O_NOFOLLOW|O_CLOEXEC</code> (rejecting a symlinked final component), the fd is confirmed to be a regular file (<code>S_ISREG</code>), and the response streams from that exact validated fd; traversal guards <code>is_within</code>/<code>safe_join</code> back it (<code>workspace.py:202-226</code>).
             </p>
             <div class="warning-box">
                 <h4>⚠️ Honest residuals</h4>
@@ -371,7 +374,7 @@
                 Stated honestly: the platform is self-hosted software, so <strong>encryption at rest and in transit are properties of how you deploy it</strong>, not of a vendor-operated service.
             </p>
             <ul>
-                <li><strong>In transit:</strong> the API speaks plain HTTP and expects to sit behind your own TLS-terminating reverse proxy. Token signing (HS256, section&nbsp;6) protects token <em>integrity</em>, but it is not transport encryption — terminate TLS at your perimeter. CORS <code>allow_credentials</code> defaults <code>True</code> with localhost origins (<code>api/config.py:64-72</code>); lock origins down before exposing the API.</li>
+                <li><strong>In transit:</strong> the API speaks plain HTTP and expects to sit behind your own TLS-terminating reverse proxy. Token signing (HS256, section&nbsp;6) protects token <em>integrity</em>, but it is not transport encryption — terminate TLS at your perimeter. CORS <code>allow_credentials</code> defaults <code>True</code> with localhost origins (<code>server/src/mmm_framework_server/main.py</code>, <code>MMM_CORS_ORIGINS</code>); lock origins down before exposing the API.</li>
                 <li><strong>At rest:</strong> platform state is stored as plaintext JSON sidecars and a SQLite <code>sessions.db</code> (WAL mode) on local disk; knowledge-base embeddings are binary blobs in that same SQLite store. Encryption at rest is therefore whatever your <strong>disk / volume encryption</strong> provides (e.g. LUKS, a cloud encrypted volume) — the application does not add its own at-rest layer, and <code>org_id</code> and secrets in <code>.env</code> are stored in cleartext on that disk.</li>
                 <li><strong>Secrets in flight to providers:</strong> calls to managed LLM/embedding providers (Anthropic, OpenAI, Google, Vertex) and to S3 (if used) go over the provider's own TLS endpoints. The fully-local LM&nbsp;Studio option keeps even that traffic on <code>localhost</code>.</li>
             </ul>
@@ -426,8 +429,7 @@
                     <li><strong>SSO / OIDC is stubbed, not shipped.</strong> The <code>OIDCVerifier</code> seam exists and is selected on <code>provider=oidc</code>, but raises <code>NotImplementedError</code> (<code>auth/tokens.py:149-166</code>). HS256 symmetric tokens are the only live path today.</li>
                     <li><strong>No instant access-token kill.</strong> Refresh tokens are revocable (single-use rotation, logout, and a <code>revoked_tokens</code> denylist), but access tokens are stateless and stay valid until their short TTL expires (≤ 1h). A <code>token_version</code> claim would close this.</li>
                     <li><strong>Tenant isolation is code-enforced, not DB-enforced.</strong> <code>org_id</code> lives in plaintext sidecars and an SQLite store with no row-level ACLs; correctness depends on routes mounting the access dependency.</li>
-                    <li><strong>S3 backend is declared but unimplemented.</strong> Only the local filesystem path is wired (<code>api/storage.py</code>).</li>
-                    <li><strong>Retention does not delete on-disk data.</strong> <code>data_retention_days</code> purges only Redis job records; dataset/model deletion is on-demand (<code>api/worker.py:1268-1292</code>).</li>
+                    <li><strong>No automatic time-based retention sweep.</strong> Stored datasets, models, and results are not auto-deleted; deletion is on-demand (section&nbsp;7).</li>
                     <li><strong>The sandbox needs an image.</strong> The container tier and hosted profile are inert until the kernel image and a runtime are deployed; <code>subprocess</code> and <code>inprocess</code> are not sandboxes.</li>
                     <li><strong>Audit is tamper-evident, not tamper-proof</strong> (the sink is installed by the API app at boot, but the chain is local); the off-host durable shipper is documented but not bundled.</li>
                     <li><strong>SOC 2: readiness, not certified.</strong> The control set here is built toward SOC 2-style expectations (access control, audit, isolation), but the platform is <strong>not SOC 2 certified</strong> and no audit has been performed. Treat this as readiness evidence, not an attestation.</li>

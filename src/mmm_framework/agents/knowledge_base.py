@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 
 from mmm_framework.agents.embeddings import embed_documents, embed_query
-from mmm_framework.api import sessions as sessions_store
+from mmm_framework.platform import sessions as sessions_store
 
 # Map file extension -> document kind.
 _KIND_BY_EXT = {

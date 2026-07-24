@@ -103,7 +103,7 @@ def test_panel_runs_all_personas_and_merges(monkeypatch):
 def test_panel_persists_persona_code_artifacts(monkeypatch, tmp_path):
     """A persona that runs execute_python gets its code recorded as session
     artifacts (via=review_panel:<persona>), same as delegate_to_expert."""
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()

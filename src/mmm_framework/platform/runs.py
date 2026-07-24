@@ -167,7 +167,9 @@ _COMPARE_PORTFOLIO_FIELDS = (
 
 
 def _delta_cell(a: Any, b: Any) -> dict[str, Any]:
-    delta = (b - a) if isinstance(a, (int, float)) and isinstance(b, (int, float)) else None
+    delta = (
+        (b - a) if isinstance(a, (int, float)) and isinstance(b, (int, float)) else None
+    )
     return {"a": a, "b": b, "delta": delta}
 
 

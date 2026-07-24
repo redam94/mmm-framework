@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Contracts — the frozen v1.0 surface | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="The frozen v1.0 contracts of the MMM Framework: the public Python API, model spec keys, MFF data format, persisted model formats, sessions-store schema, estimand schema, and the REST API — with the CI gates that pin them.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/api-contracts.html">
+    <meta property="og:title" content="API Contracts — the frozen v1.0 surface">
+    <meta property="og:description" content="What semantic versioning covers from v1.0.0: Python API, model spec keys, data and persisted formats, sessions-store schema, estimands, and REST endpoints.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/api-contracts.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+
+    <style>
+        /* Page-scoped: compact contract tables + a stability chip. Tokens only. */
+        .contract-table td:first-child code { white-space: nowrap; }
+        .contract-table td { vertical-align: top; }
+        .chip {
+            display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px;
+            font-size: 0.72rem; font-weight: 600; letter-spacing: 0.03em;
+            border: 1px solid var(--color-border);
+        }
+        .chip.frozen { color: var(--color-success, #2e7d32); border-color: currentColor; }
+        .chip.internal { color: var(--color-text-muted); border-color: currentColor; }
+        .gate-box {
+            border: 1px solid var(--color-border); border-left: 4px solid var(--color-accent);
+            border-radius: 8px; padding: 1rem 1.25rem; margin: 1.25rem 0;
+            background: var(--color-surface);
+        }
+        .gate-box code { font-size: 0.85em; }
+    </style>
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="API Contracts — the frozen v1.0 surface">
+    <meta name="twitter:description" content="What semantic versioning covers from v1.0.0: Python API, model spec keys, data and persisted formats, sessions-store schema, estimands, and REST endpoints.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/api-contracts.html",
+          "name": "API Contracts — the frozen v1.0 surface | MMM Framework",
+          "description": "The frozen v1.0 contracts of the MMM Framework: the public Python API, model spec keys, MFF data format, persisted model formats, sessions-store schema, estimand schema, and the REST API — with the CI gates that pin them.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-23",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/api-contracts.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/api-contracts.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/api-contracts.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "API Contracts",
+              "item": "https://redam94.github.io/mmm-framework/api-contracts.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>Contracts</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">What 1.0 freezes</a></li>
+                <li><a href="#python-api">Python API surface</a></li>
+                <li><a href="#model-spec">Model spec keys</a></li>
+                <li class="sub-item"><a href="#spec-top">Top-level keys</a></li>
+                <li class="sub-item"><a href="#spec-priors">Prior paths</a></li>
+                <li><a href="#data-contracts">Data contracts</a></li>
+                <li class="sub-item"><a href="#mff">MFF long format</a></li>
+                <li class="sub-item"><a href="#dataset">Role-tagged Dataset</a></li>
+                <li><a href="#persisted">Persisted model formats</a></li>
+                <li><a href="#sessions-store">Sessions store</a></li>
+                <li class="sub-item"><a href="#lifecycle">Experiment lifecycle</a></li>
+                <li><a href="#estimands">Estimand schema</a></li>
+                <li><a href="#rest">REST API</a></li>
+            </ul>
+            <h3>Meta</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#gates">The CI gates</a></li>
+                <li><a href="#caveats">Stability caveats</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">API Contracts</h1>
+            <p class="lead">
+                From <strong>v1.0.0</strong> (2026-07-24) the MMM Framework follows
+                <a href="https://semver.org" target="_blank" rel="noopener">semantic versioning</a> strictly.
+                This page enumerates the surfaces that promise means something for: the public Python API,
+                the model spec keys, the data formats, the persisted model formats, the sessions-store schema,
+                the estimand schema, and the REST API. Each is pinned by a CI gate — a breaking change fails the
+                build rather than shipping silently.
+            </p>
+
+            <div class="gate-box">
+                <strong>Reading this page.</strong> <span class="chip frozen">frozen</span> surfaces only change
+                in a major version (additions are allowed in minors and noted in the
+                <a href="changelog.html">changelog</a>). <span class="chip internal">internal</span> surfaces are
+                documented for transparency but carry no compatibility promise. Modules flagged
+                <em>Experimental</em> in the <a href="changelog.html#stability">stability grid</a> may change in
+                minor releases.
+            </div>
+
+            <h2 id="python-api">Python API surface <span class="chip frozen">frozen</span></h2>
+            <p>
+                The lean core package (<code>pip install mmm-framework</code>) exposes the modeling surface;
+                the complete reference is the <a href="https://redam94.github.io/mmm-framework/api/" target="_blank" rel="noopener">Sphinx API docs</a>.
+                The load-bearing entry points:
+            </p>
+            <table class="contract-table">
+                <thead><tr><th>Import</th><th>Role</th></tr></thead>
+                <tbody>
+                    <tr><td><code>mmm_framework.BayesianMMM</code></td><td>The core model: build, <code>fit()</code> (NUTS/numpyro; approximate <code>map</code>/<code>advi</code>/<code>fullrank_advi</code>/<code>pathfinder</code>/<code>laplace</code>; exact <code>smc</code>), <code>predict()</code>, <code>sample_channel_contributions()</code>, <code>predict_under()</code>, <code>evaluate_estimands()</code></td></tr>
+                    <tr><td><code>mmm_framework.MFFLoader</code></td><td>MFF long-format loading + validation → <code>PanelDataset</code></td></tr>
+                    <tr><td><code>mmm_framework.Dataset</code> / <code>load_dataset</code></td><td>Role-tagged wide-table contract (non-MFF entry point)</td></tr>
+                    <tr><td><code>mmm_framework.load_example</code></td><td>Bundled example datasets (<code>"national"</code>, <code>"geo"</code>)</td></tr>
+                    <tr><td><code>mmm_framework.builders.*</code></td><td>Fluent config builders (<code>ModelConfigBuilder</code>, <code>MediaChannelConfigBuilder</code>, …)</td></tr>
+                    <tr><td><code>mmm_framework.serialization.MMMSerializer</code></td><td>Model persistence (see <a href="#persisted">persisted formats</a>)</td></tr>
+                    <tr><td><code>mmm_framework.analysis</code></td><td><code>MMMAnalyzer</code>, <code>MarginalAnalysisResult</code>, contribution summaries</td></tr>
+                    <tr><td><code>mmm_framework.estimands</code></td><td>The <code>Estimand</code> schema + built-in registry (see <a href="#estimands">below</a>)</td></tr>
+                    <tr><td><code>mmm_framework.reporting.MMMReportGenerator</code></td><td>Client HTML readouts (Augur), interactive + pre-fit readouts</td></tr>
+                    <tr><td><code>mmm_framework.platform.sessions</code></td><td>The sessions store (projects, experiments registry, artifacts)</td></tr>
+                    <tr><td><code>mmm_framework.agents.fitting</code></td><td><code>build_model(spec, …)</code> / <code>build_and_fit(…)</code> — the spec-driven build path (importable without the <code>[agents]</code> LLM extra)</td></tr>
+                </tbody>
+            </table>
+            <p>
+                Config enum <em>values</em> are contracts too — they are serialized into specs and saved
+                configs. Frozen value sets include <code>FitMethod</code>
+                (<code>nuts, map, advi, fullrank_advi, pathfinder, laplace, smc</code>),
+                <code>SaturationType</code> (<code>logistic, hill, michaelis_menten, tanh, none</code>) and
+                <code>AdstockType</code> (<code>geometric, delayed, weibull, none</code>). New values may be
+                added in minors; existing values never disappear outside a major.
+            </p>
+
+            <h2 id="model-spec">Model spec keys <span class="chip frozen">frozen</span></h2>
+            <p>
+                The agent (and any programmatic caller of <code>build_model</code>) describes a model as a JSON
+                spec. The authoritative write-side contract is the <em>consumed-paths registry</em>
+                (<code>agents/fitting.py::unconsumed_spec_path</code> / <code>unconsumed_prior_path</code>):
+                a write the builder would silently ignore is rejected up front with an explanation, and every
+                key the builder reads is registered. The registry — not any TypedDict — is the contract.
+            </p>
+
+            <h3 id="spec-top">Top-level keys</h3>
+            <table class="contract-table">
+                <thead><tr><th>Key</th><th>Type / values</th><th>Meaning</th></tr></thead>
+                <tbody>
+                    <tr><td><code>kpi</code></td><td>str</td><td>KPI variable name (required)</td></tr>
+                    <tr><td><code>kpi_level</code></td><td><code>national | geo</code></td><td>KPI granularity</td></tr>
+                    <tr><td><code>time_granularity</code></td><td><code>weekly | daily | monthly</code></td><td>Cadence (default weekly)</td></tr>
+                    <tr><td><code>media_channels</code></td><td>list of dicts</td><td>Per channel: <code>name</code>, <code>adstock{type, l_max}</code>, <code>saturation{type}</code>, <code>measurement_unit</code> (<code>spend|impressions|clicks|other</code>), <code>spend_column</code>/<code>cpm</code>/<code>cpc</code>. Written per-field (<code>media_channels.&lt;name&gt;.&lt;field&gt;</code>)</td></tr>
+                    <tr><td><code>control_variables</code></td><td>list of dicts</td><td><code>name</code> + causal <code>role</code> (<code>confounder | precision</code>)</td></tr>
+                    <tr><td><code>specification</code></td><td><code>additive | multiplicative</code></td><td>Functional form</td></tr>
+                    <tr><td><code>trend</code></td><td>dict</td><td><code>type: linear|piecewise|spline|gaussian_process|none</code> + knots/changepoints</td></tr>
+                    <tr><td><code>seasonality</code></td><td>dict</td><td>Fourier orders <code>{yearly, monthly, weekly}</code>; 0/absent = off</td></tr>
+                    <tr><td><code>likelihood</code></td><td>dict</td><td><code>{family, link?, params?}</code>, default <code>normal</code>/identity</td></tr>
+                    <tr><td><code>media_prior_mode</code></td><td><code>coefficient | roi</code></td><td>Default media-prior parameterization (agent default <code>roi</code>)</td></tr>
+                    <tr><td><code>priors</code></td><td>nested dict</td><td>See <a href="#spec-priors">prior paths</a></td></tr>
+                    <tr><td><code>inference</code></td><td>dict</td><td><code>method</code> (validated), <code>chains</code>, <code>draws</code>, <code>tune</code>, <code>target_accept</code>, <code>random_seed</code>, <code>metrics_draws</code></td></tr>
+                    <tr><td><code>dataset</code></td><td>schema dict</td><td>Role-tagged (non-MFF) load path — a <code>DatasetSchema</code> dict</td></tr>
+                    <tr><td><code>dataset_path</code></td><td><span class="chip internal">internal</span></td><td>Session-state field set by the upload / Data Studio flows, not a registry-writable spec key</td></tr>
+                    <tr><td><code>estimands</code></td><td>list</td><td>Declared <a href="#estimands">Estimand</a> dicts, realized at fit</td></tr>
+                    <tr><td><code>experiments</code> / <code>experiment_ids</code></td><td>list</td><td>In-graph calibration measurements / staged registry ids</td></tr>
+                    <tr><td><code>garden_ref</code> / <code>model_params</code></td><td>dict</td><td>Model Garden class reference / bespoke <code>CONFIG_SCHEMA</code> params</td></tr>
+                    <tr><td><code>latent_factors</code></td><td>list</td><td>Structural-model shared factors (structural specs only)</td></tr>
+                    <tr><td><code>skip_quality_gate</code></td><td>bool</td><td>Bypass the pre-fit data-quality gate</td></tr>
+                    <tr><td><code>dag_model_type</code> / <code>dag_spec</code></td><td><span class="chip internal">internal</span></td><td>Stamped by the DAG builder; not registry-writable</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="spec-priors">Prior paths</h3>
+            <p>Plain (non-DAG) models:</p>
+            <table class="contract-table">
+                <thead><tr><th>Path</th><th>Shape</th></tr></thead>
+                <tbody>
+                    <tr><td><code>priors.media.&lt;ch&gt;.{coefficient, adstock_alpha, adstock_theta, saturation_kappa, saturation_slope}</code></td><td>PriorConfig dict <code>{distribution, params}</code></td></tr>
+                    <tr><td><code>priors.media.&lt;ch&gt;.roi</code></td><td><code>{median|mu, sigma}</code> — LogNormal on raw ROI</td></tr>
+                    <tr><td><code>priors.controls.&lt;cv&gt;.{coefficient, allow_negative}</code></td><td>PriorConfig / bool</td></tr>
+                    <tr><td><code>priors.intercept.{mu, sigma}</code>, <code>priors.media_default.{roi_mu, roi_sigma}</code></td><td>floats</td></tr>
+                    <tr><td><code>priors.seasonality.*</code>, <code>priors.trend.*</code></td><td>floats (per-component scales)</td></tr>
+                </tbody>
+            </table>
+            <p>
+                DAG-routed extension models (<code>nested_mmm</code>, <code>structural_nested_mmm</code>,
+                <code>multivariate_mmm</code>, <code>combined_mmm</code>) reject the plain groups and accept
+                <code>priors.mediator.&lt;name&gt;.*</code>, <code>priors.outcome.&lt;name&gt;.*</code> and
+                <code>priors.cross_effect.&lt;src&gt;__&lt;tgt&gt;.*</code> instead — names typo-checked against
+                the DAG's variables.
+            </p>
+
+            <h2 id="data-contracts">Data contracts <span class="chip frozen">frozen</span></h2>
+
+            <h3 id="mff">MFF long format</h3>
+            <p>
+                One row per (dimension-tuple, variable). Eight required columns (names remappable per config):
+                <code>Period</code>, <code>Geography</code>, <code>Product</code>, <code>Campaign</code>,
+                <code>Outlet</code>, <code>Creative</code>, <code>VariableName</code>, <code>VariableValue</code>.
+                Values are parsed forgivingly (currency symbols, parenthesized negatives, both decimal
+                conventions, null tokens); anything unparseable is a hard <code>MFFValidationError</code> with
+                samples. Weekly cadence anchors the completeness grid to the start date's own weekday; gaps
+                warn at load and <em>block</em> at fit via the data-quality gate (unless
+                <code>skip_quality_gate</code>). See <a href="data-requirements.html">Data Requirements</a>.
+            </p>
+
+            <h3 id="dataset">Role-tagged <code>Dataset</code></h3>
+            <p>
+                The wide-table entry point: one tidy table + a <code>DatasetSchema</code>
+                (<code>schema_version "1.0"</code>) binding columns to <code>DatasetRole</code>s —
+                <code>target</code>, <code>predictor</code>, <code>control</code>, <code>indicator</code>,
+                <code>group</code>, <code>time</code>, <code>offset</code>, <code>weight</code>,
+                <code>trials</code>, <code>auxiliary</code>. The first four map 1:1 onto the MFF roles;
+                the rest serve non-MMM model families. Both role enums are frozen — they are serialized
+                inside saved configs.
+            </p>
+
+            <h2 id="persisted">Persisted model formats <span class="chip frozen">frozen</span></h2>
+            <p>
+                <code>MMMSerializer</code> (format version <code>1.1</code>) writes an atomic directory:
+            </p>
+            <table class="contract-table">
+                <thead><tr><th>File</th><th>Content</th></tr></thead>
+                <tbody>
+                    <tr><td><code>metadata.json</code></td><td>Self-description: model version + <code>format_version</code>, shapes, channel/control names, <code>model_kind</code>, <code>fit_method</code> + <code>approximate</code>, declared estimands (+ schema version), experiments, <code>garden_ref</code>/<code>model_class_qualname</code>, dataset schema. Extended models add <code>model_flavor: "extended"</code></td></tr>
+                    <tr><td><code>configs.json</code></td><td>Full <code>ModelConfig</code>/<code>TrendConfig</code>/<code>MFFConfig</code> dumps (JSON-readable ground truth)</td></tr>
+                    <tr><td><code>scaling_params.json</code></td><td><code>y_mean</code>/<code>y_std</code>/<code>media_max</code>/control scaling</td></tr>
+                    <tr><td><code>trace.nc(.gz)</code></td><td>ArviZ posterior (netcdf; h5netcdf engine)</td></tr>
+                    <tr><td><code>model.pkl</code></td><td>Extended flavor only (cloudpickle, graph/trace stripped)</td></tr>
+                </tbody>
+            </table>
+            <p>
+                <code>run_metadata.json</code> (written per fit by the agent's <code>build_and_fit</code>)
+                additionally embeds the full normalized spec, diagnostics, metrics and paths.
+                <span class="chip internal">internal</span> — it contains absolute local paths and is not a
+                shareable bundle.
+            </p>
+
+            <h2 id="sessions-store">Sessions store <span class="chip internal">internal schema, stable semantics</span></h2>
+            <p>
+                Platform state lives in one SQLite file (<code>MMM_SESSIONS_DB</code>, default
+                package-local under <code>mmm_framework/platform/</code>): 22 platform tables (sessions,
+                artifacts, projects, experiments, run_metrics, garden models, preferences, budget plans,
+                learning programs, …) plus 5 auth tables (organizations, members, tokens, invites, resets).
+                The <em>schema</em> may gain columns in minors (additive migrations only; downgrade
+                unsupported); the <em>semantics</em> exposed through the REST API are the contract.
+            </p>
+
+            <h3 id="lifecycle">Experiment lifecycle</h3>
+            <p>
+                The experiment registry's state machine is frozen:
+                <code>draft → planned → running → completed → calibrated</code>, with
+                <code>abandoned</code> reachable from any active state (and legacy terminal
+                <code>cancelled</code>). Illegal transitions are rejected (HTTP 409); every hop and
+                readout write appends to an audit history; changing a calibrated readout requires
+                <code>overwrite_calibrated=true</code>.
+            </p>
+
+            <h2 id="estimands">Estimand schema <span class="chip frozen">frozen</span></h2>
+            <p>
+                <code>Estimand</code> (schema version <code>1.0</code>) is a declarative, serializable
+                counterfactual quantity: <em>reduce( op( quantity | intervention, baseline ) ) / normalizer</em>,
+                realized as mean + HDI with a pinned <code>Realization</code> (point rule + HDI method) that
+                keeps every number bit-stable against its pre-1.0 legacy implementation. The built-in
+                <strong>names</strong> are contracts (specs and saved models reference them):
+                <code>contribution_roi</code>, <code>counterfactual_roi</code>, <code>marginal_roas</code>,
+                <code>contribution</code>, plus demonstrators <code>awareness_lift</code> and
+                <code>cost_per_conversion</code> and the parametric constructors
+                (<code>latent_scalar</code>, <code>fit_index</code>, <code>factor_loading</code>).
+                Note <code>contribution_roi</code> (in-graph) and <code>counterfactual_roi</code> (zero-out
+                counterfactual) are <em>different numbers by design</em>.
+            </p>
+
+            <h2 id="rest">REST API <span class="chip frozen">frozen</span></h2>
+            <p>
+                The server package (<code>mmm-framework-server</code>) exposes 165 paths / 200 operations,
+                fully documented on the <a href="rest-api.html">REST API reference</a> (generated from the
+                live OpenAPI schema; machine-readable at <a href="shared/openapi.json"><code>shared/openapi.json</code></a>).
+                The (method, path) set is snapshot-pinned: removals or renames are major-version events.
+            </p>
+
+            <h2 id="gates">The CI gates</h2>
+            <div class="gate-box">
+                <p style="margin-top:0"><strong>Every contract above is enforced by a test:</strong></p>
+                <ul style="margin-bottom:0">
+                    <li><code>tests/test_api_contracts.py</code> — REST route snapshot
+                        (<code>tests/contracts/rest_routes.json</code>), public Python symbols, consumed
+                        spec/prior paths, frozen enum values, built-in estimand names.</li>
+                    <li><code>tests/test_lean_imports.py</code> — the lean-core invariant: the whole core
+                        import surface works with the web/LLM stacks import-blocked.</li>
+                    <li><code>tests/test_estimands.py</code> — bit-stability of estimand arithmetic vs the
+                        legacy implementations.</li>
+                    <li><code>tests/test_docs_snippets.py</code> — every Python snippet on this site
+                        references real APIs.</li>
+                </ul>
+            </div>
+
+            <h2 id="caveats">Stability caveats</h2>
+            <ul>
+                <li><strong>Experimental modules</strong> (<code>mmm_extensions</code>,
+                    <code>continuous_learning</code>, <code>garden</code>/Atelier, <code>dag_model_builder</code>,
+                    non-MMM families) may change in minor releases — see the
+                    <a href="changelog.html#stability">stability grid</a>.</li>
+                <li><strong>The sessions DB has no schema-version stamp</strong>; migrations are additive
+                    and forward-only. Back up before downgrading a deployment.</li>
+                <li><strong><code>run_metadata.json</code> and <code>garden_ref.source_path</code> embed
+                    absolute local paths</strong> — treat model run directories as internal artifacts.</li>
+                <li><strong>Estimand display labels derive from the estimand name</strong> — renaming a
+                    built-in is a breaking change by definition.</li>
+            </ul>
+
+            <p>
+                Related: <a href="architecture.html">Architecture &amp; flow diagrams</a> ·
+                <a href="rest-api.html">REST API reference</a> ·
+                <a href="changelog.html">Versioning &amp; changelog</a> ·
+                <a href="getting-started.html">Getting started</a>
+            </p>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <script src="shared/components.js"></script>
+</body>
+</html>

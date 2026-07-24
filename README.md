@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/pypi/l/mmm-framework.svg)](https://github.com/redam94/mmm-framework/blob/main/LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-online-8fa86a.svg)](https://redam94.github.io/mmm-framework/)
 
-A modular Marketing Mix Model framework built on PyMC-Marketing with full Bayesian uncertainty quantification, async model fitting, and interactive visualization.
+A modular Marketing Mix Model framework built on a standalone PyMC 6 Bayesian engine — it does not subclass or depend on PyMC-Marketing — with full Bayesian uncertainty quantification and interactive visualization.
 
 📖 **[Read the documentation →](https://redam94.github.io/mmm-framework/)** &nbsp;·&nbsp; 📦 **[Install from PyPI →](https://pypi.org/project/mmm-framework/)**
 
@@ -53,7 +53,7 @@ This framework is designed around different principles:
 
 ### Infrastructure
 
-- **FastAPI Backend** — the MMM Agent API (`mmm_framework.api.main:app`) with OpenAPI documentation
+- **FastAPI Backend** — the MMM Agent API (`mmm_framework_server.main:app`) with OpenAPI documentation
 - **React Frontend** — the supported modern UI (Vite + TypeScript) for the full measurement loop
 - **Async Job Processing** — non-blocking model fitting (the agent API runs fits in-kernel; no external queue required)
 - **LangGraph Integration** — AI-assisted modeling and interpretation with multiple LLM providers
@@ -100,9 +100,21 @@ Install the modeling library from PyPI:
 pip install mmm-framework
 ```
 
-That's everything you need to build, fit, and analyze models in Python. To run the
-full application (FastAPI backend + React UI) or to develop the framework, install
-from source instead:
+That's everything you need to build, fit, and analyze models in Python — the
+core package is **business logic only** (no web framework, no LLM stack), so it
+stays lean for Jupyter notebooks and analysis pipelines. Optional pieces are
+opt-in extras:
+
+```bash
+pip install "mmm-framework[agents]"   # + the LangGraph oracle agent / LLM stack
+pip install "mmm-framework[gcp]"      # + GCS/BigQuery data integrations
+pip install "mmm-framework[s3]"       # + S3 object-store backend
+```
+
+The FastAPI backend itself lives in the separate `server/` workspace package
+(`mmm-framework-server`, package `mmm_framework_server`) — it is not part of
+the library. To run the full application (API + React UI) or to develop the
+framework, install from source:
 
 ```bash
 # Clone the repository
@@ -110,7 +122,8 @@ git clone https://github.com/redam94/mmm-framework.git
 cd mmm-framework
 
 # Install with uv (recommended)
-uv sync                  # core library
+uv sync --no-dev         # lean core library only
+uv sync                  # dev default: core + [agents] + the API server package
 uv sync --group app      # + app extras (slide decks, Atelier lint endpoints)
 ```
 
@@ -124,14 +137,14 @@ uv sync --group dev --group app
 ## Quick Start
 
 The supported application is the **React UI** talking to the **MMM Agent API**
-(`mmm_framework.api.main:app`). The agent API runs model fits in-process (in its
+(`mmm_framework_server.main:app`). The agent API runs model fits in-process (in its
 session kernel), so this path needs **no Redis and no separate worker**.
 
 ### 1. Start the Agent API
 
 ```bash
 # from the repository root (mmm_framework is installed in the uv environment)
-uv run uvicorn mmm_framework.api.main:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn mmm_framework_server.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 > **Configure the agent LLM first.** The agent needs an LLM provider (Vertex AI,
@@ -1490,14 +1503,15 @@ The framework explicitly addresses common identification problems:
 
 ```
 mmm-framework/
-├── src/mmm_framework/          # Core modeling library
+├── src/mmm_framework/          # Core modeling library (business logic only)
 │   ├── __init__.py             # Package exports
 │   ├── config/                 # Configuration enums and Pydantic dataclasses
 │   ├── builders/               # Fluent configuration builders
 │   ├── data_loader.py          # MFF parsing and validation
 │   ├── model/                  # BayesianMMM implementation (base.py, results.py, …)
 │   ├── jobs.py                 # Async job management
-│   ├── agents/                 # LangGraph agent, tools, kernels
+│   ├── agents/                 # LangGraph agent, tools, kernels ([agents] extra)
+│   ├── platform/               # Sessions store + run history/pacing/scorecard services
 │   ├── reporting/              # HTML report generation
 │   ├── validation/             # Backtesting, diagnostics, sensitivity
 │   ├── calibration/            # Experiment calibration
@@ -1511,35 +1525,41 @@ mmm-framework/
 │       ├── builders.py         # Fluent builders + factory functions
 │       ├── components/         # PyMC/PyTensor building blocks
 │       └── models/             # NestedMMM, MultivariateMMM, CombinedMMM
+├── server/                     # FastAPI agent API (mmm-framework-server package)
+│   └── src/mmm_framework_server/main.py
 ├── frontend/                   # React/TypeScript UI
 ├── examples/                   # Usage examples
 ├── tests/                      # Test suite
-├── pyproject.toml              # Project configuration
+├── pyproject.toml              # Project configuration (uv workspace root)
 └── README.md
 ```
 
 ## Dependencies
 
-### Core
+### Core (`pip install mmm-framework`)
 
 - `pymc>=6.0` — Probabilistic programming (PyTensor 3.x + ArviZ 1.x in lockstep)
 - `numpyro>=0.19` — JAX-based NUTS sampler
 - `nutpie>=0.16` — Fast NUTS implementation
 - `pandas>=2.3` — Data manipulation
 - `numpy>=2.3` — Numerical computing
+- `pydantic>=2.12` — Data validation
+- `plotly>=6.5` — Interactive visualization (reports)
 
-### Backend
+### Agents extra (`pip install "mmm-framework[agents]"`)
+
+- `langgraph>=1.2` / `langchain-*` 1.x — the LangGraph oracle agent + LLM providers
+- `httpx`, `pypdf`, `python-docx` — knowledge-base ingestion / brand extraction
+
+### Server (`server/` workspace package, `mmm-framework-server`)
 
 - `fastapi>=0.124` — API framework
-- `redis>=7.1` — Optional shared rate-limit backend
-- `pydantic>=2.12` — Data validation
 - `uvicorn>=0.38` — ASGI server
+- `redis>=7.1` — Optional shared rate-limit backend
 
 ### Frontend
 
 - React + TypeScript (Vite) — `frontend/`
-- `plotly>=6.5` — Interactive visualization
-- `httpx>=0.28` — HTTP client
 
 ## References
 

@@ -16,8 +16,8 @@ def _body(resp) -> dict:
 
 @pytest.fixture()
 def api(tmp_path, monkeypatch):
-    from mmm_framework.api import main as M
-    from mmm_framework.api import sessions as S
+    from mmm_framework_server import main as M
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -154,7 +154,7 @@ async def test_upsert_edit_of_calibrated_row_is_409(api):
     # REST clients cannot silently mutate a calibrated experiment's
     # likelihood-feeding fields — the endpoint never exposes
     # allow_calibrated_edit, so the store's guard maps to 409.
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     created = _body(
         await api.upsert_experiment_endpoint(

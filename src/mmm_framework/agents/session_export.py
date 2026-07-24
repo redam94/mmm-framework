@@ -45,7 +45,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from mmm_framework.api import sessions as _sessions
+from mmm_framework.platform import sessions as _sessions
 
 logger = logging.getLogger(__name__)
 

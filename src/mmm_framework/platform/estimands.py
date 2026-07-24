@@ -258,7 +258,7 @@ def _model_key(model_kind: str, kpi: str, channels: list[str]) -> str:
 def build_project_estimands(project_id: str | None) -> dict[str, Any]:
     """Read the project's ``model_run`` artifacts and group their persisted
     estimand rows. Runs fitted before estimand persistence (or with no estimands)
-    are skipped; run the backfill (``python -m mmm_framework.api.backfill
+    are skipped; run the backfill (``python -m mmm_framework.platform.backfill
     --what estimands``) to populate them."""
     from . import sessions as sessions_store
 

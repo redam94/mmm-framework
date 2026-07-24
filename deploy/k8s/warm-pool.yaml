@@ -17,8 +17,11 @@ spec:
       containers:
         - name: kernel
           image: REGISTRY/mmm-kernel:PINNED_DIGEST
-          # pre-import the heavy stack so the claim is warm (no first-cell import cost)
-          command: ["tini", "--", "python", "-c", "import mmm_framework.agents.tools; import time; time.sleep(1e9)"]
+          # pre-import the heavy stack so the claim is warm (no first-cell import cost).
+          # NB: the lean kernel image has no LLM stack — agents.tools (langchain) does
+          # not import here; agents.figures is the kernel-side module, and importing
+          # mmm_framework warms the pymc/pytensor/numpy stack that dominates cold-start.
+          command: ["tini", "--", "python", "-c", "import mmm_framework; import mmm_framework.agents.figures; import time; time.sleep(1e9)"]
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false

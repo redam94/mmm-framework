@@ -379,14 +379,14 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-10",
+          "dateModified": "2026-07-21",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/getting-started.html#breadcrumb"
           },
           "@id": "https://redam94.github.io/mmm-framework/getting-started.html#webpage",
           "@type": "TechArticle",
           "headline": "Getting Started",
-          "datePublished": "2026-07-10",
+          "datePublished": "2026-07-21",
           "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
           "author": {
             "@type": "Person",
@@ -547,7 +547,9 @@
                 </p>
                 <ul>
                     <li><strong>React&nbsp;+ agent API:</strong> <em>no Redis, no external worker.</em>
-                        The agent API runs fits in-kernel, so there is no separate job queue to stand up.</li>
+                        The agent API runs fits in-kernel, so there is no separate job queue to stand up.
+                        The web layer ships as the separate <code>mmm-framework-server</code>
+                        workspace package &mdash; it is not part of the library install.</li>
                 </ul>
             </div>
 
@@ -557,9 +559,10 @@
             <p>
                 The modeling library is published on
                 <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>.
-                For anything production-facing, pin an exact version &mdash; the project is pre-1.0
-                and minor releases may include breaking changes (see the
-                <a href="changelog.html">changelog</a>).
+                1.0.0 is the first stable release, and the project follows semantic
+                versioning from 1.0.0 onward (see the
+                <a href="changelog.html#policy">versioning policy</a>). Pinning an exact
+                version remains good hygiene for anything production-facing.
             </p>
 
             <h3>Install from PyPI</h3>
@@ -573,9 +576,18 @@
                     <span class="comment"># Install the modeling library</span><br>
                     <span class="prompt">$</span> pip install mmm-framework<br><br>
                     <span class="comment"># Production: pin the exact release</span><br>
-                    <span class="prompt">$</span> pip install mmm-framework==0.2.0
+                    <span class="prompt">$</span> pip install mmm-framework==1.0.0
                 </div>
             </div>
+
+            <p>
+                <code>pip install mmm-framework</code> gives you the lean modeling core &mdash;
+                business logic only, with no web framework and no LLM stack. The optional
+                pieces are opt-in: <code>pip install "mmm-framework[agents]"</code> adds the
+                LangGraph oracle-agent / LLM stack, and the FastAPI web app ships as the
+                separate <code>mmm-framework-server</code> workspace package in
+                <code>server/</code> (it is not part of the library).
+            </p>
 
             <h3>Or Install from Source (development)</h3>
             <div class="terminal-block">
@@ -588,15 +600,23 @@
                     <span class="comment"># Clone the repository</span><br>
                     <span class="prompt">$</span> git clone https://github.com/redam94/mmm-framework.git<br>
                     <span class="prompt">$</span> cd mmm-framework<br><br>
-                    <span class="comment"># Install with uv (recommended)</span><br>
+                    <span class="comment"># Install with uv (recommended) &mdash; the dev default installs</span><br>
+                    <span class="comment"># the core library + the [agents] extra + the API server package</span><br>
                     <span class="prompt">$</span> uv sync<br><br>
+                    <span class="comment"># Lean library only (no web/LLM deps)</span><br>
+                    <span class="prompt">$</span> uv sync --no-dev<br><br>
                     <span class="comment"># Or with pip</span><br>
                     <span class="prompt">$</span> pip install -e .
                 </div>
             </div>
 
             <h3>Install App Dependencies</h3>
-            <p>If you want to use the web application (API backend plus the React frontend):</p>
+            <p>
+                A plain <code>uv sync</code> already includes the API server package
+                (<code>mmm-framework-server</code>), so there is nothing extra to install
+                for the backend. The <code>app</code> group only adds slide-deck and
+                Atelier-lint extras:
+            </p>
             <div class="terminal-block">
                 <div class="terminal-header">
                     <span class="terminal-dot red"></span>
@@ -604,10 +624,8 @@
                     <span class="terminal-dot green"></span>
                 </div>
                 <div class="terminal-content">
-                    <span class="comment"># Install app extras (slide decks, Atelier lint endpoints)</span><br>
+                    <span class="comment"># Optional extras: slide decks, Atelier lint endpoints</span><br>
                     <span class="prompt">$</span> uv sync --group app<br><br>
-                    <span class="comment"># For development (includes testing tools)</span><br>
-                    <span class="prompt">$</span> uv sync --group dev --group app<br><br>
                     <span class="comment"># For the React frontend, install its packages once</span><br>
                     <span class="prompt">$</span> cd frontend &amp;&amp; npm install
                 </div>
@@ -1204,7 +1222,9 @@ hierarchical = (
                 <span class="indent"><span class="indent"><span class="indent"><span class="indent"><span class="file">combined.py</span> — CombinedMMM</span></span></span></span><br>
                 <span class="indent"><span class="indent"><span class="indent"><span class="folder">components/</span> — PyMC/PyTensor blocks</span></span></span><br>
                 <span class="indent"><span class="indent"><span class="indent"><span class="indent"><span class="file">cross_effects.py, variable_selection.py, transforms.py</span></span></span></span></span><br>
-                <span class="indent"><span class="indent"><span class="folder">api/</span> — FastAPI agent backend (chat, sessions, projects)</span></span><br>
+                <span class="indent"><span class="indent"><span class="folder">platform/</span> — sessions store + run history/pacing/scorecard services</span></span><br>
+                <span class="indent"><span class="folder">server/</span> — FastAPI agent API (mmm-framework-server)</span><br>
+                <span class="indent"><span class="indent"><span class="file">src/mmm_framework_server/main.py</span> — app entry point</span></span><br>
                 <span class="indent"><span class="folder">frontend/</span> — React/TypeScript UI (Vite)</span><br>
                 <span class="indent"><span class="folder">examples/</span> — Usage examples</span><br>
                 <span class="indent"><span class="indent"><span class="file">ex_builder.py</span> — Builder pattern demonstrations</span></span><br>
@@ -1240,7 +1260,7 @@ hierarchical = (
                 </div>
                 <div class="terminal-content">
                     <span class="comment"># Terminal 1: Agent API (runs model fits in-kernel)</span><br>
-                    <span class="prompt">$</span> uv run uvicorn mmm_framework.api.main:app --port 8000 --reload<br><br>
+                    <span class="prompt">$</span> uv run uvicorn mmm_framework_server.main:app --port 8000 --reload<br><br>
                     <span class="comment"># Terminal 2: React UI (Vite dev server, proxies /api → :8000)</span><br>
                     <span class="prompt">$</span> cd frontend<br>
                     <span class="prompt">$</span> npm run dev

@@ -1,6 +1,6 @@
 [project]
 name = "mmm-framework"
-version = "0.2.0"
+version = "1.0.0"
 description = "Bayesian Marketing Mix Modeling framework with causal calibration, pressure testing, and an adaptive measurement loop"
 readme = "README.md"
 license = "Apache-2.0"
@@ -9,10 +9,13 @@ authors = [
     { name = "Matthew Reda", email = "m.reda94@gmail.com" }
 ]
 requires-python = ">=3.12"
+# Core = the modeling/business-logic stack ONLY. A notebook user gets a working
+# Bayesian MMM (fit/analyze/report/validate) from `pip install mmm-framework`
+# with no web or LLM dependencies. The FastAPI app lives in the separate
+# `server/` workspace package (mmm-framework-server); the LangGraph agent stack
+# is the [agents] extra. tests/test_lean_imports.py pins this invariant.
 dependencies = [
     "cloudpickle>=3.1.2",
-    "fastapi>=0.124.2",
-    "httpx>=0.28.1",
     "loguru>=0.7.3",
     "numba>=0.63.1",
     "numpy>=2.3.5",
@@ -21,7 +24,7 @@ dependencies = [
     "pandas>=2.3.3",
     "plotly>=6.5.0",
     "pydantic>=2.12.5",
-    "pydantic-settings>=2.12.0",
+    "pydantic-settings>=2.12.0",  # auth/config.py (dependency-light auth core)
     # Core Bayesian stack (2026-07-06 baseline): pymc 6 / pytensor 3 / arviz 1.x
     # move in LOCKSTEP — pymc 6 pins pytensor>=3.0.2,<3.1 and arviz>=1.1,<2.0.
     # arviz 1.x replaced InferenceData with xarray DataTree; drift is absorbed
@@ -37,31 +40,36 @@ dependencies = [
     # cap: pymc-extras 0.11+ tracks pymc 6; raise the cap only after checking
     # its pymc/pytensor/arviz floors against the locked stack.
     "pymc-extras>=0.12,<0.13",
-    "pytest-xdist>=3.8.0",
-    "python-multipart>=0.0.20",
-    "redis>=7.1.0",
-    "slowapi>=0.1.9",
-    "statsmodels>=0.14.0",
-    "uvicorn>=0.38.0",
-    "openpyxl>=3.1.0",
-    # LLM stack floors are pinned to the locked 1.x line. The agent code targets
-    # the langchain/langgraph 1.x API; the old pre-1.0 floors let a no-lock
-    # `pip install` resolve to incompatible 0.x APIs that break the agent at
-    # import/runtime. Keep these in step with uv.lock when upgrading.
+    "statsmodels>=0.14.0",  # eda + validation
+    "openpyxl>=3.1.0",      # excel_config
+    "holidays>=0.100",      # transforms/seasonality
+    # auth/passwords.py (scrypt KDF) + security/encryption.py (Fernet) import
+    # this at module level. Pre-split it arrived transitively via the then-core
+    # langchain-google-* -> google-auth chain; now it must be declared or a
+    # lean install cannot `import mmm_framework.auth` (2026-07-24 review).
+    "cryptography>=42",
+]
+
+[project.optional-dependencies]
+# LangGraph oracle agent + knowledge base (mmm_framework.agents LLM modules).
+# The langchain-free agents modules (fitting, workspace, tables, estimand_rows,
+# spec_locks/normalize, model_ops, report_builder, branding) import WITHOUT this
+# extra via the lazy agents/__init__. Floors are pinned to the locked 1.x line:
+# the agent code targets the langchain/langgraph 1.x API; older pre-1.0 floors
+# let a no-lock `pip install` resolve to incompatible 0.x APIs that break the
+# agent at import/runtime. Keep these in step with uv.lock when upgrading.
+agents = [
     "langgraph>=1.2.0",
     "langgraph-checkpoint-sqlite>=3.1.0",
     "langchain-core>=1.4.0",
     "langchain-google-genai>=4.2.2",
     "langchain-anthropic>=1.4.3",
     "langchain-openai>=1.2.1",
-    "rich>=13.0.0",
     "langchain-google-vertexai>=3.2.3",
-    "pypdf>=4.0.0",
-    "python-docx>=1.1.0",
-    "holidays>=0.100",
+    "httpx>=0.28.1",       # brand extraction / KB fetches
+    "pypdf>=4.0.0",        # KB document ingestion
+    "python-docx>=1.1.0",  # KB document ingestion
 ]
-
-[project.optional-dependencies]
 # Google Cloud data integrations (GCS object reads + BigQuery). Lazy-imported;
 # the core framework never requires these. Install with:  uv sync --extra gcp
 gcp = [
@@ -91,14 +99,19 @@ dev = [
     "boto3>=1.34.0",
     "ipykernel>=7.1.0",
     "ipywidgets>=8.1.8",
-    "mmm-framework",
+    # Dev installs the full platform: core + agent stack + the API server
+    # (workspace member), so the whole test suite runs from one sync.
+    "mmm-framework[agents]",
+    "mmm-framework-server",
     "moto>=5.0.0",
     "mypy>=1.11",
     "networkx>=3.0",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.0.0",
     "pytest-cov>=7.0.0",
+    "pytest-xdist>=3.8.0",  # Makefile runs pytest -n logical
     "python-pptx>=1.0.0",
+    "rich>=13.0.0",         # examples/ex_agent_workflow.py
     "ruff>=0.13.0",
 ]
 app = [
@@ -106,6 +119,15 @@ app = [
     "python-pptx>=1.0.0",  # PowerPoint slide-deck generation (reporting.deck.builder)
     # Powers the Atelier editor's Format + live lint endpoints (ruff check/format).
     "ruff>=0.13.0",
+]
+# Pinned closure source for the sandboxed session-kernel image
+# (deploy/kernel/Containerfile via `make kernel-lock`): lean core + ipykernel
+# + the kernel-side deliverable writers (render_slide_deck runs IN the kernel
+# under subprocess/container mode — it needs pptx + matplotlib there).
+kernel = [
+    "ipykernel>=7.1.0",
+    "python-pptx>=1.0.0",
+    "matplotlib>=3.8",
 ]
 docs = [
     "sphinx>=7.0,<8.0",
@@ -115,8 +137,12 @@ docs = [
     "myst-parser>=3.0",
 ]
 
+[tool.uv.workspace]
+members = ["server"]
+
 [tool.uv.sources]
 mmm-framework = { workspace = true }
+mmm-framework-server = { workspace = true }
 
 [tool.mypy]
 # Lenient baseline: type-checking runs in CI as NON-BLOCKING (informational) on a

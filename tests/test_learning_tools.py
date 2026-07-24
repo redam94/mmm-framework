@@ -14,7 +14,7 @@ import pytest
 @pytest.fixture()
 def env(tmp_path, monkeypatch):
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()

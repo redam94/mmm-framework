@@ -8,7 +8,7 @@
  * cruft.
  *
  * Prereqs (see the doc PR notes):
- *   - Backend agent app on :8000  (uv run uvicorn src.mmm_framework.api.main:app)
+ *   - Backend agent app on :8000  (uv run uvicorn mmm_framework_server.main:app)
  *   - Demo seeded                 (uv run python scripts/seed_demo_project.py --synthetic-records)
  *   - Production preview on :5173 (npm run build && npx vite preview --port 5173)
  *

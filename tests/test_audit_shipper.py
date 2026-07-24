@@ -75,8 +75,8 @@ def test_ship_status_and_flush_noop_when_unconfigured(tmp_path, monkeypatch):
 
 
 def test_system_health_shape(tmp_path, monkeypatch):
-    from mmm_framework.api import observability
-    from mmm_framework.api import sessions as ss
+    from mmm_framework.platform import observability
+    from mmm_framework.platform import sessions as ss
 
     monkeypatch.setattr(ss, "DB_PATH", tmp_path / "s.db")
     ss.init_db()

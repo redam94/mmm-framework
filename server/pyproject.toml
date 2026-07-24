@@ -1,0 +1,46 @@
+[project]
+name = "mmm-framework-server"
+version = "1.0.0"
+description = "FastAPI agent API server for the MMM Framework (web layer over mmm-framework[agents])"
+readme = { text = "FastAPI server for the MMM Framework. See the repository README.", content-type = "text/markdown" }
+license = "Apache-2.0"
+authors = [
+    { name = "Matthew Reda", email = "m.reda94@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    # The core framework with the agent (LangGraph oracle) stack.
+    "mmm-framework[agents]",
+    # Web layer.
+    "fastapi>=0.124.2",
+    "uvicorn>=0.38.0",
+    "python-multipart>=0.0.20",
+    # Optional shared rate-limit backend (auth/ratelimit.py lazy-imports it;
+    # in-memory fallback is used when unset). Declared here so a deployed
+    # server can enable MMM_RATELIMIT_* redis mode without extra installs.
+    "redis>=7.1.0",
+    # Slide-deck generation (reporting.deck.builder + charts) runs IN the
+    # server process under the default in-process kernel — the deployed
+    # closure must carry pptx and matplotlib (matplotlib is otherwise only a
+    # fragile transitive via pymc-extras -> preliz).
+    "python-pptx>=1.0.0",
+    "matplotlib>=3.8",
+    # Atelier editor Format + live-lint endpoints shell out to ruff.
+    "ruff>=0.13.0",
+    # Host side of the subprocess/container session kernels (jupyter_client
+    # KernelManager/BlockingKernelClient; subprocess mode also launches
+    # `python -m ipykernel_launcher` from this same environment). The GCP
+    # deploy sets MMM_AGENT_KERNEL=container, so a --no-dev server sync must
+    # include it.
+    "ipykernel>=7.1.0",
+]
+
+[tool.uv.sources]
+mmm-framework = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mmm_framework_server"]

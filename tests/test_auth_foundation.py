@@ -18,7 +18,6 @@ from mmm_framework.auth import (
 from mmm_framework.auth import service, store
 from mmm_framework.auth.tokens import ExpiredToken, InvalidToken, make_claims
 
-
 # ----- passwords --------------------------------------------------------------
 
 
@@ -220,7 +219,7 @@ def test_initialize_auth_bootstrap_owner(db, monkeypatch):
 
 
 def test_sessions_project_org_scoping(tmp_path, monkeypatch):
-    from mmm_framework.api import sessions as ss
+    from mmm_framework.platform import sessions as ss
 
     dbp = tmp_path / "sessions.db"
     monkeypatch.setattr(ss, "DB_PATH", dbp)

@@ -7,20 +7,47 @@ from .spec_locks import apply_spec_patch, is_spec_patch
 
 
 class ModelSpec(TypedDict, total=False):
-    """
-    Intermediate representation of the model specification that the agent builds up.
+    """Intermediate representation of the model specification the agent builds up.
+
+    The authoritative write-side contract is the consumed-paths registry in
+    ``agents/fitting.py`` (``unconsumed_spec_path`` / ``unconsumed_prior_path``)
+    — every key declared here is consumed by ``build_model`` or the registry.
+    Documented as the frozen v1.0 spec contract (docs/api-contracts.html);
+    keys must not be removed or renamed outside a major version.
     """
 
     kpi: str | None
-    kpi_display_name: str | None
+    kpi_display_name: str | None  # display-only
     kpi_level: str | None  # 'national' or 'geo'
 
-    media_channels: list[dict[str, Any]]
+    media_channels: list[dict[str, Any]]  # entries are {"name": ..., ...} dicts
     control_variables: list[dict[str, Any]]
 
-    # Optional parameters
-    time_granularity: str | None  # 'weekly', 'daily'
-    model_type: str | None  # 'pymc', 'numpyro'
+    time_granularity: str | None  # 'weekly', 'daily', 'monthly'
+    specification: str | None  # 'additive' or 'multiplicative'
+    trend: dict[str, Any] | None  # {type, n_changepoints, n_knots, ...}
+    seasonality: dict[str, Any] | None  # Fourier orders {yearly, monthly, weekly}
+    likelihood: dict[str, Any] | None  # {family, link?, params?}
+    priors: dict[str, Any] | None  # see unconsumed_prior_path for legal paths
+    media_prior_mode: str | None  # 'coefficient' or 'roi' (agent default 'roi')
+    inference: dict[str, Any] | None  # {method, chains, draws, tune, ...}
+    skip_quality_gate: bool | None
+
+    dataset: dict[str, Any] | None  # DatasetSchema dict (role-tagged load path)
+    model_params: dict[str, Any] | None  # bespoke CONFIG_SCHEMA params
+    garden_ref: dict[str, Any] | None  # {source_path, class_name}
+    estimands: list[dict[str, Any]] | None  # Estimand dicts
+    experiments: list[dict[str, Any]] | None  # ExperimentMeasurement dicts
+    experiment_ids: list[str] | None  # staged registry ids
+    latent_factors: list[dict[str, Any]] | None  # structural_nested_mmm only
+
+    # Stamped internally by build_model_from_dag — not registry-writable.
+    dag_model_type: str | None
+    dag_spec: dict[str, Any] | None
+
+    # Deprecated (declared historically, never consumed by build_model; kept so
+    # old checkpointed specs type-check — do not write).
+    model_type: str | None
     hierarchical: bool | None
 
 

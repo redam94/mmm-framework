@@ -162,7 +162,7 @@ EnvironmentFile=/etc/mmm/mmm.env
 Environment=HOME=/home/mmm
 Environment=XDG_RUNTIME_DIR=/run/user/${MMM_UID}
 WorkingDirectory=/data
-ExecStart=/opt/mmm/app/.venv/bin/python -m uvicorn mmm_framework.api.main:app --host 127.0.0.1 --port 8000
+ExecStart=/opt/mmm/app/.venv/bin/python -m uvicorn mmm_framework_server.main:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=5
 LimitNOFILE=65536
@@ -260,14 +260,14 @@ if [ ! -d "${REL}" ]; then
   mkdir -p "${REL}"
   gcs "releases/${VERSION}/source.tar.gz" | tar -xz -C "${REL}"
   chown -R mmm:mmm "${REL}"
-  log "installing python dependencies (uv sync --frozen --no-dev)"
+  log "installing python dependencies (uv sync --frozen --no-dev --package mmm-framework-server)"
   as_mmm env UV_PYTHON_PREFERENCE=only-managed \
-    sh -c "cd '${REL}' && /usr/local/bin/uv python install 3.12 && /usr/local/bin/uv sync --frozen --no-dev"
+    sh -c "cd '${REL}' && /usr/local/bin/uv python install 3.12 && /usr/local/bin/uv sync --frozen --no-dev --package mmm-framework-server"
   # sessions.db lives on the persistent disk via MMM_SESSIONS_DB (set in
   # /etc/mmm/mmm.env) so auth/org/session state survives releases. The
   # symlink is kept as belt-and-braces for tools run outside the unit's env
   # (e.g. an interactive shell without mmm.env loaded).
-  ln -sfn /data/state/sessions.db "${REL}/src/mmm_framework/api/sessions.db"
+  ln -sfn /data/state/sessions.db "${REL}/src/mmm_framework/platform/sessions.db"
 fi
 
 FRONT="/opt/mmm/frontends/${VERSION}"

@@ -2,7 +2,7 @@
 
 The supported web frontend for the MMM Framework (Vite + React + TypeScript +
 Tailwind 4 + Zustand). It talks to the **MMM Agent API**
-(`mmm_framework.api.main:app`) and surfaces the full measurement loop: Program,
+(`mmm_framework_server.main:app`) and surfaces the full measurement loop: Program,
 Experiments, Performance, the Agent workspace, the Atelier / Model Garden,
 Knowledge, Team, and Admin.
 
@@ -18,7 +18,7 @@ In dev, the Vite server proxies `/api/*` to the backend (default
 
 ```bash
 # from the repository root
-uv run uvicorn mmm_framework.api.main:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn mmm_framework_server.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Configuration

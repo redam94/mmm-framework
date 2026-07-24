@@ -12,7 +12,7 @@ import pytest
 
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -264,7 +264,7 @@ class TestAppendExperimentEvent:
     def test_tolerates_null_history(self, tmp_path, monkeypatch):
         """A pre-lifecycle row (NULL status_history_json) gets its history
         synthesized from the current status, like transition_experiment."""
-        from mmm_framework.api import sessions as S
+        from mmm_framework.platform import sessions as S
 
         db = tmp_path / "sessions.db"
         with sqlite3.connect(db) as c:
@@ -321,7 +321,7 @@ class TestMigration:
     def test_pre_lifecycle_db_migrates_and_reads(self, tmp_path, monkeypatch):
         """A DB created before the lifecycle columns must gain them on init_db
         and its legacy rows must read back with None/[] lifecycle fields."""
-        from mmm_framework.api import sessions as S
+        from mmm_framework.platform import sessions as S
 
         db = tmp_path / "sessions.db"
         with sqlite3.connect(db) as c:

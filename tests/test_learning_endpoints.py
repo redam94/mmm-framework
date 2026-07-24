@@ -51,7 +51,7 @@ CONFIG = {
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -114,7 +114,7 @@ def _wave_rows(n_geo=12, n_periods=2, seed=0):
 
 @pytest.mark.asyncio
 async def test_ingest_rejects_rows_plus_csv_and_concurrent_fits(store):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     prog = await _create_program(M, pid)
@@ -173,7 +173,7 @@ async def test_ingest_rejects_rows_plus_csv_and_concurrent_fits(store):
 async def test_delete_program_reaps_state_dir(store):
     from pathlib import Path
 
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     prog = await _create_program(M, pid)
@@ -190,7 +190,7 @@ async def test_delete_program_reaps_state_dir(store):
 @pytest.mark.asyncio
 async def test_wave_job_skips_foreign_project_experiments(store, monkeypatch):
     """The ingest worker never folds another project's experiments in."""
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
     from mmm_framework.continuous_learning import service as cl_service
 
     monkeypatch.setattr(
@@ -226,7 +226,7 @@ async def test_wave_job_skips_foreign_project_experiments(store, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_program_crud_shapes(store):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     with pytest.raises(HTTPException) as ei:
         await _create_program(M, "nope")
@@ -270,7 +270,7 @@ async def test_program_crud_shapes(store):
 
 @pytest.mark.asyncio
 async def test_design_wave_sync_cells_and_wave_row(store):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     prog = await _create_program(M, pid)
@@ -302,7 +302,7 @@ async def test_design_wave_optimize_and_stratify_passthrough(store):
     """The optimize/stratify request fields reach the service: a fresh program
     (no posterior, no ingested data) degrades gracefully — a knowledge-gradient
     warning instead of a `kg` block, and a round-robin assignment."""
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     prog = await _create_program(M, pid)
@@ -330,7 +330,7 @@ async def test_design_wave_request_bounds_kg_params(store):
     run hours of SLSQP solves + GB-scale MvNormal draws off one request."""
     from pydantic import ValidationError
 
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     with pytest.raises(ValidationError):
         M.LearningDesignWaveRequest(kg_n_outcomes=100000)
@@ -353,7 +353,7 @@ async def test_design_wave_request_bounds_kg_params(store):
 
 @pytest.mark.asyncio
 async def test_ingest_requires_evidence_and_poll_scoping(store):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     prog = await _create_program(M, pid)
@@ -390,7 +390,7 @@ async def test_ingest_requires_evidence_and_poll_scoping(store):
 async def test_wave_job_mocked_fit_fast(store, monkeypatch):
     """Full job wiring with the NUTS fit mocked out: pending → running → done,
     result == the snapshot, wave row + program summary written."""
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
     from mmm_framework.continuous_learning import service as cl_service
 
     canned = {
@@ -462,7 +462,7 @@ async def test_wave_job_mocked_fit_fast(store, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_wave_job_bad_rows_reports_error(store):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     prog = await _create_program(M, pid)
@@ -483,7 +483,7 @@ async def test_wave_job_bad_rows_reports_error(store):
 async def test_wave_ingest_fit_end_to_end(store):
     """create → design-wave → POST rows (+ tiny fit_kwargs) → poll to done →
     SNAPSHOT schema → GET program shows the wave + summary."""
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     prog = await _create_program(M, pid)
@@ -531,7 +531,7 @@ async def test_wave_ingest_fit_end_to_end_national_time_effect(store):
     the REST surface: create with the config knob → POST rows with period_col
     → the job ingests (tau periods indexed off the week column) and the tiny
     fit reaches done with a full SNAPSHOT."""
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
     from mmm_framework.continuous_learning import service as cl_service
 
     pid = store.create_project("P")["project_id"]
@@ -580,7 +580,7 @@ async def test_wave_ingest_fit_end_to_end_national_time_effect(store):
 async def test_import_experiments_end_to_end(store):
     """A completed registry readout becomes summary evidence: POST waves
     {experiment_ids} → done → evidence.n_summaries == 1 + imported/skipped."""
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     prog = await _create_program(M, pid)

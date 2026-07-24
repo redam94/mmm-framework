@@ -29,6 +29,10 @@ node_modules/
 # consumed client-side by the Cmd-K palette and glossary tooltips — must ship)
 !docs/shared/search-index.json
 !docs/shared/glossary.json
+# v1.0 contract artifacts — must be tracked (rest-api.html source of truth +
+# the CI route-snapshot gate in tests/test_api_contracts.py)
+!docs/shared/openapi.json
+!tests/contracts/rest_routes.json
 # Bundled example datasets shipped inside the package (load_example) — these MUST
 # be tracked and packaged despite the global *.csv / *.json ignores.
 !src/mmm_framework/datasets/data/*.csv
@@ -117,5 +121,7 @@ nbs/artifacts/_*/
 # Local screen-recording scratch (large video files; never committed)
 recordings/
 # Session DB backups produced by the prune/backup CLI (never committed)
+# (legacy pre-platform path kept — untracked runtime DBs may still live there)
 src/mmm_framework/api/sessions_backup_*.sql.gz
+src/mmm_framework/platform/sessions_backup_*.sql.gz
 sessions_backup_*.sql.gz

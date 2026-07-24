@@ -1,7 +1,7 @@
-"""Password hashing — scrypt via ``cryptography`` (no extra dependency).
+"""Password hashing — scrypt via ``cryptography`` (a declared core dependency).
 
 We deliberately avoid ``passlib``/``bcrypt``/``argon2-cffi`` to keep the auth
-foundation dependency-free: ``cryptography`` is already a transitive dependency,
+foundation lean: ``cryptography`` is a declared core dependency (pyproject),
 and its scrypt KDF is a sound memory-hard choice for password storage.
 
 Encoded format (single self-describing string, like ``passlib``'s)::

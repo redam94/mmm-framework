@@ -57,8 +57,16 @@ export const sessionService = {
     return data;
   },
 
-  async updateSession(threadId: string, request: SessionUpdateRequest): Promise<SessionInfo> {
-    const { data } = await apiClient.patch<SessionInfo>(`/sessions/${threadId}`, request);
+  // Backend returns {status:'ok'} (not the session record); callers refetch
+  // via query invalidation. name/project_id both optional, at least one set.
+  async updateSession(
+    threadId: string,
+    request: SessionUpdateRequest,
+  ): Promise<{ status: string }> {
+    const { data } = await apiClient.patch<{ status: string }>(
+      `/sessions/${threadId}`,
+      request,
+    );
     return data;
   },
 

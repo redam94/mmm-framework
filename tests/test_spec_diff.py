@@ -125,7 +125,7 @@ class TestCheckSpecDivergenceTool:
     def test_reports_divergence_against_locked_plan(self):
         import uuid
 
-        from mmm_framework.api import sessions as sessions_store
+        from mmm_framework.platform import sessions as sessions_store
 
         sessions_store.init_db()
         tid = "test-" + uuid.uuid4().hex
@@ -144,7 +144,7 @@ class TestCheckSpecDivergenceTool:
     def test_no_divergence_when_unchanged(self):
         import uuid
 
-        from mmm_framework.api import sessions as sessions_store
+        from mmm_framework.platform import sessions as sessions_store
 
         sessions_store.init_db()
         tid = "test-" + uuid.uuid4().hex
@@ -166,7 +166,7 @@ class TestCheckSpecDivergenceTool:
         # the frozen spec reads as removed (a divergence), not a crash.
         import uuid
 
-        from mmm_framework.api import sessions as sessions_store
+        from mmm_framework.platform import sessions as sessions_store
 
         sessions_store.init_db()
         tid = "test-" + uuid.uuid4().hex

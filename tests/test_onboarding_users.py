@@ -15,8 +15,8 @@ def _body(resp) -> dict:
 
 @pytest.fixture()
 def api(tmp_path, monkeypatch):
-    from mmm_framework.api import main as M
-    from mmm_framework.api import sessions as S
+    from mmm_framework_server import main as M
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
@@ -26,7 +26,7 @@ def api(tmp_path, monkeypatch):
 
 class TestUsers:
     def test_crud_and_roles(self, api):
-        from mmm_framework.api import sessions as S
+        from mmm_framework.platform import sessions as S
 
         u = S.create_user("Ada Lovelace", "ada@example.com", "owner")
         assert u["role"] == "owner"
@@ -68,7 +68,7 @@ class TestUsers:
 class TestMembers:
     @pytest.mark.asyncio
     async def test_membership_roundtrip(self, api):
-        from mmm_framework.api import sessions as S
+        from mmm_framework.platform import sessions as S
 
         pid = S.create_project("P")["project_id"]
         u1 = S.create_user("A", "a@x.com")
@@ -107,7 +107,7 @@ class TestMembers:
 class TestOnboarding:
     @pytest.mark.asyncio
     async def test_onboarding_saves_meta_and_brief(self, api):
-        from mmm_framework.api import sessions as S
+        from mmm_framework.platform import sessions as S
 
         pid = S.create_project("Acme MMM", description="FY27 measurement")["project_id"]
         u = S.create_user("Lead", "lead@x.com", "owner")
@@ -151,7 +151,7 @@ class TestOnboarding:
 class TestGuideSession:
     @pytest.mark.asyncio
     async def test_guide_session_created_once(self, api):
-        from mmm_framework.api import sessions as S
+        from mmm_framework.platform import sessions as S
 
         pid = S.create_project("P")["project_id"]
         a = _body(await api.project_guide_session_endpoint(pid))

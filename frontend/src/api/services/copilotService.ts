@@ -64,7 +64,7 @@ export interface CopilotTurn {
 }
 
 /** Notebook context attached to a copilot turn so it can diagnose a failed cell.
- * Mirrors api/main.py NotebookCopilotContext. */
+ * Mirrors mmm_framework_server/main.py NotebookCopilotContext. */
 export interface NotebookCopilotContext {
   cell_code: string;
   traceback: string;

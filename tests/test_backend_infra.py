@@ -39,7 +39,7 @@ def test_fit_quota_unlimited_plan_never_blocks(monkeypatch):
 def test_request_id_minted_and_echoed():
     from fastapi.testclient import TestClient
 
-    from mmm_framework.api.main import app
+    from mmm_framework_server.main import app
 
     with TestClient(app) as client:
         r = client.get("/health")

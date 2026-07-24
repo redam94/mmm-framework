@@ -504,7 +504,7 @@ def sync_data_connection(
     Returns:
         A Command that sets the dataset_path in state.
     """
-    from ..api import sessions as _sessions
+    from ..platform import sessions as _sessions
 
     def _err(msg: str) -> Command:
         return Command(
@@ -815,8 +815,8 @@ def fit_mmm_model(
     # These ride the model_run artifact and feed the /runs MLflow-style
     # timeline (api/runs.py).
     try:
-        from mmm_framework.api import runs as _runs
-        from mmm_framework.api import sessions as _sessions
+        from mmm_framework.platform import runs as _runs
+        from mmm_framework.platform import sessions as _sessions
 
         tid = get_current_thread()
         lineage = {
@@ -855,7 +855,7 @@ def fit_mmm_model(
     # run_metrics row that powers /projects/{id}/history + priorities.
     run_for_metrics = info.get("model_run") or dashboard_data.get("model_run")
     if isinstance(run_for_metrics, dict) and run_for_metrics.get("metrics"):
-        from mmm_framework.api.history import persist_run_metrics
+        from mmm_framework.platform.history import persist_run_metrics
 
         persist_run_metrics(run_for_metrics, get_current_thread())
 
@@ -875,7 +875,7 @@ def fit_mmm_model(
     # experiment exactly once; double-counting would require a duplicate entry.)
     if spec.get("experiments"):
         try:
-            from mmm_framework.api import sessions as _sessions
+            from mmm_framework.platform import sessions as _sessions
 
             run_id = (info.get("model_run") or {}).get("run_id")
             done = 0
@@ -1005,7 +1005,7 @@ def _persist_chat_validation(
     renders them identically. Best-effort: a persistence failure must never
     break the chat tool."""
     try:
-        from mmm_framework.api import sessions as _sessions
+        from mmm_framework.platform import sessions as _sessions
 
         tid = get_current_thread()
         sess = _sessions.get_session(tid) or {}
@@ -1141,7 +1141,7 @@ def _project_experiment_readouts(config) -> list[dict]:
     the newest within a status wins — so the panel never double-counts a channel
     or lets a stale readout shadow a fresh calibration. Host-side registry read
     (like ``list_experiment_log``)."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = get_current_thread() if config is None else _activate_thread(config)
     out: list[dict] = []
@@ -1193,13 +1193,13 @@ def triangulate_channel_effects(
     standard). Uses the calibrated/completed experiment readouts + stored platform
     figures already in the registry — no re-fit. Requires a fitted model.
     """
-    from mmm_framework.api.triangulation import platform_dict_for_project
+    from mmm_framework.platform.triangulation import platform_dict_for_project
 
     _activate_thread(config)
     experiments = _project_experiment_readouts(config)
     project_id = None
     try:
-        from mmm_framework.api import sessions as _sessions
+        from mmm_framework.platform import sessions as _sessions
 
         tid = get_current_thread()
         sess = _sessions.get_session(tid) if tid else None
@@ -1518,126 +1518,16 @@ def run_cross_validation(
 
 
 # ── Plot normalization + error formatting (shared with the kernel impls) ──────
-# Extracted to module level (Phase 1 of technical-docs/agent-session-kernels.md)
-# so BOTH the in-process execute_python path and the future subprocess kernel's
-# startup file apply the SAME figure normalization, and so the load-bearing
-# "Error executing code" text + NameError hint are formatted identically
-# regardless of where the code ran. No behavior change vs. the prior in-function
-# definitions — this is a pure extraction.
-
-# Design-consistent palette (indigo / teal / amber / rose / emerald / violet / sky …)
-_PALETTE = [
-    "#4f46e5",
-    "#0d9488",
-    "#f59e0b",
-    "#e11d48",
-    "#059669",
-    "#7c3aed",
-    "#0284c7",
-    "#b45309",
-    "#6366f1",
-    "#0f766e",
-]
-# Default Plotly Express / graph_objects colors we want to remap
-_PLOTLY_DEFAULTS = {
-    "#636efa": 0,
-    "#ef553b": 1,
-    "#00cc96": 2,
-    "#ab63fa": 3,
-    "#ffa15a": 4,
-    "#19d3f3": 5,
-    "#ff6692": 6,
-    "#b6e880": 7,
-    "#ff97ff": 8,
-    "#fecb52": 9,
-}
-
-
-def _normalize_figure(fig):
-    """Remap default colors, fix margins and suppress overlapping bar labels."""
-    color_map: dict = {}
-    next_idx = [0]
-
-    def _remap(c: str) -> str:
-        if not isinstance(c, str):
-            return c
-        key = c.lower()
-        if key not in color_map:
-            if key in _PLOTLY_DEFAULTS:
-                color_map[key] = _PALETTE[_PLOTLY_DEFAULTS[key] % len(_PALETTE)]
-            else:
-                color_map[key] = _PALETTE[next_idx[0] % len(_PALETTE)]
-                next_idx[0] += 1
-        return color_map[key]
-
-    for trace in fig.data:
-        # Remap solid string colors on the marker
-        mc = getattr(getattr(trace, "marker", None), "color", None)
-        if isinstance(mc, str):
-            trace.marker.color = _remap(mc)
-        elif isinstance(mc, (list, tuple)):
-            # Array of colors — remap each unique color
-            trace.marker.color = [_remap(c) if isinstance(c, str) else c for c in mc]
-        # Also remap line color
-        lc = getattr(getattr(trace, "line", None), "color", None)
-        if isinstance(lc, str):
-            trace.line.color = _remap(lc)
-
-    # Fix bar chart text overlap: hide labels that don't fit
-    has_bar = any(getattr(t, "type", "") in ("bar",) for t in fig.data)
-
-    fig.update_layout(
-        colorway=_PALETTE,
-        font=dict(family="Inter, system-ui, sans-serif", size=12, color="#1f2937"),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="#f9fafb",
-        margin=dict(t=90, l=70, r=40, b=80),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1,
-            bgcolor="rgba(255,255,255,0.95)",
-            bordercolor="#e5e7eb",
-            borderwidth=1,
-            font=dict(size=11, color="#374151"),
-        ),
-    )
-    if has_bar:
-        fig.update_layout(uniformtext=dict(minsize=9, mode="hide"))
-
-    return fig
-
-
-def format_execution_error(
-    traceback_str: str,
-    *,
-    is_name_error: bool = False,
-    missing_name: str | None = None,
-) -> str:
-    """Format an ``execute_python`` failure identically for the in-process and
-    (future) subprocess kernels.
-
-    The literal ``Error executing code`` substring is **load-bearing**: the
-    ``/chat`` capture loop keys ``is_error`` off it (``api/main.py``) and the
-    portable ``.py`` export marks errored cells with it (``session_export.py``).
-    When the failure is a ``NameError``, append the self-healing hint (the warm
-    namespace persists only within a live session). The caller prepends any
-    captured stdout.
-    """
-    out = f"Error executing code:\n{traceback_str}"
-    if is_name_error:
-        ref = f"`{missing_name}`" if missing_name else "a variable"
-        out += (
-            f"\n\nHint: variables persist across execute_python calls only "
-            f"within a live session. {ref} from an earlier call is gone — the "
-            f"kernel may have been reset (e.g. a server restart). The dataset is "
-            f"auto-loaded as `df` and `dataset_path` is set, so reload/rebuild "
-            f"what you need; or call `load_result('name')` if you saved it "
-            f"earlier with `save_result('name', obj)`."
-        )
-    return out
+# Lives in agents/figures.py (langchain-free) so the sandboxed kernel image —
+# which ships only the lean core closure — can import it inside the kernel
+# (kernels.py::_build_startup_source). Re-exported here for all host-side
+# consumers (branding, kernels host path, tests).
+from mmm_framework.agents.figures import (  # noqa: F401
+    _PALETTE,
+    _PLOTLY_DEFAULTS,
+    _normalize_figure,
+    format_execution_error,
+)
 
 
 class InProcessKernel:
@@ -2674,7 +2564,7 @@ def get_session_status(
             normalize_mode,
             reconcile_mode_with_model,
         )
-        from mmm_framework.api import sessions as _sessions_store
+        from mmm_framework.platform import sessions as _sessions_store
 
         _mode = normalize_mode(
             (_sessions_store.get_session(tid) or {}).get("modeling_mode")
@@ -3153,7 +3043,7 @@ def generate_project_report(
         generate_html_report,
         generate_html_slides,
     )
-    from mmm_framework.api import sessions as sessions_store_local
+    from mmm_framework.platform import sessions as sessions_store_local
 
     date_str = datetime.now(timezone.utc).strftime("%d %B %Y")
     dashboard = dict((state or {}).get("dashboard_data") or {})
@@ -3501,8 +3391,8 @@ def generate_interactive_report(
         # into the interactive report when a saved plan + delivery exist.
         pacing_facts = None
         try:
-            from mmm_framework.api import sessions as _sessions
-            from mmm_framework.api.pacing import build_project_pacing
+            from mmm_framework.platform import sessions as _sessions
+            from mmm_framework.platform.pacing import build_project_pacing
 
             _sess = _sessions.get_session(get_current_thread())
             _pid = (_sess or {}).get("project_id")
@@ -3646,7 +3536,7 @@ def generate_model_design_readout(
     # Change record: the session's versioned assumption log, oldest first.
     revisions: list[dict] = []
     try:
-        from mmm_framework.api import sessions as _sessions
+        from mmm_framework.platform import sessions as _sessions
 
         hist = _sessions.list_assumptions(tid, include_history=True)
         hist.sort(key=lambda a: str(a.get("created_at", "")))
@@ -3672,7 +3562,7 @@ def generate_model_design_readout(
     # Sign-off audit trail (issue #110): who approved these assumptions/priors.
     signoffs: list[dict] = []
     try:
-        from mmm_framework.api import sessions as _sessions
+        from mmm_framework.platform import sessions as _sessions
 
         _sess = _sessions.get_session(tid) if tid else None
         _pid = (_sess or {}).get("project_id")
@@ -3913,7 +3803,7 @@ def generate_client_slides(
     """
     from datetime import datetime, timezone
     from mmm_framework.agents.report_builder import generate_html_slides
-    from mmm_framework.api import sessions as sessions_store_local
+    from mmm_framework.platform import sessions as sessions_store_local
 
     date_str = datetime.now(timezone.utc).strftime("%d %B %Y")
     dashboard = dict((state or {}).get("dashboard_data") or {})
@@ -4132,7 +4022,7 @@ def search_knowledge_base(
     context) for passages relevant to `query`. Use this whenever the user refers
     to their own data dictionary, brief, prior analysis, or domain docs.
     Returns the top matching snippets with their source document."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
     from mmm_framework.agents import knowledge_base as kb
 
     tid = _activate_thread(config)
@@ -4159,7 +4049,7 @@ def search_knowledge_base(
 def list_knowledge_base(config: InjectedConfig = None) -> str:
     """List the documents in the current project's knowledge base, with their
     ingest status and chunk counts."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = _activate_thread(config)
     project_id = sessions_store.resolve_project_id(tid)
@@ -4194,7 +4084,7 @@ def get_preferences(
     brand. Plots automatically use confirmed branding; this tool tells you
     what is set."""
     from mmm_framework.agents.branding import brand_palette, is_active
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = _activate_thread(config)
     project_id = sessions_store.resolve_project_id(tid)
@@ -4271,7 +4161,7 @@ def save_preference(
     palette", "reports should be in EUR"). scope: "global" (all projects) or
     "project" (this project — e.g. client branding; key "branding" expects the
     branding JSON shape). value may be a JSON string or plain text."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = _activate_thread(config)
     try:
@@ -4354,7 +4244,7 @@ def list_templates(
     kind: "report" | "palette" | "model_config" | "kb" (default: all). Load a
     model config with `load_config`; pick a report template by passing
     template=<name> to `generate_client_report`."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = _activate_thread(config)
     kinds = [kind] if kind else ["report", "palette", "model_config", "kb"]
@@ -4453,7 +4343,7 @@ def extract_brand_from_website(
         BrandExtractError,
         extract_brand_from_url,
     )
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = _activate_thread(config)
     try:
@@ -4531,7 +4421,7 @@ def query_past_results(
     Optionally filter by kind (model_run | report | code_snippet | text_output |
     project_report). Returns artifact ids that can be downloaded from the
     frontend."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = _activate_thread(config)
     arts = sessions_store.list_artifacts(tid)
@@ -4847,7 +4737,7 @@ def log_experiment(
     calibration to an MMM stays channel-level; sub-channel readouts feed
     continuous-learning programs with arms.
     """
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = get_current_thread() if config is None else _activate_thread(config)
     project_id = None
@@ -4915,7 +4805,7 @@ def list_experiment_log(
     recommending new experiments (don't re-propose a channel already being
     tested) and when deciding whether a refresh should calibrate in completed
     results."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = get_current_thread() if config is None else _activate_thread(config)
     project_id = None
@@ -4998,7 +4888,7 @@ def record_platform_figure(
     channel/source overwrites the prior one. Use `triangulate_channel_effects` to
     see it next to the MMM and experiment estimates.
     """
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = get_current_thread() if config is None else _activate_thread(config)
     project_id = None
@@ -5070,7 +4960,7 @@ def run_spec_curve(
         )
     # Pre-register the default spec set to the assumption log (issue #118).
     try:
-        from mmm_framework.api import sessions as _sessions
+        from mmm_framework.platform import sessions as _sessions
         from mmm_framework.validation.spec_curve import SpecSet, default_spec_variants
 
         tid = get_current_thread()
@@ -5167,7 +5057,7 @@ def sign_off_model(
     a named person is accountable for them. The trail is append-only; a later
     edit to any past record is detectable.
     """
-    from mmm_framework.api import sessions as _sessions
+    from mmm_framework.platform import sessions as _sessions
 
     tid = get_current_thread() if config is None else _activate_thread(config)
     project_id = None
@@ -5225,7 +5115,7 @@ def plan_experiment(
     creative/keyword/campaign within the channel — MMM calibration stays
     channel-level; sub-channel readouts feed learning programs with arms.
     """
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = get_current_thread() if config is None else _activate_thread(config)
     project_id = None
@@ -5311,7 +5201,7 @@ def preregister_experiment(
     only when the design (channel, window, intensity, target precision) is
     final — analysis choices after seeing results are exactly what
     pre-registration protects against."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     try:
         exp = sessions_store.transition_experiment(
@@ -5382,7 +5272,7 @@ def record_experiment_readout(
     'completed' means measured but NOT yet in the model — follow with
     apply_experiment_calibration + fit_mmm_model to close the loop.
     """
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     exp = sessions_store.get_experiment(experiment_id)
     if exp is None:
@@ -5543,7 +5433,7 @@ def apply_experiment_calibration(
     se, estimand, and a test window (start/end dates); out-of-window
     experiments calibrate off-panel from their recorded spend.
     """
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = get_current_thread() if config is None else _activate_thread(config)
     spec = state.get("model_spec")
@@ -5813,8 +5703,8 @@ def get_run_history(
     differs from earlier ones, and as the PROVENANCE section when writing a
     final report — it is the versioned record of data, model, and rationale.
     """
-    from mmm_framework.api import runs as _runs
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import runs as _runs
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = get_current_thread() if config is None else _activate_thread(config)
     project_id = None
@@ -5865,7 +5755,7 @@ def _project_evidence(config) -> tuple[str | None, dict]:
     """(project_id, latest calibrated evidence per channel) for the active
     session — registry reads stay host-side; the evidence dict crosses the
     kernel boundary as plain JSON."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = get_current_thread() if config is None else _activate_thread(config)
     try:
@@ -6812,7 +6702,7 @@ def _persist_expert_code_artifacts(
         import re
         import time
 
-        from mmm_framework.api import sessions as _sessions
+        from mmm_framework.platform import sessions as _sessions
 
         stamp: dict[str, Any] = {"ts": time.time(), "via": via}
         if question:
@@ -7195,7 +7085,7 @@ from mmm_framework.agents.garden_registry import (  # noqa: E402
 
 def _garden_org_for(tid: str | None) -> tuple[str, str]:
     """(project_id, org_id) for the active session."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     project_id = sessions_store.resolve_project_id(tid)
     return project_id, sessions_store.resolve_org_id(project_id)
@@ -7293,7 +7183,7 @@ def list_garden_models(
     discover reusable models before loading one with `load_garden_model`.
     """
     tid = _activate_thread(config)
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     _project_id, org_id = _garden_org_for(tid)
     rows = sessions_store.list_garden_models(
@@ -7408,7 +7298,7 @@ def load_garden_model(
     model authored in one project is reused in another.
     """
     tid = _activate_thread(config)
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     _project_id, org_id = _garden_org_for(tid)
     if version is not None:
@@ -7514,7 +7404,7 @@ def test_garden_model(
     `register_garden_model`. Heavy (it fits models) — runs in the session kernel.
     """
     tid = _activate_thread(config)
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     _project_id, org_id = _garden_org_for(tid)
     if version is not None:
@@ -7604,7 +7494,7 @@ def publish_garden_model(
     published model, register a new version.
     """
     tid = _activate_thread(config)
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     _project_id, org_id = _garden_org_for(tid)
     row = sessions_store.get_garden_model(

@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from mmm_framework.api import estimands as E
+from mmm_framework.platform import estimands as E
 
 # ---------------------------------------------------------------------------
 # pure helpers
@@ -263,7 +263,7 @@ def test_is_latest_for_model_flag():
 
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -384,7 +384,7 @@ def test_build_project_estimands_skips_runs_without_estimands(store):
 
 @pytest.mark.asyncio
 async def test_endpoint_returns_groups_and_404(store):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     _seed_run(

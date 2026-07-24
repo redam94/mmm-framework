@@ -19,7 +19,7 @@ import pytest
 def store(tmp_path, monkeypatch):
     """Point the session store + checkpointer + workspace at a temp location."""
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
-    from mmm_framework.api import sessions as ss
+    from mmm_framework.platform import sessions as ss
 
     monkeypatch.setattr(ss, "DB_PATH", tmp_path / "sessions.db")
     ss.init_db()
@@ -468,7 +468,7 @@ def test_workspace_tools_functional(store, monkeypatch):
 
 @pytest.fixture()
 def client(store, tmp_path, monkeypatch):
-    import mmm_framework.api.main as main
+    import mmm_framework_server.main as main
 
     monkeypatch.setattr(main, "DB_PATH", store.DB_PATH)
     from fastapi.testclient import TestClient
@@ -515,7 +515,7 @@ def test_api_projects_kb_and_downloads(client, store):
 
 
 def test_safe_upload_name_flattens_and_guards():
-    from mmm_framework.api.main import _safe_upload_name
+    from mmm_framework_server.main import _safe_upload_name
 
     assert _safe_upload_name("../../etc/passwd", "d.bin") == "passwd"
     assert _safe_upload_name("/abs/evil.csv", "d.bin") == "evil.csv"
@@ -1133,7 +1133,7 @@ def test_container_kernel_fit_interpret_and_cold_reload(tmp_path, monkeypatch):
     monkeypatch.setenv("MMM_KERNEL_READY_TIMEOUT", "180")
     monkeypatch.setenv("MMM_KERNEL_FIT_TIMEOUT", "1800")
 
-    from mmm_framework.api import sessions as ss
+    from mmm_framework.platform import sessions as ss
 
     monkeypatch.setattr(ss, "DB_PATH", tmp_path / "sessions.db")
     ss.init_db()

@@ -10,7 +10,7 @@ rootfs, all capabilities dropped, cgroup memory/pids/cpu caps, a scrubbed env, a
 
 That sandbox needs **this image built and reachable by the host's container
 runtime**. Until it exists, hosted mode is deliberately inert (`agents/profile.py`
-+ the lifespan guard `assert_hosted_sandbox` in `src/mmm_framework/api/main.py`).
++ the lifespan guard `assert_hosted_sandbox` in `server/src/mmm_framework_server/main.py`).
 This is the one-time "ship" step.
 
 ## Build → verify → push

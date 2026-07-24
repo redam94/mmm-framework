@@ -88,6 +88,9 @@
             label: 'Platform',
             items: [
                 { href: 'platform-overview.html', label: 'Platform Overview' },
+                { href: 'architecture.html', label: 'Architecture & Flow Diagrams' },
+                { href: 'api-contracts.html', label: 'API Contracts (v1.0)' },
+                { href: 'rest-api.html', label: 'REST API Reference' },
                 { href: 'model-garden.html', label: 'Model Garden & Atelier' },
                 { href: 'pricing.html', label: 'Pricing' },
                 { href: 'data-requirements.html', label: 'Data Requirements & Runtime' },
@@ -212,6 +215,9 @@
     // get no tier chip. Reading time is computed for any page with a chip row.
     const TIER_OVERVIEW = 'overview', TIER_ANALYST = 'analyst', TIER_TECHNICAL = 'technical';
     const PAGE_TIERS = {
+        'architecture.html': TIER_TECHNICAL,
+        'api-contracts.html': TIER_TECHNICAL,
+        'rest-api.html': TIER_TECHNICAL,
         'getting-started.html': TIER_OVERVIEW,
         'troubleshooting.html': TIER_OVERVIEW,
         'about.html': TIER_OVERVIEW,

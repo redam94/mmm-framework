@@ -99,7 +99,7 @@ async def _seed(conn, thread, ns, n):
 
 @pytest.mark.asyncio
 async def test_prune_keeps_latest_n_and_drops_orphaned_writes(tmp_path, monkeypatch):
-    from mmm_framework.api import main
+    from mmm_framework_server import main
 
     monkeypatch.setenv("MMM_CHECKPOINT_RETENTION", "5")
     db = tmp_path / "sessions.db"
@@ -156,7 +156,7 @@ async def test_prune_keeps_latest_n_and_drops_orphaned_writes(tmp_path, monkeypa
 async def test_prune_is_a_noop_below_the_cap_and_when_conn_is_none(
     tmp_path, monkeypatch
 ):
-    from mmm_framework.api import main
+    from mmm_framework_server import main
 
     monkeypatch.setenv("MMM_CHECKPOINT_RETENTION", "40")
     db = tmp_path / "sessions.db"

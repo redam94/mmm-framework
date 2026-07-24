@@ -183,7 +183,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-10",
+          "dateModified": "2026-07-12",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/faq.html#breadcrumb"
           },
@@ -363,7 +363,7 @@
               "name": "How do I install it?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "From PyPI. Pin an exact version for production use: pip install mmm-framework==0.2.0 Source installs (git clone + uv sync) remain the development path. Python 3.12+ is required. The getting started guide walks through setup, and the changelog page explains the pre-1.0 versioning policy and which modules are safe to depend on."
+                "text": "From PyPI. Pin an exact version for production use: pip install mmm-framework==1.0.0 The base install is the lean modeling core (no web or LLM dependencies); the agent stack is the [agents] extra, and the web app ships as the separate mmm-framework-server package. Source installs (git clone + uv sync) remain the development path (uv sync --no-dev installs the lean library only). Python 3.12+ is required. The getting started guide walks through setup, and the changelog page explains the versioning policy (SemVer from 1.0.0) and which modules are safe to depend on."
               }
             },
             {
@@ -1470,14 +1470,18 @@ az.plot_ppc(pred.posterior_predictive)</code></pre>
                         From <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>.
                         Pin an exact version for production use:
                     </p>
-                    <pre><code>pip install mmm-framework==0.2.0</code></pre>
+                    <pre><code>pip install mmm-framework==1.0.0</code></pre>
                     <p>
-                        Source installs (<code>git clone</code> + <code>uv sync</code>) remain the development path.
+                        The base install is the lean modeling core (no web or LLM dependencies);
+                        the agent stack is the <code>[agents]</code> extra, and the web app ships
+                        as the separate <code>mmm-framework-server</code> package.
+                        Source installs (<code>git clone</code> + <code>uv sync</code>) remain the
+                        development path (<code>uv sync --no-dev</code> installs the lean library only).
                     </p>
                     <p>
                         Python 3.12+ is required. The <a href="getting-started.html">getting started guide</a>
                         walks through setup, and the <a href="changelog.html">changelog page</a> explains the
-                        pre-1.0 versioning policy and which modules are safe to depend on.
+                        versioning policy (SemVer from 1.0.0) and which modules are safe to depend on.
                     </p>
                 </div>
             </div>

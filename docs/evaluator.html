@@ -71,7 +71,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-10",
+          "dateModified": "2026-07-21",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/evaluator.html#breadcrumb"
           },
@@ -126,11 +126,11 @@
                     </tr>
                     <tr>
                         <td>Version</td>
-                        <td>0.2.0 (Beta) &mdash; in development since December 2025; first published to PyPI as 0.1.0 in June 2026. Pre-1.0: expect API changes on non-stable modules. See the <a href="changelog.html">versioning &amp; changelog page</a>.</td>
+                        <td>1.0.0 &mdash; first stable release (2026-07-24); in development since December 2025; first published to PyPI as 0.1.0 in June 2026. Strict SemVer from 1.0.0; Experimental-tier modules may still change in minor releases (see the <a href="changelog.html#stability">stability tiers</a>).</td>
                     </tr>
                     <tr>
                         <td>Packaging</td>
-                        <td>On <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>: <code>pip install mmm-framework</code>. Pin an exact version for production use (<code>mmm-framework==0.2.0</code>). Source install (<code>git clone</code> + <code>uv sync</code>) remains the development path.</td>
+                        <td>On <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>: <code>pip install mmm-framework</code>. Pin an exact version for production use (<code>mmm-framework==1.0.0</code>). The base install is the lean modeling core; the agent stack is the <code>[agents]</code> extra, and the FastAPI web app ships as the separate <code>mmm-framework-server</code> package. Source install remains the development path: <code>uv sync</code> = the full dev workspace (core + agents + server), <code>uv sync --no-dev</code> = the lean library only.</td>
                     </tr>
                     <tr>
                         <td>Maintainer</td>
@@ -161,21 +161,21 @@
         <div class="container">
             <h2>Maturity &amp; API Stability</h2>
             <p>
-                The framework is pre-1.0 and says so. Different modules have matured at different rates, and the <a href="changelog.html#stability">changelog page</a> maintains the authoritative tier list. In summary:
+                Different modules have matured at different rates, and the <a href="changelog.html#stability">changelog page</a> maintains the authoritative tier list. As of 1.0 the summary is:
             </p>
             <ul>
-                <li><strong>Stable</strong> &mdash; the core modeling surface: <code>BayesianMMM</code>, results classes, the fluent builders, Pydantic configs, the adstock/saturation/seasonality/trend transforms, and the MFF data loader.</li>
-                <li><strong>Beta</strong> &mdash; the active surface: reporting, analysis, serialization, the FastAPI endpoints, the React web UI, the AI agent workspace, the measurement-loop planning engine, and the pre-fit EDA module.</li>
-                <li><strong>Experimental</strong> &mdash; subject to change: the extension models (NestedMMM, MultivariateMMM, CombinedMMM), the DAG model builder, and the Excel config workflow.</li>
+                <li><strong>Stable (frozen at 1.0)</strong> &mdash; the core modeling surface: <code>BayesianMMM</code>, results classes, the fluent builders, Pydantic configs, the adstock/saturation/seasonality/trend transforms, the MFF data loader, the declarative <code>estimands</code> registry, <code>serialization</code> (the persisted model format), and the REST API (<code>mmm-framework-server</code>) with its org/tenant auth.</li>
+                <li><strong>Beta</strong> &mdash; the active surface: reporting, analysis, the React web UI, the AI agent workspace, the measurement-loop planning engine, the pre-fit EDA module, and the diagnostics/validation suites.</li>
+                <li><strong>Experimental</strong> &mdash; subject to change: the extension models (NestedMMM, MultivariateMMM, CombinedMMM), the continuous-learning loop, the Model Garden / Atelier, the non-MMM model families, the DAG model builder, and the Excel config workflow.</li>
             </ul>
             <p>
-                Until 1.0, minor versions (<code>0.x.0</code>) may break experimental modules; stable APIs are preserved on a best-effort basis with deprecation warnings. After 1.0 the project commits to strict <a href="https://semver.org" target="_blank" rel="noopener">SemVer</a>.
+                From 1.0.0 the project commits to strict <a href="https://semver.org" target="_blank" rel="noopener">SemVer</a>: breaking changes to Stable APIs require a major version, while modules flagged Experimental may still change in minor releases (with deprecation warnings where feasible).
             </p>
 
             <div class="note">
-                <h4>Roadmap to 1.0 &mdash; criteria, not dates</h4>
+                <h4>1.0 shipped 2026-07-24</h4>
                 <p style="margin-bottom: 0;">
-                    There is no promised ship date. 1.0 happens when a specific criterion is met: stabilizing the Beta-tier APIs. (PyPI publication, the other original criterion, happened at 0.1.0.) Until then, pin an exact release for production use: <code>pip install mmm-framework==0.2.0</code>.
+                    The criterion set out on this page &mdash; stabilizing the Beta-tier APIs &mdash; was met, and 1.0.0 shipped on 2026-07-24. (PyPI publication, the other original criterion, happened at 0.1.0.) Pinning an exact release for production use remains good hygiene: <code>pip install mmm-framework==1.0.0</code>.
                 </p>
             </div>
         </div>
@@ -286,10 +286,10 @@
             <div class="warning-box">
                 <h4>⚠️ Read before depending</h4>
                 <ul style="margin-bottom: 0;">
-                    <li><strong>Pre-1.0 on PyPI.</strong> Released, but pin an exact version (<code>mmm-framework==0.2.0</code>) for anything production-facing and read the release notes before upgrading &mdash; 0.2.0 itself moved the core stack to PyMC&nbsp;6.</li>
+                    <li><strong>Stable 1.0 on PyPI.</strong> Pin an exact version (<code>mmm-framework==1.0.0</code>) for anything production-facing and read the release notes before upgrading; SemVer applies from 1.0.0.</li>
                     <li><strong>Solo maintainer.</strong> No SLA, no commercial support, real bus-factor risk (mitigations <a href="#team">above</a>).</li>
-                    <li><strong>Pre-1.0 API churn.</strong> Beta and Experimental modules may change between minor versions; only the core modeling tier is treated as stable.</li>
-                    <li><strong>No SaaS offering.</strong> You operate the stack (FastAPI agent API + React frontend) yourself.</li>
+                    <li><strong>Experimental-module churn.</strong> Modules flagged Experimental may change in minor releases; the Stable tier is frozen under SemVer.</li>
+                    <li><strong>No SaaS offering.</strong> You operate the stack (the <code>mmm-framework-server</code> FastAPI agent API + React frontend) yourself.</li>
                     <li><strong>Open methodological findings.</strong> The pressure-testing page records methodological limits openly&mdash;e.g. regional ROI inversion under performance-chased budgets when media effectiveness is pooled across geos (mitigated by the opt-in per-geo <code>vary_media_by_geo</code> hierarchy or a per-geography refit). (Two former headline findings were since resolved: the legacy blend adstock underperforming the parametric path&mdash;fixed by making parametric adstock the default&mdash;and the holdout-validation saturation fallback for Hill-fit models.) See <a href="pressure-testing.html#strengths-weaknesses">known strengths &amp; weaknesses</a>.</li>
                 </ul>
             </div>

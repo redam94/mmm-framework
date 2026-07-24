@@ -8,7 +8,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from mmm_framework.api import sessions as store
+from mmm_framework.platform import sessions as store
 
 
 def system_health(*, fit_window_hours: float = 24.0) -> dict[str, Any]:

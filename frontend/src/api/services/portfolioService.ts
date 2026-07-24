@@ -76,11 +76,13 @@ export interface ExperimentDesign {
 }
 
 export interface NextAction {
-  type: 'calibrate' | 'refresh' | 'fit' | 'experiment';
+  type: 'calibrate' | 'refresh' | 'fit' | 'experiment' | 'retest';
   urgency: 'high' | 'medium' | 'low';
   title: string;
   detail: string;
   design?: ExperimentDesign;
+  /** retest actions: the information-decayed channels due for re-testing */
+  channels?: string[];
 }
 
 export interface PortfolioResponse {

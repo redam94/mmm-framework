@@ -78,7 +78,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-12",
+          "dateModified": "2026-07-21",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/troubleshooting.html#breadcrumb"
           },
@@ -149,7 +149,7 @@
                 </p>
                 <div class="code-wrapper">
                     <pre><code class="language-python">import mmm_framework
-print(mmm_framework.__version__)   # expect 0.2.0
+print(mmm_framework.__version__)   # expect 1.0.0
 
 from mmm_framework import load_example, BayesianMMM
 panel = load_example("national")   # bundled data — no files needed
@@ -171,17 +171,33 @@ print(panel.n_obs, "observations,", panel.n_channels, "channels")</code></pre>
             </p>
             <div class="terminal-block">
                 <div class="terminal-content">
-                    <span class="comment"># library only</span><br>
+                    <span class="comment"># full dev workspace: core + [agents] + the API server package</span><br>
                     <span class="prompt">$</span> uv sync<br>
+                    <span class="comment"># lean library only (no web/LLM deps)</span><br>
+                    <span class="prompt">$</span> uv sync --no-dev<br>
                     <span class="comment"># or, with pip</span><br>
                     <span class="prompt">$</span> pip install -e .<br><br>
-                    <span class="comment"># add dev + app tooling (tests, slide decks, Atelier lint)</span><br>
-                    <span class="prompt">$</span> uv sync --group dev --group app
+                    <span class="comment"># optional extras: slide decks, Atelier lint endpoints</span><br>
+                    <span class="prompt">$</span> uv sync --group app
                 </div>
             </div>
             <p>
                 If you installed into a global Python but run inside <code>uv</code>, prefix commands with
                 <code>uv run</code> so they use the project's virtual environment.
+            </p>
+
+            <div class="symptom">ImportError: No module named <code>fastapi</code> / <code>langgraph</code> / <code>mmm_framework.api</code></div>
+            <p>
+                This is the 1.0 packaging split, not a broken install. The base
+                <code>pip install mmm-framework</code> is now the <strong>lean modeling core</strong> —
+                no web framework, no LLM stack. If your code needs the oracle-agent / LLM stack,
+                install the extra: <code>pip install "mmm-framework[agents]"</code>. The FastAPI
+                backend itself moved to the separate <code>mmm-framework-server</code> package
+                (run it with <code>uvicorn mmm_framework_server.main:app</code>). And the service
+                modules that used to live under <code>mmm_framework.api</code> now live under
+                <code>mmm_framework.platform</code> — e.g. update
+                <code>mmm_framework.api.sessions</code> imports to
+                <code>mmm_framework.platform.sessions</code>.
             </p>
 
             <div class="symptom">JAX / NumPyro won't import or crashes on Apple Silicon</div>
@@ -389,7 +405,7 @@ print(results.diagnostics["log_marginal_likelihood"])  # model evidence, for Bay
             <div class="symptom">"cloudpickle version" errors across machines</div>
             <p>
                 Keep the modeling environment consistent — pin <code>mmm-framework</code> to an exact
-                release (<code>==0.2.0</code>) and use the same lockfile everywhere you save and load models,
+                release (<code>==1.0.0</code>) and use the same lockfile everywhere you save and load models,
                 so <code>cloudpickle</code> and the core stack match.
             </p>
 

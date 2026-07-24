@@ -19,7 +19,7 @@ Decisions locked (2026-06-17):
   stdlib `hmac`, password hashing via scrypt (`cryptography`, already installed).
 - **Tenant boundary**: an **Organization** layer above projects. Users belong to
   an org; projects belong to an org; access is checked org-first, then role.
-- **System of record**: `src/mmm_framework/api/sessions.db` (already owns
+- **System of record**: `src/mmm_framework/platform/sessions.db` (already owns
   `projects` / `users` / `project_members`). The classic root-`api/` app shares
   the same org/principal layer via `mmm_framework.auth`.
 
@@ -46,7 +46,7 @@ Decisions locked (2026-06-17):
 
 ### Phase 1.2 — Mount & enable  `[x]`
 - [x] Mount auth router in root `api/` (additive, safe; disabled by default)
-- [x] Mount auth router in agent app (`src/mmm_framework/api/main.py`)
+- [x] Mount auth router in agent app (`server/src/mmm_framework_server/main.py`)
 - [x] Resolve principal on the agent app's `/chat` + project list/create +
       experiment-create routes (dev principal when auth off → no behavior change)
 - [x] Seed: `initialize_auth()` runs on startup in both apps — schema +

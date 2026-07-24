@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mmm_framework.api import scorecard as SC
+from mmm_framework.platform import scorecard as SC
 
 
 def _estimands(rows_by_run):
@@ -168,11 +168,11 @@ class TestJoin:
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
-    import mmm_framework.api.main as main
+    import mmm_framework_server.main as main
     from fastapi.testclient import TestClient
 
     with TestClient(main.app) as c:
@@ -185,7 +185,7 @@ def project(client):
 
 
 def test_endpoint_joins_store(client, project):
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     tid = S.create_session("s", project_id=project)["thread_id"]
     S.add_artifact(

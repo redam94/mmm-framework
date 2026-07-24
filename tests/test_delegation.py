@@ -164,7 +164,7 @@ def test_delegate_persists_expert_code_artifacts(monkeypatch, tmp_path):
     streaming layer's artifact capture — delegate_to_expert must persist it
     itself (same code_snippet/text_output schema, keyed by call_id) so the
     session timeline + export include expert-written code."""
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -219,7 +219,7 @@ def test_delegate_persists_expert_code_artifacts(monkeypatch, tmp_path):
 def test_delegate_skips_artifacts_for_non_python_tools(monkeypatch, tmp_path):
     """Only execute_python cells are recorded — other expert tool calls (and
     empty code) write nothing."""
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()

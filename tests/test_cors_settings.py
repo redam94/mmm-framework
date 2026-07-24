@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mmm_framework.api.main import cors_settings
+from mmm_framework_server.main import cors_settings
 
 
 def test_default_is_localhost_with_credentials(monkeypatch):
@@ -21,7 +21,9 @@ def test_wildcard_disables_credentials(monkeypatch):
 
 
 def test_explicit_allowlist(monkeypatch):
-    monkeypatch.setenv("MMM_CORS_ORIGINS", "https://a.example.com, https://b.example.com")
+    monkeypatch.setenv(
+        "MMM_CORS_ORIGINS", "https://a.example.com, https://b.example.com"
+    )
     origins, creds = cors_settings()
     assert origins == ["https://a.example.com", "https://b.example.com"]
     assert creds is True

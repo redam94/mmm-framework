@@ -67,7 +67,7 @@ A self-contained, layered package:
 
 RBAC roles, least→most: **viewer < analyst < admin < owner**. Tenant guards are
 mounted on **both** backends — the classic `api/` and the agent
-`src/mmm_framework/api/` — via each route's `dependencies=[...]`. A dev principal
+`src/mmm_framework/platform/` — via each route's `dependencies=[...]`. A dev principal
 (`is_dev`) bypasses checks for single-tenant local use; production enforces.
 
 **Tests:** `tests/test_auth_{foundation,enforcement,lifecycle,plans,audit,ratelimit,admin_routes}.py`
@@ -235,7 +235,7 @@ overclaiming.
 
 - **Security core:** `src/mmm_framework/auth/`
 - **Integrations:** `src/mmm_framework/integrations/` (+ `ad_platforms/`, `connections.py`)
-- **Scheduler:** `src/mmm_framework/api/connection_sync.py` (lifespan tick in `api/main.py`)
+- **Scheduler:** `src/mmm_framework/platform/connection_sync.py` (lifespan tick in `mmm_framework_server/main.py`)
 - **Reports:** `src/mmm_framework/reporting/model_defense.py`, `api/portfolio_benchmark.py`
 - **Frontend:** `frontend/src/pages/{Admin,Settings,Portfolio,Program}/`
 - **Pitch deck:** `docs/business-readiness-report.html`

@@ -25,7 +25,7 @@ _Last updated: 2026-06-12._
 ## Open — security / API posture
 
 4. **The agent API has no authentication dependency.**
-   `src/mmm_framework/api/main.py`: no route carries an auth dep; the `X-API-Key`
+   `server/src/mmm_framework_server/main.py`: no route carries an auth dep; the `X-API-Key`
    header there is the *LLM key passthrough*, not auth. The Models API shared key is
    off by default (`api/auth.py`, `api/config.py:60`). `docs/security.html` now states
    this honestly; the mitigation is perimeter/SSO until real auth lands (phase-3 §1.1
@@ -67,7 +67,7 @@ _Last updated: 2026-06-12._
 
 13. **Two `/projects` APIs exist and answer differently.** The top-level Models API
     (`api/main.py`, run as `cd api && uvicorn main:app`) serves a StorageService-backed
-    project registry; the agent API (`uvicorn mmm_framework.api.main:app`) serves the
+    project registry; the agent API (`uvicorn mmm_framework_server.main:app`) serves the
     sessions-store projects the React app and `scripts/seed_demo_project.py` use. CLAUDE.md's
     React run instructions point at the former, which shows an empty project list after
     seeding (hit during screenshot capture 2026-06-12). Fix the run instructions and/or

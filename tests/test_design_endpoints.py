@@ -12,7 +12,7 @@ from fastapi import HTTPException
 
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -52,7 +52,7 @@ def _seed_run(store, pid, dataset_path, channels):
 @pytest.mark.asyncio
 class TestDesignEndpoints:
     async def test_options_and_design(self, store, geo_csv):
-        from mmm_framework.api import main as M
+        from mmm_framework_server import main as M
 
         path, key = geo_csv
         pid = store.create_project("P")["project_id"]
@@ -90,7 +90,7 @@ class TestDesignEndpoints:
         assert len(flight["schedule"]) >= 12
 
     async def test_no_runs_404_and_unknown_channel_400(self, store, geo_csv):
-        from mmm_framework.api import main as M
+        from mmm_framework_server import main as M
 
         path, key = geo_csv
         pid = store.create_project("P")["project_id"]

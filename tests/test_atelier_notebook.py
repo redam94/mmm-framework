@@ -30,11 +30,11 @@ BAD_SRC = "x = 1  # no BayesianMMM subclass here\n"
 def main(tmp_path, monkeypatch):
     """The api.main module wired to a temp sessions DB + temp workspace."""
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     # Fresh per-test source-rev cache so staging always (re)runs the setup cell.
     M._NOTEBOOK_SOURCE_REV.clear()
@@ -334,7 +334,7 @@ class TestNotebookDoc:
         )
         assert json.loads(save2.body)["id"] == saved_id
         tid = main._notebook_tid("dev-org", "Saver", None)
-        from mmm_framework.api import sessions as S
+        from mmm_framework.platform import sessions as S
 
         docs = [a for a in S.list_artifacts(tid) if a["kind"] == "atelier_notebook"]
         assert len(docs) == 1  # never duplicated
@@ -427,7 +427,9 @@ class TestCopilotChat:
 
     @pytest.mark.asyncio
     async def test_get_empty_when_absent(self, main):
-        resp = await main.get_copilot_chat("BrandNew", main._DEV_PRINCIPAL, None, "editor")
+        resp = await main.get_copilot_chat(
+            "BrandNew", main._DEV_PRINCIPAL, None, "editor"
+        )
         doc = json.loads(resp.body)
         assert doc["messages"] == []
         assert doc["surface"] == "editor"
@@ -439,7 +441,9 @@ class TestCopilotChat:
             {"id": "a1", "role": "assistant", "content": "collinear spend…"},
         ]
         save = await main.save_copilot_chat(
-            main.CopilotChatSaveRequest(name="M", version=2, surface="editor", messages=msgs),
+            main.CopilotChatSaveRequest(
+                name="M", version=2, surface="editor", messages=msgs
+            ),
             main._DEV_PRINCIPAL,
         )
         first_id = json.loads(save.body)["id"]
@@ -448,28 +452,41 @@ class TestCopilotChat:
 
         # Second save upserts the SAME artifact (singleton per key).
         save2 = await main.save_copilot_chat(
-            main.CopilotChatSaveRequest(name="M", version=2, surface="editor", messages=msgs[:1]),
+            main.CopilotChatSaveRequest(
+                name="M", version=2, surface="editor", messages=msgs[:1]
+            ),
             main._DEV_PRINCIPAL,
         )
         assert json.loads(save2.body)["id"] == first_id
-        from mmm_framework.api import sessions as S
+        from mmm_framework.platform import sessions as S
 
         tid = main._copilot_tid("dev-org", "M", 2, "editor")
         docs = [a for a in S.list_artifacts(tid) if a["kind"] == "copilot_chat"]
         assert len(docs) == 1
-        assert json.loads((await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 2, "editor")).body)["messages"] == msgs[:1]
+        assert (
+            json.loads(
+                (
+                    await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 2, "editor")
+                ).body
+            )["messages"]
+            == msgs[:1]
+        )
 
     @pytest.mark.asyncio
     async def test_clear_with_empty_messages(self, main):
         await main.save_copilot_chat(
             main.CopilotChatSaveRequest(
-                name="M", version=1, surface="editor",
+                name="M",
+                version=1,
+                surface="editor",
                 messages=[{"id": "u1", "role": "user", "content": "hi"}],
             ),
             main._DEV_PRINCIPAL,
         )
         await main.save_copilot_chat(
-            main.CopilotChatSaveRequest(name="M", version=1, surface="editor", messages=[]),
+            main.CopilotChatSaveRequest(
+                name="M", version=1, surface="editor", messages=[]
+            ),
             main._DEV_PRINCIPAL,
         )
         resp = await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 1, "editor")
@@ -480,24 +497,51 @@ class TestCopilotChat:
         editor_msg = [{"id": "e", "role": "user", "content": "editor turn"}]
         nb_msg = [{"id": "n", "role": "user", "content": "notebook turn"}]
         await main.save_copilot_chat(
-            main.CopilotChatSaveRequest(name="M", version=1, surface="editor", messages=editor_msg),
+            main.CopilotChatSaveRequest(
+                name="M", version=1, surface="editor", messages=editor_msg
+            ),
             main._DEV_PRINCIPAL,
         )
         await main.save_copilot_chat(
-            main.CopilotChatSaveRequest(name="M", version=1, surface="notebook", messages=nb_msg),
+            main.CopilotChatSaveRequest(
+                name="M", version=1, surface="notebook", messages=nb_msg
+            ),
             main._DEV_PRINCIPAL,
         )
         # Different surface → different chat.
-        assert json.loads((await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 1, "editor")).body)["messages"] == editor_msg
-        assert json.loads((await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 1, "notebook")).body)["messages"] == nb_msg
+        assert (
+            json.loads(
+                (
+                    await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 1, "editor")
+                ).body
+            )["messages"]
+            == editor_msg
+        )
+        assert (
+            json.loads(
+                (
+                    await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 1, "notebook")
+                ).body
+            )["messages"]
+            == nb_msg
+        )
         # Different version → empty.
-        assert json.loads((await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 9, "editor")).body)["messages"] == []
+        assert (
+            json.loads(
+                (
+                    await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 9, "editor")
+                ).body
+            )["messages"]
+            == []
+        )
 
     @pytest.mark.asyncio
     async def test_message_cap(self, main):
         many = [{"id": f"m{i}", "role": "user", "content": str(i)} for i in range(250)]
         await main.save_copilot_chat(
-            main.CopilotChatSaveRequest(name="M", version=1, surface="editor", messages=many),
+            main.CopilotChatSaveRequest(
+                name="M", version=1, surface="editor", messages=many
+            ),
             main._DEV_PRINCIPAL,
         )
         resp = await main.get_copilot_chat("M", main._DEV_PRINCIPAL, 1, "editor")
@@ -510,7 +554,9 @@ class TestCopilotChat:
         # A junk surface normalizes to "editor" (so it can't fork a third store).
         await main.save_copilot_chat(
             main.CopilotChatSaveRequest(
-                name="M", version=1, surface="weird",
+                name="M",
+                version=1,
+                surface="weird",
                 messages=[{"id": "u", "role": "user", "content": "x"}],
             ),
             main._DEV_PRINCIPAL,

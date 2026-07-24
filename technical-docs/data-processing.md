@@ -168,7 +168,7 @@ These are referenced for completeness; full detail and file/line evidence is in
   `MMM_AGENT_HOSTED=1`, the chat `thread_id` is a bearer capability: the API
   refuses guessable/client-invented/unknown thread IDs (server-minted sessions
   only) and refuses to drive another org's session. In dev posture, thread IDs
-  are accepted and auto-created. Evidence: `src/mmm_framework/api/main.py:450-473`.
+  are accepted and auto-created. Evidence: `server/src/mmm_framework_server/main.py:450-473`.
 - **Kernel sandbox — deployment-dependent (requires the image to be built/
   deployed).** The container kernel applies cap-drop ALL, no-new-privileges,
   read-only rootfs, cgroup mem/pids/cpu caps, ulimits, and a tmpfs-only writable
@@ -179,7 +179,7 @@ These are referenced for completeness; full detail and file/line evidence is in
   is **not** in the sandboxed set. The hosted profile force-upgrades to
   `container` and **refuses to start** if the sandbox is incomplete. Evidence:
   `src/mmm_framework/agents/container_kernel.py:202-244,373-403`,
-  `agents/profile.py:29-65`, `api/main.py:156-158`.
+  `agents/profile.py:29-65`, `mmm_framework_server/main.py:156-158`.
 - **SSRF guard on website brand-extraction — implemented.** http/https +
   ports 80/443 only, no embedded credentials, every resolved address must be
   globally routable (rejects loopback/RFC1918/link-local 169.254 metadata/ULA/
@@ -198,7 +198,7 @@ These are referenced for completeness; full detail and file/line evidence is in
   `O_NOFOLLOW|O_CLOEXEC`; regular-file check; streams from the validated fd.
   Documented residual: a narrow parent-dir-swap race not fully closed without a
   read-only mount namespace (defense-in-depth). Evidence:
-  `src/mmm_framework/api/main.py:2723-2792`, `agents/workspace.py:202-226`.
+  `server/src/mmm_framework_server/main.py:2723-2792`, `agents/workspace.py:202-226`.
 - **Audit logging — implemented (tamper-evident, not tamper-proof).** Security/
   lifecycle events are a hash-chained JSONL (each record's hash =
   `sha256(prev_hash + canonical(record))`); `verify()` detects any edit/delete/
@@ -206,7 +206,7 @@ These are referenced for completeness; full detail and file/line evidence is in
   tamper-proof** — the JSONL is local; true tamper resistance needs an off-host
   shipper. The sink is installed by the API app at startup via
   `install_audit_sink()` (best-effort; FastAPI lifespan,
-  `src/mmm_framework/api/main.py:167-169`) — it runs only when the API process
+  `server/src/mmm_framework_server/main.py:167-169`) — it runs only when the API process
   boots, so a library/standalone use that never starts the API gets no sink.
   Evidence: `src/mmm_framework/agents/audit_sink.py:45-157`.
 

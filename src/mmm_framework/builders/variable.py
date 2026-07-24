@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from ..config import (
     AdstockConfig,
+    CausalControlRole,
     ControlVariableConfig,
     DimensionType,
     KPIConfig,
@@ -277,6 +278,28 @@ class ControlVariableConfigBuilder(VariableConfigBuilderMixin):
         self._allow_negative: bool = True
         self._coefficient_prior: PriorConfig | None = None
         self._use_shrinkage: bool = False
+        self._causal_role: CausalControlRole | None = None
+        self._causal_role_reason: str | None = None
+
+    def with_causal_role(
+        self, role: CausalControlRole | str, reason: str | None = None
+    ) -> Self:
+        """Declare the control's causal role (confounder vs precision control).
+
+        Accepts the enum or its string value (``"confounder"`` /
+        ``"precision_control"``; the spec-level shorthand ``"precision"`` is
+        normalized). The role drives back-door reporting and the
+        explicit-prior-on-confounder warning in the core model.
+        """
+        if isinstance(role, str):
+            normalized = role.strip().lower()
+            if normalized == "precision":
+                normalized = "precision_control"
+            role = CausalControlRole(normalized)
+        self._causal_role = role
+        if reason is not None:
+            self._causal_role_reason = reason
+        return self
 
     def allow_negative(self, allow: bool = True) -> Self:
         """Allow negative coefficient (e.g., for price)."""
@@ -324,6 +347,10 @@ class ControlVariableConfigBuilder(VariableConfigBuilderMixin):
         )
         if coefficient_prior is not None:
             kwargs["coefficient_prior"] = coefficient_prior
+        if self._causal_role is not None:
+            kwargs["causal_role"] = self._causal_role
+        if self._causal_role_reason is not None:
+            kwargs["causal_role_reason"] = self._causal_role_reason
         return ControlVariableConfig(**kwargs)
 
 

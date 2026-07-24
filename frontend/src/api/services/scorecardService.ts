@@ -3,7 +3,7 @@ import { apiClient } from '../client';
 /**
  * Recommendation scorecard (issue #109): each channel's realized experiment
  * readout joined to the ROI the model predicted for it, plus interval
- * calibration. Mirrors api/scorecard.py + GET /projects/{id}/scorecard.
+ * calibration. Mirrors mmm_framework/platform/scorecard.py + GET /projects/{id}/scorecard.
  */
 
 export interface ScorecardRow {

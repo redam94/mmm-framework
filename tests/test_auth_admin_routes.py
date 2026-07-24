@@ -15,7 +15,7 @@ from mmm_framework.auth.routes import create_auth_router
 def ctx(tmp_path, monkeypatch):
     dbp = tmp_path / "sessions.db"
     monkeypatch.setattr(auth_store, "DEFAULT_DB_PATH", dbp)
-    from mmm_framework.api import sessions as ss
+    from mmm_framework.platform import sessions as ss
 
     monkeypatch.setattr(ss, "DB_PATH", dbp)
     ss.init_db()

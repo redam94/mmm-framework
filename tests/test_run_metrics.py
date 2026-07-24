@@ -12,7 +12,7 @@ from fastapi import HTTPException
 
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -97,7 +97,7 @@ class TestComputeRunMetrics:
 
 class TestPersistAndAssembly:
     def _seed_run(self, store, metrics, run_id, tid, created_at):
-        from mmm_framework.api.history import persist_run_metrics
+        from mmm_framework.platform.history import persist_run_metrics
 
         import copy
 
@@ -106,7 +106,7 @@ class TestPersistAndAssembly:
         return model_run
 
     def test_enrichment_and_series(self, store, metrics):
-        from mmm_framework.api.history import build_history_series
+        from mmm_framework.platform.history import build_history_series
 
         pid = store.create_project("P")["project_id"]
         tid = store.create_session("s1", project_id=pid)["thread_id"]
@@ -129,7 +129,7 @@ class TestPersistAndAssembly:
         assert out["portfolio"][0]["expected_uplift"] is not None
 
     def test_coverage_tiers_and_decay(self, store, metrics):
-        from mmm_framework.api.history import build_calibration_coverage
+        from mmm_framework.platform.history import build_calibration_coverage
 
         pid = store.create_project("P")["project_id"]
         tid = store.create_session("s1", project_id=pid)["thread_id"]
@@ -151,7 +151,7 @@ class TestPersistAndAssembly:
         """Freshness floor: evidence a month old stays 'calibrated' even when
         the posterior is wide enough that the decayed EIG clears the
         threshold (a perpetual-stale dashboard is a broken dashboard)."""
-        from mmm_framework.api.history import build_calibration_coverage
+        from mmm_framework.platform.history import build_calibration_coverage
 
         pid = store.create_project("P")["project_id"]
         tid = store.create_session("s1", project_id=pid)["thread_id"]
@@ -172,7 +172,7 @@ class TestPersistAndAssembly:
         """A running test (or a readout awaiting calibration) shows the
         channel as 'running' — the live edge of the program — and an
         evidence-backed running channel still counts as covered."""
-        from mmm_framework.api.history import build_calibration_coverage
+        from mmm_framework.platform.history import build_calibration_coverage
 
         pid = store.create_project("P")["project_id"]
         tid = store.create_session("s1", project_id=pid)["thread_id"]
@@ -206,7 +206,7 @@ class TestPersistAndAssembly:
         assert cov["coverage_pct"] == pytest.approx(50.0)
 
     def test_priorities_payload_decay_and_stale_flag(self, store, metrics):
-        from mmm_framework.api.history import build_priorities_payload
+        from mmm_framework.platform.history import build_priorities_payload
 
         pid = store.create_project("P")["project_id"]
         tid = store.create_session("s1", project_id=pid)["thread_id"]
@@ -242,8 +242,8 @@ class TestEndpoints:
     async def test_history_and_coverage_and_priorities(self, store, metrics):
         import json
 
-        from mmm_framework.api import main as M
-        from mmm_framework.api.history import persist_run_metrics
+        from mmm_framework_server import main as M
+        from mmm_framework.platform.history import persist_run_metrics
 
         pid = store.create_project("P")["project_id"]
         tid = store.create_session("s1", project_id=pid)["thread_id"]
@@ -269,7 +269,7 @@ class TestEndpoints:
 
 class TestBackfill:
     def test_skips_unrecoverable_runs_and_respects_existing(self, store, tmp_path):
-        from mmm_framework.api.backfill import backfill_run_metrics
+        from mmm_framework.platform.backfill import backfill_run_metrics
 
         pid = store.create_project("P")["project_id"]
         tid = store.create_session("s1", project_id=pid)["thread_id"]

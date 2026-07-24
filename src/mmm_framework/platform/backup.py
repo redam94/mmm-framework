@@ -5,8 +5,8 @@ checkpoints) lives in one SQLite file with no backup tooling — a single disk l
 destroys everything. This adds a CONSISTENT online backup (SQLite's backup API,
 safe while the app is running, WAL-aware) and a restore, plus a CLI::
 
-    python -m mmm_framework.api.backup backup  /backups/sessions-2026-06-25.db
-    python -m mmm_framework.api.backup restore /backups/sessions-2026-06-25.db
+    python -m mmm_framework.platform.backup backup  /backups/sessions-2026-06-25.db
+    python -m mmm_framework.platform.backup restore /backups/sessions-2026-06-25.db
 
 This is the stop-gap for the single-SQLite risk until the Postgres migration
 (action plan P1a). See technical-docs/disaster-recovery.md.

@@ -4,7 +4,7 @@ import { apiClient } from '../client';
  * In-flight pacing — actual delivery vs the saved plan (issue #123). The planned
  * series is auto-sourced server-side from the project's latest saved budget plan;
  * the panel uploads actual delivery and reads the computed pacing. Mirrors
- * api/pacing.py + the /projects/{id}/delivery|pacing endpoints.
+ * mmm_framework/platform/pacing.py + the /projects/{id}/delivery|pacing endpoints.
  */
 
 export type PacingStatus = 'on-track' | 'over-pacing' | 'under-pacing' | 'not-started';

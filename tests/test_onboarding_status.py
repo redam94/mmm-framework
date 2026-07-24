@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from mmm_framework.api import sessions as ss
-from mmm_framework.api.onboarding import project_onboarding_status
+from mmm_framework.platform import sessions as ss
+from mmm_framework.platform.onboarding import project_onboarding_status
 
 
 @pytest.fixture()
@@ -76,7 +76,7 @@ def test_unknown_project_is_none(db):
 
 
 def test_summarize_eda_issues():
-    from mmm_framework.api.onboarding import summarize_eda_issues
+    from mmm_framework.platform.onboarding import summarize_eda_issues
 
     assert summarize_eda_issues([]) == {
         "n_errors": 0,

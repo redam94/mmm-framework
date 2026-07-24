@@ -8,7 +8,7 @@ import json
 import pytest
 from fastapi import HTTPException
 
-from mmm_framework.api import sessions as ss
+from mmm_framework.platform import sessions as ss
 
 
 @pytest.fixture()
@@ -46,7 +46,7 @@ def _body_of(resp) -> dict:
 
 
 def test_endpoints_create_list_delete(db):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = ss.create_project("P")["project_id"]
     body = M.DataConnectionCreate(
@@ -65,7 +65,7 @@ def test_endpoints_create_list_delete(db):
 
 
 def test_endpoint_validation(db):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = ss.create_project("P")["project_id"]
 

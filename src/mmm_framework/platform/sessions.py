@@ -28,14 +28,26 @@ def resolve_db_path() -> Path:
 
     ``MMM_SESSIONS_DB`` overrides the package-local default so deployments can
     keep state on a persistent disk without symlinking into the install tree
-    (see deploy/gcp/vm/vm_setup.sh). ``api/main.py`` (the async checkpointer)
-    and ``auth/store.py`` honor the same variable — all three must point at the
-    same file.
+    (see deploy/gcp/vm/vm_setup.sh). The server's async checkpointer
+    (``mmm_framework_server.main``) and ``auth/store.py`` honor the same
+    variable — all three must point at the same file.
+
+    Before this module moved from ``mmm_framework.api`` to
+    ``mmm_framework.platform`` (2026-07-24), the package-local default lived in
+    the old ``api/`` directory. An existing dev DB at that legacy path keeps
+    winning so the move does not silently orphan local sessions/projects.
     """
     env = os.environ.get("MMM_SESSIONS_DB", "").strip()
     if env:
         return Path(env).expanduser()
-    return Path(__file__).parent / "sessions.db"
+    # .resolve() matches auth/store.py's duplicate resolver exactly — under a
+    # symlinked checkout the two must return the SAME Path, not merely the
+    # same inode (test_sessions_db_path asserts equality).
+    package_root = Path(__file__).resolve().parent.parent
+    legacy = package_root / "api" / "sessions.db"
+    if legacy.exists():
+        return legacy
+    return package_root / "platform" / "sessions.db"
 
 
 DB_PATH = resolve_db_path()

@@ -339,7 +339,7 @@ def register_generated_files(
     should NOT be registered (e.g. ``("results",)`` — internal save_result
     snapshots that are reloaded by name, not user-facing deliverables).
     """
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     d = thread_dir(thread_id)
     new_files = diff_new_files(d, before)

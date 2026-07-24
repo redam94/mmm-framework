@@ -10,7 +10,7 @@ from .pii import PIIFinding, scan_dataframe_for_pii, scan_text
 
 __all__ = ["PIIFinding", "scan_dataframe_for_pii", "scan_text"]
 
-try:  # encryption needs `cryptography`, which is already a core dep (scrypt)
+try:  # encryption needs `cryptography`, a declared core dep (scrypt + Fernet)
     from .encryption import (  # noqa: F401
         DatasetEncryptor,
         EncryptionError,

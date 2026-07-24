@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mmm_framework.api import sessions as store
+from mmm_framework.platform import sessions as store
 
 
 def _step(key: str, title: str, done: bool, hint: str) -> dict[str, Any]:

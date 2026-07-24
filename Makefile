@@ -2,10 +2,10 @@
         kernel-lock kernel-image kernel-verify kernel-push
 
 format:
-	uvx black src tests examples
+	uvx black src server/src tests examples
 
 lint:                            ## the same ruff gate CI runs
-	uv run ruff check src
+	uv run ruff check src server/src
 
 hooks:                           ## install the git pre-commit hook (runs `make lint`)
 	git config core.hooksPath .githooks
@@ -22,7 +22,7 @@ slow_tests:
 	uv run pytest tests/ --cov=mmm_framework -n logical -m slow
 
 run-api:
-	uv run uvicorn src.mmm_framework.api.main:app --host 0.0.0.0 --port 8000 --reload
+	uv run uvicorn mmm_framework_server.main:app --host 0.0.0.0 --port 8000 --reload
 
 run-ui:
 	cd frontend && npm run dev
@@ -37,8 +37,12 @@ KERNEL_RUNTIME  ?= podman
 KERNEL_IMAGE    ?= mmm-kernel:latest
 KERNEL_REGISTRY ?=
 
+# Kernel closure = lean core + pinned ipykernel (the `kernel` dependency
+# group). --no-dev keeps the web/LLM stack out of the sandbox image;
+# --no-emit-workspace keeps the server workspace member (a path dep pip can't
+# resolve inside the container) out of the lock.
 kernel-lock:                     ## refresh the pinned dependency closure
-	uv export --frozen --no-emit-project > deploy/kernel/requirements.lock
+	uv export --frozen --no-emit-project --no-emit-workspace --no-dev --group kernel > deploy/kernel/requirements.lock
 
 kernel-image:                    ## build the per-session sandbox image
 	$(KERNEL_RUNTIME) build -t $(KERNEL_IMAGE) -f deploy/kernel/Containerfile .

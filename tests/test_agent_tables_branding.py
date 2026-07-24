@@ -19,7 +19,7 @@ import pytest
 def store(tmp_path, monkeypatch):
     """Point the session store + checkpointer + workspace at a temp location."""
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
-    from mmm_framework.api import sessions as ss
+    from mmm_framework.platform import sessions as ss
 
     monkeypatch.setattr(ss, "DB_PATH", tmp_path / "sessions.db")
     ss.init_db()
@@ -28,7 +28,7 @@ def store(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def client(store, tmp_path, monkeypatch):
-    import mmm_framework.api.main as main
+    import mmm_framework_server.main as main
 
     monkeypatch.setattr(main, "DB_PATH", store.DB_PATH)
     from fastapi.testclient import TestClient
@@ -169,7 +169,7 @@ def test_modelop_tables_cross_the_dispatch_boundary(store):
 
 
 def test_message_dashboard_strips_ref_lists():
-    from mmm_framework.api.main import _message_dashboard
+    from mmm_framework_server.main import _message_dashboard
 
     combined = {"plots": [1], "tables": [2], "model_spec": {"kpi": "Sales"}}
     assert _message_dashboard(combined) == {"model_spec": {"kpi": "Sales"}}

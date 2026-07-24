@@ -2,7 +2,7 @@
 
 Status: **PLAN (pre-implementation)**. This is the agreed shape before any slice is
 built. It is the single source of truth shared by the agent stack
-(`src/mmm_framework/agents`, `src/mmm_framework/api`) and the React frontend
+(`src/mmm_framework/agents`, `src/mmm_framework/platform`) and the React frontend
 (`frontend/src/pages/Agent`, `frontend/src/pages/Program`).
 
 ---
@@ -84,7 +84,7 @@ record). See §7 for resume/idempotency mechanics.
 
 ## 3. Data model
 
-New table in the agent sessions store (`src/mmm_framework/api/sessions.py`), mirroring
+New table in the agent sessions store (`src/mmm_framework/platform/sessions.py`), mirroring
 the `experiments` registry conventions (migrate-friendly `ALTER TABLE`, JSON columns,
 append-only audit, project+thread scoping).
 
@@ -204,7 +204,7 @@ targets. Constraints baked into the prompt:
 
 ## 6. Backend surface
 
-### Sessions-store functions (`src/mmm_framework/api/sessions.py`)
+### Sessions-store functions (`src/mmm_framework/platform/sessions.py`)
 Mirror the experiment-registry helpers:
 - `create_causal_review(project_id, thread_id) -> dict`
 - `get_causal_review(id) -> dict | None`
@@ -222,7 +222,7 @@ Mirror the experiment-registry helpers:
 - Stage handlers live in a new `src/mmm_framework/agents/elicitation.py` (pure functions
   + the LLM question-gen), so they are unit-testable without ARQ/Redis.
 
-### HTTP endpoints (`src/mmm_framework/api/main.py`)
+### HTTP endpoints (`server/src/mmm_framework_server/main.py`)
 - `POST /projects/{project_id}/causal-reviews` → create + enqueue; returns `{review_id}`.
 - `GET  /projects/{project_id}/causal-reviews` → list (for the Program/Plan surfaces).
 - `GET  /causal-reviews/{id}` → full row (UI polls this for `pending`/`status`/`report`).

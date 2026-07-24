@@ -1546,7 +1546,7 @@ def _replace_prior_project(store, name: str) -> None:
 
 
 def seed(fast: bool, real_compat: bool) -> None:
-    from mmm_framework.api import sessions as store
+    from mmm_framework.platform import sessions as store
     from seed_demo_project import _seed_chat  # reuse the checkpointer wiring
 
     store.init_db()
@@ -1616,7 +1616,7 @@ def seed(fast: bool, real_compat: bool) -> None:
     print(
         "\nIMPORTANT: the session charts/tables are served from the agent "
         "workspace above, so launch the API with the SAME workspace, e.g.\n"
-        f"    MMM_AGENT_WORKSPACE={ws_root} uv run uvicorn mmm_framework.api.main:app --port 8000\n"
+        f"    MMM_AGENT_WORKSPACE={ws_root} uv run uvicorn mmm_framework_server.main:app --port 8000\n"
         "  (or set MMM_AGENT_WORKSPACE to the same value for BOTH this seeder and "
         "the server). The project, sessions, models, and chat use a fixed DB and "
         "show up regardless."

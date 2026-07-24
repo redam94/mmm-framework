@@ -19,7 +19,7 @@ Skip-and-report anything unrecoverable (empty model dirs, moved datasets) — ol
 runs saved on other machines often are.
 
 Usage:
-    python -m mmm_framework.api.backfill [--project ID] [--dry-run]
+    python -m mmm_framework.platform.backfill [--project ID] [--dry-run]
                                          [--max-draws 200]
                                          [--what {metrics,estimands,evidence,all}]
 """
@@ -30,7 +30,7 @@ import argparse
 import os
 from typing import Any
 
-from mmm_framework.api import sessions as sessions_store
+from mmm_framework.platform import sessions as sessions_store
 
 
 def _candidate_runs(project_id: str | None) -> list[dict[str, Any]]:
@@ -100,7 +100,7 @@ def backfill_run_metrics(
 
         try:
             from mmm_framework.agents.fitting import _mff_config_from_spec
-            from mmm_framework.api.history import persist_run_metrics
+            from mmm_framework.platform.history import persist_run_metrics
             from mmm_framework.planning.history import compute_run_metrics
             from mmm_framework import load_mff
             from mmm_framework.serialization import MMMSerializer

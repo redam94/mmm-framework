@@ -362,8 +362,8 @@ def _seed_chat(thread_id: str, turns: list[tuple[str, str]], extras: dict) -> No
 
         from mmm_framework.agents.graph import create_agent_graph
         from mmm_framework.agents.serde import MsgpackSafeSerializer
-        from mmm_framework.api import sessions as store
-        from mmm_framework.api.main import safe_json_dumps_load
+        from mmm_framework.platform import sessions as store
+        from mmm_framework_server.main import safe_json_dumps_load
 
         conn = await aiosqlite.connect(str(store.DB_PATH))
         try:
@@ -576,8 +576,8 @@ def seed(
     synthetic: bool,
     mode: str = "national",
 ) -> None:
-    from mmm_framework.api import history, sessions as store
-    from mmm_framework.api import runs as runs_mod
+    from mmm_framework.platform import history, sessions as store
+    from mmm_framework.platform import runs as runs_mod
     from mmm_framework.synth import generate_mff
 
     store.init_db()

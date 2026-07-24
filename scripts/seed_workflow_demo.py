@@ -15,7 +15,8 @@ channel sets (Lean vs Full), so each is its own model identity and BOTH show by
 default in the tab.
 
 Real fits by default. Replaces any prior "Demo: Bayesian Workflow" project (the
-sessions DB defaults to api/sessions.db — run with the same MMM_SESSIONS_DB as
+sessions DB defaults to src/mmm_framework/platform/sessions.db (a pre-split
+api/sessions.db keeps winning if present) — run with the same MMM_SESSIONS_DB as
 the server if it overrides the location; plots/tables — none here — would need
 a matching MMM_AGENT_WORKSPACE).
 
@@ -81,8 +82,12 @@ def _f(x, d=2):
 
 def _conv_line(mr: dict) -> str:
     c = (mr.get("diagnostics") or {}).get("convergence") or {}
-    verdict = "clean — no convergence flags" if c.get("ok") else (
-        "flags raised: " + ", ".join(c.get("flags") or []) + " (see Model health)"
+    verdict = (
+        "clean — no convergence flags"
+        if c.get("ok")
+        else (
+            "flags raised: " + ", ".join(c.get("flags") or []) + " (see Model health)"
+        )
     )
     return (
         f"R-hat max {_f(c.get('rhat_max'), 3)}, min bulk-ESS "
@@ -103,7 +108,11 @@ def _learning_line(mr: dict) -> str:
 def _roi_map(mr: dict) -> dict[str, dict]:
     out = {}
     for r in mr.get("estimands") or []:
-        if r.get("estimand") == "contribution_roi" and r.get("status") == "ok" and r.get("mean") is not None:
+        if (
+            r.get("estimand") == "contribution_roi"
+            and r.get("status") == "ok"
+            and r.get("mean") is not None
+        ):
             out[r.get("channel")] = r
     return out
 
@@ -114,7 +123,9 @@ def _roi_table(mr: dict) -> str:
         return "_(no contribution-ROI estimands recorded)_"
     out = "| Channel | Contribution ROI | 94% HDI |\n|---|--:|:--|\n"
     for ch, r in rows.items():
-        out += f"| {ch} | {_f(r['mean'])} | [{_f(r['hdi_low'])}, {_f(r['hdi_high'])}] |\n"
+        out += (
+            f"| {ch} | {_f(r['mean'])} | [{_f(r['hdi_low'])}, {_f(r['hdi_high'])}] |\n"
+        )
     return out
 
 
@@ -132,8 +143,8 @@ def _compare_table(lean_mr: dict, full_mr: dict, shared: list[str]) -> str:
 
 
 def seed(draws: int, tune: int, chains: int, weeks: int) -> None:
-    from mmm_framework.api import history, sessions as store
-    from mmm_framework.api import runs as runs_mod
+    from mmm_framework.platform import history, sessions as store
+    from mmm_framework.platform import runs as runs_mod
     from mmm_framework.agents.fitting import build_and_fit
     from mmm_framework.synth import generate_mff
     import seed_demo_project as base  # _stamp_and_persist / _seed_chat
@@ -153,7 +164,11 @@ def seed(draws: int, tune: int, chains: int, weeks: int) -> None:
     # distinct model identities => BOTH show by default in the Estimands tab, with
     # the core channels forming the comparable rows.
     core = [c for c in ("TV", "Search", "Social") if c in full_ch]
-    lean_ch = core if len(core) >= 2 and len(core) < len(full_ch) else full_ch[: max(2, len(full_ch) - 1)]
+    lean_ch = (
+        core
+        if len(core) >= 2 and len(core) < len(full_ch)
+        else full_ch[: max(2, len(full_ch) - 1)]
+    )
     if lean_ch == full_ch:  # safety: force a difference
         lean_ch = full_ch[:-1]
     notes = key.get("notes", {}) if isinstance(key, dict) else {}
@@ -176,8 +191,16 @@ def seed(draws: int, tune: int, chains: int, weeks: int) -> None:
     tid = sess["thread_id"]
 
     variants = [
-        {"key": "lean", "label": f"Lean MMM ({' · '.join(lean_ch)})", "channels": lean_ch},
-        {"key": "full", "label": f"Full MMM ({' · '.join(full_ch)})", "channels": full_ch},
+        {
+            "key": "lean",
+            "label": f"Lean MMM ({' · '.join(lean_ch)})",
+            "channels": lean_ch,
+        },
+        {
+            "key": "full",
+            "label": f"Full MMM ({' · '.join(full_ch)})",
+            "channels": full_ch,
+        },
     ]
     fits: dict[str, dict] = {}
     last_dash, last_spec = None, None
@@ -190,9 +213,16 @@ def seed(draws: int, tune: int, chains: int, weeks: int) -> None:
         dash = info["dashboard"]
         dash.setdefault("model_spec", spec)
         base._stamp_and_persist(store, history, runs_mod, mr, tid, path)
-        print(f"  fit done in {time.time() - t0:.0f}s — run {mr['run_id']} "
-              f"({len(mr.get('estimands') or [])} estimand rows)")
-        fits[v["key"]] = {"mr": mr, "spec": spec, "label": v["label"], "channels": v["channels"]}
+        print(
+            f"  fit done in {time.time() - t0:.0f}s — run {mr['run_id']} "
+            f"({len(mr.get('estimands') or [])} estimand rows)"
+        )
+        fits[v["key"]] = {
+            "mr": mr,
+            "spec": spec,
+            "label": v["label"],
+            "channels": v["channels"],
+        }
         last_dash, last_spec = dash, spec
 
     lean, full = fits["lean"], fits["full"]
@@ -211,7 +241,9 @@ def seed(draws: int, tune: int, chains: int, weeks: int) -> None:
 
     rows = store.list_run_metrics(pid)
     print(f"\n{'=' * 60}\nSeed complete: {len(rows)} fitted models in 1 session.")
-    print(f"  Estimands tab clusters: contribution_roi/marginal_roas/contribution on '{kpi}'")
+    print(
+        f"  Estimands tab clusters: contribution_roi/marginal_roas/contribution on '{kpi}'"
+    )
     print(f"\nOpen the app and select '{project['name']}' → Performance → Estimands.")
 
 

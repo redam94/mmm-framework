@@ -16,7 +16,7 @@ import pytest
 def store(tmp_path, monkeypatch):
     """Point the session store + workspace at a temp location."""
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
-    from mmm_framework.api import sessions as ss
+    from mmm_framework.platform import sessions as ss
 
     monkeypatch.setattr(ss, "DB_PATH", tmp_path / "sessions.db")
     ss.init_db()
@@ -27,7 +27,7 @@ def store(tmp_path, monkeypatch):
 
 
 def test_provenanced_stamps_question_and_ts():
-    from mmm_framework.api.main import _provenanced
+    from mmm_framework_server.main import _provenanced
 
     payload = {"path": "report.html"}
     out = _provenanced(payload, "What drove sales in Q3?")
@@ -39,7 +39,7 @@ def test_provenanced_stamps_question_and_ts():
 
 
 def test_provenanced_does_not_mutate_original_payload():
-    from mmm_framework.api.main import _provenanced
+    from mmm_framework_server.main import _provenanced
 
     payload = {"run_id": "abc123"}
     _provenanced(payload, "How should I allocate budget?")
@@ -48,7 +48,7 @@ def test_provenanced_does_not_mutate_original_payload():
 
 
 def test_provenanced_truncates_question_to_200_chars():
-    from mmm_framework.api.main import _provenanced
+    from mmm_framework_server.main import _provenanced
 
     out = _provenanced({}, "x" * 500)
 
@@ -57,7 +57,7 @@ def test_provenanced_truncates_question_to_200_chars():
 
 
 def test_provenanced_none_question_omits_key_but_keeps_ts():
-    from mmm_framework.api.main import _provenanced
+    from mmm_framework_server.main import _provenanced
 
     out = _provenanced({"a": 1}, None)
 
@@ -67,7 +67,7 @@ def test_provenanced_none_question_omits_key_but_keeps_ts():
 
 
 def test_provenanced_empty_question_omits_key():
-    from mmm_framework.api.main import _provenanced
+    from mmm_framework_server.main import _provenanced
 
     out = _provenanced({}, "")
 
@@ -81,7 +81,7 @@ def test_helpers_pass_non_dict_payloads_through():
     every /chat request BEFORE the stream's error handling — a raise there
     would brick the session's chat.
     """
-    from mmm_framework.api.main import _provenanced, _strip_provenance
+    from mmm_framework_server.main import _provenanced, _strip_provenance
 
     assert _provenanced(None, "q") is None
     assert _provenanced(["not", "a", "dict"], "q") == ["not", "a", "dict"]
@@ -100,7 +100,7 @@ def test_strip_provenance_restores_content_hash_equality():
     ``_strip_provenance`` first, so for a clean plan the stored (stamped)
     payload must strip back to hash-equality with the raw plan.
     """
-    from mmm_framework.api.main import _payload_hash, _provenanced, _strip_provenance
+    from mmm_framework_server.main import _payload_hash, _provenanced, _strip_provenance
 
     plan = {"channel": "TV", "budget": 50_000, "weeks": 8}
     stamped = _provenanced(plan, "Design a holdout for TV")
@@ -109,7 +109,7 @@ def test_strip_provenance_restores_content_hash_equality():
 
 
 def test_strip_provenance_is_noop_on_unstamped_payload():
-    from mmm_framework.api.main import _strip_provenance
+    from mmm_framework_server.main import _strip_provenance
 
     payload = {"path": "old_report.html"}
 
@@ -119,7 +119,7 @@ def test_strip_provenance_is_noop_on_unstamped_payload():
 def test_plan_dedup_hash_symmetric_even_with_native_provenance_keys():
     """Both dedup-hash sites strip, so a plan natively carrying a reserved
     key still yields matching persist-side and hydrate-side dedup keys."""
-    from mmm_framework.api.main import _payload_hash, _provenanced, _strip_provenance
+    from mmm_framework_server.main import _payload_hash, _provenanced, _strip_provenance
 
     plan = {"ranking": ["TV"], "question": "native", "ts": 123.0}
     stored = _provenanced(plan, "Design a holdout for TV")
@@ -135,7 +135,7 @@ def test_plan_dedup_hash_symmetric_even_with_native_provenance_keys():
 
 
 def test_add_artifact_roundtrip_carries_question_and_ts(store):
-    from mmm_framework.api.main import _provenanced
+    from mmm_framework_server.main import _provenanced
 
     tid = "thread-question-stamp"
     payload = _provenanced(

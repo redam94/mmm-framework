@@ -32,7 +32,7 @@ from mmm_framework.agents.graph import create_agent_graph
 from mmm_framework.agents.serde import MsgpackSafeSerializer
 from mmm_framework.agents.spec_locks import apply_spec_patch, is_spec_patch
 from mmm_framework.agents.state import _union_refs
-from mmm_framework.api import sessions as sessions_store
+from mmm_framework.platform import sessions as sessions_store
 from mmm_framework.auth import store as auth_store
 from mmm_framework.auth.deps import (
     ensure_project_access,
@@ -188,7 +188,7 @@ async def _connection_sync_loop(interval: float) -> None:
     """Periodically refresh saved data connections whose schedule is due."""
     import time as _time
 
-    from mmm_framework.api import connection_sync
+    from mmm_framework.platform import connection_sync
 
     while True:
         try:
@@ -206,7 +206,7 @@ async def _pacing_alert_loop(interval: float) -> None:
     flagged between fits without opening the panel."""
     import time as _time
 
-    from mmm_framework.api import pacing as _pacing
+    from mmm_framework.platform import pacing as _pacing
 
     while True:
         try:
@@ -278,7 +278,7 @@ async def lifespan(app: FastAPI):
     # so warehouse data lands automatically. Inert when the interval is 0.
     global _sync_task
     try:
-        from mmm_framework.api import connection_sync
+        from mmm_framework.platform import connection_sync
 
         sync_interval = connection_sync.sync_interval_seconds()
         if sync_interval > 0:
@@ -1324,8 +1324,16 @@ class CreateSessionRequest(BaseModel):
     modeling_mode: str | None = None
 
 
-class RenameSessionRequest(BaseModel):
-    name: str
+class UpdateSessionRequest(BaseModel):
+    """PATCH /sessions/{thread_id} — both fields optional, at least one required.
+
+    Matches the FE ``SessionUpdateRequest`` (sessionService.ts); the store's
+    ``update_session`` already supported project_id, but the endpoint only
+    accepted ``name`` until the 2026-07-24 v1.0 contract audit.
+    """
+
+    name: str | None = None
+    project_id: str | None = None
 
 
 class SetSessionModeRequest(BaseModel):
@@ -1391,8 +1399,14 @@ async def get_session_endpoint(thread_id: str):
 
 
 @app.patch("/sessions/{thread_id}", dependencies=[_sess_write])
-async def rename_session_endpoint(thread_id: str, body: RenameSessionRequest):
-    if not sessions_store.rename_session(thread_id, body.name):
+async def update_session_endpoint(thread_id: str, body: UpdateSessionRequest):
+    if body.name is None and body.project_id is None:
+        raise HTTPException(
+            status_code=422, detail="provide at least one of: name, project_id"
+        )
+    if not sessions_store.update_session(
+        thread_id, name=body.name, project_id=body.project_id
+    ):
         raise HTTPException(status_code=404, detail="session not found")
     return JSONResponse(content={"status": "ok"})
 
@@ -1542,6 +1556,10 @@ async def list_models_endpoint(
                     "thread_id": tid,
                 }
             )
+    # Honor the declared ?status= filter (accepted-but-ignored until the
+    # 2026-07-24 v1.0 contract audit).
+    if status is not None:
+        models = [m for m in models if m["status"] == status]
     models.sort(key=lambda m: m["created_at"], reverse=True)
     return JSONResponse(content={"models": models[:limit], "total": len(models)})
 
@@ -1676,7 +1694,7 @@ async def get_project_endpoint(project_id: str):
 @app.get("/projects/{project_id}/onboarding-status", dependencies=[_proj_read])
 async def onboarding_status_endpoint(project_id: str):
     """Self-serve onboarding checklist + next action for a project."""
-    from mmm_framework.api.onboarding import project_onboarding_status
+    from mmm_framework.platform.onboarding import project_onboarding_status
 
     status = project_onboarding_status(project_id)
     if status is None:
@@ -1689,7 +1707,7 @@ async def data_quality_endpoint(project_id: str):
     """Latest pre-fit data-quality summary for a project (from the agent's EDA),
     surfaced inline at the onboarding 'add data' step. Reads the most-recently
     updated session that has an EDA envelope; returns {found: false} otherwise."""
-    from mmm_framework.api.onboarding import summarize_eda_issues
+    from mmm_framework.platform.onboarding import summarize_eda_issues
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -2413,7 +2431,7 @@ class PlannerScenarioRequest(BaseModel):
 async def start_planner_optimization(project_id: str, body: PlannerOptimizeRequest):
     """Start a NON-BLOCKING budget plan: optimal allocation (national or per-geo)
     + an optional forward flighting calendar. Poll the returned job_id."""
-    from mmm_framework.api.history import latest_model_run_payload
+    from mmm_framework.platform.history import latest_model_run_payload
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -2456,7 +2474,7 @@ async def get_planner_optimization(project_id: str, job_id: str):
 async def start_planner_scenario(project_id: str, body: PlannerScenarioRequest):
     """Start a NON-BLOCKING what-if scenario (uncertainty included). Poll the
     returned job_id."""
-    from mmm_framework.api.history import latest_model_run_payload
+    from mmm_framework.platform.history import latest_model_run_payload
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -2754,7 +2772,7 @@ async def list_runs_endpoint(
     """The model-run lineage timeline: every fit with dataset fingerprint,
     spec diff vs the previous run, and the assumptions added/revised (the
     versioned data + model + rationale record)."""
-    from mmm_framework.api.runs import build_run_timeline
+    from mmm_framework.platform.runs import build_run_timeline
 
     if project_id is not None and not principal.is_dev:
         ensure_project_access(principal, project_id, Role.VIEWER)
@@ -2773,7 +2791,7 @@ async def compare_runs_endpoint(
 ):
     """Per-channel ROI/spend delta between two runs (B vs A) — the structured
     answer to "why did this channel change since the last refresh?"."""
-    from mmm_framework.api.runs import compare_runs
+    from mmm_framework.platform.runs import compare_runs
 
     try:
         result = compare_runs(run_a, run_b)
@@ -2802,7 +2820,7 @@ async def portfolio_benchmark_endpoint(
     portfolio, see model freshness + calibration coverage)."""
     import time as _t
 
-    from mmm_framework.api.portfolio_benchmark import build_portfolio_benchmark
+    from mmm_framework.platform.portfolio_benchmark import build_portfolio_benchmark
 
     org_id = None if principal.is_dev else principal.org_id
     projects = sessions_store.list_projects(org_id=org_id)
@@ -2959,7 +2977,7 @@ async def portfolio_endpoint(
     # pushed back over the EIG threshold (see planning.eig).
     if project_id:
         try:
-            from mmm_framework.api.history import build_calibration_coverage
+            from mmm_framework.platform.history import build_calibration_coverage
 
             cov = build_calibration_coverage(project_id)
             due = [c for c in cov["channels"] if c.get("retest_due")]
@@ -3005,7 +3023,7 @@ async def project_history_endpoint(project_id: str):
     share gaps, calibration status, and the portfolio series (misallocation
     proxy, marginal ROI, EVPI). Assembled purely from stored run_metrics rows
     — no model loads."""
-    from mmm_framework.api.history import build_history_series
+    from mmm_framework.platform.history import build_history_series
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3019,8 +3037,8 @@ async def project_estimands_endpoint(project_id: str):
     the same estimand+KPI sit side-by-side; different-KPI models stay separate
     (not directly comparable). Assembled from estimand rows persisted on each
     model_run artifact at fit time — no model loads. Older runs need the backfill
-    (``python -m mmm_framework.api.backfill --what estimands``)."""
-    from mmm_framework.api.estimands import build_project_estimands
+    (``python -m mmm_framework.platform.backfill --what estimands``)."""
+    from mmm_framework.platform.estimands import build_project_estimands
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3038,7 +3056,7 @@ class SignoffRequest(BaseModel):
 def _project_assumption_snapshot(project_id: str) -> Any:
     """The assumption set a sign-off approves: the latest fitted run's spec +
     every versioned assumption logged across the project's sessions."""
-    from mmm_framework.api.history import latest_model_run_payload
+    from mmm_framework.platform.history import latest_model_run_payload
 
     run = latest_model_run_payload(project_id)
     snapshot: dict[str, Any] = {"spec": (run or {}).get("spec")}
@@ -3097,7 +3115,7 @@ async def project_scorecard_endpoint(project_id: str):
     predicted interval — the model's interval calibration over time. Joined
     server-side from persisted estimands + the experiment registry; no model
     loads."""
-    from mmm_framework.api.scorecard import build_project_scorecard
+    from mmm_framework.platform.scorecard import build_project_scorecard
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3117,7 +3135,7 @@ async def project_triangulation_endpoint(
     ``kpi``/``run_id`` pin which fitted model's MMM numbers are used (default: the
     latest ``contribution_roi`` model). Any platform-attribution figures ingested
     for the project (issue #120) are folded in as the third source."""
-    from mmm_framework.api.triangulation import build_project_triangulation
+    from mmm_framework.platform.triangulation import build_project_triangulation
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3151,7 +3169,7 @@ async def upload_platform_figures_endpoint(
     ``channel`` + ``value`` column (+ optional ``source``/``metric``/
     ``attribution_window``/``incremental``/``period``). Figures are stored
     **non-incremental** (last-touch) unless a row sets ``incremental`` true."""
-    from mmm_framework.api.triangulation import parse_platform_records
+    from mmm_framework.platform.triangulation import parse_platform_records
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3200,7 +3218,7 @@ async def upload_delivery_endpoint(project_id: str, file: UploadFile = File(...)
     without spend passed inline. A CSV may be LONG (channel/period/spend columns)
     or WIDE (a date/period column + one column per channel); re-uploading a period
     overwrites it."""
-    from mmm_framework.api.pacing import parse_delivery_records
+    from mmm_framework.platform.pacing import parse_delivery_records
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3240,7 +3258,7 @@ async def project_pacing_endpoint(project_id: str, threshold: float | None = Non
     fit load) — the expected-outcome delta comes from the check_pacing agent tool.
     Returns ``available: false`` with a ``reason`` when there is no saved plan or
     no delivery yet."""
-    from mmm_framework.api.pacing import build_project_pacing
+    from mmm_framework.platform.pacing import build_project_pacing
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3256,7 +3274,7 @@ async def project_pacing_alert_endpoint(project_id: str):
     written by the background pacing-alert sweep. Returns ``{alert: null}`` when
     the project is on pace or the sweep has never run — a cheap poll the FE can
     use to badge the Pacing tab without recomputing on every page load."""
-    from mmm_framework.api.pacing import latest_pacing_alert
+    from mmm_framework.platform.pacing import latest_pacing_alert
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3272,8 +3290,8 @@ async def calibration_coverage_endpoint(project_id: str, as_of: str | None = Non
     off-pace is a reason to re-look even when its evidence is fresh — the T5
     re-evaluation surface reads ``pacing_status``/``off_pace`` per channel +
     the top-level ``pacing_alert``."""
-    from mmm_framework.api.history import build_calibration_coverage
-    from mmm_framework.api.pacing import build_project_pacing
+    from mmm_framework.platform.history import build_calibration_coverage
+    from mmm_framework.platform.pacing import build_project_pacing
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3300,8 +3318,8 @@ async def calibration_coverage_endpoint(project_id: str, as_of: str | None = Non
 async def experiment_priorities_endpoint(project_id: str, as_of: str | None = None):
     """The latest EIG/EVOI priority grid with decay + registry state applied
     at read time. 404 when the project has no run metrics yet (fit a model
-    first, or backfill: python -m mmm_framework.api.backfill)."""
-    from mmm_framework.api.history import build_priorities_payload
+    first, or backfill: python -m mmm_framework.platform.backfill)."""
+    from mmm_framework.platform.history import build_priorities_payload
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3312,7 +3330,7 @@ async def experiment_priorities_endpoint(project_id: str, as_of: str | None = No
             detail=(
                 "No run metrics for this project yet. Fit a model (metrics are "
                 "recorded automatically) or backfill saved runs with "
-                "`python -m mmm_framework.api.backfill`."
+                "`python -m mmm_framework.platform.backfill`."
             ),
         )
     return JSONResponse(content=safe_json_dumps_load(payload))
@@ -3325,7 +3343,7 @@ def _design_inputs(project_id: str, channel: str) -> tuple[str, str]:
     """(dataset_path, kpi) for design computation, from the latest run."""
     import os as _os
 
-    from mmm_framework.api.history import latest_model_run_payload
+    from mmm_framework.platform.history import latest_model_run_payload
 
     run = latest_model_run_payload(project_id)
     if not run:
@@ -3663,7 +3681,7 @@ async def start_experiment_simulation(project_id: str, body: ExperimentSimulateR
     """Start a NON-BLOCKING model-anchored economics + A/A·A/B simulation. Loads
     the project's latest saved model in the background and runs the
     experiment_economics op; poll the returned job_id for the result."""
-    from mmm_framework.api.history import latest_model_run_payload
+    from mmm_framework.platform.history import latest_model_run_payload
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3759,7 +3777,7 @@ async def start_spec_curve(project_id: str, body: SpecCurveRequest):
     answers. Multi-fit NUTS — poll the returned job_id for the result."""
     from datetime import datetime, timezone
 
-    from mmm_framework.api.history import latest_model_run_payload
+    from mmm_framework.platform.history import latest_model_run_payload
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -3948,7 +3966,7 @@ async def start_deck_generation(
 ):
     """Start a NON-BLOCKING PowerPoint slide-deck build from the project's latest
     saved model. Poll the returned job_id; download the .pptx when done."""
-    from mmm_framework.api.history import latest_model_run_payload
+    from mmm_framework.platform.history import latest_model_run_payload
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -4098,7 +4116,7 @@ async def start_model_validation(project_id: str, body: ValidationRunRequest):
     """Start a NON-BLOCKING validation run on the project's latest saved model.
     ``check`` selects which validation to run (validate / ppc / residuals /
     channels / refutation / cross_validation). Poll the returned job_id."""
-    from mmm_framework.api.history import latest_model_run_payload
+    from mmm_framework.platform.history import latest_model_run_payload
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -5793,7 +5811,7 @@ async def start_experiment_optimization(
     """Start a NON-BLOCKING experiment-setup optimization: explores the design
     grid and returns the Pareto front (MDE × short-term cost × duration) + a
     recommended setup with cool-down. Poll the returned job_id."""
-    from mmm_framework.api.history import latest_model_run_payload
+    from mmm_framework.platform.history import latest_model_run_payload
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -5887,7 +5905,7 @@ async def start_structural_identification(
     identify the channel's saturation (psi), adstock carryover (alpha) and
     coefficient (beta) — an optimistic Laplace upper bound, never a guarantee.
     Poll the returned job_id."""
-    from mmm_framework.api.history import latest_model_run_payload
+    from mmm_framework.platform.history import latest_model_run_payload
 
     if sessions_store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -5950,7 +5968,12 @@ async def get_structural_identification(project_id: str, job_id: str):
 # ── Artifacts ─────────────────────────────────────────────────────────────────
 
 
-@app.get("/artifacts/{thread_id}", dependencies=[_sess_read])
+# Canonical shape (v1.0): the listing lives under the session resource, so a
+# path param named {thread_id} never shares a shape with DELETE's
+# {artifact_id}. The legacy /artifacts/{thread_id} form is kept as a
+# deprecated alias — same handler, flagged in OpenAPI.
+@app.get("/sessions/{thread_id}/artifacts", dependencies=[_sess_read])
+@app.get("/artifacts/{thread_id}", dependencies=[_sess_read], deprecated=True)
 async def list_artifacts_endpoint(thread_id: str):
     return JSONResponse(content=sessions_store.list_artifacts(thread_id))
 
@@ -5967,9 +5990,7 @@ async def delete_artifact_endpoint(
 
 
 @app.get("/sessions/{thread_id}/export", dependencies=[_sess_read])
-async def export_session_endpoint(
-    thread_id: str, format: str = "py", scope: str = "all"
-):
+async def export_session_endpoint(thread_id: str, scope: str = "all"):
     """Download the session's Python work as a standalone, runnable script.
 
     Synthesizes a preamble that reconstitutes tool-injected state (dataset,
@@ -6170,7 +6191,9 @@ async def update_workflow_step_endpoint(
 # ── Files registry ───────────────────────────────────────────────────────────
 
 
-@app.get("/files/{thread_id}", dependencies=[_sess_read])
+# Canonical shape (v1.0) + deprecated legacy alias — see the artifacts note.
+@app.get("/sessions/{thread_id}/files", dependencies=[_sess_read])
+@app.get("/files/{thread_id}", dependencies=[_sess_read], deprecated=True)
 async def list_files_endpoint(thread_id: str):
     return JSONResponse(content=sessions_store.list_files(thread_id))
 
@@ -7146,7 +7169,7 @@ async def health_check():
 async def observability_endpoint():
     """Reliability signals for operators: audit-chain integrity, off-host ship
     backlog, and recent fit activity. No tenant data."""
-    from mmm_framework.api.observability import system_health
+    from mmm_framework.platform.observability import system_health
 
     return JSONResponse(content=system_health())
 
@@ -7518,4 +7541,4 @@ async def download_client_slides(thread_id: str | None = None):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("mmm_framework.api.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("mmm_framework_server.main:app", host="0.0.0.0", port=8000, reload=True)

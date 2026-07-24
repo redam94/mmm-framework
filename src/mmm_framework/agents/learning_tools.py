@@ -45,7 +45,7 @@ def _tid(config) -> str | None:
 
 
 def _project_id(tid: str | None) -> str | None:
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     try:
         sess = sessions_store.get_session(tid) if tid else None
@@ -67,7 +67,7 @@ def _resolve_program(
     else a clear error listing what exists. A project-less session must pass
     program_id explicitly — never adopt some other project's program from a
     global listing."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     if program_id:
         prog = sessions_store.get_learning_program(program_id)
@@ -152,7 +152,7 @@ def _fit_save_and_record(
     ``experiment_ids`` must be the SUCCESSFULLY IMPORTED ids only (provenance);
     skipped ids belong in ``observations``.
     """
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
     from mmm_framework.continuous_learning import service as cl_service
 
     config = prog.get("config") or {}
@@ -443,7 +443,7 @@ def start_learning_program(
     — no model needed) and/or design_learning_wave → run it →
     record_learning_wave.
     """
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
     from mmm_framework.continuous_learning import service as cl_service
 
     tid = _tid(config)
@@ -529,7 +529,7 @@ def import_past_experiments(
     (mroas readouts are slopes, not lifts; rows missing value/se or a spend
     level can't convert).
     """
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
     from mmm_framework.continuous_learning import service as cl_service
 
     tid = _tid(config)
@@ -672,7 +672,7 @@ def design_learning_wave(
     the program's wave timeline; after the wave runs, record results with
     record_learning_wave.
     """
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
     from mmm_framework.continuous_learning import service as cl_service
 
     tid = _tid(config)
@@ -916,7 +916,7 @@ def get_learning_program_status(
     the response curves, synergy estimates, and the ENBS stop/continue verdict.
     Reads the stored snapshot — no refit. Call without program_id when the
     project has a single active program."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
 
     tid = _tid(config)
     project_id = _project_id(tid)
@@ -993,7 +993,7 @@ def check_learning_stopping(
     and the SAME margin/population/wave_cost arguments (an omitted override
     silently falls back to the fit-time value, which can flip the verdict).
     Only pass confirm_stop=true after the user agrees."""
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
     from mmm_framework.continuous_learning.planner import should_stop
 
     tid = _tid(config)

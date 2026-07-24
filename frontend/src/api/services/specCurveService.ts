@@ -2,7 +2,7 @@ import { apiClient } from '../client';
 
 /**
  * Spec-curve / model-averaging robustness sweep (issue #118). A non-blocking
- * multi-fit job: start it, then poll the job id. Mirrors api/main.py
+ * multi-fit job: start it, then poll the job id. Mirrors mmm_framework_server/main.py
  * /projects/{id}/spec-curve[/{job_id}] and validation/spec_curve.py's to_dict().
  */
 

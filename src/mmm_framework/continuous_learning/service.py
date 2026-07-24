@@ -2,7 +2,7 @@
 
 One shared service layer used by BOTH the agent tools
 (:mod:`mmm_framework.agents.learning_tools`) and the REST endpoints
-(``api/main.py``'s ``/projects/{pid}/learning-programs`` family). No sqlite in
+(``mmm_framework_server/main.py``'s ``/projects/{pid}/learning-programs`` family). No sqlite in
 here — callers own the sessions store; this module owns config validation,
 dollar↔scaled conversion, state-file IO, wave design/ingest, past-experiment
 import, and the ONE-Thompson-pass ``fit_and_plan`` snapshot.

@@ -19,7 +19,7 @@ from .conftest import simple_wide, to_mff_long
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
-    from mmm_framework.api import sessions as ss
+    from mmm_framework.platform import sessions as ss
 
     monkeypatch.setattr(ss, "DB_PATH", tmp_path / "sessions.db")
     ss.init_db()

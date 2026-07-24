@@ -1,7 +1,7 @@
 # Agent Knowledge Base & Workspace — Design Contract
 
 This document is the frozen interface contract for the "agent superpowers" upgrade.
-It is the single source of truth shared by the backend (`src/mmm_framework/api`,
+It is the single source of truth shared by the backend (`src/mmm_framework/platform`,
 `src/mmm_framework/agents`) and the React frontend (`frontend/src/pages/AgentPage.tsx`).
 
 The upgrade delivers seven capabilities:
@@ -21,7 +21,7 @@ The unifying primitive is a **scoped workspace directory** plus **project identi
 ## 1. Scope model (projects, sessions, threads)
 
 * A **project** groups sessions and owns a knowledge base. New `projects` table in the
-  agent store (`src/mmm_framework/api/sessions.db`).
+  agent store (`src/mmm_framework/platform/sessions.db`).
 * A **session** (LangGraph `thread_id`) belongs to exactly one project via the existing
   `sessions.project_id` column. On first run a `Default Project` is auto-created and all
   pre-existing/orphan sessions resolve to it.
@@ -71,7 +71,7 @@ Helpers in `src/mmm_framework/agents/workspace.py`:
 
 ---
 
-## 4. Database tables  (added to `src/mmm_framework/api/sessions.py`, idempotent `init_db`)
+## 4. Database tables  (added to `src/mmm_framework/platform/sessions.py`, idempotent `init_db`)
 
 ### `projects`
 | col | type | notes |
@@ -179,7 +179,7 @@ framework surface (`BayesianMMM`, builders, `mmm_framework.analysis`, `mmm_exten
 
 ---
 
-## 8. Artifacts  (persisted in the `/chat` capture loop, `src/mmm_framework/api/main.py`)
+## 8. Artifacts  (persisted in the `/chat` capture loop, `server/src/mmm_framework_server/main.py`)
 
 Existing kinds: `code_snippet`, `report`, `project_report`, `project_slides`,
 `client_report`, `client_slides`, `model_run`.
@@ -195,7 +195,7 @@ on session load (instead of resetting to []).
 
 ---
 
-## 9. HTTP API  (all on the **agent app** `src/mmm_framework/api/main.py`, port 8000)
+## 9. HTTP API  (all on the **agent app** `server/src/mmm_framework_server/main.py`, port 8000)
 
 ### Projects
 * `GET /projects` → `{projects:[{project_id,name,description,session_count,doc_count,created_at,updated_at}], total}`

@@ -4,7 +4,7 @@ import { apiClient } from '../client';
  * Manual (no-LLM) model-validation runner. Kicks off a background job that loads
  * the project's latest fitted model and runs a validation op (the same ops the
  * chat agent's validate_model / run_* tools use), then returns the markdown
- * verdict + content-addressed table/plot refs. Mirrors api/main.py
+ * verdict + content-addressed table/plot refs. Mirrors mmm_framework_server/main.py
  * /projects/{id}/validate.
  */
 

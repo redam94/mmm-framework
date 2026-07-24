@@ -184,12 +184,17 @@ class MMMSerializer:
         """Sidecar metadata for an extended-flavor save (self-describing +
         readable by saved_model_settings / list_saved_models)."""
         mcls = type(model)
+        # Computed like the core flavor (garden contract), not hardcoded: a
+        # non-MMM extended subclass must not be mislabeled "mmm" — downstream
+        # load gates and saved_model_settings key off this field.
+        from .garden.contract import model_kind as _model_kind
+
         metadata: dict[str, Any] = {
             "version": getattr(model, "_VERSION", "1.0"),
             "format_version": cls._FORMAT_VERSION,
             "model_flavor": "extended",
             "model_class_qualname": f"{mcls.__module__}.{mcls.__qualname__}",
-            "model_kind": "mmm",
+            "model_kind": _model_kind(model),
             "n_obs": int(getattr(model, "n_obs", 0)),
             "n_channels": int(getattr(model, "n_channels", 0)),
             "channel_names": list(getattr(model, "channel_names", [])),
@@ -359,6 +364,24 @@ class MMMSerializer:
         # 1. Load metadata
         with open(path / "metadata.json", "r") as f:
             metadata = json.load(f)
+
+        # Format gate (both flavors stamp it). Same-major formats load —
+        # minor bumps are additive by contract; a HIGHER major means the
+        # artifact was written by an incompatible future serializer and the
+        # failure should be loud up front, not a KeyError deep in rebuild.
+        fmt = str(metadata.get("format_version", "1.0"))
+        try:
+            fmt_major = int(fmt.split(".")[0])
+        except ValueError:
+            fmt_major = 1
+        our_major = int(cls._FORMAT_VERSION.split(".")[0])
+        if fmt_major > our_major:
+            raise ValueError(
+                f"Model directory was saved with serializer format {fmt}, but "
+                f"this mmm-framework understands format major {our_major} "
+                f"(_FORMAT_VERSION={cls._FORMAT_VERSION}). Upgrade "
+                "mmm-framework to load it."
+            )
 
         # Extended flavor (BaseExtendedMMM family): panel-free pickle load.
         if metadata.get("model_flavor") == "extended":

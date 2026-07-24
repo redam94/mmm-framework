@@ -14,7 +14,7 @@ import pytest
 
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -27,7 +27,7 @@ def _body(resp) -> dict:
 
 @pytest.mark.asyncio
 async def test_validate_endpoint_wiring(store):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
 
@@ -54,7 +54,7 @@ async def test_validate_endpoint_wiring(store):
 
 @pytest.mark.asyncio
 async def test_validation_job_errors_without_model(store):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     tid = f"__valjobs__{pid}"
@@ -74,7 +74,7 @@ async def test_validation_job_errors_without_model(store):
 async def test_get_validation_job_404_cross_project(store):
     from fastapi import HTTPException
 
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     other = store.create_project("Q")["project_id"]
@@ -99,7 +99,7 @@ async def test_validation_job_end_to_end(store, tmp_path, monkeypatch):
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
     from mmm_framework.agents import workspace as ws
     from mmm_framework.agents.fitting import build_and_fit
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
     from mmm_framework.synth import generate_mff
 
     df, _ = generate_mff("realistic", seed=5, n_weeks=120)
@@ -126,7 +126,7 @@ async def test_validation_job_end_to_end(store, tmp_path, monkeypatch):
         "model_validation",
         {"status": "pending", "project_id": pid, "check": "validate"},
     )
-    from mmm_framework.api.history import latest_model_run_payload
+    from mmm_framework.platform.history import latest_model_run_payload
 
     run = latest_model_run_payload(pid)
     await M._run_validation_job(job["id"], tid, run, "validate_model", {})
@@ -146,7 +146,7 @@ async def test_validations_history_lists_jobs_and_chat_runs(store):
     """`GET /projects/{id}/validations` returns every persisted run, newest
     first — UI jobs and chat-persisted checks alike — so the Validation tab
     keeps track across reloads."""
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
 
@@ -204,7 +204,7 @@ async def test_validations_history_scoped_by_thread_id(store):
     the Validation tab shows only the CURRENT session's validations. UI jobs
     stamp the launching session from the request body; unstamped legacy rows
     are excluded from a scoped listing."""
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
 

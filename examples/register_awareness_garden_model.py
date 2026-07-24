@@ -296,7 +296,7 @@ def main() -> None:
         static_class_name,
         static_model_kind,
     )
-    from mmm_framework.api import sessions
+    from mmm_framework.platform import sessions
     from mmm_framework.garden.contract import GARDEN_CONTRACT_VERSION
 
     sessions.init_db()

@@ -1,7 +1,7 @@
 /**
  * Shared API types.
  *
- * The modern app talks to the agent API (src/mmm_framework/api) through
+ * The modern app talks to the agent API (server/src/mmm_framework_server/main.py) through
  * feature-specific service modules (see ./services). The legacy REST-API
  * request/response types that used to live here were removed with the
  * services that consumed them; only the transport-level error shape the

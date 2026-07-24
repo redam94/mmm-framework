@@ -23,7 +23,7 @@ from langgraph.types import Command
 # Injected at runtime by LangGraph; agent must NOT see this in the tool schema.
 InjectedConfig = Annotated[RunnableConfig, InjectedToolArg]
 
-from mmm_framework.api import sessions as sessions_store
+from mmm_framework.platform import sessions as sessions_store
 from mmm_framework.dag_model_builder.dag_spec import (
     DAGEdge,
     DAGNode,
@@ -1585,10 +1585,10 @@ def build_model_from_dag(
                 f"- `{name}`: latent baseline proxy — modeled via the built-in "
                 "seasonality component, not as a regressor."
             )
-    candidate["dag_roles"] = {
-        "mediators": [n.variable_name for n in mediator_nodes],
-        "instruments": [n.variable_name for n in instrument_nodes],
-    }
+    # (dag_roles used to be stamped here too — write-only, no reader anywhere;
+    # dropped in the 2026-07-24 v1.0 contract audit. The mediator/instrument
+    # partition is recoverable from the persisted dag_spec and is rendered in
+    # this tool's success message.)
     candidate["dag_model_type"] = model_type.value
     # An extension-type DAG (mediators / multiple outcomes) is fit through
     # DAGModelBuilder, which needs the full DAG kernel-side — the plain spec's

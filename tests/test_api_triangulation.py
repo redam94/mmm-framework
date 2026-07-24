@@ -13,7 +13,7 @@ import json
 import pytest
 from fastapi import HTTPException
 
-from mmm_framework.api import triangulation as TRI
+from mmm_framework.platform import triangulation as TRI
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +182,7 @@ def test_pure_join_no_contribution_roi_group():
 # ---------------------------------------------------------------------------
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -256,7 +256,7 @@ def test_build_project_triangulation_reads_store(store):
 
 @pytest.mark.asyncio
 async def test_endpoint_returns_panel_and_404(store):
-    from mmm_framework.api import main as M
+    from mmm_framework_server import main as M
 
     pid = store.create_project("P")["project_id"]
     _seed_model_run(

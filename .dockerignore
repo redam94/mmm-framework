@@ -1,0 +1,39 @@
+# Build-context hygiene for BOTH container builds (deploy/api/Dockerfile and
+# deploy/kernel/Containerfile — podman also honors this file when no
+# .containerignore exists). The critical entries are the runtime SQLite state:
+# the live sessions.db (orgs, users, password hashes, chat checkpoints) sits
+# untracked inside src/ (legacy src/mmm_framework/api/ location and the current
+# platform/ default), and hatch's **/*.db exclude protects only wheel/sdist —
+# without this file `COPY src ...` bakes it into the images, including the
+# sandbox image whose whole purpose is running untrusted user code.
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/sessions_backup_*.sql.gz
+**/__pycache__
+**/*.pyc
+**/*.egg-info
+
+# Never needed in an image; keeps the context upload small.
+.git
+.venv
+.claude
+.pytest_cache
+.ruff_cache
+node_modules
+frontend/node_modules
+frontend/dist
+agent_workspace
+graphify-out
+recordings
+screenshots
+nbs
+docs
+dist
+htmlcov
+mmm_models
+mmm_configs
+demo_data
+tests
+technical-docs
+competitive-analysis

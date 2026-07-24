@@ -411,7 +411,10 @@ def __mmm_autobind_df(_path):
 # ── plot capture: fig.show()/pio.show() -> display_data(plotly json) ──
 try:
     import json as _json
-    from mmm_framework.agents.tools import _normalize_figure as _normfig
+    # figures (not tools): the lean sandbox kernel image has no langchain, and
+    # tools.py imports langchain_core at module level — importing it here would
+    # silently disable plot capture via this except-pass.
+    from mmm_framework.agents.figures import _normalize_figure as _normfig
     from IPython.display import publish_display_data as _pdd
     import plotly.io as _pio
     import plotly.basedatatypes as _pbd

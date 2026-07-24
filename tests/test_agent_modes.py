@@ -158,7 +158,7 @@ class TestToolGating:
 class TestSessionMode:
     @pytest.fixture
     def store(self, tmp_path, monkeypatch):
-        from mmm_framework.api import sessions as S
+        from mmm_framework.platform import sessions as S
 
         monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
         S.init_db()

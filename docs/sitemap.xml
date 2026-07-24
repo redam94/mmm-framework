@@ -13,6 +13,16 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/api-contracts.html</loc>
+        <lastmod>2026-07-23</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/architecture.html</loc>
+        <lastmod>2026-07-23</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/aurora-00-overview.html</loc>
         <lastmod>2026-07-10</lastmod>
         <changefreq>monthly</changefreq>
@@ -435,6 +445,11 @@
     <url>
         <loc>https://redam94.github.io/mmm-framework/responsible-disclosure.html</loc>
         <lastmod>2026-07-04</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/rest-api.html</loc>
+        <lastmod>2026-07-23</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from mmm_framework.api import triangulation as TRI
+from mmm_framework.platform import triangulation as TRI
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ class TestParsePlatform:
 # ---------------------------------------------------------------------------
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
@@ -146,11 +146,11 @@ class TestPlatformStore:
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("MMM_AGENT_WORKSPACE", str(tmp_path / "ws"))
-    from mmm_framework.api import sessions as S
+    from mmm_framework.platform import sessions as S
 
     monkeypatch.setattr(S, "DB_PATH", tmp_path / "sessions.db")
     S.init_db()
-    import mmm_framework.api.main as main
+    import mmm_framework_server.main as main
     from fastapi.testclient import TestClient
 
     with TestClient(main.app) as c:
@@ -201,7 +201,7 @@ class TestEndpoints:
 
     def test_uploaded_figures_reach_triangulation_endpoint(self, client, project):
         # seed an MMM run so the triangulation endpoint has an MMM source
-        from mmm_framework.api import sessions as S
+        from mmm_framework.platform import sessions as S
 
         tid = S.create_session("s", project_id=project)["thread_id"]
         S.add_artifact(

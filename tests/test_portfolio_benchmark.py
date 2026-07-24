@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mmm_framework.api.portfolio_benchmark import build_portfolio_benchmark
+from mmm_framework.platform.portfolio_benchmark import build_portfolio_benchmark
 
 DAY = 86400.0
 

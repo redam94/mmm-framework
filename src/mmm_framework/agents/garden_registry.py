@@ -165,7 +165,7 @@ def register_garden_model_core(
     translate that into their own error shape (a ToolMessage or an HTTP 4xx).
     """
     from mmm_framework.agents import workspace as ws
-    from mmm_framework.api import sessions as sessions_store
+    from mmm_framework.platform import sessions as sessions_store
     from mmm_framework.garden.contract import GARDEN_CONTRACT_VERSION
 
     class_name, err = static_class_name(source_code)

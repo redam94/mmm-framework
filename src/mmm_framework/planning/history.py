@@ -5,7 +5,7 @@ ever unpickling old models.
 
 ``compute_run_metrics`` runs at fit time, kernel-side: it must touch only the
 fitted model (no registry / DB access — that enrichment happens host-side in
-``mmm_framework.api.history``) and never fail a fit (callers wrap it in
+``mmm_framework.platform.history``) and never fail a fit (callers wrap it in
 try/except). One ``compute_response_curves`` pass is shared by the ROI draws,
 the budget optimization, and the EIG/EVOI grid.
 """

@@ -1,4 +1,4 @@
-# Container image for the MMM Agent API (mmm_framework.api.main:app).
+# Container image for the MMM Agent API (mmm_framework_server.main:app).
 #
 #   docker build -f deploy/api/Dockerfile -t mmm-api .
 #   docker run -p 8000:8000 \
@@ -28,9 +28,13 @@ WORKDIR /app
 # Dependency manifests first for layer caching.
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
+# The FastAPI app is the separate workspace member `server/` (the core
+# mmm-framework package is web-free; syncing --package pulls the server plus
+# mmm-framework[agents] + fastapi/uvicorn from the same lock).
+COPY server ./server
 
-# Install locked runtime deps (no dev group). Editable install of the package.
-RUN uv sync --frozen --no-dev
+# Install locked runtime deps (no dev group). Editable install of the packages.
+RUN uv sync --frozen --no-dev --package mmm-framework-server
 
 # Persisted state (DB + agent workspace) lives on a mounted volume.
 RUN useradd -m appuser && mkdir -p /data && chown -R appuser /app /data
@@ -42,5 +46,9 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"
 
-CMD ["uv", "run", "uvicorn", "mmm_framework.api.main:app", \
+# --no-sync: the environment was built at image-build time with
+# `uv sync --frozen --no-dev --package mmm-framework-server`; a bare `uv run`
+# would try to re-sync the ROOT project's default (dev) groups at container
+# start — downloading the whole dev stack, or crash-looping offline.
+CMD ["uv", "run", "--no-sync", "uvicorn", "mmm_framework_server.main:app", \
      "--host", "0.0.0.0", "--port", "8000"]

@@ -43,7 +43,7 @@ auto-binds as `df`; the live model source is staged into
 sandboxed container kernel can import it). This mirrors `_garden_test_sync`.
 
 ### Output capture
-The cell worker (`_notebook_cell_sync` in `src/mmm_framework/api/main.py`) runs
+The cell worker (`_notebook_cell_sync` in `server/src/mmm_framework_server/main.py`) runs
 `KernelManager.execute(code, ctx)` and maps the `ExecuteResult` to JSON-safe
 refs using the **same content-addressing `execute_python` uses**:
 `workspace.store_plot` for `fig.show()` figures and `tables.publish_tables` for
@@ -90,11 +90,11 @@ cell" instruction grounding the model source + cell + traceback + siblings.
   `DiagnoseRequest` + apply-to-cell), `NotebookCell.tsx` (the Diagnose button),
   `copilotService.ts` (`streamCopilot(…, notebook?)` + shared `readCopilotStream`).
 - Backend: `GardenCopilotRequest.notebook` + `NotebookCopilotContext` in
-  `src/mmm_framework/api/main.py`; `build_copilot_system_prompt(notebook=…)` +
+  `server/src/mmm_framework_server/main.py`; `build_copilot_system_prompt(notebook=…)` +
   `NOTEBOOK_DIAGNOSIS_KNOWLEDGE` in `agents/garden_authoring.py`. The chat is
   ephemeral (not persisted with the notebook doc).
 
-## Endpoints (src/mmm_framework/api/main.py — registered before the parametric `/model-garden/{name}` routes)
+## Endpoints (server/src/mmm_framework_server/main.py — registered before the parametric `/model-garden/{name}` routes)
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -110,7 +110,7 @@ compatibility suite uses), so untrusted author source never imports in the host;
 in the hosted profile that kernel is the scrubbed-env container sandbox.
 
 ## Key files
-- Backend: `src/mmm_framework/api/main.py` (the `# Atelier notebook` block + the
+- Backend: `server/src/mmm_framework_server/main.py` (the `# Atelier notebook` block + the
   `/model-garden/copilot` endpoint); `agents/garden_authoring.py`
   (`build_copilot_system_prompt`, `NOTEBOOK_DIAGNOSIS_KNOWLEDGE`);
   `agents/tools.py::_garden_copy_source_to_session`.
