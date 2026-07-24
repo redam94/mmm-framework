@@ -103,6 +103,12 @@ so a first fit needs no data-loading code:
 
 .. toctree::
    :maxdepth: 2
+   :caption: Guides
+
+   cookbook
+
+.. toctree::
+   :maxdepth: 2
    :caption: Platform
 
    architecture
