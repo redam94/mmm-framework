@@ -4,10 +4,11 @@
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://pypi.org/project/mmm-framework/)
 [![License](https://img.shields.io/pypi/l/mmm-framework.svg)](https://github.com/redam94/mmm-framework/blob/main/LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-online-8fa86a.svg)](https://redam94.github.io/mmm-framework/)
+[![Read the Docs](https://img.shields.io/readthedocs/mmm-framework)](https://mmm-framework.readthedocs.io/)
 
 A modular Marketing Mix Model framework built on a standalone PyMC 6 Bayesian engine — it does not subclass or depend on PyMC-Marketing — with full Bayesian uncertainty quantification and interactive visualization.
 
-📖 **[Read the documentation →](https://redam94.github.io/mmm-framework/)** &nbsp;·&nbsp; 📦 **[Install from PyPI →](https://pypi.org/project/mmm-framework/)**
+📖 **[Read the documentation →](https://redam94.github.io/mmm-framework/)** &nbsp;·&nbsp; 📚 **[API reference (Read the Docs) →](https://mmm-framework.readthedocs.io/)** &nbsp;·&nbsp; 📦 **[Install from PyPI →](https://pypi.org/project/mmm-framework/)**
 
 ## Overview
 

@@ -28,6 +28,7 @@ extensions = [
     "sphinx_autodoc_typehints",
     "sphinx_copybutton",
     "myst_parser",
+    "sphinxcontrib.mermaid",  # architecture flow diagrams
 ]
 
 # -- Autodoc configuration ---------------------------------------------------
@@ -66,7 +67,12 @@ napoleon_preprocess_types = True
 napoleon_attr_annotations = True
 
 # -- Mock imports for heavy dependencies -------------------------------------
-# These packages are too large/complex to install on RTD
+# RTD installs the real (lean-core) package, but autodoc still mocks the heavy
+# numerical stack so importing every module for signatures never triggers
+# pytensor/jax initialization or compilation. Optional-stack packages
+# (fastapi/redis/httpx — server + [agents] extras, not installed on RTD) stay
+# mocked defensively; nothing in the documented tree imports them at module
+# level (tests/test_lean_imports.py pins that).
 autodoc_mock_imports = [
     # PyMC ecosystem
     "pymc",
@@ -80,16 +86,12 @@ autodoc_mock_imports = [
     "nutpie",
     # Heavy numerical packages
     "numba",
-    # Optional heavy dependencies
-    "streamlit",
+    # Optional-stack packages (server package / [agents] extra)
     "redis",
-    "arq",
     "fastapi",
     "uvicorn",
     "plotly",
     "httpx",
-    "pymc_marketing",
-    "slowapi",
 ]
 
 # -- Intersphinx configuration -----------------------------------------------
@@ -102,9 +104,11 @@ intersphinx_mapping = {
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = "sphinx_rtd_theme"
+html_title = f"MMM Framework {release}"
 html_theme_options = {
     "logo_only": False,
-    "display_version": True,
+    # sphinx_rtd_theme >= 3 renamed display_version -> version_selector
+    "version_selector": True,
     "prev_next_buttons_location": "bottom",
     "style_external_links": True,
     "collapse_navigation": False,

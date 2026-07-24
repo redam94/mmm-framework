@@ -1,29 +1,36 @@
-# Read the Docs configuration file
-# See https://docs.readthedocs.io/en/stable/config-file/v2.html
+# Read the Docs configuration (v2)
+# https://docs.readthedocs.io/en/stable/config-file/v2.html
+#
+# Builds the Sphinx site at docs/api/source (guides + full API reference).
+# The 1.0 packaging split makes this workable: `pip install .` brings only the
+# LEAN core (no web/LLM stack), and conf.py's autodoc_mock_imports mocks the
+# heavy numerical packages (pymc/jax/numba/...) during autodoc.
+#
+# One-time project setup: import the repo at https://app.readthedocs.org/
+# (Add project → redam94/mmm-framework). This file is auto-detected; enable
+# "Build pull requests" in the project settings for PR preview builds.
 
 version: 2
 
-# Build settings
 build:
-  os: ubuntu-22.04
+  os: ubuntu-24.04
   tools:
     python: "3.12"
 
-# Sphinx configuration
 sphinx:
   builder: html
   configuration: docs/api/source/conf.py
+  # The tree carries known non-fatal docstring formatting warnings; the gate
+  # is `sphinx-build` succeeding, not zero warnings.
   fail_on_warning: false
 
-# Python settings
 python:
   install:
-    # Install docs dependencies first
+    # Sphinx toolchain first (mirror of the pyproject docs dependency group).
     - requirements: docs/requirements-docs.txt
-    # Install the package itself (minimal dependencies via mocks)
+    # Then the package itself (lean core) — autodoc imports mmm_framework.
     - method: pip
       path: .
-      extra_requirements: []
 
-# Formats to build (HTML only for faster builds)
+# HTML only (PDF/eBook builds choke on the mermaid diagrams and add minutes).
 formats: []

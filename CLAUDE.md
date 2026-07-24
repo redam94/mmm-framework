@@ -33,8 +33,13 @@ make format             # Black formatting (src, tests, examples)
 make lint               # Ruff check on src (the exact gate CI runs)
 make hooks              # Install the git pre-commit hook (.githooks/) that runs the ruff gate
 
-# Build API reference (Sphinx)
-uv run sphinx-build -b html docs/api/source docs/api/build/html
+# Build API reference (Sphinx — also what Read the Docs builds)
+uv run --group docs sphinx-build -b html docs/api/source docs/api/build/html
+# RTD config: .readthedocs.yaml (root) installs docs/requirements-docs.txt
+# (LOCKSTEP MIRROR of the pyproject [dependency-groups] docs group — update
+# both) + `pip install .` (lean core; conf.py autodoc_mock_imports covers the
+# heavy pymc/jax stack). Sphinx guides live next to the API tree:
+# docs/api/source/{architecture,contracts}.rst (mermaid via sphinxcontrib-mermaid).
 
 # Static documentation site (hand-authored HTML in docs/*.html)
 # Edit pages directly; preview locally with `python3 -m http.server` from docs/.

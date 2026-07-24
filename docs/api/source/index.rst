@@ -103,9 +103,30 @@ so a first fit needs no data-loading code:
 
 .. toctree::
    :maxdepth: 2
+   :caption: Platform
+
+   architecture
+   contracts
+
+.. toctree::
+   :maxdepth: 2
    :caption: API Reference
 
    api/index
+
+More documentation
+------------------
+
+This site is the **library reference** (guides + full API docs, versioned with
+the package). The broader documentation — tutorials, methodology deep-dives,
+the platform/UI guide, the research blog, and client-facing material — lives
+on the `main docs site <https://redam94.github.io/mmm-framework/>`_:
+
+* `Getting started <https://redam94.github.io/mmm-framework/getting-started.html>`_
+* `Architecture & flow diagrams <https://redam94.github.io/mmm-framework/architecture.html>`_
+* `API contracts (v1.0) <https://redam94.github.io/mmm-framework/api-contracts.html>`_
+* `REST API reference <https://redam94.github.io/mmm-framework/rest-api.html>`_
+* `Research blog <https://redam94.github.io/mmm-framework/blog.html>`_
 
 
 Indices and tables

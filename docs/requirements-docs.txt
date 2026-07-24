@@ -1,20 +1,17 @@
-# Documentation build dependencies
-# Note: Heavy ML dependencies (PyMC, NumPyro, etc.) are mocked in conf.py
+# Sphinx toolchain for the Read the Docs build (.readthedocs.yaml).
+# Keep in lockstep with [dependency-groups] docs in pyproject.toml — RTD's
+# python.install cannot install PEP 735 dependency groups, so this file is the
+# RTD-side mirror.
+#
+# The package itself is installed separately by RTD (`pip install .` — the
+# LEAN core since the 1.0 packaging split), so runtime deps do NOT belong
+# here; a stale numpy<2 pin used to live in this file and would have made the
+# resolver fail against the core's numpy>=2.3.5. conf.py additionally mocks
+# the heavy numerical stack (pymc/jax/numba/...) during autodoc.
 
-# Sphinx core
 sphinx>=7.0,<8.0
-
-# Theme
 sphinx-rtd-theme>=2.0
-
-# Extensions
 sphinx-autodoc-typehints>=2.0
 sphinx-copybutton>=0.5
 myst-parser>=3.0
-
-# Required for imports during autodoc (lightweight deps only)
-pydantic>=2.0
-pandas>=2.0
-numpy>=1.26,<2.0
-loguru>=0.7
-cloudpickle>=3.0
+sphinxcontrib-mermaid>=0.9

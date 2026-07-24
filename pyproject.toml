@@ -129,12 +129,15 @@ kernel = [
     "python-pptx>=1.0.0",
     "matplotlib>=3.8",
 ]
+# Mirrored by docs/requirements-docs.txt (the Read the Docs install source —
+# RTD cannot install PEP 735 groups). Keep the two lists in lockstep.
 docs = [
     "sphinx>=7.0,<8.0",
     "sphinx-rtd-theme>=2.0",
     "sphinx-autodoc-typehints>=2.0",
     "sphinx-copybutton>=0.5",
     "myst-parser>=3.0",
+    "sphinxcontrib-mermaid>=0.9",
 ]
 
 [tool.uv.workspace]
