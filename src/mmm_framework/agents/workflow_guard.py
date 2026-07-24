@@ -59,6 +59,11 @@ MILESTONE_TOOLS: frozenset[str] = frozenset(
     {
         # Pipeline setup + fit — the steps shown auto-running in the screenshot.
         "define_research_question",
+        # The causal interview is elicitation, but it is a milestone ON PURPOSE:
+        # its whole point is that the agent asks the user and WAITS — counting it
+        # makes a same-turn `propose_dag` defer, so the DAG can only be drawn
+        # after the user has had a turn to answer (or explicitly said continue).
+        "causal_structure_interview",
         "define_analysis_plan",
         "propose_dag",
         "validate_causal_identification",
@@ -82,6 +87,7 @@ MILESTONE_TOOLS: frozenset[str] = frozenset(
 #: generic phrase.
 STEP_LABELS: dict[str, str] = {
     "define_research_question": "defining the research question",
+    "causal_structure_interview": "the causal-structure interview",
     "define_analysis_plan": "locking the analysis plan",
     "propose_dag": "proposing the causal DAG",
     "validate_causal_identification": "validating causal identification",

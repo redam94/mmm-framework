@@ -7675,8 +7675,13 @@ def suggest_model_improvements(
 
 # List of all tools
 TOOLS = [
-    # Step 1 — Define the question (pre-registration)
-    *[t for t in CAUSAL_TOOLS if t.name == "define_research_question"],
+    # Step 1 — Define the question (pre-registration) + the causal interview
+    # that gathers what the DAG needs from the user
+    *[
+        t
+        for t in CAUSAL_TOOLS
+        if t.name in ("define_research_question", "causal_structure_interview")
+    ],
     # Data
     generate_synthetic_data,
     load_from_bigquery,
@@ -7694,7 +7699,12 @@ TOOLS = [
         t
         for t in CAUSAL_TOOLS
         if t.name
-        in ("propose_dag", "validate_causal_identification", "build_model_from_dag")
+        in (
+            "propose_dag",
+            "explain_dag",
+            "validate_causal_identification",
+            "build_model_from_dag",
+        )
     ],
     # Config management
     configure_model,
@@ -7884,7 +7894,9 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
 #: dropped only in the purely descriptive (measurement) mode.
 _CAUSAL_TOOL_NAMES: frozenset[str] = frozenset(
     {
+        "causal_structure_interview",
         "propose_dag",
+        "explain_dag",
         "validate_causal_identification",
         "build_model_from_dag",
         "leave_one_out_decomposition",

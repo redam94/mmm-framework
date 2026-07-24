@@ -39,7 +39,42 @@ from mmm_framework.dag_model_builder.identification import (
     iv_criterion,
     report_to_dict,
 )
+from mmm_framework.dag_model_builder.narrative import dag_human_reading
 from mmm_framework.dag_model_builder.validation import validate_dag
+
+
+def _spec_entry_name(v) -> str | None:
+    """A spec list entry's variable name — the canonical stored form is
+    ``{"name": ...}`` dicts (bare strings are the legacy/normalized-away
+    form)."""
+    if isinstance(v, dict):
+        n = v.get("name")
+        return str(n) if n else None
+    if isinstance(v, str) and v:
+        return v
+    return None
+
+
+def _known_columns_from_state(state: dict | None) -> set[str] | None:
+    """Variable names known to exist as measured series: the dataset's
+    ``VariableName`` values plus the model spec's declared kpi/media/controls.
+    ``None`` when nothing is known (no dataset loaded, empty spec)."""
+    from mmm_framework.agents.spec_normalize import _dataset_variable_names
+
+    state = state or {}
+    cols: set[str] = set()
+    ds = _dataset_variable_names(state.get("dataset_path"))
+    if ds:
+        cols |= ds
+    spec = state.get("model_spec") or {}
+    kpi = _spec_entry_name(spec.get("kpi"))
+    if kpi:
+        cols.add(kpi)
+    for key in ("media_channels", "control_variables"):
+        vals = spec.get(key) or []
+        if isinstance(vals, list):
+            cols.update(n for n in (_spec_entry_name(v) for v in vals) if n)
+    return cols or None
 
 
 def _thread_id_from(config: RunnableConfig | None) -> str | None:
@@ -125,6 +160,155 @@ def define_research_question(
 
 
 # ── 2. Propose a causal DAG (Step 2 of workflow) ─────────────────────────────
+
+
+# ── 1b. Causal-structure interview (elicitation BEFORE the DAG) ──────────────
+
+
+@tool
+def causal_structure_interview(
+    config: InjectedConfig = None,
+    state: Annotated[dict, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """
+    Generate the focused discovery questions to ask the user BEFORE proposing a
+    causal DAG — so the DAG is built from THEIR answers about how the business
+    actually works, not invented. Grounded in the session's registered research
+    question, loaded dataset, and any existing DAG.
+
+    Ask the user the 3–5 most relevant returned questions (conversationally, in
+    your own words), then WAIT for their answers. Each question notes which
+    `propose_dag` argument the answer feeds and what data series it implies.
+    Elicitation only: it stores nothing but the question list for the UI — no
+    assumptions, no spec changes.
+    """
+    state = state or {}
+    dashboard = state.get("dashboard_data", {}) or {}
+    rq = dashboard.get("research_question") or {}
+    spec = state.get("model_spec") or {}
+    kpi = _spec_entry_name(spec.get("kpi")) or rq.get("outcome_variable") or "the KPI"
+    channels = [
+        n
+        for n in (_spec_entry_name(c) for c in (spec.get("media_channels") or []))
+        if n
+    ]
+    ch_txt = ", ".join(f"`{c}`" for c in channels) if channels else "your channels"
+    dag_payload = dashboard.get("dag") or {}
+    has_dag = bool(dag_payload.get("spec"))
+
+    # Each entry: (topic, question, what the answer maps to, data it implies).
+    bank: list[tuple[str, str, str, str]] = [
+        (
+            "Budget-setting (the #1 confounder)",
+            f"How are the budgets for {ch_txt} actually set — a fixed annual "
+            f"plan, last year's seasonal curve, or do they react to expected "
+            f"demand or recent {kpi}?",
+            "reacting to demand ⇒ declare that demand driver in `confounders` "
+            "(affects both spend and the KPI); reacting to the KPI itself ⇒ "
+            "reverse causation the DAG cannot fix — plan a lift experiment or "
+            "an instrument",
+            "a demand proxy series (category demand index, site/store traffic, "
+            "macro indicator) covering the modeling window",
+        ),
+        (
+            "Demand, seasonality & own actions",
+            f"Besides media, what visibly moves {kpi}? Think seasonality, "
+            f"promotions, price changes, distribution/availability changes, "
+            f"product launches.",
+            "each named driver becomes a `controls` entry — or a `confounders` "
+            "entry when it ALSO steers spend (e.g. promos supported by media)",
+            "weekly series per driver: promo calendar/depth, price, "
+            "distribution/ACV, launch flags",
+        ),
+        (
+            "Funnel & mediators",
+            "Do upper-funnel channels work through something measurable — TV "
+            "or video driving branded search, site traffic, or awareness? Is "
+            "paid search partly harvesting demand the other channels create?",
+            "yes ⇒ declare `mediators` and wire `mediator_inputs` (which media "
+            "drive each); harvesting ⇒ the harvesting channel's activity is "
+            "partly CAUSED by upstream demand — model the harvested activity "
+            "as a mediator fed by its true drivers (e.g. TV → branded search "
+            "→ sales), or declare the demand driver in `confounders` with an "
+            "edge into that channel — do NOT leave it drawn as an independent "
+            "direct cause",
+            "the mediator's own series: branded-vs-generic search split, "
+            "awareness tracker, site sessions",
+        ),
+        (
+            "Competitors & market",
+            f"Do competitor actions (promos, pricing, launches, share of "
+            f"voice) noticeably move {kpi}, and can you get any series for "
+            f"them?",
+            "a measurable competitor driver ⇒ `controls` (or `confounders` if "
+            "your spend reacts to it); unmeasurable ⇒ record it as a known "
+            "unobserved-confounding risk",
+            "competitor promo/price/SOV series, even a coarse monthly one",
+        ),
+        (
+            "Experiments & natural shocks",
+            "Have you run geo-lift or holdout tests on any channel — or were "
+            "there budget shocks unrelated to demand (mandates, outages, "
+            "platform changes)?",
+            "past tests ⇒ calibrate the fit (`spec['experiments']`); exogenous "
+            "shocks ⇒ candidate `instruments` for the affected channel",
+            "test readouts (lift, SE, window, geos); dates/sizes of the shocks",
+        ),
+        (
+            "Data reality check",
+            "Of everything above, which can you actually provide as a weekly "
+            "(or geo-weekly) series covering the modeling window — and which "
+            "would need a proxy?",
+            "measured ⇒ real controls/mediators; unmeasured confounders stay "
+            "in the DAG as declared assumptions with their back-door OPEN — "
+            "say so honestly rather than dropping them",
+            "—",
+        ),
+    ]
+
+    lines = [
+        "**Causal-structure interview — ask before drawing the DAG**",
+        "",
+        (
+            "Pick the 3–5 most relevant questions below and put them to the "
+            "user in your own words (one focused round — this is a "
+            "conversation, not a form). WAIT for the answers, then build the "
+            "`propose_dag` arguments from them. Only if the user has "
+            "EXPLICITLY asked you to skip the questions and just propose "
+            "should you go ahead without answers — and then label every "
+            "guessed confounder/mediator as an assumption for them to confirm."
+        ),
+        "",
+    ]
+    if has_dag:
+        lines.append(
+            "_A DAG already exists in this session — use these questions to "
+            "REFINE it (missing confounders, unwired mediators) rather than "
+            "starting over._"
+        )
+        lines.append("")
+    for i, (topic, q, maps_to, data) in enumerate(bank, 1):
+        lines.append(f"**{i}. {topic}**")
+        lines.append(f"   - Ask: {q}")
+        lines.append(f"   - Answer maps to: {maps_to}")
+        if data != "—":
+            lines.append(f"   - Data it implies: {data}")
+        lines.append("")
+
+    dashboard["causal_interview"] = {
+        "questions": [
+            {"topic": t, "question": q, "maps_to": m, "data": d} for t, q, m, d in bank
+        ]
+    }
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
+            ],
+            "dashboard_data": dashboard,
+        }
+    )
 
 
 def _normalize_node_ids(names: list[str]) -> list[tuple[str, str]]:
@@ -329,6 +513,7 @@ def propose_dag(
     spec = DAGSpec(nodes=nodes, edges=edges)
     validation = validate_dag(spec)
     react_flow = dag_spec_to_react_flow(spec)
+    reading = dag_human_reading(spec, known_columns=_known_columns_from_state(state))
 
     # Persist as assumption and to dashboard
     if tid:
@@ -350,6 +535,7 @@ def propose_dag(
             "errors": validation.errors,
             "warnings": validation.warnings,
         },
+        "human_reading": reading,
     }
 
     lines = [
@@ -372,8 +558,13 @@ def propose_dag(
         for w in validation.warnings:
             lines.append(f"  - {w}")
     lines.append("")
+    lines.append(reading)
+    lines.append("")
     lines.append(
-        "Use `validate_causal_identification` next to check whether the causal effect is identified."
+        "Relay the reading above to the user and ask them to CONFIRM or CORRECT "
+        "the story — especially the confounders and mediator wiring — before "
+        "moving on. Then `validate_causal_identification` checks whether the "
+        "effect is identified."
     )
 
     return Command(
@@ -381,6 +572,71 @@ def propose_dag(
             "messages": [
                 ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
             ],
+            "dashboard_data": dashboard,
+        }
+    )
+
+
+# ── 2b. Explain the current DAG in plain language ────────────────────────────
+
+
+@tool
+def explain_dag(
+    config: InjectedConfig = None,
+    state: Annotated[dict, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """
+    Plain-English reading of the session's CURRENT causal DAG: what each arrow
+    claims, what the missing arrows assume, which variables are confounders vs
+    mediators vs plain controls (and how their coefficients may be read), and
+    which declared variables still need a measured data series.
+
+    Use whenever the user asks what the DAG means/implies, or after the DAG is
+    edited in the Causal tab. Read-only; deterministic (never invents structure).
+    """
+    dashboard = (state or {}).get("dashboard_data", {}) or {}
+    dag_payload = dashboard.get("dag") or {}
+    spec_dict = dag_payload.get("spec")
+    if not spec_dict:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            "No DAG in this session yet — build one with "
+                            "`propose_dag` (or in the Causal tab) first. To "
+                            "gather what you need to draw it, run "
+                            "`causal_structure_interview`."
+                        ),
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+    try:
+        spec = DAGSpec.model_validate(spec_dict)
+    except Exception as exc:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"Could not parse the stored DAG spec: {exc}",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+    reading = dag_human_reading(spec, known_columns=_known_columns_from_state(state))
+    dag_payload["human_reading"] = reading
+    dashboard["dag"] = dag_payload
+    content = reading + (
+        "\n\nRelay this to the user and ask them to confirm or correct the "
+        "story — the graph is their claim about the business, not the model's."
+    )
+    return Command(
+        update={
+            "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)],
             "dashboard_data": dashboard,
         }
     )
@@ -478,12 +734,55 @@ def validate_causal_identification(
             change_note=f"adjustment_set={rep.adjustment_set}",
         )
 
+    open_paths = [p for p in rep.backdoor_paths if not p.is_blocked]
+    # graph-identifiability is a property of the DRAWN graph — a declared
+    # confounder closes its back-door on paper even when no measured series
+    # exists for it. Cross-check the adjustment set against what the session
+    # can actually measure and say so, or "identifiable" reads as "causal".
+    unmeasured_adj: list[str] = []
+    known_cols = _known_columns_from_state(state)
+    if known_cols is not None and rep.adjustment_set:
+        from mmm_framework.dag_model_builder.narrative import _norm_col
+
+        known_norm = {_norm_col(c) for c in known_cols}
+        for zid in rep.adjustment_set:
+            node = spec.get_node(zid)
+            zname = node.variable_name if node else str(zid)
+            if _norm_col(zname) not in known_norm:
+                unmeasured_adj.append(zname)
+    if rep.identifiable:
+        plain = (
+            f"_In plain terms: if this graph is right and the adjustment set is "
+            f"well measured, the model's `{treatment}` estimate can be read "
+            f"causally — 'change `{treatment}`, move `{outcome}`'. Everything "
+            f"rests on the graph being complete._"
+        )
+        if unmeasured_adj:
+            plain += (
+                f"\n\n⚠️ _BUT the adjustment set includes "
+                f"{', '.join(f'`{z}`' for z in unmeasured_adj)}, which has no "
+                f"measured series in this session. On paper the back-door is "
+                f"closed; in the fitted model it stays OPEN until "
+                f"{'it is' if len(unmeasured_adj) == 1 else 'they are'} measured "
+                f"or proxied — treat the estimate as not yet causal._"
+            )
+    else:
+        plain = (
+            f"_In plain terms: as drawn, `{treatment}`'s estimate would MIX its "
+            f"true effect with whatever flows along the open back-door "
+            f"path{'s' if len(open_paths) != 1 else ''} below — it cannot be "
+            f"read causally yet. The ways out: measure and control the "
+            f"open-path variable(s), calibrate with a lift experiment, or find "
+            f"an instrument._"
+        )
     lines = [
         f"**Causal identification: `{treatment}` → `{outcome}`**",
         "",
         f"- Backdoor paths found: **{len(rep.backdoor_paths)}**",
         f"- Adjustment set: {rep.adjustment_set or '_∅_'}",
         f"- Identifiable (under this DAG): **{'✅ Yes' if rep.identifiable else '❌ No'}**",
+        "",
+        plain,
         "",
     ]
     if rep.backdoor_paths:
@@ -1340,7 +1639,9 @@ def build_model_from_dag(
 
 CAUSAL_TOOLS = [
     define_research_question,
+    causal_structure_interview,
     propose_dag,
+    explain_dag,
     validate_causal_identification,
     build_model_from_dag,
     record_assumption,

@@ -185,6 +185,25 @@ class TestGuardLogic:
         ]
         assert next_paused_step(msgs) == "proposing the causal DAG"
 
+    def test_interview_then_propose_dag_defers_the_dag(self):
+        # The causal interview's WAIT is structural: asking the user counts as
+        # the turn's milestone, so a same-turn propose_dag defers — the DAG can
+        # only be drawn after the user has had a turn to answer.
+        msgs = [
+            HumanMessage("help me build a causal model"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "causal_structure_interview", "args": {}, "id": "a"},
+                    {"name": "propose_dag", "args": {}, "id": "b"},
+                ],
+            ),
+        ]
+        run, defer, label = plan_pause(msgs, budget=1)
+        assert [c["name"] for c in run] == ["causal_structure_interview"]
+        assert [c["name"] for c in defer] == ["propose_dag"]
+        assert label == "proposing the causal DAG"
+
     def test_batched_milestones_in_one_message_trip_the_guard(self):
         # A single AIMessage batching two milestones must NOT slip both through.
         msgs = [
