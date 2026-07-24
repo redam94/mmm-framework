@@ -31,6 +31,7 @@ def test_ops_registry_complete():
         "plan_scenario",
         "marginal_analysis",
         "prior_predictive_check",
+        "recovery_coverage_check",
         "leave_one_out",
         "save_model",
         "optimize_budget",
