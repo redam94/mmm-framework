@@ -7,13 +7,17 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ## [1.2.0] — 2026-07-25
 
-Sampler selection worked in one place and silently failed in three. Fixing that required new
+Sampler selection worked in one place and silently failed in four. Fixing that required new
 public API — a third NUTS backend that was a declared dependency no code path could reach —
-so this is a minor rather than a patch bump. It also raises an install floor, which is not
-patch-safe.
+so this is a minor rather than a patch bump. It also raises an install floor and marks two
+inference methods as deprecated, neither of which is patch-safe.
 
 Plus a reporting correctness fix: cross-effect tables in multi-outcome reports listed pairs
 the model never estimated.
+
+The theme is knobs that read as configuration and were no-ops. If you set `target_accept`,
+selected a frequentist inference method, or read a multi-outcome cross-effect table, your
+results change.
 
 ### Fixed
 
@@ -30,6 +34,27 @@ the model never estimated.
   argument already passed to `pm.sample`, raising a `TypeError` that named `pm.sample` rather
   than anything the caller wrote. The same line worked on an extension model and failed on a
   plain one.
+
+- **`frequentist_ridge` / `frequentist_cvxpy` no longer silently fit Bayesian NUTS.**
+  Both are declared `InferenceMethod` values with builder methods advertising "Ridge
+  regression (fast, frequentist)" and "CVXPY for constrained optimization". Neither has ever
+  been implemented: `fit()` dispatches on `FitMethod`, never on `InferenceMethod`, and the
+  package depends on neither `scikit-learn` nor `cvxpy`. Selecting one did not raise — it
+  fitted a **full Bayesian posterior** via the `"pymc"` fallback in `ModelConfig.nuts_sampler`,
+  so you asked for a fast frequentist point estimate, waited out MCMC, and got a posterior
+  with no indication the request had been ignored.
+
+  `fit()` now raises `NotImplementedError` naming the supported alternative, and constructing
+  such a config emits a `DeprecationWarning`. **The alternative is `fit(method="map")`**: under
+  Gaussian coefficient priors, maximum a posteriori estimation *is* ridge regression, so the
+  capability the name promised has effectively been available all along.
+
+  The enum values are **retained** — stored configs still parse and the frozen-enum contract
+  stays green. The Excel template parser rejects the strings at parse time. The config fields
+  that exist only for this path (`ridge_alpha`, `bootstrap_samples`, `optim_maxiter`) are
+  likewise inert and now marked as such; they are the reserved surface for the real
+  implementation, tracked in
+  [#180](https://github.com/redam94/mmm-framework/issues/180).
 
 - **Cross-effect summaries no longer report structurally-zero outcome pairs as estimated.**
   `reporting/helpers/mediated.py::compute_cross_effects` probed for `get_cross_effect_summary`
@@ -62,11 +87,24 @@ the model never estimated.
   old pin shipped a sampler that could not have started even if it had been reachable. A
   locked environment resolving the old floor needs to update.
 
+### Deprecated
+
+- `InferenceMethod.FREQUENTIST_RIDGE` and `FREQUENTIST_CVXPY`, and the corresponding
+  `ModelConfigBuilder.frequentist_ridge()` / `.frequentist_cvxpy()`. They are unimplemented
+  and now refuse rather than falling through to NUTS (see Fixed). They are **not** removed:
+  removal would break the frozen-enum contract and is reserved for a major version. They will
+  become live — not removed — when [#180](https://github.com/redam94/mmm-framework/issues/180)
+  lands.
+
 ### Notes
 
 - Extension models (`BaseExtendedMMM` — Nested / MV / Combined / Structural) keep their
   `nuts_sampler="pymc"` default deliberately. Their bespoke graphs are not all JAX-traceable,
   so inheriting a numpyro config would break fits rather than speed them up.
+- If a pipeline of yours currently runs with a frequentist inference method, it will now fail
+  loudly. That is the point: it was returning a Bayesian posterior for a frequentist request.
+  Switch to `fit(method="map")` for the fast penalized estimate, or to an explicit Bayesian
+  method to keep exactly what you were already getting.
 - Internal only, no package surface: the docs code-snippet gate now covers Markdown
   (`README.md`, `CLAUDE.md`, `technical-docs/*.md`) as well as HTML, docs navigation
   registration is gated, and `docs/tools/build_seo.py` is idempotent.

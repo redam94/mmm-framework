@@ -53,6 +53,7 @@ from ..config import (
     SaturationType,
 )
 from ..config.dataset import DatasetSchema
+from ..config.model import unimplemented_inference_message
 from ..config.roles import DatasetRole
 from ..data_loader import PanelDataset
 from ..utils import arviz_compat, compute_hdi_bounds
@@ -3075,7 +3076,19 @@ class BayesianMMM:
         Returns:
             Fitted model results with diagnostics. For approximate methods
             ``MMMResults.approximate`` is ``True`` (NUTS and SMC: ``False``).
+
+        Raises:
+            NotImplementedError: If the config selects an inference method with
+                no estimator behind it (``frequentist_ridge`` /
+                ``frequentist_cvxpy``). These used to fall through to a full
+                Bayesian NUTS fit, silently returning a posterior for a request
+                that asked for a frequentist point estimate.
         """
+        if not self.model_config.is_implemented:
+            raise NotImplementedError(
+                unimplemented_inference_message(self.model_config.inference_method)
+            )
+
         method = (
             FitMethod(method) if method is not None else self.model_config.fit_method
         )
