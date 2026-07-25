@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .enums import FitMethod, InferenceMethod, ModelSpecification, PriorType
 from .events import EventsConfig
@@ -104,6 +105,34 @@ _NUTS_SAMPLER_BY_METHOD = {
     InferenceMethod.BAYESIAN_NUMPYRO: "numpyro",
     InferenceMethod.BAYESIAN_NUTPIE: "nutpie",
 }
+
+#: Inference methods that are declared but have NO estimator behind them. They
+#: are kept in the enum so stored configs still parse (the values are frozen —
+#: see tests/test_api_contracts.py), but selecting one is an error rather than a
+#: silent fall-through to NUTS. Tracking issue: #180.
+_UNIMPLEMENTED_METHODS = frozenset(
+    {InferenceMethod.FREQUENTIST_RIDGE, InferenceMethod.FREQUENTIST_CVXPY}
+)
+
+_FREQUENTIST_TRACKING_URL = "https://github.com/redam94/mmm-framework/issues/180"
+
+
+def unimplemented_inference_message(method: InferenceMethod) -> str:
+    """The single message every surface uses to refuse an unimplemented method.
+
+    Names the supported alternative rather than only refusing: ridge regression
+    *is* maximum-a-posteriori estimation under Gaussian coefficient priors, so
+    ``fit(method="map")`` is the closest shipped equivalent.
+    """
+    return (
+        f"Inference method {method.value!r} is not implemented: the enum value "
+        "exists but no estimator backs it, so this config cannot be fitted. "
+        "For a fast penalized point estimate use fit(method='map') — with "
+        "Gaussian coefficient priors that IS ridge regression. For full "
+        "inference select a Bayesian method, e.g. "
+        "ModelConfigBuilder().bayesian_pymc(). "
+        f"Tracking: {_FREQUENTIST_TRACKING_URL}"
+    )
 
 
 class ModelConfig(BaseModel):
@@ -217,11 +246,17 @@ class ModelConfig(BaseModel):
     #   models pickled before this change keep their original behavior.
     use_parametric_adstock: bool = True
 
-    # Frequentist settings
+    # Frequentist settings. INERT — no code reads these; they are the reserved
+    # config surface for the unimplemented frequentist path (#180), where they
+    # will become the ridge penalty and the bootstrap replicate count. Setting
+    # them today does nothing, which is why the inference methods that would
+    # consume them refuse at fit() rather than pretending to honor them.
     ridge_alpha: float = 1.0
     bootstrap_samples: int = 1000
 
-    # Optimization settings (for transformation search)
+    # Optimization settings (for transformation search). optim_maxiter is
+    # likewise INERT pending #180; optim_seed IS live — fit() uses it as the
+    # random-seed fallback for every method.
     optim_maxiter: int = 500
     optim_seed: int | None = 42
 
@@ -245,6 +280,30 @@ class ModelConfig(BaseModel):
 
         Frequentist methods have no NUTS backend; they report ``"pymc"`` so a
         caller that reads this on a non-Bayesian config still gets the
-        historical default rather than an error.
+        historical default rather than an error. That fall-through is why
+        selecting one used to silently fit NUTS — ``fit()`` now refuses first
+        (see :func:`unimplemented_inference_message`).
         """
         return _NUTS_SAMPLER_BY_METHOD.get(self.inference_method, "pymc")
+
+    @property
+    def is_implemented(self) -> bool:
+        """False for declared-but-unbacked inference methods (see #180)."""
+        return self.inference_method not in _UNIMPLEMENTED_METHODS
+
+    @model_validator(mode="after")
+    def _warn_unimplemented_inference(self) -> "ModelConfig":
+        """Flag an unimplemented method at construction, not after a long fit.
+
+        Deliberately a warning rather than a hard error here: a *stored* config
+        carrying one of these values must still deserialize (the enum values are
+        frozen), and code that only reads a config should not blow up. ``fit()``
+        is where it becomes an error.
+        """
+        if self.inference_method in _UNIMPLEMENTED_METHODS:
+            warnings.warn(
+                unimplemented_inference_message(self.inference_method),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        return self

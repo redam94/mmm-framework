@@ -493,8 +493,17 @@ def _build_model_config(model_settings: dict[str, Any]) -> ModelConfig:
         "bayesian_numpyro": InferenceMethod.BAYESIAN_NUMPYRO,
         "bayesian_pymc": InferenceMethod.BAYESIAN_PYMC,
         "bayesian_nutpie": InferenceMethod.BAYESIAN_NUTPIE,
-        "frequentist_ridge": InferenceMethod.FREQUENTIST_RIDGE,
     }
+    # The frequentist methods are declared but unimplemented (#180). Reject at
+    # PARSE time rather than accepting the cell and failing at fit time -- the
+    # value came from a spreadsheet, so the error belongs next to the cell.
+    if inf_str in {"frequentist_ridge", "frequentist_cvxpy"}:
+        raise TemplateValidationError(
+            f"Inference Method {inf_str!r} is not implemented. Use "
+            "'bayesian_numpyro', 'bayesian_pymc' or 'bayesian_nutpie'; for a "
+            "fast penalized point estimate set Fit Method to 'map' instead. "
+            "Tracking: https://github.com/redam94/mmm-framework/issues/180"
+        )
     inference = inf_map.get(inf_str, InferenceMethod.BAYESIAN_NUMPYRO)
 
     # MCMC settings

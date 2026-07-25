@@ -1061,20 +1061,22 @@ class TestModelConfigBuilder:
         assert config.inference_method == InferenceMethod.BAYESIAN_NUMPYRO
 
     def test_frequentist_ridge(self):
-        """Test ridge regression inference method."""
+        """Ridge is selectable but unimplemented — building warns (#180)."""
         from mmm_framework.builders import ModelConfigBuilder
         from mmm_framework.config import InferenceMethod
 
-        config = ModelConfigBuilder().frequentist_ridge().build()
+        with pytest.warns(DeprecationWarning, match="not implemented"):
+            config = ModelConfigBuilder().frequentist_ridge().build()
 
         assert config.inference_method == InferenceMethod.FREQUENTIST_RIDGE
 
     def test_frequentist_cvxpy(self):
-        """Test CVXPY inference method."""
+        """CVXPY is selectable but unimplemented — building warns (#180)."""
         from mmm_framework.builders import ModelConfigBuilder
         from mmm_framework.config import InferenceMethod
 
-        config = ModelConfigBuilder().frequentist_cvxpy().build()
+        with pytest.warns(DeprecationWarning, match="not implemented"):
+            config = ModelConfigBuilder().frequentist_cvxpy().build()
 
         assert config.inference_method == InferenceMethod.FREQUENTIST_CVXPY
 
