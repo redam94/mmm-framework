@@ -4938,12 +4938,18 @@ def run_spec_curve(
     pre-registered set of defensible specifications.
 
     Refits the model under the standard grid of modelling choices (adstock ×
-    saturation form) against the active dataset, LOO-stacks them into a
+    saturation form) against the active dataset, averages them into a
     model-averaged (BMA) ROI, and reports how much each channel's estimate
     depends on those choices — a robust channel keeps its sign and a contained
     spread; a spec-fragile one flips or swings, so its point value shouldn't be
     over-trusted. The declared spec set is pre-registered to the assumption log
     first, so the sweep provably was not chosen after seeing the answers.
+
+    The BMA uses **equal** weights across the pre-registered set. LOO-stacking
+    weights are computed and reported for diagnosis but not applied: stacking
+    maximizes out-of-sample *predictive* skill, and two specs can predict the KPI
+    equally well while splitting it very differently between media and baseline —
+    which is the causal quantity being averaged.
 
     This fits several models with NUTS, so it BLOCKS for a few minutes (like
     cross-validation). For a non-blocking sweep the FE Robustness panel runs it as

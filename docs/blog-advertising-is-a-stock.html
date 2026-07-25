@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advertising Is a Stock. Your Optimizer Solves a One-Period Problem. | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Adstock makes an MMM a dynamic system with a state, so the correct decision object is a schedule, not a per-channel scalar. Two checkable defects in the window-sum objective: a carryover tax that penalizes brand media, and a flat-plan presumption the fitted curvature can refute.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-advertising-is-a-stock.html">
+    <meta property="og:title" content="Advertising Is a Stock. Your Optimizer Solves a One-Period Problem.">
+    <meta property="og:description" content="Your model says spend buys a decaying asset. Your optimizer allocates a window total and hands the timing question to a taste menu. Two defects you can quantify from your own fit.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-advertising-is-a-stock.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Advertising Is a Stock. Your Optimizer Solves a One-Period Problem.">
+    <meta name="twitter:description" content="Your model says spend buys a decaying asset. Your optimizer allocates a window total and hands the timing question to a taste menu. Two defects you can quantify from your own fit.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-advertising-is-a-stock.html",
+          "name": "Advertising Is a Stock. Your Optimizer Solves a One-Period Problem. | MMM Framework",
+          "description": "Adstock makes an MMM a dynamic system with a state, so the correct decision object is a schedule, not a per-channel scalar. Two checkable defects in the window-sum objective: a carryover tax that penalizes brand media, and a flat-plan presumption the fitted curvature can refute.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-advertising-is-a-stock.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-advertising-is-a-stock.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Advertising Is a Stock. Your Optimizer Solves a One-Period Problem.",
+          "datePublished": "2026-07-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-advertising-is-a-stock.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-advertising-is-a-stock.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Advertising Is a Stock. Your Optimizer Solves a One-Period Problem.",
+              "item": "https://redam94.github.io/mmm-framework/blog-advertising-is-a-stock.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#state">The Model Has a State</a></li>
+                <li><a href="#window-edge">The Window-Edge Tax</a></li>
+                <li><a href="#curvature">Curvature Decides the Rhythm</a></li>
+                <li><a href="#chattering">The Optimum Nobody Can Run</a></li>
+                <li><a href="#dorfman-steiner">The Ratio Your Model Implies</a></li>
+                <li><a href="#not-the-curse">Not the Optimizer's Curse</a></li>
+                <li><a href="#limits">What This Does Not Establish</a></li>
+                <li><a href="#deliverable">A Schedule, Not a Vector</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Advertising Is a Stock. Your Optimizer Solves a One-Period Problem.</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-24">July 24, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">MMM</span>
+            </p>
+            <p class="lead">Every marketing-mix model in production says the same thing about advertising: a dollar buys a decaying asset. That is what adstock <em>is</em> &mdash; a state variable that accumulates spend and leaks it back out at a rate the model estimates. A system with a state has a correct decision object, and it is not a number per channel. It is a policy over time. Then the optimizer runs, and it returns a vector: so much to search, so much to TV, over a window. The timing question &mdash; the one the state variable exists to answer &mdash; is handed off to a separate module offering a menu of hand-picked calendar shapes, none of which consults the model. This is not a philosophical complaint. It produces two defects you can quantify from a fit you already have. The first is a mechanical tax: summing contribution over a window discards the carryover that lands past the window edge, and the size of the discard is exactly the kernel's mean lag divided by the window length &mdash; 22% for a six-week half-life over a quarter, against 5% for paid search. The tool used to set brand budgets deflates brand media, arithmetically, before anyone argues about it. The second is sharper: whether flat spend or pulsing is optimal is decided by curvature the model already estimated, and the default prior on that curvature puts almost exactly half its mass on the side that makes your flat plan suboptimal.</p>
+
+            <h2 id="state">The Model Has a State. The Decision Object Doesn't.</h2>
+            <p>Write the model the way the code writes it. A channel's adstocked exposure at time \( t \) is a finite-impulse-response convolution of its own spend history, \( a_t = \sum_k w_k\, x_{t-k} \), and the KPI contribution is that exposure pushed through a saturation curve, \( \beta\, S(a_t) \). The weight vector \( w \) is the state-transition kernel: it is the entire content of the claim that advertising persists. For the geometric case the recursion is one line &mdash; \( a_t = x_t + \alpha a_{t-1} \) &mdash; and the framework's own docstring spells out the consequence, that "the sum of the adstock weights is 1/(1-alpha), so the total effect of a unit spend is scaled by this factor." How those kernels and curves are parameterized and how weakly they are identified is <a href="blog-bayesian-mmm-carryover-shape.html">its own subject</a>; what follows takes the fitted objects as given and asks what decision they imply.</p>
+
+            <p>Now state the decision problem the model implies. You are not choosing a total; you are choosing a path \( x_1, \ldots, x_T \) that drives a stock whose current level determines this period's return. That is a control problem, and it has been a control problem in the marketing-science literature since 1962, when Nerlove and Arrow reframed advertising as investment in a depreciating <em>goodwill</em> stock rather than as a current-period expense. The fifteen years that followed produced enough work on it to require a survey &mdash; Sethi (1977) catalogues the goodwill-capital and sales-response families and their optimal policies across forty pages of SIAM Review &mdash; and essentially none of it is visible downstream of a modern MMM. That is the gap this post is about, and it is not a gap in the literature.</p>
+
+            <div class="definition">
+                <h4>Definition: goodwill stock</h4>
+                <p>In the Nerlove&ndash;Arrow formulation, advertising at rate \( u(t) \) accumulates into a stock \( G(t) \) that depreciates continuously: \( \dot G = u - \delta G \). Demand depends on \( G \), not on current spend. Advertising is therefore capital expenditure, and the relevant question is not "what should I spend this quarter" but "what stock level should I hold, and what flow holds it." The MMM's adstock kernel is a discrete-time version of exactly this object &mdash; \( \delta \) is the decay your model calls \( \alpha \), re-expressed as \( \delta = -\ln\alpha \) per period.</p>
+            </div>
+
+            <p>The Nerlove&ndash;Arrow steady state is a clean, closed-form benchmark. Hold the stock where the marginal profit it generates equals its <em>user cost</em> &mdash; the interest rate plus the depreciation rate:</p>
+            $$ (p - c)\,\frac{\partial Q}{\partial G} \;=\; r + \delta. $$
+            <p>The advertising rate that sustains it is \( u^\star = \delta G^\star \). Both inputs are things an MMM estimates: \( \partial Q/\partial G \) is the marginal response the optimizer already differentiates, and \( \delta \) is the adstock decay. So here is the first cash-out, and it goes against the argument I am building, which is why it goes first.</p>
+
+            <p>An MMM's marginal contribution per dollar sums the entire carryover tail with no discounting at all. Nerlove&ndash;Arrow says it should be discounted, by the factor \( \delta/(r+\delta) \). How big is that correction? At a three-week half-life &mdash; retention 0.79, an ordinary paid-search or promo channel &mdash; the weekly depreciation rate is \( \delta = 0.23 \), and a 4% annual cost of capital is \( r = 0.00077 \) per week. The discounting term is 0.33% of the user cost. Push to a six-week half-life and a 15% annual hurdle rate and it reaches 2.4%. <strong>The dynamic correction the classical model supplies is smaller than the rounding on your ROI slide.</strong> Discounting is not why the one-period objective is wrong.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Why the discounting correction is negligible &mdash; and when it isn't</summary>
+                <div class="deep-dive-body">
+                    <p>A dollar of advertising buys one unit of goodwill, which yields \( (p-c)\,\partial Q/\partial G \) of profit per period and decays at \( \delta \). Its present value is \( (p-c)(\partial Q/\partial G)/(r+\delta) \); setting that equal to its price of one dollar gives the user-cost condition above. The MMM's per-dollar total effect, by contrast, is \( \beta \sum_k w_k \), an <em>undiscounted</em> sum over the kernel &mdash; in continuous terms \( (\partial Q/\partial G)/\delta \). The ratio of the two is \( (r+\delta)/\delta = 1 + r/\delta \), so the MMM overstates the discounted value of a dollar by \( r/\delta \).</p>
+                    <p>With weekly data and half-lives in the range a weekly MMM can actually estimate, \( \delta \) is two to three orders of magnitude larger than a weekly discount rate, and the correction vanishes. The exception is instructive. If the asset you care about is brand equity depreciating over 18&nbsp;months, \( \delta = \ln 2/78 = 0.0089 \) per week, and the same 4% annual cost of capital now accounts for 8% of the user cost &mdash; 25% at a 15% hurdle rate. This framework's own documentation is explicit that a weekly model does not see that asset: adstock half-lives "are a few weeks; even a generous <code>l_max</code> rarely exceeds a quarter," so long-run brand equity "is absorbed into the intercept / trend / baseline, i.e. it is credited to 'base,' not to the channel that built it." The discounting correction is negligible <em>for the \( \delta \) your model estimates</em>. That is a statement about the model's horizon, not a reassurance about brand.</p>
+                </div>
+            </details>
+
+            <p>So the classical dynamics do not rescue the objective, and they do not condemn it either. Under a concave response, a steady-state marginal condition really is a good approximation to the level decision, which is what the optimizer computes. The failures are elsewhere, and there are exactly two: what the window-sum objective does to the <em>edge</em> of the window, and what it presumes about the <em>shape</em> of the path inside it. Both are checkable against your own fit.</p>
+
+            <h2 id="window-edge">The Window-Edge Tax</h2>
+            <p>The objective this framework's optimizer maximizes is a sum. Response curves are built by scaling the historical spend matrix by a multiplier, evaluating the model's per-observation channel contributions, and summing over observations &mdash; <code>contrib.sum(axis=1)</code>, in the code. The docstring calls it "total (window-summed) original-scale contribution," which is exactly right and exactly the problem.</p>
+
+            <p>A dollar spent in period \( s \) delivers its effect over lags \( 0, 1, 2, \ldots \) according to the kernel. If the window ends at \( T \), that dollar's effect is credited only for the lags that land inside it: it receives \( \sum_{k \le T-s} w_k \) of its own kernel, and the rest falls off the edge of the accounting. A dollar in the final week of the window is credited with \( w_0 \) alone. The optimizer is not comparing channels on their long-run productivity; it is comparing them on the fraction of their productivity that happens to fit inside the reporting frame.</p>
+
+            <p>The size of the shortfall has a clean closed form. Scale the whole window's spend uniformly &mdash; which is precisely what the response-curve sampler does &mdash; and for any causal kernel normalized to sum to one, with a window at least as long as the kernel:</p>
+            $$ \text{fraction of long-run effect lost} \;=\; \frac{\bar{k}}{T}, \qquad \bar{k} \;=\; \sum_k k\, w_k, $$
+            <p>where \( \bar{k} \) is the kernel's <em>mean lag</em>. Nothing about the functional form matters &mdash; geometric, delayed-peak, Weibull, all obey it. The tax is the average delay divided by the window length.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>The mean-lag identity</summary>
+                <div class="deep-dive-body">
+                    <p>Let \( W(j) = \sum_{k \lt j} w_k \) be the kernel's cumulative weight through lag \( j-1 \), with \( W(L) = 1 \) for a kernel of length \( L \). Scaling every period's spend by the same factor, the extra window-summed contribution attributable to period \( s \) is proportional to \( W(T-s+1) \), so the average capture across the window is \( \frac{1}{T}\sum_{j=1}^{T} W(j) \) after re-indexing \( j = T-s \). The loss is therefore</p>
+                    $$ \frac{1}{T}\sum_{j=1}^{T}\bigl(1 - W(j)\bigr) \;=\; \frac{1}{T}\sum_{j=1}^{T}\ \sum_{k \ge j} w_k \;=\; \frac{1}{T}\sum_{k} k\,w_k, $$
+                    <p>because the weight \( w_k \) appears in exactly \( k \) of the inner tail sums (those with \( j \le k \)). For \( T \ge L \) the outer sum saturates at \( L \) and the result is \( \bar{k}/T \) exactly. When the window is <em>shorter</em> than the kernel the identity no longer holds &mdash; the truncated sum \( \frac{1}{T}\sum_{j=1}^{T}\mathrm{tail}(j) \) is smaller than \( \bar{k}/T \), and a dollar can never lose more than \( 1 - w_0 \) &mdash; so the figure below computes the general sum rather than the shortcut.</p>
+                    <p>Two consequences worth stating. First, the tax is <em>linear in the mean lag</em>, so it ranks channels by carryover length in the wrong direction with no threshold or discontinuity to hide behind. Second, it is bounded by the model's own lag window: the framework's default <code>l_max = 8</code> caps the mean lag at a few weeks, which caps the tax at roughly a quarter &mdash; but only because the model was never allowed to see a longer tail in the first place. Raising <code>l_max</code> to 26 to capture real TV carryover raises the tax on a six-week-half-life channel to 46% of its long-run effect over a 13-week window.</p>
+                </div>
+            </details>
+
+            <div class="interactive-box">
+                <h4>What the window edge costs a slow channel</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Share of a channel's long-run contribution that falls <strong>outside</strong> the optimization window, for three window lengths, as a function of adstock half-life. Geometric kernel normalized over <code>l_max</code> lags, the framework's construction. The reference marker is fixed at a 0.7-week half-life (retention&nbsp;0.37 &mdash; paid search); the second marker follows the slider. Read the last readout as: how much better at the margin the slow channel must genuinely be, just to tie the fast one on the optimizer's own scoreboard.</p>
+                <div class="control-row">
+                    <label>Slow channel half-life (weeks)</label>
+                    <input type="range" id="weHalf" min="1" max="12" step="0.5" value="6">
+                    <span class="value" id="weHalfVal">6.0</span>
+                </div>
+                <div class="control-row">
+                    <label>Model's lag window <code>l_max</code></label>
+                    <input type="range" id="weL" min="4" max="26" step="1" value="8">
+                    <span class="value" id="weLVal">8</span>
+                </div>
+                <div class="chart-container chart-themed" id="weChart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Slow channel, 13-week window</span><span class="val" id="weSlow13">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Slow channel, 52-week window</span><span class="val" id="weSlow52">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Search, 13-week window</span><span class="val" id="weFast13">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Advantage needed to tie</span><span class="val" id="weTie">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults &mdash; a six-week half-life against search, <code>l_max</code>&nbsp;=&nbsp;8, a 13-week planning window &mdash; the slow channel forfeits 22.3% of its long-run contribution and search forfeits 4.5%. A brand channel that is genuinely <strong>23% more productive at the margin</strong> still loses the comparison. Stretch the window to a year and the gap collapses to 4.5&nbsp;points; open <code>l_max</code> to 26 to model real TV carryover and the 13-week tax reaches 46%, with the advantage needed to tie rising to 77%.</p>
+            </div>
+
+            <div class="warning">
+                <h4>⚠️ This is not the brand-horizon problem</h4>
+                <p>Under-crediting long-run brand equity because a weekly model cannot see a multi-quarter asset is a well-documented limitation, and this framework says so in its own docs. The window-edge tax is a <em>second, independent</em> deflation stacked on top of it, and unlike the first it is purely mechanical: the model has already estimated the tail, the tail is inside <code>l_max</code>, and the objective throws it away at the boundary. That makes it the rare defect that is fully fixable without new data &mdash; credit each dollar with its whole kernel, or optimize a steady-state per-period rate instead of a window total. It also makes it worse, in the sense that matters: nobody caveats it, because nobody sees it.</p>
+            </div>
+
+            <h2 id="curvature">Curvature Decides the Rhythm</h2>
+            <p>The second defect is not about the edge of the window but about the shape of the path inside it, and it is where the fitted model most directly contradicts the plan.</p>
+
+            <p>Sasieni (1971) established the result that makes flat plans respectable: under a response function with everywhere-decreasing marginal returns, a uniform advertising rate beats any cyclic policy of the same cost. That is Jensen's inequality with a state variable attached, and it is the implicit justification for every even-spend calendar in the industry. Mahajan and Muller (1986) established the other half. Working on awareness generation for new products, they showed that the uniform policy is optimal under a <em>concave</em> response and an <em>advertising pulsing policy</em> is optimal under an <em>S-shaped</em> one &mdash; a response with a convex region at low spend, where the marginal return is still <em>increasing</em>. In a convex region, concentrating spend beats spreading it: you would rather be well inside the productive zone half the time than marginally productive all of it.</p>
+
+            <p>Now look at what your model estimated. This framework's Hill saturation is \( f(a) = a^{s}/(a^{s} + h^{s}) \), and the exponent \( s \) is exactly the concave/S-shaped switch: for \( s \le 1 \) the curve is concave everywhere, and for \( s \gt 1 \) it has an inflection at \( h\left(\frac{s-1}{s+1}\right)^{1/s} \), convex below and concave above. The default prior on that exponent is <code>HalfNormal(sigma=1.5)</code>, which places <strong>50.5% of its mass above 1</strong>. The shipped default is, to a rounding error, a coin flip on whether the response function makes your flat plan suboptimal.</p>
+
+            <p>Selecting a Hill and fitting a posterior that concentrates above \( s = 1 \) is a substantive claim about the world: this channel has a minimum effective dose, and spreading spend below it wastes money. Nothing downstream reads that claim. The allocator's docstring states its own assumption plainly &mdash; greedy marginal allocation, "which is exact for concave (saturating) response curves" &mdash; and the constrained solver's says "convex: a sum of concave channel curves under linear constraints." Both are true statements about a premise the model in front of them can refute. Meanwhile the calendar module offers six named patterns: <code>even</code>, <code>front_loaded</code>, <code>back_loaded</code>, <code>pulsed</code>, <code>seasonal</code>, <code>custom</code> &mdash; four fixed shapes and two pass-throughs for a vector you supply &mdash; and concedes the gap in its opening lines: "a planner can lay out a forward calendar <strong>before</strong> (or independent of) a fit &mdash; the model contributes the budgets, not the schedule shape." <code>pulsed</code> takes a <code>pulse_on</code> and a <code>pulse_off</code> and defaults both to 1. There is no criterion anywhere for choosing it.</p>
+
+            <div class="interactive-box">
+                <h4>The rhythm your curvature implies</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">One channel, a fixed annual budget, 52 weeks. <strong>Left:</strong> the fitted Hill curve, its inflection point, and the stretch of it the winning schedule actually visits. <strong>Right:</strong> the best periodic on/off block schedule found by search, against the framework's <code>even</code> and <code>pulsed(1,&nbsp;1)</code> patterns. The operating level is set as a fraction of the half-saturation point, so 1.0 means the plan currently runs at \( h \). Search is over on/off block cycles that tile the year, subject to a cap on consecutive dark weeks.</p>
+                <div class="control-row">
+                    <label>Hill exponent \( s \)</label>
+                    <input type="range" id="cvS" min="0.4" max="3" step="0.05" value="2">
+                    <span class="value" id="cvSVal">2.00</span>
+                </div>
+                <div class="control-row">
+                    <label>Adstock half-life (weeks)</label>
+                    <input type="range" id="cvHalf" min="0.5" max="6" step="0.25" value="2">
+                    <span class="value" id="cvHalfVal">2.00</span>
+                </div>
+                <div class="control-row">
+                    <label>Operating level (&times; half-saturation)</label>
+                    <input type="range" id="cvLvl" min="0.2" max="1.4" step="0.05" value="0.5">
+                    <span class="value" id="cvLvlVal">0.50</span>
+                </div>
+                <div class="control-row">
+                    <label>Max consecutive dark weeks</label>
+                    <input type="range" id="cvOff" min="0" max="13" step="1" value="4">
+                    <span class="value" id="cvOffVal">4</span>
+                </div>
+                <div class="chart-container chart-themed" id="cvChart" style="height:380px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Best schedule</span><span class="val" id="cvBest">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">KPI vs. even spend</span><span class="val" id="cvGain">&mdash;</span></div>
+                    <div class="stat"><span class="lbl"><code>pulsed(1,&nbsp;1)</code> vs. even</span><span class="val" id="cvP11">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="cvVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults, the same annual budget re-timed to 9 weeks on / 4 weeks dark buys <strong>3.6% more KPI</strong> &mdash; and the shipped <code>pulsed(1,&nbsp;1)</code> captures 0.5&nbsp;points of it, roughly an eighth, because a one-week pulse is smoothed away by a two-week memory before it reaches the response curve. Two reversals to try. Drag \( s \) down to 1.4: the curve is still S-shaped, but the operating point has moved above the inflection, even spend becomes optimal, and <code>pulsed</code> now <em>loses</em> 0.55%. Raise the operating level to 1.0 and the same thing happens at \( s = 2 \). An S-shape is necessary for pulsing to pay; it is not sufficient. Where you sit on the curve decides it.</p>
+            </div>
+
+            <p>Three things follow that a taste menu cannot deliver. Pulsing pays only when the operating point is on the convex side of the inflection, so the recommendation depends jointly on the fitted exponent <em>and</em> the current spend level. The optimal block length is set by the adstock memory, not by taste: short pulses against a long kernel are filtered into a flat line, which is why <code>pulsed(1,&nbsp;1)</code> underperforms a 9-on/4-off block by seven-to-one at the defaults. And the sign of the recommendation can invert &mdash; a team that picks <code>pulsed</code> off a slide because pulsing sounds sophisticated destroys value whenever the fitted curvature says concave.</p>
+
+            <p>Which raises the stakes on a problem this blog has already documented. <a href="blog-saturation-or-fatigue.html">Curvature is the parameter an MMM identifies worst</a>: on a smooth historical schedule the exponent is recovered with a spread wide enough that a re-run could land anywhere from "nearly linear" to "severely saturated." That post's conclusion was that you need designed multi-level variation to pin the shape down. This post supplies the reason the effort is worth paying for. It is not that the curvature makes the ROI number prettier &mdash; it is that the curvature decides the <em>rhythm of the plan</em>, and the rhythm is worth a few percent of annual KPI at constant budget. The worst-identified parameter in the model is the one carrying the largest untaken decision.</p>
+
+            <div class="note">
+                <h4>💡 Pulsing hides the shape that justifies it</h4>
+                <p>There is a trap in the loop. A pulsed schedule visits the extremes of the response curve and skips the middle, so the observed spend&ndash;response pairs sit at two levels and a straight line through two points cannot reveal an inflection. A channel that has been pulsed for years therefore looks close to linear in its own history, and the fit will not recover the S-shape that made pulsing correct. The pulsing literature has made this point since the 1980s; the version relevant here is narrower and it is mine: the same designed-variation program that identifies curvature (three or more distinct held levels, blocks at least as long as the adstock memory &mdash; this framework's <code>flighting_design</code> states both requirements in its docstring) is what breaks the circularity. You cannot infer the rhythm from a history generated by a rhythm.</p>
+            </div>
+
+            <h2 id="chattering">The Optimum Nobody Can Run</h2>
+            <p>Here is where the classical literature has to be handled carefully, because its headline result is a warning, not a recipe. Feinberg (2001) took the pulsing question into continuous time and found that continuous-time models relying on strict response concavity "prescribe eventual spending at a constant rate," while under S-shaped response &mdash; the case where discrete analyses had suggested periodic optima &mdash; "continuous periodic optima cannot be supported." The continuum optimum degenerates: instead of a clean on/off cycle you get chattering, switching arbitrarily fast between extremes, which is not a media plan and not implementable by anything that buys inventory.</p>
+
+            <p>The honest reading is not that pulsing is a mirage. It is that the <em>continuous-time idealization</em> is the wrong model of a media decision, and the discrete-time result is the one that applies. Media is bought in weeks or flights; the buying unit is real, and the minimum implementable block is set by the same adstock memory that the framework already computes <a href="blog-carryover-experiment-timing.html">to space sequential experiments</a> &mdash; its experiment planner derives a washout as "the smallest <code>k</code> with <code>alpha**k &lt; threshold</code>" and notes that this "also sets the minimum flighting block length (a block shorter than the memory smears the contrast)." Constrain the schedule to implementable blocks and the pathology disappears, because chattering was an artifact of allowing infinitely fast switching. The figure above shows the same effect from the other side: push the dark-week cap to its maximum and the optimum becomes a 13-week blitz followed by a 13-week blackout, worth +16% &mdash; mathematically correct and commercially absurd. Constraints are not a compromise here. They are what makes the problem well-posed.</p>
+
+            <p>So the deliverable is a restricted, curvature-conditioned schedule &mdash; a block length, a duty cycle, a dark-week cap &mdash; not a Hamiltonian. That is a modest object. It is also strictly more than a per-channel scalar plus a dropdown, and it is derivable from parameters already in the posterior.</p>
+
+            <h2 id="dorfman-steiner">The Ratio Your Model Implies</h2>
+            <p>One more classical result deserves to be cashed out, because it converts the optimizer's output into the units the person approving the budget actually thinks in. Dorfman and Steiner (1954) showed that a firm setting price and advertising jointly should hold its advertising-to-sales ratio at the advertising elasticity of demand divided by the absolute price elasticity &mdash; equivalently, since the optimal price pins the Lerner margin at the reciprocal of the price elasticity, at the elasticity times the price-cost margin.</p>
+
+            <p>The per-channel version is a two-line extension, and it is mine rather than theirs, so here is the derivation in full. With profit \( \pi = (p-c)\,Q(A_1,\ldots,A_C) - \sum_c A_c \), the first-order condition for channel \( c \) is \( (p-c)\,\partial Q/\partial A_c = 1 \). Multiply through by \( A_c/(pQ) \) and the advertising elasticity \( \eta_c = (\partial Q/\partial A_c)(A_c/Q) \) appears:</p>
+            $$ \frac{A_c}{S} \;=\; m\,\eta_c, \qquad m = \frac{p-c}{p}, \quad S = pQ. $$
+            <p>Every channel's share of sales should equal its elasticity times the margin. The assumptions are visible and restrictive: channels enter separably, the margin is constant, the interior optimum exists (so the curve is concave there), and the margin form presumes price is also set optimally.</p>
+
+            <p>Notice what this benchmark is <em>not</em>. It is not new information. Rearranged, \( A_c/S = m\eta_c \) is identical to \( m \cdot \text{mROAS}_c = 1 \) &mdash; the marginal-profit funding line the framework already solves for in its breakeven mode, whose gradient is literally <code>-(value_per_kpi * marginals(s) - 1.0)</code> and whose docstring says it "funds each channel until its marginal return hits the breakeven line." The condition is in the code. What is missing is that this mode is not the default (the default spends a fixed budget, reallocating rather than sizing), and that nobody prints the result as a ratio. That matters more than it should: the advertising-to-sales ratio is the one number a CFO already benchmarks against a category norm, and stating the model's implication in that unit turns "trust our optimizer" into a falsifiable claim about the firm's own P&amp;L.</p>
+
+            <div class="interactive-box">
+                <h4>Dorfman&ndash;Steiner, per channel</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A six-channel portfolio with fitted saturating curves. The horizontal axis is each channel's Dorfman&ndash;Steiner benchmark share of sales, \( m\,\eta_c \), computed from its marginal response at current spend; the vertical axis is the share it actually gets. The diagonal is the optimum. Above the line is over-funded at the margin, below is under-funded. Both axes are logarithmic. Slide the contribution margin and watch channels change sides.</p>
+                <div class="control-row">
+                    <label>Contribution margin \( m \)</label>
+                    <input type="range" id="dsM" min="0.15" max="0.75" step="0.01" value="0.45">
+                    <span class="value" id="dsMVal">0.45</span>
+                </div>
+                <div class="chart-container chart-themed" id="dsChart" style="height:380px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Actual advertising / sales</span><span class="val" id="dsActual">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Dorfman&ndash;Steiner benchmark</span><span class="val" id="dsTarget">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Marginal profit per $1</span><span class="val" id="dsMarg">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Under-funded channels</span><span class="val" id="dsUnder">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At a 45% margin this plan spends 6.93% of sales on media where the fitted elasticities justify 6.20% &mdash; the spend-weighted marginal profit is $0.89 per dollar, so the portfolio is over-funded at the margin by roughly a tenth. But the aggregate hides the decision: retail media is <em>under</em>-funded and should be scaled, while print sits 3.7&times; above its benchmark. Raise the margin past 50.3% and the <em>aggregate</em> flips to under-funded while print stays more than three times over &mdash; which is why a media plan is not separable from the P&amp;L, and why the margin belongs in the optimizer rather than in a footnote.</p>
+            </div>
+
+            <h2 id="not-the-curse">Not the Optimizer's Curse</h2>
+            <p>There is a well-known family of critiques of budget optimizers that this post is deliberately not making, and the distinction is worth being explicit about because the two get conflated and the remedies are completely different.</p>
+
+            <p>That family attacks the <em>statistics of the argmax</em>. Optimize over noisy estimates and the winner is selected partly for being lucky, so the plan's projected uplift is biased upward and its composition is unstable across posterior draws &mdash; the <a href="blog-multiple-comparisons.html">winner's curse</a> applied to allocation instead of to coefficients. This framework takes that seriously: it re-optimizes per posterior draw to turn parameter uncertainty into decision uncertainty, reports the probability that the plan beats the current allocation, and prices the expected KPI "left on the table by committing to this single plan under parameter uncertainty." Those are the right instruments, and they all <em>accept the objective</em> and question the estimate.</p>
+
+            <p>This post questions the objective. Every claim above survives handing the optimizer the true response surface with zero uncertainty. Give me the exact kernel and the exact saturation curve and a window-summed objective still under-credits long-carryover channels by the mean lag over the window length, and still returns a flat plan when the true curvature makes a pulsed one better. Perfect knowledge does not fix a misspecified decision problem. The two critiques stack: you can have a well-calibrated posterior, honest decision-uncertainty reporting, and a plan that is confidently optimal for a question nobody asked.</p>
+
+            <h2 id="limits">What This Does Not Establish</h2>
+            <p>It does not establish that your channel should be pulsed. The switch is the fitted curvature, and that is the quantity a conventional MMM estimates least reliably &mdash; on smooth historical spend the exponent's posterior can straddle 1 with room to spare, in which case the honest output is a schedule recommendation reported <em>with its posterior</em>, and often the finding that the data cannot tell. A point-estimate exponent of 1.4 is not a mandate to go dark for four weeks.</p>
+
+            <p>It does not deliver an optimal control solution. The figure searches a deliberately restricted family &mdash; periodic on/off blocks that tile a year, under a dark-week cap &mdash; not the space of all schedules, and the true continuous-time optimum under S-shaped response does not exist in implementable form. Treat the block schedule as a better-than-flat heuristic conditioned on the fit, not as an optimum.</p>
+
+            <p>The window-edge tax is a property of the objective, not evidence about the world. It says the optimizer discards tail effect the model already estimated inside its lag window. It does not say the true tail is longer than <code>l_max</code>, and it emphatically does not license inflating brand's ROI by 22% &mdash; if the kernel is truncated at eight lags, effect beyond eight lags was never in the model to begin with, and that is a separate, harder problem about horizons and identification.</p>
+
+            <p>The Dorfman&ndash;Steiner benchmark is a first-order condition evaluated at the current point, not a solution. It presumes separable channels with no cross-effects, a constant margin, an interior concave optimum, and &mdash; for the margin form &mdash; that price is optimally set. Read it as a directional gauge and a communication device, not as a target to solve for.</p>
+
+            <p>Finally, all of the classical results cited here are monopoly results. Competitive response changes them, sometimes qualitatively, and none of the arithmetic in this post accounts for a rival reacting to your dark weeks.</p>
+
+            <h2 id="deliverable">A Schedule, Not a Vector</h2>
+            <p>The fix is unglamorous and mostly a matter of reading parameters the posterior already contains. Four changes, in rising order of effort.</p>
+
+            <p><strong>Credit the whole kernel.</strong> Either optimize a steady-state per-period rate rather than a window total, or weight each period's incremental contribution by the kernel mass that falls outside the window and add it back. Both are arithmetic on the fitted weights and neither requires a new posterior pass. Until one of them ships, report the tax: two numbers per channel, the mean lag and the window length, and their ratio.</p>
+
+            <p><strong>Print the curvature verdict next to the plan.</strong> The posterior for the Hill exponent, the inflection point in spend units, the current operating point relative to it, and the resulting recommendation &mdash; even spend, or a block schedule with a stated duty cycle. Concave posterior and flat plan is a consistent answer worth stating; S-shaped posterior and flat plan is an unexamined contradiction.</p>
+
+            <p><strong>Set block length from the memory, not from taste.</strong> The washout calculation already exists for experiment planning. Reuse it: minimum on-block and off-block at least the channel's memory, or the pulse is filtered away before it reaches the response curve.</p>
+
+            <p><strong>Print Dorfman&ndash;Steiner as a sanity check.</strong> Actual advertising-to-sales against elasticity times margin, per channel and in total. It costs one line of arithmetic on numbers the optimizer already has, it states the model's recommendation in the unit the budget is approved in, and when it disagrees violently with a category benchmark, that disagreement is a finding rather than an embarrassment.</p>
+
+            <p>None of this is a research program. It is the observation that a model with a state variable was asked a question with no time in it, and that the answer has been quietly deflating the channels whose whole point is that they keep working after the flight ends.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Adstock makes an MMM a dynamic system with a state, so its decision object is a policy over time. Optimizers return a per-channel scalar and delegate timing to a pattern menu that never reads the fit &mdash; "the model contributes the budgets, not the schedule shape," in the framework's own words.</li>
+                    <li>Nerlove&ndash;Arrow's dynamic correction is numerically negligible at MMM horizons: the discounting term is 0.3&ndash;2.4% of goodwill's user cost \( r+\delta \) for any plausible hurdle rate and any half-life a weekly model estimates. Discounting is not the problem; it only becomes one for the 18-month brand asset the model cannot see.</li>
+                    <li>A window-summed objective credits a dollar with only the kernel mass landing inside the window. The loss is exactly the kernel's mean lag divided by the window length &mdash; 22% for a six-week half-life over 13&nbsp;weeks against 5% for search, so brand must be 23% better at the margin just to tie. 46% if <code>l_max</code> is opened to 26 for real TV carryover.</li>
+                    <li>Uniform spend is optimal under a concave response (Sasieni) and pulsing under an S-shaped one (Mahajan&ndash;Muller). The Hill exponent is that switch, and its default prior <code>HalfNormal(1.5)</code> puts 50.5% of its mass on \( s \gt 1 \) &mdash; a coin flip on whether your flat plan is suboptimal, checked by nothing downstream.</li>
+                    <li>An S-shape is necessary but not sufficient: pulsing pays only when the operating point sits on the convex side of the inflection. At the figure's defaults, re-timing a fixed annual budget to 9 weeks on / 4 dark buys 3.6% more KPI, while the shipped <code>pulsed(1,&nbsp;1)</code> captures an eighth of it and <em>loses</em> money when the curvature says concave.</li>
+                    <li>The continuous-time optimum under S-shaped response chatters and cannot be implemented (Feinberg). The honest deliverable is a constrained block schedule with block length set by the adstock memory &mdash; not a Hamiltonian.</li>
+                    <li>Dorfman&ndash;Steiner's \( A_c/S = m\,\eta_c \) is the framework's own breakeven funding line in share-of-sales units. It adds no information and enormous legibility: it states the model's recommendation in the ratio a CFO already benchmarks.</li>
+                    <li>This is not the optimizer's curse. Every defect here survives an exactly known response surface, so decision-uncertainty reporting &mdash; per-draw re-optimization, expected regret, EVPI &mdash; cannot detect it. Those tools question the estimate; this questions the objective.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Nerlove, M., &amp; Arrow, K. J. (1962). <em>Optimal Advertising Policy Under Dynamic Conditions</em>. Economica, 29(114), 129&ndash;142.</li>
+                <li>Dorfman, R., &amp; Steiner, P. O. (1954). <em>Optimal Advertising and Optimal Quality</em>. The American Economic Review, 44(5), 826&ndash;836.</li>
+                <li>Sasieni, M. W. (1971). <em>Optimal Advertising Expenditure</em>. Management Science, 18(4, Part 2), P64&ndash;P72.</li>
+                <li>Mahajan, V., &amp; Muller, E. (1986). <em>Advertising Pulsing Policies for Generating Awareness for New Products</em>. Marketing Science, 5(2), 89&ndash;106.</li>
+                <li>Feinberg, F. M. (2001). <em>On Continuous-Time Optimal Advertising Under S-Shaped Response</em>. Management Science, 47(11), 1476&ndash;1487.</li>
+                <li>Sethi, S. P. (1977). <em>Dynamic Optimal Control Models in Advertising: A Survey</em>. SIAM Review, 19(4), 685&ndash;725.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        function alphaOf(halfLife) { return Math.pow(2, -1 / halfLife); }
+
+        // Geometric FIR kernel of length L, normalized to sum 1 (the framework's
+        // `normalize=True` default).
+        function kernel(halfLife, L) {
+            var a = alphaOf(halfLife), w = [], s = 0, k;
+            for (k = 0; k < L; k++) { w.push(Math.pow(a, k)); s += w[k]; }
+            for (k = 0; k < L; k++) { w[k] /= s; }
+            return w;
+        }
+
+        // ---------------------------------------------------------------------
+        // Figure 1: the window-edge tax.
+        // Loss = (1/T) * sum_{j=1..T} tail(min(j, L)), which equals meanLag / T
+        // whenever T >= L. Computed exactly so a window shorter than the kernel
+        // is handled too.
+        // ---------------------------------------------------------------------
+        function windowLoss(halfLife, L, T) {
+            var w = kernel(halfLife, L), tail = new Array(L + 1), k, j;
+            tail[L] = 0;
+            for (k = L - 1; k >= 0; k--) { tail[k] = tail[k + 1] + w[k]; }
+            var tot = 0;
+            for (j = 1; j <= T; j++) { tot += tail[Math.min(j, L)]; }
+            return tot / T;
+        }
+
+        var WE_REF_HALF = 0.7;   // paid search, retention 0.37
+        var WE_WINDOWS = [13, 26, 52];
+
+        BV.register(function () {
+            var p = BV.palette();
+            var hl = parseFloat(document.getElementById('weHalf').value);
+            var L = parseInt(document.getElementById('weL').value, 10);
+
+            var xs = BV.linspace(0.5, 12, 120);
+            var colors = [p.danger, p.warning, p.accent];
+            var traces = WE_WINDOWS.map(function (T, i) {
+                return {
+                    type: 'scatter', mode: 'lines', x: xs,
+                    y: xs.map(function (h) { return 100 * windowLoss(h, L, T); }),
+                    name: T + '-week window', line: { color: colors[i], width: 2.5 },
+                    hovertemplate: 'half-life %{x:.1f} wk<br>lost %{y:.1f}%<extra>' + T + ' wk</extra>'
+                };
+            });
+
+            var slow13 = windowLoss(hl, L, 13), slow52 = windowLoss(hl, L, 52);
+            var fast13 = windowLoss(WE_REF_HALF, L, 13);
+            traces.push({
+                type: 'scatter', mode: 'markers', x: [hl], y: [100 * slow13], showlegend: false,
+                marker: { color: p.danger, size: 14, symbol: 'diamond', line: { color: p.surface, width: 1.5 } },
+                hovertemplate: 'slow channel: %{y:.1f}% lost<extra></extra>'
+            });
+            traces.push({
+                type: 'scatter', mode: 'markers', x: [WE_REF_HALF], y: [100 * fast13], showlegend: false,
+                marker: { color: p.primaryDark, size: 13, symbol: 'circle', line: { color: p.surface, width: 1.5 } },
+                hovertemplate: 'search: %{y:.1f}% lost<extra></extra>'
+            });
+
+            var layout = BV.layout({
+                xaxis: { title: 'adstock half-life (weeks)', range: [0, 12.4] },
+                yaxis: { title: 'share of long-run effect lost (%)', range: [0, 72], ticksuffix: '%' },
+                legend: { orientation: 'h', y: 1.15, x: 0 },
+                margin: { l: 66, r: 20, t: 34, b: 50 },
+                shapes: [{
+                    type: 'line', x0: hl, x1: hl, y0: 0, y1: 100 * slow13,
+                    line: { color: p.muted, width: 1, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: WE_REF_HALF, y: 100 * fast13, xanchor: 'left', yshift: -16, xshift: 6,
+                    text: 'search', showarrow: false, font: { size: 11, color: p.primaryDark }
+                }]
+            });
+            Plotly.react('weChart', traces, layout, BV.config);
+
+            function pct(x) { return (100 * x).toFixed(1) + '%'; }
+            var s13 = document.getElementById('weSlow13');
+            s13.textContent = pct(slow13);
+            s13.className = 'val' + (slow13 > 0.15 ? ' warn' : '');
+            document.getElementById('weSlow52').textContent = pct(slow52);
+            var f13 = document.getElementById('weFast13');
+            f13.textContent = pct(fast13);
+            f13.className = 'val ok';
+            var tie = (1 - fast13) / Math.max(1 - slow13, 1e-9);
+            var tieEl = document.getElementById('weTie');
+            tieEl.textContent = '+' + (100 * (tie - 1)).toFixed(0) + '%';
+            tieEl.className = 'val' + (tie > 1.1 ? ' warn' : '');
+        });
+        BV.sliders([
+            { id: 'weHalf', value: 'weHalfVal', fmt: function (v) { return v.toFixed(1); } },
+            { id: 'weL', value: 'weLVal', fmt: function (v) { return String(Math.round(v)); } }
+        ], BV.redraw);
+
+        // ---------------------------------------------------------------------
+        // Figure 2: curvature decides the rhythm.
+        // 52-week horizon, cyclic adstock convolution (so window edges do not
+        // contaminate the timing question), fixed total budget. Search over
+        // periodic on/off block cycles whose length divides 52.
+        // ---------------------------------------------------------------------
+        var CV_T = 52, CV_L = 8;
+        var CV_DIVISORS = (function () {
+            var d = [];
+            for (var i = 1; i <= CV_T; i++) { if (CV_T % i === 0) d.push(i); }
+            return d;
+        })();
+
+        function cvSchedule(b, off) {
+            var cyc = b + off, x = new Array(CV_T), on = 0, t;
+            for (t = 0; t < CV_T; t++) {
+                var v = (t % cyc) < b ? 1 : 0;
+                x[t] = v; on += v;
+            }
+            if (on === 0) return null;
+            for (t = 0; t < CV_T; t++) { x[t] = x[t] * CV_T / on; }
+            return x;
+        }
+        function cvAdstock(x, w) {
+            var a = new Array(CV_T), t, k;
+            for (t = 0; t < CV_T; t++) {
+                var s = 0;
+                for (k = 0; k < w.length; k++) { s += w[k] * x[((t - k) % CV_T + CV_T) % CV_T]; }
+                a[t] = s;
+            }
+            return a;
+        }
+        function hill(a, h, s) { return a <= 0 ? 0 : Math.pow(a, s) / (Math.pow(a, s) + Math.pow(h, s)); }
+        function cvTotal(x, w, h, s) {
+            var a = cvAdstock(x, w), tot = 0;
+            for (var t = 0; t < CV_T; t++) { tot += hill(a[t], h, s); }
+            return tot;
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var s = parseFloat(document.getElementById('cvS').value);
+            var hl = parseFloat(document.getElementById('cvHalf').value);
+            var lvl = parseFloat(document.getElementById('cvLvl').value);
+            var maxOff = parseInt(document.getElementById('cvOff').value, 10);
+
+            var w = kernel(hl, CV_L);
+            var h = 1 / lvl;                  // mean adstocked level fixed at 1.0
+            var evenX = cvSchedule(1, 0);
+            var evenV = cvTotal(evenX, w, h, s);
+            var p11V = cvTotal(cvSchedule(1, 1), w, h, s);
+
+            var bestV = -Infinity, bestB = 1, bestOff = 0;
+            CV_DIVISORS.forEach(function (cyc) {
+                for (var b = 1; b <= cyc; b++) {
+                    var off = cyc - b;
+                    if (off > maxOff) continue;
+                    var x = cvSchedule(b, off);
+                    if (!x) continue;
+                    var v = cvTotal(x, w, h, s);
+                    if (v > bestV * (1 + 1e-12)) { bestV = v; bestB = b; bestOff = off; }
+                }
+            });
+            var bestX = cvSchedule(bestB, bestOff);
+            var bestA = cvAdstock(bestX, w);
+            var aMin = Math.min.apply(null, bestA), aMax = Math.max.apply(null, bestA);
+            var infl = s > 1 ? h * Math.pow((s - 1) / (s + 1), 1 / s) : 0;
+
+            // --- left panel: the response curve ---
+            var as = BV.linspace(0, 4, 180);
+            var traces = [{
+                type: 'scatter', mode: 'lines', x: as, y: as.map(function (a) { return hill(a, h, s); }),
+                name: 'response f(a)', line: { color: p.muted, width: 2 },
+                xaxis: 'x', yaxis: 'y', hovertemplate: 'a=%{x:.2f}<br>f=%{y:.3f}<extra></extra>'
+            }];
+            var visited = BV.linspace(aMin, aMax, 60);
+            traces.push({
+                type: 'scatter', mode: 'lines', x: visited,
+                y: visited.map(function (a) { return hill(a, h, s); }),
+                name: 'range the plan visits', line: { color: p.primary, width: 5 },
+                xaxis: 'x', yaxis: 'y', hoverinfo: 'skip'
+            });
+
+            // --- right panel: the schedules ---
+            var weeks = [];
+            for (var t = 0; t < CV_T; t++) { weeks.push(t + 1); }
+            traces.push({
+                type: 'scatter', mode: 'lines', x: weeks, y: bestX, name: 'best block schedule',
+                line: { color: p.primary, width: 2.5, shape: 'hv' }, xaxis: 'x2', yaxis: 'y2',
+                hovertemplate: 'week %{x}<br>%{y:.2f}× average<extra></extra>'
+            });
+            traces.push({
+                type: 'scatter', mode: 'lines', x: weeks, y: evenX, name: 'even',
+                line: { color: p.accent, width: 2, dash: 'dash' }, xaxis: 'x2', yaxis: 'y2', hoverinfo: 'skip'
+            });
+            traces.push({
+                type: 'scatter', mode: 'lines', x: weeks, y: cvSchedule(1, 1), name: 'pulsed(1,1)',
+                line: { color: p.warning, width: 1.6, dash: 'dot' }, xaxis: 'x2', yaxis: 'y2', hoverinfo: 'skip'
+            });
+
+            var shapes = [
+                { type: 'line', xref: 'x', yref: 'y', x0: 1, x1: 1, y0: 0, y1: 1, line: { color: p.accent, width: 1, dash: 'dash' } }
+            ];
+            var annos = [
+                { xref: 'x', yref: 'y', x: 1, y: 1, yanchor: 'top', xanchor: 'left', xshift: 4, text: 'mean level', showarrow: false, font: { size: 10, color: p.accent } }
+            ];
+            if (s > 1) {
+                shapes.push({ type: 'line', xref: 'x', yref: 'y', x0: infl, x1: infl, y0: 0, y1: 1, line: { color: p.danger, width: 1, dash: 'dot' } });
+                annos.push({ xref: 'x', yref: 'y', x: infl, y: 0.06, yanchor: 'bottom', xanchor: 'right', xshift: -4, text: 'inflection', showarrow: false, font: { size: 10, color: p.danger } });
+            }
+
+            var layout = BV.layout({
+                xaxis: { title: 'adstocked level (× mean)', domain: [0, 0.40], range: [0, 4] },
+                yaxis: { title: 'response', domain: [0, 1], range: [0, 1.02] },
+                xaxis2: { title: 'week', domain: [0.53, 1], anchor: 'y2', range: [1, CV_T] },
+                yaxis2: { title: 'weekly spend (× average)', anchor: 'x2', domain: [0, 1], rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.17, x: 0 },
+                margin: { l: 56, r: 16, t: 40, b: 50 },
+                shapes: shapes, annotations: annos
+            });
+            Plotly.react('cvChart', traces, layout, BV.config);
+
+            var gain = bestV / evenV - 1, gp11 = p11V / evenV - 1;
+            document.getElementById('cvBest').textContent =
+                bestOff === 0 ? 'even (always on)' : bestB + ' on / ' + bestOff + ' dark';
+            var gEl = document.getElementById('cvGain');
+            gEl.textContent = (gain >= 0 ? '+' : '') + (100 * gain).toFixed(2) + '%';
+            gEl.className = 'val' + (gain > 0.005 ? ' ok' : '');
+            var pEl = document.getElementById('cvP11');
+            pEl.textContent = (gp11 >= 0 ? '+' : '') + (100 * gp11).toFixed(2) + '%';
+            pEl.className = 'val' + (gp11 < -0.001 ? ' warn' : '');
+            var vEl = document.getElementById('cvVerdict');
+            if (s <= 1) { vEl.textContent = 'concave — even is optimal'; vEl.className = 'val'; }
+            else if (gain <= 0.005) { vEl.textContent = 'S-shaped, but above inflection'; vEl.className = 'val'; }
+            else { vEl.textContent = 'pulsing pays'; vEl.className = 'val ok'; }
+        });
+        BV.sliders([
+            { id: 'cvS', value: 'cvSVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'cvHalf', value: 'cvHalfVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'cvLvl', value: 'cvLvlVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'cvOff', value: 'cvOffVal', fmt: function (v) { return String(Math.round(v)); } }
+        ], BV.redraw);
+
+        // ---------------------------------------------------------------------
+        // Figure 3: Dorfman–Steiner per channel.
+        // Michaelis–Menten curves: contribution K*A/(A+h), mROAS = K*h/(A+h)^2.
+        // ---------------------------------------------------------------------
+        var DS_BASE = 78000;
+        var DS_CH = [
+            { name: 'Search', A: 1200, K: 12000, h: 2400 },
+            { name: 'Social', A: 800, K: 9000, h: 3200 },
+            { name: 'Linear TV', A: 2600, K: 42000, h: 14000 },
+            { name: 'Online video', A: 900, K: 15000, h: 6000 },
+            { name: 'Retail media', A: 600, K: 6000, h: 800 },
+            { name: 'Print', A: 500, K: 3000, h: 4000 }
+        ];
+        var DS_STATE = (function () {
+            var contrib = 0, spend = 0;
+            DS_CH.forEach(function (c) {
+                c.contrib = c.K * c.A / (c.A + c.h);
+                c.mroas = c.K * c.h / Math.pow(c.A + c.h, 2);
+                contrib += c.contrib; spend += c.A;
+            });
+            var sales = DS_BASE + contrib;
+            DS_CH.forEach(function (c) {
+                c.share = c.A / sales;          // actual advertising / sales
+                c.eta = c.mroas * c.A / sales;  // advertising elasticity of demand
+            });
+            return { sales: sales, spend: spend };
+        })();
+
+        BV.register(function () {
+            var p = BV.palette();
+            var m = parseFloat(document.getElementById('dsM').value);
+
+            var xs = [], ys = [], labels = [], colors = [], under = 0;
+            DS_CH.forEach(function (c) {
+                var target = m * c.eta;
+                xs.push(100 * target); ys.push(100 * c.share); labels.push(c.name);
+                var isUnder = m * c.mroas > 1;
+                if (isUnder) under++;
+                colors.push(isUnder ? p.primary : p.danger);
+            });
+
+            var diag = [0.1, 4];
+            var traces = [
+                {
+                    type: 'scatter', mode: 'lines', x: diag, y: diag, name: 'Dorfman–Steiner optimum',
+                    line: { color: p.muted, width: 1.5, dash: 'dash' }, hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'markers+text', x: xs, y: ys, text: labels,
+                    textposition: 'top center', textfont: { size: 11, color: p.text },
+                    name: 'channels', showlegend: false,
+                    marker: { color: colors, size: 14, line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: '%{text}<br>benchmark %{x:.2f}% of sales<br>actual %{y:.2f}%<extra></extra>'
+                }
+            ];
+
+            var layout = BV.layout({
+                xaxis: {
+                    title: 'benchmark share of sales, m × elasticity (%)', type: 'log',
+                    range: [Math.log10(0.1), Math.log10(4.2)], tickvals: [0.1, 0.25, 0.5, 1, 2, 4],
+                    ticktext: ['0.1%', '0.25%', '0.5%', '1%', '2%', '4%']
+                },
+                yaxis: {
+                    title: 'actual share of sales (%)', type: 'log',
+                    range: [Math.log10(0.1), Math.log10(4.2)], tickvals: [0.1, 0.25, 0.5, 1, 2, 4],
+                    ticktext: ['0.1%', '0.25%', '0.5%', '1%', '2%', '4%']
+                },
+                legend: { orientation: 'h', y: 1.14, x: 0 },
+                margin: { l: 66, r: 20, t: 34, b: 54 },
+                annotations: [
+                    { x: Math.log10(0.16), y: Math.log10(2.6), xanchor: 'left', text: 'over-funded at the margin', showarrow: false, font: { size: 11, color: p.danger } },
+                    { x: Math.log10(1.5), y: Math.log10(0.13), xanchor: 'left', text: 'under-funded', showarrow: false, font: { size: 11, color: p.primary } }
+                ]
+            });
+            Plotly.react('dsChart', traces, layout, BV.config);
+
+            var weighted = 0, targetTotal = 0;
+            DS_CH.forEach(function (c) { weighted += m * c.mroas * c.A; targetTotal += m * c.eta; });
+            weighted = weighted / DS_STATE.spend;
+
+            document.getElementById('dsActual').textContent =
+                (100 * DS_STATE.spend / DS_STATE.sales).toFixed(2) + '%';
+            document.getElementById('dsTarget').textContent = (100 * targetTotal).toFixed(2) + '%';
+            var mg = document.getElementById('dsMarg');
+            mg.textContent = '$' + weighted.toFixed(2);
+            mg.className = 'val' + (weighted >= 1 ? ' ok' : ' warn');
+            var uEl = document.getElementById('dsUnder');
+            uEl.textContent = under + ' of ' + DS_CH.length;
+            uEl.className = 'val' + (under > 0 ? ' ok' : '');
+        });
+        BV.sliders([
+            { id: 'dsM', value: 'dsMVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+    })();
+    </script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Randomization Is Already in the Auction | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="The front door through impressions looks tailor-made for advertising, is now formally testable, and fails on ad data because targeting confounds the impression-outcome link. The escape hatch that works was performed by the platform's budget pacer and logged.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-auction-throttling-frontdoor.html">
+    <meta property="og:title" content="The Randomization Is Already in the Auction">
+    <meta property="og:description" content="The front-door escape hatch is now falsifiable and fails on ad data. The randomization that works was already performed by the platform's pacing system — the question is whether it is logged for you.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-auction-throttling-frontdoor.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Randomization Is Already in the Auction">
+    <meta name="twitter:description" content="The front-door escape hatch is now falsifiable and fails on ad data. The randomization that works was already performed by the platform's pacing system — the question is whether it is logged for you.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-auction-throttling-frontdoor.html",
+          "name": "The Randomization Is Already in the Auction | MMM Framework",
+          "description": "The front door through impressions looks tailor-made for advertising, is now formally testable, and fails on ad data because targeting confounds the impression-outcome link. The escape hatch that works was performed by the platform's budget pacer and logged.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-auction-throttling-frontdoor.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-auction-throttling-frontdoor.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "The Randomization Is Already in the Auction",
+          "datePublished": "2026-07-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-auction-throttling-frontdoor.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-auction-throttling-frontdoor.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "The Randomization Is Already in the Auction",
+              "item": "https://redam94.github.io/mmm-framework/blog-auction-throttling-frontdoor.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#hatch">The Hatch Everyone Reaches For</a></li>
+                <li><a href="#testable">The Assumptions Stopped Being Untestable</a></li>
+                <li><a href="#one-arrow">The Arrow Nobody Draws</a></li>
+                <li><a href="#price">What the Broken Hatch Costs</a></li>
+                <li><a href="#pacer">The Randomization Nobody Designed</a></li>
+                <li><a href="#disclosure">The Binding Constraint Is a Logging Decision</a></li>
+                <li><a href="#estimand">A LATE Is Not a Budget</a></li>
+                <li><a href="#framework">What Is Actually Shipped</a></li>
+                <li><a href="#limits">What This Does Not Establish</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">The Randomization Is Already in the Auction</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-24">July 24, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Causal inference</span>
+            </p>
+            <p class="lead">When an advertiser cannot randomize, the escape hatch a well-trained analyst reaches for is Pearl's front door: spend causes impressions, impressions cause conversions, so identify the effect through the chain and let the unobserved demand confounder do its worst. The structure looks tailor-made for media, and the usual objection &mdash; that its assumptions are untestable, so we argue plausibility and move on &mdash; stopped being true in 2022. Bhattacharya and Nabi showed the front-door model implies Verma constraints that a dataset with a suitable auxiliary variable can be tested against. That is very bad news for this particular hatch, because the reason it fails on advertising data is nameable, structural, and the same mechanism three other posts in this series keep running into: the platform chooses <em>which</em> impressions your budget buys, and it chooses them by predicted response. That single arrow &mdash; audience intent into impressions &mdash; breaks the condition the front door needs most. Meanwhile a real, machine-generated randomization has been running inside the same auction the whole time. Budget pacing throttles campaigns by drawing them into a random subset of auctions each period, and Gui, Nair, and Niu showed that the logged participation probabilities identify a local treatment effect: 110% conversion lift where naive observational methods on the same data return 600%. The uncomfortable part is what that implies. The one observational method that works needs a number only the publisher holds, which makes the binding constraint on non-experimental ad measurement a disclosure decision rather than an econometric one.</p>
+
+            <h2 id="hatch">The Hatch Everyone Reaches For</h2>
+            <p>Start with why the front door is tempting, because the appeal is not naive. The dominant confounder in media measurement is unobserved demand: planners raise budgets ahead of demand they can forecast, so spend and sales share a cause nobody measures. Back-door adjustment cannot touch it, and dropping a demand proxy into the control set does not partially fix it either &mdash; the argument of <a href="blog-demand-proxy-proximal.html">a companion post</a>. The front-door criterion is one of the few graphical results that <em>survives</em> exactly this situation. Pearl's original statement (1995, and §3.3.2 of <em>Causality</em>) identifies \( P(y \mid do(t)) \) through a mediator set, nonparametrically, even when treatment and outcome are confounded by something unmeasured. If it applied, it would be the single most valuable identification result in the field.</p>
+
+            <p>And the media chain seems to instantiate it perfectly. You set a budget; the budget buys impressions; impressions cause conversions. The mediator is measured to the individual event, at higher resolution than almost anything else in the data. Write it down and the three conditions look like bookkeeping rather than assumptions:</p>
+
+            <div class="definition">
+                <h4>Definition: the front-door criterion</h4>
+                <p>A mediator set \( M \) identifies the effect of \( T \) on \( Y \) when three things hold. <strong>(a)</strong> \( M \) intercepts every directed path from \( T \) to \( Y \) &mdash; there is no unmediated direct effect. <strong>(b)</strong> There is no unblocked back-door path from \( T \) to \( M \) &mdash; treatment and mediator are unconfounded. <strong>(c)</strong> Every back-door path from \( M \) to \( Y \) is blocked by conditioning on \( T \) &mdash; the mediator and the outcome share no cause that survives holding treatment fixed.</p>
+                <p>Under (a)&ndash;(c) the effect factorizes into two estimable pieces: how much \( T \) moves \( M \), and how much \( M \) moves \( Y \) at fixed \( T \). Unmeasured \( T \)&ndash;\( Y \) confounding is irrelevant, which is the whole point.</p>
+            </div>
+
+            <p>Condition (a) is a real constraint &mdash; a spend increase that shifts shelf placement or a sales team's attention reaches the outcome without an impression &mdash; but for a pure digital campaign it is close to defensible. Condition (b) has a failure mode people do notice: anything driving both budget and auction supply, like a holiday calendar. Condition (c) is the one that gets waved through, because it reads as innocuous. Impressions and conversions sharing a cause, <em>after</em> holding spend fixed? Surely at a fixed budget, an impression is an impression.</p>
+
+            <p>It is worth noting what the literature has and has not relaxed here, because the pattern is instructive. Fulcher, Shpitser, Marealle, and Tchetgen Tchetgen (2020) give a <em>generalized</em> front-door criterion that drops the no-direct-effect requirement, identifying a population intervention indirect effect without assuming condition&nbsp;(a). Useful &mdash; and it weakens the assumption that is not the problem. Their identification still needs the mediator to be free of the confounding that afflicts the treatment&ndash;outcome pair. Condition (c) is load-bearing in every version of the result.</p>
+
+            <h2 id="testable">The Assumptions Stopped Being Untestable</h2>
+            <p>Before dismantling condition (c), it is worth being precise about the epistemic situation, because it changed recently and most practice has not caught up. The received wisdom about the front door is that its assumptions are unfalsifiable: they constrain a causal graph, not a joint distribution, so no dataset can contradict them and the best you can do is argue that the story is plausible. That was never quite right, and Bhattacharya and Nabi (2022) made the correction explicit. Their abstract states that the front-door model's assumptions &mdash; the existence of a full mediator and its freedom from the confounding that afflicts the treatment&ndash;outcome pair &mdash; "are often deemed implausible," and that "under mild conditions involving an auxiliary variable, the assumptions encoded in the front-door model (and simple extensions of it) may be tested via generalized equality constraints a.k.a Verma constraints." They propose two goodness-of-fit tests on that basis.</p>
+
+            <div class="definition">
+                <h4>Definition: a Verma constraint</h4>
+                <p>Most graphical models constrain the observed distribution only through conditional independences. Verma and Pearl (1990) found that latent-variable graphs can imply a stronger kind of restriction: a <em>reweighted</em> version of the joint distribution &mdash; one factor divided out &mdash; satisfies an independence that the raw distribution does not. Because the constraint is an equality that the data either satisfy or violate, it makes part of a latent structure <strong>falsifiable</strong>. The front-door model, with one extra observed variable in the right position, implies such a constraint.</p>
+            </div>
+
+            <p>So the front door is no longer in the comfortable category of "assumptions we cannot check." It is in the uncomfortable category of "assumptions we could check, with the right auxiliary variable in the dataset, and mostly have not." That reframes the analyst's obligation. Reaching for the front door because randomization is unavailable is now a choice to skip a test, not a choice forced by the mathematics.</p>
+
+            <div class="warning">
+                <h4>⚠️ What follows is a structural argument, not a published test result</h4>
+                <p>Bhattacharya and Nabi establish <em>testability</em> under conditions. They do not study advertising, and they do not claim the front door fails on ad data. The argument in the next section &mdash; that platform targeting breaks condition&nbsp;(c) &mdash; is mine: it is a claim about which arrows belong in an advertising DAG, supported by a simulation and by the divergent-delivery literature &mdash; Braun and Schwartz (2025) document the delivery algorithm reshaping who sees what within a running experiment &mdash; not by a Verma-constraint test run on real advertiser data. As far as I know nobody has published that test. The distinction matters, and the honest version of the claim is "here is a graph in which the front door provably fails, and here is why I think advertising lives in it" &mdash; not "the front door has been falsified for advertising."</p>
+            </div>
+
+            <h2 id="one-arrow">The Arrow Nobody Draws</h2>
+            <p>Here is the arrow. A modern ad platform does not sell you a fixed quantity of undifferentiated impressions. It runs an auction per opportunity and decides, per opportunity, whether your campaign should participate and what to bid &mdash; scoring each opportunity against a predicted-response model. That means the <em>composition</em> of the impressions your budget buys is chosen by an algorithm optimizing on predicted conversion. Hold spend perfectly fixed and the platform will still deliver systematically higher-intent impressions in weeks when intent is high, because that is what optimizing delivery <em>is</em>. Audience intent therefore causes impressions. It also, obviously, causes conversions.</p>
+
+            <p>Those two facts put an open back-door path between the mediator and the outcome: impressions ← intent → conversions. Conditioning on spend does not close it, because intent is not on the spend path. Condition (c) fails &mdash; not marginally, but by construction, in the mechanism that makes performance advertising work. This is the same mechanism that <a href="blog-platform-divergent-delivery.html">breaks a randomized creative test from the inside</a>. There, divergent delivery confounds a comparison the analyst <em>did</em> randomize; here it invalidates the identification result you reach for when you <em>cannot</em>. One design fact, two failures, which is why it belongs on the graph rather than in the assumptions.</p>
+
+            <p>The framework has a shipped check for this. <code>frontdoor_criterion</code> in <code>dag_model_builder/identification.py</code> implements all three conditions against a declared DAG: condition (a) by enumerating directed treatment&rarr;outcome paths and reporting any that bypass the mediator set, condition (b) by looking for an unblocked back-door path from treatment to each mediator, and condition (c) by testing whether every mediator&rarr;outcome back-door path is blocked by \( \{T\} \). Feed it the advertising graph above and it returns <code>identifiable=False</code>, naming the culprit: <em>"Back-door path from mediator 'impr' to the outcome is not closed by conditioning on the treatment (impr &larr; intent &rarr; conv)."</em> The figure below runs the same three checks, arrow by arrow.</p>
+
+            <div class="interactive-box">
+                <h4>The criterion falsifying, one arrow at a time</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The chain <strong>Spend &rarr; Impressions &rarr; Conversions</strong> is always present. Toggle the arrows an ad platform actually adds. Each condition is evaluated by the same logic the shipped <code>frontdoor_criterion</code> uses, and the offending edges turn red. Watch what happens with <em>one</em> targeting arrow versus both.</p>
+                <div class="control-row">
+                    <label>Platform targeting</label>
+                    <button type="button" class="viz-btn" id="fdTgt">Intent &rarr; Impressions</button>
+                    <button type="button" class="viz-btn" id="fdAud">Intent &rarr; Conversions</button>
+                </div>
+                <div class="control-row">
+                    <label>Other realism</label>
+                    <button type="button" class="viz-btn" id="fdDir">Spend &rarr; Conversions (direct)</button>
+                    <button type="button" class="viz-btn" id="fdPace">Season &rarr; Spend &amp; Impressions</button>
+                </div>
+                <div class="chart-container chart-themed" id="fdChart" style="height:330px;"></div>
+                <p id="fdNote" style="font-size:0.88rem;color:var(--color-text-muted);font-style:italic;margin:0.2rem 0 0.9rem;">&mdash;</p>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">(a) mediator intercepts</span><span class="val" id="fdA">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">(b) T&ndash;M unconfounded</span><span class="val" id="fdB">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">(c) M&ndash;Y closed by T</span><span class="val" id="fdC">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Front-door verdict</span><span class="val" id="fdV">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">The trap is in the middle: <strong>either</strong> targeting arrow alone leaves the front door intact, and each one alone is easy to concede in a meeting. Only both together open the mediator&ndash;outcome back door &mdash; and both together are the definition of optimized delivery. The seasonality toggle breaks a different condition, (b), which is the failure people <em>do</em> anticipate.</p>
+            </div>
+
+            <h2 id="price">What the Broken Hatch Costs</h2>
+            <p>A failed graphical criterion is a verdict, not a magnitude, and "technically unidentified" and "unusable" are different claims. So plant a world and estimate it with the same three estimators the framework ships, re-implemented in the browser so you can move the dial. Weekly demand \( A_t \) is unobserved; the planner chases it, so spend responds to it; the platform's optimizer converts intent into better impressions at the same spend, which is the targeting arrow with strength \( \lambda \); and demand also lifts conversions directly:</p>
+
+            $$ S_t = \kappa A_t + \varepsilon^S_t, \qquad M_t = a\,\pi_t S_t + \lambda A_t + \varepsilon^M_t, \qquad Y_t = b\,M_t + \theta A_t + \varepsilon^Y_t. $$
+
+            <p>Here \( \pi_t \) is the pacing system's participation probability, drawn independently of demand &mdash; it will matter shortly. The causal quantities are \( b \) (conversions per impression) and \( ba\bar\pi \) (conversions per dollar of spend). Three estimators get a turn: a naive regression of conversions on spend, the shipped linear front-door estimator, and a two-stage least squares fit that uses the logged participation probability as an instrument. Each is scored against <em>its own</em> causal target, so the honest reading of every bar is "how many times the truth."</p>
+
+            <div class="interactive-box">
+                <h4>The estimate ladder</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">4,000 simulated weeks, seeded. Each bar is an estimate divided by the effect it is trying to measure, with a 95% interval; <strong>1.0 is the truth</strong>. Drag the targeting strength &lambda; from zero &mdash; a platform that does not optimize composition &mdash; upward. Watch which bar moves.</p>
+                <div class="control-row">
+                    <label>Targeting strength &lambda;</label>
+                    <input type="range" id="ladLam" min="0" max="1.5" step="0.05" value="0.9">
+                    <span class="value" id="ladLamVal">0.90</span>
+                </div>
+                <div class="chart-container chart-themed" id="ladChart" style="height:300px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Naive regression</span><span class="val" id="ladN">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Front door</span><span class="val" id="ladF">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Throttling instrument</span><span class="val" id="ladI">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="ladV">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At &lambda;&nbsp;=&nbsp;0 the front door does exactly what it advertises: 1.03&times; the truth while the naive regression sits at 2.6&times;. At the default &lambda;&nbsp;=&nbsp;0.9 it reads 1.63&times; &mdash; a 63% overstatement with a confidence interval that excludes the truth by a mile &mdash; and by &lambda;&nbsp;=&nbsp;1.5 it is 2.07&times;, most of the way back to the naive number it was supposed to rescue. The throttling instrument holds at 0.99&times; throughout, because participation is randomized with respect to demand no matter how clever the targeting gets.</p>
+            </div>
+
+            <p>Two things in that figure matter more than the headline. The first is the shape of the failure: the front door does not degrade gracefully into "somewhat biased," it walks back toward the naive estimate as the platform gets better at its job &mdash; so the method is least trustworthy precisely on the performance channels where the money is. The second is the direction. The bias is <em>upward</em>, and not by luck: the same latent demand that made the naive estimate flattering also makes the mediator look more productive than it is. Every rung of the ladder is contaminated by the same variable in the same direction, so if you were hoping the front door would at least bound the answer from the other side, it does not.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Which factor of the product breaks, and when</summary>
+                <div class="deep-dive-body">
+                    <p>The linear front-door estimate is a product of two regression coefficients: \( \hat a \), the coefficient on spend in \( M \sim S \), and \( \hat b \), the coefficient on impressions in \( Y \sim M + S \). Under the DGP above, with independent errors and the pacing factor held at its mean for legibility,</p>
+                    $$ \hat a \;\approx\; a\bar\pi + \lambda\,\frac{\mathrm{Cov}(A, S)}{\mathrm{Var}(S)} \;=\; a\bar\pi + \lambda\,\frac{\kappa\sigma_A^2}{\kappa^2\sigma_A^2 + \sigma_S^2}. $$
+                    <p>(The multiplicative \( \pi_t S_t \) term contributes a further small finite-sample wedge that is not the point here.) The first stage is biased only when the targeting arrow \( \lambda \) and the demand-chasing arrow \( \kappa \) are <em>both</em> nonzero &mdash; a product of two mechanisms, each individually deniable. The second stage is worse behaved. Regressing \( Y \) on \( (M, S) \) while omitting \( A \) gives \( \hat b \to b + \theta\,\delta_M \), where \( \delta_M \) is the coefficient on \( M \) in the auxiliary projection \( A \sim M + S \). When \( \lambda = 0 \), demand affects impressions only through spend, so \( A \perp M \mid S \), hence \( \delta_M = 0 \) and \( \hat b \) is consistent. When \( \lambda \gt 0 \) it is not.</p>
+                    <p>So both factors are consistent if and only if \( \lambda = 0 \), holding \( \kappa \) and \( \theta \) fixed. The single arrow that decides whether the front door works is the one from audience intent into impressions &mdash; which is to say, whether the platform optimizes delivery. There is no dial for \( \kappa \) in the figure, but running the same code with the demand-chasing arrow deleted (\( \kappa = 0 \), \( \lambda = 0.9 \)) gives a naive spend regression at 1.14&times; the truth and a front-door estimate at 1.34&times;. When there is no treatment&ndash;outcome confounding to escape, the escape hatch is the <em>worse</em> of the two.</p>
+                </div>
+            </details>
+
+            <h2 id="pacer">The Randomization Nobody Designed</h2>
+            <p>Now the good news, from an unexpected direction. Every campaign with a budget cap and a duration needs its spending spread across the period rather than exhausted in the first hour, and the standard engineering solution is not a queue or a bid rate limit &mdash; it is <strong>probabilistic throttling</strong>. Agarwal, Ghosh, Wei, and You describe the mechanism in LinkedIn's production pacing system: forecast eligible traffic, compute how much budget should be spent per interval, and hit that target by admitting the campaign to a random subset of eligible auctions. Gui, Nair, and Niu (2022) formalize what that means for measurement, and their framing is the whole argument in one sentence: the variation "pertains to auction throttling, a probabilistic method of budget pacing that is widely used to spread an ad-campaign's budget over its deployed duration," implemented "by computing a participation probability based on the campaign's budget spending rate and then including the campaign in a random subset of available ad-auctions each period according to this probability."</p>
+
+            <div class="definition">
+                <h4>Definition: participation probability</h4>
+                <p>The number \( \pi_t \) the pacing system computes for a campaign in period \( t \): the probability that the campaign is entered into any given eligible auction during that period. It is a function of the campaign's own budget-spending rate &mdash; how far ahead or behind pace it is &mdash; not of the individual user's characteristics. Given \( \pi_t \), the coin flip that decides whether the campaign competes for <em>this</em> opportunity is independent of that opportunity's conversion propensity. That independence is the identifying variation.</p>
+            </div>
+
+            <p>This is not a natural experiment you have to argue for. It is a randomization performed by software, for an unrelated operational reason, with a known probability that the system already has to compute in order to function. Gui, Nair, and Niu show that "access to logged-participation probabilities enables identifying the local average treatment effect (LATE) in the ad-campaign," give an estimator and a bootstrap, and apply it to campaigns from an e-commerce advertising platform. Their result is the number this post's title is really about: <em>"Our estimated conversion lift is 110%, a more plausible number than 600%, the conversion lifts estimated using naive observational methods."</em> Those two numbers are the distance between a randomization you can find and a correlation you can compute. The 600% end of that gap has its own literature and its own <a href="blog-activity-bias.html">post in this series</a>; what is new here is that the fix did not require running an experiment.</p>
+
+            <p>The nearest relative is ghost ads (Johnson, Lewis, and Nubbemeyer, 2017), which also extracts a counterfactual from inside the delivery system by logging which control users <em>would</em> have been served. The difference is where the burden sits: ghost ads need the publisher to build measurement infrastructure and the advertiser to run a study, while throttling needs neither. The mechanism exists because campaigns need pacing, the probability exists because the pacer needs it, and the only missing step is persistence.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Why throttling gives a LATE and not an ATE</summary>
+                <div class="deep-dive-body">
+                    <p>Let \( Z \) be the pacing draw, \( Z \sim \mathrm{Bernoulli}(\pi_t) \), and \( D \) the indicator that the user actually saw the ad. Two features make this a textbook instrument. First, exogeneity: \( \pi_t \) is computed from the campaign's spend rate, so conditional on \( \pi_t \) the draw is independent of the opportunity's potential outcomes. Second, and unusually clean, <strong>one-sided noncompliance</strong>: \( Z = 0 \) mechanically forces \( D = 0 \), because a campaign not in the auction cannot win it. There are no defiers to assume away &mdash; monotonicity holds by construction rather than by argument, which is rare.</p>
+                    <p>The Wald ratio \( \big(E[Y \mid Z{=}1] - E[Y \mid Z{=}0]\big) \big/ \big(E[D \mid Z{=}1] - E[D \mid Z{=}0]\big) \) then recovers the average effect among compliers (Imbens and Angrist, 1994). Under one-sided noncompliance the complier set is the set of opportunities the campaign <em>would have won had it participated</em> &mdash; so the estimand is an average over the impressions the campaign actually delivers at its current bid and current pacing, not over all users and not over the additional opportunities a larger budget would reach. That is a genuinely useful population &mdash; it is close to what "the effect of my current campaign" ought to mean &mdash; and it is not the population a budget-doubling decision is about.</p>
+                </div>
+            </details>
+
+            <h2 id="disclosure">The Binding Constraint Is a Logging Decision</h2>
+            <p>Follow the estimator's data requirement and it leads somewhere awkward. The method needs \( \pi_t \): the participation probability, per campaign, per pacing interval. That number lives inside the pacing service. It is not derivable from anything an advertiser receives, and it cannot be reverse-engineered from delivery counts, because the observed impression volume is the product of participation, auction outcomes, and eligible supply &mdash; three unknowns, one equation. Note how Gui, Nair, and Niu frame their own contribution: the paper shows how the variation "can be utilized by <em>ad-publishers</em>" to identify campaign effects. The randomization is real; the key is held on the other side of the API.</p>
+
+            <p>This sharpens rather than repeats a conclusion this series already reached. <a href="blog-attribution-incrementality.html">The attribution post</a> ends on Gordon, Moakler, and Zettelmeyer's verdict from 663 Facebook experiments &mdash; neither double machine learning nor propensity matching reliably recovered experimental ground truth &mdash; and draws the moral that the missing ingredient is randomization, not sophistication. That is right, and it is usually read as a counsel of despair: go run experiments. The throttling result relocates the missing ingredient. The randomization is not missing. It ran, and it is running right now in every paced campaign; the only thing standing between it and a defensible observational estimate is whether one already-computed float per campaign-period is written to a table the advertiser can read.</p>
+
+            <p>That reframes "more platform disclosure" from an unbounded ask into a specific and auditable one, which is a better position to negotiate from. The framework's own ad-platform connector contract mirrors the gap: it states explicitly that the model "only needs periodic spend (and optionally impressions/clicks/conversions) by channel and date &mdash; not real-time, not row-level," and the connector interface every platform implements returns exactly that shape. A sane engineering default, and also precisely a feed from which no throttling LATE can ever be computed. The pipeline everyone built is the pipeline for the estimator that does not work.</p>
+
+            <div class="note">
+                <h4>💡 The version of the ask that is actually answerable</h4>
+                <p>Not "give us user-level delivery logs," which raises privacy objections that will win. The narrower request: <strong>the campaign-period participation probability the pacer already computed</strong>, aggregated to campaign &times; period, alongside the delivery counts you already send. It is one column, it contains no user information, and it is a design parameter rather than a behavioral measurement. Ask for it in the same conversation as the impression and conversion feeds, and be specific that the purpose is instrument construction, not audit. A publisher who declines is telling you something worth knowing about how far the observational numbers in their dashboard can be pushed.</p>
+            </div>
+
+            <h2 id="estimand">A LATE Is Not a Budget</h2>
+            <p>The method that works comes with a caveat sharp enough that treating the throttling estimate as a drop-in replacement for a media mix model would be a new error rather than a fixed one. The estimand is local twice over. It is local in <em>population</em>, as the deep dive above sets out: an average over the opportunities the campaign would win at its current bid and pacing, not over the marginal opportunities a bigger budget would reach. And it is local in <em>dose</em>: a marginal-impression effect at the current operating point, on a response function that everyone in this field agrees is concave.</p>
+
+            <p>There is a third gap that gets less attention and matters more for planning. The throttling design randomizes participation, which identifies the effect of an <em>impression</em>. A budget decision needs the effect of a <em>dollar</em>, which is the impression effect multiplied by impressions-per-dollar &mdash; and that second factor is not randomized by pacing. In the simulation above, the impressions-per-dollar rung estimated by regression runs about 40% high at the default targeting strength, for exactly the reason condition (c) fails. The throttling instrument cleans one rung of the ladder and leaves the other one dirty. A per-dollar ROI built by multiplying a clean impression effect by a confounded delivery elasticity inherits the contamination, quietly, in the step nobody writes down.</p>
+
+            <div class="interactive-box">
+                <h4>Tangent versus secant: the dose locality</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A saturating response curve. The <strong>tangent</strong> at the current operating point is the local marginal effect a throttling estimate speaks to; the <strong>secant</strong> is the average return over the budget increase a plan actually proposes. Move the saturation point and the budget multiple and watch the two diverge.</p>
+                <div class="control-row">
+                    <label>Saturation half-point (% of current spend)</label>
+                    <input type="range" id="estH" min="25" max="400" step="5" value="100">
+                    <span class="value" id="estHVal">100</span>
+                </div>
+                <div class="control-row">
+                    <label>Budget multiple</label>
+                    <input type="range" id="estK" min="1.1" max="3" step="0.05" value="2">
+                    <span class="value" id="estKVal">2.00</span>
+                </div>
+                <div class="chart-container chart-themed" id="estChart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Local marginal (tangent)</span><span class="val" id="estT">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Average over the increase</span><span class="val" id="estS">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Overstatement</span><span class="val" id="estR">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="estV">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults the tangent is 0.250 conversions per index-dollar and the doubling delivers 0.167 on average &mdash; the local number overstates the decision-relevant one by 50%. Drawing the throttling estimate as a tangent is a stylization: it is a local <em>average</em> over marginally-throttled auctions, not literally a derivative. The geometry of the mismatch is the same either way.</p>
+            </div>
+
+            <p>Which is why the right home for a throttling estimate is the same as the right home for a geo lift: an anchor, not a replacement. <a href="blog-calibrating-mmm-experiments.html">The experiment is the prior</a> &mdash; a well-identified local effect enters a model that carries the response curvature, the carryover, and the extrapolation to budget levels nobody has tested, and the model pays for that structure with assumptions that the anchor then disciplines. A throttling LATE is unusually good raw material for that role: it is cheap, it is repeatable every period, and it does not cost you the holdout revenue an experiment costs. It is also, on its own, silent about every question a planner actually asks. The pattern is familiar from <a href="blog-mediation-funnel-identification.html">the mediation post</a>: randomization buys you one specific quantity cleanly, and the quantities on the slide are usually not that one.</p>
+
+            <h2 id="framework">What Is Actually Shipped</h2>
+            <p>Two pieces of this argument are code rather than prose. <code>dag_model_builder/identification.py</code> ships <code>frontdoor_criterion</code>, <code>iv_criterion</code>, <code>find_backdoor_paths</code>, <code>propose_adjustment_set</code>, and <code>identification_report</code>, and the agent surfaces the front-door verdict automatically whenever a DAG contains mediators. <code>estimators/causal.py</code> ships <code>frontdoor_estimate</code> and <code>two_stage_least_squares</code> &mdash; the two functions the ladder figure's in-browser arithmetic mirrors: same estimator, same delta-method standard error.</p>
+
+            <pre><code># illustrative
+from mmm_framework.dag_model_builder.identification import frontdoor_criterion
+from mmm_framework.estimators import frontdoor_estimate, two_stage_least_squares
+
+rep = frontdoor_criterion(dag, "spend", ["impressions"], "conversions")
+rep.identifiable                            # False, once targeting is drawn
+rep.mediator_outcome_blocked_by_treatment   # False -- condition (c) is the one that failed
+rep.notes[0]                                # names the offending path
+
+# the confounding-robust cross-check, if a logged instrument exists
+iv = two_stage_least_squares(y, exposure, participation_prob)
+iv.effect, iv.ci_low, iv.ci_high, iv.first_stage_f</code></pre>
+
+            <p>The pairing is deliberate. The project's roadmap note for full Tian&ndash;Pearl identification states the rule as "pair with an estimator or don't surface it" &mdash; only expose an identification verdict once something can actually compute the identified estimand, "otherwise it misleads." The front-door and IV criteria honor it: a "valid instrument" verdict now arrives with 2SLS and a first-stage F, and an identifiable front door with an estimate the fitted model can be checked against. Compare the two, because a large gap signals treatment&ndash;outcome confounding the back-door model cannot remove.</p>
+
+            <div class="warning">
+                <h4>⚠️ The criterion is graphical; the estimator does not know that</h4>
+                <p><code>frontdoor_criterion</code> reasons about the DAG you hand it. It cannot tell you whether the targeting arrow is real; it tells you what follows if you draw it. Omit that arrow and the function returns <code>identifiable=True</code> with total confidence, because you asserted the world it needs. Worse, <code>frontdoor_estimate</code> will compute a number regardless of the verdict &mdash; it is OLS twice and a delta-method standard error, and nothing in it inspects the graph. A tight interval around a badly biased product is exactly what the ladder figure shows at &lambda;&nbsp;=&nbsp;0.9. The graphical check earns its keep as a <em>forcing function for drawing the arrow</em>, not as a validity test.</p>
+            </div>
+
+            <h2 id="limits">What This Does Not Establish</h2>
+            <p>The simulation is a linear-Gaussian caricature with one latent factor and hand-set coefficients. Its bias multiples at the default targeting strength &mdash; 2.96&times;, 1.63&times;, 0.99&times; &mdash; are properties of that world, chosen to be legible, not estimates of what the front door does to anybody's real campaign. What the simulation does establish is the <em>sign and mechanism</em> of the failure, and that the failure is driven by one identifiable arrow.</p>
+
+            <p>Nothing here falsifies the front-door criterion in general, or even for all media. It is a property of a graph, and there are media graphs that plausibly satisfy it: delivery bought on a fixed schedule against a fixed audience, with no per-opportunity optimization, has a much better claim to condition (c) than a performance campaign does. The argument is specifically about optimized auction delivery, and it gets weaker as delivery gets dumber.</p>
+
+            <p>The 110% figure is Gui, Nair, and Niu's estimate on one e-commerce platform's campaigns, not a general advertising lift, and it is comparable to the 600% only as they compare it &mdash; two methods on the same data. The Verma-constraint testability result has not, to my knowledge, been applied to advertiser-side ad data; the claim that such a test would fail is a prediction. And the disclosure point is an implication, not a policy recommendation: a publisher may have legitimate reasons to keep its pacing parameters illegible, including that a logged participation probability partially describes an auction mechanism. Noting that the constraint is a logging decision is not an argument about which way that decision should go.</p>
+
+            <p>Finally, and least comfortably: this post inherits the assumption that a graph like the first figure's is the right description. If audience intent is not one confounder but a bundle that also drives spend through the platform's own bid recommendations, the DAG needs more arrows and the front door fails harder, not softer. That is the direction of error to expect.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>The front door through impressions is the natural escape from unobserved demand confounding, and Bhattacharya&ndash;Nabi (2022) removed its usual excuse: with a suitable auxiliary variable, the model's assumptions imply testable Verma constraints. Choosing the front door is now a choice to skip a test.</li>
+                    <li>It fails on optimized ad delivery because of one arrow: the platform picks impression composition by predicted response, so audience intent causes both impressions and conversions and condition (c) &mdash; the mediator&ndash;outcome back door closed by treatment &mdash; is open. The shipped <code>frontdoor_criterion</code> returns <code>identifiable=False</code> and names the path.</li>
+                    <li>Either targeting arrow alone leaves the criterion intact; only both together break it. That is why the assumption survives meetings: each half is individually easy to concede.</li>
+                    <li>The failure is upward and does not degrade gracefully. In the simulation the front-door estimate goes from 1.03&times; the truth at zero targeting to 2.07&times; at strong targeting &mdash; most of the way back to the naive estimate it was meant to replace. It is least reliable on the channels where delivery optimization is most aggressive.</li>
+                    <li>Budget pacing is a real randomization: probabilistic throttling admits a campaign to a random subset of auctions with a logged participation probability, and that probability identifies a LATE. Gui&ndash;Nair&ndash;Niu report 110% conversion lift where naive observational methods on the same data return 600%.</li>
+                    <li>The method's data requirement is one already-computed number per campaign-period that only the publisher holds. The binding constraint on observational ad measurement is therefore a logging decision, which makes "more disclosure" a specific and negotiable ask rather than an unbounded one.</li>
+                    <li>A throttling estimate is local in population, local in dose, and denominated in impressions rather than dollars. It calibrates a model; it does not replace one. Multiplying a clean impression effect by a confounded impressions-per-dollar elasticity re-imports the bias in the step nobody writes down.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Gui, G., Nair, H. S., &amp; Niu, F. (2022). <em>Auction Throttling and Causal Inference of Online Advertising Effects</em>. arXiv:2112.15155 (v1 December 2021; revised February 2022).</li>
+                <li>Bhattacharya, R., &amp; Nabi, R. (2022). <em>On Testability of the Front-Door Model via Verma Constraints</em>. Proceedings of the Thirty-Eighth Conference on Uncertainty in Artificial Intelligence, PMLR 180, 202&ndash;212.</li>
+                <li>Pearl, J. (1995). <em>Causal Diagrams for Empirical Research</em>. Biometrika, 82(4), 669&ndash;688.</li>
+                <li>Pearl, J. (2009). <em>Causality: Models, Reasoning, and Inference</em> (2nd ed., &sect;3.3 on the back-door and front-door criteria). Cambridge University Press.</li>
+                <li>Verma, T., &amp; Pearl, J. (1990). <em>Equivalence and Synthesis of Causal Models</em>. Proceedings of the Sixth Conference on Uncertainty in Artificial Intelligence (UAI), 220&ndash;227.</li>
+                <li>Fulcher, I. R., Shpitser, I., Marealle, S., &amp; Tchetgen Tchetgen, E. J. (2020). <em>Robust Inference on Population Indirect Causal Effects: The Generalized Front Door Criterion</em>. Journal of the Royal Statistical Society Series B (Statistical Methodology), 82(1), 199&ndash;214.</li>
+                <li>Imbens, G. W., &amp; Angrist, J. D. (1994). <em>Identification and Estimation of Local Average Treatment Effects</em>. Econometrica, 62(2), 467&ndash;475.</li>
+                <li>Agarwal, D., Ghosh, S., Wei, K., &amp; You, S. (2014). <em>Budget Pacing for Targeted Online Advertisements at LinkedIn</em>. Proceedings of the 20th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD '14), 1613&ndash;1619.</li>
+                <li>Gordon, B. R., Moakler, R., &amp; Zettelmeyer, F. (2023). <em>Close Enough? A Large-Scale Exploration of Non-Experimental Approaches to Advertising Measurement</em>. Marketing Science, 42(4), 768&ndash;793.</li>
+                <li>Braun, M., &amp; Schwartz, E. M. (2025). <em>Where A/B Testing Goes Wrong: How Divergent Delivery Affects What Online Experiments Cannot (and Can) Tell You About How Customers Respond to Advertising</em>. Journal of Marketing, 89(2), 71&ndash;95.</li>
+                <li>Johnson, G. A., Lewis, R. A., &amp; Nubbemeyer, E. I. (2017). <em>Ghost Ads: Improving the Economics of Measuring Online Ad Effectiveness</em>. Journal of Marketing Research, 54(6), 867&ndash;884.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        /* ===================================================================
+         * Figure 1 — the front-door criterion, evaluated arrow by arrow.
+         * The three checks below mirror dag_model_builder/identification.py
+         * (directed-path enumeration for (a); back-door path enumeration with
+         * d-separation blocking for (b) and (c)). Verified to return the same
+         * verdicts and note strings as the shipped Python on every toggle
+         * combination used here.
+         * =================================================================== */
+
+        var NODES = ['season', 'spend', 'impr', 'conv', 'intent'];
+        var LABEL = { season: 'Seasonality', spend: 'Spend', impr: 'Impressions', conv: 'Conversions', intent: 'Audience intent' };
+
+        function allSimplePaths(edges, start, end, maxLen) {
+            var adj = {};
+            NODES.forEach(function (n) { adj[n] = []; });
+            edges.forEach(function (e) { adj[e[0]].push([e[1], '>']); adj[e[1]].push([e[0], '<']); });
+            var out = [];
+            maxLen = maxLen || 12;
+            (function dfs(node, visited, path) {
+                if (path.length > maxLen) return;
+                if (node === end) { out.push(path.slice()); return; }
+                adj[node].forEach(function (nd) {
+                    if (visited[nd[0]]) return;
+                    visited[nd[0]] = 1; path.push(nd);
+                    dfs(nd[0], visited, path);
+                    path.pop(); delete visited[nd[0]];
+                });
+            })(start, (function () { var v = {}; v[start] = 1; return v; })(), []);
+            return out;
+        }
+        function backdoorPaths(edges, start, end) {
+            return allSimplePaths(edges, start, end)
+                .filter(function (p) { return p.length && p[0][1] === '<'; })
+                .map(function (p) {
+                    return {
+                        nodes: [start].concat(p.map(function (x) { return x[0]; })),
+                        dirs: p.map(function (x) { return x[1]; })
+                    };
+                });
+        }
+        function descendants(edges, n) {
+            var out = {}, stack = [];
+            edges.forEach(function (e) { if (e[0] === n) stack.push(e[1]); });
+            while (stack.length) {
+                var x = stack.pop();
+                if (out[x]) continue;
+                out[x] = 1;
+                edges.forEach(function (e) { if (e[0] === x) stack.push(e[1]); });
+            }
+            return out;
+        }
+        function isCollider(p, i) {
+            if (i <= 0 || i >= p.nodes.length - 1) return false;
+            return p.dirs[i - 1] === '>' && p.dirs[i] === '<';
+        }
+        function blockedBy(p, cond, edges) {
+            var bl = [];
+            for (var i = 1; i < p.nodes.length - 1; i++) {
+                var n = p.nodes[i];
+                if (isCollider(p, i)) {
+                    var d = descendants(edges, n);
+                    var hit = !!cond[n] || Object.keys(d).some(function (k) { return !!cond[k]; });
+                    if (!hit) bl.push('collider ' + n);
+                } else if (cond[n]) { bl.push(n); }
+            }
+            return bl;
+        }
+        function directedPaths(edges, start, end, maxLen) {
+            var ch = {};
+            edges.forEach(function (e) { (ch[e[0]] = ch[e[0]] || []).push(e[1]); });
+            var out = [];
+            maxLen = maxLen || 12;
+            (function dfs(node, visited, path) {
+                if (path.length > maxLen) return;
+                if (node === end) { out.push(path.slice()); return; }
+                (ch[node] || []).forEach(function (nx) {
+                    if (visited[nx]) return;
+                    visited[nx] = 1; path.push(nx);
+                    dfs(nx, visited, path);
+                    path.pop(); delete visited[nx];
+                });
+            })(start, (function () { var v = {}; v[start] = 1; return v; })(), [start]);
+            return out;
+        }
+        function renderPath(p) {
+            var s = LABEL[p.nodes[0]];
+            for (var i = 0; i < p.dirs.length; i++) {
+                s += (p.dirs[i] === '>' ? ' → ' : ' ← ') + LABEL[p.nodes[i + 1]];
+            }
+            return s;
+        }
+        function frontdoor(edges, T, meds, Y) {
+            var notes = [], medSet = {}, bad = {};
+            meds.forEach(function (m) { medSet[m] = 1; });
+
+            var directed = directedPaths(edges, T, Y), intercepts;
+            if (!directed.length) {
+                intercepts = false;
+                notes.push('No directed path from spend to conversions; there is no effect to identify via mediation.');
+            } else {
+                var unc = directed.filter(function (p) {
+                    return !p.slice(1, -1).some(function (n) { return !!medSet[n]; });
+                });
+                intercepts = !unc.length;
+                if (unc.length) {
+                    notes.push('A directed path bypasses the declared mediator (' +
+                        unc[0].map(function (n) { return LABEL[n]; }).join(' → ') +
+                        '); the front door is incomplete.');
+                    bad['spend|conv'] = 1;
+                }
+            }
+
+            var tm = true;
+            meds.forEach(function (m) {
+                if (!tm) return;
+                backdoorPaths(edges, T, m).some(function (p) {
+                    if (!blockedBy(p, {}, edges).length) {
+                        tm = false;
+                        notes.push('Open back-door path between treatment and mediator (' + renderPath(p) +
+                            '): treatment and mediator are confounded.');
+                        for (var i = 0; i < p.dirs.length; i++) {
+                            bad[(p.dirs[i] === '>' ? p.nodes[i] + '|' + p.nodes[i + 1] : p.nodes[i + 1] + '|' + p.nodes[i])] = 1;
+                        }
+                        return true;
+                    }
+                    return false;
+                });
+            });
+
+            var my = true;
+            meds.forEach(function (m) {
+                if (!my) return;
+                backdoorPaths(edges, m, Y).some(function (p) {
+                    var c = {}; c[T] = 1;
+                    if (!blockedBy(p, c, edges).length) {
+                        my = false;
+                        notes.push('Back-door path from the mediator to the outcome is not closed by conditioning on the treatment (' +
+                            renderPath(p) + ').');
+                        for (var i = 0; i < p.dirs.length; i++) {
+                            bad[(p.dirs[i] === '>' ? p.nodes[i] + '|' + p.nodes[i + 1] : p.nodes[i + 1] + '|' + p.nodes[i])] = 1;
+                        }
+                        return true;
+                    }
+                    return false;
+                });
+            });
+
+            var ident = intercepts && tm && my;
+            if (ident) {
+                notes.push('Front-door criterion satisfied: the effect is identified through Impressions via the front-door formula.');
+            }
+            return { a: intercepts, b: tm, c: my, identifiable: ident, notes: notes, bad: bad };
+        }
+
+        var POS = {
+            season: [0.48, 2.12], spend: [0.48, 1.32],
+            impr: [1.74, 1.32], conv: [2.94, 1.32], intent: [2.34, 2.12]
+        };
+        var HW = 0.33, HH = 0.155;
+        function exitPoint(id, tx, ty) {
+            var c = POS[id], dx = tx - c[0], dy = ty - c[1];
+            var sx = dx === 0 ? Infinity : HW / Math.abs(dx);
+            var sy = dy === 0 ? Infinity : HH / Math.abs(dy);
+            var s = Math.min(sx, sy);
+            return [c[0] + s * dx, c[1] + s * dy];
+        }
+
+        var fdState = { targeting: true, audience: true, direct: false, pacing: false };
+        function fdEdges() {
+            var e = [['spend', 'impr'], ['impr', 'conv']];
+            if (fdState.targeting) e.push(['intent', 'impr']);
+            if (fdState.audience) e.push(['intent', 'conv']);
+            if (fdState.direct) e.push(['spend', 'conv']);
+            if (fdState.pacing) { e.push(['season', 'spend']); e.push(['season', 'impr']); }
+            return e;
+        }
+
+        var fdDraw = BV.register(function () {
+            var p = BV.palette();
+            var edges = fdEdges();
+            var res = frontdoor(edges, 'spend', ['impr'], 'conv');
+
+            var active = { spend: 1, impr: 1, conv: 1 };
+            if (fdState.targeting || fdState.audience) active.intent = 1;
+            if (fdState.pacing) active.season = 1;
+
+            var shapes = [], annotations = [];
+
+            // node boxes + labels
+            Object.keys(POS).forEach(function (id) {
+                var on = !!active[id];
+                var c = POS[id];
+                var isChain = (id === 'spend' || id === 'impr' || id === 'conv');
+                shapes.push({
+                    type: 'rect', x0: c[0] - HW, x1: c[0] + HW, y0: c[1] - HH, y1: c[1] + HH,
+                    line: { color: on ? (isChain ? p.primary : p.accent) : BV.band(p.border, 0.55), width: on ? 1.8 : 1, dash: on ? 'solid' : 'dot' },
+                    fillcolor: on ? BV.band(isChain ? p.primary : p.accent, 0.14) : 'rgba(0,0,0,0)',
+                    layer: 'below'
+                });
+                annotations.push({
+                    x: c[0], y: c[1], text: LABEL[id], showarrow: false,
+                    font: { size: 11.5, color: on ? p.text : BV.band(p.muted, 0.55) }
+                });
+            });
+
+            // edges
+            edges.forEach(function (e) {
+                var key = e[0] + '|' + e[1];
+                var flagged = !!res.bad[key];
+                var col = flagged ? p.danger : p.muted;
+                var w = flagged ? 2.6 : 1.7;
+                if (key === 'spend|conv') {
+                    // route the direct effect underneath the mediated chain
+                    shapes.push({
+                        type: 'path',
+                        path: 'M 0.48,1.165 L 0.48,0.90 L 2.94,0.90 L 2.94,1.06',
+                        line: { color: col, width: w }
+                    });
+                    annotations.push({
+                        x: 2.94, y: 1.15, ax: 2.94, ay: 0.99, xref: 'x', yref: 'y', axref: 'x', ayref: 'y',
+                        showarrow: true, arrowhead: 3, arrowsize: 1.1, arrowwidth: w, arrowcolor: col, text: ''
+                    });
+                    return;
+                }
+                var tail = exitPoint(e[0], POS[e[1]][0], POS[e[1]][1]);
+                var head = exitPoint(e[1], POS[e[0]][0], POS[e[0]][1]);
+                annotations.push({
+                    x: head[0], y: head[1], ax: tail[0], ay: tail[1],
+                    xref: 'x', yref: 'y', axref: 'x', ayref: 'y',
+                    showarrow: true, arrowhead: 3, arrowsize: 1.05, arrowwidth: w, arrowcolor: col, text: ''
+                });
+            });
+
+            var layout = BV.layout({
+                xaxis: { range: [0.02, 3.42], visible: false, fixedrange: true },
+                yaxis: { range: [0.74, 2.44], visible: false, fixedrange: true, scaleanchor: 'x', scaleratio: 0.62 },
+                margin: { l: 8, r: 8, t: 10, b: 8 }, showlegend: false,
+                shapes: shapes, annotations: annotations
+            });
+            Plotly.react('fdChart', [{ type: 'scatter', x: [0.02], y: [0.74], mode: 'markers', marker: { size: 0.1, color: 'rgba(0,0,0,0)' }, hoverinfo: 'skip', showlegend: false }], layout, BV.config);
+
+            function chip(id, ok) {
+                var el = document.getElementById(id);
+                el.textContent = ok ? 'holds ✓' : 'fails ✗';
+                el.className = 'val' + (ok ? ' ok' : ' warn');
+            }
+            chip('fdA', res.a); chip('fdB', res.b); chip('fdC', res.c);
+            var v = document.getElementById('fdV');
+            v.textContent = res.identifiable ? 'identified' : 'NOT identified';
+            v.className = 'val' + (res.identifiable ? ' ok' : ' warn');
+            document.getElementById('fdNote').textContent = res.notes[0] || '—';
+
+            [['fdTgt', 'targeting'], ['fdAud', 'audience'], ['fdDir', 'direct'], ['fdPace', 'pacing']].forEach(function (b) {
+                var btn = document.getElementById(b[0]);
+                var on = fdState[b[1]];
+                btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+                btn.style.background = on ? 'var(--color-primary)' : 'transparent';
+                btn.style.color = on ? 'var(--color-surface)' : 'var(--color-primary-dark)';
+            });
+        });
+        [['fdTgt', 'targeting'], ['fdAud', 'audience'], ['fdDir', 'direct'], ['fdPace', 'pacing']].forEach(function (b) {
+            document.getElementById(b[0]).addEventListener('click', function () {
+                fdState[b[1]] = !fdState[b[1]];
+                fdDraw();
+            });
+        });
+
+        /* ===================================================================
+         * Figure 2 — the estimate ladder. Mirrors the shipped estimators:
+         * frontdoor_estimate (a-hat x b-hat, delta-method SE) and
+         * two_stage_least_squares (participation probability as instrument).
+         * =================================================================== */
+
+        function solveLin(A, b) {
+            var n = b.length, M = [], i, j, r;
+            for (i = 0; i < n; i++) { M.push(A[i].slice()); M[i].push(b[i]); }
+            for (var c = 0; c < n; c++) {
+                var piv = c;
+                for (r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+                var tmp = M[c]; M[c] = M[piv]; M[piv] = tmp;
+                var d = M[c][c] || 1e-12;
+                for (j = c; j <= n; j++) M[c][j] /= d;
+                for (r = 0; r < n; r++) {
+                    if (r === c) continue;
+                    var f = M[r][c];
+                    if (f === 0) continue;
+                    for (j = c; j <= n; j++) M[r][j] -= f * M[c][j];
+                }
+            }
+            return M.map(function (row) { return row[n]; });
+        }
+        function ols(y, cols) {
+            var k = cols.length, n = y.length, XtX = [], Xty = [], i, j, t;
+            for (i = 0; i < k; i++) { XtX.push(new Array(k).fill(0)); Xty.push(0); }
+            for (t = 0; t < n; t++) {
+                for (i = 0; i < k; i++) {
+                    Xty[i] += cols[i][t] * y[t];
+                    for (j = 0; j < k; j++) XtX[i][j] += cols[i][t] * cols[j][t];
+                }
+            }
+            var beta = solveLin(XtX, Xty), rss = 0;
+            for (t = 0; t < n; t++) {
+                var fit = 0;
+                for (i = 0; i < k; i++) fit += beta[i] * cols[i][t];
+                rss += (y[t] - fit) * (y[t] - fit);
+            }
+            var s2 = rss / Math.max(n - k, 1), se = [];
+            for (i = 0; i < k; i++) {
+                var e = new Array(k).fill(0); e[i] = 1;
+                var col = solveLin(XtX.map(function (row) { return row.slice(); }), e);
+                se.push(Math.sqrt(Math.max(s2 * col[i], 0)));
+            }
+            return { beta: beta, se: se };
+        }
+
+        var LAD_N = 4000, A_TRUE = 2.0, B_TRUE = 0.30, KAPPA = 0.6, THETA = 1.2;
+        function simulateLadder(lam) {
+            var rng = BV.mulberry32(7);
+            var A = [], pi = [], S = [], M = [], Y = [], one = [], t;
+            for (t = 0; t < LAD_N; t++) {
+                var a = BV.randn(rng), pt = 0.3 + 0.6 * rng();
+                var s = 10 + KAPPA * a + BV.randn(rng);
+                var m = 5 + A_TRUE * pt * s + lam * a + BV.randn(rng);
+                var y = 20 + B_TRUE * m + THETA * a + BV.randn(rng);
+                A.push(a); pi.push(pt); S.push(s); M.push(m); Y.push(y); one.push(1);
+            }
+            var pbar = BV.mean(pi), spendTruth = B_TRUE * A_TRUE * pbar;
+
+            var naive = ols(Y, [one, S]);
+            var s1 = ols(M, [one, S]), s2 = ols(Y, [one, M, S]);
+            var aHat = s1.beta[1], bHat = s2.beta[1];
+            var fdEff = aHat * bHat;
+            var fdSE = Math.sqrt(bHat * bHat * s1.se[1] * s1.se[1] + aHat * aHat * s2.se[1] * s2.se[1]);
+
+            var f1 = ols(M, [one, pi]);
+            var mHat = [];
+            for (t = 0; t < LAD_N; t++) mHat.push(f1.beta[0] + f1.beta[1] * pi[t]);
+            var iv2 = ols(Y, [one, mHat]);
+            var ivEff = iv2.beta[1], rss = 0;
+            for (t = 0; t < LAD_N; t++) {
+                var fit = iv2.beta[0] + ivEff * M[t];
+                rss += (Y[t] - fit) * (Y[t] - fit);
+            }
+            var s2iv = rss / (LAD_N - 2), mb = BV.mean(mHat), sxx = 0;
+            for (t = 0; t < LAD_N; t++) sxx += (mHat[t] - mb) * (mHat[t] - mb);
+            var ivSE = Math.sqrt(s2iv / sxx);
+
+            return {
+                aRatio: aHat / (A_TRUE * pbar),
+                rows: [
+                    { name: 'Naive regression<br>(spend → conversions)', e: naive.beta[1], se: naive.se[1], truth: spendTruth, col: 'danger' },
+                    { name: 'Front door<br>(spend → conversions)', e: fdEff, se: fdSE, truth: spendTruth, col: 'warning' },
+                    { name: 'Throttling instrument<br>(impression → conversion)', e: ivEff, se: ivSE, truth: B_TRUE, col: 'success' }
+                ]
+            };
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var lam = parseFloat(document.getElementById('ladLam').value);
+            var sim = simulateLadder(lam);
+            var mult = sim.rows.map(function (r) { return r.e / r.truth; });
+            var errs = sim.rows.map(function (r) { return 1.96 * r.se / r.truth; });
+            var names = sim.rows.map(function (r) { return r.name; });
+            var cols = sim.rows.map(function (r) { return p[r.col]; });
+
+            var xmax = Math.max(3.4, Math.max.apply(null, mult) + 0.5);
+            var traces = [{
+                type: 'bar', orientation: 'h', x: mult, y: names,
+                marker: { color: cols.map(function (c) { return BV.band(c, 0.55); }), line: { color: cols, width: 1.6 } },
+                error_x: { type: 'data', array: errs, color: p.text, thickness: 1.8, width: 6 },
+                hovertemplate: '%{x:.2f}× the truth<extra></extra>', showlegend: false
+            }];
+            var layout = BV.layout({
+                xaxis: { title: 'estimate ÷ its own causal target', range: [0, xmax], zeroline: false },
+                yaxis: { automargin: true, categoryorder: 'array', categoryarray: names.slice().reverse() },
+                margin: { l: 176, r: 24, t: 22, b: 50 }, showlegend: false, bargap: 0.42,
+                shapes: [{ type: 'line', x0: 1, x1: 1, y0: -0.5, y1: 2.5, line: { color: p.success, width: 1.6, dash: 'dash' } }],
+                annotations: [{ x: 1, y: 2.5, yanchor: 'bottom', text: 'truth', showarrow: false, font: { size: 11, color: p.success } }]
+            });
+            Plotly.react('ladChart', traces, layout, BV.config);
+
+            function put(id, m, good) {
+                var el = document.getElementById(id);
+                el.textContent = m.toFixed(2) + '×';
+                el.className = 'val' + (good ? ' ok' : ' warn');
+            }
+            put('ladN', mult[0], Math.abs(mult[0] - 1) < 0.1);
+            put('ladF', mult[1], Math.abs(mult[1] - 1) < 0.1);
+            put('ladI', mult[2], Math.abs(mult[2] - 1) < 0.1);
+            var v = document.getElementById('ladV');
+            if (Math.abs(mult[1] - 1) < 0.1) { v.textContent = 'front door holds'; v.className = 'val ok'; }
+            else if (mult[1] > 0.5 * (1 + mult[0])) { v.textContent = 'no better than naive'; v.className = 'val warn'; }
+            else { v.textContent = 'front door broken'; v.className = 'val warn'; }
+        });
+        BV.sliders([
+            { id: 'ladLam', value: 'ladLamVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+
+        /* ===================================================================
+         * Figure 3 — the dose locality: tangent vs secant on a saturating curve.
+         * =================================================================== */
+
+        var EST_A = 100, EST_B = 100;   // asymptote (index), current weekly spend (index)
+        BV.register(function () {
+            var p = BV.palette();
+            var h = parseFloat(document.getElementById('estH').value);
+            var k = parseFloat(document.getElementById('estK').value);
+
+            function R(s) { return EST_A * s / (s + h); }
+            var xs = BV.linspace(0, Math.max(3.2 * EST_B, k * EST_B * 1.15), 220);
+            var ys = xs.map(R);
+
+            var slope = EST_A * h / Math.pow(EST_B + h, 2);
+            var rB = R(EST_B), rK = R(k * EST_B);
+            var secant = (rK - rB) / ((k - 1) * EST_B);
+
+            var xTanLo = EST_B * 0.3, xTanHi = Math.min(xs[xs.length - 1], EST_B + 1.5 * (k - 1) * EST_B + 30);
+            var traces = [
+                {
+                    type: 'scatter', mode: 'lines', x: xs, y: ys, name: 'response curve',
+                    line: { color: p.primary, width: 2.6 },
+                    hovertemplate: 'spend %{x:.0f}<br>conversions %{y:.1f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines',
+                    x: [xTanLo, xTanHi],
+                    y: [rB + slope * (xTanLo - EST_B), rB + slope * (xTanHi - EST_B)],
+                    name: 'local marginal (tangent)', line: { color: p.danger, width: 2, dash: 'dot' }, hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'lines+markers', x: [EST_B, k * EST_B], y: [rB, rK],
+                    name: 'average over the increase (secant)',
+                    line: { color: p.accent, width: 2.4 },
+                    marker: { color: p.accent, size: 11, line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: 'spend %{x:.0f}<br>conversions %{y:.1f}<extra></extra>'
+                }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'weekly spend (index, current = 100)', range: [0, xs[xs.length - 1]] },
+                yaxis: { title: 'conversions (index)', range: [0, EST_A * 1.02] },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 62, r: 22, t: 40, b: 50 },
+                shapes: [{ type: 'line', x0: EST_B, x1: EST_B, y0: 0, y1: rB, line: { color: p.muted, width: 1, dash: 'dot' } }],
+                annotations: [{ x: EST_B, y: 0, yanchor: 'bottom', yshift: 4, text: 'current', showarrow: false, font: { size: 11, color: p.muted } }]
+            });
+            Plotly.react('estChart', traces, layout, BV.config);
+
+            document.getElementById('estT').textContent = slope.toFixed(3);
+            document.getElementById('estS').textContent = secant.toFixed(3);
+            var ratio = slope / secant;
+            var rEl = document.getElementById('estR');
+            rEl.textContent = '+' + Math.round(100 * (ratio - 1)) + '%';
+            rEl.className = 'val' + (ratio - 1 > 0.15 ? ' warn' : '');
+            var v = document.getElementById('estV');
+            if (ratio - 1 < 0.1) { v.textContent = 'nearly linear here'; v.className = 'val ok'; }
+            else if (ratio - 1 < 0.4) { v.textContent = 'material mismatch'; v.className = 'val'; }
+            else { v.textContent = 'wrong quantity'; v.className = 'val warn'; }
+        });
+        BV.sliders([
+            { id: 'estH', value: 'estHVal', fmt: function (v) { return String(Math.round(v)); } },
+            { id: 'estK', value: 'estKVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+    })();
+    </script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

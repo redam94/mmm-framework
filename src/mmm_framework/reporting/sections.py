@@ -1456,9 +1456,14 @@ class SpecCurveSection(Section):
     """Spec-curve / model-averaging robustness (issue #103).
 
     Renders how each channel's ROI moves across a pre-registered set of
-    defensible specs, plus the LOO-stacking model-averaged (BMA) estimate — so
-    robustness across specs is itself a reported result and fragility can't hide
-    behind one hand-picked number. Data-gated on ``bundle.spec_curve``.
+    defensible specs, plus the model-averaged (BMA) estimate — so robustness
+    across specs is itself a reported result and fragility can't hide behind one
+    hand-picked number. Data-gated on ``bundle.spec_curve``.
+
+    The BMA weighting is labelled explicitly, because averaging a *causal*
+    estimand with *predictive* weights is a category error the payload's
+    ``weighting_caveat`` spells out. See
+    :mod:`mmm_framework.validation.spec_curve`.
     """
 
     section_id: str = "spec-curve"
@@ -1473,6 +1478,14 @@ class SpecCurveSection(Section):
         if not channels or not specs:
             return ""
 
+        weighting = str(sc.get("weighting") or "equal")
+        blend_html = (
+            "blends the specs <strong>equally</strong> — each was declared "
+            "defensible before the fit, so none is promoted afterwards"
+            if weighting == "equal"
+            else "blends the specs by their <strong>LOO-stacking weight</strong> "
+            "(out-of-sample predictive skill)"
+        )
         parts = [
             f"""
             <p>
@@ -1483,16 +1496,33 @@ class SpecCurveSection(Section):
                 across all of them. A tight cluster is a robust finding; a wide
                 spread — especially one that straddles break-even — is a warning a
                 single-spec report would have hidden. The
-                <strong>model-averaged (BMA)</strong> estimate blends the specs by
-                their LOO-stacking weight (out-of-sample predictive skill), so no
-                one spec is privileged.
+                <strong>model-averaged (BMA)</strong> estimate {blend_html}.
             </p>
             """,
+            self._render_weighting_caveat(sc, weighting),
             charts.create_spec_curve_plot(sc, self.config),
             self._render_robustness_table(sc, channels),
             self._render_weights_table(sc, specs),
         ]
         return self._render_section_wrapper("\n".join(p for p in parts if p))
+
+    def _render_weighting_caveat(self, sc: dict, weighting: str) -> str:
+        """Say plainly what the mixture weights mean.
+
+        Predictive weights are not causal weights: two specs can predict the KPI
+        equally well while splitting it differently between media and baseline,
+        which is exactly the quantity being averaged. Under the default equal
+        weighting this is a short note; under opted-in stacking it is a warning.
+        """
+        caveat = str(sc.get("weighting_caveat") or "")
+        if not caveat:
+            return ""
+        if weighting == "stacking":
+            return (
+                '<div class="callout warning"><h4>Predictive weights, causal '
+                f"estimand</h4><p>{html.escape(caveat)}</p></div>"
+            )
+        return f'<div class="note"><p>{html.escape(caveat)}</p></div>'
 
     def _render_robustness_table(self, sc: dict, channels: list[str]) -> str:
         bma = sc.get("bma") or {}
@@ -1549,8 +1579,10 @@ class SpecCurveSection(Section):
 
     def _render_weights_table(self, sc: dict, specs: list[str]) -> str:
         weights = sc.get("weights") or {}
+        predictive = sc.get("predictive_weights") or {}
         per_spec = sc.get("per_spec") or {}
         primary = sc.get("primary")
+        applied = str(sc.get("weighting") or "equal")
         # Only show the LOO/weights table when stacking actually ran (some weight
         # differs from a flat 1/N) or LOO is present.
         any_loo = any((per_spec.get(s) or {}).get("loo") for s in specs)
@@ -1564,26 +1596,60 @@ class SpecCurveSection(Section):
             err = entry.get("error")
             name = html.escape(s) + (" ★" if s == primary else "")
             status = "failed" if err else f"{w * 100:.0f}%"
+            if err:
+                pred_str = "—"
+            elif s in predictive:
+                pred_str = f"{predictive[s] * 100:.0f}%"
+            else:
+                pred_str = "—"
             rows.append(f"""
                 <tr>
                     <td>{name}</td>
                     <td class="mono">{status}</td>
+                    <td class="mono">{pred_str}</td>
                     <td class="mono">{elpd_str}</td>
                 </tr>
                 """)
-        note = (
-            "LOO-stacking weight = each spec's contribution to the best "
-            "out-of-sample predictive mixture (Yao et al. 2018); ELPD is the "
-            "expected log pointwise predictive density (higher is better). ★ marks "
-            "the pre-registered primary spec."
-            if any_loo
-            else "Weights are equal (LOO stacking not computed); the model-average "
-            "is a plain mean across specs. ★ marks the pre-registered primary spec."
+        if applied == "stacking":
+            note = (
+                "Applied weight = the LOO-stacking weight (Yao et al. 2018), the "
+                "spec's contribution to the best out-of-sample predictive mixture. "
+                "It is being used here to average a causal estimand, which the "
+                "note above qualifies. "
+            )
+        elif predictive:
+            note = (
+                "Applied weight is equal across specs. The predictive column shows "
+                "what LOO-stacking <em>would</em> have assigned — reported for "
+                "diagnosis, not applied. A large gap between the two columns means "
+                "predictive fit discriminates sharply between your specs, which is "
+                "worth investigating but is not by itself a reason to reweight a "
+                "causal estimate. "
+            )
+        elif any_loo:
+            note = (
+                "Applied weight is equal across specs; stacking weights were "
+                "unavailable. ELPD is shown per spec for reference. "
+            )
+        else:
+            note = (
+                "Weights are equal (LOO not computed); the model-average is a "
+                "plain mean across specs. "
+            )
+        note += (
+            "ELPD is the expected log pointwise predictive density (higher is "
+            "better). ★ marks the pre-registered primary spec."
+        )
+        pred_header = (
+            "Predictive (LOO-stacking)"
+            if applied == "stacking"
+            else "Predictive weight (not applied)"
         )
         return f"""
             <h3>Specification weights</h3>
             <table class="data-table">
-                <thead><tr><th>Specification</th><th>Stacking weight</th>
+                <thead><tr><th>Specification</th><th>Applied weight</th>
+                    <th>{pred_header}</th>
                     <th>ELPD (LOO)</th></tr></thead>
                 <tbody>{''.join(rows)}</tbody>
             </table>
@@ -1830,10 +1896,18 @@ class CausalAssumptionsSection(Section):
             rv = ch.get("robustness_value")
             pr2 = ch.get("partial_r2")
             fragile = ch.get("is_fragile")
+            # A prior-dominated coefficient's RV is an artifact of prior
+            # tightness, not evidence — it must never render as green "Robust".
+            prior_dominated = bool(ch.get("is_prior_dominated"))
             rv_s = f"{rv:.3f}" if isinstance(rv, (int, float)) else "-"
             pr2_s = f"{pr2:.3f}" if isinstance(pr2, (int, float)) else "-"
-            cls = "negative" if fragile else "positive"
-            status = "Fragile" if fragile else "Robust"
+            if fragile:
+                cls, status = "negative", "Fragile"
+            elif prior_dominated:
+                cls, status = "uncertain", "Not assessable (prior-driven)"
+                rv_s = f"{rv_s}*"
+            else:
+                cls, status = "positive", "Robust"
             rows.append(f"""
                 <tr>
                     <td>{html.escape(ch.get("channel", "?"))}</td>
@@ -1843,6 +1917,21 @@ class CausalAssumptionsSection(Section):
                 </tr>
                 """)
         caveat = robustness.get("caveat", "")
+        any_prior_dominated = any(
+            ch.get("is_prior_dominated") for ch in robustness["channels"]
+        )
+        footnote = (
+            '<p class="chart-caption">* The robustness value grows with '
+            "|posterior mean / posterior sd|. In a Bayesian model a tight prior "
+            "shrinks that sd, so a coefficient the data barely moved reports a "
+            "high robustness value on the strength of its prior alone. Channels "
+            "whose posterior did not meaningfully narrow their prior are marked "
+            "<em>not assessable</em> rather than robust, and robustness values "
+            "are not comparable across channels whose priors differ in "
+            "tightness.</p>"
+            if any_prior_dominated
+            else ""
+        )
         return f"""
             <h3>Robustness to Unobserved Confounding</h3>
             <p>
@@ -1852,6 +1941,7 @@ class CausalAssumptionsSection(Section):
                 more robust; channels flagged "Fragile" could be overturned by a weak
                 confounder.
             </p>
+            {footnote}
             <table class="data-table">
                 <thead>
                     <tr>

@@ -12,8 +12,8 @@ sys.path.insert(0, os.path.abspath("../../../src"))
 project = "MMM Framework"
 copyright = f"{datetime.now().year}, Matthew Reda"
 author = "Matthew Reda"
-version = "1.0.0"
-release = "1.0.0"
+version = "1.0.1"
+release = "1.0.1"
 
 # -- General configuration ---------------------------------------------------
 extensions = [
