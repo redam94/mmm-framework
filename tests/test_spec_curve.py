@@ -327,3 +327,63 @@ def test_spec_curve_real_fit_with_stacking(tmp_path):
     # BMA estimate present with a finite credible interval.
     assert res.bma["TV"]["mean"] > 0
     assert np.isfinite(res.bma["TV"]["lower"]) and np.isfinite(res.bma["TV"]["upper"])
+
+
+# ---------------------------------------------------------------------------
+# Weighting: predictive weights are not causal weights
+# ---------------------------------------------------------------------------
+class TestWeightingIsEqualByDefault:
+    """A spec curve averages a CAUSAL estimand (ROI).
+
+    LOO-stacking maximizes expected *predictive* utility, which is a different
+    objective: two specs can predict the KPI equally well while splitting it
+    differently between media and baseline. So stacking weights are computed and
+    reported for diagnosis but must not be applied unless the caller opts in.
+    """
+
+    def _run(self, **kw):
+        roi_by_sat = {
+            "hill": {"TV": 2.5, "Search": 1.6},
+            "logistic": {"TV": 2.3, "Search": 0.6},
+        }
+        return run_spec_curve(
+            _base_spec(),
+            "dummy.csv",
+            fit_fn=_fake_fit(roi_by_sat),
+            roi_fn=_fake_roi,
+            max_draws=500,
+            **kw,
+        )
+
+    def test_default_weighting_is_equal(self):
+        res = self._run(compute_loo=False)
+        assert res.weighting == "equal"
+        ok = [f.name for f in res.fits if not f.error]
+        for name in ok:
+            assert res.weights[name] == pytest.approx(1.0 / len(ok))
+
+    def test_payload_labels_the_weighting_and_carries_a_caveat(self):
+        payload = self._run(compute_loo=False).to_dict()
+        assert payload["weighting"] == "equal"
+        assert "predictive" in payload["weighting_caveat"].lower()
+        assert "predictive_weights" in payload
+
+    def test_unknown_weighting_rejected(self):
+        with pytest.raises(ValueError, match="weighting must be"):
+            self._run(compute_loo=False, weighting="loo")
+
+    def test_stacking_is_opt_in_and_falls_back_when_unavailable(self):
+        # The fake models carry no trace, so stacking weights cannot be
+        # computed; the runner must degrade to equal weights and say so rather
+        # than silently reporting a stacking-weighted number.
+        res = self._run(compute_loo=True, weighting="stacking")
+        assert res.weighting == "equal"
+        assert abs(sum(res.weights.values()) - 1.0) < 1e-6
+
+    def test_equal_weights_make_robustness_a_share_of_specs(self):
+        # Search is above break-even in 2 of 4 specs (hill) and below in 2
+        # (logistic), so equal weighting reports exactly half.
+        res = self._run(compute_loo=False)
+        assert res.robustness["Search"]["profitable_weight"] == pytest.approx(
+            0.5, abs=0.01
+        )

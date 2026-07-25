@@ -18,12 +18,39 @@ This module provides:
 * :func:`default_spec_variants` — the standard defensible grid (adstock ×
   saturation forms, optionally pooling / prior mode) when the caller does not
   hand-pick one.
-* :func:`run_spec_curve` — fit/collect every spec's per-channel ROI posterior,
-  compute LOO-stacking weights, and produce a model-averaged (BMA) estimate with
-  propagated uncertainty.
-* :class:`SpecCurveResult` — the per-spec ROI table, stacking weights, the BMA
+* :func:`run_spec_curve` — fit/collect every spec's per-channel ROI posterior and
+  produce a model-averaged (BMA) estimate with propagated uncertainty.
+* :class:`SpecCurveResult` — the per-spec ROI table, the applied weights, the BMA
   estimate, and a per-channel robustness summary; ``to_dict()`` feeds the report
   robustness section.
+
+Weighting: predictive weights are not causal weights
+----------------------------------------------------
+The BMA step defaults to **equal weights** over the pre-registered set, not to
+LOO-stacking weights, and the distinction is methodological rather than
+cosmetic.
+
+Stacking (Yao et al. 2018) chooses the mixture that maximizes expected
+*predictive* utility — it answers "which combination forecasts held-out ``y``
+best?". A spec curve averages a **causal estimand** (per-channel ROI), and the
+two objectives come apart precisely where MMM specs differ. Two specs can
+predict the KPI equally well while splitting that same fitted mean very
+differently between media and baseline; predictive skill is close to
+uninformative about which split is right, because the decomposition is the free
+parameter. Worse, the direction can invert: a spec that overfits the confounder
+block often predicts *better* while being *less* trustworthy for the causal
+contrast, so stacking can systematically upweight the specs a causal analyst
+should trust least.
+
+Equal weights encode what pre-registration already asserted — every variant in
+the set was declared defensible *before* the fit, so there is no post-hoc
+predictive reason to promote one. Set ``weighting="stacking"`` to opt back in
+(it warns), which is defensible only when every spec in the set is identified
+for the same estimand and you genuinely want a predictive mixture. Stacking
+weights are still computed and reported as ``predictive_weights`` whenever
+``compute_loo`` is on: divergence between them and equal weights is a useful
+diagnostic (it says predictive fit discriminates between your specs), it is just
+not a reason to follow them.
 
 The ROI is computed with the framework's canonical semantics (per-channel
 contribution draws over the full window ÷ the measurement-aware divisor), so a
@@ -51,6 +78,7 @@ __all__ = [
     "default_spec_variants",
     "run_spec_curve",
     "channel_roi_draws",
+    "WEIGHTING_CAVEAT",
 ]
 
 
@@ -290,9 +318,32 @@ class SpecFit:
     error: str | None = None
 
 
+#: Surfaced next to any model-averaged ROI so a reader knows what the mixture
+#: weights mean. See the module docstring for the full argument.
+WEIGHTING_CAVEAT = {
+    "equal": (
+        "Model-averaged with equal weights over the pre-registered spec set. "
+        "Every variant was declared defensible before the fit, so none is "
+        "promoted on post-hoc grounds. Predictive (LOO-stacking) weights are "
+        "reported alongside for diagnosis but deliberately not applied: "
+        "stacking optimizes held-out prediction, and two specs can predict the "
+        "KPI equally well while splitting it very differently between media and "
+        "baseline — which is the quantity being averaged."
+    ),
+    "stacking": (
+        "Model-averaged with LOO-stacking weights, which optimize expected "
+        "PREDICTIVE utility, not validity for a causal estimand. Two specs can "
+        "predict the KPI equally well while disagreeing sharply on the media/"
+        "baseline split, and a spec that overfits the confounder block can "
+        "predict better while being less trustworthy for ROI. Treat this "
+        "mixture as a forecast-weighted summary, not a causal estimate."
+    ),
+}
+
+
 @dataclass
 class SpecCurveResult:
-    """Spec-curve outcome: per-spec ROI, stacking weights, BMA, robustness."""
+    """Spec-curve outcome: per-spec ROI, applied weights, BMA, robustness."""
 
     channels: list[str]
     specs: list[str]
@@ -302,6 +353,11 @@ class SpecCurveResult:
     weights: dict[str, float]
     bma: dict[str, dict[str, float]]
     robustness: dict[str, dict[str, Any]]
+    #: Which weighting formed ``bma`` — ``"equal"`` (default) or ``"stacking"``.
+    weighting: str = "equal"
+    #: LOO-stacking weights, reported for diagnosis even when not applied.
+    #: Empty when ``compute_loo=False`` or arviz could not run.
+    predictive_weights: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-friendly payload for the report bundle / agent tool (no draws)."""
@@ -311,6 +367,9 @@ class SpecCurveResult:
             "primary": self.primary,
             "hdi_prob": self.hdi_prob,
             "weights": self.weights,
+            "weighting": self.weighting,
+            "predictive_weights": self.predictive_weights,
+            "weighting_caveat": WEIGHTING_CAVEAT.get(self.weighting, ""),
             "bma": self.bma,
             "robustness": self.robustness,
             "per_spec": {
@@ -397,14 +456,18 @@ def _loo_summary(model: Any) -> dict[str, float] | None:
 def _stacking_weights(models: dict[str, Any], names: list[str]) -> dict[str, float]:
     """LOO-stacking weights over the fitted models (Yao et al. 2018).
 
-    Falls back to equal weights when ``az.compare`` cannot run (missing
-    log-likelihood, single model, or an arviz error).
+    Returns ``{}`` whenever stacking cannot genuinely run (missing
+    log-likelihood, fewer than two usable models, or an arviz error) so the
+    caller can distinguish "no predictive weights available" from "predictive
+    weights that happen to be uniform". The caller applies the equal-weight
+    fallback; reporting a fabricated uniform vector as a *stacking* result would
+    misdescribe the mixture.
     """
     import arviz as az
 
     usable = {n: m for n, m in models.items() if getattr(m, "_trace", None) is not None}
     if len(usable) < 2:
-        return {n: (1.0 if n in usable else 0.0) for n in names}
+        return {}
     compare_dict = {}
     for n, m in usable.items():
         trace = m._trace
@@ -420,15 +483,13 @@ def _stacking_weights(models: dict[str, Any], names: list[str]) -> dict[str, flo
         except Exception:  # noqa: BLE001
             continue
     if len(compare_dict) < 2:
-        eq = 1.0 / max(len(usable), 1)
-        return {n: (eq if n in usable else 0.0) for n in names}
+        return {}
     try:
         cmp = az.compare(compare_dict, method="stacking")
         weights = {str(idx): float(row["weight"]) for idx, row in cmp.iterrows()}
     except Exception as e:  # noqa: BLE001
         logger.warning(f"spec-curve stacking failed ({e}); using equal weights")
-        eq = 1.0 / len(compare_dict)
-        weights = {n: eq for n in compare_dict}
+        return {}
     return {n: float(weights.get(n, 0.0)) for n in names}
 
 
@@ -440,8 +501,13 @@ def _bma_mixture(
     n_draws: int,
     rng: np.random.Generator,
 ) -> dict[str, dict[str, float]]:
-    """Model-averaged ROI per channel: a stacking-weighted mixture of the specs'
-    ROI posteriors (propagates within- AND between-spec uncertainty)."""
+    """Model-averaged ROI per channel: a weighted mixture of the specs' ROI
+    posteriors (propagates within- AND between-spec uncertainty).
+
+    ``weights`` are whatever :func:`run_spec_curve` resolved for the chosen
+    ``weighting`` mode — equal by default. They are deliberately *not* stacking
+    weights unless the caller opted in; see the module docstring.
+    """
     bma: dict[str, dict[str, float]] = {}
     for ch in channels:
         parts: list[np.ndarray] = []
@@ -479,7 +545,10 @@ def _robustness(
             continue
         vals = np.array([m for _, m in means], dtype=float)
         primary_mean = next((m for n, m in means if n == primary), None)
-        # Weighted spread: sign-stability weighted by stacking mass.
+        # Weighted spread: sign-stability weighted by the APPLIED weights.
+        # Under the default equal weighting this is simply the fraction of
+        # defensible specs that clear the reference — which is the quantity a
+        # pre-registered spec curve is meant to report.
         pos_mass = sum(
             weights.get(n, 0.0) for n, m in means if m > 1.0
         )  # ROI reference ~1.0
@@ -510,10 +579,11 @@ def run_spec_curve(
     max_draws: int = 400,
     random_seed: int = 42,
     compute_loo: bool = True,
+    weighting: str = "equal",
     fit_fn: Callable[[dict, str], Any] | None = None,
     roi_fn: Callable[..., dict[str, np.ndarray]] | None = None,
 ) -> SpecCurveResult:
-    """Fit a spec set, collect per-channel ROI, and model-average via LOO-stacking.
+    """Fit a spec set, collect per-channel ROI, and model-average across specs.
 
     Parameters
     ----------
@@ -525,7 +595,14 @@ def run_spec_curve(
     hdi_prob, max_draws, random_seed:
         Credible-interval mass, ROI-draw thinning, and seed.
     compute_loo:
-        Compute LOO + stacking weights (else equal weights — a plain spec-curve).
+        Compute per-spec LOO and the diagnostic LOO-stacking weights. These are
+        *reported* either way; whether they are *applied* is ``weighting``.
+    weighting:
+        ``"equal"`` (default) weights every non-failing spec equally — the
+        pre-registration-consistent choice for averaging a causal estimand.
+        ``"stacking"`` applies LOO-stacking weights instead and emits a warning:
+        stacking maximizes expected *predictive* utility, which is a different
+        objective from validity for ROI. See the module docstring.
     fit_fn, roi_fn:
         Injection points for testing. ``fit_fn(spec, dataset_path) -> model``
         (default: build + fit, no serialization); ``roi_fn(model, channels,
@@ -574,11 +651,33 @@ def run_spec_curve(
             fit.error = str(e)
         fits.append(fit)
 
-    weights = _stacking_weights(models, [f.name for f in fits]) if compute_loo else {}
-    if not weights:
-        ok = [f.name for f in fits if not f.error]
-        eq = 1.0 / len(ok) if ok else 0.0
-        weights = {f.name: (eq if not f.error else 0.0) for f in fits}
+    if weighting not in ("equal", "stacking"):
+        raise ValueError(f"weighting must be 'equal' or 'stacking', got {weighting!r}.")
+
+    names = [f.name for f in fits]
+    predictive_weights = _stacking_weights(models, names) if compute_loo else {}
+
+    ok = [f.name for f in fits if not f.error]
+    eq = 1.0 / len(ok) if ok else 0.0
+    equal_weights = {f.name: (eq if not f.error else 0.0) for f in fits}
+
+    if weighting == "stacking" and predictive_weights:
+        logger.warning(
+            "spec-curve: applying LOO-stacking weights to a CAUSAL estimand. "
+            "Stacking maximizes expected predictive utility; two specs can "
+            "predict the KPI equally well while splitting it differently "
+            "between media and baseline. The resulting BMA is a "
+            "forecast-weighted summary, not a causal estimate."
+        )
+        weights = predictive_weights
+    else:
+        if weighting == "stacking":
+            logger.warning(
+                "spec-curve: weighting='stacking' requested but stacking "
+                "weights are unavailable; falling back to equal weights."
+            )
+            weighting = "equal"
+        weights = equal_weights
     for f in fits:
         f.weight = weights.get(f.name, 0.0)
 
@@ -594,4 +693,6 @@ def run_spec_curve(
         weights=weights,
         bma=bma,
         robustness=robustness,
+        weighting=weighting,
+        predictive_weights=predictive_weights,
     )

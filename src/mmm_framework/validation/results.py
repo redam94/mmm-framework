@@ -880,6 +880,16 @@ class ChannelRobustness:
     robustness_value: float  # RV_q: confounder partial R^2 to nullify the effect
     robustness_value_half: float  # RV to halve the effect
     fragile_threshold: float = 0.10
+    #: Prior->posterior contraction ``1 - Var_post / Var_prior`` for this
+    #: channel's coefficient, or ``None`` when no prior group was available.
+    #: The RV is strictly increasing in ``|t| = |mean| / sd``, and a tight prior
+    #: shrinks ``sd`` — so a prior-dominated coefficient reports a high RV
+    #: without any supporting evidence. See
+    #: :mod:`mmm_framework.validation.sensitivity_unobserved`.
+    prior_contraction: float | None = None
+    #: Below this contraction the posterior is treated as prior-dominated and
+    #: the RV is not quotable as evidence of robustness.
+    prior_dominated_threshold: float = 0.20
 
     @property
     def is_fragile(self) -> bool:
@@ -888,6 +898,21 @@ class ChannelRobustness:
             np.isfinite(self.robustness_value)
             and self.robustness_value < self.fragile_threshold
         )
+
+    @property
+    def is_prior_dominated(self) -> bool:
+        """The posterior barely narrowed the prior, so the RV reflects the prior.
+
+        ``None`` contraction (no prior group sampled) reads as *not* flagged —
+        absence of the check is reported separately rather than as a failure.
+        """
+        c = self.prior_contraction
+        return c is not None and np.isfinite(c) and c < self.prior_dominated_threshold
+
+    @property
+    def rv_is_quotable(self) -> bool:
+        """Whether the robustness value can be quoted as evidence at all."""
+        return np.isfinite(self.robustness_value) and not self.is_prior_dominated
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -900,6 +925,9 @@ class ChannelRobustness:
             "robustness_value": self.robustness_value,
             "robustness_value_half": self.robustness_value_half,
             "is_fragile": self.is_fragile,
+            "prior_contraction": self.prior_contraction,
+            "is_prior_dominated": self.is_prior_dominated,
+            "rv_is_quotable": self.rv_is_quotable,
         }
 
 
