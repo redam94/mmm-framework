@@ -500,29 +500,49 @@ frequentist)" and "CVXPY for constrained optimization".
 **Neither is implemented.** They are declared enum values with builder setters
 and nothing that consumes them: `fit()` dispatches on `FitMethod`
 (`nuts`/`smc`/`map`/`advi`/`laplace`/`pathfinder`), never on `InferenceMethod`,
-and the package depends on neither `scikit-learn` nor `cvxpy`. Selecting one
-does not raise — it silently fits **full Bayesian NUTS** via the `"pymc"`
-fallback in `ModelConfig.nuts_sampler`.
+and the package depends on neither `scikit-learn` nor `cvxpy`.
+
+Through **v1.1.0** selecting one did not even raise — `nuts_sampler` falls back
+to `"pymc"` for anything outside its Bayesian map, so the request silently fitted
+a **full Bayesian posterior**. You asked for a fast frequentist point estimate,
+waited out MCMC, and got a posterior, with nothing saying the request had been
+ignored. As of **v1.2.0** it refuses instead.
 """),
     code(r"""
-ridge_cfg = ModelConfig(inference_method=InferenceMethod.FREQUENTIST_RIDGE)
+import textwrap
+
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    ridge_cfg = ModelConfig(inference_method=InferenceMethod.FREQUENTIST_RIDGE)
+
 print(f"inference_method : {ridge_cfg.inference_method.value}")
-print(f"is_bayesian      : {ridge_cfg.is_bayesian}      <- correctly False ...")
-print(f"nuts_sampler     : {ridge_cfg.nuts_sampler!r}   <- ... but still routes to NUTS")
-print(f"fit_method       : {ridge_cfg.fit_method.value}  <- what fit() actually dispatches on")
+print(f"is_bayesian      : {ridge_cfg.is_bayesian}")
+print(f"is_implemented   : {ridge_cfg.is_implemented}   <- v1.2.0")
+print(f"nuts_sampler     : {ridge_cfg.nuts_sampler!r}   <- the fall-through that used to fit NUTS")
+print(f"warning at construction: {[w.category.__name__ for w in caught]}")
 print()
-print("No ridge/cvxpy implementation exists:")
-for mod in ("sklearn", "cvxpy"):
-    try:
-        __import__(mod); print(f"  {mod:8} importable, but nothing in mmm_framework uses it")
-    except ImportError:
-        print(f"  {mod:8} not installed - not a dependency of this package")
+
+try:
+    BayesianMMM(sc.panel(), ridge_cfg, TrendConfig(type=TrendType.LINEAR)).fit()
+except NotImplementedError as exc:
+    print("fit() refuses, and names the alternative:\n")
+    print(textwrap.fill(str(exc), 78))
 """),
     md(r"""
-If you want a fast frequentist point estimate for spec exploration, the
-supported route is the **approximate tier on the fit-method axis** —
-`fit(method="map")` gives a penalised point estimate in seconds (the priors act
-as the penalty, which is what ridge *is*), and
+The refusal names the alternative rather than just declining, because there is a
+real one: **`fit(method="map")` under Gaussian coefficient priors *is* ridge
+regression** — an L2 penalty is exactly a Normal prior. So the capability the
+name promised has effectively been available the whole time, on the other axis.
+
+Implementing the frequentist path properly — transform search instead of priors,
+bootstrap intervals, and the hard constraints a prior genuinely cannot express —
+is tracked in [#180](https://github.com/redam94/mmm-framework/issues/180). The
+enum values are kept rather than deleted so stored configs still parse; they will
+become live, not disappear.
+
+For a fast point estimate today, the **approximate tier on the fit-method axis**
+is the supported route —
+`fit(method="map")` gives a penalised point estimate in seconds, and
 [`approximate_posteriors.ipynb`](approximate_posteriors.ipynb) compares the
 whole tier. Do not reach for `frequentist_ridge`; it does not do what its name
 says.
