@@ -375,13 +375,20 @@ button.copybtn:hover {
 /* --------------------------------------------------------------------------
    7. API reference (autodoc)
    -------------------------------------------------------------------------- */
+/* Signatures hang: Furo pairs `padding-left: 3em` with `text-indent: -2.5em`
+   so a wrapped parameter list is visibly a continuation. The two must move
+   together — overriding the padding alone leaves the inherited -2.5em pulling
+   the *first* line clean out of the card (the `class Foo(` prefix rendered
+   ~20px left of the border). Both are restated here against this card's
+   padding so the pairing is local and can't drift apart again. */
 dl.py > dt.sig,
 dl.c > dt.sig,
 dl.cpp > dt.sig {
     border-radius: var(--mmm-radius-sm);
     border: 1px solid color-mix(in srgb, var(--color-background-border) 70%, transparent);
     border-left: 3px solid var(--mmm-primary);
-    padding: 0.55rem 0.8rem;
+    padding: 0.55rem 0.8rem 0.55rem calc(0.8rem + 2.5em);
+    text-indent: -2.5em;
     font-size: 0.9rem;
     line-height: 1.6;
     transition: var(--mmm-transition);

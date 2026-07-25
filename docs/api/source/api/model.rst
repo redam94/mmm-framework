@@ -6,8 +6,8 @@ Model
 The model module provides the core ``BayesianMMM`` class for fitting
 Marketing Mix Models using Bayesian inference.
 
-BayesianMMM
------------
+Core Model
+----------
 
 .. automodule:: mmm_framework.model.base
    :members:
