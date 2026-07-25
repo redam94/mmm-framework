@@ -96,6 +96,16 @@ class ControlSelectionConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+#: Which ``pm.sample(nuts_sampler=...)`` backend each Bayesian inference
+#: method selects. Kept here rather than on the enum so the enum stays a plain
+#: serialization contract (its VALUES are frozen — see tests/test_api_contracts.py).
+_NUTS_SAMPLER_BY_METHOD = {
+    InferenceMethod.BAYESIAN_PYMC: "pymc",
+    InferenceMethod.BAYESIAN_NUMPYRO: "numpyro",
+    InferenceMethod.BAYESIAN_NUTPIE: "nutpie",
+}
+
+
 class ModelConfig(BaseModel):
     """Complete model configuration."""
 
@@ -222,8 +232,19 @@ class ModelConfig(BaseModel):
         return self.inference_method in [
             InferenceMethod.BAYESIAN_PYMC,
             InferenceMethod.BAYESIAN_NUMPYRO,
+            InferenceMethod.BAYESIAN_NUTPIE,
         ]
 
     @property
     def use_numpyro(self) -> bool:
         return self.inference_method == InferenceMethod.BAYESIAN_NUMPYRO
+
+    @property
+    def nuts_sampler(self) -> str:
+        """The ``pm.sample(nuts_sampler=...)`` backend this config selects.
+
+        Frequentist methods have no NUTS backend; they report ``"pymc"`` so a
+        caller that reads this on a non-Bayesian config still gets the
+        historical default rather than an error.
+        """
+        return _NUTS_SAMPLER_BY_METHOD.get(self.inference_method, "pymc")

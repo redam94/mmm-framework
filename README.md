@@ -214,9 +214,10 @@ print(analyzer.compute_counterfactual_contributions())
 print(analyzer.compute_channel_roi())
 ```
 
-> **Note** — select the sampler on the *config* (`.bayesian_numpyro()`). `fit()` has no
-> `nuts_sampler` parameter, so passing one lands in `**kwargs` and collides with the
-> explicit argument `pm.sample` already receives.
+> **Note** — the NUTS backend is normally selected on the *config*
+> (`.bayesian_pymc()` / `.bayesian_numpyro()` / `.bayesian_nutpie()`). A one-off
+> `model.fit(nuts_sampler="nutpie")` overrides it for a single fit, and the same
+> keyword works on the extension models (`NestedMMM` and friends).
 
 ### Fluent Configuration API
 
@@ -1539,7 +1540,8 @@ mmm-framework/
 
 - `pymc>=6.0` — Probabilistic programming (PyTensor 3.x + ArviZ 1.x in lockstep)
 - `numpyro>=0.19` — JAX-based NUTS sampler
-- `nutpie>=0.16` — Fast NUTS implementation
+- `nutpie>=0.16.10` — Fast Rust NUTS implementation (`.bayesian_nutpie()`; the
+  floor is what PyMC 6 requires to drive it)
 - `pandas>=2.3` — Data manipulation
 - `numpy>=2.3` — Numerical computing
 - `pydantic>=2.12` — Data validation

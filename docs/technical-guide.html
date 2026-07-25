@@ -1440,7 +1440,7 @@ mff_config = (
 
             <div class="note">
                 <h4>💡 Performance Tip</h4>
-                <p>For complex models, use the NumPyro backend &mdash; <code>ModelConfigBuilder().bayesian_numpyro()</code> (the default); the framework then passes <code>nuts_sampler="numpyro"</code> to <code>pm.sample</code> internally.
+                <p>For complex models, use the NumPyro backend &mdash; <code>ModelConfigBuilder().bayesian_numpyro()</code> (the default), or the Rust <code>nutpie</code> backend with <code>.bayesian_nutpie()</code>; a single fit can override the choice with <code>fit(nuts_sampler=...)</code>.
                 <strong>Measured:</strong> ~3&times; faster wall-clock than the PyMC sampler at
                 equal draws (104 weeks &times; 7 channels, 4 chains &times; 500 draws, sequential
                 PyMC chains vs NumPyro's vectorized chains — the end-to-end gap a notebook user

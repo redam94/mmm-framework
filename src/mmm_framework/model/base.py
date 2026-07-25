@@ -3026,6 +3026,7 @@ class BayesianMMM:
         target_accept: float | None = None,
         random_seed: int | None = None,
         method: FitMethod | str | None = None,
+        nuts_sampler: str | None = None,
         **kwargs,
     ) -> MMMResults:
         """
@@ -3052,7 +3053,9 @@ class BayesianMMM:
             tune: Number of tuning samples (NUTS only). Default from config.
             chains: Number of MCMC chains (NUTS) or independent SMC runs
                 (SMC — R-hat is computed across them). Default from config.
-            target_accept: Target acceptance rate for NUTS. Default 0.9.
+            target_accept: Target acceptance rate for NUTS. Defaults to
+                ``model_config.target_accept`` (itself 0.9 unless set via
+                ``ModelConfigBuilder().with_target_accept(...)``).
             random_seed: Random seed for reproducibility.
             method: Fit method — ``"nuts"`` (default, full MCMC), ``"smc"``
                 (Sequential Monte Carlo, exact), ``"map"`` (maximum a
@@ -3061,6 +3064,11 @@ class BayesianMMM:
                 dependency), ``"advi"`` / ``"fullrank_advi"`` (variational
                 inference), or ``"pathfinder"`` (via ``pymc-extras`` — works
                 out of the box). Defaults to ``model_config.fit_method``.
+            nuts_sampler: NUTS backend — ``"pymc"``, ``"numpyro"``, ``"nutpie"``
+                or ``"blackjax"`` (NUTS only; ignored by the other methods).
+                Defaults to ``model_config.nuts_sampler``, i.e. the sampler
+                selected on the config via ``ModelConfigBuilder().bayesian_pymc()``
+                / ``.bayesian_numpyro()`` / ``.bayesian_nutpie()``.
             **kwargs: Additional arguments passed to the underlying sampler
                 (``pm.sample`` for NUTS, ``pm.sample_smc`` for SMC).
 
@@ -3082,9 +3090,12 @@ class BayesianMMM:
             draws = draws or self.model_config.n_draws
             tune = tune or self.model_config.n_tune
             chains = chains or self.model_config.n_chains
-            target_accept = target_accept or 0.9
+            # Precedence for both knobs: explicit fit() argument, then the
+            # config, then the built-in default. The config fields default to
+            # the built-in values, so an untouched config is byte-identical.
+            target_accept = target_accept or self.model_config.target_accept or 0.9
 
-            nuts_sampler = "numpyro" if self.model_config.use_numpyro else "pymc"
+            nuts_sampler = nuts_sampler or self.model_config.nuts_sampler
 
             prior = self.get_prior(samples=1000, random_seed=random_seed)
 

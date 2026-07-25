@@ -35,7 +35,6 @@ from ..config import (
 )
 from ..model.trend_config import TrendConfig, TrendType
 
-
 # =============================================================================
 # Exceptions
 # =============================================================================
@@ -493,6 +492,7 @@ def _build_model_config(model_settings: dict[str, Any]) -> ModelConfig:
     inf_map = {
         "bayesian_numpyro": InferenceMethod.BAYESIAN_NUMPYRO,
         "bayesian_pymc": InferenceMethod.BAYESIAN_PYMC,
+        "bayesian_nutpie": InferenceMethod.BAYESIAN_NUTPIE,
         "frequentist_ridge": InferenceMethod.FREQUENTIST_RIDGE,
     }
     inference = inf_map.get(inf_str, InferenceMethod.BAYESIAN_NUMPYRO)

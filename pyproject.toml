@@ -20,7 +20,9 @@ dependencies = [
     "numba>=0.63.1",
     "numpy>=2.3.5",
     "numpyro>=0.19.0",
-    "nutpie>=0.16.4",
+    # pymc 6.0 refuses to drive nutpie below 0.16.10 (ImportError at sample
+    # time), so the old >=0.16.4 floor shipped a sampler that could not run.
+    "nutpie>=0.16.10",
     "pandas>=2.3.3",
     "plotly>=6.5.0",
     "pydantic>=2.12.5",

@@ -125,7 +125,7 @@ So a "scored" scenario ≈ **fit (17 s) + refutation (25 s) + ops (~2 s) ≈ 44 
 * **Validation refits multiply the whole fit.** Each enabled block re-fits the full model: refutation ≤4×, cross-validation per fold (~5×), sensitivity per multiplier, bootstrap up to ~20× — and every clone re-incurs the trace-memory cost above.
 
 **Recommendations (performance).**
-- Switch the inference backend to **numpyro** (`InferenceMethod.BAYESIAN_NUMPYRO`) for ~2× speed at equal/better convergence; nutpie is installed but not yet wired into `fit()`.
+- Switch the inference backend to **numpyro** (`InferenceMethod.BAYESIAN_NUMPYRO`) for ~2× speed at equal/better convergence; nutpie is also selectable since 2026-07-25 (`.bayesian_nutpie()` / `fit(nuts_sampler="nutpie")`).
 - **Fit once, analyse many** — contributions/marginals/validation all reuse the trace; don't refit. Reconstruct contributions from the stored deterministic rather than re-sampling per channel.
 - Run the **refutation/CV/bootstrap suites selectively** (they are the dominant cost) — on the final model, with a time budget, parallelized across processes.
 - At geo scale, reduce stored deterministics (compute post-hoc), prefer numpyro/nutpie + GPU, and expect channel-count and n_obs to dominate.
@@ -172,7 +172,7 @@ Severity reflects likelihood × impact on the **default** path (national, geomet
 | # | failure | mechanism | mitigation | status |
 |---|---|---|---|---|
 | D1 | **False "not converged"** | strict `r-hat < 1.01` gate vs the ~1.01 ridge floor | treat as advisory; gate on divergences + ESS | confirmed |
-| D2 | **Backend availability/parity** | `fit()` selects pyMC or numpyro via `use_numpyro`; numpyro needs JAX (present here) and has a first-call compile cost; nutpie is installed but not wired in | document the JAX dependency; wire nutpie if desired | informational |
+| D2 | **Backend availability/parity** | `fit()` selects pymc, numpyro or nutpie via `ModelConfig.nuts_sampler` (or the `fit(nuts_sampler=...)` override, added 2026-07-25); numpyro needs JAX (present here) and has a first-call compile cost | document the JAX dependency | resolved |
 | D3 | **Downstream output flooring** | ROI/MAPE guards (`analysis.py`, `validation/validator.py`) substitute `0`/`1.0` for non-finite or zero-spend cases | prefer NaN + exclude from aggregation so degenerate cases stay visible | latent |
 
 ---
