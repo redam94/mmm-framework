@@ -1,7 +1,8 @@
 """Documentation code-snippet gate.
 
 Statically verifies that Python code blocks in the hand-authored docs site
-(``docs/*.html``) only reference APIs that actually exist in
+(``docs/*.html``) **and in the repo's Markdown** (``README.md``, ``CLAUDE.md``,
+``technical-docs/*.md``) only reference APIs that actually exist in
 ``mmm_framework``:
 
 1. Every ``from mmm_framework... import X`` / ``import mmm_framework...``
@@ -12,7 +13,8 @@ Statically verifies that Python code blocks in the hand-authored docs site
 Opting out
 ----------
 * Put an HTML comment ``<!-- doc-snippet: skip -->`` immediately before (or
-  inside) the ``<pre>``/``<div class="code-example">`` block, or
+  inside) the ``<pre>``/``<div class="code-example">`` block — in Markdown, on
+  the line above the fence — or
 * make the first line of the snippet ``# pseudocode`` or ``# illustrative``.
 
 Blocks that mention ``mmm_framework`` but do not parse as Python after
@@ -35,7 +37,8 @@ from pathlib import Path
 import pytest
 from bs4 import BeautifulSoup, Comment, NavigableString
 
-DOCS_DIR = Path(__file__).resolve().parents[1] / "docs"
+ROOT = Path(__file__).resolve().parents[1]
+DOCS_DIR = ROOT / "docs"
 
 SKIP_MARKER = "doc-snippet: skip"
 PSEUDOCODE_MARKERS = ("# pseudocode", "# illustrative")
@@ -52,6 +55,14 @@ BINDING_MAP: dict[str, tuple[str, str]] = {
     "contrib": ("mmm_framework.model.results", "ContributionResults"),
     "contributions": ("mmm_framework.model.results", "ContributionResults"),
     "panel": ("mmm_framework.data_loader", "PanelDataset"),
+    # Extension models. Deliberately NOT called `model` in the docs: the plain
+    # name is bound to BayesianMMM above, and these families have a different
+    # read surface (`get_mediation_effects`, `get_cross_effects_summary`, ...).
+    "nested_model": ("mmm_framework.mmm_extensions.models.nested", "NestedMMM"),
+    "mv_model": (
+        "mmm_framework.mmm_extensions.models.multivariate",
+        "MultivariateMMM",
+    ),
 }
 
 # Bindings that only apply when a guard substring appears in the snippet.
@@ -85,6 +96,8 @@ TRUSTED_PRODUCERS: dict[str, set[str]] = {
     "result": {"BacktestResult", "run_backtest"},
     "post": {"Posterior", "fit"},  # post = cl.fit(...) is the canonical producer
     "state": {"LearningState"},
+    "nested_model": {"NestedMMM"},
+    "mv_model": {"MultivariateMMM"},
 }
 
 # Lines that are clearly shell, not Python.
@@ -101,7 +114,9 @@ _SHELL_PREFIXES = (
 )
 
 # Unicode whitespace that HTML entities (&emsp;, &nbsp;, ...) decode to.
-_WS_TRANSLATION = str.maketrans({" ": "    ", " ": "  ", " ": " ", "\xa0": " ", "​": ""})
+_WS_TRANSLATION = str.maketrans(
+    {" ": "    ", " ": "  ", " ": " ", "\xa0": " ", "​": ""}
+)
 
 
 @dataclasses.dataclass
@@ -192,6 +207,72 @@ def extract_snippets(html_path: Path) -> list[Snippet]:
         )
         first_line = text.splitlines()[0].strip().lower()
         if _has_skip_comment(container):
+            snip.skipped, snip.skip_reason = True, "doc-snippet: skip comment"
+        elif any(first_line.startswith(m) for m in PSEUDOCODE_MARKERS):
+            snip.skipped, snip.skip_reason = True, "pseudocode/illustrative marker"
+        snippets.append(snip)
+    return snippets
+
+
+#: An *unlabeled* fence is only treated as Python when it actually imports the
+#: package. Merely mentioning ``mmm_framework`` is too weak a signal in
+#: Markdown: CLAUDE.md's directory tree is an unlabeled fence full of
+#: ``src/mmm_framework/...`` paths (the same reason the HTML extractor skips
+#: bare ``<pre>`` blocks — mermaid diagrams and ASCII art).
+_MD_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+mmm_framework", re.M)
+
+
+def extract_md_snippets(md_path: Path) -> list[Snippet]:
+    """Extract candidate Python snippets from one Markdown file.
+
+    Mirrors :func:`extract_snippets` for fenced code blocks: a ```` ```python ````
+    fence is checked strictly, an *unlabeled* fence only when it imports
+    ``mmm_framework`` (the Markdown analogue of the untyped ``code-example``
+    divs), and a fence labeled another language is ignored. The opt-outs are
+    the same — an HTML comment on the preceding line, or a
+    ``# pseudocode`` / ``# illustrative`` first line.
+    """
+    lines = md_path.read_text(encoding="utf-8").splitlines()
+    snippets: list[Snippet] = []
+    index = 0
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if not stripped.startswith("```"):
+            i += 1
+            continue
+
+        # Fence length matters: a ````-fenced block may contain ``` lines.
+        fence = "`" * (len(stripped) - len(stripped.lstrip("`")))
+        lang = stripped[len(fence) :].strip().lower()
+        body: list[str] = []
+        j = i + 1
+        while j < len(lines) and lines[j].strip() != fence:
+            body.append(lines[j])
+            j += 1
+
+        # Nearest preceding non-blank line carries the skip comment, if any.
+        k = i - 1
+        while k >= 0 and not lines[k].strip():
+            k -= 1
+        preceding = lines[k] if k >= 0 else ""
+        i = j + 1
+
+        if lang not in ("", "python", "py", "python3"):
+            continue
+        text = _clean("\n".join(body))
+        if not text:
+            continue
+        explicit = lang.startswith("py")
+        if not explicit and not _MD_IMPORT_RE.search(text):
+            continue
+
+        index += 1
+        snip = Snippet(
+            file=md_path.name, index=index, source=text, explicit_python=explicit
+        )
+        first_line = text.splitlines()[0].strip().lower()
+        if SKIP_MARKER in preceding:
             snip.skipped, snip.skip_reason = True, "doc-snippet: skip comment"
         elif any(first_line.startswith(m) for m in PSEUDOCODE_MARKERS):
             snip.skipped, snip.skip_reason = True, "pseudocode/illustrative marker"
@@ -400,12 +481,24 @@ def _docs_files() -> list[Path]:
     return sorted(DOCS_DIR.glob("*.html"))
 
 
-@pytest.mark.parametrize("html_path", _docs_files(), ids=lambda p: p.name)
-def test_docs_snippets(html_path: Path) -> None:
-    """Every Python code block on this docs page references real APIs."""
+def _md_files() -> list[Path]:
+    """Markdown sources the gate covers, in reading-importance order.
+
+    ``README.md`` is the PyPI landing page and the first thing a new user
+    reads; ``CLAUDE.md`` is loaded into every agent session, so a wrong example
+    there actively misleads the assistant. ``technical-docs/*.md`` are the
+    internal specs. All three were unguarded until 2026-07-25, and every Python
+    statement in CLAUDE.md's usage block had rotted (see #172).
+    """
+    return [ROOT / "README.md", ROOT / "CLAUDE.md"] + sorted(
+        (ROOT / "technical-docs").glob("*.md")
+    )
+
+
+def _assert_no_violations(snippets: list[Snippet], hint: str) -> None:
     violations: list[str] = []
     soft_warnings: list[str] = []
-    for snippet in extract_snippets(html_path):
+    for snippet in snippets:
         if snippet.skipped:
             continue
         res = check_snippet(snippet)
@@ -416,9 +509,26 @@ def test_docs_snippets(html_path: Path) -> None:
     assert not violations, (
         "Documentation references APIs that do not exist:\n  "
         + "\n  ".join(violations)
-        + "\n\nFix the docs page, or mark the block with "
-        "<!-- doc-snippet: skip --> / a `# pseudocode` first line "
+        + f"\n\nFix the page, or mark the block with {hint} "
         "(see technical-docs/doc-snippet-testing.md)."
+    )
+
+
+@pytest.mark.parametrize("html_path", _docs_files(), ids=lambda p: p.name)
+def test_docs_snippets(html_path: Path) -> None:
+    """Every Python code block on this docs page references real APIs."""
+    _assert_no_violations(
+        extract_snippets(html_path),
+        "<!-- doc-snippet: skip --> / a `# pseudocode` first line",
+    )
+
+
+@pytest.mark.parametrize("md_path", _md_files(), ids=lambda p: p.name)
+def test_markdown_snippets(md_path: Path) -> None:
+    """Every Python code block in this Markdown file references real APIs."""
+    _assert_no_violations(
+        extract_md_snippets(md_path),
+        "<!-- doc-snippet: skip --> on the line above / a `# pseudocode` first line",
     )
 
 
@@ -428,6 +538,18 @@ def test_docs_dir_exists_and_has_snippets() -> None:
     assert files, f"No docs HTML files found under {DOCS_DIR}"
     total = sum(len(extract_snippets(f)) for f in files)
     assert total > 50, f"Suspiciously few code blocks extracted ({total})"
+
+
+def test_markdown_sources_exist_and_have_snippets() -> None:
+    """The same guard for Markdown — this gate's whole point is that a source
+    which is never *collected* fails silently forever (#172)."""
+    files = _md_files()
+    missing = [p for p in files if not p.exists()]
+    assert not missing, f"Declared Markdown sources do not exist: {missing}"
+    for required in ("README.md", "CLAUDE.md"):
+        assert any(p.name == required for p in files), f"{required} not collected"
+    total = sum(len(extract_md_snippets(f)) for f in files)
+    assert total > 30, f"Suspiciously few Markdown code blocks extracted ({total})"
 
 
 # ---------------------------------------------------------------------------
@@ -558,3 +680,75 @@ def test_extraction_strips_highlight_spans_and_entities(tmp_path: Path) -> None:
     assert len(snips) == 1
     res = check_snippet(snips[0])
     assert res.checked and res.violations == []
+
+
+# ---------------------------------------------------------------------------
+# Self-tests: the Markdown extractor
+# ---------------------------------------------------------------------------
+
+
+def _md(tmp_path: Path, body: str) -> list[Snippet]:
+    doc = tmp_path / "doc.md"
+    doc.write_text(body)
+    return extract_md_snippets(doc)
+
+
+def test_md_extracts_python_fence(tmp_path: Path) -> None:
+    snips = _md(
+        tmp_path, "text\n\n```python\nfrom mmm_framework import BayesianMMM\n```\n"
+    )
+    assert len(snips) == 1
+    assert snips[0].explicit_python
+    assert check_snippet(snips[0]).violations == []
+
+
+def test_md_flags_fictional_api_in_fence(tmp_path: Path) -> None:
+    snips = _md(
+        tmp_path, "```python\nfrom mmm_framework import TotallyFakeClass\n```\n"
+    )
+    assert any("TotallyFakeClass" in v for v in check_snippet(snips[0]).violations)
+
+
+def test_md_ignores_other_languages(tmp_path: Path) -> None:
+    body = '```bash\nuv run pytest\n```\n\n```json\n{"a": 1}\n```\n'
+    assert _md(tmp_path, body) == []
+
+
+def test_md_checks_unlabeled_fence_only_when_it_imports_the_package(
+    tmp_path: Path,
+) -> None:
+    body = (
+        "```\nfrom mmm_framework import BayesianMMM\n```\n\n"
+        "```\nsome unrelated prose block\n```\n"
+    )
+    snips = _md(tmp_path, body)
+    assert len(snips) == 1
+    assert not snips[0].explicit_python
+
+
+def test_md_ignores_a_directory_tree_that_merely_names_the_package(
+    tmp_path: Path,
+) -> None:
+    """CLAUDE.md's repo map is an unlabeled fence full of package paths."""
+    body = "```\nmmm-framework/\n├── src/mmm_framework/    # core\n```\n"
+    assert _md(tmp_path, body) == []
+
+
+def test_md_honors_skip_comment_above_the_fence(tmp_path: Path) -> None:
+    body = (
+        "<!-- doc-snippet: skip -->\n\n"
+        "```python\nfrom mmm_framework import Imaginary\n```\n"
+    )
+    snips = _md(tmp_path, body)
+    assert len(snips) == 1 and snips[0].skipped
+
+
+def test_md_honors_pseudocode_marker(tmp_path: Path) -> None:
+    snips = _md(tmp_path, "```python\n# pseudocode\nmmm.summon_dragons()\n```\n")
+    assert len(snips) == 1 and snips[0].skipped
+
+
+def test_md_respects_fence_length(tmp_path: Path) -> None:
+    """A ````-fenced block may legitimately contain ``` lines."""
+    body = "````markdown\n```python\nnot code, an example of markup\n```\n````\n"
+    assert _md(tmp_path, body) == []

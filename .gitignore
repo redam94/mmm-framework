@@ -29,6 +29,10 @@ node_modules/
 # consumed client-side by the Cmd-K palette and glossary tooltips — must ship)
 !docs/shared/search-index.json
 !docs/shared/glossary.json
+# SEO build manifest (content hash + stamped dateModified per page). Tracked so
+# build_seo.py is idempotent across checkouts — without it every clone would
+# re-date the whole site on its first run.
+!docs/shared/seo-manifest.json
 # v1.0 contract artifacts — must be tracked (rest-api.html source of truth +
 # the CI route-snapshot gate in tests/test_api_contracts.py)
 !docs/shared/openapi.json

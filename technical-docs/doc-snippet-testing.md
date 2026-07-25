@@ -3,9 +3,18 @@
 **Gate:** `tests/test_docs_snippets.py` — runs in the default (fast) suite, ~2–3 s.
 
 **Rule:** document only APIs that exist. The suite enforces imports and known-object
-methods on every Python code block in `docs/*.html`.
+methods on every Python code block in `docs/*.html` **and in the repo's Markdown**:
+`README.md`, `CLAUDE.md`, `technical-docs/*.md`.
+
+Markdown was added 2026-07-25 (#172). Until then the gate globbed the HTML site
+only, so the PyPI landing page and the file loaded into every agent session were
+unguarded — and every Python statement in CLAUDE.md's usage block had rotted
+undetected, which is also what kept the `docs-freshness` automation re-detecting
+the same staleness daily (#173).
 
 ## What the gate checks
+
+### HTML pages (`docs/*.html`)
 
 The test extracts Python code from every hand-authored docs page:
 
@@ -28,6 +37,20 @@ For each block it then verifies, statically (via `ast`):
    than its trusted producer (e.g. `model = SomeOtherThing()`), the binding is
    dropped for that snippet — no false positives from local reuse.
 
+### Markdown files
+
+Fenced blocks, with the same downstream checks:
+
+- ` ```python ` (also `py`, `python3`) — always checked
+- unlabeled ` ``` ` fences — checked **only if the block imports
+  `mmm_framework`**. A weaker "mentions the package" rule collects prose and
+  ASCII art: CLAUDE.md's directory tree is an unlabeled fence full of
+  `src/mmm_framework/...` paths.
+- fences labeled another language (`bash`, `json`, `text`, …) — ignored
+- fence length is respected, so a ` ````markdown ` block may contain ` ``` `
+
+### Both
+
 Shell lines (`$`, `pip`, `uv `, `git `, …) are stripped before parsing.
 `# Output:` sections are comments and parse fine. A block that mentions
 `mmm_framework` but does not parse as Python after cleaning produces a *soft
@@ -42,6 +65,8 @@ warning* (and a regex-based import scan still runs); blocks with no
 | `results`, `fit` | `mmm_framework.model.results.MMMResults` |
 | `contrib`, `contributions` | `mmm_framework.model.results.ContributionResults` |
 | `panel` | `mmm_framework.data_loader.PanelDataset` |
+| `nested_model` | `mmm_framework.mmm_extensions.models.nested.NestedMMM` |
+| `mv_model` | `mmm_framework.mmm_extensions.models.multivariate.MultivariateMMM` |
 | `result` (only when `run_backtest` appears in the snippet) | `mmm_framework.validation.backtest.BacktestResult` |
 | `config` | **not bound** — ambiguous across config classes, always skipped |
 
@@ -58,7 +83,8 @@ Two equivalent opt-outs:
 <pre><code class="python">future_api.not_yet_real()</code></pre>
 ```
 
-or make the first line of the snippet a marker comment:
+In Markdown the comment goes on the line above the fence (blank lines between
+are fine). Or make the first line of the snippet a marker comment:
 
 ```python
 # pseudocode  (or: # illustrative)
@@ -70,7 +96,7 @@ the snippet against the real API.
 
 ## When the gate fails
 
-The failure message names the page, block index, and the missing symbol.
+The failure message names the file, block index, and the missing symbol.
 Either the docs reference a fictional API (fix the page) or the checker is
 wrong (refine `tests/test_docs_snippets.py` — e.g. the binding map). The
 module contains self-tests that feed synthetic fictional snippets to the
