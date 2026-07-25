@@ -25,7 +25,7 @@ model.
   dataclasses), thin wrappers over the solver.
 - Wiring: model-op `plan_budget` / `optimize_budget` (`agents/model_ops.py`), agent
   tool `run_budget_optimizer` (`agents/tools.py`), REST `POST
-  /projects/{id}/planner/optimize` (`api/main.py`), React `PlannerStudio` +
+  /projects/{id}/planner/optimize` (`server/src/mmm_framework_server/main.py`), React `PlannerStudio` +
   `AllocationResult`.
 
 ## Objectives (risk-aware)

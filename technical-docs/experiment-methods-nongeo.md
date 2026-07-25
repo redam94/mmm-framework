@@ -159,7 +159,7 @@ needs_panel=False)` (needs a national time series, not a geo panel).
   in `_NATIONAL_ESTIMATORS`.
 - **`agents/tools.py`** — a `ghost_ads_power` tool (pre-fit, `allow_unfitted`);
   switchback flows through `design_experiment_plan` with `method="switchback"`.
-- **`api/main.py`** — `POST /projects/{id}/ghost-ads/power` (stateless calc; no
+- **`server/src/mmm_framework_server/main.py`** — `POST /projects/{id}/ghost-ads/power` (stateless calc; no
   job needed) + switchback via the existing design endpoint.
 - **Frontend** — `GhostAdsCalculator.tsx` panel; switchback controls in
   `DesignStudio.tsx`.
