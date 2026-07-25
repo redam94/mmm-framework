@@ -31,7 +31,7 @@ ORG_ID = f"{SITE}/#organization"
 SITE_ID = f"{SITE}/#website"
 SENTINEL = "<!-- seo:augmented (structured data + social cards) -->"
 DEFAULT_IMG = f"{SITE}/assets/mmm-framework-social-preview.png"
-TODAY = "2026-07-23"
+TODAY = "2026-07-24"
 EXCLUDE = {"TEMPLATE.html", "TEMPLATE-SIDEBAR.html", "404.html"}
 BLOG_PREFIX = "blog-"  # blog-*.html posts emit BlogPosting nodes (index: blog.html)
 

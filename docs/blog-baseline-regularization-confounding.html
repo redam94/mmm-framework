@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Baseline Ate Your Media Effect | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="An MMM's trend basis is the adjustment set standing between media and unmeasured demand, so its flexibility is a causal hyperparameter, not a fit hyperparameter. A stiff baseline reports a narrower interval centered in the wrong place, and the flexibility that minimizes prediction error is a third setting again.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-baseline-regularization-confounding.html">
+    <meta property="og:title" content="The Baseline Ate Your Media Effect">
+    <meta property="og:description" content="Trend flexibility is a causal hyperparameter, not a fit hyperparameter. A tighter baseline gives you a narrower media interval centered in the wrong place — and no diagnostic in the output warns you.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-baseline-regularization-confounding.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Baseline Ate Your Media Effect">
+    <meta name="twitter:description" content="Trend flexibility is a causal hyperparameter, not a fit hyperparameter. A tighter baseline gives you a narrower media interval centered in the wrong place — and no diagnostic in the output warns you.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-baseline-regularization-confounding.html",
+          "name": "The Baseline Ate Your Media Effect | MMM Framework",
+          "description": "An MMM's trend basis is the adjustment set standing between media and unmeasured demand, so its flexibility is a causal hyperparameter, not a fit hyperparameter. A stiff baseline reports a narrower interval centered in the wrong place, and the flexibility that minimizes prediction error is a third setting again.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-baseline-regularization-confounding.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-baseline-regularization-confounding.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "The Baseline Ate Your Media Effect",
+          "datePublished": "2026-07-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-baseline-regularization-confounding.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-baseline-regularization-confounding.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "The Baseline Ate Your Media Effect",
+              "item": "https://redam94.github.io/mmm-framework/blog-baseline-regularization-confounding.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#confounder">Time Is the Confounder You Adjust With</a></li>
+                <li><a href="#saturated">A Baseline Is a Saturated Regressor Block</a></li>
+                <li><a href="#narrower">Narrower and Wronger</a></li>
+                <li><a href="#two-objectives">One Dial, Two Objectives</a></li>
+                <li><a href="#named">Causal ML Named This in 2018</a></li>
+                <li><a href="#framework">What the Code Gets Right, and the Gap</a></li>
+                <li><a href="#spec-curve">Put the Baseline in the Pre-Registered Set</a></li>
+                <li><a href="#limits">What This Does Not Establish</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">The Baseline Ate Your Media Effect</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-24">July 24, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">MMM</span>
+            </p>
+            <p class="lead">Every marketing mix model contains a term whose only job is to absorb demand you cannot measure: a growth rate, ten Prophet changepoints, a twenty-knot spline, a Fourier stack, a Gaussian process, a local level. It carries no business meaning, appears on no slide, and is usually set by whoever last noticed the fit improve. It is also, in every model whose budgets follow the calendar, the adjustment set standing between the media coefficients and the confounding nothing else can remove. Google's Meridian documentation says so in its own words: <em>&ldquo;If time is an important confounder between media and the KPI, then the bias-variance trade-off in estimating time effects translates to a bias-variance trade-off in estimating the causal effects of media.&rdquo;</em> Turn that dial and the ROI moves. What makes it dangerous is the direction of the error signal. On a planted world below, a baseline stiff enough to look safe puts the demand-chasing search channel at 35.0% of the KPI against a truth of 13.2% &mdash; and reports the <em>narrowest</em> interval in the sweep, 6.5 points wide, containing the truth in 0 of 200 replications. Loosening it walks the estimate onto the truth and <em>widens</em> the interval to 15 points. Precision and accuracy move in opposite directions, so nothing in the output warns you, and cross-validated error is minimized at a third setting again. Baseline flexibility is a causal hyperparameter wearing a fit hyperparameter's clothes. It cannot be tuned; it has to be swept.</p>
+
+            <h2 id="confounder">Time Is the Confounder You Adjust With</h2>
+            <p>The structural claim is short. Media budgets are not set at random; they are set against the calendar. Retail spends into Q4 because Q4 sells, insurers buy open enrollment, and everyone's annual plan is anchored on last year's shape. The KPI moves on the same calendar for reasons that have nothing to do with advertising: weather, category seasonality, holiday timing, the macro cycle. Calendar time is therefore a common cause of spend and of sales, and the part of it you did not measure is a textbook back-door path from media to the KPI. A flexible function of time is the only instrument most MMMs have for blocking it &mdash; a confounder adjustment built out of the index column, requiring no data you do not already have.</p>
+
+            <p>That framing is not an outside critique of anybody's software; it is the position taken by the documentation of the most widely deployed open MMM in the market. Meridian's page on setting knots states the trade-off in exactly the terms a causal analyst would use &mdash; <em>&ldquo;More knots reduce bias in time effect estimates, while fewer knots reduce variance in time effect estimates&rdquo;</em> &mdash; and then transmits it, as quoted above, into the media effects themselves. The knot count is documented as an analyst decision about where on a bias-variance frontier to sit. Almost nobody treats it that way: it gets set to the default, or nudged until the fit stops looking lumpy, and it never appears in the assumption log.</p>
+
+            <p>Two neighboring arguments locate this one. <a href="blog-table-2-fallacy-mmm.html">The Table 2 Fallacy in Media Mix Models</a> establishes that MMM control coefficients carry no clean causal reading and notes in passing that over-shrinking a confounder &ldquo;re-opens the back-door path into the channel estimates&rdquo; &mdash; the same mechanism, applied to columns someone named. The new subject is the term that is <em>not in the coefficient table at all</em>, a basis nobody interprets, which therefore escapes every review that would catch a suspiciously tight prior on price. And <a href="blog-demand-proxy-proximal.html">Your Demand Proxy Is Not a Control Variable</a> shows that a measured stand-in for latent demand does not buy partial de-confounding by partial adjustment. The time basis is the other way of proxying the same latent quantity: unmeasured, fit from the residuals. It needs no external data and cannot be contaminated by advertising the way a branded-search series can. It can only represent demand that moves as a function of calendar time common to the whole panel &mdash; a shock in three DMAs is invisible to it &mdash; and its flexibility is chosen by fit.</p>
+
+            <h2 id="saturated">A Baseline Is a Saturated Regressor Block</h2>
+            <p>To see why the transfer is mechanical rather than incidental, stop thinking of the baseline as a curve and start thinking of it as regressors. Hodges and Reich, writing about spatial models in 2010, showed that adding a spatially correlated random effect to a linear model is equivalent to adding a saturated collection of canonical regressors whose coefficients are shrunk toward zero, with the spatial structure determining both which regressors you get and how hard each is shrunk. Their title is the finding: <em>Adding Spatially-Correlated Errors Can Mess Up the Fixed Effect You Love</em>. Replace &ldquo;spatial map&rdquo; with &ldquo;time index&rdquo; and you have an MMM's baseline. A Prophet changepoint block, a B-spline basis, a Fourier stack and an HSGP are the same object: a design matrix \( B \) with coefficients \( \gamma \) that a prior pulls toward zero.</p>
+
+            <p>Written that way, the bias has a closed form the framework's own README already carries, for the one-confounder case. Let \( C \) be a confounder that drives both spend \( X \) and the KPI, and suppose the fit shrinks \( C \)'s coefficient by a factor \( s \in [0,1] \), so \( \tilde\gamma = s\gamma \). Then</p>
+            $$ \hat\beta \;\xrightarrow{p}\; \beta \;+\; (1-s)\cdot\gamma\cdot\frac{\mathrm{Cov}(X, C)}{\mathrm{Var}(X)}. $$
+            <p>Two readings matter. First, only \( s = 1 \) &mdash; no shrinkage &mdash; removes the bias; shrinking a confounder's coefficient by 90% leaves 90% of the omitted-variable bias. Second, the multiplier \( \mathrm{Cov}(X,C)/\mathrm{Var}(X) \) is a property of the world, not of the estimator. Shrinking \( \gamma \) does not shrink the correlation between spend and demand. You cannot regularize your way out of a design problem.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>The same formula, one direction at a time</summary>
+                <div class="deep-dive-body">
+                    <p>For a basis block the scalar \( s \) becomes a spectrum. Take the singular value decomposition \( B = UDV^\top \). Under a Gaussian prior \( \gamma \sim \mathcal{N}(0, \tau^2 I) \) and noise variance \( \sigma^2 \), the posterior mean of \( \gamma \) is the ridge estimate with penalty \( \lambda = \sigma^2/\tau^2 \), and the \( k \)-th canonical direction is shrunk by</p>
+                    $$ s_k \;=\; \frac{d_k^2}{d_k^2 + \lambda}, \qquad \lambda = \sigma^2/\tau^2 . $$
+                    <p>Directions with large singular values &mdash; the basis's smooth, high-energy shapes &mdash; are barely shrunk; wiggly low-energy directions are shrunk almost to nothing. The shrinkage is not uniform, and the basis decides which shapes survive.</p>
+                    <p>Now project the media regressor onto those directions, \( x = \sum_k c_k u_k + x^\perp \). Where \( x \) loads on a single direction \( u_k \), the scalar algebra above applies exactly with \( s = s_k \), giving transferred bias \( (1-s_k)\gamma_k c_k / \mathrm{Var}(x) \). In general \( \beta \) and \( \gamma \) are estimated jointly and the cross-terms do not vanish, so the sum over \( k \) is a first-order reading rather than an identity. The qualitative content survives and is the whole argument: the media coefficient inherits bias in proportion to how much of the channel's variation lies in directions the baseline was <em>not</em> allowed to fit. Two knobs control that: the number of basis functions, which decides which directions exist, and the prior width \( \tau \), which decides how much of each is kept.</p>
+                    <p>So dropping the knot count and tightening the prior are one problem with two spellings, and a spec set that varies knot counts while holding a tight prior fixed has swept the smaller of the two.</p>
+                </div>
+            </details>
+
+            <p>The practical version of the spectrum is a statement about timescales. A basis with \( k \) interior knots over \( T \) periods resolves variation down to roughly \( \Delta t \approx T/(k+1) \) and cannot represent anything faster. Three years of weekly data with ten Prophet changepoints resolves about a fourteen-week wave: any demand movement slower than a quarter is absorbed into the baseline, and anything faster passes through into the residual, where the media block is waiting. The same cut applies to media. A channel flighted in three-week bursts keeps almost all of its variation on the fast side of that line and is identified. A channel whose budget steps once a quarter lives on the same side of the line as the baseline, and the two are nearly the same regressor.</p>
+
+            <div class="definition">
+                <h4>Definition: concurvity</h4>
+                <p><strong>Concurvity</strong> is the nonparametric generalization of collinearity, introduced by Buja, Hastie and Tibshirani (1989) for additive models: a covariate exhibits concurvity when it is well approximated by a smooth function of the model's <em>other</em> terms. Perfect concurvity makes the parameters unidentifiable, exactly as perfect collinearity does in a linear model; partial concurvity inflates variance and transmits bias the way a high variance inflation factor does.</p>
+                <p>For an MMM the question is the concurvity of each channel with the time basis: how much of this channel's spend is a smooth function of the week number? It is a one-line regression &mdash; project the channel's modeled variable onto the baseline basis and report \( 1 - R^2 \), the fraction of its variance surviving as identifying variation. Wood (2017) treats a version of this as a standard GAM diagnostic; almost no MMM report contains it.</p>
+            </div>
+
+            <p>Meridian's endpoints make this concrete. Its documentation notes that with <code>knots = 1</code>, <em>&ldquo;all time periods are measured with a single parameter which is equivalent to saying time has no effect&rdquo;</em>; with <code>knots = n_times</code>, <em>&ldquo;each time period gets its own parameter and so the effect of a given time period is estimated using only data from that time period.&rdquo;</em> The defaults split along the line the timescale argument predicts: national models default to one knot, geo models to one per period. In a national panel with one row per week, a parameter per week is a perfect fit leaving no time-series variation for anything else &mdash; media would not be identified at all. Geo models can afford it because a period effect shared across regions still leaves within-week cross-geo contrasts. The knot count is not a smoothing preference; it decides which comparisons the estimate rests on.</p>
+
+            <h2 id="narrower">Narrower and Wronger</h2>
+            <p>Here is the part that makes this hard to catch in review. The figure below plants a world and sweeps the baseline: three years of weekly national data, two channels, one slow latent demand index that raises sales directly. <em>Brand</em> is flighted three weeks on, three weeks off &mdash; almost nothing in common with demand. <em>Search</em> has its budget re-set every eight weeks to chase where demand is going, which is what a competent performance team does. Search genuinely delivers 13.2% of the KPI, brand 5.3%. Demand is never given to the model, so the only thing standing between the search coefficient and the confounding is the baseline, swept from a single linear growth rate to a changepoint every three weeks.</p>
+
+            <div class="interactive-box">
+                <h4>The bias curve, and the band that tightens around the wrong answer</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Estimated contribution of the demand-chasing <em>search</em> channel, as a share of KPI, against baseline flexibility. The dashed line is the planted truth (13.2%); the shaded ribbon is the 90% interval. Drag <strong>demand-chasing</strong> to change how hard the search budget follows demand &mdash; at zero the channel is unconfounded and the curve flattens onto the truth. Baseline flexibility runs left to right as a changepoint every 156 weeks (a plain linear trend) down to every 3&nbsp;weeks. Least-squares fits stand in for the posterior.</p>
+                <div class="control-row">
+                    <label>Demand-chasing in the search budget</label>
+                    <input type="range" id="bcKappa" min="0" max="1.2" step="0.05" value="0.55">
+                    <span class="value" id="bcKappaVal">0.55</span>
+                    <button type="button" class="viz-btn" id="bcResample">&#8635; Resample</button>
+                </div>
+                <div class="chart-container chart-themed" id="bcChart" style="height:360px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Stiffest baseline</span><span class="val" id="bcStiff">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Its 90% width</span><span class="val" id="bcStiffW">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Loosest baseline</span><span class="val" id="bcLoose">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Its 90% width</span><span class="val" id="bcLooseW">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Truth</span><span class="val ok" id="bcTruth">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Intervals covering truth</span><span class="val" id="bcCover">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults the stiffest baseline &mdash; one linear growth rate over three years &mdash; puts search at <strong>35.0% of the KPI against a truth of 13.2%</strong>, with the narrowest interval in the sweep (6.5&nbsp;points wide, [31.7,&nbsp;38.3]). A changepoint every eight weeks lands on 14.2% with an interval half again as wide. The point estimate walks 21&nbsp;points while the interval grows steadily the whole way, 6.5 to 15.2&nbsp;points. Only 4 of the 10 specifications cover the truth, and they are the four least confident ones.</p>
+            </div>
+
+            <p>The direction of the interval is the whole problem. Everything an analyst uses to sanity-check a coefficient &mdash; interval width, the ratio of estimate to uncertainty, whether zero is excluded &mdash; gets <em>better</em> as the baseline gets stiffer and the estimate gets worse. Nor is it a coincidence: the stiff baseline leaves 90% of the search channel's variance orthogonal to the model's other terms, the loose one 6%. The standard error is small in the first case because the regressor looks beautifully separated from everything else. The model is confident because it was never asked the hard question.</p>
+
+            <p>Repeating the exercise over independent draws of the same generator turns that into a coverage statement. Across 200 replications, the 90% interval on the search channel's contribution contained the truth in <strong>0 of 200 fits</strong> under the linear baseline, with a median width of 6.2 points; 21% of the time with a changepoint every 16 weeks; 72% at every 8 weeks; and 88.5% at every 3 weeks, where the median width had grown to 15.3 points. Mean bias fell monotonically from +188% to +9% along the same axis. Nominal coverage is bought entirely with width, and the setting that a reviewer would praise for its tight intervals is the setting whose intervals are never right. (That replication study is a separate offline computation, not the single planted world in the figure.)</p>
+
+            <div class="warning">
+                <h4>⚠️ Your coverage diagnostic cannot see this</h4>
+                <p>The obvious defense is to check coverage, and this framework ships the tool: <code>diagnostics/coverage.py</code> fixes a parameter vector, simulates datasets, refits, and counts how often each interval contains the truth. It will not catch this failure, and its own documentation says why: <em>&ldquo;it simulates data FROM the model, so it can never detect real-world misspecification (wrong adstock/saturation family, unobserved confounding, time-varying effects).&rdquo;</em> Simulate from a model whose baseline is too stiff to represent demand and the generated data contain no demand confounding either &mdash; so the stiff model recovers its own truth with nominal coverage and a satisfyingly narrow interval. The module states the disambiguation: under-coverage there is mechanical (an approximate fit, a broken sampler, priors too tight to move); coverage there plus failure against an external answer key means the gap is structural. This one is structural, so only the external key finds it.</p>
+            </div>
+
+            <h2 id="two-objectives">One Dial, Two Objectives</h2>
+            <p>If the interval will not warn you, the natural next thought is to let the data choose: fit at several flexibilities, keep the one that predicts best. This is where the argument acquires a precedent from a literature that had to settle exactly this question under public scrutiny. Time-series studies of air pollution and mortality regress daily deaths on daily pollution with a smooth function of calendar time absorbing season and long-term trend &mdash; structurally the same model as an MMM, same confounder, same nuisance basis. The degrees of freedom of that smooth were contested for years, because the estimated pollution effect moved with them.</p>
+
+            <p>Peng, Dominici and Louis (2006) settled the methodology in a simulation study, and their conclusions transfer without modification. The amount of smoothing needed for a small-bias estimate of the exposure coefficient, they found, can differ from the amount needed to estimate the nuisance function well &mdash; and, more pointedly, <em>&ldquo;the automatic use of criteria such as generalized cross-validation or AIC for selecting df could be potentially misleading (particularly with high concurvity) since they are designed to choose the df that will lead to optimal prediction of the mortality series&rdquo;</em> rather than accurate estimation of the coefficient of interest. They also quantified where the bias lives: <em>&ldquo;For natural splines, the bias drops rapidly between df&nbsp;=&nbsp;1 and df&nbsp;=&nbsp;4 per year and is stable afterwards. For penalized splines, the bias drops much more slowly and does not appear to level off until df&nbsp;=&nbsp;9 or df&nbsp;=&nbsp;10 per year.&rdquo;</em> A field whose estimates set national air-quality standards concluded two decades ago that you must not tune the nuisance basis on fit. Media measurement tunes it on fit as a matter of routine.</p>
+
+            <div class="interactive-box">
+                <h4>Three curves on one axis: bias, identifying variation, and prediction error</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Same sweep, three things measured. On the left axis, the <strong>absolute bias</strong> in the search channel's contribution (% of truth) and the <strong>identifying variation</strong> that survives &mdash; the share of the channel's own variance left after the baseline basis is projected out. On the right axis, <strong>5-fold interleaved cross-validated RMSE</strong>, the criterion an analyst would actually tune on. Drag the search channel's budget cadence: the slower the budget moves, the sooner the baseline swallows it.</p>
+                <div class="control-row">
+                    <label>Search budget re-set every &hellip; weeks</label>
+                    <input type="range" id="objCad" min="2" max="26" step="2" value="8">
+                    <span class="value" id="objCadVal">8</span>
+                </div>
+                <div class="chart-container chart-themed" id="objChart" style="height:360px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Best CV at</span><span class="val" id="objBestCv">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">|Bias| there</span><span class="val warn" id="objBiasThere">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Identifying variation there</span><span class="val" id="objResidThere">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Least bias at</span><span class="val" id="objBestBias">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">CV penalty for it</span><span class="val" id="objCvPenalty">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults, cross-validated error is minimized at a changepoint every 4&nbsp;weeks, where the bias is still +22% and only 8.2% of the channel's variance is doing the identifying. The least-biased specification sits at every 8&nbsp;weeks and pays a 6.8% worse CV score for it &mdash; a gap no reviewer would defend a modeling choice on. Note the flat stretch on the right axis from every 16&nbsp;weeks to every 6: CV improves by 5.8% while the estimate travels <strong>nine points of KPI</strong>. The criterion has no resolving power exactly where the answer is being decided.</p>
+            </div>
+
+            <p>That flat stretch is the honest generalization &mdash; and it obliges me to correct a sibling post. <a href="blog-holdout-error-mmm.html">Stop Validating Your MMM With Holdout Error</a> argues the general case: a holdout score is a function of the fitted sum, never sees the split, and so cannot rank specifications for a causal estimand. But its limits section conceded that predictive accuracy is &ldquo;the right criterion for the parts of the model that are forecasts,&rdquo; listing &ldquo;baseline flexibility, trend and seasonality structure&rdquo; among them. That concession is wrong in precisely the case that matters. When time confounds media, the baseline is not a forecasting component with an incidental causal side effect; it <em>is</em> the confounder-adjustment surface, and prediction error is the wrong criterion for it for the same reason it is the wrong criterion for the ROI. The concession holds only where spend is uncorrelated with the calendar, which is to say for no real media plan.</p>
+
+            <p>None of which licenses the opposite reflex. &ldquo;Use more knots&rdquo; is not the lesson, for two reasons the sweep makes visible. The variance cost is real and unbounded: the median interval width grew monotonically across the whole axis, and at the saturated end &mdash; one parameter per period in a national model &mdash; the media effect is not identified at all. And what minimizes <em>mean squared error</em> is an interior point whose location depends on things you do not know. Over 150 replications, the root-mean-square relative error of the search estimate ran 190%, 150%, 80%, 42%, <strong>37%</strong>, 40%, 40%, 46% across changepoint spacings from 156&nbsp;weeks down to 2 &mdash; a genuine interior optimum at roughly one changepoint every six weeks. Move the budget cadence to quarterly and the optimum moves: the confounder's strength and the channel's spectrum both set it, and neither is known at fit time. There is no defensible \( k \), only a defensible way to handle not knowing it.</p>
+
+            <h2 id="named">Causal ML Named This in 2018</h2>
+            <p>The phenomenon has a name outside marketing, a literature, and even a constructive fix. Hahn, Carvalho, Puelz and He (2018) called it <strong>regularization-induced confounding</strong>: applying a shrinkage prior to a block of control coefficients biases the treatment-effect estimate, because over-shrinking the controls re-opens the confounding they were included to close. Their proposal is not &ldquo;shrink less&rdquo; but to reparameterize so the prior on the nuisance block cannot pull on the treatment effect. The sequel, Hahn, Murray and Carvalho (2020), builds the idea into Bayesian causal forests by splitting the response surface into a prognostic function and a treatment-effect function, so shrinking the first does not shrink the second.</p>
+
+            <p>Econometrics reached the same answer from the frequentist side: double/debiased machine learning (Chernozhukov and colleagues, 2018) exists because plugging a regularized nuisance estimate into a naive score contaminates the target with the nuisance's regularization bias. Its Neyman-orthogonal score and cross-fitting are an admission that <em>how you estimate the thing you do not care about determines the bias in the thing you do</em>.</p>
+
+            <p>Be precise about what these fixes buy. They remove the bias from <em>regularizing</em> a nuisance function that is otherwise adequate. They do not remove the bias from a nuisance basis that cannot represent the confounder at all. If demand moves on an eleven-week rhythm and your baseline resolves fourteen-week waves, no orthogonalization recovers the difference &mdash; the information is not in the model. Both failures are live in an MMM's baseline, and only the first has a technical fix.</p>
+
+            <div class="warning">
+                <h4>⚠️ The orthogonalization that makes it worse</h4>
+                <p>The tidiest-looking fix is to restrict the baseline to the part of the design space orthogonal to media &mdash; let the flexible term explain whatever media cannot, and the media coefficient stops moving with the knot count. Spatial statistics tried exactly this, under the name <em>restricted spatial regression</em>, and has spent a decade retracting it: Khan and Calder (2022) show that inference on the regression coefficient is frequently <em>worse</em> under it than under a model with no spatial term at all. The reason is plain in the media case. When time genuinely confounds media, projecting the baseline onto media's orthogonal complement assigns every scrap of shared time-and-spend variation to media by construction &mdash; pinning the estimate to the most credulous answer available and reporting a narrow interval around it. Shrink the baseline and you bias toward the confounded answer; orthogonalize it and you bias toward crediting media with everything the calendar explains.</p>
+            </div>
+
+            <p>Meanwhile the field is moving toward <em>more</em> time flexibility, not less. Ng, Wang and Dai (2021) describe the time-varying-coefficient MMM deployed at Uber, in which the media coefficients themselves are weighted over a set of local latent variables so effectiveness can drift. That is a defensible response to real non-stationarity, and it sharpens the problem rather than sidestepping it: a time-varying media coefficient and a flexible baseline are two flexible functions of time competing for the same variation, and their priors decide the split. Every argument above then applies twice.</p>
+
+            <h2 id="framework">What the Code Gets Right, and the Gap</h2>
+            <p>This framework has the rule half-implemented, and the missing half is the half this post is about. For named control columns the causal logic is wired in: controls carry a causal role, and the coefficient prior widths are keyed to it. A control tagged <code>CONFOUNDER</code> gets a prior standard deviation of 2.0 on standardized data while an ordinary precision control gets 0.5, with the reasoning in the source &mdash; a confounder &ldquo;must not be shrunk toward zero&rdquo; because shrinking it biases the media coefficient by exactly the \( (1-s)\gamma\,\mathrm{Cov}/\mathrm{Var} \) term above. Variable-selection priors are refused on confounders for the same reason, and a deliberately narrow prior on a confounder-tagged control raises a warning that it &ldquo;can re-open back-door bias on the media effects.&rdquo;</p>
+
+            <p>The time basis sits outside that registry entirely. Its flexibility and prior widths live in <code>TrendConfig</code> and <code>SeasonalityConfig</code> as ordinary hyperparameters &mdash; <code>n_changepoints</code>, <code>n_knots</code>, <code>changepoint_prior_scale</code>, <code>spline_prior_sigma</code>, <code>gp_lengthscale_prior_mu</code> &mdash; with no causal role attached and no warning when they are tightened. Nothing in the model knows the trend is doing confounder-adjustment work, so nothing objects when it is set to whatever the last fit liked. That is not hypothetical, and the code records the incident:</p>
+
+            <div class="note">
+                <h4>💡 From the source, on a default that was changed</h4>
+                <p><em>&ldquo;The old, much tighter defaults (0.1 / 0.05) effectively pinned the trend near zero and pushed real trend/structural breaks into media and intercept.&rdquo;</em> &mdash; <code>model/trend_config.py</code>. The two numbers are the prior standard deviation on the linear growth rate and the Laplace scale on each Prophet slope change; both were widened by a factor of five to ten. The seasonality config carries the same warning on its own axis: the Fourier amplitude prior defaults to 0.3 on standardized \( y \), and raising it is advised for strongly seasonal categories, &ldquo;or the seasonal signal gets squeezed into trend/media.&rdquo; Two components, two documented instances, one mechanism.</p>
+            </div>
+
+            <p>One genuine guard exists, and it is worth distinguishing from what it does not do. In the extension models every non-linear trend family is zero-centered so its <em>level</em> is absorbed by the intercept; the source calls this &ldquo;the identifiability guard.&rdquo; Useful, and unrelated to this failure. A guard on the level does nothing about the shape, and it is the shape &mdash; which frequencies the baseline may fit &mdash; that decides how much confounding reaches the media coefficients.</p>
+
+            <h2 id="spec-curve">Put the Baseline in the Pre-Registered Set</h2>
+            <p>If no setting is defensible and no criterion selects one, then choosing one and reporting its interval is the garden of forking paths with extra steps &mdash; a <a href="blog-p-hacking-evidence.html">researcher degree of freedom</a> that moves the headline number by a factor of three. The honest move is the one the framework already implements for the transform families: declare a set of defensible specifications before the fit, run all of them, report how the estimand moves. The change argued for here is that the set must include the baseline.</p>
+
+            <div class="interactive-box">
+                <h4>A spec curve on the nuisance</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Seven defensible baseline specifications on the same planted world &mdash; no trend, linear, three changepoint counts, and two smooth harmonic bases &mdash; rendered the way <code>validation/spec_curve.py</code> renders the adstock&nbsp;&times;&nbsp;saturation grid. One marker per specification within each channel's row, the equal-weight average as a bold diamond whose bars span the set (not a credible interval), and a green tick at the planted truth. Resample to confirm the pattern is not one lucky draw.</p>
+                <div class="control-row">
+                    <label>Same world, new draw</label>
+                    <button type="button" class="viz-btn" id="scResample">&#8635; Resample</button>
+                </div>
+                <div class="chart-container chart-themed" id="scChart" style="height:320px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Search: spread</span><span class="val warn" id="scSearchSpread">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Search: truth</span><span class="val ok" id="scSearchTruth">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Brand: spread</span><span class="val" id="scBrandSpread">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Brand: truth</span><span class="val ok" id="scBrandTruth">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Equal-weight average, search</span><span class="val" id="scAvg">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">The demand-chasing channel spans <strong>11.8% to 37.3% of the KPI across seven defensible baselines &mdash; a 3.2&times; range</strong> around a truth of 13.2%. The flighted brand channel spans 6.1% to 6.8% around a truth of 5.3%: nearly invariant to the same axis, and biased about a point high in every one of them. Which channels are baseline-fragile is itself the finding, and it is knowable before any experiment runs.</p>
+            </div>
+
+            <p>The per-channel contrast is the useful output. Baseline fragility is not a global reliability score but a channel-specific one, and it maps onto the concurvity number from earlier. The brand channel's three-week bursts live on the fast side of every baseline in the set, so its estimate barely moves &mdash; which does not make it <em>correct</em>, since it sits about a point above truth in all seven fits, a level error the trend axis cannot fix. The search channel's eight-week budget steps sit on the boundary, so it moves by a factor of three. A six-channel model typically has some of each, and a spec curve says which are which. That is actionable twice over: fragile channels are the ones whose numbers should never be quoted without an interval spanning the set, and the ones where <a href="blog-calibrating-mmm-experiments.html">an experiment is worth its cost</a> &mdash; designed variation is the only thing that moves a channel to the fast side of every baseline you might choose.</p>
+
+            <p>Here the machinery exists and the default grid does not use it. <code>SpecVariant</code> already carries a first-class <code>trend</code> axis alongside <code>adstock</code>, <code>saturation</code>, <code>controls</code> and <code>kpi_level</code>, plus a deep-merging <code>overrides</code> escape hatch reaching any spec path including the trend priors. But <code>default_spec_variants()</code> sweeps adstock forms crossed with saturation forms and nothing else &mdash; the two axes already known to carry a <a href="blog-saturation-or-fatigue.html">well-studied identification problem</a> &mdash; while the axis that silently rescales every ROI in the report keeps its default in every variant. Declaring it takes five lines.</p>
+
+            <pre><code># illustrative
+from mmm_framework.validation.spec_curve import SpecSet, SpecVariant, run_spec_curve
+
+baseline_axis = SpecSet(
+    rationale="Baseline flexibility is confounder adjustment, so it is swept, not tuned.",
+    registered_at="2026-07-24T09:00:00Z",
+    variants=[
+        SpecVariant(name="linear",             trend="linear", primary=True),
+        SpecVariant(name="piecewise 10cp",     trend="piecewise"),
+        SpecVariant(name="piecewise 26cp",     trend="piecewise",
+                    overrides={"trend": {"n_changepoints": 26}}),
+        SpecVariant(name="spline 20k",         trend="spline",
+                    overrides={"trend": {"n_knots": 20}}),
+        SpecVariant(name="gaussian process",   trend="gaussian_process"),
+        # the prior width is the same knob as the knot count -- sweep it too
+        SpecVariant(name="piecewise 26cp tight", trend="piecewise",
+                    overrides={"trend": {"n_changepoints": 26},
+                               "priors": {"trend": {"changepoint_prior_scale": 0.05}}}),
+    ],
+)
+result = run_spec_curve(base_spec, dataset_path, variants=baseline_axis)</code></pre>
+
+            <p>Three details carry the argument. The set is a <code>SpecSet</code> with a <code>rationale</code> and a <code>registered_at</code> stamp, meant to be serialized into the pre-fit design readout before anyone sees a result &mdash; the spread is only evidence if the set was fixed in advance. The variants sweep both spellings of flexibility, knot counts <em>and</em> prior width, because the deep dive shows they are one knob. And the run is deliberately not weighted by predictive skill: <code>run_spec_curve</code> defaults to equal weights for the reason its own docstring gives, that two specs can predict the KPI equally well while splitting it very differently between media and baseline. Every claim in this post is a claim about that split.</p>
+
+            <h2 id="limits">What This Does Not Establish</h2>
+            <p>It does not establish a number of knots, and any reader who leaves with one has read it backwards. The mean-squared-error optimum in the simulation was interior and moved with the confounder's strength and the channel's budget cadence, neither of which is observable at fit time. The deliverable is a swept, pre-registered, reported axis &mdash; not a recommended \( k \).</p>
+
+            <p>The demonstration is a demonstration: least-squares fits on a stylized two-channel national world, one latent confounder, Gaussian noise, hinge-and-harmonic bases standing in for Prophet and HSGP, hard degrees of freedom standing in for shrinkage. A Bayesian fit with informative priors will damp some swings, replacing the sharp \( k \) with the softer \( s_k \) spectrum. The failure exists and is large under conditions that are not adversarial; how often a given team's model lands on the wrong side of it is not something a simulation can say.</p>
+
+            <p>I did not demonstrate the mirror-image failure. It is natural to expect a very flexible baseline to absorb the media's own variation and attenuate the estimate toward zero, and I looked: across budget cadences of 8, 26 and 52&nbsp;weeks, mean bias fell monotonically with flexibility and never went materially negative. What rose monotonically was the median interval width. So this generator supports the bias-variance framing Meridian states, and the hard limit at the saturated end &mdash; a national model with one parameter per period identifies nothing &mdash; is arithmetic rather than a simulation result. Attenuation may well dominate with heavier adstock, slower channels or shorter panels; I have not shown it.</p>
+
+            <p>Geo panels change the calculus in a way the simulation cannot capture, and this is the most important limit. A national model has one row per period, so the time effect and the media block compete for a single series. A geo panel with a period effect shared across regions still has within-week cross-geo contrasts, which is why Meridian can default geo models to a knot per period and why a geo MMM tolerates far more baseline flexibility. Everything above applies most sharply to national weekly models &mdash; which is what most brands run.</p>
+
+            <p>Finally, the spec curve diagnoses and does not repair. The equal-weight average across the seven baselines lands at 24.0% of the KPI against a truth of 13.2%, because most members of the set are biased in the same direction and averaging biased estimates does not produce an unbiased one. A spec curve is a fragility report; when it comes back wide the answer is designed variation, an experiment, or an honest interval spanning the set &mdash; not a better average. And none of this addresses a confounder that is not a function of calendar time at all &mdash; a regional demand shock, a competitor's launch in two markets &mdash; where no flexibility setting helps and the argument moves to <a href="blog-demand-proxy-proximal.html">measured proxies and their own failure modes</a>.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>An MMM's trend/seasonality basis is a confounder-adjustment surface, not a forecasting component, whenever budgets follow the calendar. Meridian's own documentation transmits the trade-off explicitly: the bias-variance trade-off in time effects becomes one in the causal effects of media.</li>
+                    <li>A flexible baseline is algebraically a saturated block of shrunk regressors (Hodges&ndash;Reich). Shrinking a confounder by 90% leaves 90% of the bias, \( \hat\beta \to \beta + (1-s)\gamma\,\mathrm{Cov}(X,C)/\mathrm{Var}(X) \), and the knot count and the prior width are two spellings of one knob.</li>
+                    <li>The error signal points the wrong way: on a planted world, the stiffest baseline put the demand-chasing channel at 35.0% of the KPI against a truth of 13.2% <em>with the narrowest interval in the sweep</em>, covering the truth in 0 of 200 replications. Loosening it walked the estimate onto the truth and widened the median interval from 6.2 to 15.3&nbsp;points. Recovery-coverage diagnostics cannot see this, because they simulate from the model.</li>
+                    <li>Prediction cannot select the setting. Cross-validated error was minimized where the bias was still 22% and only 8.2% of the channel's variance identified anything, and it was flat over the region where the estimate moved nine points of KPI. Peng, Dominici and Louis established the same for air-pollution models in 2006.</li>
+                    <li>The phenomenon is named &mdash; regularization-induced confounding (Hahn et al., 2018) &mdash; and its fix removes regularization bias, not the bias from a basis that cannot represent the confounder. The tempting orthogonalization repair is restricted spatial regression, known to make inference worse.</li>
+                    <li>Ship it as a swept axis, not a tuned one. <code>SpecVariant</code> already has a <code>trend</code> field and <code>overrides</code> reaches the trend priors; <code>default_spec_variants()</code> sweeps only adstock&nbsp;&times;&nbsp;saturation. Add the baseline, pre-register the set, report per-channel fragility, and publish each channel's \( 1-R^2 \) against the basis &mdash; when that reads 8%, the ROI is an extrapolation however narrow the interval looks.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Buja, A., Hastie, T., &amp; Tibshirani, R. (1989). <em>Linear Smoothers and Additive Models</em>. The Annals of Statistics, 17(2), 453&ndash;555.</li>
+                <li>Chernozhukov, V., Chetverikov, D., Demirer, M., Duflo, E., Hansen, C., Newey, W., &amp; Robins, J. (2018). <em>Double/Debiased Machine Learning for Treatment and Structural Parameters</em>. The Econometrics Journal, 21(1), C1&ndash;C68.</li>
+                <li>Google. <em>Set knots</em>. Meridian documentation, developers.google.com/meridian/docs/advanced-modeling/setting-knots (retrieved July 2026).</li>
+                <li>Hahn, P. R., Carvalho, C. M., Puelz, D., &amp; He, J. (2018). <em>Regularization and Confounding in Linear Regression for Treatment Effect Estimation</em>. Bayesian Analysis, 13(1), 163&ndash;182.</li>
+                <li>Hahn, P. R., Murray, J. S., &amp; Carvalho, C. M. (2020). <em>Bayesian Regression Tree Models for Causal Inference: Regularization, Confounding, and Heterogeneous Effects (with Discussion)</em>. Bayesian Analysis, 15(3), 965&ndash;1056.</li>
+                <li>Hodges, J. S., &amp; Reich, B. J. (2010). <em>Adding Spatially-Correlated Errors Can Mess Up the Fixed Effect You Love</em>. The American Statistician, 64(4), 325&ndash;334.</li>
+                <li>Khan, K., &amp; Calder, C. A. (2022). <em>Restricted Spatial Regression Methods: Implications for Inference</em>. Journal of the American Statistical Association, 117(537).</li>
+                <li>Ng, E., Wang, Z., &amp; Dai, A. (2021). <em>Bayesian Time Varying Coefficient Model with Applications to Marketing Mix Modeling</em>. arXiv:2106.03322.</li>
+                <li>Peng, R. D., Dominici, F., &amp; Louis, T. A. (2006). <em>Model Choice in Time Series Studies of Air Pollution and Mortality</em>. Journal of the Royal Statistical Society, Series A, 169(2), 179&ndash;203.</li>
+                <li>Wood, S. N. (2017). <em>Generalized Additive Models: An Introduction with R</em> (2nd ed.). Chapman &amp; Hall/CRC.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // ================= shared planted world =========================
+        var T = 156;                                  // three years, weekly
+        var BETA_B = 0.45, BETA_S = 0.60, GAMMA = 0.85;
+        var KS = [0, 2, 4, 6, 9, 13, 19, 26, 39, 52]; // changepoint counts
+
+        function spacing(k) { return T / (k + 1); }
+        function spaceLabel(k) { return spacing(k).toFixed(0); }
+
+        // Latent demand confounds the search budget; brand is fast-flighted.
+        function world(kappa, cadence, seed) {
+            var rng = BV.mulberry32(seed), t, i;
+            var d = new Float64Array(T), w = 0;
+            for (t = 0; t < T; t++) {
+                w = 0.94 * w + 0.35 * BV.randn(rng);
+                d[t] = 0.9 * Math.sin(2 * Math.PI * (t / 52)) + 1.4 * (t / T) + w;
+            }
+            var m = 0; for (t = 0; t < T; t++) m += d[t]; m /= T;
+            var v = 0; for (t = 0; t < T; t++) v += (d[t] - m) * (d[t] - m); v = Math.sqrt(v / T);
+            for (t = 0; t < T; t++) d[t] = (d[t] - m) / v;
+
+            var b = new Float64Array(T);
+            for (t = 0; t < T; t++) {
+                var on = (Math.floor(t / 3) % 2 === 0) ? 1.0 : 0.22;
+                b[t] = Math.max(0.05, on * (1 + 0.25 * BV.randn(rng)));
+            }
+            var s = new Float64Array(T), lvl = 1;
+            for (t = 0; t < T; t++) {
+                if (t % cadence === 0) {
+                    var hi = Math.min(T, t + cadence), db = 0;
+                    for (i = t; i < hi; i++) db += d[i];
+                    db /= (hi - t);
+                    lvl = 1 + kappa * db + 0.32 * BV.randn(rng);
+                }
+                s[t] = Math.max(0.05, lvl * (1 + 0.06 * BV.randn(rng)));
+            }
+            var y = new Float64Array(T), ysum = 0, ssum = 0, bsum = 0;
+            for (t = 0; t < T; t++) {
+                y[t] = 4 + BETA_B * b[t] + BETA_S * s[t] + GAMMA * d[t] + 0.30 * BV.randn(rng);
+                ysum += y[t]; ssum += s[t]; bsum += b[t];
+            }
+            return {
+                b: b, s: s, y: y,
+                shareS: 100 * ssum / ysum, shareB: 100 * bsum / ysum,
+                truthS: 100 * BETA_S * ssum / ysum, truthB: 100 * BETA_B * bsum / ysum
+            };
+        }
+
+        // Piecewise-linear baseline: intercept, trend, k changepoints.
+        function hinge(k) {
+            var cols = [], t, j, c;
+            c = new Float64Array(T); for (t = 0; t < T; t++) c[t] = 1; cols.push(c);
+            c = new Float64Array(T); for (t = 0; t < T; t++) c[t] = t / (T - 1); cols.push(c);
+            for (j = 0; j < k; j++) {
+                var kn = (j + 1) / (k + 1);
+                c = new Float64Array(T);
+                for (t = 0; t < T; t++) c[t] = Math.max(0, t / (T - 1) - kn);
+                cols.push(c);
+            }
+            return cols;
+        }
+        // Smooth (harmonic) baseline — the GP-like family.
+        function harmonic(ord) {
+            var cols = hinge(0), j, t, c;
+            for (j = 1; j <= ord; j++) {
+                c = new Float64Array(T);
+                for (t = 0; t < T; t++) c[t] = Math.sin(2 * Math.PI * j * t / (T - 1));
+                cols.push(c);
+                c = new Float64Array(T);
+                for (t = 0; t < T; t++) c[t] = Math.cos(2 * Math.PI * j * t / (T - 1));
+                cols.push(c);
+            }
+            return cols;
+        }
+        function flatBasis() {
+            var c = new Float64Array(T);
+            for (var t = 0; t < T; t++) c[t] = 1;
+            return [c];
+        }
+
+        // Least squares returning coefficients and the diagonal of (X'X)^-1.
+        function ols(cols, y, rows) {
+            var p = cols.length, i, j, t, n = rows ? rows.length : T;
+            var A = [], g = new Float64Array(p);
+            for (i = 0; i < p; i++) {
+                A.push(new Float64Array(2 * p));
+                for (j = 0; j < p; j++) {
+                    var sv = 0;
+                    for (t = 0; t < n; t++) { var r = rows ? rows[t] : t; sv += cols[i][r] * cols[j][r]; }
+                    A[i][j] = sv;
+                }
+                var sg = 0;
+                for (t = 0; t < n; t++) { var r2 = rows ? rows[t] : t; sg += cols[i][r2] * y[r2]; }
+                g[i] = sg;
+                A[i][p + i] = 1;
+            }
+            var jit = 0; for (i = 0; i < p; i++) jit += A[i][i]; jit = 1e-10 * jit / p;
+            for (i = 0; i < p; i++) A[i][i] += jit;
+            for (i = 0; i < p; i++) {                       // Gauss-Jordan inverse
+                var piv = i;
+                for (j = i + 1; j < p; j++) if (Math.abs(A[j][i]) > Math.abs(A[piv][i])) piv = j;
+                var tmp = A[i]; A[i] = A[piv]; A[piv] = tmp;
+                var dv = A[i][i];
+                if (Math.abs(dv) < 1e-14) dv = 1e-14;
+                for (j = i; j < 2 * p; j++) A[i][j] /= dv;
+                for (var r3 = 0; r3 < p; r3++) {
+                    if (r3 === i) continue;
+                    var f = A[r3][i];
+                    if (f === 0) continue;
+                    for (j = i; j < 2 * p; j++) A[r3][j] -= f * A[i][j];
+                }
+            }
+            var beta = new Float64Array(p);
+            for (i = 0; i < p; i++) {
+                var sb = 0;
+                for (j = 0; j < p; j++) sb += A[i][p + j] * g[j];
+                beta[i] = sb;
+            }
+            var rss = 0;
+            for (t = 0; t < n; t++) {
+                var rr = rows ? rows[t] : t, fit = 0;
+                for (i = 0; i < p; i++) fit += cols[i][rr] * beta[i];
+                rss += (y[rr] - fit) * (y[rr] - fit);
+            }
+            var dof = Math.max(1, n - p), s2 = rss / dof, se = new Float64Array(p);
+            for (i = 0; i < p; i++) se[i] = Math.sqrt(Math.max(0, A[i][p + i] * s2));
+            return { beta: beta, se: se };
+        }
+
+        // Per-channel contribution share of KPI (%) with its standard error.
+        function fitShare(W, base) {
+            var f = ols([W.b, W.s].concat(base), W.y);
+            return {
+                shareB: W.shareB * f.beta[0], seB: W.shareB * f.se[0],
+                shareS: W.shareS * f.beta[1], seS: W.shareS * f.se[1]
+            };
+        }
+        // Share of the channel's own variance surviving the baseline projection.
+        function identifyingVar(W, base) {
+            var f = ols(base, W.s), t, i, ss = 0, tot = 0, m = 0;
+            for (t = 0; t < T; t++) m += W.s[t]; m /= T;
+            for (t = 0; t < T; t++) {
+                var fit = 0;
+                for (i = 0; i < base.length; i++) fit += base[i][t] * f.beta[i];
+                ss += (W.s[t] - fit) * (W.s[t] - fit);
+                tot += (W.s[t] - m) * (W.s[t] - m);
+            }
+            return 100 * ss / tot;
+        }
+        // 5-fold interleaved cross-validated RMSE.
+        function cvRmse(W, base) {
+            var cols = [W.b, W.s].concat(base), t, i, q, se = 0, n = 0;
+            for (var fold = 0; fold < 5; fold++) {
+                var tr = [], te = [];
+                for (t = 0; t < T; t++) (t % 5 === fold ? te : tr).push(t);
+                var f = ols(cols, W.y, tr);
+                for (q = 0; q < te.length; q++) {
+                    var fit = 0;
+                    for (i = 0; i < cols.length; i++) fit += cols[i][te[q]] * f.beta[i];
+                    se += (W.y[te[q]] - fit) * (W.y[te[q]] - fit); n++;
+                }
+            }
+            return Math.sqrt(se / n);
+        }
+
+        // ---------- Figure 1: the bias curve, band tightening ------------
+        var bcSeed = 7;
+        BV.register(function () {
+            var p = BV.palette();
+            var kappa = parseFloat(document.getElementById('bcKappa').value);
+            var W = world(kappa, 8, bcSeed);
+            var xs = [], mid = [], lo = [], hi = [], covered = 0;
+            for (var i = 0; i < KS.length; i++) {
+                var r = fitShare(W, hinge(KS[i]));
+                var l = r.shareS - 1.645 * r.seS, h = r.shareS + 1.645 * r.seS;
+                xs.push(i); mid.push(r.shareS); lo.push(l); hi.push(h);
+                if (l <= W.truthS && W.truthS <= h) covered++;
+            }
+            var ticks = KS.map(spaceLabel);
+            var traces = [
+                {
+                    type: 'scatter', mode: 'lines', x: xs.concat(xs.slice().reverse()),
+                    y: hi.concat(lo.slice().reverse()), fill: 'toself',
+                    fillcolor: BV.band(p.primary, 0.18), line: { width: 0 },
+                    name: '90% interval', hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'lines+markers', x: xs, y: mid,
+                    name: 'estimated search contribution',
+                    line: { color: p.primary, width: 2.6 },
+                    marker: { color: p.primary, size: 8, line: { color: p.surface, width: 1.2 } },
+                    hovertemplate: 'changepoint every %{text} wk<br>%{y:.1f}% of KPI<extra></extra>',
+                    text: ticks
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: [xs[0], xs[xs.length - 1]],
+                    y: [W.truthS, W.truthS], name: 'planted truth',
+                    line: { color: p.accentDark, width: 2, dash: 'dash' }, hoverinfo: 'skip'
+                }
+            ];
+            var top = Math.max(hi[0], W.truthS) * 1.15;
+            Plotly.react('bcChart', traces, BV.layout({
+                xaxis: {
+                    title: 'baseline flexibility: weeks between changepoints (looser to the right)',
+                    tickmode: 'array', tickvals: xs, ticktext: ticks
+                },
+                yaxis: { title: 'search: % of KPI', range: [0, Math.max(top, 24)] },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 64, r: 20, t: 36, b: 54 }
+            }), BV.config);
+
+            function set(id, txt, cls) {
+                var el = document.getElementById(id);
+                el.textContent = txt;
+                if (cls !== undefined) el.className = 'val' + (cls ? ' ' + cls : '');
+            }
+            var stiffBad = Math.abs(mid[0] - W.truthS) > Math.abs(mid[mid.length - 1] - W.truthS);
+            set('bcStiff', mid[0].toFixed(1) + '%', stiffBad ? 'warn' : '');
+            set('bcStiffW', (hi[0] - lo[0]).toFixed(1) + ' pp', '');
+            set('bcLoose', mid[mid.length - 1].toFixed(1) + '%', '');
+            set('bcLooseW', (hi[hi.length - 1] - lo[lo.length - 1]).toFixed(1) + ' pp', '');
+            set('bcTruth', W.truthS.toFixed(1) + '%', 'ok');
+            set('bcCover', covered + ' of ' + KS.length, covered < KS.length / 2 ? 'warn' : 'ok');
+        });
+        document.getElementById('bcResample').addEventListener('click', function () {
+            bcSeed = (bcSeed * 1664525 + 1013904223) >>> 0;
+            BV.redraw();
+        });
+        BV.sliders([
+            { id: 'bcKappa', value: 'bcKappaVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+
+        // ---------- Figure 2: three curves on one axis -------------------
+        BV.register(function () {
+            var p = BV.palette();
+            var cad = parseInt(document.getElementById('objCad').value, 10);
+            var W = world(0.55, cad, 7);
+            var xs = [], bias = [], ident = [], cv = [];
+            for (var i = 0; i < KS.length; i++) {
+                var base = hinge(KS[i]), r = fitShare(W, base);
+                xs.push(i);
+                bias.push(Math.abs(100 * (r.shareS / W.truthS - 1)));
+                ident.push(identifyingVar(W, base));
+                cv.push(cvRmse(W, base));
+            }
+            var ticks = KS.map(spaceLabel);
+            var iCv = 0, iBias = 0, j;
+            for (j = 1; j < KS.length; j++) {
+                if (cv[j] < cv[iCv]) iCv = j;
+                if (bias[j] < bias[iBias]) iBias = j;
+            }
+            var traces = [
+                {
+                    type: 'scatter', mode: 'lines+markers', x: xs, y: bias,
+                    name: '|bias| in media contribution (% of truth)',
+                    line: { color: p.danger, width: 2.6 }, marker: { color: p.danger, size: 7 },
+                    hovertemplate: 'every %{text} wk<br>bias %{y:.0f}%<extra></extra>', text: ticks
+                },
+                {
+                    type: 'scatter', mode: 'lines+markers', x: xs, y: ident,
+                    name: 'identifying variation left in the channel (%)',
+                    line: { color: p.accent, width: 2.6, dash: 'dot' }, marker: { color: p.accent, size: 7 },
+                    hovertemplate: 'every %{text} wk<br>%{y:.1f}% of variance survives<extra></extra>', text: ticks
+                },
+                {
+                    type: 'scatter', mode: 'lines+markers', x: xs, y: cv, yaxis: 'y2',
+                    name: 'cross-validated RMSE (right axis)',
+                    line: { color: p.primary, width: 2.6 }, marker: { color: p.primary, size: 7, symbol: 'diamond' },
+                    hovertemplate: 'every %{text} wk<br>CV RMSE %{y:.3f}<extra></extra>', text: ticks
+                }
+            ];
+            Plotly.react('objChart', traces, BV.layout({
+                xaxis: {
+                    title: 'baseline flexibility: weeks between changepoints (looser to the right)',
+                    tickmode: 'array', tickvals: xs, ticktext: ticks
+                },
+                yaxis: { title: 'percent', rangemode: 'tozero' },
+                yaxis2: {
+                    title: 'CV RMSE', overlaying: 'y', side: 'right',
+                    showgrid: false, rangemode: 'tozero'
+                },
+                legend: { orientation: 'h', y: 1.22, x: 0, font: { size: 11 } },
+                margin: { l: 58, r: 62, t: 44, b: 54 },
+                shapes: [
+                    {
+                        type: 'line', x0: iCv, x1: iCv, y0: 0, y1: 1, yref: 'paper',
+                        line: { color: p.primary, width: 1.4, dash: 'dash' }
+                    },
+                    {
+                        type: 'line', x0: iBias, x1: iBias, y0: 0, y1: 1, yref: 'paper',
+                        line: { color: p.danger, width: 1.4, dash: 'dash' }
+                    }
+                ],
+                annotations: [
+                    {
+                        x: iCv, y: 1.0, yref: 'paper', yanchor: 'bottom', text: 'best CV',
+                        showarrow: false, font: { size: 10, color: p.primary }
+                    },
+                    {
+                        x: iBias, y: 1.0, yref: 'paper', yanchor: 'bottom', text: 'least bias',
+                        showarrow: false, font: { size: 10, color: p.danger }
+                    }
+                ]
+            }), BV.config);
+
+            function set(id, txt, cls) {
+                var el = document.getElementById(id);
+                el.textContent = txt;
+                if (cls !== undefined) el.className = 'val' + (cls ? ' ' + cls : '');
+            }
+            set('objBestCv', 'every ' + ticks[iCv] + ' wk', '');
+            set('objBiasThere', bias[iCv].toFixed(0) + '%', bias[iCv] > 10 ? 'warn' : 'ok');
+            set('objResidThere', ident[iCv].toFixed(1) + '%', ident[iCv] < 20 ? 'warn' : '');
+            set('objBestBias', 'every ' + ticks[iBias] + ' wk', '');
+            var pen = 100 * (cv[iBias] / cv[iCv] - 1);
+            set('objCvPenalty', pen.toFixed(1) + '% worse', pen < 10 ? 'ok' : 'warn');
+        });
+        BV.sliders([
+            { id: 'objCad', value: 'objCadVal', fmt: function (v) { return String(v); } }
+        ], BV.redraw);
+
+        // ---------- Figure 3: spec curve on the nuisance -----------------
+        var SPECS = [
+            { name: 'trend: none', base: flatBasis },
+            { name: 'trend: linear', base: function () { return hinge(0); } },
+            { name: 'piecewise · 6 cp', base: function () { return hinge(6); } },
+            { name: 'piecewise · 13 cp', base: function () { return hinge(13); } },
+            { name: 'piecewise · 26 cp', base: function () { return hinge(26); } },
+            { name: 'smooth · 4 harmonics', base: function () { return harmonic(4); } },
+            { name: 'smooth · 10 harmonics', base: function () { return harmonic(10); } }
+        ];
+        var scSeed = 7;
+        BV.register(function () {
+            var p = BV.palette(), cyc = BV.cycle();
+            var W = world(0.55, 8, scSeed);
+            var rows = ['search (chases demand)', 'brand (fast flighting)'];
+            var accS = [], accB = [], traces = [], i;
+            for (i = 0; i < SPECS.length; i++) {
+                var r = fitShare(W, SPECS[i].base());
+                accS.push(r.shareS); accB.push(r.shareB);
+                var jit = (i - (SPECS.length - 1) / 2) / (SPECS.length * 1.5);
+                traces.push({
+                    type: 'scatter', mode: 'markers',
+                    name: SPECS[i].name + (i === 1 ? ' (primary)' : ''),
+                    x: [r.shareS, r.shareB], y: [0 + jit, 1 + jit],
+                    marker: {
+                        color: cyc[i % cyc.length], size: i === 1 ? 13 : 10,
+                        line: { color: i === 1 ? p.text : p.surface, width: i === 1 ? 2 : 1 }
+                    },
+                    hovertemplate: SPECS[i].name + '<br>%{x:.1f}% of KPI<extra></extra>'
+                });
+            }
+            function mn(a) { var s = 0; for (var q = 0; q < a.length; q++) s += a[q]; return s / a.length; }
+            function rng(a) { return [Math.min.apply(null, a), Math.max.apply(null, a)]; }
+            var rS = rng(accS), rB = rng(accB), avgS = mn(accS), avgB = mn(accB);
+            traces.push({
+                type: 'scatter', mode: 'markers', name: 'equal-weight average (bars: spread across the set)',
+                x: [avgS, avgB], y: [0, 1],
+                error_x: {
+                    type: 'data', symmetric: false,
+                    array: [rS[1] - avgS, rB[1] - avgB], arrayminus: [avgS - rS[0], avgB - rB[0]],
+                    color: p.muted, thickness: 2, width: 8
+                },
+                marker: { color: p.text, size: 15, symbol: 'diamond', line: { color: p.surface, width: 1 } },
+                hovertemplate: 'equal-weight average %{x:.1f}%<extra></extra>'
+            });
+            traces.push({
+                type: 'scatter', mode: 'markers', name: 'planted truth',
+                x: [W.truthS, W.truthB], y: [0, 1],
+                marker: { color: p.success, size: 22, symbol: 'line-ns-open', line: { color: p.success, width: 3 } },
+                hovertemplate: 'truth %{x:.1f}%<extra></extra>'
+            });
+            Plotly.react('scChart', traces, BV.layout({
+                xaxis: { title: 'channel contribution (% of KPI)', rangemode: 'tozero' },
+                yaxis: {
+                    tickmode: 'array', tickvals: [0, 1], ticktext: rows,
+                    range: [1.6, -0.6]
+                },
+                legend: { orientation: 'h', y: -0.22, x: 0, font: { size: 10 } },
+                margin: { l: 150, r: 24, t: 20, b: 96 }
+            }), BV.config);
+
+            function set(id, txt, cls) {
+                var el = document.getElementById(id);
+                el.textContent = txt;
+                if (cls !== undefined) el.className = 'val' + (cls ? ' ' + cls : '');
+            }
+            set('scSearchSpread', rS[0].toFixed(1) + '–' + rS[1].toFixed(1) + '% (' + (rS[1] / rS[0]).toFixed(1) + '×)', 'warn');
+            set('scSearchTruth', W.truthS.toFixed(1) + '%', 'ok');
+            set('scBrandSpread', rB[0].toFixed(1) + '–' + rB[1].toFixed(1) + '% (' + (rB[1] / rB[0]).toFixed(1) + '×)', '');
+            set('scBrandTruth', W.truthB.toFixed(1) + '%', 'ok');
+            set('scAvg', avgS.toFixed(1) + '%', avgS > 1.4 * W.truthS ? 'warn' : 'ok');
+        });
+        document.getElementById('scResample').addEventListener('click', function () {
+            scSeed = (scSeed * 1664525 + 1013904223) >>> 0;
+            BV.redraw();
+        });
+    })();
+    </script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

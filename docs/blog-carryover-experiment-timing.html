@@ -77,7 +77,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-10",
+          "dateModified": "2026-07-24",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/blog-carryover-experiment-timing.html#breadcrumb"
           },
@@ -241,7 +241,8 @@
 
             <div class="note">
                 <h4>💡 Estimate the retention rate at the cadence you test at</h4>
-                <p>The washout table is only as good as the \( \alpha \) that feeds it, and retention rates are notoriously sensitive to temporal aggregation: Clarke (1976) showed that carryover estimated from annual data implies durations 20&ndash;50 times longer than estimates from monthly data on the same process, because aggregation sums the within-period carryover into the apparent retention. Use the shortest data interval available — for most MMM stacks, weekly — and take the spacing rule from the model's posterior on \( \alpha \) rather than a category benchmark. If you want conservative spacing, size the washout from the upper end of that posterior, not the point estimate.</p>
+                <p>The washout table is only as good as the \( \alpha \) that feeds it, and retention rates are notoriously sensitive to temporal aggregation: Clarke (1976) showed that carryover estimated from annual data implies durations 20&ndash;50 times longer than estimates from monthly data on the same process, because aggregation sums the within-period carryover into the apparent retention. The benchmark to aim at is not simply "shorter": Tellis and Franses (2006) show the optimal interval is the <em>unit exposure time</em> — the smallest interval within which advertising occurs once, at the same point in each period — and, contrary to the older literature's warnings about disaggregation bias, sampling <em>finer</em> than that costs precision but introduces no bias. The asymmetry is what matters operationally. Too coarse is biased; too fine is merely noisy.</p>
+                <p>For always-on programmatic media, exposure does not happen once a week at a fixed moment, so weekly data already sits above the unit exposure time and a residual Clarke-type inflation in \( \alpha \) should be expected even at the finest interval a typical MMM stack offers. Read the fitted \( \alpha \) as an upper bound on true persistence rather than a point estimate of it. That bias runs in a convenient direction here — an inflated \( \alpha \) lengthens \( \ln \varepsilon / \ln \alpha \), so a washout sized from weekly data errs long — but it is the reason the same \( \alpha \) should not be reused as a decay parameter anywhere the direction of the error is unhelpful. Take the spacing rule from the model's posterior on \( \alpha \) rather than a category benchmark, and if you want conservative spacing, size the washout from the upper end of that posterior, not the point estimate.</p>
             </div>
 
             <h2 id="contamination">When Tests Read Each Other's Answers</h2>
@@ -297,6 +298,7 @@
                 <li>Hanssens, D. M., Parsons, L. J., &amp; Schultz, R. L. (2001). <em>Market Response Models: Econometric and Time Series Analysis</em> (2nd ed.). Kluwer Academic Publishers.</li>
                 <li>Koyck, L. M. (1954). <em>Distributed Lags and Investment Analysis</em>. North-Holland.</li>
                 <li>Clarke, D. G. (1976). <em>Econometric Measurement of the Duration of Advertising Effect on Sales</em>. Journal of Marketing Research, 13(4).</li>
+                <li>Tellis, G. J., &amp; Franses, P. H. (2006). <em>Optimal Data Interval for Estimating Advertising Response</em>. Marketing Science, 25(3), 217&ndash;229.</li>
                 <li>Rainforth, T., Foster, A., Ivanova, D. R., &amp; Bickford Smith, F. (2024). <em>Modern Bayesian Experimental Design</em>. Statistical Science, 39(1).</li>
                 <li>Foster, A., Jankowiak, M., Bingham, E., Horsfall, P., Teh, Y. W., Rainforth, T., &amp; Goodman, N. (2019). <em>Variational Bayesian Optimal Experimental Design</em>. NeurIPS.</li>
                 <li>Foster, A., Ivanova, D. R., Malik, I., &amp; Rainforth, T. (2021). <em>Deep Adaptive Design: Amortizing Sequential Bayesian Experimental Design</em>. ICML.</li>

@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stop Validating Your MMM With Holdout Error | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Holdout MAPE scores the sum of a marketing mix model; every decision you take from one depends on the split. Across 144 defensible specifications, half a point of holdout error hides a 150-point swing in estimated media contribution — and the best-forecasting model was the most wrong.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-holdout-error-mmm.html">
+    <meta property="og:title" content="Stop Validating Your MMM With Holdout Error">
+    <meta property="og:description" content="Holdout MAPE scores the sum; ROI depends on the split — and the split is where all the identification lives. What to put in the contract instead.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-holdout-error-mmm.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Stop Validating Your MMM With Holdout Error">
+    <meta name="twitter:description" content="Holdout MAPE scores the sum; ROI depends on the split — and the split is where all the identification lives. What to put in the contract instead.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-holdout-error-mmm.html",
+          "name": "Stop Validating Your MMM With Holdout Error | MMM Framework",
+          "description": "Holdout MAPE scores the sum of a marketing mix model; every decision you take from one depends on the split. Across 144 defensible specifications, half a point of holdout error hides a 150-point swing in estimated media contribution — and the best-forecasting model was the most wrong.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-holdout-error-mmm.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-holdout-error-mmm.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Stop Validating Your MMM With Holdout Error",
+          "datePublished": "2026-07-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-holdout-error-mmm.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-holdout-error-mmm.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Stop Validating Your MMM With Holdout Error",
+              "item": "https://redam94.github.io/mmm-framework/blog-holdout-error-mmm.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#the-deck">The Criterion Everyone Competes On</a></li>
+                <li><a href="#free-parameter">The Decomposition Is the Free Parameter</a></li>
+                <li><a href="#inversion">When Predicting Better Means Attributing Worse</a></li>
+                <li><a href="#reconcile">Reconciling This With Our Own Advice</a></li>
+                <li><a href="#checks">The Checks That Actually Bind</a></li>
+                <li><a href="#stacking">The Corollary We Got Wrong</a></li>
+                <li><a href="#limits">What This Does Not Establish</a></li>
+                <li><a href="#gate">The Acceptance Gate</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Stop Validating Your MMM With Holdout Error</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-24">July 24, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">MMM</span>
+            </p>
+            <p class="lead">Every marketing mix model bake-off ends the same way. Three vendors, three decks, and one number that decides it: out-of-sample accuracy on a held-out window. The 4.2% model beats the 5.1% model, procurement has something defensible to write down, and the contract is signed. The trouble is that the criterion measures a quantity nobody is buying. A holdout window scores the model's <em>sum</em> &mdash; how close its predicted KPI comes to the actual KPI. Every decision anyone takes from an MMM depends on the <em>split</em> &mdash; how much of that same predicted KPI is assigned to media rather than to price, seasonality, distribution, or demand. The sum is disciplined by the data. The split is the free parameter, and two models can agree to four decimal places on the first while disagreeing by a factor of four on the second. This is not a subtlety a careful analyst can manage around. Google's own Meridian documentation disowns the criterion in as many words, and the direction of the failure is worse than indifference: the model that predicts <em>best</em> is often the one that attributes <em>worst</em>, because the fastest way to improve a fit is to hand the model a variable that advertising caused. Below, across a grid of 144 defensible specifications on a world whose truth I planted, holdout error and estimand error are all but unrelated &mdash; and the winner by holdout MAPE understates working media by 77%.</p>
+
+            <h2 id="the-deck">The Criterion Everyone Competes On</h2>
+            <p>The holdout number acquired its authority for good reasons. It is objective: no analyst judgment enters the arithmetic. It is cheap: one refit and one subtraction. It is comparable across vendors who share nothing else &mdash; different priors, different transforms, different software &mdash; because all three can be pointed at the same 26 weeks. And it carries the weight of the one statistical lesson every stakeholder has absorbed, that fitting your own data is not evidence. Against a market whose alternative offer is "trust our methodology," a MAPE on unseen weeks looks like the only honest thing in the room.</p>
+
+            <p>It is also the wrong tool, and the vendor best placed to profit from it says so. Google's Meridian documentation states plainly that "the goal in marketing mix modeling (MMM) is causal inference, and not necessarily to minimize out-of-sample prediction metrics," and that such metrics are "useful as a preliminary check to make sure the model structure is appropriate and not extremely overparameterized." Its causal-inference page goes further &mdash; "A model with 99% out-of-sample R-squared can still be a poor model for causal inference" &mdash; while the model-fit page itself, most uncomfortably for a procurement scorecard, concludes that "it can be safer to have a model that includes all confounding variables and allows enough flexibility in the model structure to get unbiased, causal estimates (such as ROI), even if this means the model is overfit."</p>
+
+            <p>Read that last sentence again with a bake-off in mind: the vendor is saying that a model scoring <em>worse</em> on the buyer's criterion may be the one the buyer should want. That is not spin against interest, it is the standard position of the statistics literature arriving late in an applied field. Shmueli (2010) drew the distinction the field never internalized &mdash; explanatory and predictive modeling optimize different objectives, keep different variables, and are validated differently &mdash; and showed that an underspecified model can achieve lower prediction error than the correctly specified one, trading a little bias for a lot of variance. Hern&aacute;n, Hsu and Healy (2019) made the taxonomy operational, separating description, prediction and counterfactual prediction into three tasks with three validation regimes and warning that the third cannot be validated with the tools of the second. Machine learning hit the same wall from the other side: Curth and van der Schaar (2023) set out to settle how to select among models for heterogeneous treatment effects and reported that "due to the absence of counterfactual information in practice, it is usually not possible to rely on standard validation metrics" for the job &mdash; their contribution is deliberately a map of when each proxy misleads rather than a winner. If a field with randomized benchmarks and every incentive to publish a leaderboard cannot produce one for a causal estimand, a bake-off scored on a KPI holdout is not doing something more rigorous; it is doing something easier under the same name. An MMM is a counterfactual-prediction instrument wearing a prediction model's clothes, and we buy it on the clothes.</p>
+
+            <div class="definition">
+                <h4>Definition: the estimand, and what the holdout scores</h4>
+                <p>Write the model's fitted mean for week \( t \) as a baseline plus a sum of channel contributions,</p>
+                $$ \hat{\mu}_t \;=\; \hat{b}_t \;+\; \sum_{c} \hat{m}_{ct}. $$
+                <p>A holdout score &mdash; MAPE, RMSE, R&sup2;, expected log predictive density &mdash; is a function of \( \hat{\mu}_t \) and \( y_t \) <strong>only</strong>. It never sees \( \hat{b}_t \) or \( \hat{m}_{ct} \) separately. The estimand you are buying is a function of the parts: the incremental contribution \( \sum_t \hat{m}_{ct} \), the return \( \sum_t \hat{m}_{ct} / \sum_t s_{ct} \), the marginal return under a budget change. Any two models agreeing on \( \hat{\mu} \) score identically and can disagree arbitrarily on every quantity in the second list, subject only to their parts summing to the same total. The holdout is not a weak test of the estimand. It is a test of a different function of the same fit.</p>
+            </div>
+
+            <h2 id="free-parameter">The Decomposition Is the Free Parameter</h2>
+            <p>The identity above is trivially true, so the interesting question is quantitative: how much room does it leave? In a saturated MMM with a flexible baseline, a great deal, because the baseline and the media block compete for the same variation. Media spend is not randomized &mdash; it is planned against the same seasonal calendar, promotional calendar and demand forecast that drive the KPI &mdash; so the media and baseline regressors are close to collinear by construction. Whatever the fit assigns to one it can nearly un-assign from the other while leaving \( \hat{\mu} \) alone. The holdout prices the total and is silent on the transfer.</p>
+
+            <p>The figure below makes the room concrete. The world is a three-year weekly panel with two channels &mdash; a flighted brand channel and a search channel whose budget chases demand &mdash; and a slow-moving latent demand index that raises sales <em>and</em> pulls search spend upward. Media truly contributes 16.6% of the KPI, and because the truth is planted, every specification's error is knowable. I then fit 144 specifications a competent analyst could defend in a review: four control sets, three baseline shapes, four carryover assumptions, three saturation strengths, each fitted on 130 weeks and scored on the 26 held out.</p>
+
+            <div class="interactive-box">
+                <h4>144 defensible specifications, one planted truth</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The upper panel is the weekly media contribution: the planted truth (shaded), the pre-registered causal specification, and whichever specification wins on holdout MAPE. The lower panel is the whole grid &mdash; holdout MAPE against the error in total media contribution &mdash; colored by what each specification does about the demand confounder. Drag the demand-chasing dial to change how hard the search budget follows demand.</p>
+                <div class="control-row">
+                    <label>Demand-chasing in the search budget</label>
+                    <input type="range" id="f1Kappa" min="0" max="1" step="0.1" value="0.6">
+                    <span class="value" id="f1KappaVal">0.60</span>
+                    <button type="button" class="viz-btn" id="f1Drop">Including downstream-control specs</button>
+                </div>
+                <div class="chart-container chart-themed" id="f1Split" style="height:250px;"></div>
+                <div class="chart-container chart-themed" id="f1Grid" style="height:330px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">MAPE, pre-registered</span><span class="val" id="f1MapeA">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">MAPE, holdout winner</span><span class="val" id="f1MapeB">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Media share: truth</span><span class="val" id="f1ShareT">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Media share: winner</span><span class="val" id="f1ShareB">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">r (MAPE, |error|)</span><span class="val" id="f1R">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Error span within 0.5&nbsp;pp</span><span class="val" id="f1Band">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults the grid's holdout MAPE runs from 2.7% to 14.3% while the error in total media contribution runs from &minus;100% to +187%, and the correlation between them is r&nbsp;=&nbsp;0.34 &mdash; weak, and mostly carried by the handful of specifications that fit badly. Where it matters, it vanishes: among the <strong>45 specifications whose holdout MAPE sits within half a point of the best</strong>, the estimated media contribution spans &minus;99% to +54% of the truth. The winner on MAPE (2.73%) puts media at 3.8% of the KPI against a truth of 16.6%; the pre-registered causal specification scores 3.29% and lands within 3.5% of the truth. Ranking by holdout error would have rejected the right answer for one that erases three-quarters of working media.</p>
+            </div>
+
+            <p>Three features of that grid deserve attention. The first is the spread within the noise band. Half a point of MAPE is inside the range any reviewer would call a tie &mdash; it is roughly the week-to-week wobble you get from moving the holdout boundary &mdash; and inside it the estimand moves by 150&nbsp;points. The holdout has no resolving power precisely where the decision is being made.</p>
+
+            <p>The second is that the failure is not an artifact of the one obviously improper specification family. Drop every model using a downstream variable as a control &mdash; the button above does exactly that &mdash; and among the 36 survivors within half a point of the best, the media contribution still spans &minus;75% to +72% of truth. The third is that the direction is unstable: re-drawing the panel under five seeds, the holdout winner's error came out at &minus;77%, &minus;28%, &minus;26%, &minus;22% and +46%. The criterion does not reliably over- or under-state media. It does not track the quantity at all, which is worse, because a consistent bias could at least be corrected.</p>
+
+            <p>None of this should surprise anyone who has read the identification literature. Dew, Padilla and Shchetkina (2024) show that whole <em>families</em> of MMM &mdash; a nonlinear response with a fixed coefficient, and a linear response with a drifting one &mdash; are often not distinguishable from standard marketing mix data, and that the trigger is autocorrelation in the media variables, which adstock manufactures on purpose. Two such models produce near-identical predictive distributions and opposite budget recommendations. <a href="blog-saturation-or-fatigue.html">That case has its own post</a>; the consequence here is that no predictive criterion can separate models that are predictively equivalent by construction.</p>
+
+            <div class="warning">
+                <h4>⚠️ A holdout MMM test is not even a forecasting test</h4>
+                <p>Almost every MMM "holdout" hands the model the <em>actual</em> values of every control and media variable in the held-out window and asks it to predict the KPI. That is not a forecast; it is an interpolation with the right-hand side given. A genuine out-of-time forecast would require forecasting price, distribution, competitor activity and the media plan first, and would score far worse. The number on the deck is already the most flattering version of a criterion that does not measure the thing being purchased &mdash; and it explains a quirk in the figure: specifications with a post-treatment variable win partly because they are handed a column that already contains the answer.</p>
+            </div>
+
+            <h2 id="inversion">When Predicting Better Means Attributing Worse</h2>
+            <p>Indifference would be tolerable. What makes the criterion actively dangerous is that the two objectives are, in the specific structure of an MMM, often <em>opposed</em>. Two mechanisms do most of the damage, and both are routine practice.</p>
+
+            <p>The first is the post-treatment control. Branded search volume, site sessions and email opens are magnificent predictors of sales, sitting in the causal chain immediately upstream of the outcome and immediately downstream of advertising. Adding one improves almost any fit &mdash; and transfers to it most of the effect advertising had <em>through</em> it, which is the mechanism advertising works by. This is the <a href="blog-table-2-fallacy-mmm.html">Table&nbsp;2 fallacy in media mix models</a> in its most expensive form: a media coefficient adjusted for a mediator answers a question nobody asked and nobody would fund &mdash; "what would this channel do if it could not move branded search?" The analyst who adds it is rewarded on the holdout and punished on the estimand, and no diagnostic inside the fit tells them apart.</p>
+
+            <p>The second is the confounder block, where the arithmetic runs the other way. A control that closes a back-door path &mdash; a demand index, a competitor-pressure series, a category-volume proxy &mdash; earns its place by removing bias in the media coefficients. It does not have to earn its place predictively, and often cannot: it may be noisy, weakly correlated with the KPI, or nearly collinear with a trend the model already has, so adding it costs degrees of freedom and can raise out-of-sample error. That is exactly the trade Meridian describes, and the everyday version of Shmueli's appendix: the correct model is not the best forecaster. A validation regime that ranks specifications by predictive score therefore does not merely fail to find confounders. It systematically prunes them.</p>
+
+            <p>The next figure puts a number on how invisible each mistake is. It injects one fault at a time into the same world, holds everything else at the pre-registered specification, and records two things: what the fault does to holdout MAPE, and what it does to total media contribution. To keep the ranking from being an accident of one draw, everything is repeated across sixteen independently simulated worlds; the markers are medians and the whiskers are interquartile ranges.</p>
+
+            <div class="interactive-box">
+                <h4>Six ways to be wrong, and what the holdout notices</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Each marker is one injected fault, measured against the pre-registered specification on the same data. Horizontal position is the change in holdout MAPE; vertical position is the typical error in total media contribution. The shaded strip is the &plusmn;0.5&nbsp;pp band inside which no review would call a difference meaningful, so green squares are the faults a holdout gate would catch and red circles are the ones it misses. Whiskers are interquartile ranges over sixteen simulated worlds. Change the holdout length to check that the ranking is not an artifact of one window.</p>
+                <div class="control-row">
+                    <label>Holdout length (weeks)</label>
+                    <input type="range" id="f2H" min="13" max="52" step="13" value="26">
+                    <span class="value" id="f2HVal">26</span>
+                </div>
+                <div class="chart-container chart-themed" id="f2Chart" style="height:390px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Faults flagged at 0.5&nbsp;pp</span><span class="val" id="f2Flag">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Worst estimand error</span><span class="val" id="f2Worst">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">&hellip;its holdout penalty</span><span class="val" id="f2WorstD">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Placebo's share of media credit</span><span class="val" id="f2Placebo">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At a 26-week holdout, omitting the demand confounder inflates media contribution by <strong>66%</strong> and costs <strong>0.32&nbsp;pp</strong> of MAPE. A placebo channel &mdash; a plausible-looking spend series with no true effect &mdash; absorbs a median 32% of the media credit in magnitude while moving MAPE by 0.01&nbsp;pp. The only fault a half-point gate reliably flags is the over-flexible baseline, which is also the only one of the six that is not a causal fault &mdash; it moves the estimand 20%, against 66% for the omitted confounder the gate ignores. That is not a coincidence, and it is the key to the next section: the holdout is a good detector of exactly one failure mode, and it is not a causal one. The ranking holds at 13, 26, 39 and 52 weeks of holdout.</p>
+            </div>
+
+            <h2 id="reconcile">Reconciling This With Our Own Advice</h2>
+            <p>This blog has told you the opposite. In <a href="blog-modeling-pitfalls.html">Common Pitfalls in Statistical Modeling</a>, the prescribed remedy for overfitting is to "score models on <em>estimated out-of-sample</em> predictive accuracy rather than fit," with the PSIS-LOO cross-validation of Vehtari, Gelman and Gabry (2017) as the practical instrument, and the summary rule for comparing models is to score on estimated out-of-sample accuracy, never in-sample fit. That advice is right, and it is not in conflict with this post &mdash; but the boundary between them is load-bearing, and if you take either rule out of its scope you will do damage.</p>
+
+            <p>The reconciliation is that the two posts address different targets. Cross-validated predictive accuracy is the correct criterion for the model's <em>predictive</em> content: how much flexibility the baseline should have, whether a spline trend is buying signal or memorizing noise, whether an extra harmonic is real. Those are questions about \( \hat{\mu} \), which is exactly what a predictive score measures. It is the wrong criterion for the <em>causal</em> content &mdash; which variables belong in the adjustment set, what the estimand is, whether the media block is identified &mdash; because those are questions about the split, and the split is invisible to it.</p>
+
+            <p>The figure above is the boundary, drawn empirically. Six faults, and the half-point holdout gate flags exactly one &mdash; the over-flexible baseline, the fault that <em>is</em> overfitting. The gate works perfectly on its own failure mode and is blind to the other five. That is a scope statement, not a contradiction: use the predictive score to choose the model's flexibility, and never to choose its adjustment set. One exception is large enough to name: when budgets follow the calendar, the trend and seasonality basis <em>is</em> the confounder adjustment, and a predictive score should not set it either &mdash; see <a href="blog-baseline-regularization-confounding.html">The Baseline Ate Your Media Effect</a>.</p>
+
+            <div class="note">
+                <h4>💡 Two more scoping notes worth carrying</h4>
+                <p><strong>A predictive score can falsify, and cannot rank.</strong> A model whose forecasts are worthless is broken, and the holdout will tell you so &mdash; that is a real, useful floor. What it cannot do is order two models that both clear the floor. Treat it as a pass/fail gate at a pre-declared threshold, never as the leaderboard.</p>
+                <p><strong>Ordinary LOO is the wrong shape for MMM data anyway.</strong> Leave-one-out assumes exchangeable observations; weekly MMM data is autocorrelated and the media regressors are adstocked, so leaving out a single week leaves most of its information in its neighbors. B&uuml;rkner, Gabry and Vehtari (2020) give the leave-future-out construction that respects the time ordering. If you are going to use a predictive score as a floor, use one whose assumptions your data satisfies.</p>
+            </div>
+
+            <h2 id="checks">The Checks That Actually Bind</h2>
+            <p>Deleting a criterion without replacing it is worse than useless, because the vacuum gets filled by whoever tells the best story. The replacement is not another scalar. It is a workflow &mdash; a sequence of targeted checks, each aimed at a specific way the model could be wrong, reported together, in the posture Gabry, Simpson, Vehtari, Betancourt and Gelman (2019) laid out for Bayesian modeling generally: model checking as a collection of comparisons designed to be <em>failable</em>, not a number to be maximized. What follows is that list for an MMM, ordered by how much of the failure space each check can see. The ordering is my judgment, informed by the fault catalogue above.</p>
+
+            <p><strong>1. Recovery against an external answer key.</strong> Fit the pipeline you intend to ship on synthetic worlds whose causal truth you planted, and compare the intervals to the key. This is the only check that sees structural failure, because the data was not generated by your model. This framework ships a catalogue of such worlds in <code>synth/dgp.py</code> with per-channel truths computed the honest way &mdash; the noiseless structural mean minus the same mean with that channel's spend set to zero, which is the counterfactual the model's own estimand targets. Scenarios are labelled with what they violate and whether the truth is even representable in the model's hypothesis space, so under-coverage on <code>unobserved_confounding</code> is a finding and under-coverage on <code>clean</code> is a bug.</p>
+
+            <p><strong>2. Refutation and placebo tests.</strong> Feed the fitted pipeline inputs that cannot carry a real effect and confirm the effect vanishes; perturb the data in ways that should not matter and confirm the estimate holds. The framework's suite runs four &mdash; permuted media, a permuted KPI, a random common cause, and a random data subset &mdash; which between them catch the placebo-channel and over-crediting faults the holdout cannot see. They are also the tests most vulnerable to being underpowered, which is why the framework computes an explicit <code>underpowered</code> flag rather than reporting a bare pass: a "stable" verdict from an estimate that could not have moved is not evidence.</p>
+
+            <p><strong>3. Calibration of the inference itself &mdash; coverage and SBC.</strong> These answer a narrower question than the first two, but they answer it decisively, and they are the reason many teams' intervals are fiction. <a href="blog-prior-predictive-sbc.html">Simulation-based calibration</a> (Talts, Betancourt, Simpson, Vehtari and Gelman, 2018) checks that posterior ranks are uniform over datasets drawn from your own prior &mdash; a property that holds if and only if every central interval has its nominal coverage averaged over that prior. Recovery coverage fixes every parameter at one truth, simulates and refits many times, and counts how often the interval contains it. The figure below is the shape of that output, and its diagnostic value is that two very different diseases produce two visibly different curves.</p>
+
+            <div class="interactive-box">
+                <h4>Nominal versus empirical coverage, and the two ways it fails</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Simulated recovery coverage. Each dot is the share of refits whose central interval contained the fixed truth, with a binomial Monte-Carlo interval on that share; the dashed diagonal is perfect calibration. The two dials are the two diseases the framework's <code>recovery_diagnosis</code> separates: a posterior that sits in the wrong place, and one whose intervals are too narrow. Use the presets to see their signatures.</p>
+                <div class="control-row">
+                    <label>Location bias (posterior sds)</label>
+                    <input type="range" id="f3Bias" min="0" max="2" step="0.05" value="0">
+                    <span class="value" id="f3BiasVal">0.00</span>
+                </div>
+                <div class="control-row">
+                    <label>Interval width (1 = correct)</label>
+                    <input type="range" id="f3W" min="0.35" max="1.6" step="0.05" value="0.45">
+                    <span class="value" id="f3WVal">0.45</span>
+                </div>
+                <div class="control-row">
+                    <label>Simulated refits</label>
+                    <input type="range" id="f3N" min="12" max="240" step="4" value="120">
+                    <span class="value" id="f3NVal">120</span>
+                    <button type="button" class="viz-btn" id="f3PreMap">Approximate fit</button>
+                    <button type="button" class="viz-btn" id="f3PreBias">Prior conflict</button>
+                    <button type="button" class="viz-btn" id="f3PreOk">Healthy</button>
+                </div>
+                <div class="chart-container chart-themed" id="f3Chart" style="height:330px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">90% interval covers</span><span class="val" id="f3Cov">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">bias_z</span><span class="val" id="f3Bz">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">z_spread</span><span class="val" id="f3Zs">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Diagnosis</span><span class="val" id="f3Verdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">The opening preset is the single most common cause of the complaint "my 90% interval only contained the truth about half the time": an approximate fit. Intervals 2.2&times; too narrow but perfectly centered have a true coverage of 54% at the nominal 90% &mdash; and 24%, 44% and 62% at the nominal 50%, 80% and 95%. A posterior displaced 1.2 standard deviations by an over-tight prior, with correctly sized intervals, covers 67% at the 90% level but only 27% at the 50%: the same headline failure, a different curve shape, and a different fix. The dots are one batch of simulated refits and scatter around that expected curve, which is its own lesson &mdash; drag the refit count down to a dozen and watch a genuinely 90% interval "measure" anywhere from 70% to 100%. The headline number cannot separate the two diseases; <code>bias_z</code> and <code>z_spread</code> can.</p>
+            </div>
+
+            <p><strong>4. Predictive checks aimed at decomposition quantities.</strong> Ordinary posterior predictive checks compare replicated to observed KPI and pass essentially any model that fits &mdash; they are a check on \( \hat{\mu} \), so they inherit the whole problem. What earns its keep are test statistics the decomposition has to get right and the mean does not: the lag-1 autocorrelation of the residuals, their skewness, the fit in weeks where a single channel went dark. A model that reproduces the KPI's mean and variance while failing on residual autocorrelation is telling you its temporal structure &mdash; which is where adstock lives &mdash; is wrong.</p>
+
+            <p><strong>5. Agreement with an experiment that was held out of the fit.</strong> This is the only check on the list that can see confounding and misspecification simultaneously, because it brings information the observational data does not contain. It has a strict procedural requirement: the experiment must not be in the calibration. Running a geo lift test, folding it into the likelihood, and then reporting that the model agrees with it is circular &mdash; <a href="blog-calibrating-mmm-experiments.html">calibration makes the experiment the prior</a>, and a prior cannot then validate the posterior. Register the model's prediction for the experiment before the readout, and score the interval.</p>
+
+            <p>Notice where the holdout sits relative to that list. It sees one of the six faults in the figure, the one that is not causal, and the checks above see the others. It belongs on the report &mdash; it describes the model's forecasting behavior, and clients legitimately ask &mdash; but it belongs in the section that describes the model, not the section that accepts it.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Why recovery coverage cannot see misspecification, and what it therefore proves</summary>
+                <div class="deep-dive-body">
+                    <p>The recovery-coverage loop fixes every free parameter at \( \theta^* \), simulates datasets from the likelihood at \( \theta^* \), and refits the same graph on each. Every dataset it grades was generated <em>by the model being graded</em>, so the check is a statement conditional on the model class being right: within that class, does the machinery deliver intervals at their nominal frequency? It detects an approximate posterior, a broken sampler, a prior so tight the data cannot reach the truth, and an estimand mismatch. It structurally cannot detect a wrong adstock family, a missing confounder, or a drifting coefficient, because none of those exist inside the simulation.</p>
+                    <p>That makes the joint reading informative in a way neither check is alone. Under-covering here means the failure is mechanical and the fix is in the inference. Covering here while missing an external answer key means the machinery is fine and the <em>structure</em> is wrong &mdash; a more expensive diagnosis and a completely different remedy. The framework's failure-mode table lists model misspecification as "NOT visible when simulating from the model &mdash; needs external truth."</p>
+                    <p>One caveat the tool carries and users forget: Bayesian coverage is only guaranteed averaged over the prior, so an informative prior will legitimately under-cover at a \( \theta^* \) in its tail. A coverage failure at one point is a prompt to look, not a verdict.</p>
+                </div>
+            </details>
+
+            <h2 id="stacking">The Corollary We Got Wrong</h2>
+            <p>If predictive skill cannot rank specifications for a causal estimand, it cannot weight them either &mdash; and that corollary is less obvious, because model averaging looks like a principled way to avoid the ranking problem rather than an instance of it. The honest response to specification uncertainty is to declare a set of defensible specifications before the fit, run all of them, and report the spread. The tempting next step is to combine them into one number using weights, and the standard machinery for that is stacking (Yao, Vehtari, Simpson and Gelman, 2018), which chooses the mixture maximizing expected log predictive density on held-out data.</p>
+
+            <p>Stacking is excellent at what it does. What it does is find the mixture that <em>forecasts</em> best. Applied to a per-channel ROI, it inherits every failure in this post and adds one: the weights are not merely uninformative about which decomposition is right, they are systematically tilted toward the specifications a causal analyst should trust least, because the specifications that predict best are the ones with the leakiest control blocks. In the grid above, a stacking procedure would have concentrated its weight on models that put media at a quarter of its true contribution.</p>
+
+            <p>This framework shipped that error. The spec-curve module &mdash; the one whose entire purpose is to resist the garden of forking paths by pre-registering a set of specifications &mdash; computed LOO-stacking weights and used them to model-average per-channel ROI. The default is now equal weights over the pre-registered set, on the reasoning that pre-registration has already asserted every variant is defensible, so there is no post-hoc predictive ground to promote one. The module's own documentation now states the argument:</p>
+
+            <p>Stacking, its module docstring now says, "chooses the mixture that maximizes expected <em>predictive</em> utility &mdash; it answers 'which combination forecasts held-out <code>y</code> best?'. A spec curve averages a <strong>causal estimand</strong> (per-channel ROI), and the two objectives come apart precisely where MMM specs differ&hellip; Worse, the direction can invert: a spec that overfits the confounder block often predicts <em>better</em> while being <em>less</em> trustworthy for the causal contrast, so stacking can systematically upweight the specs a causal analyst should trust least."</p>
+
+            <p>The predictive weights are still computed and reported, deliberately, as a diagnostic rather than an input: divergence from uniform says predictive fit discriminates between your specifications, which is worth knowing and still not a reason to follow it. I record the history because the failure shows how the mistake propagates. Nobody chose to weight a causal estimand by predictive skill. Well-tested Bayesian machinery, whose own documentation is scrupulous about what it optimizes, was imported and pointed at a quantity it was never built for &mdash; the same move as the bake-off, one level down. It survived review until someone asked what the weights meant; this post is downstream of that question, not upstream of it, and the fix is days old.</p>
+
+            <p>The related trap is worth naming since the corollary is really about selection in general: choosing the best of many specifications by <em>any</em> criterion, then reporting that specification's interval as though it were the only one fitted, understates uncertainty and exaggerates the winning estimate. That is the <a href="blog-multiple-comparisons.html">winner's curse</a>, and it applies to a holdout leaderboard exactly as it applies to a p-value leaderboard. A spec curve with equal weights is not just a different weighting scheme; it is the refusal to hold a contest.</p>
+
+            <h2 id="limits">What This Does Not Establish</h2>
+            <p>Several things, and the argument is easy to over-drive.</p>
+
+            <p><strong>It does not establish that predictive accuracy is worthless.</strong> It is the right criterion for the parts of the model that are forecasts, and MMMs contain such parts: the model's actual use as a planning forecast, and any structure that is not doing confounder-adjustment work &mdash; which, when spend correlates with the calendar, excludes the trend and seasonality basis (<a href="blog-baseline-regularization-confounding.html">the baseline is the adjustment set</a>). A model that cannot predict at all is broken and should fail. The claim is about ranking causal estimands, not about the criterion's existence.</p>
+
+            <p><strong>The simulations are demonstrations, not measurements of prevalence.</strong> They are least-squares fits on a stylized two-channel world with a known baseline, Gaussian noise, one latent confounder and one post-treatment variable. Real panels have more channels, more collinearity and heavier tails, and Bayesian fits with informative priors will damp some of the swings shown. The simulation establishes that the failure exists and is large under conditions that are not adversarial. It says nothing about how often the specification a given team ships lands on the wrong side of it. Relatedly, the post-treatment result is flattered by the convention noted earlier: because MMM holdouts hand the model the true value of every control, a downstream variable uses information a genuine forecast would not have. Its damage to the estimand is real; the size of its predictive advantage here is not.</p>
+
+            <p><strong>The ordering of checks in the previous section is a judgment.</strong> It reflects the fault catalogue I chose, and a different catalogue would reorder it &mdash; a team whose main risk is a broken sampler should promote SBC above refutation. The catalogue omits data errors, geo aggregation artifacts, and every failure that lives in the panel rather than the model.</p>
+
+            <p><strong>The alternatives have their own failure modes, and I have not priced them.</strong> Synthetic answer keys only test the worlds you thought to plant. Refutation tests are often underpowered. Coverage checks cannot see misspecification, by construction. A held-out experiment is only as good as its own design, and buys one channel at one operating point in one window. A program that runs all five is meaningfully more expensive than one that computes a MAPE.</p>
+
+            <h2 id="gate">The Acceptance Gate</h2>
+            <p>If a holdout number should not decide a bake-off, something has to. Here is what I would write into a contract, in the order the work happens. None of it requires methodology the field does not have; all of it requires the vendor to commit before seeing results, which is the part that does the work.</p>
+
+            <p><strong>Before the fit.</strong> The estimand, in one sentence, with units &mdash; incremental KPI per dollar over a stated window, or per thousand impressions where spend is not the modeled variable. A directed acyclic graph or an explicit list of the adjustment set with a stated role for every control, so that a post-treatment variable has to be argued for rather than slipped in. And a pre-registered set of defensible specifications, filed with a timestamp, together with the rule for how disagreement across them will be reported.</p>
+
+            <p><strong>At delivery.</strong> Coverage evidence, not assertion: a recovery-coverage run at a fixed truth reporting empirical coverage with Monte-Carlo bounds at 50, 80, 90 and 95%, and an SBC run for the same specification. A refutation suite with its power flag shown, so passes from tests that could not have moved are not counted. The spec curve across the pre-registered set with equal weights, its per-channel range stated as prominently as the point estimate. And a tier on every headline number saying whether it is experiment-validated, model-identified, or prior-dominated &mdash; a number whose posterior barely moved off its prior is the analyst's assumption wearing a model.</p>
+
+            <p><strong>After delivery.</strong> One experiment, designed against the model's own uncertainty, held out of the calibration, with the model's prediction for it registered before the readout. That is the only clause on this list that can indict the whole apparatus, and it is the one worth paying for.</p>
+
+            <p><strong>And keep the holdout.</strong> Report it, with the honest caveat that the controls were given, as a description of the model's forecasting behavior and as a pass/fail floor against a threshold declared in advance. What it must not be is the thing that decides. The number that decides should be the one you are buying: how much of the KPI media actually caused, with an interval you have earned the right to quote.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>A holdout score is a function of the fitted mean \( \hat{\mu}_t \) alone; every MMM estimand is a function of how \( \hat{\mu}_t \) splits into baseline and per-channel contributions. The criterion and the deliverable are different functions of the same fit.</li>
+                    <li>Across 144 defensible specifications on a planted truth, holdout MAPE and media-contribution error correlate at r&nbsp;=&nbsp;0.34, and inside the half-point band no reviewer would call meaningful, the estimand spans &minus;99% to +54% of truth. The MAPE winner put media at 3.8% of the KPI against a truth of 16.6%.</li>
+                    <li>The relationship is often inverted, not merely absent: a post-treatment control improves the fit and steals the effect it mediates, while a genuine confounder can cost predictive accuracy and remove bias. Meridian's documentation says the safer model may be the overfit one.</li>
+                    <li>This does not retract the standing advice to score on estimated out-of-sample accuracy &mdash; that rule is right for a predictive target. In the fault catalogue here, a half-point holdout gate flags exactly one of six faults: the over-flexible baseline, which is overfitting. Use the predictive score to set flexibility, never to choose the adjustment set &mdash; and note that a calendar-correlated baseline is part of the adjustment set.</li>
+                    <li>Replace it, ranked by failure space covered: recovery against an external answer key, refutation and placebo tests, coverage and SBC, predictive checks aimed at decomposition quantities, and agreement with an experiment that was held out of the calibration.</li>
+                    <li>Predictive weights are not valid weights for averaging a causal estimand &mdash; stacking optimizes forecast utility and will upweight the leakiest specifications. This framework shipped that error in its spec-curve module and now defaults to equal weights over the pre-registered set, reporting the stacking weights only as a diagnostic.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Google. <em>Assess the model fit and the results</em>. Meridian documentation, developers.google.com/meridian.</li>
+                <li>Google. <em>About MMM as a causal inference methodology</em>. Meridian documentation, developers.google.com/meridian.</li>
+                <li>Shmueli, G. (2010). <em>To Explain or to Predict?</em> Statistical Science, 25(3), 289&ndash;310.</li>
+                <li>Hern&aacute;n, M. A., Hsu, J., &amp; Healy, B. (2019). <em>A Second Chance to Get Causal Inference Right: A Classification of Data Science Tasks</em>. CHANCE, 32(1), 42&ndash;49.</li>
+                <li>Curth, A., &amp; van der Schaar, M. (2023). <em>In Search of Insights, Not Magic Bullets: Towards Demystification of the Model Selection Dilemma in Heterogeneous Treatment Effect Estimation</em>. Proceedings of the 40th International Conference on Machine Learning, PMLR 202, 6623&ndash;6642.</li>
+                <li>Dew, R., Padilla, N., &amp; Shchetkina, A. (2024). <em>Your MMM is Broken: Identification of Nonlinear and Time-varying Effects in Marketing Mix Models</em>. arXiv:2408.07678 [econ.EM].</li>
+                <li>Yao, Y., Vehtari, A., Simpson, D., &amp; Gelman, A. (2018). <em>Using Stacking to Average Bayesian Predictive Distributions (with Discussion)</em>. Bayesian Analysis, 13(3), 917&ndash;1007.</li>
+                <li>Vehtari, A., Gelman, A., &amp; Gabry, J. (2017). <em>Practical Bayesian Model Evaluation Using Leave-One-Out Cross-Validation and WAIC</em>. Statistics and Computing, 27(5).</li>
+                <li>B&uuml;rkner, P.-C., Gabry, J., &amp; Vehtari, A. (2020). <em>Approximate Leave-Future-Out Cross-Validation for Bayesian Time Series Models</em>. Journal of Statistical Computation and Simulation, 90(14), 2499&ndash;2523.</li>
+                <li>Gabry, J., Simpson, D., Vehtari, A., Betancourt, M., &amp; Gelman, A. (2019). <em>Visualization in Bayesian Workflow</em>. Journal of the Royal Statistical Society: Series A, 182(2), 389&ndash;402.</li>
+                <li>Talts, S., Betancourt, M., Simpson, D., Vehtari, A., &amp; Gelman, A. (2018). <em>Validating Bayesian Inference Algorithms with Simulation-Based Calibration</em>. arXiv:1804.06788 [stat.ME].</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var N = 156;
+
+        // ------------------------------------------------------------------
+        // linear algebra
+        // ------------------------------------------------------------------
+        function solveOLS(X, y) {
+            var n = X.length, k = X[0].length, A = [], b = [], i, j, t;
+            for (i = 0; i < k; i++) {
+                A.push(new Array(k).fill(0));
+                for (j = 0; j < k; j++) {
+                    var s = 0;
+                    for (t = 0; t < n; t++) s += X[t][i] * X[t][j];
+                    A[i][j] = s;
+                }
+                var sb = 0;
+                for (t = 0; t < n; t++) sb += X[t][i] * y[t];
+                b.push(sb);
+            }
+            for (i = 0; i < k; i++) A[i][i] += 1e-8 * (Math.abs(A[i][i]) || 1);
+            for (var c = 0; c < k; c++) {
+                var piv = c;
+                for (var r = c + 1; r < k; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+                var tm = A[c]; A[c] = A[piv]; A[piv] = tm;
+                var tb = b[c]; b[c] = b[piv]; b[piv] = tb;
+                var pv = A[c][c];
+                if (Math.abs(pv) < 1e-14) continue;
+                for (var r2 = c + 1; r2 < k; r2++) {
+                    var f = A[r2][c] / pv;
+                    if (f === 0) continue;
+                    for (var c2 = c; c2 < k; c2++) A[r2][c2] -= f * A[c][c2];
+                    b[r2] -= f * b[c];
+                }
+            }
+            var be = new Array(k).fill(0);
+            for (i = k - 1; i >= 0; i--) {
+                var s2 = b[i];
+                for (j = i + 1; j < k; j++) s2 -= A[i][j] * be[j];
+                be[i] = Math.abs(A[i][i]) < 1e-14 ? 0 : s2 / A[i][i];
+            }
+            return be;
+        }
+        function dot(row, be) { var s = 0; for (var i = 0; i < row.length; i++) s += row[i] * be[i]; return s; }
+        function med(a) { return BV.quantile(a.slice().sort(function (x, y) { return x - y; }), 0.5); }
+        function qt(a, p) { return BV.quantile(a.slice().sort(function (x, y) { return x - y; }), p); }
+        function pearson(x, y) {
+            var mx = BV.mean(x), my = BV.mean(y), sxy = 0, sx = 0, sy = 0;
+            for (var i = 0; i < x.length; i++) {
+                sxy += (x[i] - mx) * (y[i] - my);
+                sx += (x[i] - mx) * (x[i] - mx);
+                sy += (y[i] - my) * (y[i] - my);
+            }
+            return sx > 0 && sy > 0 ? sxy / Math.sqrt(sx * sy) : 0;
+        }
+
+        // ------------------------------------------------------------------
+        // the world
+        // ------------------------------------------------------------------
+        var A_TRUE = 0.5, L_TRUE = 2.6, BETA = [150, 110], GAMMA = 55, NOISE = 42;
+
+        function adstock(x, alpha) {
+            var L = 16, w = [], sw = 0, k;
+            for (k = 0; k < L; k++) { w.push(Math.pow(alpha, k)); sw += w[k]; }
+            for (k = 0; k < L; k++) w[k] /= sw;
+            var out = [];
+            for (var t = 0; t < x.length; t++) {
+                var s = 0;
+                for (k = 0; k < L; k++) if (t - k >= 0) s += w[k] * x[t - k];
+                out.push(s);
+            }
+            return out;
+        }
+        function sat(a, lam) { return 1 - Math.exp(-Math.min(lam * a, 20)); }
+        function transform(x, alpha, lam) {
+            var a = adstock(x, alpha), mx = 0;
+            for (var i = 0; i < a.length; i++) if (a[i] > mx) mx = a[i];
+            return a.map(function (v) { return sat(mx > 0 ? v / mx : 0, lam); });
+        }
+        function demandIndex(rng) {
+            var rho = 0.94, z = 0, out = [], t;
+            for (t = 0; t < N; t++) {
+                z = rho * z + Math.sqrt(1 - rho * rho) * BV.randn(rng);
+                out.push(z);
+            }
+            var m = BV.mean(out);
+            var sd = Math.sqrt(BV.mean(out.map(function (v) { return (v - m) * (v - m); })));
+            return out.map(function (v) { return (v - m) / sd; });
+        }
+        function makeWorld(kappa, seed) {
+            var rng = BV.mulberry32(seed);
+            var Z = demandIndex(rng), tv = [], se = [], t;
+            for (t = 0; t < N; t++) {
+                var flight = (Math.floor(t / 6) % 2 === 0) ? 1.25 : 0.55;
+                tv.push(Math.max(0.05, flight * (1 + 0.22 * BV.randn(rng))));
+                se.push(Math.max(0.05, (1 + kappa * Z[t]) * (1 + 0.16 * BV.randn(rng))));
+            }
+            var spend = [tv, se], contrib = [], mediaTrue = new Array(N).fill(0), c;
+            for (c = 0; c < 2; c++) {
+                var s = transform(spend[c], A_TRUE, L_TRUE).map(function (v) { return BETA[c] * v; });
+                contrib.push(s);
+                for (t = 0; t < N; t++) mediaTrue[t] += s[t];
+            }
+            var y = [], brand = [], mMean = BV.mean(mediaTrue);
+            for (t = 0; t < N; t++) {
+                var base = 900 + 55 * (t / (N - 1)) + 70 * Math.sin(2 * Math.PI * t / 52)
+                    + 34 * Math.cos(2 * Math.PI * t / 52) + GAMMA * Z[t];
+                y.push(base + mediaTrue[t] + NOISE * BV.randn(rng));
+                // branded search: a CONSEQUENCE of media, plus demand and noise
+                brand.push(0.9 * (mediaTrue[t] - mMean) / 40 + 0.8 * Z[t] + 0.35 * BV.randn(rng));
+            }
+            return { Z: Z, spend: spend, contrib: contrib, mediaTrue: mediaTrue, y: y, brand: brand, key: kappa + '|' + seed };
+        }
+        // piecewise-linear ("hat") spline basis, 9 knots
+        var SPL_K = 9;
+        function splineRow(t) {
+            var row = [], i;
+            for (i = 1; i < SPL_K; i++) {
+                var lo = (i - 1) * (N - 1) / (SPL_K - 1), hi = i * (N - 1) / (SPL_K - 1);
+                row.push(t <= lo ? 0 : (t >= hi ? 1 : (t - lo) / (hi - lo)));
+            }
+            return row;
+        }
+
+        // ------------------------------------------------------------------
+        // specification fitting
+        // ------------------------------------------------------------------
+        var tCache = {};
+        function mediaCol(w, c, alpha, lam) {
+            var key = w.key + '|' + c + '|' + alpha + '|' + lam;
+            if (!tCache[key]) tCache[key] = transform(w.spend[c], alpha, lam);
+            return tCache[key];
+        }
+        function designMatrix(w, spec, placebo) {
+            var rows = [], mediaCols = [], mstart = 0, t, i, c;
+            for (c = 0; c < 2; c++) mediaCols.push(mediaCol(w, c, spec.alpha, spec.lam));
+            for (t = 0; t < N; t++) {
+                var row = [1];
+                if (spec.flex === 2) row = row.concat(splineRow(t)); else row.push(t / (N - 1));
+                var H = spec.flex === 0 ? 1 : 2;
+                for (i = 1; i <= H; i++) {
+                    row.push(Math.sin(2 * Math.PI * i * t / 52));
+                    row.push(Math.cos(2 * Math.PI * i * t / 52));
+                }
+                if (spec.ctrl === 'demand' || spec.ctrl === 'both') row.push(w.Z[t]);
+                if (spec.ctrl === 'downstream' || spec.ctrl === 'both') row.push(w.brand[t]);
+                if (spec.placebo) row.push(placebo[t]);
+                mstart = row.length;
+                for (i = 0; i < 2; i++) row.push(mediaCols[i][t]);
+                rows.push(row);
+            }
+            return { X: rows, mstart: mstart, mediaCols: mediaCols };
+        }
+        function fitSpec(w, spec, placebo, trainEnd) {
+            var d = designMatrix(w, spec, placebo);
+            var Xtr = d.X.slice(0, trainEnd), ytr = w.y.slice(0, trainEnd), t, c;
+            var be = solveOLS(Xtr, ytr);
+            var ape = 0, n = 0;
+            for (t = trainEnd; t < N; t++) { ape += Math.abs(w.y[t] - dot(d.X[t], be)) / Math.abs(w.y[t]); n++; }
+            var estMedia = 0, trueMedia = 0, ySum = 0, medS = [];
+            for (t = 0; t < N; t++) {
+                var mv = 0;
+                for (c = 0; c < 2; c++) mv += be[d.mstart + c] * d.mediaCols[c][t];
+                medS.push(mv);
+                if (t < trainEnd) {
+                    ySum += w.y[t];
+                    estMedia += mv;
+                    for (c = 0; c < 2; c++) trueMedia += w.contrib[c][t];
+                }
+            }
+            return {
+                mape: 100 * ape / n,
+                estMedia: estMedia, trueMedia: trueMedia,
+                err: 100 * (estMedia - trueMedia) / trueMedia,
+                shareEst: 100 * estMedia / ySum, shareTrue: 100 * trueMedia / ySum,
+                media: medS, beta: be, mstart: d.mstart
+            };
+        }
+
+        // ==================================================================
+        // Figure 1 — the specification grid
+        // ==================================================================
+        var F1_TRAIN = 130;
+        var CTRLS = ['demand', 'none', 'downstream', 'both'];
+        var ALPHAS = [0.2, 0.35, 0.5, 0.7], LAMS = [1.4, 2.6, 4.2], FLEXES = [0, 1, 2];
+        var PRE_SPEC = { ctrl: 'demand', flex: 1, alpha: 0.5, lam: 2.6 };
+        var f1Cache = {}, f1DropBad = false;
+
+        function ctrlGroup(spec) {
+            if (spec.ctrl === 'downstream' || spec.ctrl === 'both') return 2;
+            return spec.ctrl === 'demand' ? 0 : 1;
+        }
+        function f1Data(kappa) {
+            var key = kappa.toFixed(2);
+            if (!f1Cache[key]) {
+                var w = makeWorld(kappa, 7), rows = [];
+                CTRLS.forEach(function (ct) {
+                    FLEXES.forEach(function (fl) {
+                        ALPHAS.forEach(function (al) {
+                            LAMS.forEach(function (lm) {
+                                var spec = { ctrl: ct, flex: fl, alpha: al, lam: lm };
+                                var r = fitSpec(w, spec, null, F1_TRAIN);
+                                rows.push({ spec: spec, mape: r.mape, err: r.err, share: r.shareEst });
+                            });
+                        });
+                    });
+                });
+                f1Cache[key] = { w: w, rows: rows, pre: fitSpec(w, PRE_SPEC, null, F1_TRAIN) };
+            }
+            var base = f1Cache[key];
+            var rows2 = f1DropBad
+                ? base.rows.filter(function (r) { return ctrlGroup(r.spec) !== 2; })
+                : base.rows;
+            var best = rows2[0];
+            rows2.forEach(function (r) { if (r.mape < best.mape) best = r; });
+            var band = rows2.filter(function (r) { return r.mape <= best.mape + 0.5; });
+            var bandErr = band.map(function (r) { return r.err; });
+            return {
+                w: base.w, rows: rows2, best: best, pre: base.pre,
+                win: fitSpec(base.w, best.spec, null, F1_TRAIN),
+                r: pearson(rows2.map(function (r) { return r.mape; }), rows2.map(function (r) { return Math.abs(r.err); })),
+                bandLo: Math.min.apply(null, bandErr), bandHi: Math.max.apply(null, bandErr), bandN: band.length
+            };
+        }
+        function pct(v) { return (v >= 0 ? '+' : '−') + Math.round(Math.abs(v)) + '%'; }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var kappa = parseFloat(document.getElementById('f1Kappa').value);
+            var d = f1Data(kappa);
+            var weeks = [], t;
+            for (t = 0; t < N; t++) weeks.push(t + 1);
+
+            Plotly.react('f1Split', [
+                {
+                    type: 'scatter', mode: 'lines', x: weeks, y: d.w.mediaTrue, name: 'true media contribution',
+                    line: { color: p.warning, width: 2 }, fill: 'tozeroy', fillcolor: BV.band(p.warning, 0.16),
+                    hovertemplate: 'wk %{x}<br>%{y:.0f}<extra>truth</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: weeks, y: d.pre.media, name: 'pre-registered spec',
+                    line: { color: p.accent, width: 2.2 },
+                    hovertemplate: 'wk %{x}<br>%{y:.0f}<extra>pre-registered</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: weeks, y: d.win.media, name: 'holdout winner',
+                    line: { color: p.danger, width: 2.2, dash: 'dot' },
+                    hovertemplate: 'wk %{x}<br>%{y:.0f}<extra>holdout winner</extra>'
+                }
+            ], BV.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'weekly media contribution (KPI units)' },
+                legend: { orientation: 'h', y: 1.2, x: 0, font: { size: 11 } },
+                margin: { l: 66, r: 20, t: 34, b: 44 },
+                shapes: [{
+                    type: 'line', x0: F1_TRAIN + 0.5, x1: F1_TRAIN + 0.5, yref: 'paper', y0: 0, y1: 1,
+                    line: { color: p.muted, width: 1, dash: 'dash' }
+                }],
+                annotations: [{
+                    x: F1_TRAIN + 0.5, yref: 'paper', y: 1.0, yanchor: 'top', xanchor: 'right',
+                    text: 'holdout starts', showarrow: false, font: { size: 10, color: p.muted }
+                }]
+            }), BV.config);
+
+            var groups = [
+                { name: 'demand confounder controlled', color: p.accent },
+                { name: 'confounder omitted', color: p.warning },
+                { name: 'downstream control included', color: p.danger }
+            ];
+            var traces = groups.map(function (g, gi) {
+                var rs = d.rows.filter(function (r) { return ctrlGroup(r.spec) === gi; });
+                return {
+                    type: 'scatter', mode: 'markers', name: g.name,
+                    x: rs.map(function (r) { return r.mape; }),
+                    y: rs.map(function (r) { return r.err; }),
+                    marker: { color: BV.band(g.color, 0.7), size: 7, line: { color: g.color, width: 0.6 } },
+                    hovertemplate: 'MAPE %{x:.2f}%<br>error %{y:.0f}%<extra></extra>'
+                };
+            });
+            traces.push({
+                type: 'scatter', mode: 'markers', name: 'the two highlighted specs', showlegend: false,
+                x: [d.pre.mape, d.win.mape], y: [d.pre.err, d.win.err],
+                marker: { color: [p.accent, p.danger], size: 15, symbol: 'diamond', line: { color: p.surface, width: 2 } },
+                hovertemplate: 'MAPE %{x:.2f}%<br>error %{y:.0f}%<extra></extra>'
+            });
+            var mapesAll = d.rows.map(function (r) { return r.mape; });
+            var xlo = Math.min.apply(null, mapesAll) - 0.3;
+            var xhi = Math.min(Math.max.apply(null, mapesAll) + 0.6, 16);
+            Plotly.react('f1Grid', traces, BV.layout({
+                xaxis: { title: 'holdout MAPE (%) — lower is "better"', range: [xlo, xhi] },
+                yaxis: { title: 'error in total media contribution (%)' },
+                legend: { orientation: 'h', y: 1.2, x: 0, font: { size: 11 } },
+                margin: { l: 66, r: 20, t: 36, b: 48 },
+                shapes: [
+                    { type: 'line', x0: xlo, x1: xhi, y0: 0, y1: 0, line: { color: p.muted, width: 1.2, dash: 'dot' } },
+                    {
+                        type: 'rect', x0: d.best.mape, x1: d.best.mape + 0.5, yref: 'paper', y0: 0, y1: 1,
+                        fillcolor: BV.band(p.muted, 0.12), line: { width: 0 }
+                    }
+                ],
+                annotations: [{
+                    x: d.best.mape + 0.55, yref: 'paper', y: 0.04, xanchor: 'left',
+                    text: 'within 0.5 pp of the best', showarrow: false, font: { size: 10, color: p.muted }
+                }, {
+                    xref: 'paper', x: 0.98, yref: 'paper', y: 0.97, xanchor: 'right',
+                    text: 'r = ' + d.r.toFixed(2), showarrow: false, font: { size: 12, color: p.text }
+                }]
+            }), BV.config);
+
+            document.getElementById('f1MapeA').textContent = d.pre.mape.toFixed(2) + '%';
+            document.getElementById('f1MapeB').textContent = d.win.mape.toFixed(2) + '%';
+            document.getElementById('f1ShareT').textContent = d.pre.shareTrue.toFixed(1) + '%';
+            var sb = document.getElementById('f1ShareB');
+            sb.textContent = d.win.shareEst.toFixed(1) + '%';
+            sb.className = 'val' + (Math.abs(d.win.err) > 25 ? ' warn' : ' ok');
+            var rEl = document.getElementById('f1R');
+            rEl.textContent = d.r.toFixed(2);
+            rEl.className = 'val' + (Math.abs(d.r) < 0.5 ? ' warn' : '');
+            document.getElementById('f1Band').textContent =
+                pct(d.bandLo) + ' to ' + pct(d.bandHi) + ' (' + d.bandN + ' specs)';
+        });
+        BV.sliders([{ id: 'f1Kappa', value: 'f1KappaVal', fmt: function (v) { return v.toFixed(2); } }], BV.redraw);
+        document.getElementById('f1Drop').addEventListener('click', function () {
+            f1DropBad = !f1DropBad;
+            this.textContent = f1DropBad
+                ? 'Downstream-control specs removed'
+                : 'Including downstream-control specs';
+            BV.redraw();
+        });
+
+        // ==================================================================
+        // Figure 2 — the fault ladder
+        // ==================================================================
+        var FAULTS = [
+            { key: 'omitted', label: 'Omitted confounder', spec: { ctrl: 'none', flex: 1, alpha: 0.5, lam: 2.6 } },
+            { key: 'proxy', label: 'Branded search as proxy', spec: { ctrl: 'downstream', flex: 1, alpha: 0.5, lam: 2.6 } },
+            { key: 'adstock', label: 'Wrong carryover', spec: { ctrl: 'demand', flex: 1, alpha: 0.2, lam: 2.6 } },
+            { key: 'sat', label: 'Wrong saturation', spec: { ctrl: 'demand', flex: 1, alpha: 0.5, lam: 1.4 } },
+            { key: 'placebo', label: 'Placebo channel', spec: { ctrl: 'demand', flex: 1, alpha: 0.5, lam: 2.6, placebo: true } },
+            { key: 'wiggle', label: 'Over-flexible baseline', spec: { ctrl: 'demand', flex: 2, alpha: 0.5, lam: 2.6 } }
+        ];
+        var F2_SEEDS = [];
+        for (var si = 1; si <= 16; si++) F2_SEEDS.push(si * 7 + 1);
+        var f2Cache = {};
+
+        function placeboSeries(seed) {
+            var rng = BV.mulberry32(seed), out = [], v = 1;
+            for (var t = 0; t < N; t++) {
+                v = 0.75 * v + 0.25 * (1 + 0.5 * BV.randn(rng));
+                out.push(Math.max(0.05, v));
+            }
+            return transform(out, 0.5, 2.6);
+        }
+        function f2Data(holdout) {
+            if (f2Cache[holdout]) return f2Cache[holdout];
+            var te = N - holdout, acc = {}, plShare = [];
+            FAULTS.forEach(function (f) { acc[f.key] = { d: [], e: [] }; });
+            F2_SEEDS.forEach(function (sd) {
+                var w = makeWorld(0.6, sd), PL = placeboSeries(sd + 500);
+                var ref = fitSpec(w, PRE_SPEC, PL, te);
+                FAULTS.forEach(function (f) {
+                    var r = fitSpec(w, f.spec, PL, te);
+                    acc[f.key].d.push(r.mape - ref.mape);
+                    acc[f.key].e.push(Math.abs(r.err));
+                    if (f.key === 'placebo') {
+                        var dm = designMatrix(w, f.spec, PL), pIdx = dm.mstart - 1, sp = 0;
+                        for (var t = 0; t < te; t++) sp += r.beta[pIdx] * PL[t];
+                        plShare.push(Math.abs(100 * sp / r.estMedia));
+                    }
+                });
+            });
+            var out = FAULTS.map(function (f) {
+                var a = acc[f.key];
+                return {
+                    key: f.key, label: f.label,
+                    d: med(a.d), dLo: qt(a.d, 0.25), dHi: qt(a.d, 0.75),
+                    e: med(a.e), eLo: qt(a.e, 0.25), eHi: qt(a.e, 0.75)
+                };
+            });
+            f2Cache[holdout] = { rows: out, placebo: med(plShare) };
+            return f2Cache[holdout];
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var holdout = parseInt(document.getElementById('f2H').value, 10);
+            var d = f2Data(holdout), rows = d.rows;
+
+            var POS = {
+                omitted: 'middle right', proxy: 'middle right', adstock: 'middle right',
+                sat: 'middle left', placebo: 'bottom center', wiggle: 'middle right'
+            };
+            var traces = rows.map(function (r) {
+                var caught = Math.abs(r.d) >= 0.5;
+                return {
+                    type: 'scatter', mode: 'markers+text', showlegend: false,
+                    x: [r.d], y: [r.e], text: [r.label],
+                    textposition: POS[r.key] || 'middle right',
+                    textfont: { size: 11, color: p.text },
+                    marker: {
+                        color: caught ? p.success : p.danger, size: 13, symbol: caught ? 'square' : 'circle',
+                        line: { color: p.surface, width: 1.5 }
+                    },
+                    error_x: {
+                        type: 'data', symmetric: false, array: [r.dHi - r.d], arrayminus: [r.d - r.dLo],
+                        color: BV.band(p.muted, 0.8), thickness: 1.6, width: 4
+                    },
+                    error_y: {
+                        type: 'data', symmetric: false, array: [r.eHi - r.e], arrayminus: [r.e - r.eLo],
+                        color: BV.band(p.muted, 0.8), thickness: 1.6, width: 4
+                    },
+                    hovertemplate: r.label + '<br>ΔMAPE %{x:.2f} pp<br>error %{y:.0f}%<extra></extra>'
+                };
+            });
+            traces.push({
+                type: 'scatter', mode: 'markers+text', showlegend: false,
+                x: [0], y: [0], text: ['pre-registered spec'], textposition: 'top right',
+                textfont: { size: 11, color: p.muted },
+                marker: { color: p.muted, size: 10, symbol: 'diamond', line: { color: p.surface, width: 1.5 } },
+                hoverinfo: 'skip'
+            });
+            var xmax = Math.max(1.0, Math.max.apply(null, rows.map(function (r) { return r.dHi; })) * 1.3);
+            var ymax = Math.max.apply(null, rows.map(function (r) { return r.eHi; })) * 1.18;
+            Plotly.react('f2Chart', traces, BV.layout({
+                xaxis: { title: 'change in holdout MAPE (percentage points)', range: [-0.62, xmax] },
+                yaxis: { title: 'typical error in media contribution (%)', range: [-6, ymax] },
+                margin: { l: 66, r: 20, t: 26, b: 48 }, showlegend: false,
+                shapes: [{
+                    type: 'rect', x0: -0.5, x1: 0.5, yref: 'paper', y0: 0, y1: 1,
+                    fillcolor: BV.band(p.muted, 0.13), line: { width: 0 }
+                }],
+                annotations: [{
+                    x: 0.5, yref: 'paper', y: 0.99, xanchor: 'left', yanchor: 'top',
+                    text: 'a reviewer would call anything left of here a tie',
+                    showarrow: false, font: { size: 10, color: p.muted }
+                }]
+            }), BV.config);
+
+            var flagged = rows.filter(function (r) { return Math.abs(r.d) >= 0.5; });
+            var worst = rows.slice().sort(function (a, b) { return b.e - a.e; })[0];
+            var fe = document.getElementById('f2Flag');
+            fe.textContent = flagged.length + ' of ' + rows.length;
+            fe.className = 'val' + (flagged.length <= 1 ? ' warn' : '');
+            document.getElementById('f2Worst').textContent = Math.round(worst.e) + '% (' + worst.label.toLowerCase() + ')';
+            document.getElementById('f2WorstD').textContent = (worst.d >= 0 ? '+' : '') + worst.d.toFixed(2) + ' pp';
+            document.getElementById('f2Placebo').textContent = Math.round(d.placebo) + '%';
+        });
+        BV.sliders([{ id: 'f2H', value: 'f2HVal', fmt: function (v) { return String(v); } }], BV.redraw);
+
+        // ==================================================================
+        // Figure 3 — recovery coverage
+        // ==================================================================
+        var LEVELS = [0.5, 0.8, 0.9, 0.95];
+        function zq(level) {
+            // inverse normal CDF by bisection on BV.normCdf
+            var target = (1 + level) / 2, lo = 0, hi = 6;
+            for (var i = 0; i < 60; i++) {
+                var mid = 0.5 * (lo + hi);
+                if (BV.normCdf(mid) < target) lo = mid; else hi = mid;
+            }
+            return 0.5 * (lo + hi);
+        }
+        function binomCI(k, n) {
+            // Wilson score interval — well behaved near 0 and 1, unlike the normal
+            // approximation. (The framework reports a Jeffreys interval; both are
+            // answering "how noisy is this coverage estimate?".)
+            var z = 1.96, ph = k / n, d = 1 + z * z / n;
+            var c = (ph + z * z / (2 * n)) / d;
+            var h = z * Math.sqrt(ph * (1 - ph) / n + z * z / (4 * n * n)) / d;
+            return [BV.clamp(c - h, 0, 1), BV.clamp(c + h, 0, 1)];
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var bias = parseFloat(document.getElementById('f3Bias').value);
+            var wid = parseFloat(document.getElementById('f3W').value);
+            var n = parseInt(document.getElementById('f3N').value, 10);
+
+            // one seeded batch of refits: posterior mean sits at truth + N(bias,1),
+            // and the model reports a posterior sd of `wid` (1 = correctly sized).
+            var rng = BV.mulberry32(30), zs = [], i;
+            for (i = 0; i < n; i++) zs.push((bias + BV.randn(rng)) / wid);
+            var biasZ = BV.mean(zs) * Math.sqrt(n);
+            var mz = BV.mean(zs), sp = 0;
+            for (i = 0; i < n; i++) sp += (zs[i] - mz) * (zs[i] - mz);
+            var zSpread = Math.sqrt(sp / (n - 1));
+
+            var emp = [], lo = [], hi = [], theo = [];
+            LEVELS.forEach(function (L) {
+                var q = zq(L), k = 0;
+                for (i = 0; i < n; i++) if (Math.abs(zs[i]) <= q) k++;
+                emp.push(100 * k / n);
+                var ji = binomCI(k, n);
+                lo.push(100 * (k / n - ji[0]));
+                hi.push(100 * (ji[1] - k / n));
+                theo.push(100 * (BV.normCdf(q * wid - bias) - BV.normCdf(-q * wid - bias)));
+            });
+            var nominal = LEVELS.map(function (L) { return 100 * L; });
+
+            Plotly.react('f3Chart', [
+                {
+                    type: 'scatter', mode: 'lines', x: [40, 100], y: [40, 100], name: 'perfect calibration',
+                    line: { color: p.muted, width: 1.5, dash: 'dash' }, hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: nominal, y: theo, name: 'expected coverage',
+                    line: { color: p.accent, width: 2, dash: 'dot' },
+                    hovertemplate: 'nominal %{x:.0f}%<br>expected %{y:.0f}%<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers+lines', x: nominal, y: emp, name: 'measured over refits',
+                    line: { color: p.primary, width: 2.4 },
+                    marker: { color: p.primary, size: 11, line: { color: p.surface, width: 1.5 } },
+                    error_y: { type: 'data', symmetric: false, array: hi, arrayminus: lo, color: BV.band(p.primary, 0.85), thickness: 1.8, width: 5 },
+                    hovertemplate: 'nominal %{x:.0f}%<br>covered %{y:.0f}%<extra></extra>'
+                }
+            ], BV.layout({
+                xaxis: { title: 'nominal interval level (%)', range: [42, 100], dtick: 10 },
+                yaxis: { title: 'share of refits covering the truth (%)', range: [0, 102], dtick: 20 },
+                legend: { orientation: 'h', y: 1.18, x: 0, font: { size: 11 } },
+                margin: { l: 66, r: 20, t: 36, b: 48 }
+            }), BV.config);
+
+            var cov90 = emp[2];
+            var ce = document.getElementById('f3Cov');
+            ce.textContent = Math.round(cov90) + '%';
+            ce.className = 'val' + (cov90 < 82 ? ' warn' : ' ok');
+            document.getElementById('f3Bz').textContent = biasZ.toFixed(1);
+            document.getElementById('f3Zs').textContent = zSpread.toFixed(2);
+            var v = document.getElementById('f3Verdict');
+            var narrow = zSpread > 1.25, off = Math.abs(biasZ) >= 2.5;
+            if (narrow && off) { v.textContent = 'displaced and overconfident'; v.className = 'val warn'; }
+            else if (narrow) { v.textContent = 'intervals too narrow'; v.className = 'val warn'; }
+            else if (off) { v.textContent = 'posterior in the wrong place'; v.className = 'val warn'; }
+            else if (zSpread < 0.8) { v.textContent = 'conservative (too wide)'; v.className = 'val'; }
+            else { v.textContent = 'calibrated'; v.className = 'val ok'; }
+        });
+        BV.sliders([
+            { id: 'f3Bias', value: 'f3BiasVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'f3W', value: 'f3WVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'f3N', value: 'f3NVal', fmt: function (v) { return String(v); } }
+        ], BV.redraw);
+        function f3Preset(bias, wid) {
+            document.getElementById('f3Bias').value = String(bias);
+            document.getElementById('f3BiasVal').textContent = bias.toFixed(2);
+            document.getElementById('f3W').value = String(wid);
+            document.getElementById('f3WVal').textContent = wid.toFixed(2);
+            BV.redraw();
+        }
+        document.getElementById('f3PreMap').addEventListener('click', function () { f3Preset(0, 0.45); });
+        document.getElementById('f3PreBias').addEventListener('click', function () { f3Preset(1.2, 1.0); });
+        document.getElementById('f3PreOk').addEventListener('click', function () { f3Preset(0, 1.0); });
+    })();
+    </script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

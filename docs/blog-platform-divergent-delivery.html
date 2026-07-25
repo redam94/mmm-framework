@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Platform Randomizes After You Do | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="A correctly randomized creative A/B on an ad platform is still confounded, because the delivery algorithm sends each creative to a different optimized audience. On the same platform a lift test is not. Why sample size cannot fix it, and why creative A/B results are inadmissible as MMM calibration inputs.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-platform-divergent-delivery.html">
+    <meta property="og:title" content="The Platform Randomizes After You Do">
+    <meta property="og:description" content="Randomizing users is not enough to compare ad content: the algorithm re-sorts the audience per creative. Lift tests survive this; creative A/Bs do not — and a biased-but-precise readout will overrule your geo holdout.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-platform-divergent-delivery.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Platform Randomizes After You Do">
+    <meta name="twitter:description" content="Randomizing users is not enough to compare ad content: the algorithm re-sorts the audience per creative. Lift tests survive this; creative A/Bs do not — and a biased-but-precise readout will overrule your geo holdout.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-platform-divergent-delivery.html",
+          "name": "The Platform Randomizes After You Do | MMM Framework",
+          "description": "A correctly randomized creative A/B on an ad platform is still confounded, because the delivery algorithm sends each creative to a different optimized audience. On the same platform a lift test is not. Why sample size cannot fix it, and why creative A/B results are inadmissible as MMM calibration inputs.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-platform-divergent-delivery.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-platform-divergent-delivery.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "The Platform Randomizes After You Do",
+          "datePublished": "2026-07-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-platform-divergent-delivery.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-platform-divergent-delivery.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "The Platform Randomizes After You Do",
+              "item": "https://redam94.github.io/mmm-framework/blog-platform-divergent-delivery.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#not-the-same-mistake">Randomization Was Not the Problem</a></li>
+                <li><a href="#after-you">What the Algorithm Does After You Randomize</a></li>
+                <li><a href="#asymmetry">Why the Lift Test Survives</a></li>
+                <li><a href="#futility">Sample Size Is Not a Remedy</a></li>
+                <li><a href="#inadmissible">Why It Cannot Be a Calibration Input</a></li>
+                <li><a href="#framework">Where the Gate Belongs, and Where It Isn't</a></li>
+                <li><a href="#restore">What Restores Validity</a></li>
+                <li><a href="#limits">What This Does Not Establish</a></li>
+                <li><a href="#gate">The Registry Rule</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">The Platform Randomizes After You Do</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-24">July 24, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Experiments</span>
+            </p>
+            <p class="lead">Two creatives, split-tested inside a platform's own experimentation tool. Users randomized 50/50 by the platform, assignment logged, no self-selection into cells, no analyst degrees of freedom in the readout. By every standard this series has been applying, that is a randomized controlled trial &mdash; and the comparison it produces is still confounded. The reason is that your randomization is not the last randomization to happen. After users are split, the delivery algorithm decides <em>which</em> of them actually sees each creative, and it makes that decision separately per creative, optimizing each one against its own predicted-response model. The two cells end the test having reached measurably different audiences. The measured contrast is the ad content plus the algorithm's selection, and nothing in the log tells you the split. Braun and Schwartz established this for ad A/B tests in 2025; a Meta audit of 3,204 lift tests against 181,890 A/B tests measured it at scale in 2025. The corollary neither paper leads with is the operationally useful part, and it is not "platform experiments are broken." In a <em>lift</em> test both cells face the identical delivery algorithm, so the algorithm cancels and the test stays valid. In a content A/B the algorithm is part of the treatment. Which means the sharp version of the claim is a registry rule, not a caveat: a creative A/B result is inadmissible as an MMM calibration input, and because platform tests are enormous, it will arrive with a standard error small enough to overrule the geo holdout that <em>was</em> valid.</p>
+
+            <h2 id="not-the-same-mistake">Randomization Was Not the Problem</h2>
+            <p>This series has spent several posts on the failure mode where the exposed group differs from the unexposed group because <em>users</em> chose exposure. <a href="blog-activity-bias.html">Activity bias</a> is the canonical version: people who saw an ad were online, and being online predicts converting, so the exposed-versus-unexposed contrast overstates the ad by orders of magnitude and no set of controls repairs it. <a href="blog-attribution-incrementality.html">Attribution is not incrementality</a> makes the same point through the bookkeeping: last-touch credit conditions on the outcome path, and the fix in both posts is the same word. Randomize.</p>
+
+            <p>That advice was right and this post does not retract it. What follows is a different mechanism that happens to survive the fix. The bias does not come from users selecting into treatment; it comes from the <em>platform</em> selecting, per treatment arm, which randomized users get treated at all. The assignment is clean and the delivery is not, and the delivery is where audience composition gets decided.</p>
+
+            <p>The structural parallel is with a sibling post in this series rather than with the observational ones. <a href="blog-mediation-funnel-identification.html">Randomization buys you the total effect; the funnel is not included</a> argues that a randomized geo lift identifies one contrast and is silent about another one printed beside it. This post is the same shape of error at a different layer: randomizing users identifies the effect of <em>the campaign as delivered</em> and is silent about the effect of the <em>content</em>, which is the quantity the creative team believes it just measured.</p>
+
+            <h2 id="after-you">What the Algorithm Does After You Randomize</h2>
+            <p>Start with what a platform delivery system is for. It is not a coin flip with a budget attached; it is a ranking system that predicts, for every eligible user and every candidate ad, the probability that this user responds to <em>this</em> ad, and then spends the budget on the highest predictions. That is the product working correctly. It is also, during an experiment, a second assignment mechanism operating downstream of yours and optimized to a different objective.</p>
+
+            <div class="definition">
+                <h4>Definition: divergent delivery</h4>
+                <p>Braun and Schwartz (2025) name the phenomenon <strong>divergent delivery</strong>: when an experimenter supplies two or more ads and lets the platform optimize each of them, the platform delivers each ad to a different subset of the eligible users, chosen to suit that ad. Exposure within the test is therefore <em>not</em> random, even though assignment was, and the estimated comparison confounds the effect of the ad content with the effect of algorithmic targeting. The paper's own emphasis is that this is not a bug the platform will patch. Undetectable optimization is the service being sold; the mixes of users differ in ways the experimenter cannot observe from the reported data.</p>
+                <p>The corresponding empirical literature is older than the term. Ali and colleagues (2019) showed that on Facebook, holding the advertiser's targeting parameters fixed and varying only the creative and the budget produced large, systematic skews in who was reached &mdash; along gender and racial lines, for real employment and housing ads, with neutral targeting. The delivery stage, not the targeting stage, generated the skew.</p>
+            </div>
+
+            <p>To see what that does to a content comparison, take the cleanest possible case and grant every assumption the experimenter wants. One dimension of user heterogeneity, call it responsiveness \( x \), standardized so \( x \sim N(0,1) \) in the eligible pool. A user's baseline propensity to convert rises with it. Two creatives whose content effects are <em>known</em> and which differ by a real amount \( \delta \) &mdash; creative B is genuinely the better ad. Randomize the pool 50/50. Now let the delivery system spend each cell's budget on the users it scores highest for that cell's creative, with the two creatives appealing to opposite ends of \( x \): a discount execution and a premium execution, say, which is exactly the case where creative testing is most interesting and where the algorithm has the most reason to diverge.</p>
+
+            <p>The measured contrast is then the true content difference multiplied by a factor that depends only on how hard the algorithm optimized. And the natural way to see the damage is in the units the auditors use: the standardized mean difference between the two cells' <em>reached</em> audiences.</p>
+
+            <div class="interactive-box">
+                <h4>Divergent delivery, with the truth pinned</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Creative B is <strong>genuinely better content</strong> by the amount on the second slider &mdash; that is a fact of the simulation, drawn as the flat dashed line. The horizontal axis is the resulting audience imbalance between the two cells, measured as a standardized mean difference on the responsiveness dimension. Both cells reach 250,000 users; baseline conversion 1.0%. Push the optimization strength up and watch the measured contrast leave the truth, cross zero, and declare the worse creative the winner &mdash; with an interval that never widens.</p>
+                <div class="control-row">
+                    <label>Delivery optimization strength &lambda;</label>
+                    <input type="range" id="ddLam" min="0" max="0.5" step="0.005" value="0.15">
+                    <span class="value" id="ddLamVal">0.150</span>
+                </div>
+                <div class="control-row">
+                    <label>True content advantage of B</label>
+                    <input type="range" id="ddDelta" min="0" max="0.25" step="0.01" value="0.08">
+                    <span class="value" id="ddDeltaVal">+8%</span>
+                </div>
+                <div class="control-row">
+                    <label>Responsiveness spread &gamma;</label>
+                    <input type="range" id="ddGamma" min="0.1" max="1.2" step="0.05" value="0.6">
+                    <span class="value" id="ddGammaVal">0.60</span>
+                </div>
+                <div class="chart-container chart-themed" id="ddChart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Measured contrast</span><span class="val" id="ddMeasured">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Audience imbalance (SMD)</span><span class="val" id="ddSmd">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">SMD that flips the sign</span><span class="val" id="ddFlip">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="ddVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Closed form, not a Monte&nbsp;Carlo draw &mdash; the curve is exact (see the deep dive). At the defaults the truly better creative is measured at &minus;9.8% instead of +8%, and the sign flips at an imbalance of SMD&nbsp;=&nbsp;0.13 &mdash; <em>below</em> the 0.20 bar the Meta audit treats as the threshold for meaningful imbalance. The band is the 95% sampling interval; it is narrow everywhere, which is the whole problem.</p>
+            </div>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Why the bias is a population quantity</summary>
+                <div class="deep-dive-body">
+                    <p>Let responsiveness be \( x \sim N(0,1) \) in the eligible pool and let a user's baseline conversion propensity be \( b(x) = b_0 \exp(\gamma x - \gamma^2/2) \), normalized so that \( \mathbb{E}[b] = b_0 \). Cell \( k \) reaches user \( i \) with probability proportional to \( \exp(\lambda\theta_k x_i) \), where \( \lambda \ge 0 \) is how aggressively delivery optimizes and \( \theta_A = +1 \), \( \theta_B = -1 \) encode that the two creatives are scored toward opposite ends of the dimension.</p>
+                    <p>Exponentially tilting a standard normal shifts it and nothing else: \( \phi(x)e^{\lambda\theta x} \propto \phi(x - \lambda\theta) \). So the audience actually <em>reached</em> in cell \( k \) is \( x \sim N(\lambda\theta_k,\, 1) \) &mdash; same variance, shifted mean. Using \( \mathbb{E}[e^{\gamma x}] = e^{\gamma\mu + \gamma^2/2} \) for \( x \sim N(\mu, 1) \),</p>
+                    $$ \mathbb{E}\!\left[\,b \mid \text{reached in } k\,\right] \;=\; b_0\, e^{\gamma\lambda\theta_k}. $$
+                    <p>With a true multiplicative content advantage \( \delta \) for B, the observed rate ratio is \( (1+\delta)\,e^{-2\gamma\lambda} \). The standardized mean difference of \( x \) between the two reached audiences is \( d = 2\lambda \), because both have unit variance. Substituting,</p>
+                    $$ \widehat{\text{contrast}} \;=\; (1+\delta)\,e^{-\gamma d} - 1, \qquad \text{sign flips when } \; d \;\gt\; \frac{\ln(1+\delta)}{\gamma}. $$
+                    <p>Every quantity on the right is a population expectation. There is no \( n \). The estimator does not converge to the content effect as the test grows; it converges to the content effect times \( e^{-\gamma d} \). That is inconsistency, not imprecision, and it is why the next figure looks the way it does. At \( \delta = 0.08 \) and \( \gamma = 0.6 \) the flip threshold is \( \ln(1.08)/0.6 = 0.128 \).</p>
+                    <p>One honest caveat on the units. Burtch and colleagues compute their standardized mean differences on <em>observable</em> user features; the \( x \) above is the latent responsiveness dimension itself, which is the worst case. An imbalance of 0.13 on an observed feature only loosely related to response does proportionally less damage. Cutting the other way, and this is Braun and Schwartz's point: the dimension the platform tilts on is by construction the one it predicts response from, and it need not be visible in the features you are able to audit.</p>
+                </div>
+            </details>
+
+            <h2 id="asymmetry">Why the Lift Test Survives</h2>
+            <p>Everything above is an argument about comparing two ads. Notice what it does <em>not</em> touch. In a lift test the comparison is between users eligible to be shown the campaign and a held-out control group shown nothing. There is one ad configuration, one delivery model, one optimization objective. The algorithm selects which of the eligible treatment users get reached &mdash; and the control group's counterfactual counterparts are defined by that same selection, either by holding out at randomization and comparing intent-to-treat, or by logging the ad a control user <em>would</em> have won. The algorithm applies identically on both sides of the contrast, so it cancels. Nothing about divergent delivery threatens a holdout.</p>
+
+            <p>This is not an inference from the theory; it has been measured. Burtch, Moakler, Gordon, Zhang, and Hill (2025) audited Meta's own experimentation surface across 3,204 lift tests and 181,890 A/B tests, computing standardized mean differences in user characteristics across cells and adopting Cohen's conventional 0.20 threshold for meaningful imbalance. Their summary is worth quoting exactly, because the two halves are usually reported separately and the pairing is the finding: <em>"Lift tests show no meaningful audience imbalance, confirming their causal validity, while A/B tests show clear imbalance, as expected."</em> The magnitudes are stark. Among lift tests, 0.16% of standardized mean differences exceeded 0.20 and 5% of the balance t-tests were significant at the 5% level &mdash; exactly the nominal rate, which is what randomization predicts and what a clean test looks like. Among A/B tests, 22% of standardized mean differences exceeded 0.20 and 25% of the t-statistics were significant: five times the nominal rate.</p>
+
+            <div class="note">
+                <h4>💡 "As expected" is doing real work in that sentence</h4>
+                <p>The authors are emphatic that divergent delivery in A/B tests is <em>intentional</em> &mdash; in their words, it is "specific to A/B tests and intentional, informing advertisers about ad performance in practice." The imbalance is the algorithm doing its job. That framing matters for how you write the caveat: an A/B test is not a broken experiment, it is a valid measurement of a different estimand. It tells you which configuration performed better <em>as the platform will actually deploy it</em>, which is a genuinely useful operational number and is not a content effect. Braun and Schwartz reach the same prescriptive place from the other direction: use these tests to predict performance within the same platform and campaign, and stop short of causal claims about the creative that you intend to carry anywhere else.</p>
+            </div>
+
+            <p>So the asymmetry is not a hedge. Randomized platform holdouts remain the strongest causal anchor an advertiser can buy, and that endorsement, made in an <a href="blog-attribution-incrementality.html">earlier post</a>, stands unqualified. The A/B is the special case that fails, and it fails for a reason specific to having two treated cells and no control.</p>
+
+            <h2 id="futility">Sample Size Is Not a Remedy</h2>
+            <p>The reflex response to any measurement problem on a platform is scale. Platforms have hundreds of millions of users; run the test longer, reach more people, and the noise goes away. It does &mdash; and that is the problem, because the noise was never what was wrong.</p>
+
+            <p>Write the measured contrast as truth plus bias. The bias term derived above, \( (1+\delta)e^{-\gamma d} - (1+\delta) \), contains no sample size. The standard error falls like \( 1/\sqrt{n} \). Their ratio therefore diverges, and the test passes through three regimes as it grows: first the interval covers the truth and also covers everything else; then the interval stops covering the truth; then the interval excludes zero on the wrong side and the platform reports a statistically significant winner that is the worse ad. Scale does not move you toward the answer. It moves you from <em>uninformative</em> to <em>confidently wrong</em>, and it does so at sample sizes that are small by platform standards.</p>
+
+            <div class="interactive-box">
+                <h4>The futility panel: bias is flat, precision is not</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Same simulation, swept over the number of users reached per cell. The flat line is the absolute bias in percentage points; the falling line is the half-width of the 95% interval. Where they cross, the interval stops covering the true contrast. True content advantage fixed at +8%, responsiveness spread &gamma;&nbsp;=&nbsp;0.60.</p>
+                <div class="control-row">
+                    <label>Delivery optimization strength &lambda;</label>
+                    <input type="range" id="ftLam" min="0.02" max="0.4" step="0.005" value="0.15">
+                    <span class="value" id="ftLamVal">0.150</span>
+                </div>
+                <div class="control-row">
+                    <label>Baseline conversion rate</label>
+                    <input type="range" id="ftRate" min="0.002" max="0.05" step="0.002" value="0.01">
+                    <span class="value" id="ftRateVal">1.00%</span>
+                </div>
+                <div class="chart-container chart-themed" id="ftChart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Bias (flat in n)</span><span class="val warn" id="ftBias">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">n to exclude the truth</span><span class="val" id="ftNTruth">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">n to crown the wrong winner</span><span class="val" id="ftNWinner">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="ftVerdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults the bias is &minus;17.8&nbsp;pp and never moves. About 19,000 reached users per cell is enough for the 95% interval to exclude the true contrast; about 62,000 is enough to report the wrong creative as a significant winner. Platform tests routinely run two to three orders of magnitude larger than that.</p>
+            </div>
+
+            <p>This is the same arithmetic that makes an underpowered experiment and a biased experiment fail in opposite directions, and it is why "we ran it on ten million users" is not a defense. It is also why the failure is socially durable: the biased estimate arrives with a tight interval and a small p-value, which is precisely the presentation that survives a review meeting. A <a href="blog-p-values-across-models.html">p-value cannot tell you which of two numbers is closer to the truth</a>, and here it reliably certifies the wrong one.</p>
+
+            <h2 id="inadmissible">Why It Cannot Be a Calibration Input</h2>
+            <p>Now the part that reaches an MMM. <a href="blog-calibrating-mmm-experiments.html">The experiment is the prior</a> argued that a randomized lift test is the right way to anchor a weakly identified channel, because Bayesian updating is additive in precision: the observational likelihood carries little information in a collinear channel's direction, so a reasonably tight experimental measurement dominates and drags the channel to a value someone actually measured. That argument is correct, and it has an edge nobody likes to look at. Precision-weighted pooling has no bias term. It weights inputs by \( 1/\text{se}^2 \) and by nothing else. Hand it a biased measurement with a small standard error and it will do exactly what it promised to do.</p>
+
+            <p>The path from a creative A/B to an MMM calibration slot is short and entirely plausible. A team split-tests two Social creatives, the platform declares a winner, and the winning cell's reported return &mdash; 3.1&times;, on tens of millions of impressions, with a standard error in the second decimal place &mdash; gets written into the experiment registry as a measured readout for the Social channel, because the test <em>was</em> randomized and the number <em>did</em> come from an experiment. Meanwhile the geo holdout that ran last quarter measured the same channel at 1.6&times; with a standard error of 0.35, because geo holdouts have a few dozen markets and a noisy counterfactual. Both go into the fit.</p>
+
+            <div class="interactive-box">
+                <h4>Two experiments, one channel, and the invalid one wins</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A Gaussian stand-in for the framework's in-graph calibration. The MMM's own time-series likelihood puts the channel at ROAS 1.90&nbsp;&plusmn;&nbsp;0.45. A geo holdout &mdash; the admissible input &mdash; measures 1.60&nbsp;&plusmn;&nbsp;0.35. Drag the creative A/B's reported value and its standard error and watch it overrule both. This is not the earlier post's figure of a good experiment beating a weak likelihood; it is what happens when two experiments compete and the inadmissible one is the tighter.</p>
+                <div class="control-row">
+                    <label>A/B-derived readout (ROAS)</label>
+                    <input type="range" id="abVal" min="1" max="4.5" step="0.05" value="3.1">
+                    <span class="value" id="abValVal">3.10</span>
+                </div>
+                <div class="control-row">
+                    <label>A/B-derived standard error</label>
+                    <input type="range" id="abSe" min="0.04" max="1" step="0.01" value="0.12">
+                    <span class="value" id="abSeVal">0.12</span>
+                </div>
+                <div class="chart-container chart-themed" id="calChart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Posterior, holdout only</span><span class="val ok" id="calHold">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Posterior, both</span><span class="val" id="calBoth">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">A/B : holdout weight</span><span class="val" id="calWeight">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Shift in the headline</span><span class="val" id="calShift">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults the A/B carries 8.5&times; the holdout's weight. The channel's calibrated ROAS moves from 1.71 to 2.88 &mdash; a 68% inflation &mdash; and the 95% interval <em>narrows</em> from &plusmn;0.54 to &plusmn;0.22. Every downstream artifact reports a tighter number that is further from the only measurement in the room that identified the right thing.</p>
+            </div>
+
+            <p>The mechanism is not hidden in the framework's code; it is the code. <code>calibration/likelihood.py</code> attaches an experiment with a single line whose only tuning knob is the reported standard error:</p>
+
+            <pre><code># illustrative
+return pm.Normal(
+    name,
+    mu=estimand_expr,             # what the model thinks the experiment measured
+    sigma=float(measurement.se),  # how hard the measurement pulls
+    observed=float(measurement.value),
+)</code></pre>
+
+            <p>The module's own docstring says the quiet part: folding an experiment in alongside the time-series likelihood "is not double counting in the pathological sense, but the experiment's <code>se</code> is what governs how hard it pulls the fit." That is the right design. It is also why the admissibility question has to be answered <em>before</em> the payload is constructed, because after that point the only thing the model knows about your experiment is a mean and a standard deviation.</p>
+
+            <h2 id="framework">Where the Gate Belongs, and Where It Isn't</h2>
+            <p>Let me be precise about what this framework does and does not currently do, because the diagnostic half of this post is a simulation and the prescriptive half is a gate that is only partly built.</p>
+
+            <p>First, plainly: <strong>no code in this repository models divergent delivery.</strong> There is no estimator for it, no diagnostic that would detect it, and no simulation of it outside the figures on this page. Every occurrence of the word "divergent" in the source refers to divergent MCMC transitions or to divergent evidence across measurement sources. The audience-imbalance check that Burtch and colleagues run is a platform-side computation on user features an advertiser never receives; it is not something an MMM can reconstruct from a weekly spend panel.</p>
+
+            <p>Second, the place where a gate <em>would</em> attach is well defined, and three of its four pieces already exist. The experiment lifecycle registry in <code>platform/sessions.py</code> carries a <code>design_type</code> column per experiment and enforces a legal status path &mdash; draft, planned, running, completed, calibrated &mdash; with illegal transitions raising. The agent tool <code>record_experiment_readout</code> takes a <code>method</code> argument documented as "the measurement method (e.g. 'geo holdout DiD', 'synthetic control')". The named-method registry in <code>planning/methods/</code> enumerates seven designs &mdash; synthetic control, regression-adjusted geo, TBR, GBR, matched-market DiD, ghost ads, switchback &mdash; and every one of them produces an incrementality contrast against a control or an off-state. There is no creative-A/B entry, and there could not be one under the registry's implicit admission criterion.</p>
+
+            <p>The fourth piece is missing, and it is the one that matters. Provenance is <em>recorded</em> and never <em>read</em>. The <code>design_type</code> column is unvalidated free text. The <code>method</code> string is written into the readout, displayed in the experiment drawer, and read by no Python module anywhere in the codebase. When <code>apply_experiment_calibration</code> stages a readout for the next fit, it validates exactly four things: that the channel exists in the model spec, that value and standard error are present, that a test window is present, and that out-of-window tests carry a spend level. It never asks what design produced the number. And <code>ExperimentMeasurement</code>, the payload that actually reaches the graph, has fifteen fields &mdash; channel, window, value, standard error, estimand, spend overrides, holdout regions, error family, off-panel evaluation settings &mdash; and not one of them describes the experiment's design.</p>
+
+            <div class="warning">
+                <h4>⚠️ The evidence chip is earned by having an experiment, not by the experiment being valid</h4>
+                <p><code>reporting/evidence.py</code> defines the three tiers this framework prints beside every channel number: <code>EXPERIMENT_VALIDATED</code>, <code>MODEL_IDENTIFIED</code>, <code>PRIOR_DOMINATED</code>. The top tier's gloss reads "calibrated against a randomized experiment folded into the fit &mdash; the strongest causal anchor available." Read the assignment logic and the gate is set membership: <code>if ch in exp_set: tier = EvidenceTier.EXPERIMENT_VALIDATED</code>. A channel calibrated from a creative A/B satisfies that test, and every client-facing surface &mdash; the classic report, the Augur readout, the interactive report &mdash; renders the strongest chip in the vocabulary next to the number that was contaminated. The tier is a claim about provenance being <em>experimental</em>; it is silently read as a claim about the experiment being <em>identified</em>.</p>
+            </div>
+
+            <p>There is one near-miss worth naming, because it shows the distinction is already half-understood in the code. <code>reporting/triangulation.py</code> places three estimates of a channel's return side by side &mdash; the MMM, the experiment readout, and the platform-reported figure &mdash; and tags each source with an <code>incremental</code> flag whose docstring calls it "the axis that makes platform-vs-MMM divergence <em>expected</em>, not alarming." A platform figure exceeding the incremental estimate by more than 1.4&times; is classified <code>platform-inflated</code>. That machinery would catch our 3.1&times; readout instantly &mdash; if it arrived labeled as a platform figure. Labeled as an experiment, it is admitted as incremental, anchors the reconciliation as the causal gold standard, and the inflation check never fires. The gate exists; the A/B walks past it wearing the wrong badge.</p>
+
+            <h2 id="restore">What Restores Validity</h2>
+            <p>Four things, in ascending order of how much the practitioner will resist them.</p>
+
+            <p><strong>A control cell.</strong> This is the whole fix, and it is the one that gets cut, because a holdout looks like paying for impressions you do not get and learning nothing about creative. The reframing that survives contact with a budget owner is the one this post has been building toward: the control cell is what converts an operational readout into a causal one, and a test without it produces a number that cannot enter the model. Johnson's (2023) survey of display-ad field experiments makes the same point structurally &mdash; exposure is jointly determined by advertisers, users, algorithms and competitors, so control over exposure, not sample size, is the scarce resource.</p>
+
+            <p><strong>Fixed-audience configuration.</strong> If you must run a content A/B, you can starve the algorithm of the freedom to diverge. Burtch and colleagues test this directly and report which settings help: identical optimization goals across cells, identical target audience definitions, identical budgets, identical bid strategies, manual rather than automatic placement, a single static image per cell, and a frequency cap near one impression per user. Their most restrictive combination yielded tests with no meaningful imbalance. Their own caveat is the one to carry into the deck: no configuration guarantees eliminating divergent delivery entirely.</p>
+
+            <p><strong>Ghost-ad controls.</strong> Where the platform supports it, the cleanest user-level design runs the campaign's auction for control users too and logs the ad they would have won without serving it (Johnson, Lewis, and Nubbemeyer, 2017). The control group is then defined by the same delivery process as the treatment group, which is exactly the property that makes the algorithm cancel. This framework's <code>planning/methods/ghost_ads.py</code> implements the power side of that design as a standalone pre-fit calculator, reporting the minimum detectable effect on both the intent-to-treat and treatment-on-treated scales, since only <code>exposure_rate</code> of randomized users are actually reached.</p>
+
+            <p><strong>A third arm that isolates the algorithm.</strong> The newest proposal in this space, and the most direct attack on the decomposition, is a three-arm design: add a cell that exposes the <em>algorithm</em> to the treatment's metadata while holding the user-facing creative identical to control. The difference between that arm and control is the algorithmic channel; the residual is the creative. Pal and Susarla (2026) report a Meta campaign where the algorithmic component raised female impression share by 2.07 percentage points while the creative change lowered it by 0.68, and conclude that a conventional two-arm test understates the algorithmic channel by roughly a factor of two. This is a preprint and I have not seen an independent replication; I include it because it is the only design I am aware of that targets the decomposition itself rather than suppressing it.</p>
+
+            <h2 id="limits">What This Does Not Establish</h2>
+            <p>This post does not establish that platform experiments are unreliable. The evidence points the other way for the design that matters most: the Meta audit found lift-test balance indistinguishable from what randomization predicts, at the nominal 5% significance rate, across 3,204 tests. Randomized platform holdouts remain the best causal anchor an advertiser can buy, and Gordon and colleagues' (2019) large-scale comparison at Facebook is the reason this series treats them as the benchmark against which observational methods are judged. Nothing here licenses discounting a lift test.</p>
+
+            <p>It does not establish that A/B tests are worthless. They measure a real estimand &mdash; relative performance as the platform will actually deploy the configurations &mdash; and both papers cited here say so explicitly. A creative test that informs which asset to run next quarter on the same platform is doing legitimate work. The inadmissibility claim is scoped to one use: as a measured incrementality readout entering a model that will be used to reallocate budget across channels.</p>
+
+            <p>The figures are demonstrations, not estimates. The bias in figure one is generated by a one-dimensional stylized delivery model with a parameter, \( \lambda \), that has no counterpart you can read off a platform report. I do not know the magnitude of divergent-delivery bias in your account, and neither the simulation nor the audit tells you: the audit measures audience <em>imbalance</em>, which is an upstream symptom, and converting an observed imbalance into a bias in a conversion contrast requires exactly the responsiveness structure the simulation assumes and nobody observes. The specific claim "an SMD of 0.13 flips an 8% content difference" is arithmetic inside that model, not a measured industry number.</p>
+
+            <p>Finally, the framework audit is a statement about the current code, not a claim that the gate is hard to build. Three of the four pieces exist; what is missing is a validated vocabulary of design types, a read of that field in <code>apply_experiment_calibration</code>, and an evidence tier that distinguishes "an experiment was folded in" from "the experiment identified this estimand." That is a small, mechanical change, and until it lands, the enforcement lives in the analyst's head.</p>
+
+            <h2 id="gate">The Registry Rule</h2>
+            <p>The operational version of this post fits on one line of a pre-registration form. Before an experiment's readout is allowed to become a calibration likelihood, it must name the design that produced it, and the design must have had a cell that did not receive the treatment. Geo holdout: admissible. Ghost-ad or PSA control: admissible. Switchback on-off schedule: admissible, with the block length caveats. Matched-market DiD: admissible with the usual observational caveats about parallel trends. Creative A/B, campaign-configuration A/B, audience-configuration A/B: not admissible, at any sample size, no matter how small the standard error &mdash; and especially when the standard error is small, because that is when the number does the most damage.</p>
+
+            <p>The reporting change matters as much. A calibrated channel should print the <em>design</em>, not just the tier, so a reader can tell in one glance whether the strongest chip in the vocabulary was earned by a randomized holdout or by a test in which the platform's optimizer was part of the treatment. The distinction is invisible in a point estimate and a standard error, which is precisely why it has to travel as a field rather than as a footnote.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Randomizing users is not sufficient to compare ad <em>content</em>. Delivery optimization re-selects, per creative, which randomized users are actually reached, so the measured contrast confounds content with algorithmic targeting (Braun and Schwartz, 2025).</li>
+                    <li>The asymmetry is the useful part: in a lift test both cells face the identical delivery algorithm, so it cancels; in a content A/B the algorithm is part of the treatment. Meta's own audit measured it &mdash; 0.16% of standardized mean differences above 0.20 in 3,204 lift tests versus 22% in 181,890 A/B tests, with balance tests significant at 5% and 25% respectively.</li>
+                    <li>Sample size cannot fix it. The bias is a population quantity with no \( n \) in it while the standard error falls like \( 1/\sqrt{n} \), so scale moves the test from uninformative to confidently wrong &mdash; in the simulated case, at about 19,000 reached users per cell.</li>
+                    <li>Therefore a creative A/B result is inadmissible as an MMM calibration input. Precision-weighted pooling has no bias term: at a plausible 8.5&times; weight advantage the A/B moves a channel's calibrated ROAS from 1.71 to 2.88 and <em>narrows</em> the interval.</li>
+                    <li>In this framework the gate is three-quarters built. <code>design_type</code> and <code>method</code> are recorded but unvalidated and never read; <code>apply_experiment_calibration</code> checks channel, value, standard error and window only; <code>ExperimentMeasurement</code> has no design field; and <code>EvidenceTier.EXPERIMENT_VALIDATED</code> is granted on set membership, so an inadmissible readout earns the strongest chip in the vocabulary.</li>
+                    <li>What restores validity: a control cell, or failing that a fixed-audience configuration (identical goals, audiences, budgets, bids, manual placement, one static asset, frequency cap near one), ghost-ad controls, or a three-arm design that exposes the algorithm to the treatment metadata while holding the creative at control.</li>
+                    <li>This does not indict platform experiments. Lift tests came through the audit clean, and they remain the anchor. The claim is narrow, which is what makes it enforceable.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Braun, M., &amp; Schwartz, E. M. (2025). <em>Where A/B Testing Goes Wrong: How Divergent Delivery Affects What Online Experiments Cannot (and Can) Tell You About How Customers Respond to Advertising</em>. Journal of Marketing, 89(2), 71&ndash;95.</li>
+                <li>Burtch, G., Moakler, R., Gordon, B. R., Zhang, P., &amp; Hill, S. (2025). <em>Characterizing and Minimizing Divergent Delivery in Meta Advertising Experiments</em>. arXiv:2508.21251.</li>
+                <li>Ali, M., Sapiezynski, P., Bogen, M., Korolova, A., Mislove, A., &amp; Rieke, A. (2019). <em>Discrimination Through Optimization: How Facebook's Ad Delivery Can Lead to Biased Outcomes</em>. Proceedings of the ACM on Human-Computer Interaction, 3(CSCW), Article 199.</li>
+                <li>Johnson, G. A. (2023). <em>Inferno: A Guide to Field Experiments in Online Display Advertising</em>. Journal of Economics &amp; Management Strategy, 32(3), 469&ndash;490.</li>
+                <li>Johnson, G. A., Lewis, R. A., &amp; Nubbemeyer, E. I. (2017). <em>Ghost Ads: Improving the Economics of Measuring Online Ad Effectiveness</em>. Journal of Marketing Research, 54(6), 867&ndash;884.</li>
+                <li>Gordon, B. R., Zettelmeyer, F., Bhargava, N., &amp; Chapsky, D. (2019). <em>A Comparison of Approaches to Advertising Measurement: Evidence from Big Field Experiments at Facebook</em>. Marketing Science, 38(2), 193&ndash;225.</li>
+                <li>Pal, P., &amp; Susarla, A. (2026). <em>Algorithm or Creative? A Three-Arm Experimental Design for Decomposing Algorithmic Bias in Platform A/B Tests</em>. arXiv:2605.23706 (preprint).</li>
+                <li>Cohen, J. (1988). <em>Statistical Power Analysis for the Behavioral Sciences</em> (2nd ed.). Lawrence Erlbaum Associates. (Source of the 0.20 "small effect" convention used as the balance threshold.)</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var Z95 = 1.959963984540054;
+
+        function pct(v, digits) { return (v >= 0 ? '+' : '') + (100 * v).toFixed(digits === undefined ? 1 : digits) + '%'; }
+        function fmtN(n) {
+            if (!isFinite(n)) return '—';
+            if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+            if (n >= 1e3) return Math.round(n / 1e3) + 'k';
+            return String(Math.round(n));
+        }
+
+        // Shared model: reached-audience rates under exponential-tilt delivery.
+        // x ~ N(0,1); b(x) = b0 * exp(gamma*x - gamma^2/2); cell k tilts by
+        // exp(lam*theta_k*x) with theta = +1 (A) / -1 (B)  =>  reached x ~ N(lam*theta, 1).
+        function rates(b0, gamma, lam, delta) {
+            var pA = b0 * Math.exp(gamma * lam);
+            var pB = b0 * Math.exp(-gamma * lam) * (1 + delta);
+            return { pA: pA, pB: pB, ratio: (1 + delta) * Math.exp(-2 * gamma * lam) };
+        }
+        // Relative-scale SE of the B:A rate ratio at n reached users per cell.
+        function seRel(pA, pB, ratio, n) {
+            var v = (1 - pA) / (n * pA) + (1 - pB) / (n * pB);
+            return ratio * Math.sqrt(Math.max(v, 0));
+        }
+
+        // ---------------------------------------------------------------
+        // Figure 1 — divergent delivery with the truth pinned
+        // ---------------------------------------------------------------
+        var DD_N = 250000, DD_B0 = 0.01;
+        BV.register(function () {
+            var p = BV.palette();
+            var lam = parseFloat(document.getElementById('ddLam').value);
+            var delta = parseFloat(document.getElementById('ddDelta').value);
+            var gamma = parseFloat(document.getElementById('ddGamma').value);
+
+            var ds = BV.linspace(0, 1.0, 121);           // SMD axis = 2*lambda
+            var measured = [], hi = [], lo = [];
+            for (var i = 0; i < ds.length; i++) {
+                var l = ds[i] / 2;
+                var r = rates(DD_B0, gamma, l, delta);
+                var m = r.ratio - 1;
+                var s = seRel(r.pA, r.pB, r.ratio, DD_N);
+                measured.push(100 * m);
+                hi.push(100 * (m + Z95 * s));
+                lo.push(100 * (m - Z95 * s));
+            }
+            var here = rates(DD_B0, gamma, lam, delta);
+            var mNow = here.ratio - 1;
+            var smd = 2 * lam;
+            var flip = Math.log(1 + delta) / gamma;
+
+            var traces = [
+                {
+                    type: 'scatter', mode: 'lines', x: ds.concat(ds.slice().reverse()),
+                    y: hi.concat(lo.slice().reverse()), fill: 'toself',
+                    fillcolor: BV.band(p.primary, 0.16), line: { width: 0 },
+                    name: '95% sampling interval', hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: ds, y: measured,
+                    name: 'measured contrast (B vs A)', line: { color: p.primary, width: 2.6 },
+                    hovertemplate: 'SMD %{x:.2f}<br>measured %{y:.1f}%<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: [0, 1.0], y: [100 * delta, 100 * delta],
+                    name: 'true content contrast', line: { color: p.accent, width: 2.2, dash: 'dash' },
+                    hoverinfo: 'name'
+                },
+                {
+                    type: 'scatter', mode: 'markers', x: [smd], y: [100 * mNow], showlegend: false,
+                    marker: { color: p.primary, size: 13, symbol: 'diamond', line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: 'SMD %{x:.2f}<br>measured %{y:.1f}%<extra>this test</extra>'
+                }
+            ];
+            var yLo = Math.min(-30, lo[lo.length - 1] - 4);
+            var layout = BV.layout({
+                xaxis: { title: 'audience imbalance between reached cells (SMD)', range: [0, 1.0], dtick: 0.2 },
+                yaxis: { title: 'contrast in conversion rate (%)', range: [yLo, Math.max(30, 100 * delta + 12)], zeroline: false },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 62, r: 20, t: 38, b: 50 },
+                shapes: [
+                    { type: 'line', x0: 0, x1: 1.0, y0: 0, y1: 0, line: { color: p.muted, width: 1, dash: 'dot' } },
+                    { type: 'line', x0: 0.2, x1: 0.2, y0: yLo, y1: Math.max(30, 100 * delta + 12), line: { color: p.danger, width: 1, dash: 'dash' } },
+                    { type: 'line', x0: smd, x1: smd, y0: yLo, y1: 100 * mNow, line: { color: p.muted, width: 1, dash: 'dot' } }
+                ],
+                annotations: [
+                    { x: 0.205, y: yLo, yanchor: 'bottom', xanchor: 'left', text: 'audit bar, SMD = 0.20', showarrow: false, font: { size: 11, color: p.danger } }
+                ]
+            });
+            Plotly.react('ddChart', traces, layout, BV.config);
+
+            var corrupted = Math.abs(mNow - delta) > 0.25 * Math.max(delta, 0.01);
+            var mEl = document.getElementById('ddMeasured');
+            mEl.textContent = pct(mNow);
+            mEl.className = 'val' + (corrupted ? ' warn' : ' ok');
+            var sEl = document.getElementById('ddSmd');
+            sEl.textContent = smd.toFixed(2);
+            sEl.className = 'val' + (smd >= 0.2 ? ' warn' : ' ok');
+            document.getElementById('ddFlip').textContent = delta > 0 ? flip.toFixed(2) : 'n/a';
+            var v = document.getElementById('ddVerdict');
+            if (delta > 0 && mNow < 0) { v.textContent = 'sign reversed'; v.className = 'val warn'; }
+            else if (corrupted) { v.textContent = 'magnitude corrupted'; v.className = 'val warn'; }
+            else { v.textContent = 'roughly honest'; v.className = 'val ok'; }
+        });
+        BV.sliders([
+            { id: 'ddLam', value: 'ddLamVal', fmt: function (v) { return v.toFixed(3); } },
+            { id: 'ddDelta', value: 'ddDeltaVal', fmt: function (v) { return '+' + (100 * v).toFixed(0) + '%'; } },
+            { id: 'ddGamma', value: 'ddGammaVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+
+        // ---------------------------------------------------------------
+        // Figure 2 — bias flat, precision collapsing
+        // ---------------------------------------------------------------
+        var FT_DELTA = 0.08, FT_GAMMA = 0.6;
+        BV.register(function () {
+            var p = BV.palette();
+            var lam = parseFloat(document.getElementById('ftLam').value);
+            var b0 = parseFloat(document.getElementById('ftRate').value);
+
+            var r = rates(b0, FT_GAMMA, lam, FT_DELTA);
+            var measured = r.ratio - 1;
+            var bias = measured - FT_DELTA;                       // signed, in units
+            var absBiasPP = Math.abs(100 * bias);
+            var K = (1 - r.pA) / r.pA + (1 - r.pB) / r.pB;        // n * variance of log-ish ratio
+            // half-width(n) = Z95 * ratio * sqrt(K/n) * 100 (pp)
+            function half(n) { return Z95 * r.ratio * Math.sqrt(K / n) * 100; }
+            function nFor(targetPP) { return K * Math.pow(Z95 * r.ratio * 100 / targetPP, 2); }
+
+            var logs = BV.linspace(3, 8, 160);
+            var ns = logs.map(function (l) { return Math.pow(10, l); });
+            var hw = ns.map(half);
+            var flat = ns.map(function () { return absBiasPP; });
+
+            var nTruth = nFor(absBiasPP);
+            var nWinner = nFor(Math.abs(100 * measured));
+
+            var traces = [
+                {
+                    type: 'scatter', mode: 'lines', x: ns, y: flat, name: '|bias| (percentage points)',
+                    line: { color: p.danger, width: 2.6 }, hovertemplate: 'n=%{x:.3s}<br>bias %{y:.1f} pp<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: ns, y: hw, name: '95% interval half-width',
+                    line: { color: p.accent, width: 2.6 }, hovertemplate: 'n=%{x:.3s}<br>half-width %{y:.2f} pp<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', x: [nTruth], y: [absBiasPP], showlegend: false,
+                    marker: { color: p.warning, size: 13, symbol: 'diamond', line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: 'n=%{x:.3s}<extra>interval stops covering the truth</extra>'
+                }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'users reached per cell (log scale)', type: 'log', range: [3, 8], exponentformat: 'power' },
+                yaxis: { title: 'percentage points (log scale)', type: 'log', range: [-1.3, 2.2], exponentformat: 'power' },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 62, r: 20, t: 38, b: 50 },
+                shapes: [
+                    { type: 'line', x0: Math.log10(nTruth), x1: Math.log10(nTruth), y0: -1.3, y1: 2.2, line: { color: p.warning, width: 1, dash: 'dash' } }
+                ],
+                annotations: [
+                    { x: Math.log10(nTruth), y: 2.2, yanchor: 'top', xanchor: 'left', text: '  truth excluded beyond here', showarrow: false, font: { size: 11, color: p.warning } }
+                ]
+            });
+            Plotly.react('ftChart', traces, layout, BV.config);
+
+            document.getElementById('ftBias').textContent = (bias >= 0 ? '+' : '−') + absBiasPP.toFixed(1) + ' pp';
+            document.getElementById('ftNTruth').textContent = fmtN(nTruth);
+            document.getElementById('ftNWinner').textContent = measured * FT_DELTA < 0 ? fmtN(nWinner) : 'n/a (no reversal)';
+            var v = document.getElementById('ftVerdict');
+            if (measured < 0) { v.textContent = 'confidently wrong'; v.className = 'val warn'; }
+            else if (absBiasPP > 2) { v.textContent = 'precise, still biased'; v.className = 'val warn'; }
+            else { v.textContent = 'bias small here'; v.className = 'val'; }
+        });
+        BV.sliders([
+            { id: 'ftLam', value: 'ftLamVal', fmt: function (v) { return v.toFixed(3); } },
+            { id: 'ftRate', value: 'ftRateVal', fmt: function (v) { return (100 * v).toFixed(2) + '%'; } }
+        ], BV.redraw);
+
+        // ---------------------------------------------------------------
+        // Figure 3 — precision-weighted pooling has no bias term
+        // ---------------------------------------------------------------
+        var MMM = { mu: 1.90, sd: 0.45 };
+        var HOLD = { mu: 1.60, se: 0.35 };
+        function pool(parts) {
+            var prec = 0, num = 0;
+            for (var i = 0; i < parts.length; i++) {
+                var w = 1 / (parts[i].s * parts[i].s);
+                prec += w; num += w * parts[i].m;
+            }
+            return { mu: num / prec, sd: Math.sqrt(1 / prec) };
+        }
+        BV.register(function () {
+            var p = BV.palette();
+            var abV = parseFloat(document.getElementById('abVal').value);
+            var abS = parseFloat(document.getElementById('abSe').value);
+
+            var postHold = pool([{ m: MMM.mu, s: MMM.sd }, { m: HOLD.mu, s: HOLD.se }]);
+            var postBoth = pool([{ m: MMM.mu, s: MMM.sd }, { m: HOLD.mu, s: HOLD.se }, { m: abV, s: abS }]);
+
+            var xs = BV.linspace(0.2, 5.0, 320);
+            function pdf(mu, sd) {
+                return xs.map(function (x) {
+                    return Math.exp(-0.5 * Math.pow((x - mu) / sd, 2)) / (sd * Math.sqrt(2 * Math.PI));
+                });
+            }
+            var yBoth = pdf(postBoth.mu, postBoth.sd);
+            var yMax = Math.max.apply(null, yBoth) * 1.08;
+
+            var traces = [
+                {
+                    type: 'scatter', mode: 'lines', x: xs, y: pdf(MMM.mu, MMM.sd),
+                    name: 'MMM alone', line: { color: p.muted, width: 2, dash: 'dot' }, hoverinfo: 'name'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: xs, y: pdf(postHold.mu, postHold.sd),
+                    name: '+ geo holdout (admissible)', line: { color: p.accent, width: 2.6 }, hoverinfo: 'name'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: xs, y: yBoth,
+                    name: '+ holdout + creative A/B', line: { color: p.danger, width: 2.6 },
+                    fill: 'tozeroy', fillcolor: BV.band(p.danger, 0.15), hoverinfo: 'name'
+                }
+            ];
+            var layout = BV.layout({
+                xaxis: { title: 'channel ROAS', range: [0.2, 5.0] },
+                yaxis: { title: 'posterior density', showticklabels: false, range: [0, yMax] },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 52, r: 20, t: 38, b: 50 },
+                shapes: [
+                    { type: 'line', x0: HOLD.mu, x1: HOLD.mu, y0: 0, y1: yMax, line: { color: p.accent, width: 1, dash: 'dot' } },
+                    { type: 'line', x0: abV, x1: abV, y0: 0, y1: yMax, line: { color: p.danger, width: 1, dash: 'dot' } }
+                ],
+                annotations: [
+                    { x: HOLD.mu, y: yMax, yanchor: 'top', xanchor: 'right', text: 'holdout 1.60 ', showarrow: false, font: { size: 11, color: p.accent } },
+                    { x: abV, y: yMax, yanchor: 'top', xanchor: 'left', text: ' A/B ' + abV.toFixed(2), showarrow: false, font: { size: 11, color: p.danger } }
+                ]
+            });
+            Plotly.react('calChart', traces, layout, BV.config);
+
+            document.getElementById('calHold').textContent = postHold.mu.toFixed(2) + ' ± ' + (Z95 * postHold.sd).toFixed(2);
+            var bEl = document.getElementById('calBoth');
+            bEl.textContent = postBoth.mu.toFixed(2) + ' ± ' + (Z95 * postBoth.sd).toFixed(2);
+            var w = Math.pow(HOLD.se / abS, 2);
+            document.getElementById('calWeight').textContent = w.toFixed(1) + '×';
+            var shift = postBoth.mu / postHold.mu - 1;
+            var sh = document.getElementById('calShift');
+            sh.textContent = pct(shift, 0);
+            if (Math.abs(shift) > 0.25) { sh.className = 'val warn'; bEl.className = 'val warn'; }
+            else { sh.className = 'val'; bEl.className = 'val'; }
+        });
+        BV.sliders([
+            { id: 'abVal', value: 'abValVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'abSe', value: 'abSeVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+    })();
+    </script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

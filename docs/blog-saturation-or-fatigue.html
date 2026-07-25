@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saturation or Fatigue? Your MMM Cannot Tell the Difference | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="A concave response curve and a flat curve with fading effectiveness fit the same data to four decimal places and recommend opposite budgets. Adstock is what makes them indistinguishable: it is an AR(1) filter, and autocorrelation in the media regressor is exactly the condition under which the two model families conflate.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-saturation-or-fatigue.html">
+    <meta property="og:title" content="Saturation or Fatigue? Your MMM Cannot Tell the Difference">
+    <meta property="og:description" content="Diminishing returns and declining effectiveness fit the same series and imply opposite budgets — and the adstock transform is what makes them indistinguishable.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-saturation-or-fatigue.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Saturation or Fatigue? Your MMM Cannot Tell the Difference">
+    <meta name="twitter:description" content="Diminishing returns and declining effectiveness fit the same series and imply opposite budgets — and the adstock transform is what makes them indistinguishable.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-saturation-or-fatigue.html",
+          "name": "Saturation or Fatigue? Your MMM Cannot Tell the Difference | MMM Framework",
+          "description": "A concave response curve and a flat curve with fading effectiveness fit the same data to four decimal places and recommend opposite budgets. Adstock is what makes them indistinguishable: it is an AR(1) filter, and autocorrelation in the media regressor is exactly the condition under which the two model families conflate.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-24",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-saturation-or-fatigue.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-saturation-or-fatigue.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Saturation or Fatigue? Your MMM Cannot Tell the Difference",
+          "datePublished": "2026-07-24",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-saturation-or-fatigue.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-saturation-or-fatigue.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Saturation or Fatigue? Your MMM Cannot Tell the Difference",
+              "item": "https://redam94.github.io/mmm-framework/blog-saturation-or-fatigue.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#two-stories">Two Stories, One Series</a></li>
+                <li><a href="#not-a-ridge">This Is Not the Ridge You Know</a></li>
+                <li><a href="#secant">What the Drift Actually Estimates</a></li>
+                <li><a href="#generator">Adstock Is the Autocorrelation Generator</a></li>
+                <li><a href="#diagnostics">The Diagnostics That Will Not Save You</a></li>
+                <li><a href="#designed">The Schedule That Breaks the Tie</a></li>
+                <li><a href="#limits">What This Does Not Establish</a></li>
+                <li><a href="#practice">What to Do About It</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Saturation or Fatigue? Your MMM Cannot Tell the Difference</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-24">July 24, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">MMM</span>
+            </p>
+            <p class="lead">A channel's contribution per dollar has been sliding for two years, and there are exactly two stories. The first is <em>diminishing returns</em>: the response curve is concave, you have climbed onto its flat part, and the fix is to move dollars somewhere steeper. The second is <em>declining effectiveness</em>: the response is roughly linear in spend, but the coefficient itself is fading &mdash; worn creative, a maturing platform, an auction that has turned against you &mdash; and the fix is to repair the channel or wind it down. Those are different diagnoses, they point at different levers, and one of them is wrong. The problem is not that the data leans slightly toward one. The problem is that both models fit the same weekly series to within a thousandth of R&sup2;, their predictive means never separate by more than half a residual standard deviation in any week, and they disagree by a factor of 2.3 about the single number your budget optimizer consumes. Worse, the mechanism that makes them indistinguishable is one you installed deliberately. Adstock is a first-order autoregressive filter; running spend through it manufactures precisely the autocorrelation under which a nonlinear response and a drifting linear one become the same function. The more carryover you model, the less identified the saturation curve you then optimize against.</p>
+
+            <h2 id="two-stories">Two Stories, One Series</h2>
+            <p>Write the two models down side by side, because their similarity is the whole argument. Both explain the same weekly KPI with the same baseline &mdash; intercept, trend, annual seasonality &mdash; and the same adstocked media variable \( a_t \). They differ in one place only:</p>
+            $$ \text{A (static nonlinear):}\quad c_t = \beta\, S(a_t), \qquad\qquad \text{B (linear dynamic):}\quad c_t = \beta_t\, a_t . $$
+            <p>Model A is the standard MMM: a fixed coefficient in front of a concave saturation function \( S \). Model B is the time-varying-coefficient MMM: no curvature at all, but effectiveness \( \beta_t \) drifts smoothly across the window. Family A is what every commercial MMM ships by default. Family B is what you reach for when a client says "our TV isn't working like it used to." Both are respectable, both are in the literature, and almost nobody fits them against each other.</p>
+
+            <p>It is worth being precise about how respectable each side is, because that is how practitioners came to hold two incompatible explanations at once without a rule for choosing. Model A in its Bayesian form is Jin, Wang, Sun, Chan and Koehler (2017) &mdash; the paper that put geometric and delayed adstock next to a Hill saturation curve, and the ancestor of essentially every Bayesian MMM built since. Model B in its Bayesian form is Ng, Wang and Dai (2021), a time-varying-coefficient model developed to improve marketing mix modeling at Uber, in which the coefficient at each week is a weighted blend of local latent variables. Both are now in shipping software, and they are not even the only two options: this framework exposes drifting effectiveness per channel; PyMC-Marketing documents a time-varying media multiplier alongside a time-varying intercept; Google's Meridian takes a third route and spends its temporal flexibility on the <em>baseline</em> through knots while holding the media coefficients fixed. Three different places to put the same degrees of freedom, no guidance in any of them about which is right for your data, and in practice the choice is made by habit.</p>
+
+            <p>The figure below simulates a three-year weekly panel where one of the two stories is true by construction, fits both families, and prints what each would tell the budget meeting. The toggle switches which story is the truth. In neither direction does the fit reveal it.</p>
+
+            <div class="interactive-box">
+                <h4>Same fit, opposite prescription</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">156 weeks, one channel, geometric adstock with retention 0.70, realistic noise (R&sup2; near 0.87). One story is true by construction &mdash; use the button to switch which. Both families are then fit to the <em>same</em> simulated series. The top panel shows the two predictive means over the data; the bottom shows what each model answers to three questions a budget meeting actually asks, with the ground truth marked as a diamond. Drag the spend trend to see the fabricated story change direction.</p>
+                <div class="control-row">
+                    <label>Spend trend across the window</label>
+                    <input type="range" id="f1Trend" min="-0.6" max="0.6" step="0.05" value="0.4">
+                    <span class="value" id="f1TrendVal">+40%</span>
+                    <button type="button" class="viz-btn" id="f1Truth">Truth: diminishing returns</button>
+                </div>
+                <div class="chart-container chart-themed" id="f1Fit" style="height:290px;"></div>
+                <div class="chart-container chart-themed" id="f1Dec" style="height:250px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">R&sup2;, saturation fit</span><span class="val" id="f1R2A">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">R&sup2;, drift fit</span><span class="val" id="f1R2B">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Worst-week gap</span><span class="val" id="f1Gap">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="f1Verdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults (truth = diminishing returns, spend up 40%), the two fits differ by 0.001 in R&sup2; and their predictive means never separate by more than half a residual standard deviation &mdash; yet the drift model reports that the channel lost 57% of its effectiveness, which did not happen. Flip the toggle and the failure reverses: on a world with <em>no saturation whatsoever</em>, the static model invents a curve steep enough to claim your marginal dollar is worth half your average dollar, and promises a 16% efficiency gain from a 30% budget cut that would in fact change efficiency by nothing.</p>
+            </div>
+
+            <p>Read the bottom panel carefully, because the disagreement is not a matter of degree. The first question &mdash; what is the marginal return on the next dollar, as a fraction of the average return on the dollars already spent &mdash; is the number a budget optimizer runs on. Model A says 43%. Model B says 100%, necessarily, because a linear response has marginal equal to average at every level. That is a 2.3&times; disagreement about the quantity that determines whether this channel gets the next increment of budget. The second question asks whether cutting spend restores efficiency: model A says a 30% cut raises efficiency 20%, because you slide back down the concave curve; model B says a 30% cut changes efficiency by exactly zero, because level is irrelevant when the response is linear. The third asks whether the channel is wearing out: model A says no by construction, model B says it has lost more than half its power. One model is telling you to re-level the budget and leave the channel alone. The other is telling you the level is fine and the channel is dying.</p>
+
+            <p>And they cannot both be right, because in this simulation one of them is looking at a world the other has never seen.</p>
+
+            <h2 id="not-a-ridge">This Is Not the Ridge You Know</h2>
+            <p>Measurement teams have an immediate and wrong reaction to that figure: <em>yes, we know, adstock and saturation trade off.</em> They do, and that trade-off has its own post &mdash; <a href="blog-bayesian-mmm-carryover-shape.html">carryover and shape effects in Bayesian MMM</a> shows two different (half-saturation, slope, coefficient) triples tracing the same curve inside the observed spend range, while the adstock parameters themselves recover fairly well. This framework's own adstock module extends the ridge to the decay: its docstring says the decay shape, the saturation strength, and the coefficient "trade off against one another&hellip; This is inherent to additive MMM, not a bug."</p>
+
+            <p>That is a different failure, and confusing the two is how this one stays invisible. Within-family weak identification announces itself. The posterior for \( \alpha \) is wide, the marginal for the saturation parameter is wide, the joint is a banana, and the pair-plot has a diagonal smear that any careful analyst notices. The estimates are unstable but the <em>uncertainty is honest</em>: the model tells you it does not know.</p>
+
+            <p>What happens between families is the opposite. Inside model B, given the specification, \( \beta_t \) is perfectly well identified &mdash; there is no ridge, the chains mix, the intervals are tight. Inside model A, given the specification, the saturation parameter is identified too. Each posterior is sharp. They are sharp about incompatible things, and nothing inside either fit is aware the other exists. The failure mode here is not a wide posterior. It is <strong>a narrow posterior in the wrong model class</strong>, which is worse in the only way that matters: a wide interval invites caution, and a tight interval invites action.</p>
+
+            <div class="definition">
+                <h4>Definition: conflation of model families</h4>
+                <p>Two model families are <em>observationally equivalent</em> over a dataset when, for any member of one family, there exists a member of the other producing (near-)identical likelihoods on that data. No amount of data of the same kind separates them; no diagnostic computed within either family detects the problem, because within each family everything is well-behaved. The two families are distinguished only where they make different predictions &mdash; which, for saturation versus drift, is under a spend schedule the data has never contained. This is a statement about the <em>design</em>, not about the estimator, which is why the resolution is an experiment and not a better sampler.</p>
+            </div>
+
+            <p>Dew, Padilla and Shchetkina (2024) established the general result and named the trigger. Their abstract is worth quoting exactly, because both halves matter: they show that "nonlinear and time-varying effects are often not identifiable from standard marketing mix data: while certain data patterns may be suggestive of nonlinear effects, such patterns may also emerge under simpler models that incorporate dynamics in marketing effectiveness," and that "conflating the two types of effects is especially likely in the presence of autocorrelated marketing variables, which are common in practice, especially given the widespread use of stock variables to capture long-run effects of advertising." That last clause is the uncomfortable part, and the rest of this post is about what it implies for a transform nearly every MMM applies as a matter of course.</p>
+
+            <h2 id="secant">What the Drift Actually Estimates</h2>
+            <p>The reason the two families collapse into each other is a single line of algebra, and it also explains why the fabricated story changes direction when you drag the trend slider. Set the two contributions equal and solve for the drifting coefficient:</p>
+            $$ \beta_t\, a_t \;=\; \beta\, S(a_t) \qquad\Longrightarrow\qquad \beta_t \;=\; \beta\,\frac{S(a_t)}{a_t}. $$
+            <p>The quantity \( S(a)/a \) is the <em>secant slope</em> of the response curve from the origin to the operating point &mdash; for any concave \( S \) with \( S(0)=0 \), it is strictly decreasing in \( a \). So the time-varying-coefficient model is not estimating effectiveness at all. It is estimating the average productivity of a dollar along the true concave curve, evaluated wherever spend happened to be that week, and then plotted in time order. The "trajectory" is the response curve, re-indexed by the calendar.</p>
+
+            <p>Everything follows from that. A channel being scaled up walks rightward along the curve, its secant slope falls, and the drift model reports fatigue. A channel being wound down walks leftward, its secant slope rises, and the same model reports that the channel is <em>getting better</em> &mdash; which is what the figure above shows when you drag the trend to &minus;60%. The direction of the fabricated story is set by the direction of the media plan, not by anything about the media. Nobody in the room will read it that way. They will read a downward-sloping effectiveness line next to a chart of rising spend and conclude the two are related, which they are, in the exact opposite of the causal direction assumed.</p>
+
+            <p>The symmetric failure is at least as common and gets far less attention. Take a world with no saturation at all &mdash; a genuinely linear channel whose coefficient is fading &mdash; and fit the standard static MMM to it. The model has no way to represent the fade, so it spends the only flexibility it has: the curvature parameter. It invents a saturation curve whose secant slope declines at the rate the true effectiveness declined. In the simulation above that invented curve is steep enough to report a marginal-to-average ratio of 0.52 in a world where the true ratio is exactly 1.00, and to promise a 16% efficiency gain from a budget cut that would deliver none. The client is told they are over-invested when they are actually under-creative, and the resulting cut looks like it worked, because efficiency per dollar rises mechanically whenever a fading channel shrinks.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>When exactly can the drift track the curve?</summary>
+                <div class="deep-dive-body">
+                    <p>The identity \( \beta_t = \beta\,S(a_t)/a_t \) holds pointwise for <em>any</em> spend path, so on its face a time-varying coefficient can always reproduce a static nonlinear model exactly. What stops it is smoothness. Every practical implementation restricts \( \beta_t \) to a smooth class: a Gaussian random walk with a small innovation scale, a spline over knots, a Gaussian process with a long length-scale. Call that class \( \mathcal{B} \). The conflation condition is then simply</p>
+                    $$ t \;\mapsto\; \frac{S(a_t)}{a_t} \;\in\; \mathcal{B}. $$
+                    <p>If the adstocked regressor \( a_t \) is itself a smooth function of time, so is any fixed function of it, and the condition holds. If \( a_t \) jumps week to week, then \( S(a_t)/a_t \) jumps week to week, and no smooth coefficient can follow it &mdash; the families separate. <strong>Autocorrelation in the media regressor is exactly the property that makes a nonlinearity in spend look like a smooth trend in time.</strong></p>
+                    <p>Two consequences follow that are easy to miss. First, the aliasing is a property of the regressor's <em>time structure</em>, not of its range: a channel that visits a wide range of spend levels slowly is just as conflated as one that never moves, because slowness is the whole problem. Second, the same argument covers a third family. A flexible time-varying <em>baseline</em> &mdash; a knot-based intercept, a Hilbert-space GP trend &mdash; is also a smooth function of time, so it competes for the same variation. Saturation, drifting media coefficients, and a wiggly baseline are three ways to spend the same degrees of freedom, and adding flexibility to any one of them takes identification away from the other two.</p>
+                    <p><em>Attribution note:</em> the identification result and the autocorrelation condition are established by Dew, Padilla and Shchetkina (2024) through theory and simulation with a Bayesian nonparametric response model. The secant-slope derivation and the smoothness-class framing above are my own compact restatement of the mechanism, not results quoted from that paper.</p>
+                </div>
+            </details>
+
+            <h2 id="generator">Adstock Is the Autocorrelation Generator</h2>
+            <p>Here is the part that should change how you think about the transform. Geometric adstock with retention \( \alpha \) and an infinite kernel is, written as a recursion,</p>
+            $$ a_t \;=\; \sum_{k \ge 0} \alpha^k x_{t-k} \;=\; \alpha\, a_{t-1} + x_t , $$
+            <p>which is the definition of an AR(1) process driven by \( x_t \). If weekly spend were white noise, the adstocked regressor would have lag-1 autocorrelation of exactly \( \alpha \). That is not an approximation or an asymptotic result; it is the recursion. Simulating twenty thousand weeks of white-noise spend and measuring the autocorrelation of the adstocked series returns 0.312, 0.511, 0.708, 0.806 and 0.903 for retentions of 0.3, 0.5, 0.7, 0.8 and 0.9 &mdash; the identity, to sampling error.</p>
+
+            <p>Normalizing the kernel to sum to one, which most implementations do, rescales the series and leaves the autocorrelation alone. Truncating it at a finite maximum lag shaves a little off. The point survives both: <strong>the transform whose entire purpose is to encode memory is the same operation that installs autocorrelation into the regressor, and autocorrelation is the documented condition under which the saturation curve stops being identified.</strong> A device introduced to capture carryover manufactures the exact regressor property that dissolves the shape you were going to optimize against.</p>
+
+            <div class="interactive-box">
+                <h4>How much carryover buys how much confusion</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Weekly spend is drawn near-independently week to week, so the raw series carries almost no autocorrelation (flat dashed line) &mdash; though it does drift about 30% across the window, as real budgets do, which is why the adstocked series reads a little above &alpha;. Adstock is then applied at retention &alpha;. The upper curve is the lag-1 autocorrelation the filter creates; the lower curve is the share of the true saturation <em>curvature</em> &mdash; the part of the response left after the linear-in-spend component is removed &mdash; that a smoothly drifting coefficient can reproduce. Averaged over four spend paths.</p>
+                <div class="control-row">
+                    <label>Adstock retention &alpha;</label>
+                    <input type="range" id="f2Alpha" min="0" max="0.85" step="0.05" value="0.7">
+                    <span class="value" id="f2AlphaVal">0.70</span>
+                </div>
+                <div class="chart-container chart-themed" id="f2Chart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Lag-1 autocorrelation</span><span class="val" id="f2Rho">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Effective weeks (of 156)</span><span class="val" id="f2Neff">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Curvature absorbed by drift</span><span class="val" id="f2Abs">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="f2Verdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">With no carryover, a drifting coefficient can mimic only 12% of the saturation curvature and the two families are genuinely distinguishable. At &alpha;&nbsp;=&nbsp;0.70 &mdash; an unremarkable retention for weekly TV &mdash; it mimics 73%; at 0.85, 79%. The effective-sample-size readout uses the same Newey&ndash;West design effect this framework applies elsewhere: a 156-week window at &rho;&nbsp;=&nbsp;0.80 is worth about 18 independent weeks.</p>
+            </div>
+
+            <p>The effective-sample-size readout deserves a moment, because it is the second, quieter cost. Autocorrelated regressors do not merely alias the shape; they shrink the information content of the window. The variance design effect for an autocorrelated series, \( \mathrm{deff} = 1 + 2\sum_{k=1}^{L-1}(1 - k/L)\,\rho^k \), is the same quantity this framework computes in <code>planning/identification.py::ar1_design_effect</code> to stop a correlated experiment window from being labelled powered on an independent-observation standard error. At \( \rho = 0.8 \) it equals 8.7, so three years of weekly data carry about eighteen weeks' worth of independent information about the media variable. Fitting a flexible response curve and a drifting coefficient on eighteen effective observations is not a modeling problem you can regularize your way out of.</p>
+
+            <div class="warning">
+                <h4>⚠️ More carryover modeled means less trustworthy saturation</h4>
+                <p>The retention parameter is itself only weakly identified from observational data, so in practice it is substantially prior-driven. That means the smoothness of the regressor whose curvature you are trying to estimate is partly a <em>modeling choice</em>. Pushing a channel's retention prior up &mdash; because it feels right for brand TV, because someone's benchmark says 0.8 &mdash; smooths the regressor and hands the saturation curve's variation to any smooth-in-time component in the model. The response curve does not warn you that it is now being pinned by the prior; it just gets flatter or steeper and stays tight.</p>
+            </div>
+
+            <h2 id="diagnostics">The Diagnostics That Will Not Save You</h2>
+            <p>The natural next move is to reach for the workflow. It will not help, and it is worth being specific about why, because each tool fails for its own reason.</p>
+
+            <p><strong>Convergence diagnostics are silent by construction.</strong> R-hat, effective sample size and divergences interrogate whether the sampler explored the posterior of <em>the model you wrote</em>. Both models here are well-specified, well-behaved and cleanly sampled. <a href="blog-when-sampling-fails.html">Everything that sampling diagnostics are designed to catch</a> is absent, which is exactly the trap: a clean fit is evidence that the geometry is fine, not that the family is right.</p>
+
+            <p><strong>Posterior predictive checks pass both.</strong> They must &mdash; the two families produce nearly the same predictive distribution on the observed spend path, which is what "observationally equivalent" means. A PPC that separated them would be a refutation of the premise.</p>
+
+            <p><strong>Prior predictive checks and simulation-based calibration pass both.</strong> <a href="blog-prior-predictive-sbc.html">SBC verifies that your inference recovers parameters drawn from your own prior under your own model</a>. Run it on model A and it passes; run it on model B and it passes. Self-consistency within a family is orthogonal to the question of which family generated the data.</p>
+
+            <p><strong>Cross-validation is nearly indifferent, and honestly so.</strong> In the simulations above the two families' in-sample R&sup2; differ by about a thousandth, and out-of-sample they differ only insofar as the future spend path departs from the past one. Expected log predictive density will hand you a difference well inside its own standard error. This is not a defect of the criterion. Predictive equivalence <em>is</em> the problem, and a predictive criterion cannot resolve a question the predictions do not encode. The two models agree about everything except the counterfactual you are about to enact.</p>
+
+            <p><strong>Priors regularize the wrong thing.</strong> A tight prior on the innovation scale of a random-walk coefficient does shrink toward a constant \( \beta \) &mdash; this framework's default innovation scale of 0.15 does exactly that. But the shrinkage is a statement of belief about drift, not evidence about it. If you are the sort of analyst who believes in saturation, your priors will encode saturation and your posterior will be sharp about saturation, and the same is true in reverse. Two teams with different priors will get confidently different answers from identical data, and neither posterior will be wide enough to reveal that this happened.</p>
+
+            <p>There is one diagnostic that does fire, and it is worth running: fit both families and compare the <em>decisions</em>, not the fits. If the marginal-to-average ROAS ratio moves from 0.4 to 1.0 across two specifications that fit equally well, you have not learned that one is right. You have learned that your data does not contain the answer, which is a finding, and one that should be reported.</p>
+
+            <h2 id="designed">The Schedule That Breaks the Tie</h2>
+            <p>Because this is an identification problem rather than an estimation problem, the fix has to come from the design of the data, not the design of the model. And because the families differ precisely in what they predict under spend paths the data has never contained, the resolution is to go contain one. Dew and coauthors reach the same conclusion: their closing contribution is showing how marketers can avoid the conflation by designing experiments that manipulate spending in ways that pin down model form.</p>
+
+            <p>The requirement has two parts, and they are separate. To identify <em>curvature</em>, the schedule has to visit distinct spend levels and hold them &mdash; you learn the shape of \( S \) by observing the response at several points along it, and that is a statement about the range of \( a_t \). To identify <em>carryover</em>, the schedule has to change sharply &mdash; you learn \( \alpha \) from the decay after a drop, which is a statement about the time structure of \( a_t \). This framework's design module states both requirements in its own docstring for the multi-level flighting schedule: "&ge;3 distinct levels let the experiment trace the response CURVE&hellip; not just a single on/off contrast," and "Block length should be &gt;= the channel's adstock memory so carryover doesn't smear the contrast."</p>
+
+            <p>That second constraint is the one teams get wrong, and the simulation below shows why it is not a detail. Adstock does not only alias your history &mdash; it also smooths your <em>experiment</em>. Pulsing a channel with a 3.1-week half-life in two-week blocks means the regressor never reaches either level before it is moved again, and most of your designed contrast is filtered away before it reaches the response curve.</p>
+
+            <div class="interactive-box">
+                <h4>Designed variation, and the washout that eats it</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The same channel (retention 0.80, so a 3.1-week half-life and a 14-week 95% washout), now under a <strong>budget-neutral</strong> flighting schedule: total spend is held at the business-as-usual level, only its distribution across weeks changes. The top panel shows the weekly schedule and what adstock does to it. The bottom shows the recovered curvature parameter and its spread across eight independent re-runs, against the business-as-usual baseline and the true value. Setting levels to 1 restores the smooth historical schedule.</p>
+                <div class="control-row">
+                    <label>Distinct spend levels (1 = business as usual)</label>
+                    <input type="range" id="f3Lev" min="1" max="5" step="1" value="3">
+                    <span class="value" id="f3LevVal">3</span>
+                </div>
+                <div class="control-row">
+                    <label>Weeks held at each level</label>
+                    <input type="range" id="f3Blk" min="2" max="13" step="1" value="8">
+                    <span class="value" id="f3BlkVal">8</span>
+                </div>
+                <div class="chart-container chart-themed" id="f3Sched" style="height:250px;"></div>
+                <div class="chart-container chart-themed" id="f3Res" style="height:230px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Curvature absorbed by drift</span><span class="val" id="f3Abs">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Curvature detection t</span><span class="val" id="f3T">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Recovered curvature</span><span class="val" id="f3Lam">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="f3Verdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">Business as usual recovers the curvature at 1.96&nbsp;&plusmn;&nbsp;0.96 against a truth of 2.20 &mdash; a spread so wide that a re-run could land anywhere from "nearly linear" to "severely saturated," and the curvature is undetectable once drift is allowed (t&nbsp;=&nbsp;1.0). Three levels held eight weeks each, at identical total spend, cut the spread to &plusmn;0.41 and lift detection to t&nbsp;=&nbsp;4.0; five levels reach &plusmn;0.24. Shorten the blocks to two weeks &mdash; below the 3.1-week half-life &mdash; and the spread widens back to &plusmn;0.71 with detection at t&nbsp;=&nbsp;2.4. The design is not the level count alone; it is level count <em>and</em> dwell time against the washout.</p>
+            </div>
+
+            <p>Two design lessons fall out that are worth stating plainly. First, most of the detection power arrives with the second level: going from a smooth historical schedule to a two-level pulse cuts the curvature spread from &plusmn;0.96 to &plusmn;0.37. Additional levels buy less than practitioners expect for <em>detecting</em> curvature and more than they expect for <em>pinning its shape</em> &mdash; which matters, because the shape is what extrapolates to a spend level you have not tried. Second, the dwell time interacts with the very parameter that caused the problem. A channel with retention \( \alpha \) needs roughly \( \ln(0.05)/\ln(\alpha) \) weeks to wash out to 5%: three weeks at \( \alpha=0.3 \), nine at 0.7, fourteen at 0.8, twenty-nine at 0.9. Design your blocks below that and adstock filters your experiment for you, which is the same arithmetic that governs <a href="blog-carryover-experiment-timing.html">spacing sequential geo tests</a>.</p>
+
+            <div class="note">
+                <h4>💡 Where this lives in the framework</h4>
+                <p>Both families are available, which is what makes the comparison runnable rather than rhetorical. A channel opts into drifting effectiveness with <code>MediaChannelConfigBuilder(&hellip;).with_time_varying()</code> (or <code>MediaChannelConfig.time_varying=True</code>); the graph then builds a demeaned random walk on \( \log \beta_t \) with a <code>HalfNormal</code> innovation scale defaulting to 0.15, emits the trajectory as <code>beta_tv_&lt;channel&gt;</code> alongside the time-average <code>beta_&lt;channel&gt;</code>, and surfaces it for reporting as <code>bundle.time_varying_betas</code>. The multi-level schedule comes from <code>planning.design.flighting_design(levels=&hellip;, block_weeks=&hellip;)</code>, and <code>planning.identification.structural_identification</code> scores how much a candidate schedule would contract the structural parameters &mdash; it will refuse to claim the saturation parameter unless the design offers at least three distinct in-support levels. The synthetic world <code>synth.dgp.make_time_varying_beta</code> plants a fatiguing channel and a mid-series structural break for exactly this kind of test.</p>
+                <p><strong>An honest boundary:</strong> the identification module scores the <em>within-family</em> block &mdash; coefficient, carryover, saturation &mdash; and reports an explicitly optimistic upper bound on what a refit achieves. It does not compute a between-family Bayes factor, and nothing in the framework currently automates the saturation-versus-drift comparison. Running both specifications and diffing their decisions is still a manual act.</p>
+            </div>
+
+            <h2 id="limits">What This Does Not Establish</h2>
+            <p>Several things, and they matter for how far you should carry the argument.</p>
+
+            <p><strong>It does not establish that time-varying coefficients are wrong, or that saturation is.</strong> Both mechanisms are real. Creative does wear out; response curves are concave. The claim is narrower and stranger: over a typical observational window, the data does not adjudicate, and whichever you fit will come back confident.</p>
+
+            <p><strong>The simulations here are demonstrations, not evidence about your data.</strong> They use a single channel, a known baseline, additive Gaussian noise, a polynomial-in-time stand-in for a random-walk coefficient, and an exponential saturation form. Real panels have correlated channels, misspecified baselines, and heavier tails, all of which make the conflation worse, not better &mdash; but "worse in simulation" is not a measurement of severity in the wild. Dew and coauthors document prevalence across real datasets; I have not.</p>
+
+            <p><strong>The autocorrelation-to-conflation link is not a theorem I proved.</strong> It is the paper's result, restated. What I have added is the observation that adstock is an AR(1) filter and therefore a deliberate generator of the triggering condition, plus the secant-slope identity that makes the aliasing explicit. Both are elementary; neither is quoted from the paper.</p>
+
+            <p><strong>Designed variation resolves the question locally, not globally.</strong> A flighting schedule spanning 0.1&times; to 2&times; historical spend identifies the curve over that range. It says nothing about the shape at 5&times;, which is precisely where an aggressive budget recommendation would like to go. Extrapolation beyond the designed support remains a prior, however the curve was estimated.</p>
+
+            <p><strong>And the fix costs something.</strong> A budget-neutral pulse schedule is neutral in total spend, not in outcome: flighting a channel with real carryover through low weeks sacrifices some contribution relative to a smooth plan. That is a genuine short-term cost paid for a genuine long-term identification gain, and it should be priced as such rather than waved through as free.</p>
+
+            <h2 id="practice">What to Do About It</h2>
+            <p>The practical program is short, and none of it requires new methodology.</p>
+
+            <p>Start by fitting both families and comparing decisions rather than fits. If the marginal-to-average ratio, the recommended budget change and the "is this channel dying" verdict all move materially between two specifications with indistinguishable R&sup2;, the honest report is a range with a stated reason, not a point estimate from whichever specification the team prefers. This is a specification-curve exercise in the narrow, load-bearing sense: not a robustness parade over arbitrary choices, but a deliberate comparison of the two families that the data cannot separate.</p>
+
+            <p>Then check the autocorrelation of your adstocked regressors before you trust any response curve. It takes one line, it is directly interpretable through the design effect, and a channel whose adstocked series sits above \( \rho \approx 0.8 \) should be assumed to have a prior-driven saturation curve until an experiment says otherwise. Treat a high retention prior as what it is &mdash; a decision to reduce the identification of the shape &mdash; and set it deliberately rather than by benchmark.</p>
+
+            <p>Where a channel's curve actually drives money, buy the variation. A budget-neutral multi-level schedule with dwell time above the washout is the cheapest instrument available, because it manufactures the exogenous spend variation your media plan never produced and it does so without changing the annual budget. Where a full schedule is impractical, a geo lift test still helps, though less than one might hope: <a href="blog-calibrating-mmm-experiments.html">calibrating to a single experiment pins the coefficient at one operating point</a> and thereby anchors the level, but a single point does not identify the shape. Two operating points do considerably more than twice as much.</p>
+
+            <p>Finally, do not let the drift trajectory be reported as a finding without a schedule chart beside it. A falling \( \beta_t \) plotted next to a rising spend plan is the signature of the secant slope, not of creative wear-out, and the two are visually identical. If effectiveness genuinely fell, it should have fallen at a moment tied to something real &mdash; a creative change, a platform change, a competitive entry &mdash; and not merely tracked the budget monotonically for three years. That is a weak test. It is also the only one you get for free.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>A static concave response and a linear response with a drifting coefficient fit the same weekly series to within 0.001 of R&sup2; and never separate by more than half a residual standard deviation &mdash; while disagreeing 2.3&times; about marginal-to-average ROAS, the number the budget optimizer consumes.</li>
+                    <li>The aliasing has an exact form: a drifting coefficient recovers \( \beta_t = \beta\,S(a_t)/a_t \), the secant slope of the true curve read in time order. A channel being scaled up therefore <em>always</em> looks like it is fatiguing, and one being wound down looks like it is improving, regardless of what is really happening.</li>
+                    <li>Geometric adstock is an AR(1) filter: \( a_t = \alpha a_{t-1} + x_t \), so it installs lag-1 autocorrelation of exactly \( \alpha \) into the regressor &mdash; and autocorrelated media variables are the documented condition under which the two families conflate (Dew, Padilla and Shchetkina, 2024). More modeled carryover means less identified saturation.</li>
+                    <li>This is not the within-family carryover&ndash;shape ridge. That one produces wide, honest posteriors. This one produces a <strong>sharp posterior in the wrong family</strong>, and no convergence diagnostic, posterior predictive check, SBC run or cross-validation score detects it, because each is computed inside a family that is internally fine.</li>
+                    <li>Designed variation is the only tiebreaker, and it has two independent requirements: distinct spend levels to trace the curve, and dwell time above the adstock washout so the carryover does not filter your own experiment. Three levels held eight weeks cut the curvature spread from &plusmn;0.96 to &plusmn;0.41 at identical total spend; the same three levels in two-week blocks only reach &plusmn;0.71.</li>
+                    <li>When two families that fit equally well recommend opposite actions, the finding is that the data does not contain the answer. Report the range and the experiment that would close it, not the specification the team likes.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Dew, R., Padilla, N., &amp; Shchetkina, A. (2024). <em>Your MMM is Broken: Identification of Nonlinear and Time-varying Effects in Marketing Mix Models</em>. arXiv:2408.07678 [econ.EM].</li>
+                <li>Ng, E., Wang, Z., &amp; Dai, A. (2021). <em>Bayesian Time Varying Coefficient Model with Applications to Marketing Mix Modeling</em>. arXiv:2106.03322 [stat.AP].</li>
+                <li>Jin, Y., Wang, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). <em>Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects</em>. Google Inc. Research publication.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        var N = 156, LAM = 2.2, AMP = 100, NOISE = 14;
+
+        // ---------- linear algebra ----------
+        function solveOLS(X, y) {
+            var n = X.length, k = X[0].length, A = [], b = [], i, j, t;
+            for (i = 0; i < k; i++) {
+                A.push(new Array(k).fill(0));
+                for (j = 0; j < k; j++) {
+                    var s = 0;
+                    for (t = 0; t < n; t++) s += X[t][i] * X[t][j];
+                    A[i][j] = s;
+                }
+                var sb = 0;
+                for (t = 0; t < n; t++) sb += X[t][i] * y[t];
+                b.push(sb);
+            }
+            for (i = 0; i < k; i++) A[i][i] += 1e-10 * (Math.abs(A[i][i]) || 1);
+            for (var c = 0; c < k; c++) {
+                var piv = c;
+                for (var r = c + 1; r < k; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+                var tm = A[c]; A[c] = A[piv]; A[piv] = tm;
+                var tb = b[c]; b[c] = b[piv]; b[piv] = tb;
+                var pv = A[c][c];
+                if (Math.abs(pv) < 1e-14) continue;
+                for (var r2 = c + 1; r2 < k; r2++) {
+                    var f = A[r2][c] / pv;
+                    if (f === 0) continue;
+                    for (var c2 = c; c2 < k; c2++) A[r2][c2] -= f * A[c][c2];
+                    b[r2] -= f * b[c];
+                }
+            }
+            var be = new Array(k).fill(0);
+            for (i = k - 1; i >= 0; i--) {
+                var s2 = b[i];
+                for (j = i + 1; j < k; j++) s2 -= A[i][j] * be[j];
+                be[i] = Math.abs(A[i][i]) < 1e-14 ? 0 : s2 / A[i][i];
+            }
+            return be;
+        }
+        function predict(X, be) {
+            return X.map(function (row) {
+                var s = 0;
+                for (var i = 0; i < row.length; i++) s += row[i] * be[i];
+                return s;
+            });
+        }
+        function sse(y, yh) { var s = 0; for (var i = 0; i < y.length; i++) s += (y[i] - yh[i]) * (y[i] - yh[i]); return s; }
+        function ssq(v) { var m = BV.mean(v), s = 0; for (var i = 0; i < v.length; i++) s += (v[i] - m) * (v[i] - m); return s; }
+        function resid(v, Z) { var f = predict(Z, solveOLS(Z, v)); return v.map(function (x, i) { return x - f[i]; }); }
+        function r2(y, yh) { return 1 - sse(y, yh) / ssq(y); }
+
+        // ---------- world ----------
+        function adstock(x, alpha) {
+            var L = 20, w = [], sw = 0, k;
+            for (k = 0; k < L; k++) { w.push(Math.pow(alpha, k)); sw += w[k]; }
+            for (k = 0; k < L; k++) w[k] /= sw;
+            var out = [];
+            for (var t = 0; t < x.length; t++) {
+                var s = 0;
+                for (k = 0; k < L; k++) if (t - k >= 0) s += w[k] * x[t - k];
+                out.push(s);
+            }
+            return out;
+        }
+        function lag1(a) {
+            var m = BV.mean(a), nu = 0, de = 0, t;
+            for (t = 1; t < a.length; t++) nu += (a[t] - m) * (a[t - 1] - m);
+            for (t = 0; t < a.length; t++) de += (a[t] - m) * (a[t] - m);
+            return de > 0 ? nu / de : 0;
+        }
+        function deffNeff(rho) {
+            var L = N, d = 1;
+            rho = BV.clamp(rho, 0, 0.95);
+            for (var k = 1; k < L; k++) d += 2 * (1 - k / L) * Math.pow(rho, k);
+            return N / BV.clamp(d, 1, L);
+        }
+        function bbasis(t) {
+            var u = t / (N - 1);
+            return [1, u, Math.sin(2 * Math.PI * t / 52), Math.cos(2 * Math.PI * t / 52)];
+        }
+        function sat(a, lam) { return 1 - Math.exp(-Math.min(lam * a, 20)); }
+        function neutral(sp) { var m = BV.mean(sp); return sp.map(function (v) { return v / m; }); }
+        function normAd(sp, alpha) {
+            var a = adstock(sp, alpha), mx = 0;
+            for (var i = 0; i < a.length; i++) if (a[i] > mx) mx = a[i];
+            return a.map(function (v) { return mx > 0 ? v / mx : 0; });
+        }
+        function bauSpend(rng, trend) {
+            var x = [];
+            for (var t = 0; t < N; t++) {
+                var lvl = 1 + trend * (t / (N - 1) - 0.5);
+                x.push(Math.max(0.05, lvl * (1 + 0.30 * BV.randn(rng))));
+            }
+            return x;
+        }
+        function levelsFor(k) {
+            var lo = 0.08, hi = 1.95, o = [], i;
+            for (i = 0; i < k; i++) o.push(lo + (hi - lo) * i / (k - 1));
+            var order = [];
+            for (i = 0; i < k; i++) order.push(o[(i * Math.ceil(k / 2)) % k]);
+            return order;
+        }
+        function flightSpend(rng, lv, block) {
+            var x = [], i = 0;
+            while (x.length < N) {
+                var l = lv[i % lv.length];
+                for (var b = 0; b < block && x.length < N; b++) x.push(Math.max(0.02, l * (1 + 0.05 * BV.randn(rng))));
+                i++;
+            }
+            return x;
+        }
+        function baseline(t) {
+            var bb = bbasis(t);
+            return 800 + 60 * bb[1] + 40 * bb[2] + 25 * bb[3];
+        }
+
+        // ---------- the two families ----------
+        function driftCols(a, deg) {
+            var cols = [];
+            for (var d = 1; d <= deg; d++) {
+                var col = [];
+                for (var t = 0; t < N; t++) col.push(a[t] * Math.pow(t / (N - 1) - 0.5, d));
+                cols.push(col);
+            }
+            return cols;
+        }
+        function fitSat(a, y, nGrid) {
+            var best = null, ls = BV.linspace(0.3, 9.0, nGrid || 90);
+            for (var i = 0; i < ls.length; i++) {
+                var lam = ls[i], X = [];
+                for (var t = 0; t < N; t++) X.push(bbasis(t).concat([sat(a[t], lam)]));
+                var b = solveOLS(X, y), yh = predict(X, b), s = sse(y, yh);
+                if (!best || s < best.sse) best = { sse: s, lam: lam, b: b, yh: yh };
+            }
+            return best;
+        }
+        function fitDrift(a, y, deg) {
+            var X = [], cols = driftCols(a, deg), t, d;
+            for (t = 0; t < N; t++) {
+                var row = bbasis(t);
+                row.push(a[t]);
+                for (d = 0; d < cols.length; d++) row.push(cols[d][t]);
+                X.push(row);
+            }
+            var b = solveOLS(X, y), yh = predict(X, b), bt = [];
+            for (t = 0; t < N; t++) {
+                var u = t / (N - 1) - 0.5, s = b[4];
+                for (d = 1; d <= deg; d++) s += b[4 + d] * Math.pow(u, d);
+                bt.push(s);
+            }
+            return { sse: sse(y, yh), b: b, yh: yh, bt: bt, X: X };
+        }
+        // share of the TRUE curvature (response minus its linear-in-spend part)
+        // that a smoothly drifting linear coefficient can reproduce
+        function curvatureAbsorbed(a, deg) {
+            var Z0 = [], t;
+            for (t = 0; t < N; t++) Z0.push(bbasis(t).concat([a[t]]));
+            var target = resid(a.map(function (v) { return sat(v, LAM); }), Z0);
+            var cols = driftCols(a, deg).map(function (c) { return resid(c, Z0); });
+            var X = [];
+            for (t = 0; t < N; t++) X.push(cols.map(function (c) { return c[t]; }));
+            var f = predict(X, solveOLS(X, target));
+            var rr = target.map(function (v, i) { return v - f[i]; });
+            var den = ssq(target);
+            return den > 0 ? BV.clamp(1 - ssq(rr) / den, 0, 1) : 0;
+        }
+        // t-statistic for the true curvature term AFTER a drifting coefficient is allowed
+        function curvatureT(a, y, deg) {
+            var B = fitDrift(a, y, deg);
+            var X2 = B.X.map(function (row, t) { return row.concat([sat(a[t], LAM)]); });
+            var s2 = sse(y, predict(X2, solveOLS(X2, y))), df = N - X2[0].length;
+            var F = (B.sse - s2) / (s2 / df);
+            return Math.sqrt(Math.max(F, 0));
+        }
+
+        // =====================================================================
+        // Figure 1 — same fit, opposite prescription
+        // =====================================================================
+        var F1_ALPHA = 0.70, F1_DEG = 3, FADE = 0.55, B0 = 118;
+        var f1TruthSat = true;
+
+        function f1Sim(trend) {
+            var sp = neutral(bauSpend(BV.mulberry32(5), trend));
+            var a = normAd(sp, F1_ALPHA);
+            var rng = BV.mulberry32(11), y = [], t;
+            for (t = 0; t < N; t++) {
+                var c = f1TruthSat ? AMP * sat(a[t], LAM) : B0 * (1 - FADE * t / (N - 1)) * a[t];
+                y.push(baseline(t) + c + NOISE * BV.randn(rng));
+            }
+            var A = fitSat(a, y), B = fitDrift(a, y, F1_DEG);
+            var gap = 0;
+            for (t = 0; t < N; t++) gap = Math.max(gap, Math.abs(A.yh[t] - B.yh[t]));
+            var rsd = Math.sqrt(A.sse / N);
+            var aNow = BV.mean(a.slice(N - 13));
+            function elas(lam) { var e = lam * aNow; return e * Math.exp(-e) / (1 - Math.exp(-e)); }
+            function cutGain(lam) {
+                var e = lam * aNow;
+                return ((1 - Math.exp(-0.7 * e)) / (0.7 * e)) / ((1 - Math.exp(-e)) / e) - 1;
+            }
+            return {
+                a: a, y: y, A: A, B: B, gapSd: gap / rsd,
+                r2A: r2(y, A.yh), r2B: r2(y, B.yh),
+                q: [
+                    [100 * elas(A.lam), 100, f1TruthSat ? 100 * elas(LAM) : 100],
+                    [100 * cutGain(A.lam), 0, f1TruthSat ? 100 * cutGain(LAM) : 0],
+                    [0, 100 * (B.bt[N - 1] / B.bt[0] - 1), f1TruthSat ? 0 : -100 * FADE]
+                ]
+            };
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var trend = parseFloat(document.getElementById('f1Trend').value);
+            var s = f1Sim(trend);
+            var weeks = [];
+            for (var t = 0; t < N; t++) weeks.push(t + 1);
+
+            Plotly.react('f1Fit', [
+                {
+                    type: 'scatter', mode: 'markers', x: weeks, y: s.y, name: 'observed KPI',
+                    marker: { color: BV.band(p.muted, 0.45), size: 4 }, hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: weeks, y: s.A.yh, name: 'A: static saturation',
+                    line: { color: p.accent, width: 2.4 }, hovertemplate: 'wk %{x}<br>%{y:.0f}<extra>saturation</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: weeks, y: s.B.yh, name: 'B: drifting coefficient',
+                    line: { color: p.primary, width: 2.4, dash: 'dot' }, hovertemplate: 'wk %{x}<br>%{y:.0f}<extra>drift</extra>'
+                }
+            ], BV.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'KPI' },
+                legend: { orientation: 'h', y: 1.16, x: 0 },
+                margin: { l: 64, r: 20, t: 34, b: 46 }
+            }), BV.config);
+
+            var cats = ['Effectiveness change,<br>3 years', 'Efficiency gain from<br>a 30% spend cut', 'Marginal ÷ average<br>ROAS today'];
+            var order = [2, 1, 0];
+            function series(idx) { return order.map(function (i) { return s.q[i][idx]; }); }
+            Plotly.react('f1Dec', [
+                {
+                    type: 'bar', orientation: 'h', x: series(0), y: cats, name: 'A: static saturation',
+                    marker: { color: BV.band(p.accent, 0.85) },
+                    hovertemplate: '%{x:.0f}%<extra>saturation fit</extra>'
+                },
+                {
+                    type: 'bar', orientation: 'h', x: series(1), y: cats, name: 'B: drifting coefficient',
+                    marker: { color: BV.band(p.primary, 0.85) },
+                    hovertemplate: '%{x:.0f}%<extra>drift fit</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', orientation: 'h', x: series(2), y: cats, name: 'ground truth',
+                    marker: { color: p.warning, size: 13, symbol: 'diamond', line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: '%{x:.0f}%<extra>truth</extra>'
+                }
+            ], BV.layout({
+                barmode: 'group',
+                xaxis: { title: "the model's answer (%)", zeroline: true, zerolinecolor: p.muted },
+                yaxis: { automargin: true, tickfont: { size: 11 } },
+                legend: { orientation: 'h', y: 1.24, x: 0 },
+                margin: { l: 130, r: 20, t: 40, b: 46 }
+            }), BV.config);
+
+            document.getElementById('f1R2A').textContent = s.r2A.toFixed(4);
+            document.getElementById('f1R2B').textContent = s.r2B.toFixed(4);
+            document.getElementById('f1Gap').textContent = s.gapSd.toFixed(2) + ' resid sd';
+            var wrong = f1TruthSat ? Math.abs(s.q[2][1]) : Math.abs(s.q[0][0] - 100);
+            var v = document.getElementById('f1Verdict');
+            if (Math.abs(s.r2A - s.r2B) < 0.005 && wrong > 15) {
+                v.textContent = 'indistinguishable, opposed';
+                v.className = 'val warn';
+            } else if (Math.abs(s.r2A - s.r2B) < 0.005) {
+                v.textContent = 'indistinguishable fits';
+                v.className = 'val warn';
+            } else {
+                v.textContent = 'families separable here';
+                v.className = 'val ok';
+            }
+        });
+        BV.sliders([
+            { id: 'f1Trend', value: 'f1TrendVal', fmt: function (v) { return (v >= 0 ? '+' : '') + Math.round(100 * v) + '%'; } }
+        ], BV.redraw);
+        document.getElementById('f1Truth').addEventListener('click', function () {
+            f1TruthSat = !f1TruthSat;
+            this.textContent = f1TruthSat ? 'Truth: diminishing returns' : 'Truth: fading effectiveness';
+            BV.redraw();
+        });
+
+        // =====================================================================
+        // Figure 2 — carryover generates the autocorrelation
+        // =====================================================================
+        var F2_DEG = 4, F2_SEEDS = 4, f2Curve = null;
+
+        function f2Point(alpha) {
+            var ab = 0, rho = 0, rhoRaw = 0;
+            for (var s = 0; s < F2_SEEDS; s++) {
+                var sp = neutral(bauSpend(BV.mulberry32(5 + 17 * s), 0.3));
+                var a = normAd(sp, alpha);
+                ab += curvatureAbsorbed(a, F2_DEG);
+                rho += lag1(a);
+                rhoRaw += lag1(sp);
+            }
+            return { ab: ab / F2_SEEDS, rho: rho / F2_SEEDS, rhoRaw: rhoRaw / F2_SEEDS };
+        }
+        function f2Data() {
+            if (f2Curve) return f2Curve;
+            var xs = BV.linspace(0, 0.85, 18), rows = [];
+            for (var i = 0; i < xs.length; i++) rows.push(f2Point(xs[i]));
+            f2Curve = { xs: xs, rows: rows };
+            return f2Curve;
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var d = f2Data();
+            var alpha = parseFloat(document.getElementById('f2Alpha').value);
+            var cur = f2Point(alpha);
+
+            Plotly.react('f2Chart', [
+                {
+                    type: 'scatter', mode: 'lines', x: d.xs, y: d.rows.map(function (r) { return r.rhoRaw; }),
+                    name: 'autocorrelation of raw spend', line: { color: p.muted, width: 1.8, dash: 'dash' },
+                    hovertemplate: 'ρ = %{y:.2f}<extra>raw spend</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: d.xs, y: d.rows.map(function (r) { return r.rho; }),
+                    name: 'autocorrelation after adstock', line: { color: p.accent, width: 2.6 },
+                    hovertemplate: 'α = %{x:.2f}<br>ρ = %{y:.2f}<extra>adstocked</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: d.xs, y: d.rows.map(function (r) { return r.ab; }),
+                    name: 'saturation curvature a drift can mimic', line: { color: p.primary, width: 2.6 },
+                    fill: 'tozeroy', fillcolor: BV.band(p.primary, 0.12),
+                    hovertemplate: 'α = %{x:.2f}<br>%{y:.0%} absorbed<extra>aliasing</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', x: [alpha, alpha], y: [cur.rho, cur.ab], showlegend: false,
+                    marker: { color: [p.accent, p.primary], size: 12, symbol: 'diamond', line: { color: p.surface, width: 1.5 } },
+                    hoverinfo: 'skip'
+                }
+            ], BV.layout({
+                xaxis: { title: 'adstock retention α', range: [0, 0.87] },
+                yaxis: { title: 'proportion', range: [0, 1], dtick: 0.25 },
+                legend: { orientation: 'h', y: 1.26, x: 0, font: { size: 11 } },
+                margin: { l: 62, r: 20, t: 46, b: 48 }
+            }), BV.config);
+
+            document.getElementById('f2Rho').textContent = cur.rho.toFixed(2);
+            document.getElementById('f2Neff').textContent = Math.round(deffNeff(cur.rho)) + ' weeks';
+            var abEl = document.getElementById('f2Abs');
+            abEl.textContent = Math.round(100 * cur.ab) + '%';
+            abEl.className = 'val' + (cur.ab > 0.6 ? ' warn' : (cur.ab < 0.3 ? ' ok' : ''));
+            var v = document.getElementById('f2Verdict');
+            if (cur.ab > 0.65) { v.textContent = 'shape not identified'; v.className = 'val warn'; }
+            else if (cur.ab > 0.35) { v.textContent = 'shape weakly identified'; v.className = 'val'; }
+            else { v.textContent = 'families separable'; v.className = 'val ok'; }
+        });
+        BV.sliders([
+            { id: 'f2Alpha', value: 'f2AlphaVal', fmt: function (v) { return v.toFixed(2); } }
+        ], BV.redraw);
+
+        // =====================================================================
+        // Figure 3 — designed variation and the washout
+        // =====================================================================
+        var F3_ALPHA = 0.80, F3_DEG = 4, F3_SEEDS = 8, f3Bau = null;
+
+        function f3Schedule(levels, block, seed) {
+            var rng = BV.mulberry32(seed);
+            return levels <= 1
+                ? neutral(bauSpend(rng, 0.3))
+                : neutral(flightSpend(rng, levelsFor(levels), block));
+        }
+        function f3Eval(levels, block) {
+            var lams = [], ts = [], abs = [];
+            for (var s = 0; s < F3_SEEDS; s++) {
+                var sp = f3Schedule(levels, block, 100 + s);
+                var a = normAd(sp, F3_ALPHA);
+                var rng = BV.mulberry32(500 + s), y = [];
+                for (var t = 0; t < N; t++) y.push(baseline(t) + AMP * sat(a[t], LAM) + NOISE * BV.randn(rng));
+                lams.push(fitSat(a, y, 45).lam);
+                ts.push(curvatureT(a, y, F3_DEG));
+                abs.push(curvatureAbsorbed(a, F3_DEG));
+            }
+            var lm = BV.mean(lams), va = 0;
+            for (var i = 0; i < lams.length; i++) va += (lams[i] - lm) * (lams[i] - lm);
+            return { lam: lm, lamSd: Math.sqrt(va / lams.length), t: BV.mean(ts), ab: BV.mean(abs) };
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var levels = parseInt(document.getElementById('f3Lev').value, 10);
+            var block = parseInt(document.getElementById('f3Blk').value, 10);
+            if (!f3Bau) f3Bau = f3Eval(1, 8);
+            var res = f3Eval(levels, block);
+
+            var sp = f3Schedule(levels, block, 100);
+            var a = normAd(sp, F3_ALPHA);
+            var aScaled = a.map(function (v) { return v / BV.mean(a); });
+            var weeks = [];
+            for (var t = 0; t < N; t++) weeks.push(t + 1);
+
+            Plotly.react('f3Sched', [
+                {
+                    type: 'scatter', mode: 'lines', x: weeks, y: sp, name: 'weekly spend (× average)',
+                    line: { color: p.accent, width: 1.8, shape: 'hv' },
+                    hovertemplate: 'wk %{x}<br>%{y:.2f}×<extra>spend</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: weeks, y: aScaled, name: 'after adstock (α = 0.80)',
+                    line: { color: p.primary, width: 2.4 },
+                    hovertemplate: 'wk %{x}<br>%{y:.2f}×<extra>adstocked</extra>'
+                }
+            ], BV.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'multiple of average', rangemode: 'tozero' },
+                legend: { orientation: 'h', y: 1.2, x: 0, font: { size: 11 } },
+                margin: { l: 64, r: 20, t: 36, b: 46 }
+            }), BV.config);
+
+            var labels = ['business as usual', levels <= 1 ? 'this schedule (same)' : levels + ' levels × ' + block + ' wk'];
+            Plotly.react('f3Res', [
+                {
+                    type: 'scatter', mode: 'markers', x: [f3Bau.lam, res.lam], y: labels,
+                    error_x: { type: 'data', array: [f3Bau.lamSd, res.lamSd], color: p.muted, thickness: 2.5, width: 8 },
+                    marker: { color: [BV.band(p.muted, 0.9), p.primary], size: 13, line: { color: p.surface, width: 1.5 } },
+                    showlegend: false,
+                    hovertemplate: 'curvature %{x:.2f}<extra></extra>'
+                }
+            ], BV.layout({
+                xaxis: { title: 'recovered saturation curvature (true value 2.20)', range: [0, 5], zeroline: false },
+                yaxis: { automargin: true, categoryorder: 'array', categoryarray: [labels[1], labels[0]], tickfont: { size: 11 } },
+                margin: { l: 150, r: 20, t: 22, b: 48 },
+                shapes: [{ type: 'line', x0: LAM, x1: LAM, y0: -0.5, y1: 1.5, line: { color: p.warning, width: 2, dash: 'dash' } }],
+                annotations: [{ x: LAM, y: 1.5, yanchor: 'bottom', text: 'truth', showarrow: false, font: { size: 11, color: p.warning } }]
+            }), BV.config);
+
+            var abEl = document.getElementById('f3Abs');
+            abEl.textContent = Math.round(100 * res.ab) + '%';
+            abEl.className = 'val' + (res.ab > 0.55 ? ' warn' : ' ok');
+            var tEl = document.getElementById('f3T');
+            tEl.textContent = res.t.toFixed(1);
+            tEl.className = 'val' + (res.t < 2 ? ' warn' : ' ok');
+            document.getElementById('f3Lam').textContent = res.lam.toFixed(2) + ' ± ' + res.lamSd.toFixed(2);
+            var v = document.getElementById('f3Verdict');
+            var washout = Math.ceil(Math.log(0.05) / Math.log(F3_ALPHA));
+            if (levels <= 1) { v.textContent = 'no designed variation'; v.className = 'val warn'; }
+            else if (block * 2 < washout && res.t < 3) { v.textContent = 'blocks below washout'; v.className = 'val warn'; }
+            else if (res.t >= 3) { v.textContent = 'curvature identified'; v.className = 'val ok'; }
+            else { v.textContent = 'partial identification'; v.className = 'val'; }
+        });
+        BV.sliders([
+            { id: 'f3Lev', value: 'f3LevVal', fmt: function (v) { return String(v); } },
+            { id: 'f3Blk', value: 'f3BlkVal', fmt: function (v) { return String(v) + ' wk'; } }
+        ], BV.redraw);
+    })();
+    </script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
