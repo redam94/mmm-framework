@@ -5,10 +5,14 @@ All notable changes to `mmm-framework` are documented here. The project follows
 frozen public contract breaks, and the contract itself is pinned by
 `tests/test_api_contracts.py` and `tests/test_lean_imports.py`.
 
-## [1.0.1] — 2026-07-24
+## [1.1.0] — 2026-07-25
 
 Two methodological fixes in `validation/`. Both corrected numbers that read as **more
 trustworthy than they were**, so both change output you may have quoted.
+
+A minor rather than a patch bump: the fixes are accompanied by new public API (a `weighting`
+argument, new result fields, two new exported names), and one of them changes a default so
+that a re-run returns a different number than 1.0.0 did.
 
 ### Fixed
 
