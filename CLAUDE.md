@@ -47,12 +47,20 @@ uv run --group docs sphinx-build -b html docs/api/source docs/api/build/html
 # keep in lockstep); _static/custom.css carries structure/typography ONLY.
 # Furo emits the theme-option variables in a <style> block AFTER html_css_files,
 # on `body`, so a :root or body block in custom.css silently loses — put colors
-# in conf.py. Two Furo constraints worth knowing: --color-announcement-background
+# in conf.py. Three Furo constraints worth knowing: --color-announcement-background
 # is applied via `background-color` (a gradient value there is invalid and the
 # bar goes transparent — the gradient rides on --mmm-announcement-gradient as a
-# background-image), and .admonition p.admonition-title reserves its left padding
+# background-image); .admonition p.admonition-title reserves its left padding
 # for an absolutely-positioned icon, so changing the card padding requires moving
-# both the title padding and the ::before `left` or the icon lands on the text.
+# both the title padding and the ::before `left` or the icon lands on the text;
+# and `.sig:not(.sig-inline)` hangs signatures with `text-indent: -2.5em` against
+# `padding-left: 3em` — restyling the signature card must restate BOTH (custom.css
+# sets `padding-left: calc(.8rem + 2.5em)` + `text-indent: -2.5em`), else the
+# inherited indent drags every signature's first line ~20px OUTSIDE the card.
+# Long autodoc names also blew up the 15em right-hand TOC (Furo wraps them with
+# `overflow-wrap: anywhere`, so `BayesianMMM.REQUIRED_DATASET_CAPABILITIES` broke
+# mid-word over four lines) — conf.py sets `toc_object_entries_show_parents =
+# "hide"` so entries read `fit()`, nested under their class.
 # NB incremental builds have been seen serving a STALE _static/custom.css; if a
 # CSS edit does not show up, `rm -rf docs/api/build` and rebuild (RTD is always clean).
 

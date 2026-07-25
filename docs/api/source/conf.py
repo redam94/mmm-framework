@@ -51,6 +51,13 @@ autodoc_type_aliases = {
 # Generate autosummary stubs
 autosummary_generate = True
 
+# "On this page" entries carry the object's own name, not `Class.member`. The
+# right-hand column is 15em wide and Furo breaks long tokens anywhere, so the
+# qualified form shattered mid-word ("BayesianMMM.REQUIRED_DATASET_CAPAB /
+# ILITIES" over four lines). Members are already nested under their class in
+# the tree, so the prefix was redundant as well as unreadable.
+toc_object_entries_show_parents = "hide"
+
 # -- Napoleon settings (Google-style docstrings) -----------------------------
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
