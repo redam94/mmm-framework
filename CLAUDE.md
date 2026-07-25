@@ -40,6 +40,21 @@ uv run --group docs sphinx-build -b html docs/api/source docs/api/build/html
 # both) + `pip install .` (lean core; conf.py autodoc_mock_imports covers the
 # heavy pymc/jax stack). Sphinx guides live next to the API tree:
 # docs/api/source/{architecture,contracts}.rst (mermaid via sphinxcontrib-mermaid).
+# THEME (2026-07-25): furo, not sphinx_rtd_theme — it is themed entirely through
+# CSS variables, so this site shares the GitHub Pages palette instead of running
+# a second look. The PALETTE lives in conf.py `_BRAND_LIGHT`/`_BRAND_DARK`
+# (a MIRROR of the :root / [data-theme="dark"] tokens in docs/shared/styles.css —
+# keep in lockstep); _static/custom.css carries structure/typography ONLY.
+# Furo emits the theme-option variables in a <style> block AFTER html_css_files,
+# on `body`, so a :root or body block in custom.css silently loses — put colors
+# in conf.py. Two Furo constraints worth knowing: --color-announcement-background
+# is applied via `background-color` (a gradient value there is invalid and the
+# bar goes transparent — the gradient rides on --mmm-announcement-gradient as a
+# background-image), and .admonition p.admonition-title reserves its left padding
+# for an absolutely-positioned icon, so changing the card padding requires moving
+# both the title padding and the ::before `left` or the icon lands on the text.
+# NB incremental builds have been seen serving a STALE _static/custom.css; if a
+# CSS edit does not show up, `rm -rf docs/api/build` and rebuild (RTD is always clean).
 
 # Static documentation site (hand-authored HTML in docs/*.html)
 # Edit pages directly; preview locally with `python3 -m http.server` from docs/.
