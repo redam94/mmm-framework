@@ -1,26 +1,620 @@
-/* Custom styling for MMM Framework documentation */
+/* ==========================================================================
+   MMM Framework — Sphinx (Furo) theme layer
+   --------------------------------------------------------------------------
+   Shares the visual language of the hand-authored documentation site
+   (docs/shared/styles.css): DM Serif Display headings, Source Sans 3 prose,
+   JetBrains Mono code, sage-green primary / dusty-blue accent on a warm
+   off-white page, soft layered shadows, 12-16px radii.
 
-/* Improve code block readability */
-.highlight {
-    background: #f8f8f8;
-    border-radius: 4px;
+   The PALETTE lives in conf.py (`light_css_variables` / `dark_css_variables`)
+   because Furo injects those into a <style> block emitted after this file —
+   a `body { --token: ... }` block here would lose. This file carries
+   structure, typography and component styling only.
+
+   Order of concerns below:
+     1. Layout metrics       6. Code
+     2. Typography           7. API reference (autodoc)
+     3. Sidebar              8. Tables & field lists
+     4. Announcement         9. Content chrome (TOC, footer, prev/next)
+     5. Admonitions         10. Diagrams, motion, print
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Layout metrics
+   -------------------------------------------------------------------------- */
+body {
+    /* Wider than Furo's 46em default: API signatures and the cookbook tables
+       need the room, and Source Sans 3 stays comfortable at 48em. */
+    --content-width: 48em;
+    /* Module paths like `mmm_framework.mmm_extensions.models` need the space. */
+    --sidebar-width: 17em;
+    --mmm-radius-sm: 8px;
+    --mmm-radius-md: 12px;
+    --mmm-radius-pill: 100px;
+    --mmm-transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Better parameter formatting */
-.field-list dt {
-    font-weight: bold;
+/* --------------------------------------------------------------------------
+   2. Typography
+   -------------------------------------------------------------------------- */
+article[role="main"] {
+    font-size: 1.0625rem;   /* 17px, matching the main docs site */
+    line-height: 1.7;
 }
 
-/* Improve table readability */
-table.docutils {
-    margin: 1em 0;
+article[role="main"] h1,
+article[role="main"] h2,
+article[role="main"] h3,
+article[role="main"] h4,
+article[role="main"] h5,
+article[role="main"] h6 {
+    font-family: var(--font-stack--headings);
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+    text-wrap: balance;
+    color: var(--color-foreground-primary);
 }
 
-table.docutils td, table.docutils th {
-    padding: 8px 12px;
+article[role="main"] h1 {
+    font-size: 2.4rem;
+    line-height: 1.14;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.25rem;
 }
 
-/* Better method/class signature display */
-.sig-name {
-    font-weight: bold;
+/* A short brand rule under the page title — the one flourish carried over
+   from the marketing pages, and the only gradient on the page. */
+article[role="main"] > section > h1::after,
+article[role="main"] > h1::after {
+    content: "";
+    display: block;
+    width: 3.5rem;
+    height: 3px;
+    margin-top: 0.85rem;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--mmm-primary), var(--mmm-accent));
+}
+
+article[role="main"] h2 {
+    font-size: 1.75rem;
+    margin-top: 3rem;
+    padding-top: 1.75rem;
+    border-top: 1px solid var(--color-background-border);
+}
+
+/* The first h2 sits right under the title rule; the divider would double up. */
+article[role="main"] > section > section:first-of-type > h2 {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 2.25rem;
+}
+
+article[role="main"] h3 { font-size: 1.3rem; margin-top: 2.25rem; }
+article[role="main"] h4 { font-size: 1.1rem; }
+
+article[role="main"] p { margin-bottom: 1.25rem; }
+
+/* Prose links: accent-coloured with a refined offset underline, as on the
+   main docs site. Scoped away from chrome that renders its own links. */
+article[role="main"] a.reference.external,
+article[role="main"] a.reference.internal:not(.toc-backref):not(.image-reference) {
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--color-brand-content) 35%, transparent);
+    text-underline-offset: 0.18em;
+    text-decoration-thickness: 1px;
+    transition: var(--mmm-transition);
+}
+
+article[role="main"] a.reference.external:hover,
+article[role="main"] a.reference.internal:hover {
+    text-decoration-color: var(--color-brand-content);
+}
+
+/* Lead paragraph: the opening paragraph of a page reads as a standfirst. */
+article[role="main"] > section > p:first-of-type {
+    font-size: 1.15rem;
+    line-height: 1.6;
+    color: var(--color-foreground-secondary);
+}
+
+article[role="main"] blockquote {
+    border-left: 3px solid var(--mmm-primary);
+    background: var(--color-background-secondary);
+    border-radius: 0 var(--mmm-radius-sm) var(--mmm-radius-sm) 0;
+    padding: 0.85rem 1.25rem;
+    margin-inline: 0;
+}
+
+article[role="main"] hr.docutils {
+    border: none;
+    border-top: 1px solid var(--color-background-border);
+    margin: 3rem 0;
+}
+
+/* --------------------------------------------------------------------------
+   3. Sidebar
+   -------------------------------------------------------------------------- */
+.sidebar-brand {
+    padding: 0.5rem 0 0.75rem;
+    border-bottom: 1px solid var(--color-sidebar-background-border);
+    margin-bottom: 0.5rem;
+}
+
+.sidebar-logo {
+    max-width: 42px;
+    border-radius: 10px;
+    box-shadow: var(--mmm-shadow-sm);
+}
+
+.sidebar-logo-container { margin-bottom: 0.6rem; }
+
+.sidebar-brand-text {
+    font-family: var(--font-stack--headings);
+    font-size: 1.15rem;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+}
+
+/* Section captions as monospaced eyebrows — the label treatment used across
+   the main docs site. */
+.sidebar-tree .caption,
+.sidebar-tree :not(.caption) > .caption-text,
+.sidebar-mmm-links .caption {
+    font-family: var(--font-stack--monospace);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-sidebar-caption-text);
+    margin-top: 1.5rem;
+    margin-bottom: 0.35rem;
+}
+
+.sidebar-tree .reference {
+    border-radius: var(--mmm-radius-sm);
+    transition: var(--mmm-transition);
+}
+
+.sidebar-tree .current-page > .reference {
+    font-weight: 600;
+    color: var(--color-brand-primary);
+    box-shadow: inset 2px 0 0 var(--mmm-primary);
+}
+
+.sidebar-search {
+    border-radius: var(--mmm-radius-pill);
+    border: 1px solid var(--color-sidebar-search-border);
+    transition: var(--mmm-transition);
+}
+
+.sidebar-search:focus {
+    border-color: var(--mmm-primary);
+    box-shadow: 0 0 0 3px rgba(106, 143, 168, 0.25);
+    outline: none;
+}
+
+.sidebar-search-container::before { z-index: 2; }
+
+/* Cross-links panel to the main documentation site (sidebar/mmm-links.html) */
+.sidebar-mmm-links {
+    margin: 1.75rem 0 0.5rem;
+    padding: 1.25rem var(--sidebar-item-spacing-horizontal, 1rem) 0;
+    border-top: 1px solid var(--color-sidebar-background-border);
+    font-size: var(--sidebar-item-font-size, 0.9rem);
+}
+
+.sidebar-mmm-links .caption { margin-top: 0; }
+
+.sidebar-mmm-links ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar-mmm-links a {
+    display: block;
+    padding: 0.3rem 0.4rem;
+    border-radius: var(--mmm-radius-sm);
+    color: var(--color-sidebar-link-text);
+    text-decoration: none;
+    transition: var(--mmm-transition);
+}
+
+.sidebar-mmm-links a::after {
+    content: " ↗";
+    opacity: 0.45;
+    font-size: 0.85em;
+}
+
+.sidebar-mmm-links a:hover {
+    background: var(--color-sidebar-item-background--hover);
+    color: var(--color-brand-primary);
+}
+
+/* --------------------------------------------------------------------------
+   4. Announcement bar
+   -------------------------------------------------------------------------- */
+/* Furo binds --color-announcement-background to `background-color`, which
+   cannot hold a gradient; the brand gradient is layered on top of that solid
+   colour as an image, so a stale/unsupported value still leaves the bar
+   readable. */
+.announcement {
+    background-image: var(--mmm-announcement-gradient);
+    font-size: 0.85rem;
+    letter-spacing: 0.005em;
+}
+
+.announcement-content { padding: 0.6rem 1rem; }
+
+.announcement-content a {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+    text-decoration-color: rgba(255, 255, 255, 0.5);
+}
+
+.announcement-content a:hover {
+    color: inherit;
+    text-decoration-color: currentColor;
+}
+
+/* --------------------------------------------------------------------------
+   5. Admonitions — card aesthetic rather than solid colour blocks
+   -------------------------------------------------------------------------- */
+.admonition,
+.topic {
+    border-radius: var(--mmm-radius-md);
+    border: 1px solid var(--color-background-border);
+    border-left: 3px solid var(--color-admonition-title, var(--mmm-primary));
+    background: var(--color-background-secondary);
+    box-shadow: none;
+    font-size: 0.97em;
+    padding: 0 0.9rem 0.5rem;
+    overflow: hidden;
+}
+
+/* The title bar bleeds to the card edges. Furo reserves its left padding for
+   an absolutely-positioned icon (`left: .5rem` against a .5rem card padding);
+   this card pads by .9rem, so the icon offset and the text indent move with
+   it — otherwise the icon sits on top of the first letter. */
+.admonition p.admonition-title,
+p.topic-title {
+    font-family: var(--font-stack);
+    font-weight: 600;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    margin-inline: -0.9rem;
+    padding: 0.45rem 0.9rem 0.45rem 2.4rem;
+}
+
+.admonition p.admonition-title::before,
+p.topic-title::before { left: 0.9rem; }
+
+/* Colour the left rule per admonition type, reusing Furo's own title tokens. */
+.admonition.note        { border-left-color: var(--color-admonition-title--note); }
+.admonition.seealso     { border-left-color: var(--color-admonition-title--seealso); }
+.admonition.important   { border-left-color: var(--color-admonition-title--important); }
+.admonition.tip         { border-left-color: var(--color-admonition-title--tip); }
+.admonition.hint        { border-left-color: var(--color-admonition-title--hint); }
+.admonition.warning     { border-left-color: var(--color-admonition-title--warning); }
+.admonition.caution     { border-left-color: var(--color-admonition-title--caution); }
+.admonition.attention   { border-left-color: var(--color-admonition-title--attention); }
+.admonition.danger      { border-left-color: var(--color-admonition-title--danger); }
+.admonition.error       { border-left-color: var(--color-admonition-title--error); }
+
+/* Napoleon renders Google-style `Example:` blocks as a generic admonition. */
+.admonition.admonition-example { border-left-color: var(--mmm-accent); }
+
+/* --------------------------------------------------------------------------
+   6. Code
+   -------------------------------------------------------------------------- */
+article[role="main"] .highlight,
+article[role="main"] pre.literal-block {
+    border-radius: var(--mmm-radius-md);
+    border: 1px solid var(--color-background-border);
+    box-shadow: var(--mmm-shadow-sm);
+}
+
+article[role="main"] .highlight pre,
+article[role="main"] pre.literal-block {
+    padding: 1rem 1.1rem;
+    font-size: 0.875rem;
+    line-height: 1.65;
+    font-variant-ligatures: none;
+}
+
+/* Captioned code blocks (`.. code-block:: python` + `:caption:`) */
+.literal-block-wrapper {
+    border-radius: var(--mmm-radius-md);
+    border: 1px solid var(--color-background-border);
+    overflow: hidden;
+}
+
+.literal-block-wrapper .code-block-caption {
+    background: var(--color-background-secondary);
+    border-bottom: 1px solid var(--color-background-border);
+    font-family: var(--font-stack--monospace);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-foreground-muted);
+    padding: 0.5rem 1.1rem;
+}
+
+.literal-block-wrapper .highlight {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+article[role="main"] code.literal {
+    border-radius: 5px;
+    border: 1px solid color-mix(in srgb, var(--color-background-border) 60%, transparent);
+    padding: 0.12em 0.35em;
+    font-size: 0.86em;
+}
+
+/* sphinx-copybutton: a quiet control that only asserts itself on hover. */
+button.copybtn {
+    border-radius: 6px;
+    border: 1px solid var(--color-background-border);
+    background: var(--color-background-primary);
+    opacity: 0;
+    transition: var(--mmm-transition);
+}
+
+.highlight:hover button.copybtn,
+button.copybtn:focus-visible { opacity: 1; }
+
+button.copybtn:hover {
+    border-color: var(--mmm-primary);
+    background: var(--color-background-hover);
+}
+
+/* --------------------------------------------------------------------------
+   7. API reference (autodoc)
+   -------------------------------------------------------------------------- */
+dl.py > dt.sig,
+dl.c > dt.sig,
+dl.cpp > dt.sig {
+    border-radius: var(--mmm-radius-sm);
+    border: 1px solid color-mix(in srgb, var(--color-background-border) 70%, transparent);
+    border-left: 3px solid var(--mmm-primary);
+    padding: 0.55rem 0.8rem;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    transition: var(--mmm-transition);
+}
+
+/* Nested members (methods on a class) step down to the accent hue so the
+   class signature stays the anchor of the block. */
+dl.py dl.py > dt.sig { border-left-color: var(--mmm-accent); }
+
+dl.py > dt.sig:hover { border-color: var(--mmm-primary); }
+
+dt.sig .sig-name,
+dt.sig .sig-name .pre { font-weight: 600; }
+
+dt.sig em.property,
+dt.sig .property {
+    font-style: normal;
+    font-family: var(--font-stack--monospace);
+    font-size: 0.85em;
+    color: var(--color-api-keyword);
+}
+
+/* Parameter names in signatures */
+dt.sig .sig-param .n .pre { color: var(--color-foreground-secondary); }
+
+a.viewcode-link {
+    font-family: var(--font-stack--monospace);
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-foreground-muted);
+    text-decoration: none;
+    float: right;
+}
+
+a.viewcode-link:hover { color: var(--color-brand-primary); }
+
+/* --------------------------------------------------------------------------
+   8. Tables & field lists
+   -------------------------------------------------------------------------- */
+article[role="main"] table.docutils {
+    border-radius: var(--mmm-radius-md);
+    border: 1px solid var(--color-background-border);
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    box-shadow: var(--mmm-shadow-sm);
+    font-size: 0.94em;
+}
+
+article[role="main"] table.docutils th {
+    background: var(--color-background-secondary);
+    font-family: var(--font-stack);
+    font-weight: 600;
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-foreground-secondary);
+    border: none;
+    border-bottom: 1px solid var(--color-background-border);
+    padding: 0.7rem 0.9rem;
+    text-align: left;
+}
+
+article[role="main"] table.docutils td {
+    border: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-background-border) 55%, transparent);
+    padding: 0.7rem 0.9rem;
+    vertical-align: top;
+}
+
+article[role="main"] table.docutils tr:last-child td { border-bottom: none; }
+
+article[role="main"] table.docutils tbody tr:hover {
+    background: var(--color-background-hover--transparent);
+}
+
+/* autosummary tables read as an index, not a data table — drop the chrome. */
+article[role="main"] table.autosummary,
+article[role="main"] table.longtable.autosummary {
+    box-shadow: none;
+    border-color: color-mix(in srgb, var(--color-background-border) 60%, transparent);
+}
+
+/* Parameters / Returns / Raises blocks (napoleon_use_param) */
+dl.field-list > dt {
+    font-family: var(--font-stack--monospace);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-foreground-muted);
+    padding-top: 0.35rem;
+}
+
+dl.field-list > dd { margin-bottom: 0.75rem; }
+
+/* --------------------------------------------------------------------------
+   9. Content chrome — right TOC, page buttons, footer, prev/next
+   -------------------------------------------------------------------------- */
+.toc-title {
+    font-family: var(--font-stack--monospace);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+/* Autodoc entries are long single tokens and Furo breaks them anywhere, so a
+   boxed inline-code style shatters into fragments mid-word. Strip the box in
+   the TOC and let them wrap as plain monospace. */
+.toc-tree code.literal {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.92em;
+    color: inherit;
+}
+
+.toc-tree li.scroll-current > .reference {
+    font-weight: 600;
+    box-shadow: inset 2px 0 0 var(--mmm-primary);
+    margin-left: -1px;
+}
+
+.content-icon-container { gap: 0.4rem; }
+
+.content-icon-container .edit-this-page a,
+.content-icon-container .view-this-page a {
+    border-radius: var(--mmm-radius-pill);
+    border: 1px solid var(--color-background-border);
+    padding: 0.25rem 0.6rem;
+    transition: var(--mmm-transition);
+}
+
+.content-icon-container .edit-this-page a:hover,
+.content-icon-container .view-this-page a:hover {
+    border-color: var(--mmm-primary);
+    background: var(--color-background-hover--transparent);
+}
+
+.related-pages a {
+    border-radius: var(--mmm-radius-md);
+    border: 1px solid transparent;
+    padding: 0.85rem 1rem;
+    transition: var(--mmm-transition);
+}
+
+.related-pages a:hover {
+    border-color: var(--color-background-border);
+    background: var(--color-background-secondary);
+    box-shadow: var(--mmm-shadow-sm);
+}
+
+.related-pages a .page-info .context {
+    font-family: var(--font-stack--monospace);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.bottom-of-page {
+    border-top: 1px solid var(--color-background-border);
+    font-size: 0.85rem;
+    color: var(--color-foreground-muted);
+}
+
+.bottom-of-page .left-details { line-height: 1.6; }
+
+.theme-toggle,
+.nav-overlay-icon { border-radius: var(--mmm-radius-sm); }
+
+/* Search results page */
+ul.search li {
+    border-radius: var(--mmm-radius-md);
+    border: 1px solid var(--color-background-border);
+    background: var(--color-background-secondary);
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.75rem;
+}
+
+/* --------------------------------------------------------------------------
+   10. Diagrams, motion, print
+   -------------------------------------------------------------------------- */
+.mermaid {
+    display: flex;
+    justify-content: center;
+    background: var(--color-background-secondary);
+    border: 1px solid var(--color-background-border);
+    border-radius: var(--mmm-radius-md);
+    padding: 1.5rem 1rem;
+    margin: 1.75rem 0;
+    overflow-x: auto;
+}
+
+.mermaid svg { max-width: 100%; height: auto; }
+
+article[role="main"] img { border-radius: var(--mmm-radius-sm); }
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+    html { scroll-behavior: auto; }
+}
+
+@media print {
+    .announcement,
+    .sidebar-mmm-links,
+    .content-icon-container { display: none; }
+    article[role="main"] .highlight { box-shadow: none; }
+}
+
+/* Narrow viewports: keep the title rule and dividers, step the sizes down. */
+@media (max-width: 46em) {
+    /* Furo pins the strip to one nowrap line that scrolls sideways, which
+       clips the link out of view on a phone. Let it wrap instead; the
+       `.announcement + .page` coupling is only a min-height, so growing the
+       bar costs nothing. */
+    .announcement { height: auto; }
+
+    .announcement-content {
+        white-space: normal;
+        padding: 0.5rem 0.9rem;
+        font-size: 0.8rem;
+        line-height: 1.45;
+    }
+
+    article[role="main"] { font-size: 1rem; }
+    article[role="main"] h1 { font-size: 2rem; }
+    article[role="main"] h2 { font-size: 1.5rem; }
+    article[role="main"] > section > p:first-of-type { font-size: 1.05rem; }
 }

@@ -10,7 +10,7 @@
 # the heavy numerical stack (pymc/jax/numba/...) during autodoc.
 
 sphinx>=7.0,<8.0
-sphinx-rtd-theme>=2.0
+furo>=2024.8.6
 sphinx-autodoc-typehints>=2.0
 sphinx-copybutton>=0.5
 myst-parser>=3.0
