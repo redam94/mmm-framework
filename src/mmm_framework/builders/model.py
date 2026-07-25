@@ -336,10 +336,14 @@ class ModelConfigBuilder:
         return self
 
     def bayesian_nutpie(self) -> Self:
-        """Use the nutpie NUTS sampler (Rust; often the fastest backend).
+        """Use the nutpie NUTS sampler (Rust implementation).
 
         Samples the same graph as :meth:`bayesian_pymc` / :meth:`bayesian_numpyro`
-        — only the NUTS implementation differs.
+        — only the NUTS implementation differs, so all three target the identical
+        posterior. Which one is *fastest* is model-dependent: measured on effective
+        samples per second, the ranking inverts between a small national model and
+        a geo panel. Benchmark on your own model rather than assuming
+        (``nbs/demos/nuts_backends.ipynb`` does exactly this).
         """
         self._inference_method = InferenceMethod.BAYESIAN_NUTPIE
         return self
