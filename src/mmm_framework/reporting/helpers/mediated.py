@@ -220,10 +220,14 @@ def compute_cross_effects(
     if not hasattr(model, "outcome_names"):
         raise ValueError("Model does not support cross-effect analysis")
 
-    # Try model's built-in method
-    if hasattr(model, "get_cross_effect_summary"):
+    # Try model's built-in method. NB the method is plural
+    # (``get_cross_effects_summary``) on both MultivariateMMM and CombinedMMM —
+    # a singular spelling here silently fell through to the manual branch below,
+    # which walks every off-diagonal psi entry and so reports undeclared pairs
+    # (structurally zero) as if they were estimated cross-effects.
+    if hasattr(model, "get_cross_effects_summary"):
         try:
-            result = model.get_cross_effect_summary()
+            result = model.get_cross_effects_summary()
             if result is not None and len(result) > 0:
                 return result
         except Exception as e:

@@ -179,46 +179,44 @@ from mmm_framework import (
     BayesianMMM,
 )
 
-# Load data in MFF format
-loader = MFFLoader(config=mff_config)
-panel_data = loader.load("data.csv")
+# Declare variable roles and build the panel. `create_simple_mff_config` is the
+# shortcut; build an MFFConfig explicitly for per-channel adstock/saturation priors.
+from mmm_framework.config import DimensionType, create_simple_mff_config
+from mmm_framework.data_loader import load_mff
 
-# Build model configuration
-config = (
+mff_config = create_simple_mff_config(
+    kpi_name="Sales",
+    media_names=["TV", "Search"],
+    control_names=["Price"],
+    kpi_dimensions=[DimensionType.PERIOD],   # national; add GEOGRAPHY for a geo panel
+)
+panel = load_mff(mff_df, mff_config)
+
+# Inference settings live on the model config; the trend is its own config object.
+model_config = (
     ModelConfigBuilder()
-    .with_kpi("sales", log_transform=True)
-    .with_media_channel(
-        MediaChannelConfigBuilder()
-        .with_name("tv")
-        .with_adstock(alpha_prior=(1, 3), l_max=8)
-        .with_saturation(lam_prior=(1, 2))
-        .build()
-    )
-    .with_seasonality(yearly=True, n_fourier=2)
-    .with_trend(trend_type="linear")
+    .bayesian_numpyro()      # 4-10x faster than CPU PyMC
+    .with_chains(4)
+    .with_draws(2000)
+    .with_tune(1000)
     .build()
 )
 
 # Fit the model
-model = BayesianMMM(
-    X_media=panel_data.media,
-    y=panel_data.kpi,
-    channel_names=panel_data.channel_names,
-    config=config,
-)
+model = BayesianMMM(panel, model_config, TrendConfig(type=TrendType.LINEAR))
+results = model.fit(random_seed=42)
 
-results = model.fit(
-    draws=2000,
-    tune=1000,
-    chains=4,
-    nuts_sampler="numpyro",  # 4-10x faster than CPU PyMC
-)
+# Contributions and ROI with uncertainty
+from mmm_framework.analysis import MMMAnalyzer
 
-# Get contributions with uncertainty
-contributions = model.compute_contributions()
-print(contributions.mean_contributions)
-print(contributions.hdi_contributions)  # 94% credible intervals
+analyzer = MMMAnalyzer(model)
+print(analyzer.compute_counterfactual_contributions())
+print(analyzer.compute_channel_roi())
 ```
+
+> **Note** — select the sampler on the *config* (`.bayesian_numpyro()`). `fit()` has no
+> `nuts_sampler` parameter, so passing one lands in `**kwargs` and collides with the
+> explicit argument `pm.sample` already receives.
 
 ### Fluent Configuration API
 
@@ -1205,7 +1203,7 @@ Extended models have more parameters and thus higher risk of weak identification
 | Cross-effects | ~1.1x per effect |
 | Partial observation | ~1.2x (masking overhead) |
 
-For complex models, use `nuts_sampler="numpyro"` for 4-10x speedup.
+For complex models, select the NumPyro sampler with `ModelConfigBuilder().bayesian_numpyro()` for a 4-10x speedup.
 
 ## Mathematical Specification: Variable Selection Priors
 
@@ -1497,7 +1495,7 @@ The framework explicitly addresses common identification problems:
 ### Recommendations
 
 - **Development iteration**: Use `Ridge(positive=True)` with differential evolution for transformation search
-- **Production models**: Use `nuts_sampler="numpyro"` for 4-10x speedup over CPU PyMC
+- **Production models**: Use `ModelConfigBuilder().bayesian_numpyro()` for 4-10x speedup over CPU PyMC
 - **GPU acceleration**: Additional 4x gains available with JAX on GPU
 
 ## Project Structure

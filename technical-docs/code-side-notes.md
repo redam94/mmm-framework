@@ -10,7 +10,7 @@ _Last updated: 2026-06-12._
 ## Open — behavior bugs
 
 1. **`fit()` ignores `ModelConfig.target_accept`.**
-   `src/mmm_framework/model/base.py:1633` hardcodes `target_accept = target_accept or 0.9`
+   `src/mmm_framework/model/base.py:3085` (was :1633) hardcodes `target_accept = target_accept or 0.9`
    and never reads `self.model_config.target_accept`, so
    `ModelConfigBuilder().with_target_accept(0.95)` silently does nothing unless the value
    is also passed to `fit()`. Fix: default from the config
@@ -27,12 +27,14 @@ _Last updated: 2026-06-12._
 4. **The agent API has no authentication dependency.**
    `server/src/mmm_framework_server/main.py`: no route carries an auth dep; the `X-API-Key`
    header there is the *LLM key passthrough*, not auth. The Models API shared key is
-   off by default (`api/auth.py`, `api/config.py:60`). `docs/security.html` now states
+   off by default (`api/auth.py`, `api/config.py:60` — both removed with that app in the
+   2026-07-24 packaging split, see #13). `docs/security.html` now states
    this honestly; the mitigation is perimeter/SSO until real auth lands (phase-3 §1.1
    defers it deliberately — this note is a reminder that the docs promise it).
 
 5. **`technical-docs/agent-knowledge-workspace.md` §9 claims "All new routes require
-   the existing X-API-Key dep" — false** against current `api/main.py` (see #4).
+   the existing X-API-Key dep" — false** against the current
+   `server/src/mmm_framework_server/main.py` (see #4).
    Fix the doc or (better) make it true.
 
 6. **Container egress on macOS dev is recorded as `open:unenforced-macos-dev`**
@@ -65,13 +67,13 @@ _Last updated: 2026-06-12._
     (the real pattern, used by the aurora builder and `nbs/demos/real_data_onboarding.ipynb`).
     Update the example so it demonstrates the shipped generator.
 
-13. **Two `/projects` APIs exist and answer differently.** The top-level Models API
-    (`api/main.py`, run as `cd api && uvicorn main:app`) serves a StorageService-backed
-    project registry; the agent API (`uvicorn mmm_framework_server.main:app`) serves the
-    sessions-store projects the React app and `scripts/seed_demo_project.py` use. CLAUDE.md's
-    React run instructions point at the former, which shows an empty project list after
-    seeding (hit during screenshot capture 2026-06-12). Fix the run instructions and/or
-    unify the registries.
+13. ~~**Two `/projects` APIs exist and answer differently.**~~ **RESOLVED** by the
+    2026-07-24 packaging split (v1.0.0). The top-level Models API at `api/main.py` is
+    gone — the repo now has exactly one FastAPI app,
+    `server/src/mmm_framework_server/main.py`, serving the sessions-store projects the
+    React app and `scripts/seed_demo_project.py` use. (A stray untracked `api/` directory
+    may survive locally holding only `__pycache__`/`.pytest_cache`; it contains no source
+    and can be deleted.)
 
 14. **Duplicate prior-predictive APIs**: `BayesianMMM.get_prior()` (base.py:1597) and
     `BayesianMMM.sample_prior_predictive()` (base.py:2180) overlap. Docs were

@@ -440,6 +440,41 @@ class TestExtendedModels:
             assert "source" in cross_df.columns
             assert "target" in cross_df.columns
 
+    def test_compute_cross_effects_prefers_the_model_method(self):
+        """The model's own summary wins over the manual psi walk.
+
+        Regression: the hasattr probe used the singular
+        ``get_cross_effect_summary``, which no model defines, so every report
+        silently fell through to the manual branch. That branch walks *every*
+        off-diagonal psi entry, and undeclared pairs are structurally zero — so
+        pairs the analyst never modelled were reported as estimated
+        cross-effects alongside the real ones.
+        """
+        model = create_mock_multivariate_model()
+        called = []
+
+        def _summary():
+            called.append(True)
+            return pd.DataFrame(
+                [
+                    {
+                        "source": "product_a",
+                        "target": "product_b",
+                        "effect_type": "cannibalization",
+                        "mean": -0.1,
+                    }
+                ]
+            )
+
+        model.get_cross_effects_summary = _summary
+
+        cross_df = compute_cross_effects(model)
+
+        assert called, "model.get_cross_effects_summary() was never called"
+        # The declared pair only — not both off-diagonal entries of psi.
+        assert len(cross_df) == 1
+        assert cross_df.iloc[0]["effect_type"] == "cannibalization"
+
 
 class TestModelSummary:
     """Test model summary generation."""
