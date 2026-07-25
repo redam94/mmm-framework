@@ -17,6 +17,7 @@ The sampler is spied on rather than run: these assert what reaches
 from __future__ import annotations
 
 import inspect
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -201,8 +202,13 @@ class TestNutpieIsReachable:
         assert not config.use_numpyro
 
     def test_frequentist_config_reports_the_historical_default(self):
-        """No NUTS backend to report — must not raise on a non-Bayesian config."""
-        config = ModelConfig(inference_method=InferenceMethod.FREQUENTIST_RIDGE)
+        """No NUTS backend to report — must not raise on a non-Bayesian config.
+
+        Reading the property stays safe; it is ``fit()`` that refuses (#180),
+        so a config can still be inspected and round-tripped.
+        """
+        with pytest.warns(DeprecationWarning):
+            config = ModelConfig(inference_method=InferenceMethod.FREQUENTIST_RIDGE)
         assert config.nuts_sampler == "pymc"
 
     def test_declared_nutpie_version_is_one_pymc_will_drive(self):
@@ -212,3 +218,97 @@ class TestNutpieIsReachable:
         from packaging.version import Version
 
         assert Version(version("nutpie")) >= Version("0.16.10")
+
+
+# ---------------------------------------------------------------------------
+# #181 / #180 — declared-but-unimplemented inference methods must refuse
+# ---------------------------------------------------------------------------
+
+
+class TestUnimplementedInferenceMethods:
+    """``frequentist_ridge`` / ``frequentist_cvxpy`` used to silently fit NUTS.
+
+    ``fit()`` dispatches on ``FitMethod``, never on ``InferenceMethod``, and
+    ``nuts_sampler`` falls back to ``"pymc"`` for anything outside its Bayesian
+    map — so asking for a frequentist point estimate returned a full posterior,
+    after paying for MCMC, with no warning. Same defect class as #169/#171: a
+    knob that reads as configuration and is a no-op.
+    """
+
+    FREQUENTIST = [
+        InferenceMethod.FREQUENTIST_RIDGE,
+        InferenceMethod.FREQUENTIST_CVXPY,
+    ]
+
+    @pytest.mark.parametrize("method", FREQUENTIST)
+    def test_construction_warns(self, method):
+        with pytest.warns(DeprecationWarning, match="not implemented"):
+            ModelConfig(inference_method=method)
+
+    @pytest.mark.parametrize("method", FREQUENTIST)
+    def test_is_implemented_is_false(self, method):
+        with pytest.warns(DeprecationWarning):
+            assert not ModelConfig(inference_method=method).is_implemented
+
+    @pytest.mark.parametrize("method", FREQUENTIST)
+    def test_fit_raises_before_sampling(self, panel, method, sample_spy):
+        """The refusal must precede any sampling — no MCMC, no wasted runtime."""
+        with pytest.warns(DeprecationWarning):
+            config = ModelConfig(inference_method=method, n_draws=10, n_tune=10)
+        model = _model(panel, config)
+
+        with pytest.raises(NotImplementedError) as exc:
+            model.fit()
+
+        assert not sample_spy, "pm.sample was reached despite an unbacked method"
+        assert method.value in str(exc.value)
+
+    def test_refusal_names_the_supported_alternative(self, panel):
+        """Refusing is not enough — it must say what to use instead.
+
+        Ridge *is* MAP under Gaussian coefficient priors, so ``method="map"``
+        is the honest redirect rather than a bare "unsupported".
+        """
+        with pytest.warns(DeprecationWarning):
+            config = ModelConfig(inference_method=InferenceMethod.FREQUENTIST_RIDGE)
+        with pytest.raises(NotImplementedError) as exc:
+            _model(panel, config).fit()
+
+        msg = str(exc.value)
+        assert "map" in msg
+        assert "issues/180" in msg
+
+    @pytest.mark.parametrize(
+        "method",
+        [
+            InferenceMethod.BAYESIAN_PYMC,
+            InferenceMethod.BAYESIAN_NUMPYRO,
+            InferenceMethod.BAYESIAN_NUTPIE,
+        ],
+    )
+    def test_bayesian_methods_neither_warn_nor_raise(self, panel, sample_spy, method):
+        """The guard must not touch the supported path."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            config = ModelConfig(inference_method=method, n_draws=10, n_tune=10)
+        assert config.is_implemented
+        _fit_kwargs(_model(panel, config), sample_spy)  # reaches pm.sample
+
+    def test_enum_values_are_retained(self):
+        """Refusing must not mean deleting — stored configs still parse.
+
+        Removing the values would break the frozen-enum contract
+        (tests/test_api_contracts.py) and is a MAJOR-version event.
+        """
+        assert InferenceMethod("frequentist_ridge") is InferenceMethod.FREQUENTIST_RIDGE
+        assert InferenceMethod("frequentist_cvxpy") is InferenceMethod.FREQUENTIST_CVXPY
+
+    def test_excel_template_rejects_at_parse_time(self):
+        """The value came from a spreadsheet cell — fail next to the cell."""
+        from mmm_framework.excel_config.parser import (
+            TemplateValidationError,
+            _build_model_config,
+        )
+
+        with pytest.raises(TemplateValidationError, match="not implemented"):
+            _build_model_config({"Inference Method": "frequentist_ridge"})

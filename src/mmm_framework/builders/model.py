@@ -349,12 +349,29 @@ class ModelConfigBuilder:
         return self
 
     def frequentist_ridge(self) -> Self:
-        """Use Ridge regression (fast, frequentist)."""
+        """**Not implemented** — selecting this makes ``fit()`` raise.
+
+        The enum value exists but no ridge estimator backs it. Until one does
+        (tracking: `#180 <https://github.com/redam94/mmm-framework/issues/180>`_),
+        use :meth:`ModelConfigBuilder.map_fit` / ``fit(method="map")`` for a fast
+        penalized point estimate — under Gaussian coefficient priors, MAP *is*
+        ridge regression.
+
+        Kept on the builder so stored configs and existing call sites still
+        construct; the refusal happens at fit time with an actionable message.
+        """
         self._inference_method = InferenceMethod.FREQUENTIST_RIDGE
         return self
 
     def frequentist_cvxpy(self) -> Self:
-        """Use CVXPY for constrained optimization."""
+        """**Not implemented** — selecting this makes ``fit()`` raise.
+
+        Constrained (sign / sum / monotonicity) estimation via a convex program
+        is tracked in `#180 <https://github.com/redam94/mmm-framework/issues/180>`_.
+        For a sign constraint today, use a positive-only coefficient prior
+        (``PriorConfigBuilder().half_normal(...)``), which constrains the sign in
+        the Bayesian path.
+        """
         self._inference_method = InferenceMethod.FREQUENTIST_CVXPY
         return self
 

@@ -349,22 +349,25 @@ def example_model_builders():
         f"chains={bayesian_model.n_chains}, draws={bayesian_model.n_draws}"
     )
 
-    # Fast frequentist config
-    frequentist_model = (
+    # Fast approximate config. NOTE: this used to demonstrate
+    # `.frequentist_ridge()`, which is declared but UNIMPLEMENTED — selecting it
+    # silently fitted full Bayesian NUTS, and now raises at fit() (#180). The
+    # honest fast option is MAP: with Gaussian coefficient priors, maximum a
+    # posteriori estimation IS ridge regression, and it returns in seconds.
+    fast_model = (
         ModelConfigBuilder()
         .additive()
-        .frequentist_ridge()
-        .with_ridge_alpha(1.0)
-        .with_bootstrap_samples(1000)
+        .bayesian_pymc()
+        .map_fit()
         .with_optim_maxiter(500)
         .build()
     )
     print(
-        f"Frequentist model: method={frequentist_model.inference_method.value}, "
-        f"alpha={frequentist_model.ridge_alpha}"
+        f"Fast model: method={fast_model.inference_method.value}, "
+        f"fit_method={fast_model.fit_method.value}"
     )
 
-    return bayesian_model, frequentist_model
+    return bayesian_model, fast_model
 
 
 # =============================================================================
