@@ -44,10 +44,17 @@ uv run --group docs sphinx-build -b html docs/api/source docs/api/build/html
 # Static documentation site (hand-authored HTML in docs/*.html)
 # Edit pages directly; preview locally with `python3 -m http.server` from docs/.
 # Navigation/footer are injected by docs/shared/components.js — update NAV_LINKS there
-# (also SERIES for prev/next cards and PAGE_TIERS for the audience chip).
+# (also SERIES for prev/next cards and PAGE_TIERS for the audience chip; both are
+# GATED by tests/test_docs_nav_registration.py since 2026-07-25 — omission used to
+# be invisible, silently rendering no prev/next cards and no tier chip, #175).
 # After adding/editing pages: `python3 tools/build_search_index.py` from docs/
 # regenerates the Cmd-K search index + glossary tooltip data (shared/*.json);
 # `python3 tools/build_seo.py` refreshes JSON-LD, sitemap.xml and llms.txt.
+# build_seo.py is now IDEMPOTENT (#174): shared/seo-manifest.json records each
+# page's content hash + stamped dateModified, so only pages you actually edited
+# get re-dated (it used to re-date ~70 unrelated pages per run, needing a manual
+# `git checkout --` sweep) and a second run is a no-op. Commit the manifest.
+# `--stamp YYYY-MM-DD` overrides the date for changed pages (default: today).
 # REST API reference (docs/rest-api.html) is GENERATED: after changing server
 # endpoints, re-export docs/shared/openapi.json (app.openapi(), see the file
 # header), bump EXPECTED_OPS in docs/tools/build_rest_docs.py, run it from
@@ -275,7 +282,9 @@ Test organization:
 - `tests/` - Core module tests
 - `tests/reporting/` - Reporting module tests
 - `tests/mmm_extensions/` - Extension module tests
-- `tests/test_docs_snippets.py` - Docs code-snippet gate: verifies `docs/*.html` Python blocks only reference real APIs (see `technical-docs/doc-snippet-testing.md`)
+- `tests/test_docs_snippets.py` - Docs code-snippet gate: verifies Python blocks only reference real APIs, across `docs/*.html` **and Markdown** — `README.md`, `CLAUDE.md`, `technical-docs/*.md` (Markdown added 2026-07-25, #172: the gate globbed HTML only, so the PyPI landing page and this file rotted undetected — every statement in the usage block below was wrong). ```python fences always checked; unlabeled fences only when they *import* the package (a "mentions it" rule collects the directory tree above). See `technical-docs/doc-snippet-testing.md`
+- `tests/test_docs_nav_registration.py` - Docs nav-registration gate (#175): every `docs/blog-*.html` appears exactly once in `SERIES` and has a `PAGE_TIERS` entry, both point at files that exist, and SERIES order matches the `blog.html` card order. These two hand-maintained lists in `shared/components.js` fail silently — no prev/next cards, no audience chip
+- `tests/test_docs_seo_build.py` - Idempotency contract for `docs/tools/build_seo.py` (#174; see the manifest note in Quick Commands)
 
 ## Common Development Tasks
 

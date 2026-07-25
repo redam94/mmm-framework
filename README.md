@@ -362,7 +362,7 @@ nested_config = (
 )
 
 # Fit the model
-model = NestedMMM(
+nested_model = NestedMMM(
     X_media=X_media,
     y=sales,
     channel_names=["tv", "digital", "social", "search"],
@@ -370,15 +370,16 @@ model = NestedMMM(
     mediator_data={"brand_awareness": survey_data},  # Sparse observations OK
 )
 
-results = model.fit(draws=2000, tune=1000)
+results = nested_model.fit(draws=2000, tune=1000)
 
-# Decompose effects
-mediation_effects = model.get_mediation_effects()
-for channel_effect in mediation_effects:
-    print(f"{channel_effect.channel}:")
-    print(f"  Direct: {channel_effect.direct_effect:.3f}")
-    print(f"  Indirect via awareness: {channel_effect.indirect_effects['brand_awareness']:.3f}")
-    print(f"  Proportion mediated: {channel_effect.proportion_mediated:.1%}")
+# Decompose effects — one row per channel, with an
+# `indirect_via_<mediator>` column per declared mediator.
+mediation_effects = nested_model.get_mediation_effects()
+for row in mediation_effects.itertuples():
+    print(f"{row.channel}:")
+    print(f"  Direct: {row.direct_effect:.3f}")
+    print(f"  Indirect via awareness: {row.indirect_via_brand_awareness:.3f}")
+    print(f"  Proportion mediated: {row.proportion_mediated:.1%}")
 ```
 
 #### Mediator Types
@@ -453,7 +454,7 @@ mv_config = (
 )
 
 # Fit model
-model = MultivariateMMM(
+mv_model = MultivariateMMM(
     X_media=X_media,
     outcome_data={"single_pack": y_single, "multipack": y_multi},
     channel_names=channels,
@@ -461,14 +462,14 @@ model = MultivariateMMM(
     promotion_data={"multipack_promo": promo_indicator},
 )
 
-results = model.fit()
+results = mv_model.fit()
 
 # Analyze cross-effects
-cross_effects = model.get_cross_effect_summary()
+cross_effects = mv_model.get_cross_effects_summary()
 print(cross_effects)
 
 # Get correlation matrix
-corr = model.get_correlation_matrix()
+corr = mv_model.get_correlation_matrix()
 ```
 
 #### Cross-Effect Types
@@ -555,17 +556,18 @@ halo = halo_effect("premium", "value")  # Premium brand lifts value brand
 All extended models provide structured result containers:
 
 ```python
-# Mediation decomposition
-effects = model.get_mediation_effects()
-for e in effects:
-    print(e.to_dict())
+# Mediation decomposition (NestedMMM / StructuralNestedMMM) — a DataFrame with
+# channel, direct_effect, total_indirect, total_effect, proportion_mediated
+# and one indirect_via_<mediator> column per mediator.
+effects = nested_model.get_mediation_effects()
+print(effects)
 
-# Cross-effect summary with HDI
-cross_df = model.get_cross_effect_summary()
-# Returns: source, target, effect_type, mean, sd, hdi_3%, hdi_97%
+# Cross-effect summary with HDI (MultivariateMMM / CombinedMMM)
+cross_df = mv_model.get_cross_effects_summary()
+# Returns: source, target, effect_type, mean, sd, hdi_low, hdi_high
 
 # Correlation matrix for multivariate outcomes
-corr_matrix = model.get_correlation_matrix()
+corr_matrix = mv_model.get_correlation_matrix()
 
 # Standard ArviZ diagnostics
 results.summary(var_names=["beta_media", "alpha"])

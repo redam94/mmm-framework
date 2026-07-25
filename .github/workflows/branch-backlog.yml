@@ -1,0 +1,95 @@
+# Alarm for automation branches that pile up unmerged.
+#
+# An external schedule pushes `docs-freshness/<date>` branches. It never opened
+# a PR, so 21 of them accumulated silently over three weeks — each re-detecting
+# the same staleness, none of it landing, while a real behavior bug sat unmerged
+# in one of them (#173). A branch with no PR is invisible; this makes it loud.
+#
+# The run FAILS when the backlog exceeds the threshold. On a scheduled workflow
+# GitHub emails the repo owner on failure, which is the alert. No write
+# permissions are needed or granted.
+name: Branch backlog
+
+on:
+  schedule:
+    # 07:15 UTC daily — after the docs-freshness schedule has had time to run.
+    - cron: '15 7 * * *'
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: 'Fail when more than this many automation branches are unmerged'
+        required: false
+        default: '3'
+
+permissions:
+  contents: read
+
+jobs:
+  stale-automation-branches:
+    name: Unmerged automation branches
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Branch-name prefixes produced by automation rather than by a human.
+      PREFIXES: 'docs-freshness/'
+      THRESHOLD: ${{ github.event.inputs.threshold || '3' }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Count unmerged automation branches
+        run: |
+          set -euo pipefail
+          git fetch origin --prune --quiet
+
+          default_branch="${DEFAULT_BRANCH:-main}"
+          echo "Default branch: $default_branch"
+
+          stale=()
+          for prefix in $PREFIXES; do
+            while read -r ref; do
+              [ -n "$ref" ] || continue
+              branch=${ref#origin/}
+              # Squash-merged branches are not ancestors of the default branch,
+              # so ask whether the branch still carries commits that are absent
+              # from it by content, not just by ancestry.
+              if [ -z "$(git log --oneline "origin/$default_branch..$ref" -- 2>/dev/null)" ]; then
+                echo "  merged/empty: $branch"
+                continue
+              fi
+              pr=$(gh pr list --head "$branch" --state all --json number \
+                     --jq '.[0].number' 2>/dev/null || true)
+              if [ -n "$pr" ]; then
+                echo "  has PR #$pr: $branch"
+                continue
+              fi
+              stale+=("$branch")
+            done < <(git branch -r --list "origin/${prefix}*" --format='%(refname:short)')
+          done
+
+          count=${#stale[@]}
+          {
+            echo "## Unmerged automation branches: $count (threshold $THRESHOLD)"
+            echo
+            if [ "$count" -gt 0 ]; then
+              printf '-  `%s`\n' "${stale[@]}"
+              echo
+              echo "Each of these carries commits that are not in \`$default_branch\` and has **no pull request**."
+              echo "Work produced and dropped is worse than work not produced: the same staleness is"
+              echo "re-detected every run while the real errors stay live. Open a PR per run (or push"
+              echo "docs-only fixes straight to \`$default_branch\` when the gate is green), and let the"
+              echo "automation accumulate onto ONE long-lived branch instead of a new dated one per day."
+            else
+              echo "None. 🎉"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$count" -gt "$THRESHOLD" ]; then
+            echo "::error::$count unmerged automation branches with no PR (threshold $THRESHOLD)."
+            exit 1
+          fi
+          echo "Backlog within threshold."
