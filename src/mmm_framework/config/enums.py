@@ -144,10 +144,17 @@ class AllocationMethod(str, Enum):
 
 
 class InferenceMethod(str, Enum):
-    """Available inference methods."""
+    """Available inference methods.
+
+    The three Bayesian entries differ only in the **NUTS backend** used to
+    sample the same graph (``ModelConfig.nuts_sampler`` maps them onto the
+    ``pm.sample(nuts_sampler=...)`` value): reference PyMC, JAX/NumPyro, or
+    the Rust ``nutpie`` sampler.
+    """
 
     BAYESIAN_PYMC = "bayesian_pymc"
     BAYESIAN_NUMPYRO = "bayesian_numpyro"
+    BAYESIAN_NUTPIE = "bayesian_nutpie"
     FREQUENTIST_RIDGE = "frequentist_ridge"
     FREQUENTIST_CVXPY = "frequentist_cvxpy"
 

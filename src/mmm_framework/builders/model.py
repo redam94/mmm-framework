@@ -335,6 +335,15 @@ class ModelConfigBuilder:
         self._inference_method = InferenceMethod.BAYESIAN_NUMPYRO
         return self
 
+    def bayesian_nutpie(self) -> Self:
+        """Use the nutpie NUTS sampler (Rust; often the fastest backend).
+
+        Samples the same graph as :meth:`bayesian_pymc` / :meth:`bayesian_numpyro`
+        — only the NUTS implementation differs.
+        """
+        self._inference_method = InferenceMethod.BAYESIAN_NUTPIE
+        return self
+
     def frequentist_ridge(self) -> Self:
         """Use Ridge regression (fast, frequentist)."""
         self._inference_method = InferenceMethod.FREQUENTIST_RIDGE

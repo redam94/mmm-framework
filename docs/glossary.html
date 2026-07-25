@@ -619,9 +619,9 @@
                     <dd>
                         A JAX-backed probabilistic programming library used by the framework as a fast alternative
                         sampler to native PyMC. Select it on the model config —
-                        <code>ModelConfigBuilder().bayesian_numpyro()</code> (in fact the default) — not via a
-                        <code>fit()</code> argument; the framework then passes <code>nuts_sampler="numpyro"</code> to
-                        <code>pm.sample</code> internally. Measured speedup: ~3x wall-clock vs sequential PyMC chains at equal draws on a
+                        <code>ModelConfigBuilder().bayesian_numpyro()</code> (in fact the default) — or override it
+                        for a single fit with <code>fit(nuts_sampler="numpyro")</code>; either way the framework
+                        passes that value to <code>pm.sample</code> internally. Measured speedup: ~3x wall-clock vs sequential PyMC chains at equal draws on a
                         7-channel national model (down from ~6x under PyMC 5, whose native sampler was slower; narrower still against parallel PyMC chains); see
                         <code>nbs/validation/runtime_benchmark.ipynb</code>.
                     </dd>
@@ -629,7 +629,9 @@
                     <dt id="term-nutpie">NutPie</dt>
                     <dd>
                         A Rust-backed NUTS sampler available as another fast PyMC backend. Sometimes faster than
-                        NumPyro for small-to-medium models; benchmark on your data.
+                        NumPyro for small-to-medium models; benchmark on your data. Select it with
+                        <code>ModelConfigBuilder().bayesian_nutpie()</code> or
+                        <code>fit(nuts_sampler="nutpie")</code>.
                     </dd>
 
                     <dt id="term-mape">MAPE (Mean Absolute Percentage Error)</dt>

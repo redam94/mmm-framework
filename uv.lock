@@ -2488,7 +2488,7 @@ requires-dist = [
     { name = "numba", specifier = ">=0.63.1" },
     { name = "numpy", specifier = ">=2.3.5" },
     { name = "numpyro", specifier = ">=0.19.0" },
-    { name = "nutpie", specifier = ">=0.16.4" },
+    { name = "nutpie", specifier = ">=0.16.10" },
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "plotly", specifier = ">=6.5.0" },
@@ -2877,31 +2877,35 @@ wheels = [
 
 [[package]]
 name = "nutpie"
-version = "0.16.4"
+version = "0.16.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arro3-core" },
     { name = "arviz" },
     { name = "obstore" },
     { name = "pandas" },
+    { name = "platformdirs" },
     { name = "pyarrow" },
     { name = "xarray" },
     { name = "zarr" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2d/46/3d8b65a96024a2b5e5c1b11950649058bfd696909ab64bdc44b151a3d386/nutpie-0.16.4.tar.gz", hash = "sha256:2187f19b447a0de5076718d3ec332154a0bf9581248b0e440c997a38e3530ba3", size = 708299 }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/11/f53d7618c4e3c54a9d5c410ac42711499f5a2554c28a4b9f03c4d0439d5e/nutpie-0.16.11.tar.gz", hash = "sha256:e00bf6c004a345ca95d50a57aa794b1b6a2c39270987da131011e7f672589487", size = 721831 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f1/65/c982a8cf8d974eae2f6efd109300d472c4ca52ac0a1a224b05ea65eeb959/nutpie-0.16.4-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:cd85ea9f3a173efc41052a99842a6f21105ba3c5f141b1b43a7232f8f4b11f3c", size = 8982051 },
-    { url = "https://files.pythonhosted.org/packages/90/7a/24d7492284e5faaac63dc22eb7e5618bdd93fae72c8247f17aa802b3c548/nutpie-0.16.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:c9e02551fdf8d4ae0a3be126a6269f633073ffbee8bbf07c2d27a78dda6086ed", size = 8284228 },
-    { url = "https://files.pythonhosted.org/packages/f0/3d/54ac857fcfa9f9bf3da3952d8759d585f6a3d82f35cbbee57b899a6c86c1/nutpie-0.16.4-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:82e368318fdc19073f8230e44caa829b569384566bacb94beee476608f7c40a3", size = 7927457 },
-    { url = "https://files.pythonhosted.org/packages/48/2f/00ab092c8df06d57ac95ee89bb7615bc61ec3654590b3811ceeb0f33ddfb/nutpie-0.16.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0c6bbf17a6c72061c29c086a4097d0a070d4131f77db6503a9955ce2d509bece", size = 8518747 },
-    { url = "https://files.pythonhosted.org/packages/3a/66/a0d838fb910b651356f1d8557b205e47668d7a2db7bb2184e19e0e2e6779/nutpie-0.16.4-cp312-cp312-win_amd64.whl", hash = "sha256:2cc7e7bd4ccf012f14fcc94b276251206b438d8eb913254e53bd5c1671d63f5a", size = 8914308 },
-    { url = "https://files.pythonhosted.org/packages/71/68/b3a2a829a16154228f331d26a727362b7c9564ed582f157f50ea185c28b2/nutpie-0.16.4-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:6603ee879a83ee61631591f069b57754a4e155a88bf44d666889d9aa3251ed44", size = 8981006 },
-    { url = "https://files.pythonhosted.org/packages/a4/b1/3e3690fd1ba2af86c1dd15a4220652c78a3e24d826b5ffefbe250ca2ef1d/nutpie-0.16.4-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:c5713c2874cd7488c3e4c3510f02ca3d4f058d578c18a3512449a38207db5bff", size = 8284340 },
-    { url = "https://files.pythonhosted.org/packages/76/89/2d602fd744aa88dfddb1c5dc26e65a6f065c8b82390ab6fb629da9e8bd59/nutpie-0.16.4-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:7bee987350f8798fece21128275b370589f53df691b762d018a1ca99fcd8118f", size = 7926380 },
-    { url = "https://files.pythonhosted.org/packages/91/c8/e3ab9ee8fa20f9a80f69ae1f63fc15605328e3bd1d72605700df06835d74/nutpie-0.16.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5625141d5183244a936f37d2c9b231e2494fa5ea3d51eecfb9134deb4ed0ddb2", size = 8518454 },
-    { url = "https://files.pythonhosted.org/packages/39/e3/09198f08a2652bbb4e295293cf159a7fddde873c293e5dbe649ef62533ca/nutpie-0.16.4-cp313-cp313-win_amd64.whl", hash = "sha256:e80f00294a85ba4a7406737038436a9b978693b682ab758bfc689a74e139205b", size = 8914046 },
-    { url = "https://files.pythonhosted.org/packages/3e/50/a448ff221d3904fdee33bbebeb7e065f3c6bf7959d3260d59259320cdddc/nutpie-0.16.4-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:c95b06a076622eac3b37756f2f3372d53551e4180c6af0e006ea9ebebd8efc61", size = 8285783 },
-    { url = "https://files.pythonhosted.org/packages/7e/fb/4003e6c892461de6e6b59651c0906b6bd237c7baccaf1453e3d0a3ae7a1b/nutpie-0.16.4-cp314-cp314-win_amd64.whl", hash = "sha256:6725edd7a54ebf44f5995dde60fc3dcfd34bf47eba86aecfd68854f3fac0a97f", size = 8917116 },
+    { url = "https://files.pythonhosted.org/packages/c1/28/f112ef823626cab9cf2359852dd52da47951b6102468a3f799c2f29809a1/nutpie-0.16.11-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:4c888815e35936a510570dc31bca00ad716aec035b8d5975b00fd056c2cb431b", size = 9792945 },
+    { url = "https://files.pythonhosted.org/packages/b0/9d/b6843a1b5c98b52024e671b0e11eb2e8583de016c5973f15eb5bff87a242/nutpie-0.16.11-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:33fca4a297b06881945c75bab0e6466d5b428d4fd7955c6f90c62f39fa277952", size = 9066723 },
+    { url = "https://files.pythonhosted.org/packages/8f/74/13203b2f76a95a5da04f194fa397b47501682b953582dcaac8539cd3a381/nutpie-0.16.11-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:fac130a35a9c044d1ec8dce909b7ffbecd17d0bc3498250be658abad12f0cdc9", size = 8518235 },
+    { url = "https://files.pythonhosted.org/packages/4a/8e/0796cf8c12799a1ea074171dbd97e875cc8a75af20b7600dc8744a54ea47/nutpie-0.16.11-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:39c383b2638368b20ce85319458ff914dab0bc5e87588ffec68879719e3c7dcf", size = 9198731 },
+    { url = "https://files.pythonhosted.org/packages/8b/25/b27fe3521b50254cb4841ad19508501388a963cc4bd3446e0e84f51fc9d4/nutpie-0.16.11-cp312-cp312-win_amd64.whl", hash = "sha256:5d6d501066e111ca021a55de03ac080122794b95750e32a62ef9fb3fae77bea0", size = 9716865 },
+    { url = "https://files.pythonhosted.org/packages/00/04/5d6ae4432507c5e214028ff86983dd894985fcc002d208b0cb5c91b14f52/nutpie-0.16.11-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:946e8fa1e0c35dd5d90ac6a018639f7f0b9750918a103bf04c4922b39f6ad463", size = 9796609 },
+    { url = "https://files.pythonhosted.org/packages/b1/b9/efc6c43aca0fad920e6ea60f1b8c9bb6c47f4adcc5e5438a7d6c0c406cbe/nutpie-0.16.11-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:d8586bb001198b2944547ebcf7b60869af41629476478d3d015dc6ff05afcd20", size = 9072919 },
+    { url = "https://files.pythonhosted.org/packages/6b/78/5ae182d5e9bdbb0a83d55bf4c4c0241bf1b1d76cd8f454d64cb2f93edadf/nutpie-0.16.11-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0534b9ca2f840d1f5448d1abb7b00d109195e54e3c1b66fd48b204d741e6a3e5", size = 8522366 },
+    { url = "https://files.pythonhosted.org/packages/12/0b/f772965ad238214ade1d7b0dcf017dd1320a3db007ac2d4f2a0933a14016/nutpie-0.16.11-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cf006a9f1372dd21147c0ca511702658ac094155b52223ac00ce1f17a800d5d8", size = 9201373 },
+    { url = "https://files.pythonhosted.org/packages/70/42/a27209862624bcd96bbcf06ab2b09f7eedd9190a8094737ae5ec2d8cdc37/nutpie-0.16.11-cp313-cp313-win_amd64.whl", hash = "sha256:3c93116eae6a19d8436408a6b6745fd10c778707552bf3be4c3db4118f308c63", size = 9721668 },
+    { url = "https://files.pythonhosted.org/packages/7f/18/513b1f2bec678bf739447a155414760e374dc772e65510b057768de3c809/nutpie-0.16.11-cp314-cp314-macosx_10_12_x86_64.whl", hash = "sha256:d080abe9510591a4d52cc8095544d6bbc3ec6a54de76ed1771c212c7e6f1acfe", size = 9793255 },
+    { url = "https://files.pythonhosted.org/packages/16/16/9ed76db7fd208c74dd9613ac2c0c9b062d409ae5176122cb904ace61abe2/nutpie-0.16.11-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:740c7b73591583f0383cd1cca63d36abd1d14a3ad2adb3afed07496b09cc4b54", size = 9070376 },
+    { url = "https://files.pythonhosted.org/packages/b9/0c/9f44539e11074cd2a366191fbf5b3c18764c122ac85d19b54e622b6bd4ae/nutpie-0.16.11-cp314-cp314-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:714759c5a6f2bd33e19c96412cedc4c29afe333c1023b8ccb0c7ba07ccbdd1a0", size = 8520110 },
+    { url = "https://files.pythonhosted.org/packages/ce/de/90fcb6511f06980c639e5c4ce905c4abb079ce3118758e4b0ce1aff910a4/nutpie-0.16.11-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:abf6a66c895ccaf884d33aec4093df8af1947c3ca01105bcdf4aaffaa0e89972", size = 9198390 },
+    { url = "https://files.pythonhosted.org/packages/79/58/97c6c2976bb7a483cb8314ddbfbe298fd1957a5d128e70c71ba8e9f34c78/nutpie-0.16.11-cp314-cp314-win_amd64.whl", hash = "sha256:f6b7e49894882fb0d5949be3fdb14c4ec990c9f62ecbf3310060ee53ae8f3530", size = 9717171 },
 ]
 
 [[package]]

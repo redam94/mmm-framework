@@ -376,6 +376,23 @@ class DAGModelBuilder:
         )
         return self
 
+    def bayesian_nutpie(self) -> Self:
+        """
+        Use the nutpie NUTS sampler (Rust backend).
+
+        Returns
+        -------
+        Self
+            The builder instance for chaining.
+        """
+        if self._model_config is None:
+            self._model_config = ModelConfig()
+
+        self._model_config = self._model_config.model_copy(
+            update={"inference_method": InferenceMethod.BAYESIAN_NUTPIE}
+        )
+        return self
+
     def with_draws(self, n_draws: int) -> Self:
         """
         Set number of posterior draws.

@@ -73,7 +73,9 @@ Tighter/asymmetric priors that break an `α↔ρ`-style ridge belong here too.
 **Rung 3 — sampler settings.**
 `target_accept` 0.9 → 0.95 → 0.99 (smaller steps through tight curvature —
 costs time, cures *false* divergences only); more `tune`; more draws/chains
-for a pure-ESS shortfall; `nuts_sampler="numpyro"` for speed. Settings are the
+for a pure-ESS shortfall; a faster backend for speed —
+`fit(nuts_sampler="numpyro"|"nutpie")`, or `.bayesian_numpyro()` /
+`.bayesian_nutpie()` on the config. Settings are the
 *last* resort for divergences, not the first: papering over a divergence with
 `target_accept=0.999` on unfixed geometry just hides the bias.
 
@@ -159,11 +161,11 @@ calibrated".
 
 ## 5. Deferred (known next wins, deliberately not in this change)
 
-- **nutpie routing** — `nutpie>=0.16` is a declared dependency but
-  `fit()` only dispatches `nuts_sampler="numpyro"|"pymc"` (and passing
-  `nuts_sampler` via kwargs collides with the explicit argument). Wiring it in
-  (and its experimental normalizing-flow adaptation) is the highest-value
-  "NUTS fails on geometry" fix after this playbook: a learned
+- ~~**nutpie routing**~~ — **done 2026-07-25** (#171). `InferenceMethod.BAYESIAN_NUTPIE`,
+  `.bayesian_nutpie()` on both builders, and `fit(nuts_sampler="nutpie")` now
+  reach it; the dependency floor moved to `>=0.16.10` (pymc 6 refuses older).
+  Its experimental **normalizing-flow adaptation** is still un-wired and remains
+  the highest-value "NUTS fails on geometry" fix after this playbook: a learned
   reparameterization without touching the model.
 - Pathfinder/ADVI-initialized NUTS (`init=` is hardcoded `"adapt_diag"`).
 - GPU vectorized chains via numpyro for big geo panels.

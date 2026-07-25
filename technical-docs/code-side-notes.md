@@ -5,16 +5,9 @@ documentation site. Each entry: what was found, where, why it matters, suggested
 Add new entries at the top of the relevant section as they surface; move items to
 **Resolved** with the fixing commit when closed.
 
-_Last updated: 2026-06-12._
+_Last updated: 2026-07-25._
 
 ## Open — behavior bugs
-
-1. **`fit()` ignores `ModelConfig.target_accept`.**
-   `src/mmm_framework/model/base.py:3085` (was :1633) hardcodes `target_accept = target_accept or 0.9`
-   and never reads `self.model_config.target_accept`, so
-   `ModelConfigBuilder().with_target_accept(0.95)` silently does nothing unless the value
-   is also passed to `fit()`. Fix: default from the config
-   (`target_accept or self.model_config.target_accept or 0.9`).
 
 2. **`compute_saturation_curves` is half-implemented.**
    Known from the workshop-notebook build (see memory/workshop notes); the docs avoid it
@@ -94,6 +87,18 @@ _Last updated: 2026-06-12._
     there is still no bake-time generation binding HTML constants to recorded outputs.
 
 ## Resolved
+
+- **`fit()` ignored `ModelConfig.target_accept`** (was #1, tracked from 2026-06-12,
+  filed as issue #169): `model/base.py` hardcoded `target_accept = target_accept or 0.9`
+  and never read the config, so `ModelConfigBuilder().with_target_accept(0.95)` was a
+  silent no-op — the one knob the sampling-failure playbook tells you to reach for
+  first. Fixed 2026-07-25: precedence is now explicit `fit()` argument → config →
+  `0.9`, which is byte-identical for an untouched config (the field's own default is
+  `0.9`). Landed with two sibling sampler fixes — `BayesianMMM.fit()` gained an
+  explicit `nuts_sampler` parameter (#170: it previously fell into `**kwargs` and
+  collided with the explicit argument, while `BaseExtendedMMM.fit()` accepted it —
+  the same call worked on one model family and raised on the other) and nutpie
+  became selectable (#171). Pinned by `tests/test_sampler_selection.py`.
 
 - **Learning-diagnostic verdict mislabeled evidence-driven relocation** (raised by
   Matthew 2026-06-12): `diagnostics/learning.py` computed `shift_z` but never used it
