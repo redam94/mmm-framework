@@ -37,6 +37,7 @@ facts rather than docstring assertions.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -131,7 +132,7 @@ def fit_ridge(
     *,
     penalty: float = 0.0,
     penalize: "NDArray[np.bool_] | NDArray[np.floating] | None" = None,
-    nonneg: bool = False,
+    nonneg: "bool | Sequence[str]" = False,
 ) -> RidgeFit:
     """Solve the penalized least-squares problem for a fixed-transform design.
 
@@ -156,10 +157,18 @@ def fit_ridge(
             unpenalized and shrinks media, controls and the geo/product dummies —
             and the geo dummies are **identified by** that choice, since the graph
             has no per-geo intercept.
-        nonneg: Constrain every coefficient the mask penalizes to be ``>= 0``.
-            Unpenalized structural columns (intercept, trend, seasonality) stay
-            free, since a negative trend or seasonal coefficient is meaningful.
-            Solved with ``scipy.optimize.nnls`` on the augmented system.
+        nonneg: Constrain media coefficients to be ``>= 0``. ``True`` constrains
+            the **media block only**; pass an explicit list of column names to
+            choose a different set.
+
+            Media is the one block whose sign is known a priori — advertising
+            does not reduce sales. Controls, geo/product effects, trend and
+            seasonality all have meaningful negative values (a price coefficient
+            *should* be negative, and geo effects are deviations about a pooled
+            intercept), so constraining them would impose an assumption nobody
+            made. Solved with ``scipy.optimize.nnls`` on the augmented system,
+            with the unconstrained columns sign-freed by fitting their positive
+            and negative parts.
 
     Returns:
         The :class:`RidgeFit`.
@@ -185,23 +194,36 @@ def fit_ridge(
     weights = raw.astype(float)
     if np.any(weights < 0):
         raise ValueError("penalize weights must be non-negative")
-    mask = weights > 0
 
     Xa, ya = _augment(X, y_vec, penalty, weights)
 
-    if nonneg:
-        # NNLS constrains EVERY coefficient it solves for, so the unpenalized
-        # structural columns are split off, sign-freed by fitting their positive
-        # and negative parts, and recombined. Cheaper and more robust than a
-        # bespoke active-set solver, and exact.
-        free = ~mask
+    if nonneg is True:
+        block = design.blocks.get("media")
+        constrained = np.zeros(X.shape[1], dtype=bool)
+        if block is not None:
+            constrained[block] = True
+    elif nonneg:
+        names = set(nonneg)
+        unknown = names - set(design.columns)
+        if unknown:
+            raise ValueError(f"nonneg names not in the design: {sorted(unknown)}")
+        constrained = np.array([c in names for c in design.columns], dtype=bool)
+    else:
+        constrained = np.zeros(X.shape[1], dtype=bool)
+
+    if constrained.any():
+        # NNLS constrains EVERY coefficient it solves for, so the unconstrained
+        # columns are split off, sign-freed by fitting their positive and
+        # negative parts, and recombined. Cheaper and more robust than a bespoke
+        # active-set solver, and exact.
+        free = ~constrained
         if free.any():
             Xa = np.hstack([Xa, -Xa[:, free]])
         solution, _ = optimize.nnls(Xa, ya)
         theta = solution[: X.shape[1]].copy()
         if free.any():
             theta[free] -= solution[X.shape[1] :]
-        at_boundary = mask & np.isclose(theta, 0.0)
+        at_boundary = constrained & np.isclose(theta, 0.0)
     else:
         theta, *_ = linalg.lstsq(Xa, ya)
         at_boundary = np.zeros(X.shape[1], dtype=bool)
@@ -221,7 +243,10 @@ def fit_ridge(
         at_boundary=at_boundary,
         columns=list(design.columns),
         diagnostics={
-            "nonneg": nonneg,
+            "nonneg": bool(constrained.any()),
+            "nonneg_columns": [
+                c for c, on in zip(design.columns, constrained, strict=False) if on
+            ],
             "n_obs": int(X.shape[0]),
             "n_params": int(X.shape[1]),
         },

@@ -24,6 +24,9 @@ import pytest
 # Distributions that are NOT part of the lean core install. Keep in sync with
 # pyproject.toml: [agents] extra + server/pyproject.toml dependencies.
 BLOCKED_PACKAGES = [
+    # Optional [frequentist] extra: the constrained estimator imports it lazily,
+    # so the design matrix and the closed-form ridge must work without it.
+    "cvxpy",
     "fastapi",
     "starlette",
     "uvicorn",

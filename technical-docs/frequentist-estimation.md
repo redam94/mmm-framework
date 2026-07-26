@@ -537,15 +537,16 @@ optimality with no local-minimum caveat. Four constraint families:
 
 | family | example |
 |---|---|
-| non-negativity | `β_c ≥ 0` on media (also available without cvxpy via NNLS, §6) |
+| non-negativity | `β_c ≥ 0` on media (also available without cvxpy via NNLS, §6 — the two paths are pinned to agree) |
 | linear equality / inequality on contributions | "these three channels sum to the booked number"; the natural home for reconciling an MMM to an experiment readout as a **hard** constraint rather than a soft calibration likelihood |
 | monotonicity / ordering | `β_TV ≥ β_Display` |
 | sum constraints | total media contribution ≤ a share of KPI |
 
 **Dependency posture.** `cvxpy` goes in an optional `[frequentist]` extra, never
 core. Imported lazily *inside* the function with an actionable `ImportError`
-naming the extra. `tests/test_lean_imports.py` must stay green with the extra
-absent, and ridge (§6) must keep working without it.
+naming the extra — and naming `fit_ridge(nonneg=True)` for the one case that does
+not need it at all. `tests/test_lean_imports.py` blocks `cvxpy` alongside the web
+and LLM stacks, so the invariant is enforced rather than intended.
 
 **Infeasibility raises**, naming which constraint failed — never a silent fall
 back to the unconstrained solution.
@@ -557,8 +558,19 @@ to a point. `ConstrainedFit` marks active constraints, and §8 renders them as
 "at constraint" rather than as an estimate with a CI.
 
 **A hard constraint is an assumption with no uncertainty.** Every interval from a
-constrained fit conditions on the constraint being true. Documented, and stated in
-the report banner.
+constrained fit conditions on the constraint being true, and nothing in the
+bootstrap will tell you it was wrong — a mis-specified equality constraint moves
+the estimate *and* narrows the interval around the wrong place. Documented, and
+stated in the report banner.
+
+**One semantic correction this issue forced.** `fit_ridge(nonneg=True)` originally
+constrained every *penalized* column, which silently included controls and the
+geo/product dummies. That is wrong: media is the one block whose sign is known a
+priori (advertising does not reduce sales), while a price coefficient *should* be
+negative and geo effects are signed deviations about a pooled intercept. `nonneg`
+now constrains the **media block only**, accepts an explicit column list, and the
+cvxpy and scipy paths are pinned to agree on the shared case — a difference
+between them would mean the optional extra silently changes the answer.
 
 ---
 
