@@ -40,7 +40,11 @@ a way no diagnostic here will catch.
   transform search ([#184](https://github.com/redam94/mmm-framework/issues/184))
   optimizes out-of-sample prediction. A specification that predicts better can
   attribute worse. This is the same objection raised against LOO-stacking in the
-  v1.1.0 `spec_curve` fix, and it applies here with full force.
+  v1.1.0 `spec_curve` fix, and it applies here with full force — **and it is now
+  measured rather than feared**: on `make_clean`, whose truth the model can
+  represent exactly, a budget-1000 search finds a candidate scoring 0.0328
+  out-of-sample against the *planted parameters'* own 0.0337, while sitting
+  further from them in λ. See [§4a](#4a-what-the-search-recovers).
 
 ---
 
@@ -296,6 +300,30 @@ evaluates the component Deterministics, and asserts
 If this test drifts, a frequentist fit and a Bayesian fit stop being comparable
 and every benchmark between them becomes meaningless. It is the load-bearing
 test of the whole epic.
+
+### 4a. What the search recovers
+
+Graded against `synth.dgp.make_clean` (the positive control — the model's exact
+generative family, planting per-channel α and λ):
+
+| quantity | result |
+|---|---|
+| **carryover α** | recovered better than chance — mean abs error ~0.17 against ~0.26 for an uninformed draw from the same bounds |
+| **saturation λ** | **not identified by this criterion**. Within the candidates scoring inside 10% of the best, TV's `sat_lam` ranges over ≈0.16–7.8 — nearly the whole search range — while the planted value is 1.6 |
+| **winner vs truth** | at budget 1000 the winner *beats* the planted parameters out-of-sample (0.0328 vs 0.0337) while sitting further from them in λ |
+| **budget** | 60 candidates is demonstrably under-powered (the winner does not reach the truth's own score); the default is 256, ≈2s on a 156-week national panel |
+
+Three consequences the implementation carries rather than merely documents:
+
+* the **near-optimal ensemble**, not the winner, is what should be read — across
+  seeds the single winner occasionally lands no better than chance on α (0.257
+  against a 0.261 baseline) while the ensemble is stable, which is why
+  `SearchResult.spread()` exists and why the recovery test asserts on it;
+* `SearchResult.caveat` is a rendered string, not a docstring, because the
+  winner's λ is not an estimate of anything;
+* this is the strongest available argument for `refit_search=True` in
+  [§5](#5-uncertainty): the selection is a genuine nuisance parameter, not a
+  fact to condition on.
 
 ---
 
@@ -590,7 +618,7 @@ here: the failure mode is a string, so the test is a string test.
 | `_saturation.py` | graph-faithful numpy saturation mirroring `_apply_saturation_pt` guard-for-guard (§4) |
 | `design.py` | `build_design_matrix(panel, alpha, lam, *, model_config, trend_config) -> DesignMatrix` |
 | `ridge.py` | `fit_ridge(design, y, *, penalty, penalize=None, nonneg=False) -> RidgeFit` |
-| `search.py` | `search_transforms(panel, *, objective, budget, strategy="random", seed) -> SearchResult` |
+| `search.py` | `search_transforms(panel, *, model_config, trend_config, objective, budget, strategy, seed) -> SearchResult` |
 | `bootstrap.py` | `bootstrap_fit(panel, *, n_boot, block_length, refit_search, seed) -> (az.InferenceData, dict)` |
 | `constrained.py` | `fit_constrained(design, y, *, constraints, penalty, solver=None) -> ConstrainedFit` — lazy `cvxpy` |
 
