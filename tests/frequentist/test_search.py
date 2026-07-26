@@ -46,6 +46,7 @@ from mmm_framework.config.enums import AdstockType, SaturationType
 from mmm_framework.frequentist.design import UnsupportedModelError, build_design_matrix
 from mmm_framework.frequentist.search import (
     ADSTOCK_BOUNDS,
+    HALF_SATURATION_FRACTION,
     SATURATION_BOUNDS,
     search_transforms,
 )
@@ -80,10 +81,20 @@ class TestBoundsCoverEveryFamily:
     def test_saturation_bounds_cover_every_declared_family(self):
         assert set(SATURATION_BOUNDS) == set(SaturationType)
 
-    def test_logistic_upper_bound_stays_below_the_graphs_exponent_clip(self):
-        """Past `lam * x = 20` the curve is numerically flat and lam stops being
-        identified; searching there would report a meaningless winner."""
-        assert SATURATION_BOUNDS[SaturationType.LOGISTIC]["sat_lam"][1] <= 20.0
+    def test_logistic_bound_is_derived_from_the_half_saturation_fraction(self):
+        """Bounds live in DATA units: the elbow must sit inside observed spend.
+
+        Media is normalized by the channel max, so a half-saturation fraction g
+        maps to `lam = ln(2)/g` for `sat(x) = 1 - exp(-lam*x)`. Deriving the
+        bound rather than writing it down is what keeps the saturation families
+        agreeing about where the curve may bend.
+        """
+        lo, hi = SATURATION_BOUNDS[SaturationType.LOGISTIC]["sat_lam"]
+        g_lo, g_hi = HALF_SATURATION_FRACTION
+        assert lo == pytest.approx(np.log(2) / g_hi)
+        assert hi == pytest.approx(np.log(2) / g_lo)
+        # Comfortably inside the graph's exponent clip (lam * x = 20).
+        assert hi <= 20.0
 
 
 class TestSearchContract:
@@ -317,21 +328,67 @@ class TestRecoveryOnPlantedTruth:
             )
 
     def test_saturation_is_not_identified_by_predictive_error(self, panel):
-        """The near-optimal set spans nearly the whole lambda range.
+        """The near-optimal set spans essentially the whole allowed window.
 
-        This is the executable form of the module's caveat: candidates whose
+        The executable form of the module's caveat: candidates whose
         out-of-sample error is within 10% of the best disagree about TV's
-        saturation from roughly 0.2 to 7.8, while the planted value is 1.6.
-        Selecting on prediction does not pin this parameter, and any surface
-        that renders the winner's lambda as an estimate is overclaiming.
+        saturation across nearly the entire search range. Any surface rendering
+        the winner's lambda as an estimate is overclaiming.
+
+        Asserted as a FRACTION of the bound rather than an absolute width, so it
+        stays meaningful when the bound changes. That matters: anchoring the
+        bound to observed spend (HALF_SATURATION_FRACTION) shrank the window from
+        80x to 3.3x and cut lambda error fivefold — but it did not make the
+        parameter identifiable, and this test is what would notice if someone
+        later mistook the narrower bound for identification.
         """
+        lo, hi = SATURATION_BOUNDS[SaturationType.LOGISTIC]["sat_lam"]
         res = self._run(panel, 0)
         lams = [c.lam["TV"]["sat_lam"] for c in res.spread(0.10)]
         assert len(lams) >= 5, "too few near-optimal candidates to judge"
-        assert max(lams) - min(lams) > 3.0, (
-            f"near-optimal lambda range {min(lams):.2f}-{max(lams):.2f} is "
-            "narrower than measured; if saturation has become identifiable the "
-            "module docstring and caveat need revisiting"
+        covered = (max(lams) - min(lams)) / (hi - lo)
+        assert covered > 0.75, (
+            f"near-optimal lambda spans {min(lams):.2f}-{max(lams):.2f}, only "
+            f"{covered:.0%} of the allowed window [{lo:.2f}, {hi:.2f}]. If "
+            "saturation has become identifiable, the module docstring and the "
+            "caveat both need revisiting."
+        )
+
+    def test_anchoring_the_bound_to_observed_spend_improves_recovery(self, panel):
+        """Robyn's mechanism, measured here: bound the elbow, not the parameter.
+
+        `HALF_SATURATION_FRACTION` puts the half-saturation point inside the
+        observed spend range, which is what every production MMM does — Robyn
+        via `inflexion = max(x) * gamma`, Meridian by scaling `ec` to median
+        spend. It is CONTAINMENT, not identification (see the test above), but
+        the containment is worth a great deal: it stops the search proposing
+        curves no analyst would entertain.
+        """
+        lo, hi = SATURATION_BOUNDS[SaturationType.LOGISTIC]["sat_lam"]
+        wide = {"sat_lam": (0.1, 8.0)}  # the absolute bound this replaced
+
+        def err(bounds):
+            original = SATURATION_BOUNDS[SaturationType.LOGISTIC]
+            SATURATION_BOUNDS[SaturationType.LOGISTIC] = bounds
+            try:
+                res = self._run(panel, 0)
+                near = res.spread(0.10)
+                return float(
+                    np.mean(
+                        [
+                            [abs(c.lam[ch]["sat_lam"] - _LAM[ch]) for ch in _LAM]
+                            for c in near
+                        ]
+                    )
+                )
+            finally:
+                SATURATION_BOUNDS[SaturationType.LOGISTIC] = original
+
+        anchored = err({"sat_lam": (lo, hi)})
+        absolute = err(wide)
+        assert anchored < absolute / 2, (
+            f"anchored bound gives lambda error {anchored:.3f} vs {absolute:.3f} "
+            "for the absolute bound — the measured improvement was ~5x"
         )
 
     def test_the_criterion_cannot_separate_the_winner_from_the_truth(self, panel):

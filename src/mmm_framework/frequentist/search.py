@@ -58,6 +58,34 @@ represent exactly (``tests/frequentist/test_search.py``):
 That last point is the caveat above, measured rather than asserted. Read the
 winner as one draw from :meth:`SearchResult.spread`, not as an estimate of the
 transforms.
+
+Containment, which is not identification
+----------------------------------------
+None of this is particular to the frequentist path or to this codebase. Jin et
+al. (Google, 2017) showed the Hill parameters are "essentially unidentifiable in
+some scenarios" and that the half-saturation posterior median averages roughly
+twice the truth at two years of weekly data, concentrating only at *sixty*.
+Dew et al. (2024) show predictive fit — cross-validation included — cannot
+arbitrate between observationally equivalent response specifications. So no
+production MMM identifies saturation from the sales likelihood; each one
+accommodates the fact.
+
+The accommodation that transfers here is **bounding in data units**, which is
+what :data:`HALF_SATURATION_FRACTION` does. Measured on ``make_clean`` over four
+seeds, moving from an absolute ``lam`` bound to the half-saturation fraction cuts
+mean absolute ``lam`` error from **2.08 to 0.42** — a 5x improvement — at no cost
+in out-of-sample score, and the run-to-run spread collapses from 1.77–2.42 to
+0.39–0.44.
+
+**It does not identify the parameter.** Inside the new bound the near-optimal set
+still spans essentially the whole window (0.70–2.28 of a 0.69–2.31 range): the
+criterion still cannot order ``lam``, it simply can no longer propose a curve no
+analyst would entertain. What genuinely identifies curvature is **dose spread** —
+a rank condition on the spend design, not a property of any estimator. A single
+lift test at one spend level yields one equation in two unknowns and leaves
+``lam`` unidentified at any sample size; ``planning/identification.py`` reaches
+the same conclusion from a Laplace bound and refuses to claim identification
+below three in-support levels.
 """
 
 from __future__ import annotations
@@ -92,15 +120,45 @@ ADSTOCK_BOUNDS: dict[AdstockType, dict[str, tuple[float, float]]] = {
     AdstockType.NONE: {},
 }
 
-#: Search bounds per saturation family. Media is normalized to roughly ``[0, 1]``
-#: before saturation, so these are on that scale. The logistic upper bound sits
-#: below the graph's exponent clip (``lam * x = 20``), past which the curve is
-#: numerically flat and the parameter stops being identified.
+#: Half-saturation point as a fraction of the channel's observed maximum. This
+#: is the interval every production MMM bounds saturation over, and bounding in
+#: *data units* rather than in the parameter's own units is the single change
+#: that most improves recovery (see the module docstring's measurement). Robyn
+#: hard-codes ``inflexion = max(x) * gamma`` and recommends ``gamma`` in
+#: ``[0.3, 1.0]``; Meridian scales so its ``ec`` prior is centred on the median
+#: non-zero spend. Media here is already normalized by the channel max, so this
+#: fraction *is* the half-saturation point on the modelled scale.
+HALF_SATURATION_FRACTION: tuple[float, float] = (0.3, 1.0)
+
+#: Search bounds per saturation family, on the normalized (~[0, 1]) media scale.
+#: Every entry is derived from :data:`HALF_SATURATION_FRACTION` so the families
+#: agree about where the curve is allowed to bend:
+#:
+#: * ``logistic`` — ``sat(x) = 1 - exp(-lam*x)`` has its half-saturation point at
+#:   ``ln(2)/lam``, so a fraction ``g`` maps to ``lam = ln(2)/g``. The resulting
+#:   ``[0.69, 2.31]`` is a 3.3x window; the absolute ``[0.1, 8.0]`` it replaced
+#:   was 80x and let the search wander to curves no analyst would entertain.
+#: * ``michaelis_menten`` / ``tanh`` / ``hill`` — ``sat_half`` already *is* the
+#:   half-saturation point, so the fraction applies directly.
+#: * ``root`` — has no half-saturation point (no asymptote); the exponent's own
+#:   concavity range is the natural bound.
+#:
+#: The Hill *slope* stays free but narrow. Meridian fixes it outright
+#: (``Deterministic(1)``, "difficult to learn because of identifiability
+#: reasons"); this keeps it estimable while refusing the extremes.
 SATURATION_BOUNDS: dict[SaturationType, dict[str, tuple[float, float]]] = {
-    SaturationType.LOGISTIC: {"sat_lam": (0.1, 8.0)},
-    SaturationType.HILL: {"sat_half": (0.05, 1.5), "sat_slope": (0.3, 4.0)},
-    SaturationType.MICHAELIS_MENTEN: {"sat_half": (0.05, 2.0)},
-    SaturationType.TANH: {"sat_half": (0.05, 2.0)},
+    SaturationType.LOGISTIC: {
+        "sat_lam": (
+            float(np.log(2) / HALF_SATURATION_FRACTION[1]),
+            float(np.log(2) / HALF_SATURATION_FRACTION[0]),
+        )
+    },
+    SaturationType.HILL: {
+        "sat_half": HALF_SATURATION_FRACTION,
+        "sat_slope": (0.5, 3.0),
+    },
+    SaturationType.MICHAELIS_MENTEN: {"sat_half": HALF_SATURATION_FRACTION},
+    SaturationType.TANH: {"sat_half": HALF_SATURATION_FRACTION},
     SaturationType.ROOT: {"sat_exponent": (0.1, 1.0)},
     SaturationType.NONE: {},
 }

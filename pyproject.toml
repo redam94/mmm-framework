@@ -72,6 +72,16 @@ agents = [
     "pypdf>=4.0.0",        # KB document ingestion
     "python-docx>=1.1.0",  # KB document ingestion
 ]
+# Hard-constrained frequentist estimation (mmm_framework.frequentist.constrained).
+# The ONLY capability in the frequentist path with no Bayesian equivalent: a prior
+# makes a negative coefficient unlikely, a convex program makes it impossible.
+# Lazy-imported inside fit_constrained, so ridge (#185) and the design matrix
+# (#183) keep working with this extra absent -- pinned by tests/test_lean_imports.py,
+# which blocks cvxpy alongside the web and LLM stacks.
+# Install with:  uv sync --extra frequentist
+frequentist = [
+    "cvxpy>=1.5",
+]
 # Google Cloud data integrations (GCS object reads + BigQuery). Lazy-imported;
 # the core framework never requires these. Install with:  uv sync --extra gcp
 gcp = [
@@ -104,6 +114,7 @@ dev = [
     # Dev installs the full platform: core + agent stack + the API server
     # (workspace member), so the whole test suite runs from one sync.
     "mmm-framework[agents]",
+    "mmm-framework[frequentist]",
     "mmm-framework-server",
     "moto>=5.0.0",
     "mypy>=1.11",

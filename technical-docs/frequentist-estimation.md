@@ -303,6 +303,17 @@ test of the whole epic.
 
 ### 4a. What the search recovers
 
+![Predictive error does not identify saturation](../nbs/artifacts/saturation_identifiability.png)
+
+*The response curves the criterion cannot separate, under two bound regimes.
+Left: bounding λ in its own units lets the search entertain curves from nearly
+linear to almost fully saturated. Right: bounding the **elbow** to observed spend
+— Robyn's `inflexion = max(x)·γ`, Meridian's `ec` scaled to median spend — cuts
+mean |λ error| from 2.14 to 0.41. The right panel still shows 51 candidates the
+criterion cannot order, which is the point: this is **containment, not
+identification**. Regenerate with
+`nbs/builders/build_saturation_identifiability.py`.*
+
 Graded against `synth.dgp.make_clean` (the positive control — the model's exact
 generative family, planting per-channel α and λ):
 
@@ -312,6 +323,7 @@ generative family, planting per-channel α and λ):
 | **saturation λ** | **not identified by this criterion**. Within the candidates scoring inside 10% of the best, TV's `sat_lam` ranges over ≈0.16–7.8 — nearly the whole search range — while the planted value is 1.6 |
 | **winner vs truth** | at budget 1000 the winner *beats* the planted parameters out-of-sample (0.0328 vs 0.0337) while sitting further from them in λ |
 | **budget** | 60 candidates is demonstrably under-powered (the winner does not reach the truth's own score); the default is 256, ≈2s on a 156-week national panel |
+| **bounds** | anchoring the elbow to observed spend (`HALF_SATURATION_FRACTION`) cuts mean \|λ error\| from **2.08 to 0.42** over four seeds at no cost in score, and collapses run-to-run spread from 1.77–2.42 to 0.39–0.44 |
 
 Three consequences the implementation carries rather than merely documents:
 
@@ -324,6 +336,26 @@ Three consequences the implementation carries rather than merely documents:
 * this is the strongest available argument for `refit_search=True` in
   [§5](#5-uncertainty): the selection is a genuine nuisance parameter, not a
   fact to condition on.
+
+**None of this is particular to this codebase, and the literature is unusually
+clear.** Jin et al. (Google, 2017) showed the Hill parameters are "essentially
+unidentifiable in some scenarios" — exhibiting visually identical curves from very
+different `(K, S, β)` — and that the half-saturation posterior median averages
+roughly twice the truth at two years of weekly data, concentrating only at *sixty*.
+Dew et al. (2024) prove the corollary we hit: predictive fit, cross-validation
+included, cannot arbitrate between observationally equivalent response
+specifications even under exogenous spend. Chan & Perry report five plausible MMMs
+at R² 0.98–0.99 and 6–8% out-of-sample MAPE disagreeing about achievable sales by
+up to 50%.
+
+So no production MMM identifies saturation from the sales likelihood; each is a
+different accommodation. The one that transfers here is **bounding in data units**,
+which is what `HALF_SATURATION_FRACTION` does. What would genuinely identify
+curvature is **dose spread** — a rank condition on the spend design, not a property
+of any estimator. A single lift test at one spend level yields one equation in two
+unknowns and leaves λ unidentified at any sample size, which is why
+`planning/identification.py` already refuses to claim identification below three
+in-support levels.
 
 ---
 
@@ -361,17 +393,40 @@ correlation that makes a panel more informative than one national series.
 ### Post-selection inference
 
 If `(α̂, λ̂)` and the penalty are chosen once by search and every replicate
-conditions on that choice, the intervals ignore selection uncertainty and are
-again too narrow. Re-running the search inside each replicate is correct and
-costs `n_boot × search`.
+conditions on that choice, the intervals ignore selection uncertainty. Re-running
+the search inside each replicate is correct and costs `n_boot × search`.
 
-**Decision: `refit_search=False` by default, and the cheap path is labelled, not
-silently shipped.** The label rides in three places so it cannot be lost:
+**This is a correctness tradeoff, not a precision tradeoff, and the distinction
+matters.** A cheaper interval that is merely *wider than necessary* costs the user
+statistical power — annoying, but conservative and self-announcing. This is the
+opposite: conditioning on the selected transforms produces an interval that is
+**too narrow**, and narrowness reads as confidence. The user is not told they
+bought speed; they are told the answer is more certain than it is. The failure is
+silent and points the wrong way.
+
+The measurement in [§4a](#4a-what-the-search-recovers) is what makes this concrete
+rather than theoretical. λ is not identified by the selection criterion at all —
+candidates spanning ≈0.16–7.8 score within 10% of the winner. So the quantity being
+conditioned on is not a well-estimated parameter with a little noise around it; it
+is a **near-arbitrary pick from a set the data cannot order**. A conditional
+interval treats that pick as known, which means the reported uncertainty omits the
+single largest source of uncertainty in the fit.
+
+**Decision unchanged: `refit_search=False` by default, and the cheap path is
+labelled, not silently shipped.** The reasoning is that an unlabelled honest-but-
+unaffordable default helps nobody — a `refit_search=True` default that takes hours
+gets switched off, and then the label is gone too. What makes the cheap default
+defensible is that its deficiency is **named at every surface that renders the
+number**, so a reader can discount it, rather than being invited to trust it.
+
+The label therefore rides in three places so it cannot be lost:
 `diagnostics["interval_semantics"]`, the `InferenceData` attrs, and every rendered
 surface ([§8](#8-the-gating-checklist)). `refit_search=True` is the documented
 requirement for any interval that will be published, and the coverage table in
-[#186](https://github.com/redam94/mmm-framework/issues/186) must report **both**
-so the size of the gap is visible rather than asserted.
+[#186](https://github.com/redam94/mmm-framework/issues/186) must report **both** —
+because the size of the gap between them is the only honest way to know whether
+the cheap path was acceptable on a given dataset, and that is a question about the
+data, not one the default can answer in advance.
 
 ### Ridge is biased, and no interval method fixes that
 
@@ -505,15 +560,16 @@ optimality with no local-minimum caveat. Four constraint families:
 
 | family | example |
 |---|---|
-| non-negativity | `β_c ≥ 0` on media (also available without cvxpy via NNLS, §6) |
+| non-negativity | `β_c ≥ 0` on media (also available without cvxpy via NNLS, §6 — the two paths are pinned to agree) |
 | linear equality / inequality on contributions | "these three channels sum to the booked number"; the natural home for reconciling an MMM to an experiment readout as a **hard** constraint rather than a soft calibration likelihood |
 | monotonicity / ordering | `β_TV ≥ β_Display` |
 | sum constraints | total media contribution ≤ a share of KPI |
 
 **Dependency posture.** `cvxpy` goes in an optional `[frequentist]` extra, never
 core. Imported lazily *inside* the function with an actionable `ImportError`
-naming the extra. `tests/test_lean_imports.py` must stay green with the extra
-absent, and ridge (§6) must keep working without it.
+naming the extra — and naming `fit_ridge(nonneg=True)` for the one case that does
+not need it at all. `tests/test_lean_imports.py` blocks `cvxpy` alongside the web
+and LLM stacks, so the invariant is enforced rather than intended.
 
 **Infeasibility raises**, naming which constraint failed — never a silent fall
 back to the unconstrained solution.
@@ -525,8 +581,19 @@ to a point. `ConstrainedFit` marks active constraints, and §8 renders them as
 "at constraint" rather than as an estimate with a CI.
 
 **A hard constraint is an assumption with no uncertainty.** Every interval from a
-constrained fit conditions on the constraint being true. Documented, and stated in
-the report banner.
+constrained fit conditions on the constraint being true, and nothing in the
+bootstrap will tell you it was wrong — a mis-specified equality constraint moves
+the estimate *and* narrows the interval around the wrong place. Documented, and
+stated in the report banner.
+
+**One semantic correction this issue forced.** `fit_ridge(nonneg=True)` originally
+constrained every *penalized* column, which silently included controls and the
+geo/product dummies. That is wrong: media is the one block whose sign is known a
+priori (advertising does not reduce sales), while a price coefficient *should* be
+negative and geo effects are signed deviations about a pooled intercept. `nonneg`
+now constrains the **media block only**, accepts an explicit column list, and the
+cvxpy and scipy paths are pinned to agree on the shared case — a difference
+between them would mean the optional extra silently changes the answer.
 
 ---
 
