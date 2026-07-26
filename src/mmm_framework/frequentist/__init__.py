@@ -11,5 +11,16 @@ lean-core invariant (``tests/test_lean_imports.py``) holds with the optional
 """
 
 from ._transforms import adstock_panel, adstock_series, saturate
+from .design import DesignMatrix, UnsupportedModelError, build_design_matrix
+from .ridge import RidgeFit, fit_ridge
 
-__all__ = ["adstock_panel", "adstock_series", "saturate"]
+__all__ = [
+    "DesignMatrix",
+    "RidgeFit",
+    "UnsupportedModelError",
+    "adstock_panel",
+    "adstock_series",
+    "build_design_matrix",
+    "fit_ridge",
+    "saturate",
+]
