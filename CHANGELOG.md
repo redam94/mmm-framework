@@ -159,6 +159,9 @@ frozen public contract breaks, and the contract itself is pinned by
   one restriction every MMM wants and the one a prior can only express softly. It needs the
   optional extra (`pip install 'mmm-framework[frequentist]'`).
 
+  The Excel template's `Inference Method` cell accepts both values too — it had its own hard
+  refusal, added while they were unimplemented, which would have outlived the thing it gated.
+
 - **The frequentist path, graded — and the verdict written down.** Epic
   [#180](https://github.com/redam94/mmm-framework/issues/180) opened by challenging itself
   ("ridge is MAP with Gaussian priors, so this risks shipping a synonym").

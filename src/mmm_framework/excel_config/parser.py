@@ -489,21 +489,20 @@ def _build_model_config(model_settings: dict[str, Any]) -> ModelConfig:
     inf_str = _to_str(
         model_settings.get("Inference Method", "bayesian_numpyro")
     ).lower()
+    # The frequentist methods select a different PARADIGM, not a NUTS backend:
+    # a penalized point estimate with bootstrap CONFIDENCE intervals and no
+    # posterior. They became live in #188; the Chains/Draws/Tune/Target Accept
+    # cells below are simply not read for them.
     inf_map = {
         "bayesian_numpyro": InferenceMethod.BAYESIAN_NUMPYRO,
         "bayesian_pymc": InferenceMethod.BAYESIAN_PYMC,
         "bayesian_nutpie": InferenceMethod.BAYESIAN_NUTPIE,
+        "frequentist_ridge": InferenceMethod.FREQUENTIST_RIDGE,
+        "frequentist_cvxpy": InferenceMethod.FREQUENTIST_CVXPY,
     }
-    # The frequentist methods are declared but unimplemented (#180). Reject at
-    # PARSE time rather than accepting the cell and failing at fit time -- the
-    # value came from a spreadsheet, so the error belongs next to the cell.
-    if inf_str in {"frequentist_ridge", "frequentist_cvxpy"}:
-        raise TemplateValidationError(
-            f"Inference Method {inf_str!r} is not implemented. Use "
-            "'bayesian_numpyro', 'bayesian_pymc' or 'bayesian_nutpie'; for a "
-            "fast penalized point estimate set Fit Method to 'map' instead. "
-            "Tracking: https://github.com/redam94/mmm-framework/issues/180"
-        )
+    # An unrecognized value still falls back to the Bayesian default rather than
+    # raising -- the value came from a spreadsheet cell and the historical
+    # behaviour for a typo is a working model, not a failed parse.
     inference = inf_map.get(inf_str, InferenceMethod.BAYESIAN_NUMPYRO)
 
     # MCMC settings

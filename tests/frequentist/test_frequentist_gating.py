@@ -271,6 +271,20 @@ class TestProvenanceCarriesOutward:
         assert meta["estimator"] == "ridge"
         assert meta["interval_semantics"] == "conditional_on_selection"
 
+    def test_excel_template_can_select_the_paradigm(self):
+        """The spreadsheet path had its own hard refusal, added when the methods
+        were unimplemented. A gate that outlives the thing it gated is the same
+        class of stale as an unlabelled interval, one surface removed."""
+        from mmm_framework.excel_config.parser import _build_model_config
+
+        for value, expected in (
+            ("frequentist_ridge", InferenceMethod.FREQUENTIST_RIDGE),
+            ("frequentist_cvxpy", InferenceMethod.FREQUENTIST_CVXPY),
+            ("bayesian_nutpie", InferenceMethod.BAYESIAN_NUTPIE),
+        ):
+            cfg = _build_model_config({"Inference Method": value})
+            assert cfg.inference_method is expected, value
+
     def test_unfitted_frequentist_config_claims_no_fit_method(self):
         """The prefit surfaces read ``model_config.fit_method`` on a model that
         has not been fitted yet. Leaving the ``"nuts"`` default there makes a
