@@ -159,6 +159,43 @@ frozen public contract breaks, and the contract itself is pinned by
   one restriction every MMM wants and the one a prior can only express softly. It needs the
   optional extra (`pip install 'mmm-framework[frequentist]'`).
 
+- **The frequentist path, graded — and the verdict written down.** Epic
+  [#180](https://github.com/redam94/mmm-framework/issues/180) opened by challenging itself
+  ("ridge is MAP with Gaussian priors, so this risks shipping a synonym").
+  [#189](https://github.com/redam94/mmm-framework/issues/189) answers it with numbers on five
+  synthetic worlds with answer keys, and records the answer where it is unflattering.
+
+  Mean |relative error| on per-channel contribution (NUTS at 4 × 1000; full table and signed
+  bias in `tests/frequentist/test_recovery_comparison.py`):
+
+  | world | ridge | map | nuts |
+  |---|---|---|---|
+  | `clean` (control) | **0.052** | 0.073 | 0.076 |
+  | `realistic` | 0.317 | 0.216 | **0.182** |
+  | `unobserved_confounding` | 0.670 | **0.297** | 0.302 |
+  | `adstock_misspec` | 0.959 | 0.955 | **0.809** |
+  | `saturation_misspec` | 0.688 | 0.399 | **0.389** |
+
+  Runtime: ridge 1.7–2.9 s, MAP 2.6–5.6 s, NUTS 8.9–19.6 s.
+
+  **Ridge is not a synonym for MAP** — the two differ by roughly 2× on three of five worlds
+  and in opposite directions on `adstock_misspec`. **But it is not more accurate.** It wins
+  only on the positive control, and under unobserved confounding it over-credits media by
+  **+41.6%** against MAP's +5.9% — because the shipped `Gamma` / `LogNormal` media priors
+  shrink media effects in a way that happens to counteract back-door bias, and a penalty
+  selected by out-of-sample error carries no such opinion.
+
+  **So the honest recommendation is: use the Bayesian path.** Reach for the frequentist one
+  when you need a **hard constraint** a prior cannot express (β ≥ 0, an ordering, a
+  contribution total that must match a booked number — the epic's strongest justification),
+  a **fast second opinion** for triangulation, or iteration speed while a specification is
+  still moving. Do not reach for it to publish intervals, to encode knowledge, or on data you
+  suspect of confounding.
+
+  Ships with `nbs/demos/frequentist_vs_bayesian.ipynb` — the **paradigm** axis, sibling to
+  `approximate_posteriors.ipynb` (method) and `nuts_backends.ipynb` (backend) — which measures
+  all of the above at bake time rather than quoting it.
+
 - **`run_recovery_coverage(refit=...)`** — estimator injection for
   `diagnostics/coverage.py`, which was hard-wired to `pm.observe` + NUTS. Supplying a callable
   grades a non-PyMC estimator against the same θ*, the same simulated datasets and the same

@@ -94,6 +94,51 @@ With that settled, the three things this path adds:
 **Non-goal.** This does not replace the Bayesian path as the recommended default.
 It is a fast, constrained alternative and a triangulation tool.
 
+### 1a. The verdict, after implementation
+
+The spec above was written before any of it existed. [#189](https://github.com/redam94/mmm-framework/issues/189)
+graded all three estimators against planted truth to check whether the
+justification survived contact, and it partly did not. Recorded here rather than
+in a commit message, because the epic asked for the answer plainly.
+
+Mean |relative error| on per-channel contribution, five worlds, NUTS at 4 × 1000
+(full table and signed bias in `tests/frequentist/test_recovery_comparison.py`):
+
+| world | ridge | map | nuts |
+|---|---|---|---|
+| `clean` (control) | **0.052** | 0.073 | 0.076 |
+| `realistic` | 0.317 | 0.216 | **0.182** |
+| `unobserved_confounding` | 0.670 | **0.297** | 0.302 |
+| `adstock_misspec` | 0.959 | 0.955 | **0.809** |
+| `saturation_misspec` | 0.688 | 0.399 | **0.389** |
+
+Runtime: ridge 1.7–2.9 s, MAP 2.6–5.6 s, NUTS 8.9–19.6 s.
+
+**Ridge is not a synonym for MAP — confirmed, and by a wider margin than the
+prior-family table above predicts.** The two differ by roughly 2× on three of
+five worlds and in opposite directions on `adstock_misspec`.
+
+**But it is not more accurate, and on one world it is much worse.** Under
+unobserved confounding ridge over-credits media by **+41.6%** against MAP's
++5.9%. The mechanism is understood: the shipped media priors shrink media
+effects toward a modest value, and under a back-door path that shrinkage happens
+to counteract the upward bias. A penalty selected by out-of-sample error carries
+no such opinion, so the confounding passes through. The Bayesian path's edge on
+these worlds is *regularization it was told to apply*, not better estimation —
+which is worth knowing in both directions.
+
+So of the three justifications above, **(3) hard constraints is the one that
+stands unqualified**. (1) transform search is genuinely a different estimator but
+buys accuracy only on the positive control. (2) frequentist intervals are honest
+but, per [§5](#5-uncertainty), narrower than they should be by default and
+subject to shrinkage bias.
+
+**When to reach for it:** a constraint a prior cannot express; a fast second
+opinion whose disagreement with the Bayesian fit is a specification question
+worth chasing; iteration speed while a specification is still moving. **When not
+to:** to publish intervals, to encode knowledge (calibration, ROI priors,
+pooling), or on data you suspect of confounding.
+
 ---
 
 ## 2. The premise, verified: `mu` is `X @ θ`
