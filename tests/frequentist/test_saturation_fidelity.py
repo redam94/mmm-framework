@@ -53,7 +53,9 @@ def _graph(kind: SaturationType, params: dict) -> np.ndarray:
     return _apply_saturation_pt(pt.constant(X), kind, params).eval()
 
 
-@pytest.mark.parametrize(("kind", "params"), CASES, ids=lambda v: getattr(v, "value", None))
+@pytest.mark.parametrize(
+    ("kind", "params"), CASES, ids=lambda v: getattr(v, "value", None)
+)
 def test_matches_the_graph_exactly(kind, params):
     """Bit-for-bit agreement, not merely 'close enough'."""
     np.testing.assert_allclose(
