@@ -5,6 +5,13 @@ All notable changes to `mmm-framework` are documented here. The project follows
 frozen public contract breaks, and the contract itself is pinned by
 `tests/test_api_contracts.py` and `tests/test_lean_imports.py`.
 
+> **Maintainers:** every entry added here must also be mirrored into
+> [`docs/changelog.html`](docs/changelog.html) — the public documentation site — in the same PR
+> as the version bump, including moving the `Current` chip onto the new release. That page is
+> hand-authored HTML; nothing generates it from this file and no test gates it, so it rots
+> silently (1.1.0 and 1.2.0 both shipped while the site still announced 1.0.0). The full
+> checklist is in `CLAUDE.md` § "Release checklist".
+
 ## [1.2.0] — 2026-07-25
 
 Sampler selection worked in one place and silently failed in four. Fixing that required new

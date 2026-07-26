@@ -136,7 +136,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-10",
+          "dateModified": "2026-07-25",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/changelog.html#breadcrumb"
           },
@@ -186,8 +186,8 @@
         <main class="main-content">
             <h1 id="status">Versioning &amp; Changelog</h1>
             <p class="lead">
-                The MMM Framework is at <strong>version 1.0.0</strong> &mdash; the first stable release,
-                published on <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>
+                The MMM Framework is at <strong>version 1.2.0</strong>, published on
+                <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>
                 (<code>pip install mmm-framework</code>).
                 From 1.0.0 on, the project follows <a href="https://semver.org" target="_blank" rel="noopener">semantic
                 versioning</a> strictly and the public contracts documented on the
@@ -204,7 +204,7 @@
                     (see <a href="rest-api.html">REST API reference</a>). Modules marked
                     <em>Experimental</em> below may still change in minor releases &mdash; they are
                     flagged in the stability grid and in their docstrings. Pinning
-                    (<code>pip install mmm-framework==1.0.0</code>) remains good production hygiene.
+                    (<code>pip install mmm-framework==1.2.0</code>) remains good production hygiene.
                 </p>
             </div>
 
@@ -270,13 +270,77 @@
 
             <h2 id="releases">Release Notes</h2>
 
-            <p>For ongoing release tracking, see the <a href="https://github.com/redam94/mmm-framework/releases" target="_blank" rel="noopener">GitHub Releases page</a>. The history below summarises each version.</p>
+            <p>For ongoing release tracking, see the <a href="https://github.com/redam94/mmm-framework/releases" target="_blank" rel="noopener">GitHub Releases page</a>; the full per-release detail lives in <a href="https://github.com/redam94/mmm-framework/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG.md</a>. The history below summarises each version.</p>
+
+            <div class="release">
+                <div class="release-header">
+                    <span class="release-version">1.2.0</span>
+                    <span class="release-date">2026-07-25</span>
+                    <span class="release-tag">Current</span>
+                </div>
+                <p style="margin: 0.5rem 0 0.5rem 0;">
+                    Knobs that read as configuration and were no-ops. Sampler selection worked in one
+                    place and silently failed in four; fixing it required new public API &mdash; a third
+                    NUTS backend that was already a declared dependency but that no code path could
+                    reach &mdash; so this is a minor rather than a patch bump. If you set
+                    <code>target_accept</code>, selected a frequentist inference method, or read a
+                    multi-outcome cross-effect table, your results change.
+                </p>
+                <div class="callout warning" style="margin: 0.75rem 0; padding: 0.9rem 1.1rem; border-left: 4px solid var(--color-warning); background: rgba(212,168,106,0.08); border-radius: 8px;">
+                    <strong>Behavioral change:</strong> <code>frequentist_ridge</code> and
+                    <code>frequentist_cvxpy</code> now <strong>raise</strong> instead of silently
+                    fitting a full Bayesian posterior. Neither has ever been implemented &mdash;
+                    <code>fit()</code> dispatches on the fit method, not the inference method &mdash; so
+                    selecting one asked for a fast frequentist point estimate and got MCMC with no
+                    indication the request had been ignored. Use <code>fit(method="map")</code> for the
+                    fast penalized estimate, or an explicit Bayesian method to keep exactly what you
+                    were already getting. The enum values are retained (removing them would break the
+                    frozen-enum contract); they become live, not removed, when
+                    <a href="https://github.com/redam94/mmm-framework/issues/180" target="_blank" rel="noopener">the frequentist estimation path</a>
+                    lands. Also raises the <code>nutpie</code> floor to <code>&gt;=0.16.10</code> &mdash;
+                    PyMC&nbsp;6 raises <code>ImportError</code> below it, so the old pin shipped a sampler
+                    that could not have started.
+                </div>
+                <ul>
+                    <li><strong><code>ModelConfig.target_accept</code> is now honored by <code>fit()</code></strong> &mdash; the fallback went straight to a literal <code>0.9</code>, so <code>.with_target_accept(0.95)</code> was a silent no-op: the first knob the sampling-failure playbook tells you to reach for, doing nothing about divergences because it never reached <code>pm.sample</code>. Precedence is now explicit argument &rarr; config &rarr; <code>0.9</code>; an untouched config still samples byte-identically to 1.1.0.</li>
+                    <li><strong><code>fit(nuts_sampler=...)</code> no longer raises on the core model</strong> &mdash; the keyword fell into <code>**kwargs</code> and collided with the argument already passed to <code>pm.sample</code>, so the same line worked on an extension model and failed on a plain one with a <code>TypeError</code> naming <code>pm.sample</code> rather than anything the caller wrote.</li>
+                    <li><strong>Cross-effect summaries no longer report structurally-zero outcome pairs as estimated</strong> &mdash; the report helper probed for a method name neither multi-outcome model spells that way, so every report fell through to a manual branch that walks the whole off-diagonal matrix. Pairs you never declared appeared alongside the real ones. If you have a multi-outcome report with undeclared cross-effect rows, that is this bug; re-run for the declared set.</li>
+                    <li><strong>A third NUTS backend</strong>: <code>InferenceMethod.BAYESIAN_NUTPIE</code> plus <code>.bayesian_nutpie()</code> on both builders, alongside <code>.bayesian_pymc()</code> / <code>.bayesian_numpyro()</code>. The three sample the same graph &mdash; only the NUTS implementation differs &mdash; and a real MMM fit through nutpie agrees with the pymc backend. <code>ModelConfig.nuts_sampler</code> is the single resolver from inference method to the sampler string.</li>
+                </ul>
+                <p style="margin: 0.5rem 0 0 0; font-size: 0.92rem; color: var(--color-text-muted);">
+                    Extension models (Nested / MV / Combined / Structural) keep their
+                    <code>"pymc"</code> default deliberately: their bespoke graphs are not all
+                    JAX-traceable, so inheriting a numpyro config would break fits rather than speed
+                    them up.
+                </p>
+            </div>
+
+            <div class="release">
+                <div class="release-header">
+                    <span class="release-version">1.1.0</span>
+                    <span class="release-date">2026-07-25</span>
+                </div>
+                <p style="margin: 0.5rem 0 0.5rem 0;">
+                    Two methodological fixes in <code>validation</code>. Both corrected numbers that read
+                    as <strong>more trustworthy than they were</strong>, so both change output you may
+                    have quoted. A minor rather than a patch bump: the fixes come with new public API,
+                    and one changes a default so that a re-run returns a different number than 1.0.0 did.
+                </p>
+                <ul>
+                    <li><strong>Spec-curve model averaging no longer weights a causal estimand by predictive skill.</strong> LOO-stacking maximizes expected <em>predictive</em> utility &mdash; "which mixture forecasts held-out <code>y</code> best?" &mdash; while a spec curve averages a <em>causal</em> estimand. The two objectives come apart exactly where MMM specs differ, because two specs can predict the KPI equally well while splitting that same fitted mean very differently between media and baseline; a spec that overfits the confounder block often predicts <em>better</em> while being <em>less</em> trustworthy for the causal contrast. The default is now <strong>equal weights</strong> over the pre-registered set &mdash; pre-registration already asserted every variant is defensible, so there is no post-hoc predictive ground to promote one. <code>run_spec_curve(..., weighting="stacking")</code> opts back in, with a warning; the stacking weights are still computed and reported as a <em>diagnostic</em> (<code>SpecCurveResult.predictive_weights</code>), because divergence from uniform is worth seeing and not worth acting on.</li>
+                    <li><strong>The unobserved-confounding robustness value is no longer inflated by tight priors.</strong> The robustness value is strictly increasing in <code>|t|</code>, and <code>t = posterior_mean / posterior_sd</code> &mdash; so tightening a prior shrank the posterior sd and <em>raised</em> reported robustness with no new evidence. The most prior-dominated channel could report the most robust value, and values were not comparable across channels with differently tight priors. Prior contraction is now computed per channel; a channel below the threshold renders as <strong>"Not assessable (prior-driven)"</strong> rather than a green "Robust", and "could not check" is reported distinctly from "checked and passed".</li>
+                </ul>
+                <p style="margin: 0.5rem 0 0 0; font-size: 0.92rem; color: var(--color-text-muted);">
+                    If you have a stored spec-curve result or a report produced by 1.0.0, its
+                    model-averaged ROI was stacking-weighted. Re-run for the equal-weight number, or
+                    read <code>predictive_weights</code> to see how far the two diverge on your set.
+                </p>
+            </div>
 
             <div class="release">
                 <div class="release-header">
                     <span class="release-version">1.0.0</span>
                     <span class="release-date">2026-07-24</span>
-                    <span class="release-tag">Current</span>
                 </div>
                 <p style="margin: 0.5rem 0 0.5rem 0;">
                     The first stable release: the package was split into a lean modeling core and

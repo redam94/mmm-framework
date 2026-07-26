@@ -89,6 +89,8 @@ uv run --group docs sphinx-build -b html docs/api/source docs/api/build/html
 # Blog posts are flat `blog-<slug>.html` pages (index blog.html, nav label "Research");
 # the `blog-` prefix drives BlogPosting JSON-LD + the Research breadcrumb in build_seo.py,
 # datePublished comes from the post's visible <time datetime> byline.
+# ON A RELEASE: docs/changelog.html is hand-authored and NOTHING generates it from
+# CHANGELOG.md — see the "Release checklist" section below. It rots silently.
 
 # Start the application (React UI talking to the agent API)
 # The agent API runs fits in-kernel, so no Redis or external worker is required.
@@ -98,6 +100,30 @@ cd frontend && npm run dev                # Terminal 2: React UI (Vite, port 517
 # Run example
 uv run python examples/ex_model_workflow.py
 ```
+
+## Release checklist (do NOT skip the docs site)
+
+**Every release must update `docs/changelog.html` in the same PR as the version bump.** It is
+hand-authored HTML, nothing generates it from `CHANGELOG.md`, and no test gates it — so it rots
+silently: 1.1.0 and 1.2.0 both shipped while the site still announced 1.0.0 as the current
+version, and every "current version" claim across the site went stale with them.
+
+Cutting `vX.Y.Z`:
+
+1. Bump `version` in `pyproject.toml`.
+2. Write the release section in `CHANGELOG.md` (source of truth, full detail).
+3. **Mirror it into `docs/changelog.html`** — a summarised `<div class="release">` block at the
+   top of the `#releases` list, and **move the `<span class="release-tag">Current</span>` chip**
+   off the previous release onto the new one. Also update the version stated in the `.lead`
+   paragraph and the `==X.Y.Z` pin example in the "what stable covers" box.
+4. Sweep the other pages that state a current version or pin example:
+   `getting-started.html`, `faq.html`, `evaluator.html`, `troubleshooting.html`
+   (its `__version__` expectation), `about.html` (citation), `api-contracts.html`.
+   `grep -rn '==1\.[0-9]*\.[0-9]*\|version 1\.' docs/*.html` finds most of them.
+5. From `docs/`: `python3 tools/build_search_index.py` then `python3 tools/build_seo.py`, and
+   commit `shared/seo-manifest.json` along with the regenerated `shared/*.json`.
+6. Tag and push — `.github/workflows/release.yml` builds, publishes to PyPI (trusted publishing)
+   and cuts the GitHub release from the tag.
 
 ## Configure the agent LLM (Vertex AI / ADC / API keys)
 
