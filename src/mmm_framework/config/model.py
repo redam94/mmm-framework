@@ -327,6 +327,26 @@ class ModelConfig(BaseModel):
         return self.inference_method not in _UNIMPLEMENTED_METHODS
 
     @model_validator(mode="after")
+    def _clear_fit_method_for_frequentist(self) -> "ModelConfig":
+        """A frequentist config never carries a Bayesian ``fit_method``.
+
+        Enforced here rather than in each construction path because there are
+        four of them — the builder, the Excel template parser, a direct ctor
+        call, and deserializing a stored config — and the invariant has to hold
+        for all of them. ``FitMethod`` has no frequentist member, so the field's
+        ``"nuts"`` default would otherwise make an **unfitted** frequentist model
+        announce a full MCMC posterior everywhere the prefit surfaces read it
+        (the prefit readout's inference-plan row, saved-model settings), right
+        up until the moment it runs something else entirely.
+
+        A stored config carrying both is corrected on load, which is the point:
+        the pair was never meaningful.
+        """
+        if self.inference_method in _FREQUENTIST_ESTIMATOR_BY_METHOD:
+            object.__setattr__(self, "fit_method", None)
+        return self
+
+    @model_validator(mode="after")
     def _warn_unimplemented_inference(self) -> "ModelConfig":
         """Flag an unimplemented method at construction, not after a long fit.
 

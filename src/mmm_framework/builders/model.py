@@ -295,7 +295,7 @@ class ModelConfigBuilder:
         self._optim_maxiter: int = 500
         self._optim_seed: int | None = 42
         self._use_parametric_adstock: bool = True
-        self._fit_method: FitMethod = FitMethod.NUTS
+        self._fit_method: FitMethod | None = FitMethod.NUTS
         self._likelihood: LikelihoodConfig | None = None
 
     # Model specification
@@ -398,6 +398,10 @@ class ModelConfigBuilder:
         The generic form of :meth:`bayesian_pymc` / :meth:`frequentist_ridge` /
         …, for a caller holding the enum value rather than choosing at the call
         site — e.g. the agent spec layer mapping ``inference.method``.
+
+        Selecting a frequentist paradigm also clears ``fit_method`` — enforced
+        by ``ModelConfig``'s own validator rather than here, so it holds however
+        the config was built.
         """
         self._inference_method = InferenceMethod(method)
         return self
@@ -435,8 +439,13 @@ class ModelConfigBuilder:
         The approximate methods — ``"map"``, ``"laplace"``, ``"advi"``,
         ``"fullrank_advi"``, ``"pathfinder"`` — fit in seconds for quick model
         checks but produce uncalibrated uncertainty.
+
+        ``None`` is accepted and means "no Bayesian fit method applies" — the
+        state a frequentist config is left in, since :class:`FitMethod` has no
+        member for a penalized point estimate and a default of ``"nuts"`` would
+        make an unfitted model's prefit surfaces announce a full MCMC posterior.
         """
-        self._fit_method = FitMethod(method)
+        self._fit_method = None if method is None else FitMethod(method)
         return self
 
     def map_fit(self) -> Self:

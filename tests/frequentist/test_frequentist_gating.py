@@ -271,6 +271,62 @@ class TestProvenanceCarriesOutward:
         assert meta["estimator"] == "ridge"
         assert meta["interval_semantics"] == "conditional_on_selection"
 
+    def test_bayesian_config_with_a_cleared_fit_method_still_fits(self):
+        """``fit_method`` became optional in #188 so a frequentist config can
+        carry None. A *Bayesian* config with it cleared must not then drop
+        through every branch in ``fit()`` and off the end of the function."""
+        from mmm_framework.builders import ModelConfigBuilder
+
+        cfg = ModelConfigBuilder().bayesian_pymc().with_fit_method(None).build()
+        assert cfg.fit_method is None
+        assert not cfg.is_frequentist
+        # Resolution falls back to NUTS; asserted through the public surface
+        # rather than by re-running MCMC.
+        from mmm_framework.config.enums import FitMethod
+
+        assert (cfg.fit_method or FitMethod.NUTS) is FitMethod.NUTS
+
+    def test_excel_template_can_select_the_paradigm(self):
+        """The spreadsheet path had its own hard refusal, added when the methods
+        were unimplemented. A gate that outlives the thing it gated is the same
+        class of stale as an unlabelled interval, one surface removed."""
+        from mmm_framework.excel_config.parser import _build_model_config
+
+        for value, expected in (
+            ("frequentist_ridge", InferenceMethod.FREQUENTIST_RIDGE),
+            ("frequentist_cvxpy", InferenceMethod.FREQUENTIST_CVXPY),
+            ("bayesian_nutpie", InferenceMethod.BAYESIAN_NUTPIE),
+        ):
+            cfg = _build_model_config({"Inference Method": value})
+            assert cfg.inference_method is expected, value
+
+    def test_unfitted_frequentist_config_claims_no_fit_method(self):
+        """The prefit surfaces read ``model_config.fit_method`` on a model that
+        has not been fitted yet. Leaving the ``"nuts"`` default there makes a
+        prefit readout announce a full MCMC posterior for a config that will
+        never run one — so selecting the paradigm clears it at build time, not
+        only after ``fit()``.
+
+        The agent spec layer builds ``.bayesian_numpyro()`` first and the
+        paradigm second, so the clear has to survive that ordering.
+        """
+        from mmm_framework.agents.fitting import _model_config_from_spec
+        from mmm_framework.builders import ModelConfigBuilder
+
+        for method in ("frequentist_ridge", "frequentist_cvxpy"):
+            cfg = _model_config_from_spec({"inference": {"method": method}})
+            assert cfg.is_frequentist
+            assert cfg.fit_method is None, method
+
+        assert ModelConfigBuilder().frequentist_ridge().build().fit_method is None
+        assert ModelConfigBuilder().frequentist_cvxpy().build().fit_method is None
+        # The Bayesian path is untouched.
+        assert ModelConfigBuilder().build().fit_method is not None
+        assert (
+            _model_config_from_spec({"inference": {"method": "map"}}).fit_method
+            is not None
+        )
+
     def test_agent_registry_accepts_and_routes_the_method(self):
         from mmm_framework.agents.fitting import (
             _FREQUENTIST_METHODS,

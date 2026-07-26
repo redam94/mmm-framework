@@ -3306,8 +3306,15 @@ class BayesianMMM:
         if self.model_config.is_frequentist:
             return self._fit_frequentist(random_seed=random_seed, **kwargs)
 
+        # `fit_method` is optional since #188 (a frequentist config carries
+        # None), and the frequentist branch above already returned — so a None
+        # reaching here means a Bayesian config had it cleared explicitly. Fall
+        # back to NUTS rather than dropping through every `is` comparison below
+        # and off the end of the function.
         method = (
-            FitMethod(method) if method is not None else self.model_config.fit_method
+            FitMethod(method)
+            if method is not None
+            else (self.model_config.fit_method or FitMethod.NUTS)
         )
         # Record the method actually used back on the config so a serialized
         # model's configs.json is truthful (previously it kept the default
