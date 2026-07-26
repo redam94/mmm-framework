@@ -33,13 +33,25 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Added
 
-- **`mmm_framework.frequentist`** — the out-of-graph design-matrix layer for epic
+- **`mmm_framework.frequentist`** — the estimation layer for epic
   [#180](https://github.com/redam94/mmm-framework/issues/180). With per-channel adstock and
   saturation held fixed the core model is linear in its remaining parameters, so its mean is
-  exactly `X @ theta`; `build_design_matrix` produces that design in pure NumPy and an
+  exactly `X @ theta`. `build_design_matrix` produces that design in pure NumPy and an
   equivalence test pins it against the PyTensor graph to 1e-12 across every supported
-  transform, trend and panel shape. No estimator is wired to `fit()` yet — `frequentist_ridge`
-  and `frequentist_cvxpy` still refuse. Design spec: `technical-docs/frequentist-estimation.md`.
+  transform, trend and panel shape; `fit_ridge` solves it in closed form (NumPy/SciPy only,
+  diagonal penalty, effective degrees of freedom, optional non-negativity); and
+  `search_transforms` chooses the transforms by rolling-origin out-of-sample error.
+
+  Note what the search does **not** do. Graded against the planted truth in
+  `synth.dgp.make_clean`, carryover is recovered better than chance (mean absolute error
+  ~0.17 on α against ~0.26 for an uninformed draw) but **saturation is not identified** —
+  among candidates scoring within 10% of the best, one channel's `sat_lam` ranges over
+  ~0.16 to 7.8 while the planted value is 1.6. At a large budget the winner *beats the true
+  parameters* out of sample while sitting further from them. Read `SearchResult.spread()`,
+  not the winner, and render `SearchResult.caveat` wherever its ROI is shown.
+
+  No estimator is wired to `fit()` yet — `frequentist_ridge` and `frequentist_cvxpy` still
+  refuse. Design spec: `technical-docs/frequentist-estimation.md`.
 
 ## [1.2.0] — 2026-07-25
 
