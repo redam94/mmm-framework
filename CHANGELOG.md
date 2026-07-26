@@ -12,6 +12,35 @@ frozen public contract breaks, and the contract itself is pinned by
 > silently (1.1.0 and 1.2.0 both shipped while the site still announced 1.0.0). The full
 > checklist is in `CLAUDE.md` § "Release checklist".
 
+## [Unreleased]
+
+### Fixed
+
+- **Backtests on a root-saturation model were computed from unsaturated forecasts.**
+  `PosteriorForecaster._saturate` — the NumPy forward pass behind `run_backtest` —
+  dispatched on four saturation families and returned its input unchanged for anything
+  else, so `SaturationType.ROOT` fell through to the no-saturation return. Every metric
+  the backtest reported for such a model was therefore wrong: MAPE, sMAPE, RMSE, MAE,
+  bias, MASE, the naive-baseline comparison and the 50/80/95% interval coverage. Nothing
+  raised; the backtest completed and reported plausible numbers. Measured on a real MAP
+  fit, the saturated response was off by 0.27 on a transform whose range is `[0, 1]`.
+
+  Saturation now has **one** NumPy definition — `mmm_framework.frequentist._transforms`,
+  a bit-for-bit mirror of the in-graph `_apply_saturation_pt` — which both the forecaster
+  and the new frequentist design matrix import, and an unhandled family raises rather than
+  degrading to identity. If you have run a backtest on a model with `saturation="root"`,
+  re-run it. ([#202](https://github.com/redam94/mmm-framework/issues/202))
+
+### Added
+
+- **`mmm_framework.frequentist`** — the out-of-graph design-matrix layer for epic
+  [#180](https://github.com/redam94/mmm-framework/issues/180). With per-channel adstock and
+  saturation held fixed the core model is linear in its remaining parameters, so its mean is
+  exactly `X @ theta`; `build_design_matrix` produces that design in pure NumPy and an
+  equivalence test pins it against the PyTensor graph to 1e-12 across every supported
+  transform, trend and panel shape. No estimator is wired to `fit()` yet — `frequentist_ridge`
+  and `frequentist_cvxpy` still refuse. Design spec: `technical-docs/frequentist-estimation.md`.
+
 ## [1.2.0] — 2026-07-25
 
 Sampler selection worked in one place and silently failed in four. Fixing that required new
