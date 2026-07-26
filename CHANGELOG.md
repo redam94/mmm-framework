@@ -88,13 +88,14 @@ frozen public contract breaks, and the contract itself is pinned by
   do not cover:
 
   - **Blocks, with a data-driven length.** MMM residuals are serially correlated, and an iid
-    residual bootstrap treats each week as exchangeable. Measured over 60 simulations of the
-    `make_clean` world with AR(1) errors at ρ = 0.6, the iid bootstrap's 90% intervals cover
-    materially below nominal and the block version (length estimated from the residual
-    autocorrelation) restores them; at ρ = 0 the two agree, so nothing pays for a dependence
-    that is not there. Panel cells resample the *same* period sequence, because resampling
-    geographies independently destroys the contemporaneous correlation that makes a panel
-    more informative than one national series.
+    residual bootstrap treats each week as exchangeable. Measured over 60 simulations × 300
+    replicates of the `make_clean` world with AR(1) errors at ρ = 0.6, per-channel
+    contribution coverage of 90% intervals is **79.6%** for the iid bootstrap and **90.4%**
+    for the block version (median block length 7). At ρ = 0 the estimated block length
+    collapses to 1 and the two agree (92.9% vs 93.3%), so nothing pays a width penalty for a
+    dependence that is not there. Panel cells resample the *same* period sequence, because
+    resampling geographies independently destroys the contemporaneous correlation that makes
+    a panel more informative than one national series.
   - **The cheap interval is labelled, not silently shipped.** The transforms and penalty are
     chosen once by search, and every replicate conditioning on that choice omits selection
     uncertainty — which matters more than usual here, because saturation is not identified by

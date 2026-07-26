@@ -11,9 +11,21 @@ intervals that are too narrow — the same error class as the AR(1) design-effec
 correction in the docs work and the autocorrelation-inflated false-positive rate
 in ``planning/simulation.py``. So the resampling unit is a **moving block** of
 consecutive periods, and the block length is estimated from the residual
-autocorrelation rather than assumed. Measured on a synthetic world in
-``tests/frequentist/test_bootstrap_coverage.py``: at ρ ≈ 0.6 the iid bootstrap's
-90% intervals cover ≈70% of the time and the block version restores ≈90%.
+autocorrelation rather than assumed. Measured over 60 simulations × 300
+replicates of the ``make_clean`` world with AR(1) errors, per-channel total
+contributions at the 90% level:
+
+===========  ====================  ===================================
+ρ            iid bootstrap         block bootstrap
+===========  ====================  ===================================
+0.6          **79.6%** (70–93)     **90.4%** (82–97), median block 7
+0.0          92.9% (83–97)         93.3% (85–97), median block 1
+===========  ====================  ===================================
+
+At ρ = 0 the estimated block length collapses to 1 and the two agree, so nothing
+pays a width penalty for a dependence that is not there. The one channel still
+below nominal under blocks (TV, 82%) is the shrinkage story in point 3, not a
+resampling failure.
 
 **2. Post-selection inference.** The transforms and the penalty are chosen by
 search (:mod:`~mmm_framework.frequentist.search`). If every replicate conditions

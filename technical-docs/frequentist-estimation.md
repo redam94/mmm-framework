@@ -464,6 +464,43 @@ table at 50/80/90/95% — **including the iid-bootstrap comparison that shows th
 under-coverage the block version fixes** — is the acceptance evidence for #186. A
 path that under-covers ships with that stated, or does not ship.
 
+**Measured.** 60 simulations × 300 replicates on the `make_clean` world, per-channel
+total contributions at the 90% level. Two tables, because one instrument cannot
+produce both: `run_recovery_coverage` simulates from the model's own iid-Normal
+likelihood, so it validates the machinery but by construction cannot exhibit
+residual autocorrelation — the AR(1) comparison needs a purpose-built world that
+plants the errors and grades with the same `build_recovery_result`.
+
+| world | iid bootstrap | block bootstrap |
+|---|---|---|
+| AR(1) errors, ρ = 0.6 | **79.6%** (70–93 by channel) | **90.4%** (82–97), median block length 7 |
+| iid errors, ρ = 0 | 92.9% (83–97) | 93.3% (85–97), median block length 1 |
+| model-faithful (`run_recovery_coverage`, `refit=` hook) | — | 88.7% (78–97) |
+
+Three things this says, and one it does not:
+
+* the block correction is doing real work at realistic autocorrelation, and the
+  estimated block length collapses to 1 when there is none — so an uncorrelated
+  dataset pays no width penalty for a dependence it does not have;
+* **one channel stays below nominal under blocks** (TV, 82%, `verdict: biased low`).
+  That is the shrinkage story of the previous subsection, not a resampling failure:
+  the coverage engine's own bias/width decomposition attributes it to location, not
+  interval width. It ships stated rather than rounded up;
+* the model-faithful table is graded against a θ\* that **pins the transforms to the
+  point the estimator holds fixed**. Left to a prior draw, the simulation would use
+  one (α, λ) and the estimator another, and the table would measure that mismatch
+  rather than the interval.
+
+What it does not say: anything about misspecification. Data are simulated *from* the
+model in both tables. The three-way ridge / MAP / NUTS comparison on the violation
+scenarios ([#189](https://github.com/redam94/mmm-framework/issues/189)) is where the
+question "does ridge fail *differently*" gets answered.
+
+Reproduce with the script recorded in the #186 pull request; it is a measurement, not
+a test — `tests/frequentist/test_bootstrap_coverage.py` asserts the direction and size
+of the ρ = 0.6 gap at a cheaper budget, with deliberately loose tolerances, because a
+tight threshold on 24 simulations would be a flaky test asserting Monte-Carlo noise.
+
 Pointing it at this path is **not free**, and #186 must budget for three things
 the issue did not anticipate:
 
