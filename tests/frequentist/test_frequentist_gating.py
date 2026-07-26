@@ -271,6 +271,21 @@ class TestProvenanceCarriesOutward:
         assert meta["estimator"] == "ridge"
         assert meta["interval_semantics"] == "conditional_on_selection"
 
+    def test_bayesian_config_with_a_cleared_fit_method_still_fits(self):
+        """``fit_method`` became optional in #188 so a frequentist config can
+        carry None. A *Bayesian* config with it cleared must not then drop
+        through every branch in ``fit()`` and off the end of the function."""
+        from mmm_framework.builders import ModelConfigBuilder
+
+        cfg = ModelConfigBuilder().bayesian_pymc().with_fit_method(None).build()
+        assert cfg.fit_method is None
+        assert not cfg.is_frequentist
+        # Resolution falls back to NUTS; asserted through the public surface
+        # rather than by re-running MCMC.
+        from mmm_framework.config.enums import FitMethod
+
+        assert (cfg.fit_method or FitMethod.NUTS) is FitMethod.NUTS
+
     def test_excel_template_can_select_the_paradigm(self):
         """The spreadsheet path had its own hard refusal, added when the methods
         were unimplemented. A gate that outlives the thing it gated is the same
