@@ -191,6 +191,36 @@ def _sample_from_prior_config(
     return default()
 
 
+# Default logistic-saturation prior, anchored to observed spend (#207).
+#
+# Media reaches saturation already normalized by the channel's training maximum,
+# so for ``sat(x) = 1 - exp(-lam * x)`` the half-saturation point is ``ln(2)/lam``
+# **in units of that maximum**. ``sat_lam`` is therefore the elbow position, and a
+# prior on it is a statement about where the curve bends relative to spend we have
+# actually observed.
+#
+# The historical default, ``Exponential(lam=0.5)``, was never reparameterized after
+# that normalization: its mode sits at ``lam = 0`` (a perfectly linear channel) and
+# 29.3% of its mass puts the elbow BEYOND maximum observed spend, where no amount of
+# observational data can move it. Since saturation is not identified from the sales
+# likelihood -- Jin et al. (Google, 2017) call the Hill parameters "essentially
+# unidentifiable"; Dew et al. (2024) show predictive fit cannot arbitrate -- the
+# prior IS largely the answer, so it has to be defensible.
+#
+# LogNormal(log(ln2 / 0.5), 0.4) places the median elbow at half of maximum spend,
+# a 90% interval of roughly [0.26, 0.97] of maximum, and only ~4% of mass beyond it.
+# This is the same move every production MMM makes: Robyn hard-codes
+# ``inflexion = max(x) * gamma`` with gamma in [0.3, 1]; Meridian scales its ``ec``
+# prior so 1 is the median non-zero media unit.
+#
+# Set ``SaturationConfig.lam_prior`` to restore any other prior. The historical
+# ``Exponential(lam=0.5)`` is ``PriorConfig(distribution="Gamma", params={"alpha":
+# 1.0, "beta": 0.5})`` -- Gamma(1, rate) is the Exponential, and ``PriorType`` has
+# no Exponential member.
+DEFAULT_LOGISTIC_ELBOW_FRACTION = 0.5
+DEFAULT_LOGISTIC_LAM_SIGMA = 0.4
+
+
 def _apply_saturation_pt(
     x: "pt.TensorVariable",
     kind: SaturationType,
@@ -278,6 +308,53 @@ def _anchored_det(
     return expr + 0.0 * anchor
 
 
+@contextmanager
+def _map_boundary_diagnostics(model: "pm.Model"):
+    """Turn an interval-transform saturation crash into an actionable message (#203).
+
+    ``find_MAP`` optimizes in the UNCONSTRAINED space, so a parameter bounded to
+    ``[0, 1]`` — every ``Beta``-prior parameter in this model: ``adstock_alpha``,
+    ``sat_half``, ``sat_exponent`` — reaches the optimizer as a logit. In float64
+    ``sigmoid(x)`` returns *exactly* ``1.0`` once ``x`` exceeds about 37, so an
+    optimizer that walks the logit far enough makes ``1 - alpha`` exactly zero,
+    and the ``Beta`` log-density's gradient term ``-2 / (1 - alpha)`` divides by
+    zero inside the compiled graph.
+
+    The raw failure is a bare ``ZeroDivisionError`` raised from a JIT-compiled
+    function, naming a ``Composite`` op and nothing a caller could act on. This
+    re-raises it naming the mechanism and the ways out. It does not prevent the
+    crash — preventing it means changing the model's priors, which is the caller's
+    decision, not ours.
+    """
+    try:
+        yield
+    except ZeroDivisionError as exc:
+        bounded = sorted(
+            rv.name
+            for rv in model.free_RVs
+            if rv.name.startswith(("adstock_alpha_", "sat_half_", "sat_exponent_"))
+        )
+        raise ZeroDivisionError(
+            "MAP optimization drove a [0, 1]-bounded parameter onto its boundary, "
+            "where its Beta prior's gradient is undefined.\n\n"
+            "find_MAP optimizes in the unconstrained (logit) space, and float64 "
+            "sigmoid saturates to exactly 1.0 past ~37, so `1 - alpha` becomes "
+            "exactly zero. The bounded parameters in this model are: "
+            f"{', '.join(bounded) or '(none found)'}.\n\n"
+            "This is a property of gradient-based MAP on interval-constrained "
+            "parameters, not a wrong model. Ways out, cheapest first:\n"
+            "  * fit(method='advi') or NUTS — neither walks the boundary the same "
+            "way;\n"
+            "  * give the offending parameter a prior with less mass at the edge "
+            "(e.g. AdstockConfig.geometric(alpha_prior=PriorConfig(distribution="
+            "'Beta', params={'alpha': 2.0, 'beta': 5.0})));\n"
+            "  * check the channel actually has enough spend variation to inform "
+            "its carryover — a flat likelihood is what lets the optimizer wander "
+            "this far.\n\n"
+            "Tracking: https://github.com/redam94/mmm-framework/issues/203"
+        ) from exc
+
+
 def run_approximate_fit(
     model: "pm.Model",
     method: FitMethod,
@@ -303,7 +380,8 @@ def run_approximate_fit(
     """
     if method is FitMethod.MAP:
         with model:
-            point = pm.find_MAP(seed=random_seed, **kwargs)
+            with _map_boundary_diagnostics(model):
+                point = pm.find_MAP(seed=random_seed, **kwargs)
         return arviz_compat.point_to_idata(point), {"map": True}
 
     if method in (FitMethod.ADVI, FitMethod.FULLRANK_ADVI):
@@ -1903,18 +1981,42 @@ class BayesianMMM:
         params: dict[str, Any] = {}
 
         if kind == SaturationType.LOGISTIC:
+            # See DEFAULT_LOGISTIC_ELBOW_FRACTION: the default prior is stated in
+            # units of observed spend, because `sat_lam` IS the elbow position on
+            # max-normalized media.
             params["sat_lam"] = _sample_from_prior_config(
                 f"sat_lam_{channel_name}",
                 cfg.lam_prior,
-                lambda: pm.Exponential(f"sat_lam_{channel_name}", lam=0.5),
+                lambda: pm.LogNormal(
+                    f"sat_lam_{channel_name}",
+                    mu=float(np.log(np.log(2.0) / DEFAULT_LOGISTIC_ELBOW_FRACTION)),
+                    sigma=DEFAULT_LOGISTIC_LAM_SIGMA,
+                ),
             )
         elif kind == SaturationType.HILL:
             # Half-saturation point of the adstocked normalized (~[0, 1])
             # spend; Beta(2, 2) centers it well inside the data's support.
+            #
+            # `anchor_kappa_to_data` narrows that further to the channel's own
+            # observed spend percentiles (#207): Beta(2,2) keeps the elbow inside
+            # [0, 1], but a channel whose spend is concentrated low still gets an
+            # elbow prior centred at half of MAXIMUM spend, which is not where its
+            # data is. Opt-in, because it changes fitted results.
+            hill_default = lambda: pm.Beta(  # noqa: E731
+                f"sat_half_{channel_name}", alpha=2, beta=2
+            )
+            if getattr(cfg, "anchor_kappa_to_data", False) and cfg.kappa_prior is None:
+                lo, hi = self._kappa_bounds_for(channel_name, cfg)
+                hill_default = lambda lo=lo, hi=hi: pm.Deterministic(  # noqa: E731
+                    f"sat_half_{channel_name}",
+                    lo
+                    + (hi - lo)
+                    * pm.Beta(f"sat_half_raw_{channel_name}", alpha=2, beta=2),
+                )
             params["sat_half"] = _sample_from_prior_config(
                 f"sat_half_{channel_name}",
                 cfg.kappa_prior,
-                lambda: pm.Beta(f"sat_half_{channel_name}", alpha=2, beta=2),
+                hill_default,
             )
             params["sat_slope"] = _sample_from_prior_config(
                 f"sat_slope_{channel_name}",
@@ -1936,6 +2038,33 @@ class BayesianMMM:
             )
         # SaturationType.NONE: no RVs.
         return kind, params
+
+    def _kappa_bounds_for(self, channel_name: str, cfg) -> tuple[float, float]:
+        """Half-saturation bounds from this channel's observed spend (#207).
+
+        Uses :meth:`SaturationConfig.compute_kappa_bounds_from_data` on the
+        channel's *normalized* media -- the same scale the saturation sees -- so
+        the elbow prior is confined to the region the data covers. Falls back to
+        the unanchored ``[0, 1]`` with a warning when the channel's spend has no
+        usable spread, rather than raising mid-graph-build.
+        """
+        c = self.channel_names.index(channel_name)
+        x = self._prepare_raw_media_for_model()[:, c]
+        x = x[x > 0] if np.any(x > 0) else x
+        try:
+            lo, hi = type(cfg).compute_kappa_bounds_from_data(
+                x, percentiles=getattr(cfg, "kappa_bounds_percentiles", (0.1, 0.9))
+            )
+        except ValueError as exc:
+            warnings.warn(
+                f"Channel {channel_name!r}: cannot anchor the saturation elbow to "
+                f"observed spend ({exc}); falling back to the unanchored "
+                "Beta(2, 2) on [0, 1].",
+                UserWarning,
+                stacklevel=2,
+            )
+            return 0.0, 1.0
+        return float(lo), float(hi)
 
     def _apply_adstock_kernel_pt(
         self, x: "pt.TensorVariable", kind: str, l_max: int, normalize: bool, **params

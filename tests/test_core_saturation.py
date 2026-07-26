@@ -98,8 +98,8 @@ class TestDefaultIsLogistic:
         assert MediaChannelConfig(name="TV").saturation.type == (
             SaturationType.LOGISTIC
         )
-        # No lam prior configured -> the model uses the historical
-        # Exponential(lam=0.5) builtin.
+        # No lam prior configured -> the model uses its built-in default, which
+        # since #207 is stated in units of observed spend (see below).
         assert MediaChannelConfig(name="TV").saturation.lam_prior is None
 
     @pytest.mark.parametrize("parametric", [False, True])
@@ -111,14 +111,63 @@ class TestDefaultIsLogistic:
             assert f"sat_half_{c}" not in free
             assert f"sat_slope_{c}" not in free
 
-    def test_default_sat_lam_is_exponential_half(self):
-        """The default RV keeps the historical Exponential(lam=0.5) prior."""
+    def test_default_sat_lam_is_anchored_to_observed_spend(self):
+        """The default prior is stated in units of observed spend (#207).
+
+        Media reaches saturation normalized by the channel's training maximum,
+        so ``sat_lam`` IS the curve's elbow: half-saturation at ``ln(2)/lam`` in
+        units of that maximum. The pre-1.3 default, ``Exponential(lam=0.5)``, was
+        never reparameterized after that normalization -- its mode sat at
+        ``lam = 0`` (a channel that never saturates) and 29.3% of its mass put the
+        elbow beyond any spend we observed, where no data can move it. Since
+        saturation is not identified from the sales likelihood, that mass came
+        back as posterior essentially unchanged.
+
+        The default is now a LogNormal placing the median elbow at
+        ``DEFAULT_LOGISTIC_ELBOW_FRACTION`` of maximum observed spend.
+        ``tests/test_saturation_prior_identifiability.py`` covers the implied
+        elbow distribution and the escape hatch; this pins the graph node.
+        """
+        import numpy as np
+
+        from mmm_framework.model.base import (
+            DEFAULT_LOGISTIC_ELBOW_FRACTION,
+            DEFAULT_LOGISTIC_LAM_SIGMA,
+        )
+
         m = _mmm({})
         rv = m.model["sat_lam_TV"]
-        assert rv.owner.op.name == "exponential"
-        # Exponential rate parameter == 0.5 (PyMC stores the scale 1/lam).
-        scale = rv.owner.inputs[-1].eval()
-        assert float(scale) == pytest.approx(2.0)
+        assert rv.owner.op.name == "lognormal"
+        mu, sigma = (float(i.eval()) for i in rv.owner.inputs[-2:])
+        assert mu == pytest.approx(
+            np.log(np.log(2.0) / DEFAULT_LOGISTIC_ELBOW_FRACTION)
+        )
+        assert sigma == pytest.approx(DEFAULT_LOGISTIC_LAM_SIGMA)
+        # The median elbow lands where the constant says it does.
+        assert np.log(2.0) / np.exp(mu) == pytest.approx(
+            DEFAULT_LOGISTIC_ELBOW_FRACTION
+        )
+
+    def test_the_pre_1_3_prior_is_still_reachable(self):
+        """The behaviour change must come with a working way back.
+
+        ``PriorType`` has no Exponential member, so the documented restoration is
+        ``Gamma(1, rate)`` -- the same distribution.
+        """
+        from mmm_framework.config import PriorConfig
+
+        m = _mmm(
+            {
+                c: SaturationConfig.logistic(
+                    lam_prior=PriorConfig(
+                        distribution="Gamma", params={"alpha": 1.0, "beta": 0.5}
+                    )
+                )
+                for c in CHANNELS
+            }
+        )
+        rv = m.model["sat_lam_TV"]
+        assert rv.owner.op.name == "gamma"
 
     def test_default_named_vars_match_historical_set(self):
         """Graph contract: a default model has exactly the historical nodes."""

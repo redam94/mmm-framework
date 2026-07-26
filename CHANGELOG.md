@@ -14,24 +14,48 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ## [Unreleased]
 
-### Fixed
+### Changed
 
-- **Backtests on a root-saturation model were computed from unsaturated forecasts.**
-  `PosteriorForecaster._saturate` — the NumPy forward pass behind `run_backtest` —
-  dispatched on four saturation families and returned its input unchanged for anything
-  else, so `SaturationType.ROOT` fell through to the no-saturation return. Every metric
-  the backtest reported for such a model was therefore wrong: MAPE, sMAPE, RMSE, MAE,
-  bias, MASE, the naive-baseline comparison and the 50/80/95% interval coverage. Nothing
-  raised; the backtest completed and reported plausible numbers. Measured on a real MAP
-  fit, the saturated response was off by 0.27 on a transform whose range is `[0, 1]`.
+- **The default logistic saturation prior is now stated in units of observed spend.**
+  Media reaches saturation normalized by the channel's training maximum, so `sat_lam` *is*
+  the curve's elbow — half-saturation sits at `ln(2)/lam` in units of that maximum. The
+  previous default, `Exponential(lam=0.5)`, was never reparameterized after that
+  normalization: its **mode was `lam = 0`** (a channel that never saturates) and **29.3% of
+  its mass placed the elbow beyond maximum observed spend**, where no observational data can
+  move it.
 
-  Saturation now has **one** NumPy definition — `mmm_framework.frequentist._transforms`,
-  a bit-for-bit mirror of the in-graph `_apply_saturation_pt` — which both the forecaster
-  and the new frequentist design matrix import, and an unhandled family raises rather than
-  degrading to identity. If you have run a backtest on a model with `saturation="root"`,
-  re-run it. ([#202](https://github.com/redam94/mmm-framework/issues/202))
+  That matters more than an ordinary prior choice because saturation is **not identified from
+  the sales likelihood** — Jin et al. (Google, 2017) call the Hill parameters "essentially
+  unidentifiable"; Dew et al. (2024) show predictive fit cannot arbitrate between
+  observationally equivalent response curves. When a parameter is unidentified the prior is
+  largely the answer, so it has to be defensible.
+
+  The new default places the median elbow at half of maximum observed spend, with a 90%
+  interval of roughly 26–97% of maximum and ~4% of mass beyond it — the same move Robyn
+  (`inflexion = max(x)·γ`) and Meridian (`ec` scaled to median spend) make.
+
+  **This changes fitted results for any model that did not set an explicit `lam_prior`.**
+  To restore the old prior, pass
+  `SaturationConfig.logistic(lam_prior=PriorConfig(distribution="Gamma", params={"alpha": 1.0, "beta": 0.5}))`
+  — `Gamma(1, rate)` *is* the Exponential, and `PriorType` has no Exponential member.
+  ([#207](https://github.com/redam94/mmm-framework/issues/207))
 
 ### Added
+
+- **`SaturationConfig.anchor_kappa_to_data`** — confines the Hill half-saturation prior to the
+  channel's own observed spend percentiles rather than the whole normalized `[0, 1]` range,
+  via the existing `compute_kappa_bounds_from_data` (previously reachable only from the
+  extension priors). Opt-in, because it changes fitted results; an explicit `kappa_prior`
+  still wins. ([#207](https://github.com/redam94/mmm-framework/issues/207))
+
+- **`mmm_framework.diagnostics.saturation`** — the pair of checks for a parameter whose value
+  is mostly its prior. `saturation_prior_report` asks, *before* fitting, where the prior puts
+  the curve's elbow relative to spend you have actually observed, and grades it
+  `anchored` / `diffuse` / `unanchored`; `warn_if_saturation_prior_is_unanchored` warns on the
+  last of those and is silent otherwise; `saturation_learning` reports post-fit
+  prior→posterior contraction for the saturation block, where a `"prior-dominated"` verdict
+  means the fitted curve is the prior you chose. Neither makes the parameter identifiable —
+  only dose spread does that. ([#207](https://github.com/redam94/mmm-framework/issues/207))
 
 - **`mmm_framework.frequentist`** — the estimation layer for epic
   [#180](https://github.com/redam94/mmm-framework/issues/180). With per-channel adstock and
@@ -52,6 +76,38 @@ frozen public contract breaks, and the contract itself is pinned by
 
   No estimator is wired to `fit()` yet — `frequentist_ridge` and `frequentist_cvxpy` still
   refuse. Design spec: `technical-docs/frequentist-estimation.md`.
+
+### Fixed
+
+- **`fit(method="map")` no longer fails with a bare `ZeroDivisionError`.** `find_MAP`
+  optimizes in the unconstrained space, so a `[0, 1]`-bounded parameter — every `Beta`-prior
+  parameter in the model: `adstock_alpha`, `sat_half`, `sat_exponent` — reaches the optimizer
+  as a logit, and float64 `sigmoid` returns *exactly* `1.0` past about 37. `1 - alpha` then
+  becomes exactly zero and the `Beta` log-density's gradient divides by zero inside the
+  compiled graph, surfacing as a bare `ZeroDivisionError` naming a `Composite` op and nothing
+  actionable.
+
+  The error now names the mechanism, lists the bounded parameters in your model, and gives the
+  ways out (ADVI or NUTS; a prior with less mass at the edge; or checking the channel has
+  enough spend variation to inform its carryover at all). This does not prevent the crash —
+  preventing it means changing priors, which is the caller's decision. Note the `#207` prior
+  change above happens to stop the originally-reported configuration from crashing, but the
+  failure mode is unchanged. ([#203](https://github.com/redam94/mmm-framework/issues/203))
+
+- **Backtests on a root-saturation model were computed from unsaturated forecasts.**
+  `PosteriorForecaster._saturate` — the NumPy forward pass behind `run_backtest` —
+  dispatched on four saturation families and returned its input unchanged for anything
+  else, so `SaturationType.ROOT` fell through to the no-saturation return. Every metric
+  the backtest reported for such a model was therefore wrong: MAPE, sMAPE, RMSE, MAE,
+  bias, MASE, the naive-baseline comparison and the 50/80/95% interval coverage. Nothing
+  raised; the backtest completed and reported plausible numbers. Measured on a real MAP
+  fit, the saturated response was off by 0.27 on a transform whose range is `[0, 1]`.
+
+  Saturation now has **one** NumPy definition — `mmm_framework.frequentist._transforms`,
+  a bit-for-bit mirror of the in-graph `_apply_saturation_pt` — which both the forecaster
+  and the new frequentist design matrix import, and an unhandled family raises rather than
+  degrading to identity. If you have run a backtest on a model with `saturation="root"`,
+  re-run it. ([#202](https://github.com/redam94/mmm-framework/issues/202))
 
 ## [1.2.0] — 2026-07-25
 

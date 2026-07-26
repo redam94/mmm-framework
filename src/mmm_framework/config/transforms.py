@@ -121,8 +121,12 @@ class SaturationConfig(BaseModel):
     ``kappa_bounds_percentiles``) and pass them as ``kappa_lower`` / ``kappa_upper``
     to :func:`mmm_framework.mmm_extensions.components.priors.create_saturation_prior`,
     which then uses a bounded ``Uniform`` instead of the default weakly-informative
-    prior. This keeps the curve's "elbow" inside the region the data covers. It is
-    **opt-in** -- the default prior is unchanged unless you pass bounds.
+    prior. This keeps the curve's "elbow" inside the region the data covers.
+
+    In the **core** model, set ``anchor_kappa_to_data=True`` to do the same thing
+    automatically from the channel's own normalized spend. It is opt-in because it
+    changes fitted results; the *logistic* default, by contrast, is anchored out of
+    the box (see :meth:`logistic`).
 
     The core :class:`BayesianMMM` honors ``type`` per channel: ``logistic``
     (the default, a single ``sat_lam_<ch>``), ``hill`` (``sat_half_<ch>`` and
@@ -139,15 +143,24 @@ class SaturationConfig(BaseModel):
     slope_prior: PriorConfig | None = None  # Curve steepness
     beta_prior: PriorConfig | None = None  # Maximum effect scaling
 
-    # Logistic (1 - exp(-lam * x)) rate prior. ``None`` keeps the core model's
-    # built-in ``Exponential(lam=0.5)`` -- the historical default -- so default
-    # configs build a graph bit-identical to models from before saturation
-    # types were honored.
+    # Logistic (1 - exp(-lam * x)) rate prior. ``None`` uses the core model's
+    # data-anchored default (``model/base.py::DEFAULT_LOGISTIC_ELBOW_FRACTION``):
+    # a LogNormal placing the median elbow at half of maximum observed spend.
+    # Set this to restore any other prior. The pre-1.3 default was
+    # ``Exponential(lam=0.5)``, which PriorConfig expresses as
+    # ``PriorConfig(distribution="Gamma", params={"alpha": 1.0, "beta": 0.5})``
+    # -- Gamma(1, rate) IS the Exponential, and PriorType has no Exponential.
     lam_prior: PriorConfig | None = None
 
     # Percentiles (probabilities in [0, 1]) used by compute_kappa_bounds_from_data
     # to derive data-driven kappa bounds for the Hill path.
     kappa_bounds_percentiles: tuple[float, float] = (0.1, 0.9)
+
+    # Confine the Hill half-saturation prior to this channel's own observed spend
+    # percentiles rather than the whole [0, 1] normalized range (#207). Opt-in
+    # because it changes fitted results. Ignored when ``kappa_prior`` is set --
+    # an explicit prior always wins.
+    anchor_kappa_to_data: bool = False
 
     model_config = {"extra": "forbid"}
 
@@ -208,10 +221,16 @@ class SaturationConfig(BaseModel):
     def logistic(cls, lam_prior: PriorConfig | None = None) -> SaturationConfig:
         """Logistic saturation ``1 - exp(-lam * x)`` (the core model default).
 
-        With ``lam_prior=None`` the core model uses its historical
-        ``Exponential(lam=0.5)`` prior on ``sat_lam_<ch>``, keeping default
-        models bit-identical to those built before per-channel saturation
-        types were honored.
+        With ``lam_prior=None`` the core model uses a prior stated in units of
+        observed spend: media is normalized by the channel maximum before
+        saturation, so ``sat_lam`` *is* the elbow position (half-saturation at
+        ``ln(2)/lam``), and the default places its median at half of maximum
+        spend. See ``model/base.py::DEFAULT_LOGISTIC_ELBOW_FRACTION`` for why.
+
+        To restore the pre-1.3 ``Exponential(lam=0.5)``, pass
+        ``lam_prior=PriorConfig(distribution="Gamma", params={"alpha": 1.0,
+        "beta": 0.5})`` -- Gamma(1, rate) is the Exponential, and
+        :class:`PriorType` has no Exponential member.
         """
         return cls(type=SaturationType.LOGISTIC, lam_prior=lam_prior)
 
