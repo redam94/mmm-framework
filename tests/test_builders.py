@@ -1061,24 +1061,59 @@ class TestModelConfigBuilder:
         assert config.inference_method == InferenceMethod.BAYESIAN_NUMPYRO
 
     def test_frequentist_ridge(self):
-        """Ridge is selectable but unimplemented — building warns (#180)."""
+        """Ridge selects the frequentist paradigm and builds cleanly (#188).
+
+        It warned as unimplemented between 1.2.0 and #188; now it dispatches, so
+        a warning would be noise on a supported path.
+        """
+        import warnings as _w
+
         from mmm_framework.builders import ModelConfigBuilder
         from mmm_framework.config import InferenceMethod
 
-        with pytest.warns(DeprecationWarning, match="not implemented"):
+        with _w.catch_warnings():
+            _w.simplefilter("error", DeprecationWarning)
             config = ModelConfigBuilder().frequentist_ridge().build()
 
         assert config.inference_method == InferenceMethod.FREQUENTIST_RIDGE
+        assert config.is_frequentist
+        assert not config.is_bayesian
+        assert config.frequentist_estimator == "ridge"
 
     def test_frequentist_cvxpy(self):
-        """CVXPY is selectable but unimplemented — building warns (#180)."""
+        """CVXPY selects the constrained estimator (#188)."""
+        import warnings as _w
+
         from mmm_framework.builders import ModelConfigBuilder
         from mmm_framework.config import InferenceMethod
 
-        with pytest.warns(DeprecationWarning, match="not implemented"):
+        with _w.catch_warnings():
+            _w.simplefilter("error", DeprecationWarning)
             config = ModelConfigBuilder().frequentist_cvxpy().build()
 
         assert config.inference_method == InferenceMethod.FREQUENTIST_CVXPY
+        assert config.is_frequentist
+        assert config.frequentist_estimator == "constrained"
+
+    def test_with_inference_method_accepts_enum_or_string(self):
+        """The generic setter the agent spec layer maps `inference.method` through."""
+        from mmm_framework.builders import ModelConfigBuilder
+        from mmm_framework.config import InferenceMethod
+
+        assert (
+            ModelConfigBuilder()
+            .with_inference_method("frequentist_ridge")
+            .build()
+            .inference_method
+            is InferenceMethod.FREQUENTIST_RIDGE
+        )
+        assert (
+            ModelConfigBuilder()
+            .with_inference_method(InferenceMethod.BAYESIAN_NUTPIE)
+            .build()
+            .inference_method
+            is InferenceMethod.BAYESIAN_NUTPIE
+        )
 
     def test_with_chains(self):
         """Test setting chains."""

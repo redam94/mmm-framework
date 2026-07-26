@@ -204,12 +204,14 @@ class TestNutpieIsReachable:
     def test_frequentist_config_reports_the_historical_default(self):
         """No NUTS backend to report — must not raise on a non-Bayesian config.
 
-        Reading the property stays safe; it is ``fit()`` that refuses (#180),
-        so a config can still be inspected and round-tripped.
+        Reading the property stays safe so a config can be inspected and
+        round-tripped. ``fit()`` branches on ``is_frequentist`` *before* reading
+        it, so the value is never consumed on this config — which is what stops
+        the fall-through that used to silently run NUTS (#188).
         """
-        with pytest.warns(DeprecationWarning):
-            config = ModelConfig(inference_method=InferenceMethod.FREQUENTIST_RIDGE)
+        config = ModelConfig(inference_method=InferenceMethod.FREQUENTIST_RIDGE)
         assert config.nuts_sampler == "pymc"
+        assert config.is_frequentist
 
     def test_declared_nutpie_version_is_one_pymc_will_drive(self):
         """The <0.16.10 floor shipped a sampler pymc refuses to start."""
@@ -225,14 +227,16 @@ class TestNutpieIsReachable:
 # ---------------------------------------------------------------------------
 
 
-class TestUnimplementedInferenceMethods:
-    """``frequentist_ridge`` / ``frequentist_cvxpy`` used to silently fit NUTS.
+class TestFrequentistInferenceMethods:
+    """``frequentist_ridge`` / ``frequentist_cvxpy``, from silent NUTS to real.
 
-    ``fit()`` dispatches on ``FitMethod``, never on ``InferenceMethod``, and
-    ``nuts_sampler`` falls back to ``"pymc"`` for anything outside its Bayesian
-    map — so asking for a frequentist point estimate returned a full posterior,
-    after paying for MCMC, with no warning. Same defect class as #169/#171: a
-    knob that reads as configuration and is a no-op.
+    The history matters for what these assert. Originally ``fit()`` dispatched
+    on ``FitMethod`` and never on ``InferenceMethod``, and ``nuts_sampler`` fell
+    back to ``"pymc"`` for anything outside its Bayesian map — so asking for a
+    frequentist point estimate returned a full posterior, after paying for MCMC,
+    with no warning. #181 turned that into a loud refusal; #188 turned the
+    refusal into a dispatch. These tests pin the third state and, just as
+    importantly, that the *second* one is gone: a supported path must not warn.
     """
 
     FREQUENTIST = [
@@ -241,42 +245,64 @@ class TestUnimplementedInferenceMethods:
     ]
 
     @pytest.mark.parametrize("method", FREQUENTIST)
-    def test_construction_warns(self, method):
-        with pytest.warns(DeprecationWarning, match="not implemented"):
-            ModelConfig(inference_method=method)
+    def test_construction_does_not_warn(self, method):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            config = ModelConfig(inference_method=method)
+        assert config.is_implemented
 
     @pytest.mark.parametrize("method", FREQUENTIST)
-    def test_is_implemented_is_false(self, method):
-        with pytest.warns(DeprecationWarning):
-            assert not ModelConfig(inference_method=method).is_implemented
+    def test_is_frequentist_and_not_bayesian(self, method):
+        config = ModelConfig(inference_method=method)
+        assert config.is_frequentist
+        assert not config.is_bayesian
 
-    @pytest.mark.parametrize("method", FREQUENTIST)
-    def test_fit_raises_before_sampling(self, panel, method, sample_spy):
-        """The refusal must precede any sampling — no MCMC, no wasted runtime."""
-        with pytest.warns(DeprecationWarning):
-            config = ModelConfig(inference_method=method, n_draws=10, n_tune=10)
-        model = _model(panel, config)
+    def test_estimator_is_named_per_method(self):
+        assert (
+            ModelConfig(
+                inference_method=InferenceMethod.FREQUENTIST_RIDGE
+            ).frequentist_estimator
+            == "ridge"
+        )
+        assert (
+            ModelConfig(
+                inference_method=InferenceMethod.FREQUENTIST_CVXPY
+            ).frequentist_estimator
+            == "constrained"
+        )
+        assert (
+            ModelConfig(
+                inference_method=InferenceMethod.BAYESIAN_PYMC
+            ).frequentist_estimator
+            is None
+        )
 
-        with pytest.raises(NotImplementedError) as exc:
-            model.fit()
+    def test_fit_never_reaches_pm_sample(self, panel, sample_spy):
+        """The whole point: a frequentist request must not run MCMC.
 
-        assert not sample_spy, "pm.sample was reached despite an unbacked method"
-        assert method.value in str(exc.value)
-
-    def test_refusal_names_the_supported_alternative(self, panel):
-        """Refusing is not enough — it must say what to use instead.
-
-        Ridge *is* MAP under Gaussian coefficient priors, so ``method="map"``
-        is the honest redirect rather than a bare "unsupported".
+        This is the original defect stated positively. It is asserted on the
+        DISPATCHING path rather than on a refusal, because a refusal that never
+        reaches ``pm.sample`` proves nothing once the method is implemented.
         """
-        with pytest.warns(DeprecationWarning):
-            config = ModelConfig(inference_method=InferenceMethod.FREQUENTIST_RIDGE)
-        with pytest.raises(NotImplementedError) as exc:
-            _model(panel, config).fit()
+        config = ModelConfig(
+            inference_method=InferenceMethod.FREQUENTIST_RIDGE,
+            bootstrap_samples=8,
+            optim_maxiter=4,
+        )
+        model = _model(panel, config)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            results = model.fit(
+                search_kwargs={"budget": 4, "horizon": 6, "max_origins": 1}
+            )
 
-        msg = str(exc.value)
-        assert "map" in msg
-        assert "issues/180" in msg
+        assert not sample_spy, "pm.sample was reached for a frequentist fit"
+        assert results.diagnostics["inference_family"] == "frequentist"
+        assert results.diagnostics["estimator"] == "ridge"
+        # Not an approximate posterior — not a posterior at all.
+        assert results.approximate is False
+        # R-hat/ESS describe a sampler; there is no chain here.
+        assert results.converged is None
 
     @pytest.mark.parametrize(
         "method",
@@ -287,11 +313,12 @@ class TestUnimplementedInferenceMethods:
         ],
     )
     def test_bayesian_methods_neither_warn_nor_raise(self, panel, sample_spy, method):
-        """The guard must not touch the supported path."""
+        """The dispatch must not touch the Bayesian path."""
         with warnings.catch_warnings():
             warnings.simplefilter("error", DeprecationWarning)
             config = ModelConfig(inference_method=method, n_draws=10, n_tune=10)
         assert config.is_implemented
+        assert not config.is_frequentist
         _fit_kwargs(_model(panel, config), sample_spy)  # reaches pm.sample
 
     def test_enum_values_are_retained(self):

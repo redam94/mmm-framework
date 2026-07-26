@@ -221,6 +221,8 @@ class DataExtractor(ABC):
         convergence verdict becomes "not assessable" (never a green "converged"
         for an uncalibrated fit). NUTS fits are unaffected.
         """
+        from ...diagnostics import provenance as _prov
+
         diagnostics = dict(diagnostics or {})
         res = getattr(self, "results", None)
         src = getattr(res, "diagnostics", None) if res is not None else None
@@ -228,7 +230,38 @@ class DataExtractor(ABC):
             fit_method = src.get("fit_method")
             if fit_method is not None:
                 diagnostics.setdefault("fit_method", fit_method)
-            if src.get("approximate"):
+            if _prov.is_frequentist(src):
+                # A FREQUENTIST fit is not an approximate posterior — it is not
+                # a posterior at all — so it needs its own branch rather than
+                # borrowing `approximate`. Without this it passes through
+                # untouched and the recomputed R-hat/ESS decide the verdict: on
+                # a (chain=1, draw=B) bootstrap trace that is NaN R-hat (→ None,
+                # which does not raise a flag) and ESS ≈ B (iid replicates), so
+                # the report renders a green "converged".
+                for key in (
+                    "inference_family",
+                    "estimator",
+                    "interval_kind",
+                    "interval_semantics",
+                    "selection_criterion",
+                    "n_boot",
+                    "block_length",
+                    "effective_dof",
+                    "penalty",
+                    "caveats",
+                ):
+                    if key in src:
+                        diagnostics[key] = src[key]
+                diagnostics["approximate"] = False
+                diagnostics["fit_method"] = None
+                for key in (
+                    "rhat_max",
+                    "ess_bulk_min",
+                    "ess_tail_min",
+                    "divergences",
+                ):
+                    diagnostics[key] = None
+            elif src.get("approximate"):
                 diagnostics["approximate"] = True
                 # R-hat / ESS are undefined for a single-path approximation —
                 # the recomputed values (NaN or a spurious VI number) must not
@@ -243,6 +276,26 @@ class DataExtractor(ABC):
         except Exception:
             pass
         return diagnostics
+
+    def stamp_inference_family(self, bundle: Any, diagnostics: Any) -> None:
+        """Copy the estimation paradigm onto the bundle for section gating.
+
+        Kept separate from :meth:`_merge_fit_provenance` (which owns the
+        diagnostics *dict*) because sections read the bundle, not the dict, and
+        a section that has to reach into ``bundle.diagnostics`` to learn what
+        vocabulary to use is a section that will forget to.
+        """
+        from ...diagnostics import provenance as _prov
+
+        if not isinstance(diagnostics, dict):
+            return
+        bundle.inference_family = _prov.family_of(diagnostics)
+        if bundle.inference_family != _prov.FREQUENTIST:
+            return
+        bundle.estimator = diagnostics.get("estimator")
+        bundle.interval_kind = diagnostics.get("interval_kind")
+        bundle.interval_semantics = diagnostics.get("interval_semantics")
+        bundle.frequentist_caveats = _prov.frequentist_caveats(diagnostics)
 
 
 __all__ = [

@@ -234,6 +234,39 @@ class MMMDataBundle:
     # analysis). Drives section gating: channel/ROI sections are MMM-only.
     model_kind: str = "mmm"
 
+    # ----------------------------------------------------------------- #
+    # Estimation PARADIGM (epic #180). Orthogonal to ``model_kind``: that
+    # says what was modelled, this says how it was estimated.
+    #
+    # ``inference_family`` is "bayesian" or "frequentist", and **absence
+    # reads as bayesian** — every bundle built before the frequentist path
+    # existed has no such key. It gates two different things:
+    #
+    #   * WORDING. A bootstrap percentile interval is a *confidence*
+    #     interval. "There is a 90% probability the ROI is in this range"
+    #     is true of a credible interval and false of this one, and that
+    #     sentence is written into a dozen surfaces. Sections read
+    #     ``Section.interval_noun`` / ``interval_phrase`` rather than
+    #     hard-coding "credible".
+    #   * AVAILABILITY. Posterior-predictive checks, Bayesian p-values,
+    #     prior-vs-posterior contraction, SBC and the convergence table
+    #     have no frequentist analogue. Those sections render an
+    #     explanation of why they are absent, not a blank space and not a
+    #     fabricated number.
+    #
+    # ``frequentist_caveats`` carries the estimator's own statements (they
+    # quote the fit's effective degrees of freedom and how many transform
+    # candidates the data could not order), rendered in the banner.
+    inference_family: str = "bayesian"
+    estimator: str | None = None
+    interval_kind: str | None = None
+    interval_semantics: str | None = None
+    frequentist_caveats: list[str] | None = None
+
+    @property
+    def is_frequentist(self) -> bool:
+        return str(self.inference_family).lower() == "frequentist"
+
     # Non-MMM latent-structure results (CFA / LCA / …). ``factor_loadings`` holds
     # the summary table as a list of column dicts (CFA: indicator/factor/loading/…;
     # LCA: class/item/prob/…); ``cfa_fit_indices`` holds the declared estimands

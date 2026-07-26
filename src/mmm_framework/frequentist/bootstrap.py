@@ -566,7 +566,15 @@ def _to_idata(
     used_coords: dict[str, Any] = {"chain": [0], "draw": list(range(n_draws))}
     for name, series in draws.items():
         arr = np.asarray(series, dtype=float)[np.newaxis, ...]  # (1, draw, *shape)
-        dims = [d for d in (var_dims.get(name) or []) if d]
+        # PyMC accepts `dims="control"` as a bare STRING as well as a 1-tuple,
+        # and iterating a string yields characters — so the length check below
+        # would silently fall through to anonymous axes. A variable with NO
+        # declared dims legitimately gets anonymous ones; that matches what a
+        # NUTS trace of the same model carries.
+        declared = var_dims.get(name) or ()
+        if isinstance(declared, str):
+            declared = (declared,)
+        dims = [d for d in declared if d]
         if len(dims) == arr.ndim - 2 and all(
             d in model_coords and len(model_coords[d]) == arr.shape[2 + i]
             for i, d in enumerate(dims)
@@ -579,8 +587,16 @@ def _to_idata(
         data_vars[name] = (["chain", "draw", *axes], arr)
 
     ds = xr.Dataset(data_vars, coords=used_coords)
+    # netCDF has no boolean attribute type, and `bool` is an `int` subclass —
+    # so an unguarded isinstance check lets `approximate: False` through and the
+    # first `trace.to_netcdf()` raises. Booleans are stringified rather than
+    # dropped: they are the provenance flags a reader most wants to see.
     ds.attrs.update(
-        {k: v for k, v in attrs.items() if isinstance(v, (str, int, float))}
+        {
+            k: (str(v) if isinstance(v, bool) else v)
+            for k, v in attrs.items()
+            if isinstance(v, (str, int, float))
+        }
     )
     return arviz_compat.dataset_to_idata(ds)
 
@@ -601,6 +617,46 @@ def _panel_with_y(panel: "PanelDataset", y_raw: "NDArray[np.floating]"):
     )
 
 
+class _Solve:
+    """One replicate's solve — ridge, or the constrained QP when asked.
+
+    Both estimators take ``(design, y, penalty)`` and return a coefficient
+    vector, so the bootstrap loop does not branch. ``ConstrainedFit`` carries no
+    ``residual_sd`` or ``effective_dof``, so those are derived here using the
+    **unconstrained** ridge dof — an upper bound, since an active constraint can
+    only remove freedom. It is used to inflate the residuals and to describe how
+    hard the penalty is working, and both readings stay conservative under an
+    upper bound.
+    """
+
+    def __init__(self, penalty: float, nonneg, constraints) -> None:
+        self.penalty = float(penalty)
+        self.nonneg = nonneg
+        self.constraints = list(constraints or [])
+        self.estimator = "constrained" if self.constraints else "ridge"
+
+    def __call__(self, design: "DesignMatrix", y=None, penalty: float | None = None):
+        pen = self.penalty if penalty is None else float(penalty)
+        if not self.constraints:
+            fit = fit_ridge(design, y=y, penalty=pen, nonneg=self.nonneg)
+            return fit.theta, fit.residual_sd, fit.at_boundary, fit.effective_dof
+
+        from .ridge import _effective_dof
+        from .constrained import fit_constrained
+
+        fit = fit_constrained(
+            design, y=y, penalty=pen, constraints=self.constraints
+        )
+        y_vec = np.asarray(design.y if y is None else y, dtype=float)
+        resid = y_vec - design.X @ fit.theta
+        edof = _effective_dof(
+            np.asarray(design.X, dtype=float), pen, design.penalize.astype(float)
+        )
+        n = design.n_obs
+        sd = float(np.sqrt(float(resid @ resid) / max(n - edof, 1.0)))
+        return fit.theta, sd, fit.at_boundary, edof
+
+
 def bootstrap_fit(
     panel: "PanelDataset",
     *,
@@ -613,6 +669,7 @@ def bootstrap_fit(
     block_length: int | None = None,
     refit_search: bool = False,
     nonneg: "bool | Sequence[str]" = False,
+    constraints: "Sequence[Any] | None" = None,
     search_kwargs: "Mapping[str, Any] | None" = None,
     seed: int | None = None,
     progress: "Callable[[int, int], None] | None" = None,
@@ -643,7 +700,19 @@ def bootstrap_fit(
             the module docstring for why it is not the default. Requires trend
             ``none`` or ``linear`` (the search's own restriction).
         nonneg: Passed to :func:`~mmm_framework.frequentist.ridge.fit_ridge`.
-            ``True`` constrains the media block to be non-negative.
+            ``True`` constrains the media block to be non-negative. Ignored when
+            ``constraints`` is supplied (express it as a constraint instead).
+        constraints: Linear constraints from
+            :mod:`~mmm_framework.frequentist.constrained`, or a **factory**
+            ``(design) -> list[Constraint]`` for the common case where the
+            estimator is chosen before a transform point exists (a Constraint's
+            row is indexed by design column). Non-empty switches
+            every replicate to the convex program and stamps
+            ``estimator="constrained"``; this is what ``frequentist_cvxpy``
+            reaches, and it needs the optional ``[frequentist]`` extra. A
+            coefficient pinned by an active constraint has **no meaningful
+            two-sided interval** — those columns are listed in
+            ``diagnostics["at_boundary"]``.
         search_kwargs: Extra keyword arguments for ``search_transforms``.
         seed: Seed for the resampling (and for the search, when it runs).
         progress: Optional ``(done, total)`` callback, called per replicate.
@@ -676,6 +745,15 @@ def bootstrap_fit(
     trend_type = str(getattr(trend_config.type, "value", trend_config.type))
     search_kwargs = dict(search_kwargs or {})
     rng = np.random.default_rng(seed)
+
+    # -- 0. refuse early -------------------------------------------------------
+    # Before the search, so the message names the MODEL feature that is not
+    # linear rather than the search step that happened to hit it first.
+    from ..model.base import BayesianMMM as _BMMM
+
+    from .design import _reject_unsupported
+
+    _reject_unsupported(_BMMM(panel, model_config, trend_config))
 
     # -- 1. the transform point ------------------------------------------------
     search_result = None
@@ -716,18 +794,26 @@ def bootstrap_fit(
         model_config=model_config,
         trend_config=trend_config,
     )
-    base = fit_ridge(design, penalty=float(penalty), nonneg=nonneg)
+    if callable(constraints):
+        # `frequentist_cvxpy` selects the estimator before a transform point
+        # exists, and a Constraint's `a` vector is indexed by design column — so
+        # the constraint set is supplied as a factory and resolved here, once the
+        # search has produced a design. Column ORDER is a function of the config,
+        # not of the transform point, so a `refit_search` rebuild reuses these
+        # rows safely.
+        constraints = constraints(design)
+    solve = _Solve(float(penalty), nonneg, constraints)
+    theta_hat, base_sd, base_boundary, base_edof = solve(design)
 
-    y_std_scale = design.y
-    fitted = design.X @ base.theta
-    resid = y_std_scale - fitted
+    fitted = design.X @ theta_hat
+    resid = design.y - fitted
     resid = resid - resid.mean()
     # Residuals from a penalized fit are shrunk toward the fitted surface, so
     # resampling them raw understates the noise. The OLS `sqrt(n/(n-p))`
     # correction generalizes with the EFFECTIVE degrees of freedom, which is
     # exactly what makes `effective_dof` load-bearing rather than decorative.
     n_obs = int(design.n_obs)
-    inflate = math.sqrt(n_obs / max(n_obs - base.effective_dof, 1.0))
+    inflate = math.sqrt(n_obs / max(n_obs - base_edof, 1.0))
     resid = resid * inflate
 
     # -- 3. the block length ---------------------------------------------------
@@ -794,8 +880,8 @@ def bootstrap_fit(
                 rep_roi = np.array(
                     [rep_design.roi_scale.get(c, 1.0) for c in evaluator.channels]
                 )
-            rep = fit_ridge(rep_design, y=y_star, penalty=rep_penalty, nonneg=nonneg)
-            values = evaluator(rep.theta, rep.residual_sd, rep_transform, rep_roi)
+            rep_theta, rep_sd, _, _ = solve(rep_design, y_star, rep_penalty)
+            values = evaluator(rep_theta, rep_sd, rep_transform, rep_roi)
         except (
             Exception
         ) as exc:  # noqa: BLE001 - one bad replicate must not kill the fit
@@ -826,7 +912,7 @@ def bootstrap_fit(
     diagnostics: dict[str, Any] = {
         # -- provenance contract (technical-docs/frequentist-estimation.md §8) --
         "inference_family": "frequentist",
-        "estimator": "ridge",
+        "estimator": solve.estimator,
         "interval_kind": "bootstrap_percentile",
         "interval_semantics": semantics,
         "selection_criterion": criterion,
@@ -842,19 +928,24 @@ def bootstrap_fit(
         "residual_rho": float(rho),
         "residual_inflation": float(inflate),
         "penalty": float(penalty),
-        "effective_dof": float(base.effective_dof),
+        "effective_dof": float(base_edof),
         "n_params": int(design.n_params),
         "n_obs": n_obs,
-        "residual_sd": float(base.residual_sd),
-        "nonneg": bool(base.diagnostics.get("nonneg")),
+        "residual_sd": float(base_sd),
+        "nonneg": bool(nonneg),
+        "constraints": [str(getattr(c, "label", c)) for c in (constraints or [])],
         "at_boundary": [
-            c for c, on in zip(design.columns, base.at_boundary, strict=False) if on
+            c for c, on in zip(design.columns, base_boundary, strict=False) if on
         ],
         "transform_alpha": {k: dict(v) for k, v in dict(alpha).items()},
         "transform_lam": {k: dict(v) for k, v in dict(lam).items()},
-        "point_estimate": base.as_dict(),
+        "point_estimate": dict(
+            zip(design.columns, (float(v) for v in theta_hat), strict=False)
+        ),
         "elapsed_s": float(time.perf_counter() - t0),
-        "caveats": _caveats(semantics, base, criterion, search_result),
+        "caveats": _caveats(
+            semantics, base_edof, design.n_params, criterion, search_result
+        ),
     }
     if search_result is not None:
         near = search_result.spread(0.10)
@@ -870,7 +961,11 @@ def bootstrap_fit(
 
 
 def _caveats(
-    semantics: str, base: Any, criterion: str, search_result: Any
+    semantics: str,
+    effective_dof: float,
+    n_params: int,
+    criterion: str,
+    search_result: Any,
 ) -> list[str]:
     """The statements that must ride with any rendered interval from this path."""
     out = [
@@ -880,12 +975,12 @@ def _caveats(
         "parameter. 'There is a 90% probability the ROI is in this range' is "
         "false for them.",
     ]
-    shrunk = base.effective_dof < 0.95 * base.diagnostics.get("n_params", 0)
+    shrunk = effective_dof < 0.95 * n_params
     out.append(
         "Ridge is biased by construction, so a percentile interval covers the "
         "estimator's sampling distribution rather than the true parameter. The "
-        f"penalty is currently using {base.effective_dof:.1f} of "
-        f"{base.diagnostics.get('n_params', 0)} effective degrees of freedom"
+        f"penalty is currently using {effective_dof:.1f} of "
+        f"{n_params} effective degrees of freedom"
         + (
             " — it is doing real work here, so read coverage for the truth as "
             "below nominal."

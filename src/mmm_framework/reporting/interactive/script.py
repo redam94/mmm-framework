@@ -18,6 +18,14 @@ INTERACTIVE_REPORT_JS = r"""
   var TH = window.__IR_THEME__ || {};
   if (!IR) return;
 
+  // Interval vocabulary, inherited from the payload rather than hard-coded.
+  // The arithmetic below (window sums, equal-tailed quantiles) is identical
+  // across paradigms; the sentence a reader is licensed to say is not. A
+  // bootstrap percentile interval is a CONFIDENCE interval — "there is a 90%
+  // probability the value is in this range" is false for it.
+  var IR_FREQ = ((IR.meta || {}).inference_family || 'bayesian') === 'frequentist';
+  var IR_CI_NOUN = IR_FREQ ? 'confidence interval' : 'credible interval';
+
   // ── decoding + math ────────────────────────────────────────────────────
   function b64f32(b64) {
     var bin = atob(b64), bytes = new Uint8Array(bin.length);
@@ -1128,7 +1136,7 @@ INTERACTIVE_REPORT_JS = r"""
     var mean = Math.round((f.mean || 0) * 100);
     var lo = Math.round((f.lower || 0) * 100);
     var hi = Math.round((f.upper || 0) * 100);
-    var head = '<div class="callout" style="background:' + (TH.accent || '#5a7a3a') + '18;color:' + (TH.accent || '#5a7a3a') + ';padding:.7rem 1rem;border-radius:8px;margin-bottom:1rem"><strong>Estimated ' + mean + '% long-term (brand)</strong> — 90% credible interval [' + lo + '%, ' + hi + '%] of the total media effect; the rest is short-term activation.</div>';
+    var head = '<div class="callout" style="background:' + (TH.accent || '#5a7a3a') + '18;color:' + (TH.accent || '#5a7a3a') + ';padding:.7rem 1rem;border-radius:8px;margin-bottom:1rem"><strong>Estimated ' + mean + '% long-term (brand)</strong> — 90% ' + IR_CI_NOUN + ' [' + lo + '%, ' + hi + '%] of the total media effect; the rest is short-term activation.</div>';
     var chans = lt.channels || [];
     var body = '';
     if (chans.length) {

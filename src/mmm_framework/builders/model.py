@@ -349,30 +349,57 @@ class ModelConfigBuilder:
         return self
 
     def frequentist_ridge(self) -> Self:
-        """**Not implemented** — selecting this makes ``fit()`` raise.
+        """Ridge estimation with bootstrap confidence intervals (epic #180).
 
-        The enum value exists but no ridge estimator backs it. Until one does
-        (tracking: `#180 <https://github.com/redam94/mmm-framework/issues/180>`_),
-        use :meth:`ModelConfigBuilder.map_fit` / ``fit(method="map")`` for a fast
-        penalized point estimate — under Gaussian coefficient priors, MAP *is*
-        ridge regression.
+        A **different paradigm**, not a faster Bayesian one. Adstock and
+        saturation are chosen by rolling-origin out-of-sample search rather than
+        estimated under priors, the remaining coefficients are solved in closed
+        form, and the intervals come from a moving-block residual bootstrap.
 
-        Kept on the builder so stored configs and existing call sites still
-        construct; the refusal happens at fit time with an actionable message.
+        Not a synonym for ``fit(method="map")``: ridge is MAP under *Gaussian*
+        coefficient priors, and this framework's media prior is
+        ``Gamma(mu=1.5, sigma=1)`` or ``LogNormal(0, 1)`` on ROI — neither of
+        which is Gaussian, so MAP here is a different penalized estimator. What
+        this adds is transform selection by search, bootstrap confidence
+        intervals, and (via :meth:`frequentist_cvxpy`) hard constraints.
+
+        ``MMMResults.converged`` is ``None`` for such a fit and every report
+        surface labels its intervals as confidence intervals. Requires a model
+        that is linear given fixed transforms; a GP trend, per-geo media
+        coefficients or reach/frequency channels raise, naming the feature.
         """
         self._inference_method = InferenceMethod.FREQUENTIST_RIDGE
         return self
 
     def frequentist_cvxpy(self) -> Self:
-        """**Not implemented** — selecting this makes ``fit()`` raise.
+        """Constrained estimation via a convex program (epic #180).
 
-        Constrained (sign / sum / monotonicity) estimation via a convex program
-        is tracked in `#180 <https://github.com/redam94/mmm-framework/issues/180>`_.
-        For a sign constraint today, use a positive-only coefficient prior
-        (``PriorConfigBuilder().half_normal(...)``), which constrains the sign in
-        the Bayesian path.
+        Everything :meth:`frequentist_ridge` does, with **hard** linear
+        constraints the solver must satisfy exactly — the one capability a prior
+        cannot express. A ``HalfNormal`` prior makes a negative coefficient
+        merely unlikely; a constraint makes it impossible, and a
+        sum-of-contributions constraint ("match the number finance booked") has
+        no prior analogue at all.
+
+        Selecting this with no explicit ``constraints=`` applies non-negative
+        media, the one restriction every MMM wants. Needs the optional extra:
+        ``pip install 'mmm-framework[frequentist]'`` (``cvxpy``).
+
+        A coefficient pinned by an active constraint has **no meaningful
+        two-sided interval**; those columns are listed in
+        ``diagnostics["at_boundary"]``.
         """
         self._inference_method = InferenceMethod.FREQUENTIST_CVXPY
+        return self
+
+    def with_inference_method(self, method: "InferenceMethod | str") -> Self:
+        """Set the inference method (paradigm) directly.
+
+        The generic form of :meth:`bayesian_pymc` / :meth:`frequentist_ridge` /
+        …, for a caller holding the enum value rather than choosing at the call
+        site — e.g. the agent spec layer mapping ``inference.method``.
+        """
+        self._inference_method = InferenceMethod(method)
         return self
 
     # MCMC settings

@@ -92,6 +92,7 @@ class ExtendedMMMExtractor(DataExtractor, EstimandPPCMixin):
             bundle.diagnostics = self._merge_fit_provenance(
                 self._extract_diagnostics(self.model._trace)
             )
+            self.stamp_inference_family(bundle, bundle.diagnostics)
 
             if is_multi:
                 self._extract_multioutcome_fit(bundle)

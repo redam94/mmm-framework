@@ -95,6 +95,7 @@ class BayesianMMMExtractor(
             bundle.diagnostics = self._merge_fit_provenance(
                 self._extract_diagnostics(getattr(self.mmm, "_trace", None))
             )
+            self.stamp_inference_family(bundle, bundle.diagnostics)
 
             # ROI and contributions
             bundle.channel_roi = self._compute_channel_roi()
@@ -119,13 +120,24 @@ class BayesianMMMExtractor(
             # Trace data for diagnostics
             bundle.trace_data, bundle.trace_parameters = self._get_trace_data()
 
-            # Prior/posterior
-            bundle.prior_samples, bundle.posterior_samples = self._get_prior_posterior()
+            # Prior/posterior. A frequentist fit has NO prior — the transforms
+            # came from an out-of-sample search and the coefficients from a
+            # penalized solve — so prior-vs-posterior contraction has nothing to
+            # measure. Skipped rather than filled with the fallback synthetic
+            # priors, which would render a "prior-dominated" chip about a prior
+            # that does not exist.
+            if not bundle.is_frequentist:
+                bundle.prior_samples, bundle.posterior_samples = (
+                    self._get_prior_posterior()
+                )
 
             # Estimand results (mean + CI) and posterior-predictive goodness-of-fit.
             # Both are best-effort so a report never fails on them.
             bundle = self._extract_estimands(bundle)
-            bundle = self._extract_posterior_predictive(bundle)
+            if not bundle.is_frequentist:
+                # A posterior-predictive p-value is undefined without a
+                # posterior; leaving the field empty is what gates the section.
+                bundle = self._extract_posterior_predictive(bundle)
             # Short-term vs long-term / brand split (issue #106).
             bundle = self._extract_long_term(bundle)
             # CFO one-pager: P&L rollup + spend-cut revenue-at-risk (issue #108).

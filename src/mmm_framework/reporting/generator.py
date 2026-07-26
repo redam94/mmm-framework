@@ -540,13 +540,25 @@ class MMMReportGenerator:
                 f'<p class="confidential-notice">CONFIDENTIAL{client_label} — '
                 "not for distribution</p>"
             )
+        # The footer names the paradigm outright: it is the last thing a reader
+        # sees and the one place the whole document's provenance is stated.
+        _freq = bool(getattr(self.data, "is_frequentist", False))
+        _family = "frequentist" if _freq else "bayesian"
+        from ..diagnostics.provenance import interval_noun, interval_phrase
+
+        _model_desc = (
+            "a marketing mix model estimated by penalized regression with "
+            "bootstrap resampling"
+            if _freq
+            else "a Bayesian marketing mix model"
+        )
         footer = f"""
         <footer class="report-footer">
             {conf_line}
-            <p>ROI, credible intervals, saturation curves and carryover rates are
-               output from a Bayesian marketing mix model; figures carry
-               {int(self.config.default_credible_interval * 100)}% credible
-               intervals unless noted. Weekly flighting patterns are illustrative —
+            <p>ROI, {interval_noun(_family, plural=True)}, saturation curves and
+               carryover rates are output from {_model_desc}; figures carry
+               {interval_phrase(self.config.default_credible_interval, _family)}s
+               unless noted. Weekly flighting patterns are illustrative —
                modelled to be consistent with the channel-level estimates — and are
                marked as such where they appear. Point estimates alone are not
                decisions. Generated {generated_date} with the MMM Framework.</p>
