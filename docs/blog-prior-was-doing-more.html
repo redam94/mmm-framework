@@ -202,7 +202,7 @@
 
             <div class="interactive-box">
                 <h4>Where the two criteria part company</h4>
-                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Analytic large-sample values for a single confounded regressor, so nothing here is sampling noise. <strong>Blue</strong>: absolute bias in the estimated media effect. <strong>Amber</strong>: out-of-sample prediction error, plotted on its own scale. The <strong>dashed</strong> marker is the shrinkage cross-validation selects (the minimum of the amber curve); the <strong>dotted</strong> marker is a fixed prior's shrinkage, which does not move with the data. Drag the slider to open and close the back-door path.</p>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Analytic large-sample values for a single confounded regressor, so nothing here is sampling noise. <strong>Distance from the truth</strong> is the absolute bias in the estimated media effect; <strong>out-of-sample error</strong> is prediction error on held-out data, plotted against its own scale on the right. The <strong>dashed</strong> vertical marks the shrinkage cross-validation selects &mdash; the minimum of the prediction-error curve; the <strong>dotted</strong> vertical is a fixed prior's shrinkage, which does not move with the data. Drag the slider to open and close the back-door path.</p>
                 <div class="control-row">
                     <label>Confounding strength (how much demand drives spend)</label>
                     <input type="range" id="cfKappa" min="0" max="0.85" step="0.05" value="0.55">
@@ -302,8 +302,7 @@ ridge_results = ridge_model.fit(random_seed=42)</code></pre>
     <script>
     (function () {
         'use strict';
-        if (typeof BlogViz === 'undefined' || typeof Plotly === 'undefined') return;
-        var BV = BlogViz;
+        if (typeof BV === 'undefined' || typeof Plotly === 'undefined') return;
 
         // ------------------------------------------------------------------
         // One confounded regressor, large-sample (analytic) values.
@@ -375,7 +374,13 @@ ridge_results = ridge_model.fit(random_seed=42)</code></pre>
             ];
 
             Plotly.react('cfChart', traces, BV.layout({
-                xaxis: { title: 'Shrinkage applied &nbsp;(1.0 = none)' },
+                xaxis: {
+                    title: 'Shrinkage applied &nbsp;(1.0 = none)',
+                    // Padded past 1.0 so the cross-validation marker, which lands
+                    // exactly at 1.0, reads as a marker rather than as the plot's
+                    // own border. The curves themselves still stop at 1.0.
+                    range: [0.28, 1.045]
+                },
                 yaxis: { title: 'Distance from truth', rangemode: 'tozero' },
                 yaxis2: {
                     title: 'Out-of-sample error', overlaying: 'y', side: 'right',
@@ -394,6 +399,22 @@ ridge_results = ridge_model.fit(random_seed=42)</code></pre>
         BV.register(draw);
         draw();
     })();
+    </script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
     </script>
 </body>
 </html>
