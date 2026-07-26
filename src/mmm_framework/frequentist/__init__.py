@@ -21,6 +21,14 @@ but not identical.
 """
 
 from ._transforms import adstock_panel, adstock_series, saturate
+from .bootstrap import (
+    bc_interval,
+    bca_interval,
+    bootstrap_fit,
+    estimate_block_length,
+    moving_block_indices,
+    residual_autocorrelation,
+)
 from .constrained import ConstrainedFit, InfeasibleConstraints, fit_constrained
 from .design import DesignMatrix, UnsupportedModelError, build_design_matrix
 from .ridge import RidgeFit, fit_ridge
@@ -36,9 +44,15 @@ __all__ = [
     "UnsupportedModelError",
     "adstock_panel",
     "adstock_series",
+    "bc_interval",
+    "bca_interval",
+    "bootstrap_fit",
     "build_design_matrix",
+    "estimate_block_length",
     "fit_constrained",
     "fit_ridge",
+    "moving_block_indices",
+    "residual_autocorrelation",
     "search_transforms",
     "saturate",
 ]

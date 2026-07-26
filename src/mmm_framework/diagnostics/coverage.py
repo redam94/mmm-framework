@@ -552,6 +552,8 @@ def run_recovery_coverage(
     params: list[str] | None = None,
     include_contributions: bool = True,
     progress: Callable[[int, int], None] | None = None,
+    refit: Callable[[np.ndarray, int], Any] | None = None,
+    extra_caveats: tuple[str, ...] = (),
 ) -> RecoveryCoverageResult:
     """Fixed-truth recovery coverage for a :class:`BayesianMMM`.
 
@@ -569,6 +571,28 @@ def run_recovery_coverage(
     intervals cover?" Under-coverage here is a mechanical problem (approximate
     inference, sampler, priors); it deliberately cannot see real-world
     misspecification — see the module docstring.
+
+    Args:
+        refit: Estimator injection. ``None`` (default) refits the PyMC model
+            with ``pm.observe`` + NUTS, which is the only thing this used to be
+            able to do. Supply a callable ``(y_sim, seed) -> idata`` to grade a
+            **non-PyMC** estimator — the frequentist ridge + bootstrap path
+            (#186) is why the hook exists. The simulate-from-the-model half is
+            unchanged, so both paths are graded against the same θ* and the same
+            central equal-tailed intervals. The callable may return anything
+            carrying a ``.posterior`` mapping, or a plain
+            ``{name: draws}`` mapping.
+        extra_caveats: Statements appended verbatim to the result's caveats.
+            Required for the frequentist path: this function auto-attaches an
+            uncertainty caveat for ``advi``/``fullrank_advi`` only, so ridge
+            shrinkage bias and conditional-on-selection intervals must be passed
+            explicitly or they go unstated.
+
+    Note:
+        Parameters the injected estimator holds **fixed** (the frequentist path
+        fixes adstock and saturation) have degenerate draws, and their coverage
+        is not meaningful. Pass ``params=[...]`` to restrict the table to the
+        quantities the estimator actually estimates.
     """
     import pymc as pm
 
@@ -612,15 +636,18 @@ def run_recovery_coverage(
     for i in range(int(n_sims)):
         y_sim = np.asarray(y_sims[0, i], dtype=float)
         try:
-            swapped = pm.observe(graph, {obs_name: y_sim})
-            idata = _sample_swapped(
-                swapped,
-                sampler=sampler,
-                L=int(L),
-                tune=int(tune),
-                chains=int(chains),
-                seed=int(seed) + 7919 * (i + 1),
-            )
+            if refit is not None:
+                idata = refit(y_sim, int(seed) + 7919 * (i + 1))
+            else:
+                swapped = pm.observe(graph, {obs_name: y_sim})
+                idata = _sample_swapped(
+                    swapped,
+                    sampler=sampler,
+                    L=int(L),
+                    tune=int(tune),
+                    chains=int(chains),
+                    seed=int(seed) + 7919 * (i + 1),
+                )
         except Exception as e:  # noqa: BLE001
             failed += 1
             if failed == 1:
@@ -628,7 +655,7 @@ def run_recovery_coverage(
             if progress:
                 progress(i + 1, int(n_sims))
             continue
-        post = idata.posterior
+        post = getattr(idata, "posterior", idata)
         for p in scalar_params:
             if p in truths and p in post:
                 draws_by_target[p].append(
@@ -645,7 +672,15 @@ def run_recovery_coverage(
         if progress:
             progress(i + 1, int(n_sims))
 
-    extra: list[str] = []
+    extra: list[str] = list(extra_caveats)
+    if refit is not None:
+        sampler = f"injected:{sampler}" if sampler != "numpyro" else "injected"
+        extra.append(
+            "Refits used an injected estimator, not the model's own sampler. "
+            "Any parameter that estimator holds fixed has degenerate draws and "
+            "its coverage number is meaningless — read the targets it actually "
+            "estimates."
+        )
     if truth_source.startswith("posterior_mean"):
         extra.append(
             "Truth = the fitted posterior mean: this checks the machinery at a "
