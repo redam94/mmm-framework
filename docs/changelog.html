@@ -136,7 +136,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-25",
+          "dateModified": "2026-07-26",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/changelog.html#breadcrumb"
           },
@@ -186,7 +186,7 @@
         <main class="main-content">
             <h1 id="status">Versioning &amp; Changelog</h1>
             <p class="lead">
-                The MMM Framework is at <strong>version 1.2.0</strong>, published on
+                The MMM Framework is at <strong>version 1.3.0</strong>, published on
                 <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>
                 (<code>pip install mmm-framework</code>).
                 From 1.0.0 on, the project follows <a href="https://semver.org" target="_blank" rel="noopener">semantic
@@ -204,7 +204,7 @@
                     (see <a href="rest-api.html">REST API reference</a>). Modules marked
                     <em>Experimental</em> below may still change in minor releases &mdash; they are
                     flagged in the stability grid and in their docstrings. Pinning
-                    (<code>pip install mmm-framework==1.2.0</code>) remains good production hygiene.
+                    (<code>pip install mmm-framework==1.3.0</code>) remains good production hygiene.
                 </p>
             </div>
 
@@ -274,9 +274,61 @@
 
             <div class="release">
                 <div class="release-header">
+                    <span class="release-version">1.3.0</span>
+                    <span class="release-date">2026-07-26</span>
+                    <span class="release-tag">Current</span>
+                </div>
+                <p style="margin: 0.5rem 0 0.5rem 0;">
+                    A <strong>second estimation paradigm</strong>. With each channel's carryover and
+                    saturation held fixed, this model is linear in everything else &mdash; so it can be
+                    solved in closed form instead of sampled. <code>frequentist_ridge</code> and
+                    <code>frequentist_cvxpy</code>, enum values since early in the project, now select
+                    a real estimator: transforms chosen by rolling-origin out-of-sample search, a
+                    penalized linear solve, and confidence intervals from a moving-block bootstrap.
+                    <code>frequentist_cvxpy</code> adds hard linear constraints &mdash; a sign
+                    restriction, an ordering, a contribution total that must match a booked number
+                    &mdash; via the optional <code>[frequentist]</code> extra.
+                </p>
+                <div class="callout" style="margin: 0.75rem 0; padding: 0.9rem 1.1rem; border-left: 4px solid var(--color-primary); background: rgba(90,122,58,0.07); border-radius: 8px;">
+                    <strong>Use the Bayesian path.</strong> Graded against planted truth on five
+                    synthetic worlds, ridge wins only on the positive control and is worse everywhere
+                    else &mdash; most starkly under unobserved confounding, where it over-credits media
+                    <strong>+41.6%</strong> against MAP's +5.9%. Reach for the frequentist path when you
+                    need a hard constraint a prior cannot express, a fast second opinion for
+                    triangulation, or iteration speed; not to publish intervals, and not on data you
+                    suspect of confounding. The reasoning is in
+                    <a href="blog-prior-was-doing-more.html">The Prior Was Doing More Than You Thought</a>.
+                </div>
+                <ul>
+                    <li><strong>Honest labelling throughout.</strong> A frequentist fit reports
+                        <code>converged</code> as <code>None</code> rather than <code>True</code> &mdash;
+                        R-hat and effective sample size describe an MCMC sampler and there is no chain
+                        &mdash; and every interval it produces is named a <em>confidence</em> interval.
+                        Posterior-predictive checks, Bayesian p-values, prior-predictive checks and
+                        prior-to-posterior contraction are gated off with a stated reason rather than
+                        computed anyway.</li>
+                    <li><strong>Block bootstrap, because residuals are autocorrelated.</strong> Block
+                        length is estimated from the residual autocorrelation rather than assumed. At
+                        &rho;&nbsp;=&nbsp;0.6, an iid bootstrap covers 79.6% of nominal 90% intervals
+                        and the block version 90.4%; at &rho;&nbsp;=&nbsp;0 the two agree, so nothing
+                        pays a width penalty for a dependence that is not there.</li>
+                    <li><strong>The cheap interval is labelled, not silently shipped.</strong>
+                        Conditioning every replicate on one transform search omits selection
+                        uncertainty &mdash; measured at 2.1&times;&ndash;7.6&times; too narrow on one
+                        dataset. <code>refit_search=True</code> is the publishable interval.</li>
+                    <li><strong>New:</strong> <code>run_recovery_coverage(refit=...)</code> grades any
+                        estimator, not only PyMC ones; <code>mmm_framework.diagnostics.provenance</code>
+                        is the single source of estimation-paradigm vocabulary. Absence of the
+                        provenance field reads as Bayesian, so no existing fit changes.</li>
+                    <li>Notebook: <code>nbs/demos/frequentist_vs_bayesian.ipynb</code> &mdash; the
+                        paradigm axis, alongside the existing method and backend comparisons.</li>
+                </ul>
+            </div>
+
+            <div class="release">
+                <div class="release-header">
                     <span class="release-version">1.2.0</span>
                     <span class="release-date">2026-07-25</span>
-                    <span class="release-tag">Current</span>
                 </div>
                 <p style="margin: 0.5rem 0 0.5rem 0;">
                     Knobs that read as configuration and were no-ops. Sampler selection worked in one

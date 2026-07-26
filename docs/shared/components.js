@@ -228,7 +228,8 @@
             ['blog-bed-bo-bandits.html', 'BED vs. BO vs. Bandits'],
             ['blog-thompson-sampling.html', 'Thompson Sampling in Practice'],
             ['blog-continuous-learning-interactions.html', 'Continuous Learning with Interactions'],
-            ['blog-vendor-graded-homework.html', 'Vendor-Graded Homework']
+            ['blog-vendor-graded-homework.html', 'Vendor-Graded Homework'],
+            ['blog-prior-was-doing-more.html', 'The Prior Was Doing More Than You Thought']
         ]
     };
 
@@ -332,6 +333,7 @@
         'blog-curve-assumed-you-wouldnt-act.html': TIER_ANALYST,
         'blog-modelled-one-p.html': TIER_ANALYST,
         'blog-vendor-graded-homework.html': TIER_ANALYST,
+        'blog-prior-was-doing-more.html': TIER_ANALYST,
         'blog-platform-divergent-delivery.html': TIER_ANALYST,
         'blog-holdout-error-mmm.html': TIER_ANALYST,
         'blog-advertising-is-a-stock.html': TIER_ANALYST,
