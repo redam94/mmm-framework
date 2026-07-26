@@ -54,7 +54,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from ..config import SaturationType
+from ..frequentist._transforms import SATURATION_PARAMS, saturate
 from ..transforms.adstock import adstock_weights, geometric_adstock_2d
 from ..transforms.seasonality import create_fourier_features
 
@@ -371,26 +371,37 @@ class PosteriorForecaster:
         return windows @ kernels  # (n_full, n_samples)
 
     def _saturate(self, channel: str, x_ad: np.ndarray) -> np.ndarray:
-        """Apply the channel's saturation; mirrors ``_apply_saturation_pt``."""
-        model = self.model
-        kind = model._get_saturation_config(channel).type
-        if kind == SaturationType.LOGISTIC:
-            lam = self._get(f"sat_lam_{channel}")
-            exponent = np.clip(-lam[None, :] * x_ad, -20, 0)
-            return 1 - np.exp(exponent)
-        if kind == SaturationType.HILL:
-            half = self._get(f"sat_half_{channel}")
-            slope = self._get(f"sat_slope_{channel}")
-            x_safe = np.maximum(x_ad, 1e-9)
-            x_pow = x_safe ** slope[None, :]
-            return x_pow / (x_pow + half[None, :] ** slope[None, :])
-        if kind == SaturationType.MICHAELIS_MENTEN:
-            half = self._get(f"sat_half_{channel}")
-            return x_ad / (x_ad + half[None, :])
-        if kind == SaturationType.TANH:
-            half = self._get(f"sat_half_{channel}")
-            return np.tanh(x_ad / half[None, :])
-        return x_ad  # SaturationType.NONE
+        """Apply the channel's saturation, per posterior draw.
+
+        Delegates to :func:`mmm_framework.frequentist._transforms.saturate`, the
+        single numpy mirror of
+        :func:`~mmm_framework.model.base._apply_saturation_pt`, so the forecaster
+        and the frequentist design matrix (#180) cannot drift from the graph or
+        from each other.
+
+        This method previously carried its own copy covering four families and
+        returning ``x_ad`` unchanged for anything else — so a channel configured
+        with ``SaturationType.ROOT`` was forecast **unsaturated**, and every
+        backtest metric on such a model was wrong. Dispatching through the shared
+        table makes an unhandled family a loud error rather than a silent
+        identity.
+
+        Posterior parameters arrive shaped ``(n_draws,)`` and are reshaped to
+        ``(1, n_draws)`` to broadcast against ``x_ad``'s ``(n_obs, n_draws)``.
+        """
+        kind = self.model._get_saturation_config(channel).type
+        params: dict[str, np.ndarray] = {}
+        for name in SATURATION_PARAMS[kind]:
+            values = self._get(f"{name}_{channel}")
+            if values is None:
+                raise KeyError(
+                    f"Saturation parameter '{name}_{channel}' is not in the "
+                    f"trace, so channel '{channel}' ({kind.value} saturation) "
+                    "cannot be forecast. Was the model fitted with a different "
+                    "saturation configuration than the one it now carries?"
+                )
+            params[name] = np.asarray(values)[None, :]
+        return saturate(x_ad, kind, **params)
 
     # -- forecast -----------------------------------------------------------
 
