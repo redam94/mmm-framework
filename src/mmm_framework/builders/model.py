@@ -295,7 +295,7 @@ class ModelConfigBuilder:
         self._optim_maxiter: int = 500
         self._optim_seed: int | None = 42
         self._use_parametric_adstock: bool = True
-        self._fit_method: FitMethod = FitMethod.NUTS
+        self._fit_method: FitMethod | None = FitMethod.NUTS
         self._likelihood: LikelihoodConfig | None = None
 
     # Model specification
@@ -369,6 +369,10 @@ class ModelConfigBuilder:
         coefficients or reach/frequency channels raise, naming the feature.
         """
         self._inference_method = InferenceMethod.FREQUENTIST_RIDGE
+        # `FitMethod` has no frequentist member; leaving the "nuts" default
+        # here makes an UNFITTED model's prefit readout and saved settings
+        # announce a full MCMC posterior for a config that will never run one.
+        self._fit_method = None
         return self
 
     def frequentist_cvxpy(self) -> Self:
@@ -390,6 +394,10 @@ class ModelConfigBuilder:
         ``diagnostics["at_boundary"]``.
         """
         self._inference_method = InferenceMethod.FREQUENTIST_CVXPY
+        # `FitMethod` has no frequentist member; leaving the "nuts" default
+        # here makes an UNFITTED model's prefit readout and saved settings
+        # announce a full MCMC posterior for a config that will never run one.
+        self._fit_method = None
         return self
 
     def with_inference_method(self, method: "InferenceMethod | str") -> Self:
@@ -398,8 +406,18 @@ class ModelConfigBuilder:
         The generic form of :meth:`bayesian_pymc` / :meth:`frequentist_ridge` /
         …, for a caller holding the enum value rather than choosing at the call
         site — e.g. the agent spec layer mapping ``inference.method``.
+
+        Selecting a frequentist paradigm clears ``fit_method`` for the same
+        reason the named methods do, and clears it even if a Bayesian method was
+        set earlier in the chain — which is exactly the order the agent spec
+        layer builds in (``.bayesian_numpyro()`` first, paradigm second).
         """
         self._inference_method = InferenceMethod(method)
+        if self._inference_method in (
+            InferenceMethod.FREQUENTIST_RIDGE,
+            InferenceMethod.FREQUENTIST_CVXPY,
+        ):
+            self._fit_method = None
         return self
 
     # MCMC settings
@@ -435,8 +453,13 @@ class ModelConfigBuilder:
         The approximate methods — ``"map"``, ``"laplace"``, ``"advi"``,
         ``"fullrank_advi"``, ``"pathfinder"`` — fit in seconds for quick model
         checks but produce uncalibrated uncertainty.
+
+        ``None`` is accepted and means "no Bayesian fit method applies" — the
+        state a frequentist config is left in, since :class:`FitMethod` has no
+        member for a penalized point estimate and a default of ``"nuts"`` would
+        make an unfitted model's prefit surfaces announce a full MCMC posterior.
         """
-        self._fit_method = FitMethod(method)
+        self._fit_method = None if method is None else FitMethod(method)
         return self
 
     def map_fit(self) -> Self:
