@@ -231,6 +231,7 @@ def build_design_matrix(
     *,
     model_config: Any,
     trend_config: Any,
+    evaluate_panel: "PanelDataset | None" = None,
 ) -> DesignMatrix:
     """Build the linear design implied by a fixed (adstock, saturation) point.
 
@@ -247,6 +248,16 @@ def build_design_matrix(
         model_config: The :class:`ModelConfig` the Bayesian path would use. Read
             for the likelihood family, media prior mode and seasonality.
         trend_config: The :class:`TrendConfig` the Bayesian path would use.
+        evaluate_panel: Produce rows for this panel while taking **every scaling
+            constant from** ``panel``. Defaults to ``panel`` (the ordinary case,
+            byte-identical to omitting it).
+
+            This is what makes honest out-of-time cross-validation possible
+            (#184): fit on a prefix, score on periods the prefix never saw, with
+            the standardization derived from training data only and adstock
+            carryover flowing across the fold boundary. ``evaluate_panel`` must
+            extend ``panel`` in time — same channels and controls, and at least
+            as many periods.
 
     Returns:
         The :class:`DesignMatrix`, whose ``X @ theta`` reproduces the graph's
@@ -267,8 +278,39 @@ def build_design_matrix(
     mmm = BayesianMMM(panel, model_config, trend_config)
     _reject_unsupported(mmm)
 
-    n = mmm.n_obs
-    ti = mmm.time_idx
+    # `mmm` is the SCALING source; `ev` is the ROW source. They are the same
+    # object in the ordinary case.
+    ev = mmm
+    trend_type = str(getattr(trend_config.type, "value", trend_config.type))
+    if evaluate_panel is not None and evaluate_panel is not panel:
+        ev = BayesianMMM(evaluate_panel, model_config, trend_config)
+        if list(ev.channel_names) != list(mmm.channel_names):
+            raise ValueError(
+                "evaluate_panel must carry the same channels as panel: "
+                f"{ev.channel_names} != {mmm.channel_names}"
+            )
+        if list(ev.control_names) != list(mmm.control_names):
+            raise ValueError(
+                "evaluate_panel must carry the same controls as panel: "
+                f"{ev.control_names} != {mmm.control_names}"
+            )
+        if ev.n_periods < mmm.n_periods:
+            raise ValueError(
+                f"evaluate_panel has {ev.n_periods} periods, fewer than panel's "
+                f"{mmm.n_periods}; it must extend panel, not truncate it"
+            )
+        if trend_type in ("piecewise", "spline"):
+            # Both bases are defined on [0, 1] over the FIT periods; evaluating
+            # them past the end is extrapolation with no defensible meaning.
+            # `validation/backtest.py` restricts itself for the same reason.
+            raise UnsupportedModelError(
+                f"Out-of-time evaluation with a {trend_type} trend",
+                "the basis is defined over the fitted period range and does not "
+                "extrapolate; use trend 'none' or 'linear' for cross-validation",
+            )
+
+    n = ev.n_obs
+    ti = ev.time_idx
     cols: list["NDArray[np.floating]"] = []
     names: list[str] = []
     penal: list[bool] = []
@@ -292,10 +334,11 @@ def build_design_matrix(
 
     # -- trend --------------------------------------------------------------
     start = len(cols)
-    trend_type = str(getattr(trend_config.type, "value", trend_config.type))
-    t_scaled = mmm.t_scaled
     if trend_type == "linear":
-        _add("trend", t_scaled[ti], "trend_slope", False, "trend_slope", 0)
+        # t is scaled by the FIT panel's span, so a period past its end lands
+        # beyond 1.0 -- the exact linear continuation of the fitted slope.
+        span = max(mmm.n_periods - 1, 1)
+        _add("trend", ti / span, "trend_slope", False, "trend_slope", 0)
     elif trend_type == "piecewise":
         s = np.asarray(mmm.trend_features["changepoints"], dtype=float)
         A = np.asarray(mmm.trend_features["changepoint_matrix"], dtype=float)
@@ -328,7 +371,7 @@ def build_design_matrix(
 
     # -- seasonality --------------------------------------------------------
     start = len(cols)
-    for sname, feats in mmm.seasonality_features.items():
+    for sname, feats in ev.seasonality_features.items():
         F = np.asarray(feats, dtype=float)[ti]
         for j in range(F.shape[1]):
             _add(
@@ -349,13 +392,13 @@ def build_design_matrix(
         (
             "geo",
             mmm.has_geo and mmm.hierarchical_config.pool_across_geo,
-            mmm.geo_idx,
+            ev.geo_idx,
             mmm.n_geos,
         ),
         (
             "product",
             mmm.has_product and mmm.hierarchical_config.pool_across_product,
-            mmm.product_idx,
+            ev.product_idx,
             mmm.n_products,
         ),
     ):
@@ -374,7 +417,9 @@ def build_design_matrix(
 
     # -- media --------------------------------------------------------------
     start = len(cols)
-    X_norm = mmm._prepare_raw_media_for_model()
+    # Normalized with the FIT panel's per-channel max, exactly as
+    # PosteriorForecaster does, so evaluation rows sit on the training scale.
+    X_norm = mmm._prepare_raw_media_for_model(ev.X_media_raw)
     roi_scale: dict[str, float] = {}
     for c, ch in enumerate(mmm.channel_names):
         acfg = mmm._get_adstock_config(ch)
@@ -384,8 +429,8 @@ def build_design_matrix(
             kind,
             acfg.l_max,
             time_idx=ti,
-            cell_idx=mmm.cell_idx,
-            n_cells=mmm.n_cells,
+            cell_idx=ev.cell_idx,
+            n_cells=ev.n_cells,
             normalize=acfg.normalize,
             **alpha.get(ch, {}),
         )
@@ -415,10 +460,15 @@ def build_design_matrix(
     # -- controls -----------------------------------------------------------
     start = len(cols)
     if mmm.n_controls > 0:
+        X_controls_ev = (
+            mmm.X_controls
+            if ev is mmm
+            else (ev.X_controls_raw - mmm.control_mean) / mmm.control_std
+        )
         for c, cn in enumerate(mmm.control_names):
             _add(
                 "controls",
-                mmm.X_controls[:, c],
+                X_controls_ev[:, c],
                 f"control_{cn}",
                 True,
                 "beta_controls",
@@ -428,7 +478,9 @@ def build_design_matrix(
 
     return DesignMatrix(
         X=np.column_stack(cols),
-        y=np.asarray(mmm.y, dtype=float),
+        y=np.asarray(
+            mmm.y if ev is mmm else (ev.y_raw - mmm.y_mean) / mmm.y_std, dtype=float
+        ),
         columns=names,
         blocks=blocks,
         penalize=np.asarray(penal, dtype=bool),
