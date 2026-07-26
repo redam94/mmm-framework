@@ -13,16 +13,24 @@ exactly — candidates whose out-of-sample error is within 10% of the best disag
 about TV's ``sat_lam`` across nearly the whole search range, while the planted
 value is 1.6.
 
-Two panels, because the point needs both halves:
+Two panels, showing the same search under two bound regimes:
 
-* **Left — the criterion is flat.** Out-of-sample MAPE against ``sat_lam``. If
-  saturation were identified this would be a bowl with a minimum near the truth.
-  It is not; a wide band of lambda scores indistinguishably.
-* **Right — those are not small differences.** The response curves those same
-  near-optimal candidates imply. "Equally good at forecasting" spans curves from
-  nearly linear to almost fully saturated by a fifth of max spend — which is the
-  difference between "spend more" and "stop spending", read off models the data
-  cannot rank.
+* **Left — bounding lambda absolutely.** What the search entertains when the
+  bound is written in the parameter's own units. Candidates that forecast
+  indistinguishably span curves from nearly linear to almost fully saturated by a
+  fifth of max spend: the difference between "spend more" and "stop spending",
+  read off models the data cannot rank.
+* **Right — bounding the elbow to observed spend.** Robyn hard-codes
+  ``inflexion = max(x) * gamma`` with ``gamma`` in ``[0.3, 1.0]``; Meridian
+  scales its ``ec`` prior to median spend. Media here is already normalized by
+  the channel max, so that fraction *is* the half-saturation point, and for
+  ``1 - exp(-lam*x)`` it maps to ``lam = ln(2)/gamma``.
+
+Measured over four seeds, that one change cuts mean absolute ``lam`` error from
+2.08 to 0.42. **It is containment, not identification** — inside the narrower
+bound the near-optimal set still covers essentially the whole window, so the
+criterion still cannot order ``lam``. It simply can no longer propose a curve no
+analyst would entertain.
 
 Palette: ``#2b6a9e`` / ``#7d9c2a``, snapped from the project's slate/sage brand
 hues to the nearest steps that clear the categorical checks (the brand values
@@ -58,6 +66,9 @@ GRID = "rgba(120,120,115,0.16)"
 BUDGET = 256
 WITHIN = 0.10
 CHANNEL = "TV"
+
+#: The absolute bound the data-anchored one replaced (see the module docstring).
+ABSOLUTE_BOUNDS = (0.1, 8.0)
 
 
 def _panel():
@@ -137,209 +148,136 @@ def _score_the_truth(panel):
     return res.best.score
 
 
+def _run_at(panel, bounds):
+    """Search once under a given logistic bound, returning (result, lam error)."""
+    import numpy as _np
+
+    import mmm_framework.frequentist.search as search_mod
+    from mmm_framework.config.enums import SaturationType as _S
+    from mmm_framework.synth.dgp import _LAM
+
+    original = search_mod.SATURATION_BOUNDS[_S.LOGISTIC]
+    search_mod.SATURATION_BOUNDS[_S.LOGISTIC] = {"sat_lam": bounds}
+    try:
+        res = _search(panel)
+    finally:
+        search_mod.SATURATION_BOUNDS[_S.LOGISTIC] = original
+    near = res.spread(WITHIN)
+    err = float(
+        _np.mean([[abs(c.lam[ch]["sat_lam"] - _LAM[ch]) for ch in _LAM] for c in near])
+    )
+    return res, near, err
+
+
 def build() -> Path:
+    import mmm_framework.frequentist.search as search_mod
+    from mmm_framework.config.enums import SaturationType as _S
     from mmm_framework.synth.dgp import _LAM
 
     panel = _panel()
-    res = _search(panel)
-    truth_score = _score_the_truth(panel)
     lam_true = _LAM[CHANNEL]
+    anchored_bounds = search_mod.SATURATION_BOUNDS[_S.LOGISTIC]["sat_lam"]
 
-    lams = np.array([c.lam[CHANNEL]["sat_lam"] for c in res.candidates])
-    scores = np.array([c.score for c in res.candidates])
-    near = res.spread(WITHIN)
-    near_lams = np.array([c.lam[CHANNEL]["sat_lam"] for c in near])
-    cutoff = res.best.score * (1 + WITHIN)
-    lo, hi = float(near_lams.min()), float(near_lams.max())
+    regimes = [
+        ("absolute", ABSOLUTE_BOUNDS, "λ bounded absolutely"),
+        ("anchored", anchored_bounds, "elbow bounded to observed spend"),
+    ]
+    runs = {}
+    for key, bounds, _ in regimes:
+        runs[key] = _run_at(panel, bounds) + (bounds,)
 
     fig = make_subplots(
         rows=1,
         cols=2,
-        subplot_titles=(
-            "<b>The criterion is flat in λ</b>",
-            "<b>Those are not small differences</b>",
-        ),
-        horizontal_spacing=0.11,
+        subplot_titles=tuple(f"<b>{t}</b>" for _, _, t in regimes),
+        horizontal_spacing=0.10,
+        shared_yaxes=True,
     )
 
-    # -- left: out-of-sample error against lambda ---------------------------
-    fig.add_trace(
-        go.Scatter(
-            x=lams,
-            y=scores,
-            mode="markers",
-            marker=dict(size=7, color="rgba(120,120,115,0.22)", line=dict(width=0)),
-            name=f"candidate ({len(lams)})",
-            hovertemplate="λ %{x:.2f}<br>MAPE %{y:.4f}<extra></extra>",
-        ),
-        row=1,
-        col=1,
-    )
-    # The lower envelope is what makes "flat" legible: the best score reachable
-    # at each λ. A bowl with a minimum near the truth would mean λ is identified.
-    edges = np.linspace(lams.min(), lams.max(), 11)
-    centres, floor = [], []
-    for a, b in zip(edges[:-1], edges[1:], strict=False):
-        sel = (lams >= a) & (lams < b if b < edges[-1] else lams <= b)
-        if sel.sum():
-            centres.append((a + b) / 2)
-            floor.append(scores[sel].min())
-    fig.add_trace(
-        go.Scatter(
-            x=centres,
-            y=floor,
-            mode="lines",
-            line=dict(width=2.5, color=INK_MUTED),
-            name="best reachable at each λ",
-            hovertemplate="λ ≈ %{x:.2f}<br>best MAPE %{y:.4f}<extra></extra>",
-        ),
-        row=1,
-        col=1,
-    )
-    fig.add_hline(
-        y=cutoff,
-        line=dict(width=1.5, color=INK_MUTED, dash="dot"),
-        row=1,
-        col=1,
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=[lam_true],
-            y=[truth_score],
-            mode="markers",
-            marker=dict(
-                size=15,
-                color=TRUTH,
-                symbol="diamond",
-                line=dict(width=2, color=SURFACE),
-            ),
-            name=f"planted truth (λ={lam_true})",
-            legendgroup="truth",
-            showlegend=False,
-            hovertemplate="planted λ %{x:.2f}<br>MAPE %{y:.4f}<extra></extra>",
-        ),
-        row=1,
-        col=1,
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=[res.best.lam[CHANNEL]["sat_lam"]],
-            y=[res.best.score],
-            mode="markers",
-            marker=dict(
-                size=15, color=WINNER, symbol="star", line=dict(width=2, color=SURFACE)
-            ),
-            name="search winner",
-            legendgroup="winner",
-            showlegend=False,
-            hovertemplate="winner λ %{x:.2f}<br>MAPE %{y:.4f}<extra></extra>",
-        ),
-        row=1,
-        col=1,
-    )
-    fig.add_annotation(
-        x=float(lams.max()),
-        y=cutoff,
-        text=f"<b>within 10% of best — λ spans {lo:.2f} to {hi:.2f}</b>",
-        showarrow=False,
-        yshift=11,
-        xanchor="right",
-        font=dict(size=12, color=INK),
-        row=1,
-        col=1,
-    )
-
-    # -- right: the response curves those lambdas imply ---------------------
     x = np.linspace(0, 1, 200)
-    for i, lam in enumerate(np.sort(near_lams)):
+    for col, (key, _, _) in enumerate(regimes, start=1):
+        res, near, err, bounds = runs[key]
+        lams = np.sort([c.lam[CHANNEL]["sat_lam"] for c in near])
+        for i, lam in enumerate(lams):
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=1 - np.exp(-lam * x),
+                    mode="lines",
+                    line=dict(width=1.4, color=ENSEMBLE),
+                    name="candidates the criterion cannot separate",
+                    legendgroup="near",
+                    showlegend=(i == 0 and col == 1),
+                    hoverinfo="skip",
+                ),
+                row=1,
+                col=col,
+            )
         fig.add_trace(
             go.Scatter(
                 x=x,
-                y=1 - np.exp(-lam * x),
+                y=1 - np.exp(-lam_true * x),
                 mode="lines",
-                line=dict(width=1.5, color=ENSEMBLE),
-                name="near-optimal candidates",
-                legendgroup="near",
-                showlegend=(i == 0),
-                hovertemplate="λ %{text}<extra></extra>",
-                text=[f"{lam:.2f}"] * len(x),
+                line=dict(width=3.5, color=TRUTH),
+                name=f"planted truth (λ={lam_true})",
+                legendgroup="truth",
+                showlegend=(col == 1),
+                hoverinfo="skip",
             ),
             row=1,
-            col=2,
+            col=col,
         )
-    fig.add_trace(
-        go.Scatter(
-            x=x,
-            y=1 - np.exp(-lam_true * x),
-            mode="lines",
-            line=dict(width=3, color=TRUTH),
-            name=f"planted truth (λ={lam_true})",
-            legendgroup="truth",
-            hoverinfo="skip",
-        ),
-        row=1,
-        col=2,
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=x,
-            y=1 - np.exp(-res.best.lam[CHANNEL]["sat_lam"] * x),
-            mode="lines",
-            line=dict(width=3, color=WINNER, dash="dash"),
-            name=f"search winner (λ={res.best.lam[CHANNEL]['sat_lam']:.2f})",
-            legendgroup="winner",
-            hoverinfo="skip",
-        ),
-        row=1,
-        col=2,
-    )
+        fig.add_annotation(
+            x=0.03,
+            y=0.965,
+            xref=f"x{col if col > 1 else ''} domain",
+            yref=f"y{col if col > 1 else ''} domain",
+            xanchor="left",
+            align="left",
+            showarrow=False,
+            text=(
+                f"bound  λ ∈ [{bounds[0]:.2f}, {bounds[1]:.2f}]"
+                f"   ({bounds[1] / bounds[0]:.0f}× window)<br>"
+                f"near-optimal span  {lams.min():.2f} – {lams.max():.2f}"
+                f"   ({len(lams)} of {BUDGET})<br>"
+                f"<b>mean |λ error|  {err:.2f}</b>"
+            ),
+            font=dict(size=12, color=INK_MUTED),
+        )
 
-    fig.update_xaxes(
-        title_text=f"saturation λ for {CHANNEL}",
-        row=1,
-        col=1,
-        gridcolor=GRID,
-        zeroline=False,
-        title_font=dict(size=13, color=INK_MUTED),
-        tickfont=dict(size=12, color=INK_MUTED),
-    )
-    fig.update_yaxes(
-        title_text="rolling-origin out-of-sample MAPE",
-        row=1,
-        col=1,
-        gridcolor=GRID,
-        zeroline=False,
-        title_font=dict(size=13, color=INK_MUTED),
-        tickfont=dict(size=12, color=INK_MUTED),
-    )
-    fig.update_xaxes(
-        title_text="spend (share of channel maximum)",
-        row=1,
-        col=2,
-        gridcolor=GRID,
-        zeroline=False,
-        title_font=dict(size=13, color=INK_MUTED),
-        tickfont=dict(size=12, color=INK_MUTED),
-    )
+    for col in (1, 2):
+        fig.update_xaxes(
+            title_text="spend (share of channel maximum)",
+            row=1,
+            col=col,
+            gridcolor=GRID,
+            zeroline=False,
+            title_font=dict(size=13, color=INK_MUTED),
+            tickfont=dict(size=12, color=INK_MUTED),
+        )
     fig.update_yaxes(
         title_text="saturated response",
+        range=[0, 1.02],
         row=1,
-        col=2,
+        col=1,
         gridcolor=GRID,
         zeroline=False,
         title_font=dict(size=13, color=INK_MUTED),
         tickfont=dict(size=12, color=INK_MUTED),
     )
+    fig.update_yaxes(range=[0, 1.02], row=1, col=2, gridcolor=GRID, zeroline=False)
 
     fig.update_layout(
         title=dict(
             text=(
-                "<b>Predictive error does not identify saturation</b><br>"
+                "<b>Bounding the elbow to observed spend contains the damage — "
+                "it does not identify the parameter</b><br>"
                 "<span style='font-size:13px'>"
-                f"{BUDGET} candidates on <i>make_clean</i>, a world the model represents exactly. "
-                "Carryover is recovered; saturation is not.</span>"
+                "Response curves the criterion cannot separate, on <i>make_clean</i> "
+                "— a world the model represents exactly. Same search, same data; "
+                "only the bound differs.</span>"
             ),
-            font=dict(size=19, color=INK),
+            font=dict(size=18, color=INK),
             x=0.012,
             xanchor="left",
             y=0.965,
@@ -348,8 +286,8 @@ def build() -> Path:
         plot_bgcolor=SURFACE,
         font=dict(family="Inter, Helvetica, Arial, sans-serif", color=INK),
         width=1180,
-        height=520,
-        margin=dict(t=118, b=64, l=74, r=26),
+        height=530,
+        margin=dict(t=118, b=68, l=74, r=26),
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -358,20 +296,22 @@ def build() -> Path:
             font=dict(size=12, color=INK_MUTED),
             bgcolor="rgba(0,0,0,0)",
         ),
-        hovermode="closest",
     )
     for ann in fig.layout.annotations[:2]:
         ann.font = dict(size=14, color=INK)
-        ann.x = ann.x - 0.045
-        ann.xanchor = "left"
+        ann.y = ann.y + 0.012
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     fig.write_image(str(OUT), scale=2)
     print(f"wrote {OUT.relative_to(ROOT)}")
-    print(f"  candidates      : {len(lams)}")
-    print(f"  best MAPE       : {res.best.score:.5f}  (λ={res.best.lam[CHANNEL]['sat_lam']:.2f})")
-    print(f"  planted truth   : {truth_score:.5f}  (λ={lam_true})")
-    print(f"  within {int(WITHIN*100)}%      : {len(near)} candidates, λ = {lo:.2f} … {hi:.2f}")
+    for key, _, label in regimes:
+        res, near, err, bounds = runs[key]
+        lams = [c.lam[CHANNEL]["sat_lam"] for c in near]
+        print(
+            f"  {label:<34} bound [{bounds[0]:.2f},{bounds[1]:.2f}]  "
+            f"span {min(lams):.2f}-{max(lams):.2f}  |λ err| {err:.3f}  "
+            f"MAPE {res.best.score:.5f}"
+        )
     return OUT
 
 

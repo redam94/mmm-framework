@@ -305,11 +305,13 @@ test of the whole epic.
 
 ![Predictive error does not identify saturation](../nbs/artifacts/saturation_identifiability.png)
 
-*Left: out-of-sample error against λ, with the best score reachable at each λ. If
-saturation were identified this would be a bowl with its minimum near the truth;
-instead the floor is flat and a wide band of λ scores within 10% of the winner.
-Right: the response curves those same near-optimal candidates imply — from nearly
-linear to almost fully saturated. Regenerate with
+*The response curves the criterion cannot separate, under two bound regimes.
+Left: bounding λ in its own units lets the search entertain curves from nearly
+linear to almost fully saturated. Right: bounding the **elbow** to observed spend
+— Robyn's `inflexion = max(x)·γ`, Meridian's `ec` scaled to median spend — cuts
+mean |λ error| from 2.14 to 0.41. The right panel still shows 51 candidates the
+criterion cannot order, which is the point: this is **containment, not
+identification**. Regenerate with
 `nbs/builders/build_saturation_identifiability.py`.*
 
 Graded against `synth.dgp.make_clean` (the positive control — the model's exact
@@ -321,6 +323,7 @@ generative family, planting per-channel α and λ):
 | **saturation λ** | **not identified by this criterion**. Within the candidates scoring inside 10% of the best, TV's `sat_lam` ranges over ≈0.16–7.8 — nearly the whole search range — while the planted value is 1.6 |
 | **winner vs truth** | at budget 1000 the winner *beats* the planted parameters out-of-sample (0.0328 vs 0.0337) while sitting further from them in λ |
 | **budget** | 60 candidates is demonstrably under-powered (the winner does not reach the truth's own score); the default is 256, ≈2s on a 156-week national panel |
+| **bounds** | anchoring the elbow to observed spend (`HALF_SATURATION_FRACTION`) cuts mean \|λ error\| from **2.08 to 0.42** over four seeds at no cost in score, and collapses run-to-run spread from 1.77–2.42 to 0.39–0.44 |
 
 Three consequences the implementation carries rather than merely documents:
 
@@ -333,6 +336,26 @@ Three consequences the implementation carries rather than merely documents:
 * this is the strongest available argument for `refit_search=True` in
   [§5](#5-uncertainty): the selection is a genuine nuisance parameter, not a
   fact to condition on.
+
+**None of this is particular to this codebase, and the literature is unusually
+clear.** Jin et al. (Google, 2017) showed the Hill parameters are "essentially
+unidentifiable in some scenarios" — exhibiting visually identical curves from very
+different `(K, S, β)` — and that the half-saturation posterior median averages
+roughly twice the truth at two years of weekly data, concentrating only at *sixty*.
+Dew et al. (2024) prove the corollary we hit: predictive fit, cross-validation
+included, cannot arbitrate between observationally equivalent response
+specifications even under exogenous spend. Chan & Perry report five plausible MMMs
+at R² 0.98–0.99 and 6–8% out-of-sample MAPE disagreeing about achievable sales by
+up to 50%.
+
+So no production MMM identifies saturation from the sales likelihood; each is a
+different accommodation. The one that transfers here is **bounding in data units**,
+which is what `HALF_SATURATION_FRACTION` does. What would genuinely identify
+curvature is **dose spread** — a rank condition on the spend design, not a property
+of any estimator. A single lift test at one spend level yields one equation in two
+unknowns and leaves λ unidentified at any sample size, which is why
+`planning/identification.py` already refuses to claim identification below three
+in-support levels.
 
 ---
 
