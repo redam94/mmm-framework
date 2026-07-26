@@ -369,10 +369,6 @@ class ModelConfigBuilder:
         coefficients or reach/frequency channels raise, naming the feature.
         """
         self._inference_method = InferenceMethod.FREQUENTIST_RIDGE
-        # `FitMethod` has no frequentist member; leaving the "nuts" default
-        # here makes an UNFITTED model's prefit readout and saved settings
-        # announce a full MCMC posterior for a config that will never run one.
-        self._fit_method = None
         return self
 
     def frequentist_cvxpy(self) -> Self:
@@ -394,10 +390,6 @@ class ModelConfigBuilder:
         ``diagnostics["at_boundary"]``.
         """
         self._inference_method = InferenceMethod.FREQUENTIST_CVXPY
-        # `FitMethod` has no frequentist member; leaving the "nuts" default
-        # here makes an UNFITTED model's prefit readout and saved settings
-        # announce a full MCMC posterior for a config that will never run one.
-        self._fit_method = None
         return self
 
     def with_inference_method(self, method: "InferenceMethod | str") -> Self:
@@ -407,17 +399,11 @@ class ModelConfigBuilder:
         …, for a caller holding the enum value rather than choosing at the call
         site — e.g. the agent spec layer mapping ``inference.method``.
 
-        Selecting a frequentist paradigm clears ``fit_method`` for the same
-        reason the named methods do, and clears it even if a Bayesian method was
-        set earlier in the chain — which is exactly the order the agent spec
-        layer builds in (``.bayesian_numpyro()`` first, paradigm second).
+        Selecting a frequentist paradigm also clears ``fit_method`` — enforced
+        by ``ModelConfig``'s own validator rather than here, so it holds however
+        the config was built.
         """
         self._inference_method = InferenceMethod(method)
-        if self._inference_method in (
-            InferenceMethod.FREQUENTIST_RIDGE,
-            InferenceMethod.FREQUENTIST_CVXPY,
-        ):
-            self._fit_method = None
         return self
 
     # MCMC settings

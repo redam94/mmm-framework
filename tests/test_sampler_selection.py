@@ -330,12 +330,29 @@ class TestFrequentistInferenceMethods:
         assert InferenceMethod("frequentist_ridge") is InferenceMethod.FREQUENTIST_RIDGE
         assert InferenceMethod("frequentist_cvxpy") is InferenceMethod.FREQUENTIST_CVXPY
 
-    def test_excel_template_rejects_at_parse_time(self):
-        """The value came from a spreadsheet cell — fail next to the cell."""
-        from mmm_framework.excel_config.parser import (
-            TemplateValidationError,
-            _build_model_config,
-        )
+    def test_excel_template_selects_the_paradigm(self):
+        """The spreadsheet path used to reject these at parse time, which was
+        right while they were unimplemented and wrong the moment #188 landed —
+        a gate that outlives the thing it gated is stale in the same way an
+        unlabelled interval is, one surface removed."""
+        from mmm_framework.excel_config.parser import _build_model_config
 
-        with pytest.raises(TemplateValidationError, match="not implemented"):
-            _build_model_config({"Inference Method": "frequentist_ridge"})
+        for value, expected in (
+            ("frequentist_ridge", InferenceMethod.FREQUENTIST_RIDGE),
+            ("frequentist_cvxpy", InferenceMethod.FREQUENTIST_CVXPY),
+        ):
+            cfg = _build_model_config({"Inference Method": value})
+            assert cfg.inference_method is expected, value
+            assert cfg.is_frequentist
+            # `FitMethod` has no frequentist member; a spreadsheet-built config
+            # must not claim NUTS before it has been fitted either.
+            assert cfg.fit_method is None, value
+
+    def test_excel_template_still_falls_back_on_a_typo(self):
+        """A typo in a spreadsheet cell has always produced a working model
+        rather than a failed parse, and that is not this change's call to
+        make."""
+        from mmm_framework.excel_config.parser import _build_model_config
+
+        cfg = _build_model_config({"Inference Method": "frequntist_ridge"})
+        assert cfg.inference_method is InferenceMethod.BAYESIAN_NUMPYRO
