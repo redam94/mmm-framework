@@ -14,6 +14,10 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.3.0] — 2026-07-26
+
 ### Changed
 
 - **The default logistic saturation prior is now stated in units of observed spend.**
