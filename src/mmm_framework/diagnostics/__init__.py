@@ -26,6 +26,11 @@ from .learning import (
     plot_parameter_learning,
     plot_prior_posterior_overlay,
 )
+from .saturation import (
+    saturation_learning,
+    saturation_prior_report,
+    warn_if_saturation_prior_is_unanchored,
+)
 from .sbc import SBCResult, run_mmm_sbc, run_sbc
 from .snapshot import compute_fit_diagnostics
 
@@ -46,5 +51,8 @@ __all__ = [
     "run_mmm_sbc",
     "run_recovery_coverage",
     "run_sbc",
+    "saturation_learning",
+    "saturation_prior_report",
     "warn_if_not_converged",
+    "warn_if_saturation_prior_is_unanchored",
 ]
