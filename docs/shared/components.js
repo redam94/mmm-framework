@@ -204,10 +204,15 @@
             ['blog-causalimpact-bsts.html', 'CausalImpact & Structural Time Series'],
             ['blog-bayesian-mmm-carryover-shape.html', 'Carryover & Shape in Bayesian MMM'],
             ['blog-saturation-or-fatigue.html', 'Saturation or Fatigue?'],
+            ['blog-aggregation-bends-the-curve.html', 'Aggregation Bends the Curve'],
             ['blog-holdout-error-mmm.html', 'Stop Validating With Holdout Error'],
+            ['blog-calibrate-validate-same-experiment.html', 'Can\'t Calibrate and Validate on the Same Experiment'],
             ['blog-baseline-regularization-confounding.html', 'The Baseline Ate Your Media Effect'],
             ['blog-advertising-is-a-stock.html', 'Advertising Is a Stock'],
+            ['blog-optimizers-curse.html', 'The Optimizer\'s Curse'],
+            ['blog-curve-assumed-you-wouldnt-act.html', 'Your Curve Assumed You Wouldn\'t Act On It'],
             ['blog-table-2-fallacy-mmm.html', 'The Table 2 Fallacy in MMMs'],
+            ['blog-modelled-one-p.html', 'You Modelled One P'],
             ['blog-surrogate-outcomes.html', 'Surrogate Outcomes for the Long Run'],
             ['blog-calibrating-mmm-experiments.html', 'The Experiment Is the Prior'],
             ['blog-carryover-experiment-timing.html', 'Adstock & Experiment Timing'],
@@ -222,7 +227,8 @@
             ['blog-geo-holdout-eig.html', 'A Geo-Holdout as Bayesian Design'],
             ['blog-bed-bo-bandits.html', 'BED vs. BO vs. Bandits'],
             ['blog-thompson-sampling.html', 'Thompson Sampling in Practice'],
-            ['blog-continuous-learning-interactions.html', 'Continuous Learning with Interactions']
+            ['blog-continuous-learning-interactions.html', 'Continuous Learning with Interactions'],
+            ['blog-vendor-graded-homework.html', 'Vendor-Graded Homework']
         ]
     };
 
@@ -320,6 +326,12 @@
         'blog-bed-bo-bandits.html': TIER_ANALYST,
         'blog-thompson-sampling.html': TIER_ANALYST,
         'blog-continuous-learning-interactions.html': TIER_ANALYST,
+        'blog-aggregation-bends-the-curve.html': TIER_ANALYST,
+        'blog-calibrate-validate-same-experiment.html': TIER_ANALYST,
+        'blog-optimizers-curse.html': TIER_ANALYST,
+        'blog-curve-assumed-you-wouldnt-act.html': TIER_ANALYST,
+        'blog-modelled-one-p.html': TIER_ANALYST,
+        'blog-vendor-graded-homework.html': TIER_ANALYST,
         'blog-platform-divergent-delivery.html': TIER_ANALYST,
         'blog-holdout-error-mmm.html': TIER_ANALYST,
         'blog-advertising-is-a-stock.html': TIER_ANALYST,
