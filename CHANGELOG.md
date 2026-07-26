@@ -77,6 +77,51 @@ frozen public contract breaks, and the contract itself is pinned by
   No estimator is wired to `fit()` yet — `frequentist_ridge` and `frequentist_cvxpy` still
   refuse. Design spec: `technical-docs/frequentist-estimation.md`.
 
+- **`mmm_framework.frequentist.bootstrap_fit`** — moving-block residual bootstrap turning the
+  ridge point estimate into `(chain=1, draw=n_boot)` `InferenceData`, so `predict`, the
+  estimand engine and reporting all work unchanged. Every deterministic in the container is
+  evaluated out of the model's own PyTensor graph at each replicate's parameter vector, so a
+  bootstrap `channel_contributions` cannot drift from the Bayesian definition of one.
+  ([#186](https://github.com/redam94/mmm-framework/issues/186))
+
+  Three deliberate choices, each addressing a way a plausible bootstrap ships intervals that
+  do not cover:
+
+  - **Blocks, with a data-driven length.** MMM residuals are serially correlated, and an iid
+    residual bootstrap treats each week as exchangeable. Measured over 60 simulations of the
+    `make_clean` world with AR(1) errors at ρ = 0.6, the iid bootstrap's 90% intervals cover
+    materially below nominal and the block version (length estimated from the residual
+    autocorrelation) restores them; at ρ = 0 the two agree, so nothing pays for a dependence
+    that is not there. Panel cells resample the *same* period sequence, because resampling
+    geographies independently destroys the contemporaneous correlation that makes a panel
+    more informative than one national series.
+  - **The cheap interval is labelled, not silently shipped.** The transforms and penalty are
+    chosen once by search, and every replicate conditioning on that choice omits selection
+    uncertainty — which matters more than usual here, because saturation is not identified by
+    the criterion at all. `refit_search=True` re-runs the search inside each replicate and is
+    correct; the default is `False` and stamps
+    `diagnostics["interval_semantics"] = "conditional_on_selection"` plus a plain-language
+    caveat, on the reasoning that an unaffordable honest default gets switched off and takes
+    its own label with it.
+  - **The bias is stated, not papered over.** Percentile intervals around a shrunk estimator
+    cover the estimator's sampling distribution, not the true parameter, and no interval
+    method fixes that. `bc_interval` / `bca_interval` correct the bootstrap distribution's
+    median-bias and skewness for a named scalar; the caveat carries the fit's effective
+    degrees of freedom, which is the honest measure of how much work the penalty is doing.
+
+  Every fit stamps `inference_family="frequentist"`, `interval_kind="bootstrap_percentile"`
+  and `approximate=False` — `approximate` is the wrong flag to reuse, since an approximate fit
+  is a badly-estimated posterior and a ridge fit is not a posterior at all. Nothing renders
+  these yet; that is [#188](https://github.com/redam94/mmm-framework/issues/188).
+
+- **`run_recovery_coverage(refit=...)`** — estimator injection for
+  `diagnostics/coverage.py`, which was hard-wired to `pm.observe` + NUTS. Supplying a callable
+  grades a non-PyMC estimator against the same θ*, the same simulated datasets and the same
+  central equal-tailed intervals as the Bayesian path, which is what made the #186 coverage
+  table possible. `extra_caveats=` was added alongside it: the function auto-attaches an
+  uncertainty caveat for ADVI only, so ridge shrinkage bias and conditional-on-selection
+  intervals have to be passed explicitly or they go unstated.
+
 ### Fixed
 
 - **`fit(method="map")` no longer fails with a bare `ZeroDivisionError`.** `find_MAP`

@@ -438,9 +438,23 @@ relative to the true parameter. Coverage for the truth therefore falls below
 nominal exactly when the penalty is doing real work.
 
 The honest instrument for "how much work is it doing" is the **effective degrees
-of freedom** `tr(X(XᵀX+λP)⁻¹Xᵀ)` reported by the ridge fit ([§6](#6-ridge)).
-v1 ships BC intervals by default, BCa optional (affordable, since each replicate
-is one linear solve), and states this limitation wherever an interval is rendered.
+of freedom** `tr(X(XᵀX+λP)⁻¹Xᵀ)` reported by the ridge fit ([§6](#6-ridge)), which
+is carried through as `diagnostics["effective_dof"]` and stated wherever an
+interval is rendered.
+
+**What actually shipped: percentile draws, BC/BCa as functions.** An earlier draft
+of this section said "BC by default", which contradicts the graded-default
+decision two subsections down. The contradiction resolves in favor of percentile,
+for a reason the draft missed: **downstream consumes draws, not intervals**, and a
+BC/BCa adjustment is per-statistic *and* per-level — it cannot be baked into a
+`(chain, draw)` array without changing what the draws mean. So `bootstrap_fit`
+emits the replicate distribution as-is (`interval_kind="bootstrap_percentile"`),
+which is also what `diagnostics/coverage.py` grades and what keeps the headline
+coverage number comparable to the Bayesian path's. `frequentist.bc_interval` and
+`frequentist.bca_interval` apply the correction to a named scalar for a caller who
+wants it, and are unit-tested against their degenerate cases (a coefficient pinned
+at a non-negativity boundary has every replicate on one side of the point estimate,
+where the naive formula returns an infinite endpoint).
 
 ### Validate, do not assume
 
