@@ -303,6 +303,15 @@ test of the whole epic.
 
 ### 4a. What the search recovers
 
+![Predictive error does not identify saturation](../nbs/artifacts/saturation_identifiability.png)
+
+*Left: out-of-sample error against λ, with the best score reachable at each λ. If
+saturation were identified this would be a bowl with its minimum near the truth;
+instead the floor is flat and a wide band of λ scores within 10% of the winner.
+Right: the response curves those same near-optimal candidates imply — from nearly
+linear to almost fully saturated. Regenerate with
+`nbs/builders/build_saturation_identifiability.py`.*
+
 Graded against `synth.dgp.make_clean` (the positive control — the model's exact
 generative family, planting per-channel α and λ):
 
@@ -361,17 +370,40 @@ correlation that makes a panel more informative than one national series.
 ### Post-selection inference
 
 If `(α̂, λ̂)` and the penalty are chosen once by search and every replicate
-conditions on that choice, the intervals ignore selection uncertainty and are
-again too narrow. Re-running the search inside each replicate is correct and
-costs `n_boot × search`.
+conditions on that choice, the intervals ignore selection uncertainty. Re-running
+the search inside each replicate is correct and costs `n_boot × search`.
 
-**Decision: `refit_search=False` by default, and the cheap path is labelled, not
-silently shipped.** The label rides in three places so it cannot be lost:
+**This is a correctness tradeoff, not a precision tradeoff, and the distinction
+matters.** A cheaper interval that is merely *wider than necessary* costs the user
+statistical power — annoying, but conservative and self-announcing. This is the
+opposite: conditioning on the selected transforms produces an interval that is
+**too narrow**, and narrowness reads as confidence. The user is not told they
+bought speed; they are told the answer is more certain than it is. The failure is
+silent and points the wrong way.
+
+The measurement in [§4a](#4a-what-the-search-recovers) is what makes this concrete
+rather than theoretical. λ is not identified by the selection criterion at all —
+candidates spanning ≈0.16–7.8 score within 10% of the winner. So the quantity being
+conditioned on is not a well-estimated parameter with a little noise around it; it
+is a **near-arbitrary pick from a set the data cannot order**. A conditional
+interval treats that pick as known, which means the reported uncertainty omits the
+single largest source of uncertainty in the fit.
+
+**Decision unchanged: `refit_search=False` by default, and the cheap path is
+labelled, not silently shipped.** The reasoning is that an unlabelled honest-but-
+unaffordable default helps nobody — a `refit_search=True` default that takes hours
+gets switched off, and then the label is gone too. What makes the cheap default
+defensible is that its deficiency is **named at every surface that renders the
+number**, so a reader can discount it, rather than being invited to trust it.
+
+The label therefore rides in three places so it cannot be lost:
 `diagnostics["interval_semantics"]`, the `InferenceData` attrs, and every rendered
 surface ([§8](#8-the-gating-checklist)). `refit_search=True` is the documented
 requirement for any interval that will be published, and the coverage table in
-[#186](https://github.com/redam94/mmm-framework/issues/186) must report **both**
-so the size of the gap is visible rather than asserted.
+[#186](https://github.com/redam94/mmm-framework/issues/186) must report **both** —
+because the size of the gap between them is the only honest way to know whether
+the cheap path was acceptable on a given dataset, and that is a question about the
+data, not one the default can answer in advance.
 
 ### Ridge is biased, and no interval method fixes that
 
