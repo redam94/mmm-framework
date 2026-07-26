@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Curve Assumed You Wouldn't Act On It | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="The response curve your optimizer maximizes was fit under the policy you are about to replace. Two channels that always co-moved can clear every per-channel range check while landing 7.6 standard deviations outside the joint history it was fit on.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-curve-assumed-you-wouldnt-act.html">
+    <meta property="og:title" content="Your Curve Assumed You Wouldn't Act On It">
+    <meta property="og:description" content="Staying inside every channel's own historical spend range does not mean the fitted curve still applies once you act on it — and that's the natural next layer worth building on top of a solid per-channel check.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-curve-assumed-you-wouldnt-act.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Your Curve Assumed You Wouldn't Act On It">
+    <meta name="twitter:description" content="Staying inside every channel's own historical spend range does not mean the fitted curve still applies once you act on it — and that's the natural next layer worth building on top of a solid per-channel check.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-curve-assumed-you-wouldnt-act.html",
+          "name": "Your Curve Assumed You Wouldn't Act On It | MMM Framework",
+          "description": "The response curve your optimizer maximizes was fit under the policy you are about to replace. Two channels that always co-moved can clear every per-channel range check while landing 7.6 standard deviations outside the joint history it was fit on.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-26",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-curve-assumed-you-wouldnt-act.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-curve-assumed-you-wouldnt-act.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Your Curve Assumed You Wouldn't Act On It",
+          "datePublished": "2026-07-26",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-curve-assumed-you-wouldnt-act.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-curve-assumed-you-wouldnt-act.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Your Curve Assumed You Wouldn't Act On It",
+              "item": "https://redam94.github.io/mmm-framework/blog-curve-assumed-you-wouldnt-act.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#policy-not-law">A Fact About a Policy, Not a Law About the World</a></li>
+                <li><a href="#performative">Performative Prediction, and the Older Critique It Formalizes</a></li>
+                <li><a href="#narrow-band">The Curve That Looked Perfectly Calibrated</a></li>
+                <li><a href="#joint-support">In Range on Every Axis, Off the Map</a></li>
+                <li><a href="#two-failures">Two Failures This Is Not</a></li>
+                <li><a href="#partial-defense">What the Framework Already Catches &mdash; and What's Worth Adding Next</a></li>
+                <li><a href="#hypothesis">Treat the Curve as a Hypothesis, Not a Fact</a></li>
+                <li><a href="#limits">What This Does Not Establish</a></li>
+                <li><a href="#protocol">The Rule for a One-Shot Reallocation</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Your Curve Assumed You Wouldn't Act On It</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-26">July 26, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">MMM</span>
+            </p>
+            <p class="lead">Every fitted marketing mix model ships an optimizer that treats its response curve like a fixed law: plug in a budget, differentiate, report the argmax. But a response curve is not a law about the world &mdash; it is a summary of what happened under one particular spending policy, the one your team actually ran. No model is ever a finished, perfectly correct picture of reality; it is a simplification built to be useful for one decision at a time, useful only as long as the world underneath it still looks roughly like the world it was fit on. Change the policy, and you are no longer reading the curve. You are asking it a question it was never fit to answer.</p>
+
+            <p class="lead">This framework already has one instrument built for a version of that problem: a per-channel <code>max_obs_multiplier</code> check that flags a recommendation pushing a channel past anything its own history ever showed. That check is real and well built, and it is not what this post is about. A recommendation can clear every channel's own historical range, trigger zero flags, and still lean on a spending pattern the data never produced &mdash; because the curve was fit under one joint policy across channels and time together, not independent per-channel bands. In the simulation below, two channels that always moved together produce a reallocation that passes both individual range checks while landing 7.6 standard deviations outside the joint history the curve was ever estimated on: the next, sharper question worth learning to ask of the model, and this post is an invitation to start asking it.</p>
+
+            <h2 id="policy-not-law">A Fact About a Policy, Not a Law About the World</h2>
+            <p>A marketing mix model's response curve is estimated from whatever spending actually happened, and that spending was never exploratory. A media plan is a negotiated, calendar-locked commitment, so the typical channel runs at close to the same weekly level for most of the year, with an occasional flight or promotional bump on top. This framework's own defaults quietly assume as much: a client report that hasn't been through the Planner studio caps its "default reallocation" at &plusmn;20% of current spend per channel, and a plain-language comment beside the per-channel headroom check spells out the edge case &mdash; a channel that has always run at a perfectly constant level has nowhere to scale up without counting as extrapolation.</p>
+
+            <p>The curve fit on that narrow, steady history is then handed to an optimizer that treats it as portable: plug in a budget, differentiate, report the argmax. Nothing in that step asks whether the curve survives the move it's about to recommend. Economist Robert Lucas asked the same question of macroeconomic models back in 1976, in a paper that became one of the field's most durable warnings. His point, in plain terms: a relationship estimated from historical data bakes in the decisions people were making under the old rules, so you can't trust it once the rules change &mdash; because the relationship itself was a product of those rules. Lucas was writing about consumption functions and Phillips curves; a media response curve is the same kind of object wearing different variable names, a pattern that held while certain behaviors stayed fixed, now being asked to keep holding once one of those behaviors changes on purpose.</p>
+
+            <p>Marketing researchers Van Heerde, Dekimpe and Putsis carried the critique into marketing econometrics directly, in a 2005 paper laying out exactly when a marketing model's parameters are themselves tied to the policy that generated the data &mdash; and noted that the point had gone largely unnoticed in marketing despite applying just as strongly as in macroeconomics. A budget optimizer that maximizes a fitted curve and calls the argmax "the recommendation" is, two decades later, doing the thing they were flagging, with a Bayesian saturation curve standing in for a consumption function.</p>
+
+            <div class="definition">
+                <h4>Definition: a policy-conditional response curve</h4>
+                <p>In plain terms: the curve you fit isn't a general law about how the channel works. It's a description of how the channel behaved under one specific spending pattern &mdash; and swapping in a new pattern is exactly what an optimizer's recommendation asks you to do. Written more formally, a fitted response curve is really \( \hat f_{\pi}(\cdot) \), not \( \hat f(\cdot) \): a function estimated from data generated under one joint spending policy \( \pi \) across every channel and week. An optimizer that solves</p>
+                $$ \mathbf{s}^{\star} \;=\; \arg\max_{\mathbf{s}} \sum_{c} \hat f_{\pi_0}(s_c) \quad \text{subject to} \quad \sum_c s_c = B $$
+                <p>and reports \( \mathbf{s}^{\star} \) as the new plan is quietly assuming \( \hat f_{\pi_0} = \hat f_{\pi_1} \), where \( \pi_1 \) is the policy that acting on \( \mathbf{s}^{\star} \) creates. A standard fit never tests that assumption. And \( \mathbf{s}^{\star} \) sitting inside each channel's own historical spend range doesn't confirm it either: \( \pi \) is a statement about the JOINT pattern across channels and time together, and a point can sit comfortably inside every individual channel's range while sitting far outside the combination those channels ever formed &mdash; the same way a person can be an average height and an average weight without having an average build.</p>
+            </div>
+
+            <h2 id="performative">Performative Prediction, and the Older Critique It Formalizes</h2>
+            <p>The Lucas critique is fifty years old and speaks in the language of macroeconomics. A cleaner, more current version of the same idea comes from machine learning research. Computer scientists Perdomo, Zrnic, Mendler-D&uuml;nner and Hardt gave it a name in 2020: <strong>performative prediction</strong> &mdash; in a half-sentence, a prediction is "performative" when acting on it changes the very thing the prediction was trying to describe. Their intuitive fix is to retrain until the model and the world it produces agree, but that only counts as stable if the agreement actually survives being deployed again. A budget optimizer that maximizes a fitted curve and hands you the argmax is doing exactly this: the recommendation <em>is</em> the action, and the curve was fit on data generated before that action existed.</p>
+
+            <p>Their paper is about loan-scoring classifiers and content recommenders, not media spend, and the reason to bring it up here is narrower than "marketing invented this problem." It's that a fifty-year-old critique of economic policy models and a five-year-old idea from machine learning describe the same underlying pattern, independently, in fields that otherwise share almost no methodology. That's not a coincidence. It's a property of any model asked to justify a decision that changes the world the model was fit on &mdash; and a sign that a maturing measurement practice keeps rediscovering the same lesson, each time as a chance to build a sharper check.</p>
+
+            <p>Here's the useful distinction underneath all of this. Acting on a prediction can move the world past what the model has seen in two different ways. The first is the easy, catchable one: the action pushes some input past anything the training data ever showed <em>on that input's own axis</em> &mdash; the univariate case, precisely what this framework's <code>max_obs_multiplier</code> is built to flag. The second is subtler, and it's the one the next two figures explore: the action can leave every individual input exactly where the training data always put it, while moving the <em>combination</em> of inputs into territory the training policy never visited together. A regime can change this second way without tripping a check designed to watch one input at a time &mdash; not a flaw in that check so much as a sign of where the natural next layer belongs.</p>
+
+            <h2 id="narrow-band">The Curve That Looked Perfectly Calibrated</h2>
+            <p>Start with the single-channel version, because it's the version this framework's own extrapolation check is built to catch &mdash; and, on its own terms, does. Picture a channel run at a near-constant weekly level for two years, drifting &plusmn;8% around its mean on a rhythm set by the planning calendar. Now suppose sales were also moved by something else entirely &mdash; a competitive push, a category tailwind, anything that isn't media &mdash; and that something happened to track the channel's own week-to-week wobble for no causal reason at all. Both were simply driven by the same seasonal planning cycle that set the channel's spend in the first place. Fit the standard single-channel regression on two years of that history and the coefficient absorbs both effects, because within the historical range the confound and the channel's own spend are indistinguishable to a regression that has never seen them move apart. At the figure's default comovement strength, the fitted coefficient comes out 33% above the channel's true, causal per-dollar effect &mdash; and the fit doesn't confess it. Across the full two years in-sample, the residual is almost invisible, because the confound rode along with every historical dollar the model ever saw.</p>
+
+            <div class="interactive-box">
+                <h4>A channel run at a near-constant level, confounded by something that used to move with it</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Left: two simulated years of weekly sales attributable to one channel &mdash; observed (including the confound) against what a standard single-channel regression fits. Right: the same channel's response curve, extended by spend multiplier &mdash; the fitted model's prediction against the true, causal response once the confound is decoupled from a deliberate spend increase. The dotted vertical line is the channel's own <code>max_obs_multiplier</code> ceiling; the diamonds mark the optimizer's actual recommendation, comfortably inside it.</p>
+                <div class="control-row">
+                    <label>Confound comovement strength</label>
+                    <input type="range" id="f1R" min="0" max="1" step="0.05" value="0.6">
+                    <span class="value" id="f1RVal">0.60</span>
+                </div>
+                <div class="chart-container chart-themed" id="f1Fit" style="height:230px;"></div>
+                <div class="chart-container chart-themed" id="f1Curve" style="height:330px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Fitted coefficient</span><span class="val" id="f1Bhat">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">True coefficient</span><span class="val">100.0</span></div>
+                    <div class="stat"><span class="lbl">max_obs_multiplier</span><span class="val" id="f1MaxObs">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Recommended multiplier</span><span class="val" id="f1RecMult">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Prediction error at that spend</span><span class="val" id="f1Err">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the default comovement strength, the fitted coefficient (132.8) overstates the channel's true causal effect (100.0) by 33% &mdash; and the in-sample fit over two full years of history is close to exact, because the confound rode along with every historical dollar the model saw. The optimizer's recommended multiplier, 1.06&times; current spend, sits comfortably inside the channel's own <code>max_obs_multiplier</code> ceiling of 1.08&times; &mdash; no extrapolation flag fires &mdash; and the predicted incremental return there still overstates the true, decoupled response by 33%. Drag comovement to zero and the two curves coincide exactly; drag it to its maximum and the overstatement reaches 55%.</p>
+            </div>
+
+            <p>Now push spend to the level the optimizer actually recommends off that curve. It sits inside the channel's own headroom, comfortably below its <code>max_obs_multiplier</code>, with no flag raised anywhere in the report. But the confound doesn't come along: it was never caused by this channel's spend, only correlated with the planning calendar that set spend too, and scaling this channel up on purpose breaks that link &mdash; the whole point of a deliberate move rather than waiting for the calendar to shift things on its own. The true incremental return at that spend level is the causal coefficient alone. The fitted curve, still carrying its inflated slope, overstates it by exactly the bias baked into the historical fit &mdash; a third, at the figure's defaults, and worse the harder the two series moved together historically.</p>
+
+            <h2 id="joint-support">In Range on Every Axis, Off the Map</h2>
+            <p>The single-channel story already shows the extrapolation check's blind spot, but it still needed an unmeasured confound to do the damage. The two-channel version needs nothing hidden at all. It's a property of the joint history of two channels the model measures directly &mdash; which makes it the sharper illustration of why "inside every channel's own range" and "inside the region the curve was estimated on" are two different claims.</p>
+
+            <p>Picture two channels, run under one shared media plan for two years, moving together &mdash; not perfectly, but tightly. The same planner set both budgets against the same calendar, so a high-spend week for channel A was very often a high-spend week for channel B too. <code>max_obs_multiplier</code> checks each channel's own axis: has this channel's recommended average spend stayed below the largest single week it actually ran? Both channels can pass that check independently while the pair of them, taken together, describe a spend combination the historical data never remotely produced. The check simply has no way to see the other axis, and that's exactly the opening for a second, complementary instrument &mdash; one that looks at the two channels together instead of one at a time.</p>
+
+            <div class="interactive-box">
+                <h4>Two channels that always moved together</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">104 simulated weeks of two channels' spend, run under one shared media plan. The dashed box is each channel's own historical min/max &mdash; what a per-channel check like <code>max_obs_multiplier</code> can see. The diamond is the optimizer's recommended reallocation: more to channel A, funded by pulling back on channel B.</p>
+                <div class="control-row">
+                    <label>Historical co-movement between the two channels</label>
+                    <input type="range" id="f2Rho" min="0.3" max="0.95" step="0.05" value="0.85">
+                    <span class="value" id="f2RhoVal">0.85</span>
+                </div>
+                <div class="chart-container chart-themed" id="f2Chart" style="height:380px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Historical correlation</span><span class="val" id="f2Corr">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Distance from joint history</span><span class="val" id="f2MD">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Per-channel range checks</span><span class="val" id="f2Within">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the default co-movement setting (realized sample correlation 0.86), the recommendation sits at 1.38&times; channel A's mean spend against a channel-A ceiling of 1.41&times;, and at 0.76&times; channel B's mean &mdash; a cut, which can never extrapolate upward. Both rows would read <code>within_observed_range: true</code> in this framework's own optimizer output. The same point measured against the two channels' JOINT history is 7.6 standard deviations away &mdash; a spend configuration the historical data never remotely produced. Drag co-movement down to 0.5 (sample correlation 0.54) and the distance falls to 4.2 SD; it is still nowhere near a boundary either per-channel check would ever see.</p>
+            </div>
+
+            <p>At the default comovement strength, the reallocation the optimizer recommends &mdash; more to channel A, funded by pulling back on channel B &mdash; sits inside channel A's own observed ceiling and, since a cut can never extrapolate upward, trivially inside channel B's too. Both rows of the per-channel table this framework prints would read <code>within_observed_range: true</code>. Measured against the joint history instead of either channel on its own, that same point is 7.6 standard deviations from anything the two channels together ever did &mdash; not a subtle tail event, but close to impossible under the historical pattern. The two channels moving somewhat independently is exactly the property the historical data doesn't have, and a check that scores each channel's own axis one at a time has no way to register that absence.</p>
+
+            <h2 id="two-failures">Two Failures This Is Not</h2>
+            <p>Two adjacent critiques of budget optimizers are easy to mix up with this one. Telling them apart matters, because the fix for each is different, and chasing the wrong fix spends real effort in the wrong place.</p>
+
+            <p>The first comes from this framework's own <a href="blog-advertising-is-a-stock.html">earlier post on adstock and scheduling</a>, and the two are complementary rather than competing. That post covers the objective side well: even handed a perfectly estimated response curve, is a window-summed total the right thing to maximize for a channel whose effect persists past the window, and is a flat spending plan right when the fitted curvature says otherwise? It's explicit that its results assume "the true response surface with zero uncertainty" &mdash; the curve itself is never in question there, only what you do with it. This post is the complementary piece: how the world underneath that same curve can shift once you act on it, even when the curve and objective were both exactly right at the time. Push a little further on that post's own caveat that its results ignore a competitor's reaction, and you land close to this post's point: a rival reacting to your move is one way the regime can change. A co-moving confound decoupling, or a joint spending pattern breaking apart, are others &mdash; "the curve doesn't know about competitors" turns out to be one instance of a broader truth, that the curve doesn't know about anything it assumed would stay fixed.</p>
+
+            <p>The second adjacent critique targets the statistics of the argmax rather than the curve itself: optimize over a noisy estimate and the winning plan gets picked partly for being lucky, so its projected uplift runs optimistic and its composition shifts across posterior draws. This framework already takes that seriously &mdash; it re-optimizes per posterior draw, reports the probability the plan beats the status quo, and prices the expected KPI left on the table from committing to one plan under parameter uncertainty. All of that accepts the fitted curve as the right target and asks how confidently the argmax was found on it. This post's point sits at a right angle to that one, and it survives even a perfectly known, zero-uncertainty curve: give every posterior draw the identical, noiseless true response function, and every draw still shares the same now-invalid regime assumption, so re-optimizing per draw doesn't touch it. A well-calibrated posterior and an honest decision-uncertainty report are entirely compatible with a plan that's confidently optimal for a curve that no longer applies.</p>
+
+            <h2 id="partial-defense">What the Framework Already Catches &mdash; and What's Worth Adding Next</h2>
+            <p>Give the optimizer credit for the check it already runs, honestly and by name. This framework's per-channel <code>max_obs_multiplier</code> (in <code>planning/budget.py</code>) computes, for each channel, the largest single-period spend the model actually saw divided by that channel's mean spend &mdash; the biggest multiple of current spend the historical data ever supports. When a recommended multiplier clears that ceiling, the optimizer flags the channel as extrapolated, widens its reported spend interval for the extra uncertainty of operating past observed spend, and prints a note recommending a test before committing to large scale-ups. That's a real, well-built, honestly worded defense against gross, single-channel extrapolation. The default client-facing reallocation goes further still, keeping every channel within &plusmn;20% of its own historical band by construction, precisely so the check rarely even has to fire.</p>
+
+            <div class="note">
+                <h4>The exact mechanics</h4>
+                <p><code>ResponseCurves.max_obs_multiplier</code> computes "the largest current-spend multiple that stays within observed support"; <code>optimize_budget</code> checks every channel's recommended multiplier against it and, when channels clear it, prints that they are "recommended beyond the spend range the model has observed" and that the reader should "confirm with a test before committing large scale-ups." The curve-sampling function's own docstring separately notes that "the model is additive in channels, so each channel's curve is unaffected by the others' scenario spend" &mdash; accurate about how the posterior-predictive pass is computed, and a useful pointer toward where a joint-support check belongs.</p>
+            </div>
+
+            <p>What this check doesn't yet do is look across channels together. It works per channel and per axis, one at a time, and the response curves it's built on are generated the same additive way, so nothing in the pipeline looks at how channels moved together historically. A recommendation can be entirely within every channel's own historical range &mdash; clearing <code>max_obs_multiplier</code> on every row, triggering zero notes, exactly what the figure above showed &mdash; and still describe a joint spend combination nothing in the training data ever exhibited. That's the natural next instrument worth building: something that asks whether the recommended point sits inside the convex hull, or within some bounded distance, of the joint historical spend distribution. It doesn't exist in this codebase yet, and it's a genuinely useful next layer to add.</p>
+
+            <div class="warning">
+                <h4>A second instrument, not a fix to the first</h4>
+                <p>The per-channel check does exactly what its name promises. What's described here is a second, complementary question, not a defect in the first &mdash; "is this channel's own spend in range" and "is this joint spend configuration in range" are genuinely different checks, and having the first doesn't hand you the second for free. A clean <code>within_observed_range</code> reading is one necessary condition cleared, worth having, and a good reason to build the second layer on top of it &mdash; not a substitute for it.</p>
+            </div>
+
+            <h2 id="hypothesis">Treat the Curve as a Hypothesis, Not a Fact</h2>
+            <p>None of this is an argument for refusing to act on a fitted curve. A curve fit honestly on real spend variation is still the best evidence a team has, and setting it aside in favor of gut feel is its own kind of error. The better response is smaller: stop treating the argmax as a finding, and start treating it as a hypothesis about the new regime &mdash; one sized so a small, controlled move can confirm or refute it before the full recommendation gets trusted.</p>
+
+            <p>This framework already has a module built around exactly that posture, worth naming because its whole design leans into the idea rather than working around it. <code>continuous_learning/</code> doesn't fit a response surface once and hand it to an optimizer; it keeps re-learning the surface after every action, through small designed interventions folded back through a closed loop that carries the posterior forward wave by wave. It isn't a complete fix for the failure this post describes &mdash; it's a different module, built for geo-experiment programs rather than a national MMM's one-shot reallocation &mdash; but its design principle is the right one to borrow: don't ask one fit to survive an action it never saw, ask a sequence of small, deliberately decoupled moves to re-estimate the curve under the regime the action creates. A companion piece answers a related question one level upstream: not "is my plan safe" but "would this schedule actually move the channel's structural parameters off their priors" &mdash; the same adstock and saturation parameters this framework's other posts keep returning to as the hardest things in an MMM to pin down.</p>
+
+            <div class="note">
+                <h4>Where this lives</h4>
+                <p>The closed-loop machinery is <code>continuous_learning/design.py::central_composite</code> for the designed interventions, folded through <code>continuous_learning/loop.py</code>'s <code>LearningState</code> and <code>run_closed_loop</code> to carry the posterior across waves; the upstream identifiability question is answered by <code>planning/identification.py</code>'s Fisher/Laplace bound.</p>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Committing once, versus testing in stages</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The same confounded single-channel world as the first figure. "One-shot" commits fully to the optimizer's recommendation and never revisits it. "Staged" runs three small, deliberately decoupled test moves &mdash; spend levels the historical calendar never produced on its own &mdash; and refits after each one.</p>
+                <div class="control-row">
+                    <label>Confound comovement strength</label>
+                    <input type="range" id="f3R" min="0" max="1" step="0.05" value="0.6">
+                    <span class="value" id="f3RVal">0.60</span>
+                </div>
+                <div class="chart-container chart-themed" id="f3Chart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Starting error (wave 0)</span><span class="val" id="f3E0">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">One-shot, forever</span><span class="val" id="f3OneShot">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Staged, after 3 waves</span><span class="val" id="f3E3">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the default comovement strength, both paths start 33% high. Committing to the one-shot plan and never testing it leaves the estimate exactly there, indefinitely &mdash; nothing in a single fit tells the model it was wrong. Three staged test waves of eight weeks each, spending at levels the historical plan never visited on its own, pull the estimate to within 4% of the truth by the third wave. The recovery isn't luck; it's the only kind of data &mdash; generated under the new regime rather than the old one &mdash; that can tell a policy-conditional curve it no longer applies.</p>
+            </div>
+
+            <h2 id="limits">What This Does Not Establish</h2>
+            <p>A few things, stated plainly so the argument isn't over-driven.</p>
+
+            <p><strong>This isn't a case against one-shot budget optimization, or against MMM-based allocation in general.</strong> A curve fit honestly on real historical variation is evidence, and setting it aside in favor of intuition is not the safer choice. The claim is narrower: an argmax computed once and acted on in full is a hypothesis about a regime that doesn't exist yet, not a finding about the one that does.</p>
+
+            <p><strong>The simulations are illustrative constructions, not a measurement of how often real portfolios run into this.</strong> The comovement and cross-channel correlation strengths sit on a slider on purpose &mdash; how common either pattern is in a given business is an empirical question this post doesn't answer. A category with genuinely independent channel budgets, or a historical calendar that didn't tie media to anything else driving sales, would show a much smaller effect, possibly none.</p>
+
+            <p><strong>A joint-support distance is a diagnostic, not a fix.</strong> Flagging that a recommendation sits far from the joint historical distribution says the curve's validity there is unverified. It doesn't by itself say which direction the true response actually points, and no such check is built into this codebase today &mdash; the two-channel figure makes the case for building one, not a demonstration of one already closing the loop.</p>
+
+            <p><strong>Sequential re-testing has its own failure modes worth watching for.</strong> A designed test move too small to decouple from the confound teaches the model nothing. One that ignores adstock memory, or invites a competitive response, reintroduces problems this framework's other posts already cover. Three waves converging cleanly in a controlled simulation isn't a claim about how many waves a real program needs, and <code>continuous_learning/</code>'s own design machinery is built for geo experiments specifically, not for retrofitting every national MMM decision.</p>
+
+            <h2 id="protocol">The Rule for a One-Shot Reallocation</h2>
+            <p>Here's the practical version. Before acting on a fitted curve's recommendation, check what the model can already tell you, and hold one more question in mind it can't yet answer. It <strong>can</strong> tell you whether every channel individually clears its own historical range: read the <code>within_observed_range</code> flag and the extrapolation note, and take them seriously &mdash; they catch a real failure mode. It <strong>can't yet</strong> tell you whether the recommended point is anywhere near the joint spend pattern the data actually produced, because nothing in the pipeline checks that today. Treat "every channel individually in range" as necessary, never as sufficient.</p>
+
+            <p>Size the first move accordingly. The larger the distance between the recommendation and the historical joint pattern, the more it should be read as a hypothesis about a regime that doesn't exist yet, and the smaller the first real step should be. Fund a test at a fraction of the recommended change, large enough to break the historical co-movement rather than ride along with it, before committing to the full reallocation. That isn't a reason to distrust the model &mdash; it's the same discipline the model already applies to its own historical fit, extended to the one thing a single fit can never verify about itself: whether the world it describes is still the world you're about to create.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>A fitted response curve is really \( \hat f_{\pi}(\cdot) \), a function of the JOINT spending policy \( \pi \) that generated the data, not a fixed law about the channel. Acting on its argmax quietly assumes the new policy leaves the curve unchanged &mdash; an assumption nothing in a standard fit tests (Lucas, 1976; Van Heerde, Dekimpe &amp; Putsis, 2005; formalized as performative prediction by Perdomo et al., 2020).</li>
+                    <li>This framework's own <code>max_obs_multiplier</code> honestly catches gross, per-channel extrapolation and prints a note when it fires &mdash; a real, well-built defense. The natural next layer looks at channels jointly: a recommendation can sit inside every channel's own historical range and still land far outside the joint pattern those channels ever moved in together.</li>
+                    <li>In a two-channel simulation, a reallocation that clears both channels' individual range checks with room to spare sits 7.6 standard deviations from the joint historical spend distribution at the default co-movement strength.</li>
+                    <li>A single unmeasured confound that historically co-moved with one channel's near-constant spend inflates that channel's fitted coefficient by 33% at default settings &mdash; invisibly, since the in-sample fit is essentially exact &mdash; and the bias fully survives inside the channel's own observed spend range.</li>
+                    <li>This complements rather than repeats <a href="blog-advertising-is-a-stock.html">this framework's earlier post</a> on objectives and scheduling (which covers the case of a correct, static curve throughout), and sits at a different angle from the optimizer's-curse family of decision-uncertainty critiques (those assume a noisy estimate of a fixed, correct curve). It survives an exactly known, zero-uncertainty response function; per-draw re-optimization doesn't touch it.</li>
+                    <li>The constructive direction already exists in this codebase, for a different kind of decision: <code>continuous_learning/</code> re-learns the response surface after small designed interventions rather than fitting once and optimizing forever. In simulation, three staged test waves take the same starting bias from 33% down to under 4%, where committing to the one-shot recommendation leaves it exactly where it started.</li>
+                </ul>
+            </div>
+
+            <p>None of this is a verdict on the model. It's a description of what any fitted model is: never a finished, perfectly correct account of the channel, only ever a tool built for one decision at a time. Adding a joint-support check, and treating every reallocation as a hypothesis worth a small test first, isn't patching something broken &mdash; it's the next increment in the same ongoing conversation with the model that got it this far.</p>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Lucas, R. E. (1976). <em>Econometric Policy Evaluation: A Critique</em>. Carnegie-Rochester Conference Series on Public Policy, 1, 19&ndash;46.</li>
+                <li>Van Heerde, H. J., Dekimpe, M. G., &amp; Putsis, W. P. (2005). <em>Marketing Models and the Lucas Critique</em>. Journal of Marketing Research, 42(1), 15&ndash;24.</li>
+                <li>Franses, P. H. (2005). <em>On the Use of Econometric Models for Policy Simulation in Marketing</em>. Journal of Marketing Research, 42(1), 4&ndash;14.</li>
+                <li>Perdomo, J. C., Zrnic, T., Mendler-D&uuml;nner, C., &amp; Hardt, M. (2020). <em>Performative Prediction</em>. Proceedings of the 37th International Conference on Machine Learning, PMLR 119, 7599&ndash;7609.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // ------------------------------------------------------------------
+        // Shared world: a single channel run at a near-constant weekly level
+        // (±8% around its mean, on a 13-week planning rhythm) whose historical
+        // sales were also moved by an unmeasured confound that happened to
+        // track the same rhythm. The confound is a DETERMINISTIC function of
+        // the historical multiplier (no sampling noise) so the omitted-
+        // variable bias below is exact and reproducible by hand, not an
+        // artifact of one random draw — the point is about policy dependence,
+        // not estimation noise.
+        // ------------------------------------------------------------------
+        var LAM = 0.9, BETA_A = 100, GAMMA_Z = 20, T_HIST = 104;
+
+        function satFn(x) { return 1 - Math.exp(-LAM * x); }
+
+        var HIST_MULTS = (function () {
+            var out = [];
+            for (var t = 1; t <= T_HIST; t++) out.push(1 + 0.08 * Math.sin(2 * Math.PI * t / 13));
+            return out;
+        })();
+        var MAX_OBS_MULT = Math.max.apply(null, HIST_MULTS) / BV.mean(HIST_MULTS);
+        var REC_MULT = 1.06;
+
+        function olsOneRegressor(mults, ys) {
+            var n = mults.length, sats = mults.map(satFn);
+            var ms = BV.mean(sats), my = BV.mean(ys), cov = 0, varS = 0, i;
+            for (i = 0; i < n; i++) {
+                cov += (sats[i] - ms) * (ys[i] - my);
+                varS += (sats[i] - ms) * (sats[i] - ms);
+            }
+            cov /= n; varS /= n;
+            var b = cov / varS;
+            return { a: my - b * ms, b: b };
+        }
+
+        function historicalSeries(r) {
+            var Zs = HIST_MULTS.map(function (m) { return r * GAMMA_Z * (m - 1); });
+            var ys = HIST_MULTS.map(function (m, i) { return BETA_A * satFn(m) + Zs[i]; });
+            return ys;
+        }
+
+        // ==================================================================
+        // Figure 1 — the curve that looked perfectly calibrated
+        // ==================================================================
+        BV.register(function () {
+            var p = BV.palette();
+            var r = parseFloat(document.getElementById('f1R').value);
+            var ysObs = historicalSeries(r);
+            var fit = olsOneRegressor(HIST_MULTS, ysObs);
+            var yHat = HIST_MULTS.map(function (m) { return fit.a + fit.b * satFn(m); });
+            var weeks = HIST_MULTS.map(function (_, i) { return i + 1; });
+
+            Plotly.react('f1Fit', [
+                {
+                    type: 'scatter', mode: 'lines', x: weeks, y: ysObs,
+                    name: 'observed weekly sales (incl. confound)', line: { color: p.muted, width: 2 },
+                    hovertemplate: 'wk %{x}<br>%{y:.1f}<extra>observed</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: weeks, y: yHat,
+                    name: 'fitted model (channel A only)', line: { color: p.primary, width: 2, dash: 'dot' },
+                    hovertemplate: 'wk %{x}<br>%{y:.1f}<extra>fitted</extra>'
+                }
+            ], BV.layout({
+                xaxis: { title: 'week' },
+                yaxis: { title: 'weekly sales attributed here' },
+                legend: { orientation: 'h', y: 1.24, x: 0, font: { size: 11 } },
+                margin: { l: 58, r: 16, t: 34, b: 40 }
+            }), BV.config);
+
+            var ms = BV.linspace(0.75, 1.35, 120);
+            var d1 = satFn(1);
+            var trueDelta = ms.map(function (m) { return BETA_A * (satFn(m) - d1); });
+            var predDelta = ms.map(function (m) { return fit.b * (satFn(m) - d1); });
+            var recTrueDelta = BETA_A * (satFn(REC_MULT) - d1);
+            var recPredDelta = fit.b * (satFn(REC_MULT) - d1);
+            var errPct = (recPredDelta / recTrueDelta - 1) * 100;
+
+            Plotly.react('f1Curve', [
+                {
+                    type: 'scatter', mode: 'lines', x: ms, y: predDelta, name: 'fitted model’s prediction',
+                    line: { color: p.danger, width: 2.4 },
+                    hovertemplate: 'mult %{x:.2f}<br>%{y:.1f}<extra>fitted</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: ms, y: trueDelta, name: 'true response (confound decoupled)',
+                    line: { color: p.primary, width: 2.4, dash: 'dash' },
+                    hovertemplate: 'mult %{x:.2f}<br>%{y:.1f}<extra>true</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', x: [REC_MULT, REC_MULT], y: [recPredDelta, recTrueDelta],
+                    showlegend: false,
+                    marker: { color: [p.danger, p.primary], size: 12, symbol: 'diamond', line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: 'recommended mult %{x:.2f}<br>%{y:.1f}<extra></extra>'
+                }
+            ], BV.layout({
+                xaxis: { title: 'spend multiplier (current spend = 1.0)' },
+                yaxis: { title: 'incremental weekly contribution vs. current' },
+                legend: { orientation: 'h', y: 1.18, x: 0, font: { size: 11 } },
+                margin: { l: 58, r: 16, t: 32, b: 44 },
+                shapes: [{
+                    type: 'line', x0: MAX_OBS_MULT, x1: MAX_OBS_MULT, yref: 'paper', y0: 0, y1: 1,
+                    line: { color: p.muted, width: 1, dash: 'dot' }
+                }],
+                annotations: [{
+                    x: MAX_OBS_MULT, yref: 'paper', y: 1.0, yanchor: 'top', xanchor: 'left', xshift: 4,
+                    text: 'max_obs_multiplier', showarrow: false, font: { size: 10, color: p.muted }
+                }]
+            }), BV.config);
+
+            document.getElementById('f1Bhat').textContent = fit.b.toFixed(1);
+            document.getElementById('f1MaxObs').textContent = MAX_OBS_MULT.toFixed(2) + '×';
+            document.getElementById('f1RecMult').textContent = REC_MULT.toFixed(2) + '× (no flag)';
+            var eEl = document.getElementById('f1Err');
+            eEl.textContent = (errPct >= 0 ? '+' : '') + errPct.toFixed(1) + '%';
+            eEl.className = 'val' + (Math.abs(errPct) > 10 ? ' warn' : '');
+        });
+        BV.sliders([{ id: 'f1R', value: 'f1RVal', fmt: function (v) { return v.toFixed(2); } }], BV.redraw);
+
+        // ==================================================================
+        // Figure 2 — joint vs. marginal support
+        // ==================================================================
+        var F2_SEED = 7, F2_T = 104, REC_A = 135, REC_B = 75;
+
+        function jointWorld(rho) {
+            var rng = BV.mulberry32(F2_SEED), A = [], B = [], t;
+            for (t = 0; t < F2_T; t++) {
+                var u = BV.randn(rng), vA = BV.randn(rng), vB = BV.randn(rng);
+                var zA = Math.sqrt(rho) * u + Math.sqrt(1 - rho) * vA;
+                var zB = Math.sqrt(rho) * u + Math.sqrt(1 - rho) * vB;
+                A.push(100 * (1 + 0.15 * zA));
+                B.push(100 * (1 + 0.15 * zB));
+            }
+            return { A: A, B: B };
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var rho = parseFloat(document.getElementById('f2Rho').value);
+            var w = jointWorld(rho), A = w.A, B = w.B, n = A.length, i;
+            var mA = BV.mean(A), mB = BV.mean(B);
+            var varA = 0, varB = 0, cov = 0;
+            for (i = 0; i < n; i++) {
+                varA += (A[i] - mA) * (A[i] - mA);
+                varB += (B[i] - mB) * (B[i] - mB);
+                cov += (A[i] - mA) * (B[i] - mB);
+            }
+            varA /= n; varB /= n; cov /= n;
+            var corr = cov / Math.sqrt(varA * varB);
+            var minA = Math.min.apply(null, A), maxA = Math.max.apply(null, A);
+            var minB = Math.min.apply(null, B), maxB = Math.max.apply(null, B);
+            var det = varA * varB - cov * cov;
+            var dA = REC_A - mA, dB = REC_B - mB;
+            var invA = varB / det, invOff = -cov / det, invB = varA / det;
+            var md = Math.sqrt(dA * dA * invA + 2 * dA * dB * invOff + dB * dB * invB);
+            var rectX = [minA, maxA, maxA, minA, minA], rectY = [minB, minB, maxB, maxB, minB];
+
+            Plotly.react('f2Chart', [
+                {
+                    type: 'scatter', mode: 'markers', x: A, y: B, name: 'historical weeks',
+                    marker: { color: BV.band(p.muted, 0.55), size: 6, line: { color: p.muted, width: 0.4 } },
+                    hovertemplate: 'A %{x:.0f}<br>B %{y:.0f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: rectX, y: rectY, name: 'each channel’s own min/max',
+                    line: { color: p.accent, width: 1.6, dash: 'dash' }, hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'markers', x: [REC_A], y: [REC_B], name: 'optimizer’s recommendation',
+                    marker: { color: p.danger, size: 15, symbol: 'diamond', line: { color: p.surface, width: 2 } },
+                    hovertemplate: 'A %{x:.0f}<br>B %{y:.0f}<extra>recommended</extra>'
+                }
+            ], BV.layout({
+                xaxis: { title: 'channel A spend (index, mean≈100)' },
+                yaxis: { title: 'channel B spend (index, mean≈100)' },
+                legend: { orientation: 'h', y: 1.2, x: 0, font: { size: 11 } },
+                margin: { l: 58, r: 16, t: 32, b: 44 }
+            }), BV.config);
+
+            document.getElementById('f2Corr').textContent = corr.toFixed(2);
+            var mdEl = document.getElementById('f2MD');
+            mdEl.textContent = md.toFixed(1) + ' SD';
+            mdEl.className = 'val' + (md > 5 ? ' warn' : '');
+            var withinA = REC_A >= minA && REC_A <= maxA;
+            var withinB = REC_B >= minB && REC_B <= maxB;
+            var wEl = document.getElementById('f2Within');
+            wEl.textContent = (withinA && withinB) ? 'both channels pass' : 'flagged';
+            wEl.className = 'val' + ((withinA && withinB) ? ' warn' : ' ok');
+        });
+        BV.sliders([{ id: 'f2Rho', value: 'f2RhoVal', fmt: function (v) { return v.toFixed(2); } }], BV.redraw);
+
+        // ==================================================================
+        // Figure 3 — one-shot versus staged testing
+        // ==================================================================
+        var F3_WAVES = [{ n: 8, m: 1.30 }, { n: 8, m: 0.75 }, { n: 8, m: 1.55 }];
+
+        function waveTrail(r) {
+            var mults = HIST_MULTS.slice(), ys = historicalSeries(r);
+            var trail = [olsOneRegressor(mults, ys).b];
+            F3_WAVES.forEach(function (w) {
+                for (var k = 0; k < w.n; k++) { mults.push(w.m); ys.push(BETA_A * satFn(w.m)); }
+                trail.push(olsOneRegressor(mults, ys).b);
+            });
+            return trail;
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var r = parseFloat(document.getElementById('f3R').value);
+            var trail = waveTrail(r);
+            var waveX = [0, 1, 2, 3];
+            var oneShot = waveX.map(function () { return trail[0]; });
+
+            Plotly.react('f3Chart', [
+                {
+                    type: 'scatter', mode: 'lines', x: [0, 3], y: [BETA_A, BETA_A], name: 'true coefficient',
+                    line: { color: p.muted, width: 1.4, dash: 'dot' }, hoverinfo: 'skip'
+                },
+                {
+                    type: 'scatter', mode: 'lines+markers', x: waveX, y: oneShot,
+                    name: 'one-shot: commit and never revisit', line: { color: p.danger, width: 2.2, dash: 'dash' },
+                    marker: { color: p.danger, size: 8 },
+                    hovertemplate: 'wave %{x}<br>%{y:.1f}<extra>one-shot</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines+markers', x: waveX, y: trail,
+                    name: 'staged: small test each wave, refit', line: { color: p.primary, width: 2.4 },
+                    marker: { color: p.primary, size: 9 },
+                    hovertemplate: 'wave %{x}<br>%{y:.1f}<extra>staged</extra>'
+                }
+            ], BV.layout({
+                xaxis: { title: 'wave (0 = pre-test estimate)', dtick: 1, range: [-0.2, 3.2] },
+                yaxis: { title: 'estimated channel-A coefficient' },
+                legend: { orientation: 'h', y: 1.22, x: 0, font: { size: 11 } },
+                margin: { l: 58, r: 16, t: 34, b: 42 }
+            }), BV.config);
+
+            var e0 = (trail[0] / BETA_A - 1) * 100, e3 = (trail[3] / BETA_A - 1) * 100;
+            document.getElementById('f3E0').textContent = '+' + e0.toFixed(1) + '%';
+            var e3El = document.getElementById('f3E3');
+            e3El.textContent = (e3 >= 0 ? '+' : '') + e3.toFixed(1) + '%';
+            e3El.className = 'val ok';
+            var oneShotEl = document.getElementById('f3OneShot');
+            oneShotEl.textContent = '+' + e0.toFixed(1) + '% (never corrected)';
+            oneShotEl.className = 'val warn';
+        });
+        BV.sliders([{ id: 'f3R', value: 'f3RVal', fmt: function (v) { return v.toFixed(2); } }], BV.redraw);
+    })();
+    </script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

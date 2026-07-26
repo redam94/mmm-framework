@@ -49,6 +49,10 @@
       "hash": "fe5416dcfd6b4d37",
       "modified": "2026-07-24"
     },
+    "blog-aggregation-bends-the-curve.html": {
+      "hash": "8d86151754451442",
+      "modified": "2026-07-26"
+    },
     "blog-attribution-incrementality.html": {
       "hash": "2cd78a34daf43efc",
       "modified": "2026-07-24"
@@ -69,6 +73,10 @@
       "hash": "9109e114a80bf763",
       "modified": "2026-07-10"
     },
+    "blog-calibrate-validate-same-experiment.html": {
+      "hash": "f8e0f8b0df32e572",
+      "modified": "2026-07-26"
+    },
     "blog-calibrating-mmm-experiments.html": {
       "hash": "274b751096fa50b0",
       "modified": "2026-07-14"
@@ -88,6 +96,10 @@
     "blog-continuous-learning-interactions.html": {
       "hash": "3db5103a96eb1b63",
       "modified": "2026-07-10"
+    },
+    "blog-curve-assumed-you-wouldnt-act.html": {
+      "hash": "59fbfca3f52788a4",
+      "modified": "2026-07-26"
     },
     "blog-demand-proxy-proximal.html": {
       "hash": "642486618f536a16",
@@ -117,9 +129,17 @@
       "hash": "a897f84969243c48",
       "modified": "2026-07-10"
     },
+    "blog-modelled-one-p.html": {
+      "hash": "f785fa311ea13c38",
+      "modified": "2026-07-26"
+    },
     "blog-multiple-comparisons.html": {
       "hash": "5fe87fd4b8d0524c",
       "modified": "2026-07-10"
+    },
+    "blog-optimizers-curse.html": {
+      "hash": "f9c516ad0fe63263",
+      "modified": "2026-07-26"
     },
     "blog-p-hacking-evidence.html": {
       "hash": "52fa9fdea8082181",
@@ -177,13 +197,17 @@
       "hash": "f9b38ba0da43fdae",
       "modified": "2026-07-10"
     },
+    "blog-vendor-graded-homework.html": {
+      "hash": "0f0c9bb5035fbbb1",
+      "modified": "2026-07-26"
+    },
     "blog-when-sampling-fails.html": {
       "hash": "f75a16ee281f0125",
       "modified": "2026-07-17"
     },
     "blog.html": {
-      "hash": "0f1ea87647d44e01",
-      "modified": "2026-07-23"
+      "hash": "4b125165caebacdd",
+      "modified": "2026-07-26"
     },
     "business-readiness-report.html": {
       "hash": "4f24d06496fc708f",

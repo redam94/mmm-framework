@@ -68,6 +68,11 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-aggregation-bends-the-curve.html</loc>
+        <lastmod>2026-07-26</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/blog-attribution-incrementality.html</loc>
         <lastmod>2026-07-24</lastmod>
         <changefreq>monthly</changefreq>
@@ -93,6 +98,11 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-calibrate-validate-same-experiment.html</loc>
+        <lastmod>2026-07-26</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/blog-calibrating-mmm-experiments.html</loc>
         <lastmod>2026-07-14</lastmod>
         <changefreq>monthly</changefreq>
@@ -115,6 +125,11 @@
     <url>
         <loc>https://redam94.github.io/mmm-framework/blog-continuous-learning-interactions.html</loc>
         <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-curve-assumed-you-wouldnt-act.html</loc>
+        <lastmod>2026-07-26</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -153,8 +168,18 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-modelled-one-p.html</loc>
+        <lastmod>2026-07-26</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/blog-multiple-comparisons.html</loc>
         <lastmod>2026-07-10</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-optimizers-curse.html</loc>
+        <lastmod>2026-07-26</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -228,13 +253,18 @@
         <changefreq>monthly</changefreq>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/blog-vendor-graded-homework.html</loc>
+        <lastmod>2026-07-26</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/blog-when-sampling-fails.html</loc>
         <lastmod>2026-07-17</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/blog.html</loc>
-        <lastmod>2026-07-23</lastmod>
+        <lastmod>2026-07-26</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>

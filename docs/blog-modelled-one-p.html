@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>You Modelled One P | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Price is the classic endogenous regressor, and this framework's sign-guarded elasticity disciplines the wrong failure mode: it forecloses an impossible sign while leaving the magnitude open to the bias it rigorously screens for on every media channel except this one — recovering 39% of a planted elasticity, sign intact.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-modelled-one-p.html">
+    <meta property="og:title" content="You Modelled One P">
+    <meta property="og:description" content="A sign-guarded price elasticity forecloses one failure mode and leaves the magnitude exactly where an uninstrumented regression puts it. One parameter, two questions, and only one of them was ever answered.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-modelled-one-p.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="You Modelled One P">
+    <meta name="twitter:description" content="A sign-guarded price elasticity forecloses one failure mode and leaves the magnitude exactly where an uninstrumented regression puts it. One parameter, two questions, and only one of them was ever answered.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-modelled-one-p.html",
+          "name": "You Modelled One P | MMM Framework",
+          "description": "Price is the classic endogenous regressor, and this framework's sign-guarded elasticity disciplines the wrong failure mode: it forecloses an impossible sign while leaving the magnitude open to the bias it rigorously screens for on every media channel except this one — recovering 39% of a planted elasticity, sign intact.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-07-26",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-modelled-one-p.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-modelled-one-p.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "You Modelled One P",
+          "datePublished": "2026-07-26",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-modelled-one-p.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-modelled-one-p.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "You Modelled One P",
+              "item": "https://redam94.github.io/mmm-framework/blog-modelled-one-p.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#mechanism">A Choice Variable, Not a Proxy</a></li>
+                <li><a href="#sign-guard">What the Sign Guard Actually Disciplines</a></li>
+                <li><a href="#detector">The Detector That Isn't Pointed at the Suspect</a></li>
+                <li><a href="#one-p">You Modelled One P</a></li>
+                <li><a href="#instruments">The Honest Fix, and How Rare It Is</a></li>
+                <li><a href="#designed-variation">Designed Variation Closes the Gap</a></li>
+                <li><a href="#latent-remedy">A Partial Remedy This Framework Already Ships</a></li>
+                <li><a href="#limits">What This Does Not Establish</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">You Modelled One P</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-07-26">July 26, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Causal inference</span>
+            </p>
+            <p class="lead">A marketing mix model earns its keep the same way for every media channel: it asks how much of the outcome the channel actually caused, not just how much it moved alongside it. This post asks that same question of price, because this framework already treats price as more than an ordinary control &mdash; it hands back a single number, <code>price_elasticity</code>, meant to describe how sales respond when a retailer changes price. That's the pun in the title: one <em>P</em> is being asked to answer two different questions at once. One is descriptive &mdash; given everything else in the model, how does sales move with price in this dataset &mdash; and the model answers it well. The other is causal &mdash; if the client cut price next month, how much would sales actually move &mdash; and nothing about how the number is built guarantees the two questions share an answer. The framework already refuses one specific bad answer: it is built so a fitted elasticity can never say a price increase raised demand. The more interesting question is whether the <em>size</em> of the number, not just its sign, is telling us what a pricing decision needs to know. In a simulation built to mirror the shipped mechanism, the sign-respecting estimate recovers <strong>39%</strong> of a planted elasticity &mdash; correct in sign, confidently estimated, and considerably smaller than the truth.</p>
+
+            <p>Every model here, and every model anywhere, is a simplification built to be useful for a decision, not a finished, perfectly correct account of the world. A measurement practice that's maturing doesn't stop once a number's sign looks right; it keeps finding sharper questions to ask of the same number, and turning one up is a sign the practice is working, not a sign something was missed earlier. This post is about the next sharper question worth asking of price.</p>
+
+            <h2 id="mechanism">A Choice Variable, Not a Proxy</h2>
+            <p>Start with what makes price different from an ordinary control variable. <a href="blog-demand-proxy-proximal.html">A companion post</a> on this blog looked at a related but different problem: a control column measured with error, standing in imperfectly for a confounder the model can't see directly. That's a measurement problem, and the honest fix is a better or more complete measurement of the thing the column is standing in for.</p>
+
+            <p>Price's problem is a different one, and it deserves a plain-language name before anything formal: <strong>endogeneity</strong> just means a variable in a regression is tangled up with the very thing the regression is trying to explain, so its coefficient stops being a clean cause-and-effect number. Price is tangled because it is a <strong>choice variable</strong> &mdash; a retailer sets it, usually while forecasting the same demand that will go on to determine sales, and often cuts it precisely because that forecast looks soft. Price isn't a noisy read of something out in the world; it's a decision, made by someone reacting to the same signal that's also driving sales. Economists call this specific flavor of tangle <strong>simultaneity</strong>: price and sales are both outcomes of the same underlying demand story, rather than price simply causing sales in one direction.</p>
+
+            <div class="definition">
+                <h4>Simultaneity, in one line</h4>
+                <p>In plain terms: the same demand shock moves both price (a retailer discounts harder when demand looks soft) and sales, so a plain regression of sales on price can't cleanly separate "price caused this" from "the shock caused both." Formally, let \( D_t \) be that unobserved demand shock. The retailer sets \( \log P_t = \gamma D_{t-1} + \nu_t \) with \( \gamma \lt 0 \) &mdash; discounting after a soft signal &mdash; while sales respond to both price and the same shock, \( Y_t = a - \beta \log(P_t / P_{\text{ref}}) + \theta D_t + \varepsilon_t \), \( \beta \gt 0 \). Price and sales are jointly produced by the demand process rather than one simply causing the other. This is the puzzle differentiated-products demand estimation was built to solve (Berry, Levinsohn, and Pakes, 1995) &mdash; a genuinely different problem from a mismeasured stand-in for a confounder, which is a claim about a separate variable, not about price itself.</p>
+            </div>
+
+            <p>Because a simultaneity problem is different from a measurement problem, it needs a different kind of fix: a source of price movement the retailer's own forecast never touched. Economists call a tool like that an <strong>instrument</strong> &mdash; something that moves price for a reason unrelated to demand, so whatever those price movements do to sales can be credited to price alone. A supplier's shipping cost is a classic example: it nudges the retailer's price around, but a shipping-cost spike has nothing to do with whether demand looks soft this week. No amount of better demand measurement substitutes for that; only a genuine instrument, or a deliberately designed experiment, does.</p>
+
+            <p>This framework already treats price as more than an afterthought, which is exactly why it's worth understanding precisely what that treatment buys. A dedicated <code>PriceConfig</code> promotes a price column from an ordinary control into a first-class lever with its own transform, and the model builds an elasticity from it in <code>_build_price_promo_levers</code>. The intent is a good one: price and promotion are decisions a client actually controls, so planners want a real elasticity and a promo ROI rather than a generic control coefficient. The mechanism behind that intent, today, is a single regressor &mdash; the model picks a reference price and computes <code>log(price / reference)</code> once from the raw series, with no lag, no cost-side variable, and no instrument field anywhere in the config. Here is the term itself:</p>
+
+            <pre><code># model/base.py:1794-1799
+# Sign guard: elasticity ≤ 0 (a price rise cannot raise demand here).
+mag = pm.HalfNormal(
+    "price_elasticity_mag", sigma=float(cfg.elasticity_prior_sigma)
+)
+elasticity = pm.Deterministic("price_elasticity", -mag)
+price_contrib = elasticity * pt.as_tensor_variable(log_price)</code></pre>
+
+            <p>A non-centered <code>HalfNormal</code> magnitude, negated into a Deterministic. It's a clean, effective piece of engineering for exactly one job: constraining a <em>sign</em>, not identifying an effect.</p>
+
+            <p>There's a second layer worth understanding, because it points straight at the improvement worth making next. Before the model assigns any control a causal role &mdash; confounder, precision control, mediator, collider &mdash; it clears price out of the control block entirely, in <code>_prepare_levers</code>, since price already has its own dedicated lever and doesn't need a second turn as a generic control. That's sensible on its own terms. It also means price hasn't yet joined the same role-assignment conversation that keeps a confounder from being over-shrunk, or a mediator from being conditioned on by mistake &mdash; the taxonomy this blog has <a href="blog-table-2-fallacy-mmm.html">described elsewhere</a>. Price simply isn't part of that machinery yet, in either direction.</p>
+
+            <p>The framework's own endogeneity screen tells a similar story from a different angle. <code>endogeneity_diagnostic</code> is a genuinely useful lead/lag test, built to catch a channel whose spend looks like it's reacting to the KPI's own recent movements &mdash; exactly the pattern that would flag a retailer discounting after a soft demand signal. It's a real diagnostic for a real problem, and today it's wired to read only the media arrays. Extending it to price, alongside extending the causal-role taxonomy to cover price the way it already covers controls, is a natural, well-scoped next step &mdash; the pieces already exist and already do the right thing for media. They just haven't been pointed at price yet.</p>
+
+            <div class="note">
+                <h4>Where this lives, for readers who want the exact lines</h4>
+                <p><code>PriceConfig</code> (<code>config/levers.py:24&ndash;37</code>) and <code>_build_price_promo_levers</code> (<code>model/base.py:1776&ndash;1833</code>) build the lever; <code>_resolve_price_reference</code> (<code>model/base.py:1766&ndash;1774</code>) picks the reference price. <code>_prepare_levers</code> (<code>model/base.py:1156&ndash;1201</code>) clears price from the control block before <code>_resolve_control_causal_roles</code> assigns roles (the taxonomy lives in <code>config/enums.py:64</code>). <code>endogeneity_diagnostic</code>'s signature (<code>diagnostics/endogeneity.py:64&ndash;69</code>, reading <code>model.X_media_raw</code>/<code>model.y_raw</code>/<code>model.channel_names</code>, lines 77&ndash;79) is called from <code>agents/model_ops.py:791</code> and <code>reporting/prefit.py:153</code>, neither passing it a price argument.</p>
+            </div>
+
+            <h2 id="sign-guard">What the Sign Guard Actually Disciplines</h2>
+            <p>Give the sign guard its due, because it earns its place. Picture a short fit window, thin price variation, and a promotional calendar that happens to land in soft weeks for reasons that have nothing to do with price itself. An unconstrained regression on log-price can come back with a <em>positive</em> coefficient in that situation &mdash; reading a price cut as though it reduced sales, purely because discounts and demand troughs happened to line up. That's a genuinely bad look for a client-facing number, and forcing <code>price_elasticity = -HalfNormal(&hellip;)</code> makes it impossible to report by construction. That's real, useful discipline, worth keeping exactly as it is.</p>
+
+            <p>But a sign constraint can only ever catch one kind of mistake: a number crossing zero. It has nothing to say about a number that keeps the right sign but lands in the wrong place. Jeziorski, Leng, and Seiler (2025) looked at this directly: fitting a demand model with an endogenous price control reduces bias, on real supermarket scanner data, but doesn't remove it, and what's left over can be substantial. Their finding and the sign guard aren't really in tension &mdash; they're about two different failure modes. Nothing in the result says the surviving bias tends to flip the sign; it says the number tends to move inward, toward zero, because the same demand shock that drives a discount also drives sales, and an uninstrumented regression ends up crediting price with some of what the shock actually caused. A rule that only watches for a sign crossing zero has no way to notice a number quietly losing most of its size while staying on the right side of that line.</p>
+
+            <div class="interactive-box">
+                <h4>The sign guard doesn't fix the magnitude</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A world built to match the shipped mechanism: a persistent demand shock drives both price (the retailer discounts harder when demand looks soft) and sales; a cost-shifter instrument, uncorrelated with demand, moves price for reasons that have nothing to do with the retailer's forecast. Two estimators, exact closed-form sampling distributions (asymptotic normal, no Monte Carlo noise): the framework's own sign-guarded regression on log-price alone, and the same regression instrumented by the cost shifter. The true elasticity is &minus;1.20.</p>
+                <div class="control-row">
+                    <label>Instrument strength &nbsp;(cost shifter &rarr; price)</label>
+                    <input type="range" id="f1Alpha" min="0.2" max="1.5" step="0.05" value="0.6">
+                    <span class="value" id="f1AlphaVal">0.60</span>
+                </div>
+                <div class="control-row">
+                    <label>Weeks of data</label>
+                    <input type="range" id="f1N" min="60" max="500" step="10" value="250">
+                    <span class="value" id="f1NVal">250</span>
+                </div>
+                <div class="chart-container chart-themed" id="f1Chart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Sign-guarded estimate</span><span class="val" id="f1NaiveMean">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">&hellip;% of true elasticity</span><span class="val" id="f1NaivePct">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Instrumented estimate</span><span class="val" id="f1IvMean">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">&hellip;% of true elasticity</span><span class="val" id="f1IvPct">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">P(sign guard binds)</span><span class="val" id="f1FlipP">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults, the sign-guarded estimator's sampling distribution centers at <strong>&minus;0.47</strong> &mdash; 39% of the true &minus;1.20 &mdash; with a standard error of about 0.05, tight enough that the probability of it ever returning a positive number (the one thing the guard rail would catch) is effectively zero. The instrumented estimator centers at &minus;1.20, essentially exact, with roughly 2.4&times; the sign-guarded estimator's standard error &mdash; correct, but visibly less confident about it. Reduce the instrument to a weak trickle and the sign-guarded curve never crosses zero either &mdash; it just keeps understating the truth, precisely and without complaint.</p>
+            </div>
+
+            <h2 id="detector">The Detector That Isn't Pointed at the Suspect</h2>
+            <p>It's one thing to say the endogeneity screen hasn't been pointed at price yet. It's more useful to show what it would see if it were. The diagnostic works by checking, for a channel's week-over-week changes, whether the KPI's own recent moves predict the channel's future spend better than the reverse &mdash; essentially asking, "does this look like the KPI is driving the channel, rather than the other way around." A channel gets flagged when that lead correlation clears a threshold (<code>_max_lead_corr</code>, <code>diagnostics/endogeneity.py:48&ndash;61</code>, threshold 0.30 over a window of up to 8 periods) and dominates the reverse direction. The figure below runs that same test, translated faithfully from the shipped function, on two series from one simulated world: a media channel flighted on its own calendar, genuinely unrelated to demand, and a price series that discounts after a soft demand signal &mdash; the same story as the figure above, now seen through the diagnostic's own eyes.</p>
+
+            <div class="interactive-box">
+                <h4>The detector that isn't pointed at the suspect</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A 300-week simulated world (seeded PRNG, reproducible): a persistent demand shock, a media channel flighted independently of it, and a price series that discounts in proportion to <em>last period's</em> demand reading. Bars are the demand-leads-spend correlation at each lag, computed exactly as <code>_max_lead_corr</code> computes it. The shaded band marks the &plusmn;0.30 flag threshold.</p>
+                <div class="control-row">
+                    <label>Price's response to lagged demand (&gamma;)</label>
+                    <input type="range" id="f2Gamma" min="-4" max="0" step="0.2" value="-3">
+                    <span class="value" id="f2GammaVal">&minus;3.0</span>
+                </div>
+                <div class="chart-container chart-themed" id="f2Chart" style="height:340px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Media: best |corr| (lag)</span><span class="val" id="f2Media">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Media verdict</span><span class="val" id="f2MediaV">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Price: best |corr| (lag)</span><span class="val" id="f2Price">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Price: reverse-direction |corr|</span><span class="val" id="f2PriceRev">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Price verdict</span><span class="val" id="f2PriceV">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">At the defaults, the media channel's strongest demand-leads-spend correlation is &minus;0.15 at lag 5 &mdash; well under the 0.30 threshold, correctly unflagged. Price's is &minus;0.90 at lag 1, clearing the threshold by a wide margin and dominating the reverse-direction correlation of 0.09 &mdash; exactly the pattern the diagnostic's own warning describes: spend "appears to respond to demand&hellip; its effect can't be cleanly separated from demand without an experiment." Drag &gamma; toward zero and price's bars collapse into the media channel's noise floor &mdash; the flag tracks the mechanism, not a property of "being price."</p>
+            </div>
+
+            <p>Which is exactly the invitation here: the diagnostic already draws this line correctly for every media channel. Pointing it at price next is a small, concrete extension of something that already works &mdash; not a new invention.</p>
+
+            <h2 id="one-p">You Modelled One P</h2>
+            <p>Put the last two sections together and the title says exactly what's going on. One parameter &mdash; the single Deterministic <code>price_elasticity</code> &mdash; is being asked to answer two different questions, and only one of them has a clean answer yet. The first question is descriptive: given everything else in the model, what's the average slope of sales on log-price in this dataset? That's a well-defined, estimable number, and the model recovers it faithfully, sign guard and all &mdash; it's exactly what Figure&nbsp;1's sign-guarded curve is centered on. The second question is causal: if the client cut price next month, holding the retailer's own pricing habits fixed, how much would sales actually move? Those two questions share an answer only under one assumption &mdash; that price is set independently of whatever else is moving sales &mdash; and that's precisely the assumption this framework already refuses to make for every media channel.</p>
+
+            <p>It's worth being precise about how this differs from the demand-proxy post's finding, since "endogeneity" can flatten two different problems into one vague worry. That post found one control column asked to play two roles &mdash; confounder for one channel, mediator for another &mdash; inside a design matrix with no way to record which role applies where. This is a different shape of problem: one coefficient, on the model's own treatment variable, being asked to be both a descriptive statistic and a causal effect, without the randomization or instrument that would make those the same thing. A sign constraint is a rule about what shape an answer must have. Whether that shape is also the right size is a separate fact about where the price variation in the data actually came from &mdash; and that's the fact worth going after next. You modelled one <em>P</em>; the data can hand back two different numbers, and it takes a bit more work to know which one you're holding.</p>
+
+            <h2 id="instruments">The Honest Fix, and How Rare It Is</h2>
+            <p>Economists solved this problem for price a long time ago, by finding price variation a demand shock can't see. The classic move, from Berry, Levinsohn, and Pakes (1995), instruments a product's price with the observed characteristics of its <em>competitors</em> &mdash; correlated with cost pressures, but plausibly unrelated to the idiosyncratic demand shock hitting this particular product &mdash; and it recovers demand elasticities that survive automobile pricing's own simultaneity. A related, older idea uses the price of the same good in a separate, distant market: it shares the manufacturer's national cost shocks but not the local demand shock, as long as the two markets aren't otherwise linked (Hausman, 1996).</p>
+
+            <p>The marketing literature reached the same conclusion just as bluntly, and just as long ago. Villas-Boas and Winer (1999) fit scanner-panel demand models with price and promotion set endogenously by the retailer, and found that ignoring it produces substantial coefficient bias relative to an instrumented version. That's not a recent finding rediscovering an old worry; it's a quarter-century-old result about exactly this data-generating process.</p>
+
+            <p>None of this is available off the shelf to most marketing teams, and it's worth saying so plainly before saying anything else. A cost-shifter instrument needs supplier cost data most teams never see. A cross-market instrument needs a genuinely separate market with its own price series and no demand leakage between the two &mdash; a footprint few single-country retail or DTC brands have. That scarcity is exactly why more recent work has leaned toward a more modest goal: instead of assuming a point-identifying instrument exists, estimate a plausible <em>range</em> for the elasticity, built from structural models and elicited managerial judgment about demand. If the field is turning to ranges specifically because point-identifying instruments are this rare, then a framework returning one tight number with no instrument at all is quietly promising more precision than the underlying data usually supports.</p>
+
+            <div class="warning">
+                <h4>&#9888;&#65039; The docs already flag this &mdash; this post is the deep dive</h4>
+                <p>The framework's modeling guide already says the right thing about price, in one sentence: "price is usually endogenous (cut because demand is soft) &mdash; treat the elasticity as conditional, cross-check the <a href="identification-assumptions.html">identification assumptions</a>, and confirm with an experiment." That sentence is correct, and it's the entire argument of this post compressed into a caveat. <a href="blog-table-2-fallacy-mmm.html">The Table 2 fallacy in media mix models</a> covers the general version of this same point well &mdash; a price coefficient is "precise nonsense" needing "its own instruments or experiments." This post is the specific follow-through: what the sign guard actually does, what it doesn't do yet, and what a concrete next step looks like for this framework's own <code>PriceConfig</code>.</p>
+            </div>
+
+            <h2 id="designed-variation">Designed Variation Closes the Gap</h2>
+            <p>There's a middle path between "no instrument" and "an instrument you probably don't have": design the price variation yourself. Run a flighted or randomized discount schedule, so a share of the price movement in the data is demand-independent by construction &mdash; put there by a calendar, not a forecast. It's the same mechanism as Figure&nbsp;1's cost shifter, seen from a different angle. Instead of asking whether a usable instrument already exists somewhere out in the world, this figure asks how much demand-independent price variation a designed calendar would need to add before the sign-guarded estimate stops badly understating the truth and starts being merely a little imprecise.</p>
+
+            <div class="interactive-box">
+                <h4>Designed variation is what closes the gap</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Same world and same sign-guarded estimator as Figure&nbsp;1, in closed form (exact population bias, no sampling). The x-axis is the variance of price movements that are demand-independent by construction &mdash; a randomized or flighted discount schedule, rather than an instrument found in someone else's cost data.</p>
+                <div class="control-row">
+                    <label>Designed, demand-independent price variance</label>
+                    <input type="range" id="f3SigmaD" min="0" max="5" step="0.05" value="0.36">
+                    <span class="value" id="f3SigmaDVal">0.36</span>
+                </div>
+                <div class="chart-container chart-themed" id="f3Chart" style="height:330px;"></div>
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Sign-guarded estimate</span><span class="val" id="f3Est">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">% of true elasticity recovered</span><span class="val" id="f3Pct">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="f3Verdict">&mdash;</span></div>
+                </div>
+                <p class="chart-caption" style="margin-bottom:0;">With no designed variation at all, the sign-guarded estimate recovers just 9% of the true elasticity &mdash; a hair's breadth from the sign flip the guard rail exists to prevent. At the variance an instrument of Figure&nbsp;1's strength would supply, it recovers 39%, the number this post has led with throughout. Push designed variation to five times the demand-driven variance and it recovers 88%. The curve is monotone with no crossover &mdash; unlike bias amplification from a mismeasured demand proxy, where a <em>better</em> measurement can move the estimate the wrong way, demand-independent price variation here only ever helps, because it dilutes the confounding term in the denominator without adding any to the numerator.</p>
+            </div>
+
+            <h2 id="latent-remedy">A Partial Remedy This Framework Already Ships</h2>
+            <p>When there's no instrument, and no budget or client appetite for a designed discount calendar, the honest move isn't to try to squeeze the confound out of one coefficient by assumption. It's the same move the demand-proxy post made for a different confounder: model the shared demand shock openly, as its own piece of the model, rather than asking a single regression to net it out silently.</p>
+
+            <p>This framework already ships that pattern for a different confounder, in <code>examples/garden_models/latent_factor_mmm.py</code>. It treats several imperfect macro indicators as noisy readings of one underlying "economic health" factor, lets that factor evolve over time, and feeds it into the sales equation as a covariate the media coefficients now condition on jointly &mdash; with its own uncertainty carried through rather than plugged in as a single point estimate.</p>
+
+            <p>The same idea applies to price. Instead of asking one log-price coefficient to carry the whole weight of an unmodeled pricing rule, model the demand shock that rule reacts to as a shared latent factor sitting alongside price and sales &mdash; fed by whatever a client already tracks, such as a category volume index, a competitor price series, or a macro demand indicator. It's the same measurement idea, pointed at a new confounder. It's worth being precise about what this buys, because the demand-proxy post already ran this exact experiment against a known ground truth, and the lesson transfers directly. On that answer key, ignoring the confounder left one channel's estimated contribution off by 406%; adding four indicators as ordinary controls cut that to 101%; modeling them jointly landed at 112% &mdash; no better on point accuracy. What the joint model bought instead was the factor itself, recovered at a 0.981 correlation with the truth, sign intact. That post's own framing for the result is worth reusing here: not an accuracy purchase, a knowledge purchase. Applied to price, the honest promise of a joint demand-factor model isn't a corrected elasticity. It's a labeled, inspectable account of the demand story the retailer's own pricing rule was already reacting to &mdash; genuinely useful on its own, and a good foundation for the identification work that comes after it.</p>
+
+            <div class="note">
+                <h4>&#128161; What's worth writing down when there's no instrument yet</h4>
+                <p>Most of the time there won't be an instrument, a designed discount calendar, or the appetite to build either this quarter &mdash; and that's fine; it just changes what the honest deliverable looks like. In that case, the useful thing to hand a client isn't a confident point estimate. It's a plain diagnosis (the sign guard disciplines a sign, not a magnitude), a named requirement (demand-independent price variation, which this dataset does or doesn't have), and, when that requirement isn't met yet, a <strong>labeled conditional elasticity with a wide interval</strong> &mdash; never a number that reads as more identified than it is.</p>
+            </div>
+
+            <h2 id="limits">What This Does Not Establish</h2>
+            <p><strong>The simulations are illustrations, not a prevalence study.</strong> They're built to mirror the shipped mechanism, not to adversarially maximize the effect, and they show the failure exists and can be sizeable. They don't say what share of real, fitted price coefficients land far from the truth, or by how much.</p>
+
+            <p><strong>None of this argues for removing the sign guard.</strong> It's a cheap, real safeguard against a genuine failure &mdash; a promotional-timing artifact flipping the reported sign &mdash; and it costs nothing to keep. The point is narrower: don't read a tight, sign-correct posterior as evidence the size of the number is settled too.</p>
+
+            <p><strong>Plenty of practitioners do have a usable instrument.</strong> Some retailers run genuinely separate regional markets, or have supplier cost pass-through data that would satisfy a Hausman-style exclusion restriction. The claim here is that this is uncommon, not impossible &mdash; which is exactly why Haschka and Herwartz (2025) build set-identification tools for the more common case, where a point-identifying instrument isn't available.</p>
+
+            <p><strong>The joint-latent-factor idea is an analogy here, not a validated result for price specifically.</strong> The 406%/101%/112% figures come from the demand-proxy post's own answer-key world, built around a different confounder. This post hasn't yet built a price-specific synthetic world with a planted elasticity and a planted demand factor to confirm the same ordering holds for price; the claim is that the mechanism transfers, not that the exact numbers do.</p>
+
+            <p><strong>The promo lever is a different story, for another day.</strong> A promotion is also a client decision, but its timing is often booked well ahead of the demand forecast that drives a week-to-week price cut &mdash; a different endogeneity story with its own caveats. This post is about price specifically.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Price's endogeneity is <strong>simultaneity</strong>, not proxy measurement error: a retailer's pricing rule and the sales equation share the same demand shock. The fix is different from <a href="blog-demand-proxy-proximal.html">the demand-proxy post's</a> &mdash; better measurement of a stand-in doesn't help here; what's missing is demand-independent price variation.</li>
+                    <li>This framework's price lever is one regressor &mdash; <code>log(price/reference)</code> &mdash; with a sign guard keeping <code>price_elasticity &le; 0</code> (<code>model/base.py:1794&ndash;1799</code>) and no instrument, lag structure, or cost-side field yet in <code>PriceConfig</code>.</li>
+                    <li>Price hasn't yet joined the framework's two existing endogeneity safeguards: <code>_prepare_levers</code> (<code>model/base.py:1156&ndash;1201</code>) clears it from the control block before causal roles are assigned, and <code>endogeneity_diagnostic</code> reads only media arrays today. Both are natural, well-scoped places to extend next.</li>
+                    <li>A sign constraint rules out a sign flip; it doesn't fix the size of the number. Jeziorski, Leng, and Seiler (2025) find that conditioning on an endogenous price control "reduces bias but does not remove it," with surviving bias that "can be substantial" &mdash; in this post's own simulation, the sign-guarded estimator recovers 39% of a true &minus;1.20 elasticity, at &minus;0.47, confidently, without ever once returning a positive number across the sampling distribution.</li>
+                    <li>Run the framework's own lead/lag test on price and it flags decisively &mdash; a &minus;0.90 demand-leads-price correlation against the 0.30 threshold, versus &minus;0.15 for a well-behaved media channel.</li>
+                    <li>Real fixes exist (BLP-style competitor-characteristic instruments, Hausman's cross-market prices, designed demand-independent price variation), though they're rare in practice. A joint latent-demand-factor model &mdash; a pattern this framework already ships in <code>latent_factor_mmm.py</code> &mdash; is a knowledge purchase worth having even before an instrument is in hand.</li>
+                </ul>
+                <p style="margin-bottom:0;">None of this is a defect closed. It's one more increment in the direction this whole framework is already heading: a model doesn't have to be finished to be useful, and the next sharper question &mdash; giving price the same causal-role thinking media channels already get &mdash; is a good one to be asking right now.</p>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Berry, S., Levinsohn, J., &amp; Pakes, A. (1995). <em>Automobile Prices in Market Equilibrium</em>. Econometrica, 63(4), 841&ndash;890.</li>
+                <li>Villas-Boas, J. M., &amp; Winer, R. S. (1999). <em>Endogeneity in Brand Choice Models</em>. Management Science, 45(10), 1324&ndash;1338.</li>
+                <li>Jeziorski, P., Leng, D., &amp; Seiler, S. (2025). <em>Causal Inference with Endogenous Price Response</em>. CESifo Working Paper No. 11898 (also CEPR Discussion Paper No. 20252).</li>
+                <li>Haschka, R. E., &amp; Herwartz, H. (2025). <em>Utilizing managerial beliefs for set identification of price elasticities of demand</em>. Journal of the Academy of Marketing Science, 53(5), 1482&ndash;1505.</li>
+                <li>Hausman, J. A. (1996). <em>Valuation of New Goods under Perfect and Imperfect Competition</em>. In T. F. Bresnahan &amp; R. J. Gordon (Eds.), The Economics of New Goods. University of Chicago Press.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        // Shared world parameters (fixed across Figures 1 and 3, so the
+        // headline numbers stay consistent between them). true elasticity is
+        // -BETA_TRUE; log_price = B*demand + alpha*instrument + idiosyncratic.
+        var B = 0.8, THETA = 1.0, SIGXI2 = 0.09, SIGEPS2 = 0.25, BETA_TRUE = 1.2;
+
+        function normPdf(x, mu, sd) {
+            var z = (x - mu) / sd;
+            return Math.exp(-0.5 * z * z) / (sd * Math.sqrt(2 * Math.PI));
+        }
+
+        // ==================================================================
+        // Figure 1 — sign-guarded vs. instrumented, exact asymptotic normal
+        // sampling distributions (closed form; no Monte Carlo).
+        // ==================================================================
+        function f1Compute(alpha, n) {
+            var VarX = B * B + alpha * alpha + SIGXI2;
+            var naiveMean = -BETA_TRUE + THETA * B / VarX;
+            var t1 = THETA * THETA * Math.pow(1 - B * B / VarX, 2);
+            var t2 = Math.pow(THETA * B * alpha / VarX, 2);
+            var t3 = Math.pow(THETA * B / VarX, 2) * SIGXI2;
+            var varE = t1 + t2 + t3 + SIGEPS2;
+            var sdNaive = Math.sqrt(varE / (n * VarX));
+            var ivMean = -BETA_TRUE;
+            var varV = THETA * THETA + SIGEPS2;
+            var sdIV = Math.sqrt(varV / (n * alpha * alpha));
+            return { naiveMean: naiveMean, sdNaive: sdNaive, ivMean: ivMean, sdIV: sdIV };
+        }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var alpha = parseFloat(document.getElementById('f1Alpha').value);
+            var n = parseInt(document.getElementById('f1N').value, 10);
+            var d = f1Compute(alpha, n);
+
+            var lo = Math.min(d.naiveMean - 4 * d.sdNaive, d.ivMean - 4 * d.sdIV, -BETA_TRUE - 0.3);
+            var hi = Math.max(d.naiveMean + 4 * d.sdNaive, d.ivMean + 4 * d.sdIV, 0.15);
+            var xs = BV.linspace(lo, hi, 320);
+
+            Plotly.react('f1Chart', [
+                {
+                    type: 'scatter', mode: 'lines', x: xs, y: xs.map(function (x) { return normPdf(x, d.naiveMean, d.sdNaive); }),
+                    name: 'sign-guarded (no instrument)', line: { color: p.danger, width: 2.4 },
+                    fill: 'tozeroy', fillcolor: BV.band(p.danger, 0.16),
+                    hovertemplate: 'elasticity %{x:.2f}<extra>sign-guarded</extra>'
+                },
+                {
+                    type: 'scatter', mode: 'lines', x: xs, y: xs.map(function (x) { return normPdf(x, d.ivMean, d.sdIV); }),
+                    name: 'instrumented (cost shifter)', line: { color: p.primary, width: 2.4 },
+                    fill: 'tozeroy', fillcolor: BV.band(p.primary, 0.14),
+                    hovertemplate: 'elasticity %{x:.2f}<extra>instrumented</extra>'
+                }
+            ], BV.layout({
+                xaxis: { title: 'estimated price elasticity', range: [lo, hi] },
+                yaxis: { title: 'sampling density', showticklabels: false },
+                legend: { orientation: 'h', y: 1.18, x: 0, font: { size: 11 } },
+                margin: { l: 52, r: 20, t: 36, b: 48 },
+                shapes: [
+                    { type: 'line', x0: -BETA_TRUE, x1: -BETA_TRUE, yref: 'paper', y0: 0, y1: 1, line: { color: p.text, width: 1.4, dash: 'dash' } },
+                    { type: 'line', x0: 0, x1: 0, yref: 'paper', y0: 0, y1: 1, line: { color: p.muted, width: 1.2, dash: 'dot' } }
+                ],
+                annotations: [
+                    { x: -BETA_TRUE, yref: 'paper', y: 1.0, yanchor: 'bottom', text: 'truth', showarrow: false, font: { size: 10, color: p.text } },
+                    { x: 0, yref: 'paper', y: 1.0, yanchor: 'bottom', text: 'sign guard binds here', showarrow: false, font: { size: 10, color: p.muted } }
+                ]
+            }), BV.config);
+
+            document.getElementById('f1NaiveMean').textContent = d.naiveMean.toFixed(2);
+            document.getElementById('f1NaivePct').textContent = Math.round(100 * Math.abs(d.naiveMean) / BETA_TRUE) + '%';
+            document.getElementById('f1IvMean').textContent = d.ivMean.toFixed(2);
+            document.getElementById('f1IvPct').textContent = Math.round(100 * Math.abs(d.ivMean) / BETA_TRUE) + '%';
+            var flipP = 1 - BV.normCdf(0, d.naiveMean, d.sdNaive);
+            var fe = document.getElementById('f1FlipP');
+            fe.textContent = (flipP < 0.001 ? '< 0.1%' : (100 * flipP).toFixed(1) + '%');
+            fe.className = 'val ok';
+        });
+        BV.sliders([
+            { id: 'f1Alpha', value: 'f1AlphaVal', fmt: function (v) { return v.toFixed(2); } },
+            { id: 'f1N', value: 'f1NVal', fmt: function (v) { return String(v); } }
+        ], BV.redraw);
+
+        // ==================================================================
+        // Figure 2 — lead/lag endogeneity screen, faithfully translated from
+        // diagnostics/endogeneity.py, on a seeded simulated world.
+        // ==================================================================
+        var F2_T = 300, F2_RHO = 0.9, F2_SEED = 2026, F2_MAXLAG = 8, F2_THRESH = 0.30;
+        var f2World = null;
+
+        function f2Corr(a, b) {
+            var n = a.length;
+            if (n < 3) return 0;
+            var ma = BV.mean(a), mb = BV.mean(b), sxy = 0, sx = 0, sy = 0, i;
+            for (i = 0; i < n; i++) { sxy += (a[i] - ma) * (b[i] - mb); sx += (a[i] - ma) * (a[i] - ma); sy += (b[i] - mb) * (b[i] - mb); }
+            return (sx > 1e-12 && sy > 1e-12) ? sxy / Math.sqrt(sx * sy) : 0;
+        }
+        function f2MaxLeadCorr(driver, target, maxLag) {
+            var best = 0, bestK = 0, n = Math.min(driver.length, target.length), k;
+            for (k = 1; k <= maxLag; k++) {
+                if (n - k < 3) break;
+                var c = f2Corr(driver.slice(0, n - k), target.slice(k, n));
+                if (Math.abs(c) > Math.abs(best)) { best = c; bestK = k; }
+            }
+            return { corr: best, lag: bestK };
+        }
+        function f2BuildWorld() {
+            var rng = BV.mulberry32(F2_SEED), sdInnov = Math.sqrt(1 - F2_RHO * F2_RHO);
+            var demand = [0], t;
+            for (t = 1; t < F2_T; t++) demand.push(F2_RHO * demand[t - 1] + sdInnov * BV.randn(rng));
+            var sales = [], media = [], priceNoise = [];
+            for (t = 0; t < F2_T; t++) sales.push(100 + 20 * demand[t] + 2.0 * BV.randn(rng));
+            for (t = 0; t < F2_T; t++) media.push(50 + 5 * Math.sin(2 * Math.PI * t / 26) + 3.0 * BV.randn(rng));
+            for (t = 0; t < F2_T; t++) priceNoise.push(0.3 * BV.randn(rng));
+            return { demand: demand, sales: sales, media: media, priceNoise: priceNoise };
+        }
+        function f2Price(gamma) {
+            if (!f2World) f2World = f2BuildWorld();
+            var out = [], t;
+            for (t = 0; t < F2_T; t++) {
+                var lagD = t > 0 ? f2World.demand[t - 1] : 0;
+                out.push(20 + gamma * lagD + f2World.priceNoise[t]);
+            }
+            return out;
+        }
+        function diff(a) { var out = []; for (var i = 1; i < a.length; i++) out.push(a[i] - a[i - 1]); return out; }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var gamma = parseFloat(document.getElementById('f2Gamma').value);
+            if (!f2World) f2World = f2BuildWorld();
+            var price = f2Price(gamma);
+            var dy = diff(f2World.sales), dMedia = diff(f2World.media), dPrice = diff(price);
+
+            var lags = [], mediaCorrs = [], priceCorrs = [], k;
+            for (k = 1; k <= F2_MAXLAG; k++) {
+                lags.push(k);
+                mediaCorrs.push(f2Corr(dy.slice(0, dy.length - k), dMedia.slice(k, dy.length)));
+                priceCorrs.push(f2Corr(dy.slice(0, dy.length - k), dPrice.slice(k, dy.length)));
+            }
+            var mediaBest = f2MaxLeadCorr(dy, dMedia, F2_MAXLAG);
+            var priceBest = f2MaxLeadCorr(dy, dPrice, F2_MAXLAG);
+            var priceRev = f2MaxLeadCorr(dPrice, dy, F2_MAXLAG);
+
+            Plotly.react('f2Chart', [
+                {
+                    type: 'bar', name: 'media channel', x: lags, y: mediaCorrs,
+                    marker: { color: BV.band(p.accent, 0.85) },
+                    hovertemplate: 'lag %{x}<br>corr %{y:.2f}<extra>media</extra>'
+                },
+                {
+                    type: 'bar', name: 'price', x: lags, y: priceCorrs,
+                    marker: { color: BV.band(p.danger, 0.85) },
+                    hovertemplate: 'lag %{x}<br>corr %{y:.2f}<extra>price</extra>'
+                }
+            ], BV.layout({
+                barmode: 'group',
+                xaxis: { title: 'lag (periods): past KPI change &rarr; current spend/price change', dtick: 1 },
+                yaxis: { title: 'demand-leads-spend correlation', range: [-1, 1] },
+                legend: { orientation: 'h', y: 1.16, x: 0, font: { size: 11 } },
+                margin: { l: 58, r: 20, t: 32, b: 50 },
+                shapes: [
+                    { type: 'line', x0: 0.5, x1: F2_MAXLAG + 0.5, y0: F2_THRESH, y1: F2_THRESH, line: { color: p.muted, width: 1.2, dash: 'dash' } },
+                    { type: 'line', x0: 0.5, x1: F2_MAXLAG + 0.5, y0: -F2_THRESH, y1: -F2_THRESH, line: { color: p.muted, width: 1.2, dash: 'dash' } }
+                ]
+            }), BV.config);
+
+            function fmtCorr(r) { return r.corr.toFixed(2) + ' (lag ' + r.lag + ')'; }
+            document.getElementById('f2Media').textContent = fmtCorr(mediaBest);
+            document.getElementById('f2Price').textContent = fmtCorr(priceBest);
+            document.getElementById('f2PriceRev').textContent = priceRev.corr.toFixed(2) + ' (lag ' + priceRev.lag + ')';
+            var mediaFlag = Math.abs(mediaBest.corr) >= F2_THRESH;
+            var priceFlag = Math.abs(priceBest.corr) >= F2_THRESH && Math.abs(priceBest.corr) > Math.abs(priceRev.corr);
+            var mv = document.getElementById('f2MediaV');
+            mv.textContent = mediaFlag ? 'flagged' : 'not flagged'; mv.className = 'val' + (mediaFlag ? ' warn' : ' ok');
+            var pv = document.getElementById('f2PriceV');
+            pv.textContent = priceFlag ? 'flagged' : 'not flagged'; pv.className = 'val' + (priceFlag ? ' warn' : ' ok');
+        });
+        BV.sliders([{ id: 'f2Gamma', value: 'f2GammaVal', fmt: function (v) { return v.toFixed(1); } }], BV.redraw);
+
+        // ==================================================================
+        // Figure 3 — designed variation closes the gap (closed form).
+        // ==================================================================
+        function f3Naive(sigmaD2) { return -BETA_TRUE + THETA * B / (B * B + sigmaD2 + SIGXI2); }
+
+        BV.register(function () {
+            var p = BV.palette();
+            var sigmaD2 = parseFloat(document.getElementById('f3SigmaD').value);
+
+            var xs = BV.linspace(0, 5, 200);
+            var ys = xs.map(function (x) { return 100 * Math.abs(f3Naive(x)) / BETA_TRUE; });
+            var curEst = f3Naive(sigmaD2);
+            var curPct = 100 * Math.abs(curEst) / BETA_TRUE;
+
+            Plotly.react('f3Chart', [
+                {
+                    type: 'scatter', mode: 'lines', x: xs, y: ys, name: '% of truth recovered',
+                    line: { color: p.primary, width: 2.4 }, hovertemplate: 'variance %{x:.2f}<br>%{y:.0f}% of truth<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', x: [sigmaD2], y: [curPct], showlegend: false,
+                    marker: { color: p.danger, size: 13, symbol: 'diamond', line: { color: p.surface, width: 1.5 } },
+                    hovertemplate: '%{y:.0f}% of truth<extra></extra>'
+                }
+            ], BV.layout({
+                xaxis: { title: 'designed, demand-independent price variance', range: [0, 5] },
+                yaxis: { title: '% of true elasticity recovered', range: [0, 105] },
+                margin: { l: 58, r: 20, t: 30, b: 48 }, showlegend: false,
+                shapes: [{ type: 'line', x0: 0, x1: 5, y0: 100, y1: 100, line: { color: p.muted, width: 1.2, dash: 'dot' } }]
+            }), BV.config);
+
+            document.getElementById('f3Est').textContent = curEst.toFixed(2);
+            document.getElementById('f3Pct').textContent = Math.round(curPct) + '%';
+            var v = document.getElementById('f3Verdict');
+            if (curPct < 20) { v.textContent = 'near sign-flip risk'; v.className = 'val warn'; }
+            else if (curPct < 75) { v.textContent = 'materially biased'; v.className = 'val warn'; }
+            else { v.textContent = 'close to identified'; v.className = 'val ok'; }
+        });
+        BV.sliders([{ id: 'f3SigmaD', value: 'f3SigmaDVal', fmt: function (v) { return v.toFixed(2); } }], BV.redraw);
+    })();
+    </script>
+
+    <!-- Initialize KaTeX after DOM is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "\\[", right: "\\]", display: true},
+                        {left: "\\(", right: "\\)", display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>
