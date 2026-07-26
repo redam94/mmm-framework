@@ -16,7 +16,24 @@ jobs:
   lint-and-test:
     name: Lint + fast tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 45, not 30: the last 12 successful runs spanned 21m56s–29m05s, i.e. 55s of
+    # headroom against the old ceiling. That is a latent hard failure that would
+    # present as an infrastructure flake, so the ceiling moves before anything
+    # else does.
+    timeout-minutes: 45
+    env:
+      # coverage.py's PEP 669 core (needs coverage>=7.4 + Python>=3.12; we have
+      # 7.13.1 on 3.12.13). Measured on the full fast suite, warm, -n logical:
+      #   no coverage   ~120s
+      #   default C tracer  217.5s   (x1.81)
+      #   COVERAGE_CORE=sysmon  126.6s   (x1.05)
+      # Identical report either way (52669 stmts / 12775 missed / 76%), so this
+      # buys ~42% of the warm suite for one environment variable.
+      # NB mutually exclusive with pytest-testmon: PEP 669's DISABLE return means
+      # only the first test to touch a function is recorded, which silently drops
+      # most of testmon's dependency edges. We do not use testmon — see the PR
+      # body for why change-based selection was measured and rejected here.
+      COVERAGE_CORE: sysmon
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,8 +63,16 @@ jobs:
 
       - name: Fast tests + coverage
         # Floor is well below the current ~70% fast-suite coverage; ratchet up.
+        #
+        # `-n logical`, NOT `-n auto`: xdist resolves "auto" via
+        # psutil.cpu_count(logical=False), which is 2 on a 4-vCPU GitHub runner —
+        # the run log for #208 says "created: 2/2 workers", i.e. half the runner
+        # sat idle. "logical" asks for all 4.
+        # If workers start dying unexplained (4 PyMC/PyTensor/JAX processes on
+        # 16 GB is not free), that is an OOM: revert this token to `-n 2` rather
+        # than chasing a flake.
         run: >
-          uv run pytest tests/ -m "not slow" -n auto
+          uv run pytest tests/ -m "not slow" -n logical
           --cov=mmm_framework --cov-report=xml --cov-report=term-missing
           --cov-fail-under=60
 
