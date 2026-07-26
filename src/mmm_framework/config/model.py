@@ -106,13 +106,21 @@ _NUTS_SAMPLER_BY_METHOD = {
     InferenceMethod.BAYESIAN_NUTPIE: "nutpie",
 }
 
-#: Inference methods that are declared but have NO estimator behind them. They
-#: are kept in the enum so stored configs still parse (the values are frozen —
-#: see tests/test_api_contracts.py), but selecting one is an error rather than a
-#: silent fall-through to NUTS. Tracking issue: #180.
-_UNIMPLEMENTED_METHODS = frozenset(
-    {InferenceMethod.FREQUENTIST_RIDGE, InferenceMethod.FREQUENTIST_CVXPY}
-)
+#: Which frequentist estimator each non-Bayesian inference method selects.
+#: ``"ridge"`` is the closed-form penalized solve; ``"constrained"`` is the
+#: convex program, which needs the optional ``[frequentist]`` extra (``cvxpy``).
+_FREQUENTIST_ESTIMATOR_BY_METHOD = {
+    InferenceMethod.FREQUENTIST_RIDGE: "ridge",
+    InferenceMethod.FREQUENTIST_CVXPY: "constrained",
+}
+
+#: Inference methods that are declared but have NO estimator behind them.
+#: **Empty since #188** — both frequentist methods now dispatch to
+#: :mod:`mmm_framework.frequentist`. Kept (rather than deleted along with the
+#: machinery) because it is the mechanism for declaring a future enum value
+#: before its estimator lands, which is what stopped ``frequentist_ridge`` from
+#: silently fitting NUTS between 1.2.0 and now.
+_UNIMPLEMENTED_METHODS: frozenset[InferenceMethod] = frozenset()
 
 _FREQUENTIST_TRACKING_URL = "https://github.com/redam94/mmm-framework/issues/180"
 
@@ -120,15 +128,14 @@ _FREQUENTIST_TRACKING_URL = "https://github.com/redam94/mmm-framework/issues/180
 def unimplemented_inference_message(method: InferenceMethod) -> str:
     """The single message every surface uses to refuse an unimplemented method.
 
-    Names the supported alternative rather than only refusing: ridge regression
-    *is* maximum-a-posteriori estimation under Gaussian coefficient priors, so
-    ``fit(method="map")`` is the closest shipped equivalent.
+    Names the supported alternative rather than only refusing. Currently
+    unreachable — :data:`_UNIMPLEMENTED_METHODS` is empty — and kept so the next
+    declared-before-implemented method has somewhere to refuse from.
     """
     return (
         f"Inference method {method.value!r} is not implemented: the enum value "
         "exists but no estimator backs it, so this config cannot be fitted. "
-        "For a fast penalized point estimate use fit(method='map') — with "
-        "Gaussian coefficient priors that IS ridge regression. For full "
+        "For a fast penalized point estimate use fit(method='map'). For full "
         "inference select a Bayesian method, e.g. "
         "ModelConfigBuilder().bayesian_pymc(). "
         f"Tracking: {_FREQUENTIST_TRACKING_URL}"
@@ -198,7 +205,14 @@ class ModelConfig(BaseModel):
     # NUTS (full MCMC) is the default; the approximate methods (MAP / ADVI /
     # full-rank ADVI / Pathfinder) trade calibrated uncertainty for speed and
     # are meant for fast model checks, not final inference.
-    fit_method: FitMethod = FitMethod.NUTS
+    #
+    # `None` after a FREQUENTIST fit, and deliberately so: `FitMethod` has no
+    # frequentist member, this field selects among the *Bayesian* estimators,
+    # and a stray "nuts" left here is what makes downstream surfaces (the
+    # interactive report's inference card, `saved_model_settings`) announce a
+    # full MCMC posterior for a ridge fit. Read `inference_method` /
+    # `is_frequentist` to learn the paradigm.
+    fit_method: FitMethod | None = FitMethod.NUTS
 
     # Hierarchical structure
     hierarchical: HierarchicalConfig = Field(default_factory=HierarchicalConfig)
@@ -247,16 +261,21 @@ class ModelConfig(BaseModel):
     use_parametric_adstock: bool = True
 
     # Frequentist settings. INERT — no code reads these; they are the reserved
-    # config surface for the unimplemented frequentist path (#180), where they
-    # will become the ridge penalty and the bootstrap replicate count. Setting
-    # them today does nothing, which is why the inference methods that would
-    # consume them refuse at fit() rather than pretending to honor them.
+    # config surface for the frequentist path (#180). LIVE since #188 — read by
+    # `model/base.py::run_frequentist_fit` when `inference_method` is one of the
+    # frequentist values, and ignored entirely by the Bayesian methods.
+    #
+    # `ridge_alpha` is the L2 strength on the STANDARDIZED design, so it means
+    # the same thing across channels and datasets. It is only a fallback: the
+    # transform search selects the penalty by the same out-of-sample criterion it
+    # uses for adstock and saturation, and an in-sample rule (AIC, GCV) would
+    # reintroduce exactly the bias that criterion exists to avoid.
     ridge_alpha: float = 1.0
     bootstrap_samples: int = 1000
 
-    # Optimization settings (for transformation search). optim_maxiter is
-    # likewise INERT pending #180; optim_seed IS live — fit() uses it as the
-    # random-seed fallback for every method.
+    # Optimization settings (for transformation search). `optim_maxiter` is the
+    # number of (adstock, saturation) candidate points evaluated; `optim_seed`
+    # is the random-seed fallback for every method, frequentist included.
     optim_maxiter: int = 500
     optim_seed: int | None = 42
 
@@ -271,6 +290,21 @@ class ModelConfig(BaseModel):
         ]
 
     @property
+    def is_frequentist(self) -> bool:
+        """True for the ridge / constrained estimation path (epic #180).
+
+        The complement of :attr:`is_bayesian` over the *implemented* methods, but
+        written as its own membership test rather than ``not is_bayesian`` so a
+        future third paradigm cannot silently inherit the frequentist branch.
+        """
+        return self.inference_method in _FREQUENTIST_ESTIMATOR_BY_METHOD
+
+    @property
+    def frequentist_estimator(self) -> str | None:
+        """``"ridge"`` / ``"constrained"``, or ``None`` for a Bayesian config."""
+        return _FREQUENTIST_ESTIMATOR_BY_METHOD.get(self.inference_method)
+
+    @property
     def use_numpyro(self) -> bool:
         return self.inference_method == InferenceMethod.BAYESIAN_NUMPYRO
 
@@ -281,8 +315,9 @@ class ModelConfig(BaseModel):
         Frequentist methods have no NUTS backend; they report ``"pymc"`` so a
         caller that reads this on a non-Bayesian config still gets the
         historical default rather than an error. That fall-through is why
-        selecting one used to silently fit NUTS — ``fit()`` now refuses first
-        (see :func:`unimplemented_inference_message`).
+        selecting one used to silently fit NUTS — ``fit()`` now branches on
+        :attr:`is_frequentist` *before* reading this, so the value is never
+        consumed on a frequentist config.
         """
         return _NUTS_SAMPLER_BY_METHOD.get(self.inference_method, "pymc")
 

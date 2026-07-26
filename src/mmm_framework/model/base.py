@@ -498,6 +498,80 @@ def run_smc_fit(
     return idata, extra
 
 
+def run_frequentist_fit(
+    mmm: "BayesianMMM",
+    random_seed: int | None,
+    **kwargs,
+) -> tuple[az.InferenceData, dict]:
+    """Ridge / constrained estimation with bootstrap intervals (epic #180).
+
+    The third packaging shape alongside :func:`run_approximate_fit` and
+    :func:`run_smc_fit`, and structurally closest to the latter: **not**
+    approximate (``approximate`` stays ``False``, because a ridge fit is not a
+    badly-estimated posterior — it is not a posterior at all), not NUTS, and its
+    estimator-specific numbers ride in the returned extra-diagnostics dict.
+
+    Takes the *model* rather than the PyMC graph, because the estimator works out
+    of graph: it builds a design matrix from the panel at a fixed
+    (adstock, saturation) point, solves the resulting linear problem, and
+    bootstraps. The graph is still built — to evaluate the deterministics every
+    replicate, so a bootstrap ``channel_contributions`` cannot drift from the
+    Bayesian definition of one.
+
+    Args:
+        mmm: The model. Its ``model_config`` selects the estimator
+            (``frequentist_ridge`` → ridge, ``frequentist_cvxpy`` → the convex
+            program) and supplies ``ridge_alpha`` / ``bootstrap_samples`` /
+            ``optim_maxiter`` as the penalty fallback, replicate count and
+            search budget.
+        random_seed: Seed for the resampling and the transform search.
+        **kwargs: Forwarded to
+            :func:`~mmm_framework.frequentist.bootstrap.bootstrap_fit` —
+            ``alpha`` / ``lam`` to skip the search, ``refit_search=True`` for an
+            interval that includes selection uncertainty, ``constraints`` for the
+            convex program, ``block_length``, ``nonneg``, ``search_kwargs``.
+
+    Returns:
+        ``(idata, extra_diagnostics)``, the extras carrying the §8 provenance
+        contract of ``technical-docs/frequentist-estimation.md``.
+
+    Raises:
+        UnsupportedModelError: If the configuration is not linear given fixed
+            transforms (a GP trend, per-geo media coefficients, reach/frequency
+            channels, …). It names the feature rather than dropping the term.
+        ImportError: For ``frequentist_cvxpy`` without the ``[frequentist]``
+            extra installed.
+    """
+    from ..frequentist.bootstrap import bootstrap_fit
+
+    cfg = mmm.model_config
+    estimator = cfg.frequentist_estimator or "ridge"
+    kwargs.setdefault("n_boot", int(cfg.bootstrap_samples))
+    kwargs.setdefault("penalty", None)
+    search_kwargs = dict(kwargs.pop("search_kwargs", None) or {})
+    search_kwargs.setdefault("budget", int(cfg.optim_maxiter))
+
+    if estimator == "constrained" and not kwargs.get("constraints"):
+        # `frequentist_cvxpy` selected from the enum alone still means the
+        # convex program — with the one restriction every MMM wants. Passed as a
+        # FACTORY because a Constraint's row is indexed by design column and the
+        # design does not exist until the transform search has run.
+        from ..frequentist.constrained import nonneg as _nonneg
+
+        kwargs["constraints"] = _nonneg
+
+    idata, diagnostics = bootstrap_fit(
+        mmm.panel,
+        model_config=cfg,
+        trend_config=mmm.trend_config,
+        seed=random_seed,
+        search_kwargs=search_kwargs,
+        **kwargs,
+    )
+    diagnostics["inference_method"] = cfg.inference_method.value
+    return idata, diagnostics
+
+
 class BayesianMMM:
     """
     Bayesian Marketing Mix Model - Robust Implementation with Prediction Support.
@@ -3208,15 +3282,29 @@ class BayesianMMM:
 
         Raises:
             NotImplementedError: If the config selects an inference method with
-                no estimator behind it (``frequentist_ridge`` /
-                ``frequentist_cvxpy``). These used to fall through to a full
-                Bayesian NUTS fit, silently returning a posterior for a request
-                that asked for a frequentist point estimate.
+                no estimator behind it. Currently none do — both frequentist
+                methods dispatch (see below) — but the refusal stays as the
+                mechanism for a future declared-before-implemented value.
+            UnsupportedModelError: For a frequentist config whose model is not
+                linear given fixed transforms.
+
+        Note:
+            **Paradigm dispatch happens first.** ``inference_method`` selects the
+            *estimation paradigm* (Bayesian vs frequentist); ``method`` /
+            ``FitMethod`` selects among the Bayesian estimators and is ignored by
+            the frequentist path, which has no MAP/ADVI/SMC analogue. A
+            frequentist fit returns ``MMMResults`` with ``approximate=False`` and
+            ``converged is None``, and stamps
+            ``diagnostics["inference_family"] = "frequentist"`` — every rendering
+            surface branches on that, never on ``approximate``.
         """
         if not self.model_config.is_implemented:
             raise NotImplementedError(
                 unimplemented_inference_message(self.model_config.inference_method)
             )
+
+        if self.model_config.is_frequentist:
+            return self._fit_frequentist(random_seed=random_seed, **kwargs)
 
         method = (
             FitMethod(method) if method is not None else self.model_config.fit_method
@@ -3413,6 +3501,54 @@ class BayesianMMM:
         the extended models) so both approximate paths stay identical.
         """
         return run_approximate_fit(self.model, method, draws, random_seed, **kwargs)
+
+    def _fit_frequentist(self, random_seed: int | None, **kwargs) -> MMMResults:
+        """Ridge / constrained estimation with bootstrap intervals.
+
+        Assembles the same :class:`MMMResults` the Bayesian paths return — the
+        estimand engine, ``predict``, serialization and reporting all read it
+        unchanged — with three deliberate differences in ``diagnostics``:
+
+        * ``inference_family="frequentist"``, which is what every rendering
+          surface branches on;
+        * ``approximate=False``, because this is not an uncalibrated posterior;
+        * ``converged is None``, since R-hat and ESS describe a sampler and
+          there is no chain here. ``diagnostics.annotate`` nulls the metrics for
+          the same reason: ``az.ess`` happily reports ≈``n_boot`` for iid
+          bootstrap replicates, and a table that formats whatever it finds would
+          render that as a pass.
+
+        ``fit_method`` is left ``None`` rather than defaulting to ``"nuts"``:
+        ``FitMethod`` has no frequentist member, and a stray default there is
+        exactly what makes the interactive report's inference card print "NUTS".
+        """
+        random_seed = random_seed or self.model_config.optim_seed
+        trace, extra = run_frequentist_fit(self, random_seed, **kwargs)
+        self._trace = trace
+        self.model_config.fit_method = None
+
+        diagnostics: dict = dict(extra)
+        from ..diagnostics import convergence as _conv
+
+        _conv.annotate(diagnostics)
+        # Kept on the model (mirroring `BaseExtendedMMM._fit_diagnostics`) so
+        # `MMMSerializer` can stamp the estimator, the selected transforms and
+        # the interval semantics into `metadata.json` without a `results` handle.
+        # A reloaded frequentist fit that read as Bayesian would be the same
+        # defect as an unlabelled interval, one save/load removed.
+        self._fit_diagnostics = dict(diagnostics)
+
+        return self._attach_declared_estimands(
+            MMMResults(
+                trace=trace,
+                model=self.model,
+                panel=self.panel,
+                diagnostics=diagnostics,
+                y_mean=self.y_mean,
+                y_std=self.y_std,
+                approximate=False,
+            )
+        )
 
     @contextmanager
     def _swapped_media_data(

@@ -27,6 +27,8 @@ import math
 import warnings
 from typing import Any
 
+from . import provenance as _provenance
+
 # Conventional sampler-health thresholds. Kept in step with
 # diagnostics.snapshot.RHAT_OK / ESS_BULK_OK and validation.validator.
 RHAT_OK = 1.01
@@ -86,7 +88,16 @@ def compute_convergence(trace: Any) -> dict[str, Any]:
 
 
 def convergence_flags(diagnostics: dict[str, Any]) -> list[str]:
-    """Which checks FAILED: subset of ``{"divergences", "rhat", "ess"}``."""
+    """Which checks FAILED: subset of ``{"divergences", "rhat", "ess"}``.
+
+    Empty for a **frequentist** fit — not because it passed, but because none of
+    these checks apply to it. Read alongside :func:`is_converged`, which returns
+    ``None`` for the same fit; an empty flag list on its own must never be taken
+    as a pass (that conflation is exactly what made a bootstrap trace read as
+    converged).
+    """
+    if _provenance.is_frequentist(diagnostics):
+        return []
     flags: list[str] = []
     div = diagnostics.get("divergences")
     rhat = _finite(diagnostics.get("rhat_max"))
@@ -104,10 +115,21 @@ def is_converged(diagnostics: dict[str, Any]) -> bool | None:
     """Convergence verdict from a diagnostics dict.
 
     Returns ``True``/``False`` for NUTS fits, and ``None`` when convergence is
-    not assessable — an approximate fit (``diagnostics["approximate"]`` truthy)
-    or one with no usable R-hat/ESS/divergence signal. ``None`` is NOT
-    "converged"; callers should surface it as "N/A".
+    not assessable — a **frequentist** fit (no chain exists), an approximate fit
+    (``diagnostics["approximate"]`` truthy), or one with no usable
+    R-hat/ESS/divergence signal. ``None`` is NOT "converged"; callers should
+    surface it as "N/A".
+
+    The frequentist branch is load-bearing rather than defensive. A
+    ``(chain=1, draw=B)`` bootstrap trace passes every check as ``True``:
+    ``az.rhat`` on one chain is NaN → filtered to ``None``, a ``None`` metric
+    does not raise a flag, and ``az.ess`` returns ≈B because bootstrap
+    replicates are iid. So without this the estimator is silently green
+    everywhere the verdict is consumed — measured and recorded in
+    ``technical-docs/frequentist-estimation.md`` §8.
     """
+    if _provenance.is_frequentist(diagnostics):
+        return None
     if diagnostics.get("approximate"):
         return None
     rhat = _finite(diagnostics.get("rhat_max"))
@@ -165,7 +187,15 @@ def annotate(diagnostics: dict[str, Any]) -> dict[str, Any]:
     """Return ``diagnostics`` with ``flags`` and ``converged`` filled in.
 
     Mutates and returns the same dict so it round-trips through serialization.
+
+    For a frequentist fit the sampler metrics are also **nulled**: ``az.ess``
+    happily reports ≈``n_boot`` for iid bootstrap replicates and ``az.rhat``
+    reports NaN, and a downstream table that formats whatever it finds would
+    render both as if they meant something.
     """
+    if _provenance.is_frequentist(diagnostics):
+        for key in ("rhat_max", "ess_bulk_min", "ess_tail_min", "divergences"):
+            diagnostics[key] = None
     diagnostics["flags"] = convergence_flags(diagnostics)
     diagnostics["converged"] = is_converged(diagnostics)
     return diagnostics

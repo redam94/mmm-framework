@@ -18,8 +18,13 @@ The window-recomputation contract (shared with the report's JS):
 - ``marginal ROAS`` over a window = ``sum_t dcontrib[d, t] / sum_t dspend[t]``
   where ``dcontrib`` is the paired contribution delta under an all-channel
   ``+bump_pct%`` spend perturbation (posterior params held fixed per draw).
-- Intervals are central (equal-tailed) credible intervals, matching
-  :func:`mmm_framework.utils.compute_hdi_bounds`.
+- Intervals are central (equal-tailed) quantile intervals, matching
+  :func:`mmm_framework.utils.compute_hdi_bounds`. What they *mean* depends on
+  the estimation paradigm and is carried in ``meta["inference_family"]``:
+  **credible** intervals over a posterior for a Bayesian fit, **confidence**
+  intervals over a bootstrap sampling distribution for a frequentist one. The
+  arithmetic is identical; the sentence a reader is licensed to say is not, and
+  the JS inherits its wording from that slot rather than hard-coding "credible".
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ from typing import Any
 import numpy as np
 from loguru import logger
 
+from ...diagnostics import provenance as _prov
 from ...utils import compute_hdi_bounds
 from ..helpers.measurement import resolve_channel_divisor
 from ..helpers.prefit import (
@@ -1365,7 +1371,11 @@ def interactive_report_facts(
     ppc_prior: dict[str, Any] | None = None
     prior_est: dict[str, Any] = {}
     prior_idata: Any = None
-    if include_prior_sections:
+    # A frequentist fit has no prior. The PyMC graph still carries prior
+    # distributions — it is the same graph — so sampling them would produce a
+    # prior-vs-posterior panel about a prior the estimator never consulted.
+    _freq = _prov.is_frequentist(getattr(results, "diagnostics", None))
+    if include_prior_sections and not _freq:
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -1477,6 +1487,21 @@ def interactive_report_facts(
         "marginal_bump_pct": marginal_bump_pct,
         "fit_method": diagnostics.get("fit_method"),
         "approximate": bool(diagnostics.get("approximate", False)),
+        # Estimation PARADIGM, distinct from `approximate` and from
+        # `fit_method`. The JS inherits its interval vocabulary from here, and
+        # the inference card used to default a missing `fit_method` to "NUTS" —
+        # which is exactly what a frequentist fit has (None), so without this
+        # slot the page announced a full MCMC posterior for a ridge fit.
+        "inference_family": _prov.family_of(diagnostics),
+        "estimator": diagnostics.get("estimator"),
+        "interval_kind": diagnostics.get("interval_kind"),
+        "interval_semantics": diagnostics.get("interval_semantics"),
+        "selection_criterion": diagnostics.get("selection_criterion"),
+        "frequentist_caveats": (
+            _prov.frequentist_caveats(diagnostics)
+            if _prov.is_frequentist(diagnostics)
+            else []
+        ),
     }
     try:
         meta["kpi"] = str(model.mff_config.kpi.name)
@@ -1493,6 +1518,18 @@ def interactive_report_facts(
                 idx = 0
             if 0 <= idx < len(names):
                 meta["kpi"] = str(names[idx])
+
+    if _freq:
+        # Posterior-only blocks, blanked at the one place they leave this
+        # function so a new section cannot pick them up by accident. Every
+        # consumer already no-ops on an empty block, which is how the classic
+        # report gates the same views.
+        #   ppc_stats      — Bayesian p-values (P(T(y_rep) >= T(y_obs)))
+        #   prior_posterior — contraction rows; no prior to contract from
+        #   ppc_prior      — the prior-predictive fan
+        ppc_stats = {}
+        prior_posterior = []
+        ppc_prior = None
 
     return {
         "meta": meta,

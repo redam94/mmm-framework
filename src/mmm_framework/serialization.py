@@ -650,6 +650,35 @@ class MMMSerializer:
         # uncertainty is calibrated (NUTS) or approximate (map/advi/pathfinder).
         # `fit()` writes the method used back onto model_config, so this is the
         # method of the LAST fit (default "nuts" for an unfitted model).
+        # WHICH PARADIGM produced it. Stamped before `fit_method`, because a
+        # frequentist fit legitimately has `fit_method=None` and the block below
+        # would then stamp nothing — leaving a reloaded ridge fit to read as
+        # Bayesian by omission (absence of `inference_family` means Bayesian).
+        try:
+            im = getattr(model.model_config, "inference_method", None)
+            if im is not None:
+                metadata["inference_method"] = str(getattr(im, "value", im))
+            if getattr(model.model_config, "is_frequentist", False):
+                from .diagnostics import provenance as _prov
+
+                metadata["inference_family"] = _prov.FREQUENTIST
+                metadata["approximate"] = False
+                diag = getattr(model, "_fit_diagnostics", None) or {}
+                for key in (
+                    "estimator",
+                    "interval_kind",
+                    "interval_semantics",
+                    "selection_criterion",
+                    "n_boot",
+                    "block_length",
+                    "effective_dof",
+                    "penalty",
+                ):
+                    if key in diag:
+                        metadata[key] = diag[key]
+        except Exception:  # noqa: BLE001
+            pass
+
         try:
             fm = getattr(model.model_config, "fit_method", None)
             fit_method = getattr(fm, "value", fm)

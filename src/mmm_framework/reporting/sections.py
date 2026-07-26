@@ -46,6 +46,51 @@ class Section:
     def render(self) -> str:
         raise NotImplementedError
 
+    # ------------------------------------------------------------------ #
+    # estimation paradigm (epic #180)
+    # ------------------------------------------------------------------ #
+
+    @property
+    def is_frequentist(self) -> bool:
+        """True when the fit behind this report produced no posterior."""
+        return bool(getattr(self.data, "is_frequentist", False))
+
+    @property
+    def interval_noun(self) -> str:
+        """``"credible interval"`` / ``"confidence interval"``.
+
+        Every section that names its interval reads this instead of writing
+        "credible" literally. A bootstrap percentile interval describes the
+        sampling variability of an estimator; the probability statement a
+        credible interval licenses is simply false for it.
+        """
+        from ..diagnostics.provenance import interval_noun
+
+        return interval_noun("frequentist" if self.is_frequentist else "bayesian")
+
+    def interval_phrase(self, ci_level: float) -> str:
+        """e.g. ``"90% credible interval"`` / ``"90% bootstrap confidence interval"``."""
+        from ..diagnostics.provenance import interval_phrase
+
+        return interval_phrase(
+            ci_level, "frequentist" if self.is_frequentist else "bayesian"
+        )
+
+    def _posterior_only_notice(self, slug: str) -> str:
+        """Rendered in place of a posterior-only section for a frequentist fit.
+
+        Gating with a stated reason rather than a blank space is the point: a
+        missing convergence table reads as an oversight, while "not applicable
+        because there is no chain" reads as a property of the method.
+        """
+        from ..diagnostics.provenance import not_applicable_reason
+
+        return self._render_section_wrapper(
+            '<div class="methodology-note"><p><strong>Not applicable to this '
+            "fit.</strong> "
+            f"{html.escape(not_applicable_reason(slug))}</p></div>"
+        )
+
     def _format_currency(self, value: float) -> str:
         """Format a value as currency via the report config."""
         if hasattr(self.config, "format_currency"):
@@ -90,8 +135,6 @@ class ExecutiveSummarySection(Section):
         if not self.is_enabled:
             return ""
 
-        ci_level = int(self.section_config.credible_interval * 100)
-
         # Build metrics grid
         metrics_html = self._render_metrics_grid()
 
@@ -105,7 +148,7 @@ class ExecutiveSummarySection(Section):
             <div class="callout warning">
                 <h4>⚠️ Uncertainty Matters</h4>
                 <p>
-                    All estimates include {ci_level}% credible intervals reflecting genuine uncertainty from limited data.
+                    All estimates include {self.interval_phrase(self.section_config.credible_interval)}s reflecting genuine uncertainty from limited data.
                     Point estimates alone can be misleading—decisions should account for the full range of plausible values.
                 </p>
             </div>
@@ -118,10 +161,15 @@ class ExecutiveSummarySection(Section):
         # Approximate-fit banner: a MAP/ADVI/Pathfinder fit gives uncalibrated
         # uncertainty, so its credible intervals must carry a stop sign too.
         approximate_banner = self._render_approximate_banner()
+        # Frequentist banner: a ridge fit is not an uncalibrated posterior, it
+        # is not a posterior at all, so it needs its own statement rather than
+        # borrowing the approximate one.
+        frequentist_banner = self._render_frequentist_banner()
 
         content = f"""
             {convergence_banner}
             {approximate_banner}
+            {frequentist_banner}
             {metrics_html}
             {key_finding}
             {uncertainty_callout}
@@ -160,7 +208,7 @@ class ExecutiveSummarySection(Section):
                 <p>{_html.escape(msg)}</p>
                 <p style="margin-top:6px;font-size:0.9em;">
                     The estimates below come from a sampler that failed convergence checks; their
-                    credible intervals are not trustworthy. Re-fit with more tuning/draws/chains
+                    {self.interval_noun}s are not trustworthy. Re-fit with more tuning/draws/chains
                     (or a reparameterization) before using these numbers for decisions.
                 </p>
             </div>
@@ -190,6 +238,42 @@ class ExecutiveSummarySection(Section):
                     are <strong>not trustworthy</strong>. Re-fit with NUTS before using these
                     numbers for budget or experiment decisions.
                 </p>
+            </div>
+        """
+
+    def _render_frequentist_banner(self) -> str:
+        """Prominent notice when the fit is a frequentist point estimate.
+
+        Deliberately NOT the approximate-fit banner. An approximate fit is a
+        badly-estimated posterior and its headline is "do not trust the
+        intervals"; a ridge fit's point estimate may be excellent, and what a
+        reader must not do is read its intervals as probability statements about
+        the parameter. Different failure, different sentence.
+
+        The caveats come from the estimator itself, so they quote this fit's own
+        effective degrees of freedom and how many transform candidates the data
+        could not order — rather than a generic disclaimer.
+        """
+        if not self.is_frequentist:
+            return ""
+        diag = getattr(self.data, "diagnostics", None) or {}
+        from ..diagnostics.provenance import estimator_label
+
+        estimator = html.escape(estimator_label(diag))
+        criterion = html.escape(str(diag.get("selection_criterion") or "search"))
+        caveats = getattr(self.data, "frequentist_caveats", None) or []
+        items = "".join(f"<li>{html.escape(str(c))}</li>" for c in caveats)
+        return f"""
+            <div class="callout warning" style="border-left:6px solid #1d4ed8;background:#eef2ff;color:#1e2a5a;">
+                <h4>Frequentist fit ({estimator}) — ranges are confidence intervals</h4>
+                <p>
+                    These figures are a <strong>point estimate</strong> with bootstrap
+                    intervals, not a posterior. Transforms were selected by
+                    <strong>{criterion}</strong> and the coefficients solved in closed form.
+                    Convergence diagnostics (R-hat, effective sample size) describe a sampler
+                    and do not apply.
+                </p>
+                <ul style="margin:6px 0 0 1.1em;font-size:0.9em;">{items}</ul>
             </div>
         """
 
@@ -391,8 +475,9 @@ class ModelFitSection(Section):
         content = f"""
             <p>
                 The model fit shows observed data against posterior predictions. The shaded band
-                represents the {int(chart_config.ci_level * 100)}% credible interval, capturing
-                both parameter uncertainty and residual variance.
+                represents the {self.interval_phrase(chart_config.ci_level)}, capturing
+                {"the sampling variability of the estimator" if self.is_frequentist
+                 else "both parameter uncertainty and residual variance"}.
             </p>
             {fit_chart}
             {stats_html}
@@ -1169,7 +1254,7 @@ class LongTermSection(Section):
                 above the adstock window, so it <strong>estimates</strong> the long-term
                 share of the media effect (with uncertainty) rather than assuming it.
                 An estimated <strong>{mean:.0f}%</strong> of the total media effect is
-                <strong>long-term (brand)</strong> — 90% credible interval
+                <strong>long-term (brand)</strong> — {self.interval_phrase(0.9)}
                 [{lo:.0f}%, {hi:.0f}%]; the rest is short-term activation.</p>
             </div>
             {table}
@@ -1715,13 +1800,13 @@ class MethodologySection(Section):
 
         # Honest uncertainty principles
         if self.config.methodology_note:
-            ci_level = int(self.section_config.credible_interval * 100)
+
             content_parts.append(f"""
                 <div class="methodology-note">
                     <h4>Honest Uncertainty Principles</h4>
                     <p>This report follows principles of honest uncertainty quantification:</p>
                     <ul style="margin: 1rem 0 0 1.5rem;">
-                        <li>All estimates include {ci_level}% credible intervals, not just point estimates</li>
+                        <li>All estimates include {self.interval_phrase(self.section_config.credible_interval)}s, not just point estimates</li>
                         <li>Model was pre-specified before examining results</li>
                         <li>Sensitivity analysis explores reasonable alternative specifications</li>
                         <li>Recommendations explicitly acknowledge uncertainty levels</li>
@@ -1958,7 +2043,15 @@ class CausalAssumptionsSection(Section):
 
 
 class DiagnosticsSection(Section):
-    """MCMC diagnostics and convergence checks."""
+    """MCMC diagnostics and convergence checks.
+
+    Gated OFF for a frequentist fit, with a stated reason. Left on, the
+    extractor supplies ``None`` R-hat/ESS and the table below renders them as
+    "N/A" — which is correct but reads as a broken table rather than as a
+    property of the estimator. Worse, before ``_merge_fit_provenance`` learned
+    the paradigm, the recomputed ESS of a bootstrap trace was ≈``n_boot`` and
+    the row rendered "✅ Pass".
+    """
 
     section_id: str = "diagnostics"
     default_title: str = "Model Diagnostics"
@@ -1966,6 +2059,8 @@ class DiagnosticsSection(Section):
     def render(self) -> str:
         if not self.is_enabled:
             return ""
+        if self.is_frequentist:
+            return self._posterior_only_notice("convergence")
 
         content_parts = []
 
@@ -2067,7 +2162,7 @@ class GeographicSection(Section):
         # Geographic performance summary table
         content_parts.append(f"""
             <h3>Performance by Geography</h3>
-            <p>Regional breakdown with {ci_level}% credible intervals.</p>
+            <p>Regional breakdown with {self.interval_phrase(self.section_config.credible_interval)}s.</p>
         """)
 
         # Build performance table
@@ -2165,7 +2260,7 @@ class MediatorSection(Section):
             <h3>Indirect Effects Through Mediators</h3>
             <p>Marketing affects sales both directly and indirectly through intermediate outcomes 
             (e.g., awareness, consideration). This analysis decomposes total effects into direct 
-            and mediated pathways with {ci_level}% credible intervals.</p>
+            and mediated pathways with {self.interval_phrase(self.section_config.credible_interval)}s.</p>
         """)
 
         # Pathway diagram (visual representation)
@@ -2293,14 +2388,13 @@ class CannibalizationSection(Section):
             return ""
 
         content_parts = []
-        ci_level = int(self.section_config.credible_interval * 100)
 
         # Introduction
         content_parts.append(f"""
             <h3>Cross-Product Effects</h3>
             <p>Marketing for one product may cannibalize sales of another (substitution) or 
-            boost them (halo effects). This matrix shows cross-product effects with {ci_level}% 
-            credible intervals. Negative values indicate cannibalization; positive values 
+            boost them (halo effects). This matrix shows cross-product effects with
+            {self.interval_phrase(self.section_config.credible_interval)}s. Negative values indicate cannibalization; positive values 
             indicate synergy.</p>
         """)
 
@@ -2411,7 +2505,7 @@ class CannibalizationSection(Section):
                 <span class="danger">Red</span> = significant cannibalization; 
                 <span class="success">Green</span> = significant synergy; 
                 <span class="muted">Gray</span> = not significant (CI includes zero).
-                Hover for credible intervals.
+                Hover for {self.interval_noun}s.
             </p>
         """)
 
@@ -2622,7 +2716,7 @@ class EstimandsSection(Section):
             return ""
         note = (
             '<div class="methodology-note"><p><strong>Reading this table:</strong> '
-            '"Strong" means the credible interval excludes the no-effect reference '
+            f'"Strong" means the {self.interval_noun} excludes the no-effect reference '
             '(ROI/ROAS against 1.0, contribution against 0); "Uncertain" means it '
             "does not, so the sign of the effect is not resolved by the data.</p></div>"
         )
@@ -2771,6 +2865,12 @@ class PosteriorPredictiveSection(Section):
     def render(self) -> str:
         if not self.is_enabled:
             return ""
+        if self.is_frequentist:
+            # A posterior-predictive p-value is a tail probability under the
+            # posterior predictive distribution. There is no posterior here, so
+            # the replicate overlay and every Bayes p in this section would be
+            # a computed number that does not mean what its label says.
+            return self._posterior_only_notice("posterior_predictive")
         pp = self.data.posterior_predictive
         if not pp or pp.get("observed") is None:
             return ""

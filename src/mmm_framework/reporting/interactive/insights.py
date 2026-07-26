@@ -15,6 +15,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ...diagnostics.provenance import interval_phrase as _interval_phrase
+
 __all__ = ["INTERACTIVE_INSIGHT_SLOTS", "build_interactive_insights"]
 
 INTERACTIVE_INSIGHT_SLOTS = (
@@ -78,11 +80,24 @@ def _fallback_insights(f: dict[str, Any]) -> dict[str, str]:
         if meta.get("approximate")
         else ""
     )
+    # The standfirst names the paradigm: it is the first sentence a reader sees
+    # and the one that licenses (or does not license) a probability statement
+    # about every number below it.
+    _freq = str(meta.get("inference_family", "")).lower() == "frequentist"
+    _family = "frequentist" if _freq else "bayesian"
+    _model_desc = (
+        "a marketing mix model estimated by penalized regression"
+        if _freq
+        else "a Bayesian marketing mix model"
+    )
+    _draws = (
+        "the same bootstrap replicates" if _freq else "the same posterior draws"
+    )
     out["standfirst"] = (
-        f"This is the fitted readout of a Bayesian marketing mix model of {kpi} "
+        f"This is the fitted readout of {_model_desc} of {kpi} "
         f"across {n_ch} media channel{'s' if n_ch != 1 else ''}{window}. Every "
-        f"number carries a {interval}% credible interval, and the date-window "
-        f"selectors re-aggregate the same posterior draws — they never refit "
+        f"number carries a {_interval_phrase(interval / 100, _family)}, and the "
+        f"date-window selectors re-aggregate {_draws} — they never refit "
         f"the model.{approx}"
     )
 

@@ -232,8 +232,8 @@ class UnobservedConfoundingAnalysis:
             "estimated effect. It is an OLS-analogy approximation; anchor "
             "effects with randomized experiments (mmm_framework.calibration) "
             "for genuine causal validity. "
-            "The RV rises with |posterior mean / posterior sd|, and in a Bayesian "
-            "model a tighter prior shrinks that sd — so a prior-dominated "
+            "The RV rises with |estimate / standard error|, and in a Bayesian "
+            "model a tighter prior shrinks that error — so a prior-dominated "
             "coefficient reports high robustness without new evidence. RVs are "
             "not comparable across channels whose priors differ in tightness."
         )

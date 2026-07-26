@@ -351,6 +351,11 @@ _INFERENCE_KEYS = {
 # Mirrors config.enums.FitMethod — "nuts" is full MCMC and "smc" is tempered
 # Sequential Monte Carlo (both EXACT); the rest are the approximate methods
 # BayesianMMM.fit dispatches to (_fit_approx).
+#: Values `inference.method` accepts. The first two are exact Bayesian
+#: samplers, the next five are approximate Bayesian fits, and the last two
+#: select the FREQUENTIST paradigm (#188) — a penalized point estimate with
+#: bootstrap confidence intervals, not a posterior. Validated here so a typo is
+#: caught when the setting is written rather than at fit time.
 _INFERENCE_METHODS = {
     "nuts",
     "smc",
@@ -359,7 +364,12 @@ _INFERENCE_METHODS = {
     "advi",
     "fullrank_advi",
     "pathfinder",
+    "frequentist_ridge",
+    "frequentist_cvxpy",
 }
+
+#: The subset that leaves the Bayesian paradigm entirely.
+_FREQUENTIST_METHODS = {"frequentist_ridge", "frequentist_cvxpy"}
 _TREND_KEYS = {
     "type",
     "n_changepoints",
@@ -553,8 +563,11 @@ def unconsumed_spec_path(parts: list[str], value, spec: dict) -> str | None:
                         f"the fit would fail. Recognized methods: "
                         f"{', '.join(sorted(_INFERENCE_METHODS))} (nuts = full "
                         "MCMC and smc = Sequential Monte Carlo, both exact; "
-                        "the rest are fast approximate fits with "
-                        "uncalibrated uncertainty)."
+                        "map/laplace/advi/fullrank_advi/pathfinder are fast "
+                        "approximate fits with uncalibrated uncertainty; "
+                        "frequentist_ridge/frequentist_cvxpy are penalized "
+                        "point estimates with bootstrap CONFIDENCE intervals "
+                        "and no posterior at all)."
                     )
             # likelihood.params is free-form (family-specific); the family/link
             # values are validated by LikelihoodConfig at build time.
@@ -1079,6 +1092,7 @@ def _model_config_from_spec(spec: dict):
     tune = int(inf.get("tune", 1000))
     target_accept = float(inf.get("target_accept", 0.85))
 
+    method = str(inf.get("method", "nuts")).lower()
     model_config_builder = (
         ModelConfigBuilder()
         .bayesian_numpyro()
@@ -1086,11 +1100,20 @@ def _model_config_from_spec(spec: dict):
         .with_draws(draws)
         .with_tune(tune)
         .with_target_accept(target_accept)
+    )
+    if method in _FREQUENTIST_METHODS:
+        # `inference.method` selects the PARADIGM here, not just a Bayesian
+        # estimator. It lands on `inference_method` (which `fit()` branches on),
+        # and `fit_method` is left alone — `FitMethod` has no frequentist member
+        # and setting one would make an unfitted model claim NUTS.
+        from ..config.enums import InferenceMethod as _IM
+
+        model_config_builder.with_inference_method(_IM(method))
+    else:
         # Carry the planned inference method onto the config so an UNFITTED model
         # (prefit readout, prior predictive check) reflects what the fit will use
         # — map/advi/pathfinder vs full NUTS — instead of always reading "nuts".
-        .with_fit_method(str(inf.get("method", "nuts")).lower())
-    )
+        model_config_builder.with_fit_method(method)
     # Agent-built models default to ROI-BASED media priors: the default prior
     # is placed on each channel's ROI (LogNormal, median 1.0 = break-even) and
     # beta is derived in-graph, so the prior predictive ROI the oracle reports

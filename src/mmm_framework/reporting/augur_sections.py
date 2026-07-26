@@ -172,11 +172,17 @@ class AugurHeadlineSection(AugurSection):
 
     def _caveat_banner(self) -> str:
         """A client-facing stop sign when the model was fit APPROXIMATELY (MAP /
-        ADVI / Pathfinder — uncertainty not calibrated) or did NOT converge.
+        ADVI / Pathfinder — uncertainty not calibrated), did NOT converge, or is
+        a FREQUENTIST point estimate.
 
         The Augur deck is otherwise a confident client readout with no
         diagnostics section, so without this a MAP/non-converged model reads as
         trustworthy. Kept short and plain-language for a non-technical audience.
+
+        The frequentist case needed its own branch rather than reusing the
+        approximate one: before it existed, a ridge fit tripped neither
+        condition — ``approximate`` is ``False`` and ``is_converged`` returns
+        ``None``, not ``False`` — so the deck rendered with **zero** caveat.
         """
         diag = getattr(self.data, "diagnostics", None) or {}
         try:
@@ -185,6 +191,28 @@ class AugurHeadlineSection(AugurSection):
             is_converged = None  # type: ignore
         approx = bool(diag.get("approximate"))
         not_conv = is_converged is not None and is_converged(diag) is False
+        if self.is_frequentist and not not_conv:
+            semantics = str(diag.get("interval_semantics") or "")
+            selection = (
+                " The carryover and saturation curves were picked by one "
+                "out-of-sample search and the ranges assume that pick was right, "
+                "so they are, if anything, narrower than the truth."
+                if semantics == "conditional_on_selection"
+                else ""
+            )
+            msg = (
+                "These figures come from a <strong>fast statistical estimate</strong> "
+                "rather than full modelling. The ranges shown are "
+                "<strong>confidence intervals</strong> — they describe how much the "
+                "estimate would move on different data, <strong>not</strong> the "
+                "probability that the true value sits inside them." + selection
+            )
+            return (
+                '<div class="callout" style="border-left:4px solid #1d4ed8;'
+                "background:#eef2ff;color:#1e2a5a;padding:12px 16px;border-radius:8px;"
+                'margin:8px 0 4px;font-size:0.92em;">'
+                f"ℹ️ {msg}</div>"
+            )
         if not (approx or not_conv):
             return ""
         if approx:
@@ -399,9 +427,14 @@ class AugurScorecardSection(AugurSection):
                     <td class="action-cell {r['css']}">{html.escape(r['action'])}</td>
                 </tr>
                 """)
+        span = (
+            "the estimator's own sampling variability spans"
+            if self.is_frequentist
+            else "the data considers plausible"
+        )
         intro = (
-            "<p>Return is revenue generated per dollar of media, with an "
-            f"{ci}% credible interval — the range the data considers plausible. "
+            "<p>Return is revenue generated per dollar of media, with a "
+            f"{self.interval_phrase(ci / 100)} — the range {span}. "
             "The <em>read</em> reflects where that whole range sits relative to "
             "break-even, and the <em>action</em> follows from it.</p>"
         )
@@ -505,8 +538,8 @@ class AugurROISection(AugurSection):
         ]
         chart = charts.create_plotly_div(trace, layout, "augurForest")
         intro = (
-            "<p>Each marker is the channel's central return; the bar is its 80% "
-            "credible interval. Where the whole bar sits to the right of the "
+            "<p>Each marker is the channel's central return; the bar is its "
+            f"{self.interval_phrase(0.8)}. Where the whole bar sits to the right of the "
             "dashed break-even line, the channel pays back with confidence. Where "
             "it straddles the line, the honest answer is that we do not yet know — "
             "a cue to test, not to bet.</p>"
@@ -1140,16 +1173,16 @@ class AugurModelFitSection(AugurSection):
             if gloss
             else (
                 "<p>Before trusting the splits above, the model has to reproduce "
-                "the revenue it was trained on. The line is the posterior mean; the "
-                "band is the credible interval — the outcomes the model considers "
+                "the revenue it was trained on. The line is the fitted mean; the "
+                f"band is the {self.interval_noun} — the outcomes the model considers "
                 "plausible, including observation noise.</p>"
             )
         )
         cards = self._fit_cards(cc.ci_level)
         caption = (
             '<p class="chart-caption">Observed KPI (points) against the model\'s '
-            f"posterior-predictive mean (line) and {int(cc.ci_level * 100)}% "
-            "credible band over the analysis period.</p>"
+            f"fitted mean (line) and {self.interval_phrase(cc.ci_level)} band "
+            "over the analysis period.</p>"
         )
         return self._wrap(
             f'{intro}{cards}<div class="chart-card">{chart}</div>{caption}'
@@ -1206,6 +1239,12 @@ class AugurPPCSection(AugurSection):
 
     def render(self) -> str:
         if not self.is_enabled:
+            return ""
+        if self.is_frequentist:
+            # No posterior ⇒ no posterior predictive distribution ⇒ no Bayesian
+            # p-value. Dropped silently rather than explained, because the Augur
+            # deck is a client readout whose caveat already lives in the headline
+            # banner; a second "not applicable" panel would be noise there.
             return ""
         pp = getattr(self.data, "posterior_predictive", None)
         if not pp or pp.get("observed") is None:

@@ -115,6 +115,50 @@ frozen public contract breaks, and the contract itself is pinned by
   is a badly-estimated posterior and a ridge fit is not a posterior at all. Nothing renders
   these yet; that is [#188](https://github.com/redam94/mmm-framework/issues/188).
 
+- **`fit()` dispatches the frequentist path, and every surface tells the truth about it.**
+  `InferenceMethod.FREQUENTIST_RIDGE` / `FREQUENTIST_CVXPY` now select a real estimator instead
+  of raising. `ModelConfigBuilder().frequentist_ridge()` / `.frequentist_cvxpy()` are live, as is
+  the generic `.with_inference_method(...)`; `ridge_alpha`, `bootstrap_samples` and
+  `optim_maxiter` stop being inert and become the penalty fallback, replicate count and search
+  budget. The agent spec accepts `inference.method = "frequentist_ridge"`.
+  ([#188](https://github.com/redam94/mmm-framework/issues/188))
+
+  **`inference_method` selects the paradigm; `fit_method` selects among the Bayesian
+  estimators.** A frequentist fit leaves `fit_method` as `None` — `FitMethod` has no frequentist
+  member, and a stray `"nuts"` there is precisely what made downstream surfaces announce a full
+  MCMC posterior for a ridge fit.
+
+  The integration half is the larger one, because every report section, estimand label and
+  diagnostic in this codebase was written assuming a posterior:
+
+  - **`MMMResults.converged` is `None`** for a frequentist fit, and the sampler metrics are
+    nulled rather than computed. This is not defensive: a `(chain=1, draw=B)` bootstrap trace
+    passed *every* convergence gate as `True` — `az.rhat` on one chain is NaN and a `None` metric
+    raises no flag, while `az.ess` returns ≈`B` because bootstrap replicates are iid. The
+    estimator was silently green everywhere the verdict is consumed.
+  - **Interval wording is family-aware.** A bootstrap percentile interval is a **confidence**
+    interval; "there is a 90% probability the ROI is in this range" is true of a credible
+    interval and false of this one. `mmm_framework.diagnostics.provenance` is the single source
+    of that vocabulary, and the classic report, the Augur client deck and the interactive
+    report's JavaScript all read it instead of hard-coding "credible".
+  - **Posterior-only views are gated off with a stated reason**, not blanked: the convergence
+    table, posterior-predictive checks and Bayesian p-values, prior-predictive and
+    prior-vs-posterior contraction. A missing table reads as an oversight; "not applicable
+    because there is no chain" reads as a property of the method.
+  - **A banner names the estimator, the selection criterion and the interval semantics** in all
+    three shells — including the Augur client deck, which previously rendered a frequentist fit
+    with *zero* caveat, since its only stop sign fires on `approximate` (False here) or
+    `is_converged is False` (`None` here).
+  - **`inference_family` is a distinct provenance field**, carried into report bundles, the
+    serializer's `metadata.json` and `planning/history` run metrics. `approximate` is the wrong
+    flag to reuse: an approximate fit is a badly-estimated posterior, a ridge fit is not a
+    posterior at all and its point estimate may be excellent. Absence of the field reads as
+    Bayesian, so every fit produced before this release is unaffected.
+
+  Selecting `frequentist_cvxpy` with no explicit `constraints=` applies non-negative media — the
+  one restriction every MMM wants and the one a prior can only express softly. It needs the
+  optional extra (`pip install 'mmm-framework[frequentist]'`).
+
 - **`run_recovery_coverage(refit=...)`** — estimator injection for
   `diagnostics/coverage.py`, which was hard-wired to `pm.observe` + NUTS. Supplying a callable
   grades a non-PyMC estimator against the same θ*, the same simulated datasets and the same

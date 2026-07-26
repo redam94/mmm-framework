@@ -231,10 +231,32 @@ class InteractiveReportGenerator:
     def _insight(self, key: str) -> str:
         return _esc(self.insights.get(key, ""))
 
+    @property
+    def _is_frequentist(self) -> bool:
+        return (
+            str(self.facts.get("meta", {}).get("inference_family", "")).lower()
+            == "frequentist"
+        )
+
     def _approx_banner(self) -> str:
-        if not self.facts.get("meta", {}).get("approximate"):
+        meta = self.facts.get("meta", {})
+        if self._is_frequentist:
+            # NOT the approximate banner. An approximate fit is a badly-estimated
+            # posterior; a ridge fit is not a posterior at all and its point
+            # estimate may be excellent. What a reader must not do is read the
+            # ranges as probability statements about the parameter.
+            caveats = meta.get("frequentist_caveats") or []
+            items = "".join(f"<li>{_esc(str(c))}</li>" for c in caveats)
+            return (
+                '<div class="ir-banner"><span>ℹ︎</span><div>'
+                "<b>Frequentist fit</b> — these are a point estimate with "
+                "bootstrap <b>confidence</b> intervals, not a posterior. "
+                "Convergence diagnostics describe an MCMC sampler and do not "
+                f"apply.<ul>{items}</ul></div></div>"
+            )
+        if not meta.get("approximate"):
             return ""
-        method = self.facts.get("meta", {}).get("fit_method") or "approximate"
+        method = meta.get("fit_method") or "approximate"
         return (
             '<div class="ir-banner"><span>⚠︎</span><div>'
             f"<b>Approximate fit ({_esc(str(method).upper())})</b> — this "
@@ -506,7 +528,9 @@ class InteractiveReportGenerator:
             '<div class="chart-card"><div id="roiChart"></div>'
             '<div id="roiChartEff"></div></div>'
             '<p class="chart-caption">Forest plot of per-channel returns over '
-            "the selected window: point = posterior mean, thick bar = 50% "
+            "the selected window: point = "
+            + ("central estimate" if self._is_frequentist else "posterior mean")
+            + ", thick bar = 50% "
             "interval, thin whisker = the wide interval. The dashed line is "
             "break-even; channels measured in volume (impressions/clicks) "
             "appear in a separate efficiency panel with a zero reference.</p>"
@@ -881,19 +905,40 @@ class InteractiveReportGenerator:
             '<div class="kpi-grid">'
             + _dcell(
                 "Inference",
-                _esc(str(meta.get("fit_method") or "nuts").upper())
+                # NEVER default to "NUTS": a frequentist fit legitimately carries
+                # `fit_method=None`, and the old `or "nuts"` fallback turned that
+                # into a claim of full MCMC.
+                _esc(
+                    str(
+                        meta.get("estimator")
+                        if self._is_frequentist
+                        else (meta.get("fit_method") or "nuts")
+                    ).upper()
+                )
                 + ('<span class="chip-approx">Approx.</span>' if approx else ""),
-                "uncertainty not calibrated" if approx else "full MCMC posterior",
+                (
+                    "bootstrap confidence intervals — not a posterior"
+                    if self._is_frequentist
+                    else ("uncertainty not calibrated" if approx else "full MCMC posterior")
+                ),
             )
             + _dcell(
                 "Max R-hat",
                 "—" if rhat is None else f"{float(rhat):.3f}",
-                "n/a for approximate fits" if approx else "should be < 1.01",
+                (
+                    "n/a — no sampler"
+                    if self._is_frequentist
+                    else ("n/a for approximate fits" if approx else "should be < 1.01")
+                ),
             )
             + _dcell(
                 "Min bulk ESS",
                 "—" if ess is None else f"{float(ess):,.0f}",
-                "n/a for approximate fits" if approx else "should be > 400",
+                (
+                    "n/a — no sampler"
+                    if self._is_frequentist
+                    else ("n/a for approximate fits" if approx else "should be > 400")
+                ),
             )
             + _dcell(
                 "Divergences",

@@ -146,11 +146,25 @@ def compute_run_metrics(
         except ValueError:
             return str(val).lower() != "nuts"
 
+    # WHICH PARADIGM. Distinct from `approximate`, and load-bearing for the
+    # history view: a frequentist run's stored intervals are CONFIDENCE
+    # intervals, and `approximate` is False for them, so without this the two
+    # paradigms' ROI histories would be plotted as if they meant the same thing.
+    _cfg = getattr(mmm, "model_config", None)
+    _freq = bool(getattr(_cfg, "is_frequentist", False))
+    _fit_diag = getattr(mmm, "_fit_diagnostics", None) or {}
+
     metrics = {
         "schema_version": RUN_METRICS_SCHEMA_VERSION,
         "n_draws": int(curves.contributions.shape[0]),
         "fit_method": str(_fit_method) if _fit_method is not None else None,
-        "approximate": _is_approx(_fit_method),
+        "approximate": False if _freq else _is_approx(_fit_method),
+        "inference_family": "frequentist" if _freq else "bayesian",
+        "estimator": _fit_diag.get("estimator") if _freq else None,
+        "interval_kind": _fit_diag.get("interval_kind") if _freq else None,
+        "interval_semantics": (
+            _fit_diag.get("interval_semantics") if _freq else None
+        ),
         "response_curves": response_curves,
         "channels": channels,
         "portfolio": {
