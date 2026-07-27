@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+
+from ..finance import UnresolvedValueError
 import pandas as pd
 
 DEFAULT_MULTIPLIERS = (0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5)
@@ -284,7 +286,7 @@ def _solve_allocation(
     hi_spend: np.ndarray,  # (C,)
     groups: list[dict] | None = None,
     mode: str = "fixed",
-    value_per_kpi: float = 1.0,
+    value_per_kpi: float | None = None,
     x0: np.ndarray | None = None,
 ) -> tuple[np.ndarray, float, np.ndarray]:
     """Constrained allocation on one response curve via SLSQP (convex: a sum of
@@ -314,6 +316,13 @@ def _solve_allocation(
         )
 
     if mode == "free":
+        # `free` trades KPI against SPEND, so the exchange rate is load-bearing.
+        # A silent 1.0 here asserts one KPI unit is worth one dollar and funds
+        # every channel to that line; on a KPI denominated in thousands the
+        # recommended budget is ~1000x too large — and it renders with credible
+        # intervals. Refuse instead. `fixed` needs no valuation and is unchanged.
+        if value_per_kpi is None:
+            raise UnresolvedValueError("Fund-to-breakeven allocation (mode='free')")
         # Maximize profit value_per_kpi·KPI(s) − Σs → minimize the negative.
         def neg(s):
             return -(value_per_kpi * value(s) - float(s.sum()))
@@ -325,10 +334,12 @@ def _solve_allocation(
     else:  # fixed budget
 
         def neg(s):
-            return -value_per_kpi * value(s)
+            # Scale-free: a positive constant does not move the argmax under a
+            # fixed budget, so `fixed` runs with no valuation set.
+            return -(value_per_kpi or 1.0) * value(s)
 
         def neg_jac(s):
-            return -value_per_kpi * marginals(s)
+            return -(value_per_kpi or 1.0) * marginals(s)
 
         constraints = [
             {
@@ -381,7 +392,11 @@ def _solve_allocation(
         method="SLSQP",
         bounds=bnds,
         constraints=constraints,
-        options={"maxiter": 200, "ftol": 1e-9},
+        # ftol is ABSOLUTE. Scaling the objective by value_per_kpi would then
+        # make convergence depend on the KPI's units: at value_per_kpi=1e-3 the
+        # per-iteration deltas fall under 1e-9 and SLSQP returns the warm start
+        # as "the optimal plan". Normalize the tolerance by the objective scale.
+        options={"maxiter": 200, "ftol": 1e-9 * max(abs(value_per_kpi or 1.0), 1e-12)},
     )
     alloc = np.clip(res.x, lo_spend, np.maximum(hi_spend, lo_spend))
     if mode != "free" and total_budget and alloc.sum() > 0:
@@ -391,7 +406,7 @@ def _solve_allocation(
         deficit = float(total_budget) - alloc.sum()
         alloc = alloc + deficit * room / room.sum()
         alloc = np.clip(alloc, lo_spend, np.maximum(hi_spend, lo_spend))
-    m = value_per_kpi * marginals(alloc)
+    m = (value_per_kpi or 1.0) * marginals(alloc)
     funded = (alloc > lo_spend + 1e-9) & (alloc < hi_spend - 1e-9)
     shadow = float(np.median(m[funded])) if funded.any() else float(np.max(m))
     return alloc, shadow, m
@@ -445,7 +460,7 @@ def optimize_budget(
     min_channel_spend: float | dict[str, float] | None = None,
     objective: str = "mean",
     mode: str = "fixed",
-    value_per_kpi: float = 1.0,
+    value_per_kpi: float | None = None,
     n_steps: int = 400,
     max_draws: int = 200,
     random_seed: int | None = None,
@@ -579,7 +594,11 @@ def optimize_budget(
     # Shadow price + marginal ROAS AT the recommended plan (v2 readouts): the
     # per-channel marginal value of the next dollar, and the budget water level
     # (the level greedy/SLSQP equalizes across interior funded channels).
-    marg = value_per_kpi * np.array(
+    # With no valuation resolved these readouts are in KPI units per dollar, NOT
+    # dollars per dollar — a factor of 1.0 is the identity, not an assumed
+    # exchange rate. Labelling them accordingly at every render site is #221;
+    # `fixed` mode legitimately runs without a valuation, so it must not refuse.
+    marg = (value_per_kpi or 1.0) * np.array(
         [
             _segment_marginal(mean_curves[c], spend_grid[c], optimal[c])
             for c in range(len(names))

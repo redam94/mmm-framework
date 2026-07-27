@@ -102,7 +102,9 @@ def test_solve_absolute_bounds_and_free_mode():
     mean = objective_curves(c, "mean")
     lo = np.array([50.0, 0.0, 0.0, 0.0])
     hi = np.array([120.0, 150.0, 150.0, 150.0])
-    # free / breakeven mode: total is an output; TV pinned in [50, 120]
+    # free / breakeven mode: total is an output; TV pinned in [50, 120].
+    # value_per_kpi is now EXPLICIT (#215) — free mode trades KPI against spend,
+    # so the exchange rate is load-bearing and no longer defaults to 1.0.
     alloc, _, marg = _solve_allocation(
         mean,
         c.spend_grid,
@@ -110,6 +112,7 @@ def test_solve_absolute_bounds_and_free_mode():
         lo_spend=lo,
         hi_spend=hi,
         mode="free",
+        value_per_kpi=1.0,
     )
     assert 50.0 - 1e-6 <= alloc[0] <= 120.0 + 1e-6
     # interior funded channels sit near the breakeven line (marginal ≈ 1)

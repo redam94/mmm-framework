@@ -60,6 +60,7 @@ CORE_IMPORTS = [
     "mmm_framework.planning",
     "mmm_framework.planning.history",
     "mmm_framework.estimands",
+    "mmm_framework.finance",
     "mmm_framework.diagnostics",
     "mmm_framework.calibration",
     "mmm_framework.mmm_extensions",

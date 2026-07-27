@@ -184,7 +184,7 @@ def budget_frontier(
     abs_bounds: dict[str, tuple[float, float]] | None = None,
     groups: list[dict] | None = None,
     min_channel_spend: float | dict[str, float] | None = None,
-    value_per_kpi: float = 1.0,
+    value_per_kpi: float | None = None,
     max_draws: int = 120,
     random_seed: int | None = 42,
 ) -> FrontierResult:
@@ -295,7 +295,7 @@ def goal_seek(
     abs_bounds: dict[str, tuple[float, float]] | None = None,
     groups: list[dict] | None = None,
     min_channel_spend: float | dict[str, float] | None = None,
-    value_per_kpi: float = 1.0,
+    value_per_kpi: float | None = None,
     budget_max: float | None = None,
     tol: float = 1e-3,
     max_iter: int = 40,
