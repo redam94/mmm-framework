@@ -16,6 +16,120 @@ frozen public contract breaks, and the contract itself is pinned by
 
 Nothing yet.
 
+## [1.3.1] — 2026-07-26
+
+A correctness release for the out-of-time forecast path. One bug, of the class this project
+treats as most serious: **a code path that reads as complete and silently does nothing for one
+configuration** — the same shape as the v1.2.0 sampler fixes (#169/#171) and the root-saturation
+fix in 1.3.0 (#202).
+
+### Fixed
+
+- **`PosteriorForecaster` summed five of the fitted mean's ten terms** ([#219]). The model's
+  `mu` is `intercept + trend + seasonality + geo + product + media + controls`, plus conditional
+  `event` (#143), cross-channel `interaction` (#142) and price/promo `lever` (#138) blocks. The
+  forward pass replayed only intercept, trend, seasonality, media and controls — and raised
+  nothing. It also applied a **time-averaged** coefficient to a time-varying channel
+  (`beta_<ch>` is `pt.mean(beta_t)`), and convolved **raw reach** for a reach/frequency channel,
+  omitting the frequency gain.
+
+  Every metric computed from that forward pass was affected on such a model — MAPE, sMAPE,
+  RMSE, MAE, bias, MASE, the naive-baseline comparison and 50/80/95% interval coverage — and the
+  failure was silent: the backtest completed and reported plausible accuracy. On a
+  geo × product panel the dropped product offset alone moved the forecast by up to **113 KPI
+  units**, on every observation.
+
+  These numbers ship through `run_backtest`, the `cross_validation` agent tool, the
+  Validation-tab REST job and a client artifact.
+
+  The fix follows the frequentist path's refusal convention (#183): the **product level offset is
+  now replayed**, and every term the forward pass genuinely cannot reproduce raises the new
+  `ForecastUnsupportedError` — naming the feature, listing every blocker at once, and doing so at
+  **construction time**, so a caller cannot hold a forecaster whose output it is not allowed to
+  trust. Refused: price and promotion levers, events, cross-channel interactions,
+  reach/frequency, time-varying coefficients, and the multiplicative specification.
+
+  **This turns some previously "working" backtests into hard refusals.** That is the point: the
+  numbers they produced were wrong. The `cross_validation` agent tool reports it as a stated
+  "not assessable for this model" reason rather than a failure.
+
+- **`_clone_for_prefix` downcast custom model classes** ([#219]). It hard-constructed
+  `BayesianMMM(...)`, so backtesting any garden or custom model — a `CustomMMM` subclass such as
+  `LatentFactorMMM` or the awareness model — silently fit and graded a **plain additive MMM** and
+  reported its accuracy under the custom model's name. It now reconstructs `type(model)` and
+  forwards `model_params`, refusing when the class cannot be rebuilt rather than falling back.
+
+- **`run_backtest` now refuses an experiment-calibrated model.** The refit drops calibration
+  likelihoods (their estimands reference full-period spend), so the reported accuracy was an
+  *uncalibrated* model's, carrying the calibrated model's name.
+
+- **A geo/product panel with a spline, GP or piecewise trend replayed the trend at the wrong
+  time index** ([#219]). `trend_component` is registered per-*observation*, but the forward pass
+  indexed it with *period* positions — so on an `n_cells`-wide panel, period `p` read
+  observation `p`, which belongs to period `p // n_cells`. The trend was stretched by a factor of
+  `n_cells`, and the documented hold-last-flat clamp never fired because positions never reached
+  the end of the obs axis. Measured at **up to 26% of KPI level** on a 6-cell spline panel. A
+  national panel was unaffected (`n_obs == n_periods` makes the two indexings identical), which
+  is why it went unseen.
+
+- **Student-t fits drew Gaussian observation noise.** `LikelihoodFamily.STUDENT_T` is a supported
+  additive family (default `nu = 4.0`, genuinely heavy-tailed), but `include_noise=True` always
+  drew `Normal(0, 1) * sigma`. Since the whole purpose of that flag is the predictive
+  distribution that `BacktestResult.coverage()` grades, the reported interval coverage was not
+  the model's. The noise draw now dispatches on the fitted family.
+
+- **The rolling-window cross-validation forecast seasonality out of phase.** `_trend_at` honoured
+  `train_offset` but `_seasonality_at` did not, so a clone whose window starts at absolute period
+  `s` evaluated the Fourier basis `s` periods out of phase. `run_backtest` always passes
+  `train_offset=0` and was unaffected; `ModelValidator.cross_validate(strategy="rolling")` was not.
+
+- **`ModelValidator.cross_validate` swallowed the new refusal into a per-fold warning.** Its broad
+  `except Exception` downgraded a configuration-level refusal to a log line — and not uniformly,
+  since event regressors are rebuilt per fold, so a fold containing no configured holiday passed
+  while one containing a holiday was silently dropped. It now propagates, and the audit is hoisted
+  above the fold loop so the refusal costs zero refits instead of one per fold. Cross-validation
+  also now applies `audit_refit`: it drops `experiments` exactly as the backtest refit does, so it
+  was silently grading an uncalibrated model while the backtest harness refused to.
+
+- **Four more clone sites in `validation/validator.py` downcast custom model classes** — the
+  cross-validation, prior-sensitivity and stability clones, and `_fit_clone`, which powers the
+  causal refutation suite behind the **Model Defense** document. A garden model's defense report
+  was showing a plain additive MMM's refutation results under the garden model's name. All five
+  clone sites now share one `rebuild_like()` helper.
+
+### Added
+
+- `ForecastUnsupportedError` (with `.feature`, `.reason`, `.all_unsupported`),
+  `TrendExtrapolation`, `rebuild_like()`, and the public `audit_forward_pass()` /
+  `audit_refit()` helpers, all exported from `mmm_framework.validation`.
+- **A subclass that overrides `_build_model` is now refused**, because it defines its own mean
+  and this forward pass reproduces only the base additive one. A class whose mean *is* the base
+  mean opts in with `__forecast_forward_pass__ = "base"`. This is the necessary counterpart to
+  class-preserving cloning: fitting the right class while replaying the base forward pass would
+  have traded one silent-drop path for another.
+- **`PosteriorForecaster.trend_extrapolation`** states how the trend is continued past the
+  training window instead of leaving it implicit: `linear` extrapolates in closed form, while
+  spline/GP/piecewise **hold the last fitted level flat** — so those forecast intervals do not
+  widen with horizon. `is_model_defined` distinguishes the model's own continuation from the
+  heuristic. It also records the training length, because a linear trend's slope *per period* is
+  a function of it.
+- `PosteriorForecaster(..., strict=False)` downgrades a refusal to a warning for diagnostic use.
+  It omits a term the model estimated and must not be used for planning.
+
+### Notes
+
+The regression test (`tests/test_backtest_completeness.py::TestComponentSumIdentity`) asserts
+that `forecast(include_noise=False)` over training positions equals the sum of the model's
+registered component Deterministics to `atol=1e-9`. **That test is the audit**: any term the
+forward pass fails to sum appears as a residual rather than as a plausible number. It
+deliberately does not compare against `predict()`, which draws from the observation likelihood
+and carries MC noise no seed removes.
+
+The module and `validator.py` docstrings claimed "national data only; trend NONE or LINEAR"
+while geo panels and every trend family in fact ran. They now state the actual scope.
+
+[#219]: https://github.com/redam94/mmm-framework/issues/219
+
 ## [1.3.0] — 2026-07-26
 
 ### Changed

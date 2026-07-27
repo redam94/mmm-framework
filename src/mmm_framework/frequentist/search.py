@@ -18,8 +18,8 @@ measured the same way.
 
 What is reused, and what is not
 -------------------------------
-``run_backtest`` is **not** pluggable — ``_clone_for_prefix`` hard-imports
-``BayesianMMM`` and calls ``.fit(draws=, tune=, chains=)``. The reusable pieces
+``run_backtest`` is **not** pluggable — ``_clone_for_prefix`` reconstructs the
+model's own class and calls ``.fit(draws=, tune=, chains=)``. The reusable pieces
 are the pure ones, and they are reused directly: :func:`rolling_origins` for the
 splits, :func:`_slice_panel_prefix` for the geo-correct panel prefix, and
 :func:`_point_metrics` for the error measures.

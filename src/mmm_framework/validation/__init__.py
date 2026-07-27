@@ -113,7 +113,9 @@ from .results import (
 from .backtest import (
     BacktestConfig,
     BacktestResult,
+    ForecastUnsupportedError,
     PosteriorForecaster,
+    TrendExtrapolation,
     rolling_origins,
     run_backtest,
 )
@@ -149,6 +151,8 @@ __all__ = [
     "BacktestResult",
     "PosteriorForecaster",
     "rolling_origins",
+    "ForecastUnsupportedError",
+    "TrendExtrapolation",
     "run_backtest",
     # Spec-curve / model-averaging robustness
     "SpecSet",

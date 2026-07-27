@@ -3866,9 +3866,15 @@ def cross_validation(
     """Out-of-time cross-validation (rolling-origin backtest). REFITS the model on
     expanding windows and grades genuine out-of-sample forecasts vs naive
     baselines — slow (one refit per origin)."""
-    try:
-        from mmm_framework.validation.backtest import BacktestConfig, run_backtest
+    # Imported before the try so the `except ForecastUnsupportedError` clause
+    # below can never hit an unbound name (which would mask a real ImportError).
+    from mmm_framework.validation.backtest import (
+        BacktestConfig,
+        ForecastUnsupportedError,
+        run_backtest,
+    )
 
+    try:
         cfg = BacktestConfig(
             horizon=horizon, max_origins=max_origins, draws=draws, tune=tune
         )
@@ -3895,6 +3901,15 @@ def cross_validation(
             ],
             "error": None,
         }
+    except ForecastUnsupportedError as e:
+        # Not a failure — a stated refusal. This model carries a term the
+        # out-of-time forward pass cannot replay, so there is no honest
+        # cross-validation number to report for it.
+        return _err(
+            f"Out-of-time cross-validation is not assessable for this model: "
+            f"{e.feature} cannot be replayed by the forward pass ({e.reason}). "
+            "Every other validation check still applies."
+        )
     except Exception as e:  # noqa: BLE001
         return _err(f"Cross-validation failed: {e}")
 
