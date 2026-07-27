@@ -16,6 +16,22 @@ frozen public contract breaks, and the contract itself is pinned by
 
 Nothing yet.
 
+## [1.3.2] — 2026-07-27
+
+### Fixed
+
+- **Three names v1.3.1 documented as public were not actually exported.** Its changelog stated
+  that `rebuild_like()`, `audit_forward_pass()` and `audit_refit()` were "exported from
+  `mmm_framework.validation`". They were reachable only from
+  `mmm_framework.validation.backtest`. The claim is now true.
+
+  Found by importing the published wheel and checking it against its own release notes rather
+  than against the working tree. Nothing pinned the export set — `PUBLIC_SURFACE` in
+  `tests/test_api_contracts.py` did not cover `mmm_framework.validation`, and the docs-snippet
+  gate reads code fences, so a *prose* claim about the API surface had nothing checking it.
+  `mmm_framework.validation` is now in `PUBLIC_SURFACE`, which makes removing or renaming any of
+  these a declared breaking change.
+
 ## [1.3.1] — 2026-07-26
 
 A correctness release for the out-of-time forecast path. One bug, of the class this project
