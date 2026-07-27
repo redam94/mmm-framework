@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..planning.calendar import label_sort_key
+
 from ..planning.pacing import DEFAULT_PACING_THRESHOLD, compute_pacing
 
 
@@ -149,7 +151,12 @@ def _actual_from_delivery(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         bucket = by_period.setdefault(period, {})
         bucket[str(ch)] = bucket.get(str(ch), 0.0) + spend
     out: list[dict[str, Any]] = []
-    for period in sorted(by_period):
+    # NOT plain sorted(): the default labels are P1..Pn and lexicographic order
+    # puts P10 before P2. Consumers that align positionally then shuffle every
+    # per-period series once n > 9 (fixed on the read side too — see
+    # planning/pacing.py::_join_periods — but emitting them in a wrong order was
+    # the source).
+    for period in sorted(by_period, key=label_sort_key):
         row: dict[str, Any] = {"period": period}
         row.update(by_period[period])
         out.append(row)
