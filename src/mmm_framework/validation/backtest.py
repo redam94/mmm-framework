@@ -21,13 +21,32 @@ geometric/delayed/Weibull kernels) and all configured saturation types.
 Adstock is convolved over the *full* spend history so carryover from the
 training period flows into the forecast window correctly.
 
-Scope (enforced with explicit errors, not silent wrong answers):
+Scope (enforced with explicit errors, not silent wrong answers).
 
-* national data only (one geo x product cell);
-* trend ``NONE`` or ``LINEAR`` (extrapolating spline/GP/piecewise trends is
-  ill-defined without additional assumptions);
-* experiment-calibration likelihood terms are dropped in backtest refits
-  (their estimands reference the full-period spend).
+The forward pass reproduces the fitted mean exactly for the terms it supports,
+and :class:`ForecastUnsupportedError` refuses the rest **at construction time**,
+so a caller cannot obtain a forecaster it is not allowed to trust:
+
+* supported — national and geo/product panels, every trend family, seasonality,
+  parametric and legacy adstock, all saturation families, controls, per-geo
+  media coefficients (``vary_media_by_geo``), and the geo/product level offsets;
+* refused — price and promotion levers, event/holiday effects, cross-channel
+  interactions, reach/frequency channels, time-varying coefficients, and the
+  multiplicative specification. Each of these contributes to the fitted mean
+  and the forward pass cannot replay it, so dropping it would shift the
+  forecast level while leaving the interval width untouched;
+* trend extrapolation is a stated *policy*, not a silent default — read
+  ``forecaster.trend_extrapolation``. ``LINEAR`` extrapolates in closed form;
+  spline/GP/piecewise **hold the last fitted level flat**, so their intervals do
+  not widen with horizon;
+* experiment-calibration likelihood terms are dropped by the backtest refit
+  (their estimands reference the full-period spend), so :func:`run_backtest`
+  refuses a calibrated model rather than reporting an uncalibrated model's
+  accuracy under the calibrated model's name.
+
+Before v1.3.1 the forward pass summed five of the fitted mean's ten terms and
+raised nothing, and the refit downcast any garden/custom model class to a plain
+additive ``BayesianMMM``. See the CHANGELOG entry for v1.3.1.
 
 A good backtest validates the *predictive* model, not the causal one: a model
 can forecast well while attributing wrongly (and vice versa). Use this
@@ -61,10 +80,92 @@ from ..transforms.seasonality import create_fourier_features
 __all__ = [
     "BacktestConfig",
     "BacktestResult",
+    "ForecastUnsupportedError",
     "PosteriorForecaster",
+    "TrendExtrapolation",
+    "rebuild_like",
     "rolling_origins",
     "run_backtest",
 ]
+
+
+class ForecastUnsupportedError(NotImplementedError):
+    """The fitted model carries a term the forward pass cannot replay.
+
+    Raised instead of silently dropping the term, mirroring
+    :class:`mmm_framework.frequentist.design.UnsupportedModelError`. Carries
+    ``feature`` so callers (the backtest harness, the agent, the REST job) can
+    report *which* configuration blocked the forecast rather than a generic
+    refusal, and ``all_unsupported`` so a UI can list every blocker at once
+    instead of making the user fix them one at a time.
+    """
+
+    def __init__(
+        self,
+        feature: str,
+        reason: str,
+        all_unsupported: "list[tuple[str, str]] | None" = None,
+    ):
+        self.feature = feature
+        self.reason = reason
+        self.all_unsupported = all_unsupported or [(feature, reason)]
+        extra = ""
+        if len(self.all_unsupported) > 1:
+            others = ", ".join(f for f, _ in self.all_unsupported[1:])
+            extra = f" (this model also carries: {others})"
+        super().__init__(
+            f"{feature} cannot be replayed by the out-of-time forward pass: "
+            f"{reason}. Refusing rather than dropping the term, which would "
+            f"shift the forecast level while leaving the interval width "
+            f"unchanged{extra}."
+        )
+
+
+@dataclass(frozen=True)
+class TrendExtrapolation:
+    """How the forecaster continues the trend past the training window.
+
+    Recorded rather than assumed, because the three policies carry very
+    different forecast semantics and only one of them is model-defined.
+
+    Attributes
+    ----------
+    policy : {'none', 'linear', 'held_flat'}
+        ``held_flat`` is a *heuristic*: a spline/GP/piecewise basis has no
+        out-of-time forecast, so the last fitted level is carried forward and
+        the interval consequently does not widen with horizon.
+    trend_type : str
+        The configured trend family.
+    n_train_periods : int
+        Training length. Load-bearing for ``linear``: the fitted slope is on a
+        ``t_scaled = pos / (n_train - 1)`` axis, so the same posterior implies a
+        different slope *per period* depending on how long the training panel
+        was. Reporting it makes that visible rather than surprising.
+    """
+
+    policy: str
+    trend_type: str
+    n_train_periods: int
+
+    @property
+    def is_model_defined(self) -> bool:
+        """False when the continuation is a heuristic rather than the model's."""
+        return self.policy in ("none", "linear")
+
+    def describe(self) -> str:
+        if self.policy == "none":
+            return "No trend term; nothing is extrapolated."
+        if self.policy == "linear":
+            return (
+                f"Linear trend extrapolated in closed form on the training time "
+                f"scale ({self.n_train_periods} periods)."
+            )
+        return (
+            f"{self.trend_type} trend has no out-of-time forecast; the last "
+            f"fitted level ({self.n_train_periods} periods) is HELD FLAT. The "
+            "forecast interval therefore does not widen with horizon and "
+            "understates long-horizon uncertainty."
+        )
 
 # Same component-period table as BayesianMMM._prepare_seasonality, so the
 # forecaster evaluates the Fourier features at exactly the training phase.
@@ -169,22 +270,227 @@ def rolling_origins(
 # ---------------------------------------------------------------------------
 
 
+def audit_forward_pass(model: Any) -> list[tuple[str, str]]:
+    """Every fitted-mean term :class:`PosteriorForecaster` cannot replay.
+
+    Returns ``(feature, reason)`` pairs, most-likely-to-be-hit first, so the
+    first message a user sees names the thing they actually configured. Empty
+    means the forward pass reproduces the fitted mean exactly.
+
+    The reference for "every term" is the mu construction in
+    ``model/base.py::_build_model``: ``intercept + trend + seasonality + geo +
+    product + media + controls`` plus the conditional ``event``, ``interaction``
+    and ``lever`` blocks. Each conditional block below is one of those.
+    """
+    out: list[tuple[str, str]] = []
+
+    # A subclass that writes its own graph defines its own mu, and this forward
+    # pass reproduces only the BASE additive mu. Before class-preserving cloning
+    # this could not arise (the clone was always a plain BayesianMMM, so the
+    # replay matched the fitted graph even though the graph was the wrong one);
+    # now that the real class is rebuilt, an overridden `_build_model` is a live
+    # silent-drop path. Example: the awareness garden model registers its own
+    # `trend_component` for an organic-level state and never creates
+    # `trend_slope`, so the base replay silently forecasts it trend-free.
+    #
+    # Opt out by declaring `__forecast_forward_pass__ = "base"` on the class,
+    # which asserts its mu is exactly the base mu.
+    from ..model.base import BayesianMMM
+
+    cls = type(model)
+    if (
+        getattr(cls, "_build_model", None) is not BayesianMMM._build_model
+        and getattr(cls, "__forecast_forward_pass__", None) != "base"
+    ):
+        out.append(
+            (
+                f"Custom model graph ({cls.__name__}._build_model)",
+                "this class builds its own PyMC graph, so its fitted mean may "
+                "carry terms the base additive forward pass does not reproduce. "
+                'Declare `__forecast_forward_pass__ = "base"` on the class to '
+                "assert its mean is exactly the base mean",
+            )
+        )
+
+    likelihood = getattr(getattr(model, "model_config", None), "likelihood", None)
+    family = getattr(getattr(likelihood, "family", None), "value", None)
+    if family is not None and family not in ("normal", "student_t"):
+        out.append(
+            (
+                f"{family} likelihood",
+                "the forward pass bridges back to KPI units with "
+                "`mu * y_std + y_mean` and adds additive noise, both of which "
+                "are the wrong shape under a non-identity link",
+            )
+        )
+
+    if getattr(model, "_multiplicative", False):
+        out.append(
+            (
+                "Multiplicative specification",
+                "the model fits log(y) and combines channels multiplicatively, "
+                "so the additive forward pass and its `mu * y_std + y_mean` "
+                "bridge back to KPI units are both the wrong shape",
+            )
+        )
+
+    for ch in getattr(model, "channel_names", []) or []:
+        try:
+            cfg = model.mff_config.get_media_config(ch)
+        except Exception:  # pragma: no cover - defensive
+            continue
+        if getattr(cfg, "time_varying", False):
+            out.append(
+                (
+                    f"Time-varying coefficient on {ch!r}",
+                    "the graph carries `beta_tv_<ch>` (a per-period random "
+                    "walk) while the trace's `beta_<ch>` is only its TIME "
+                    "AVERAGE, so the forward pass would apply an average "
+                    "effectiveness to a channel whose whole point is that its "
+                    "effectiveness moved",
+                )
+            )
+            break
+
+    # Gated on the parametric path: the frequency gain reaches mu only through
+    # `_channel_media_input`, which the legacy fixed-alpha branch never calls.
+    # On the legacy path the graph convolves the raw reach column — exactly what
+    # `_legacy_adstock` reproduces — so refusing there would remove a capability
+    # that worked. (That the configured gain is inert on the legacy path is a
+    # separate pre-existing model bug, not this forward pass's to convert into a
+    # forecast refusal.)
+    if getattr(model, "_reach_freq", None) and getattr(
+        model, "use_parametric_adstock", False
+    ):
+        out.append(
+            (
+                "Reach/frequency channels",
+                "the frequency gain multiplies the media column before adstock "
+                "and carries its own shape parameters; the forward pass "
+                "convolves the RAW reach series and would silently omit the gain",
+            )
+        )
+
+    if getattr(model, "_price_lever", None) is not None or getattr(
+        model, "_promo_levers", None
+    ):
+        out.append(
+            (
+                "Price / promotion levers",
+                "`lever_component` is part of the fitted mean and the forward "
+                "pass has no branch for it, so every forecast would omit the "
+                "price and promotion effects the model estimated",
+            )
+        )
+
+    events = getattr(model, "event_features", None)
+    if events is not None and getattr(events, "shape", (0, 0))[1] > 0:
+        out.append(
+            (
+                "Event / holiday effects",
+                "`event_component` is part of the fitted mean, and replaying it "
+                "needs the original EventsConfig plus a rule that an event with "
+                "no future occurrence yields a zero column rather than being "
+                "dropped — subtle enough to refuse rather than guess",
+            )
+        )
+
+    if getattr(getattr(model, "model_config", None), "channel_interactions", None):
+        out.append(
+            (
+                "Cross-channel interactions",
+                "`interaction_component` is part of the fitted mean and the "
+                "forward pass has no branch for it",
+            )
+        )
+
+    return out
+
+
+def audit_refit(model: Any) -> list[tuple[str, str]]:
+    """What a rolling-origin *refit* would change about the model under test.
+
+    Distinct from :func:`audit_forward_pass`: these terms do not break the
+    forward pass, they make the backtest grade a **different model** than the
+    one the user holds. Reported by :func:`run_backtest`, not by the forecaster.
+    """
+    out: list[tuple[str, str]] = []
+    if getattr(model, "experiments", None):
+        out.append(
+            (
+                "Experiment calibration",
+                "the calibration likelihoods reference full-period spend, so the "
+                "refit on a training prefix drops them — the reported accuracy "
+                "would be an UNCALIBRATED model's, carrying the calibrated "
+                "model's name. Backtest the uncalibrated specification "
+                "explicitly if that is what you want to measure",
+            )
+        )
+    return out
+
+
+def _raise_first(problems: list[tuple[str, str]]) -> None:
+    if problems:
+        feature, reason = problems[0]
+        raise ForecastUnsupportedError(feature, reason, all_unsupported=problems)
+
+
 class PosteriorForecaster:
     """Out-of-time forecasts from a fitted BayesianMMM's posterior draws.
 
-    Replays the model's structural forward pass (trend, seasonality, adstock,
-    saturation, controls, observation noise) in NumPy at arbitrary future
-    period positions, using the full spend history for adstock carryover.
+    Replays the model's structural forward pass (intercept, trend, seasonality,
+    geo and product level offsets, adstock, saturation, controls, observation
+    noise) in NumPy at arbitrary future period positions, using the full spend
+    history for adstock carryover.
+
+    The replay is *exact*: over training positions, ``forecast(include_noise=
+    False)`` equals the sum of the model's registered component Deterministics
+    to floating-point tolerance. Terms it cannot replay are refused here, in the
+    constructor, rather than at forecast time — so a caller cannot hold a
+    forecaster whose output it is not allowed to trust.
 
     Parameters
     ----------
     model : BayesianMMM
         A *fitted* model, possibly trained on a prefix of the full series.
+    strict : bool, default True
+        When ``True``, an unreplayable term raises
+        :class:`ForecastUnsupportedError`. ``False`` downgrades the refusal to a
+        warning and records it on ``self.unsupported`` — for diagnostic use on a
+        model you already know is incomplete. **Never use it for planning**: the
+        resulting forecast omits a term the model estimated.
+
+    Attributes
+    ----------
+    trend_extrapolation : TrendExtrapolation
+        The stated policy for continuing the trend past the training window.
+    unsupported : list[tuple[str, str]]
+        Empty unless ``strict=False`` suppressed a refusal.
+
+    Raises
+    ------
+    ForecastUnsupportedError
+        The model carries a term the forward pass cannot replay.
     """
 
-    def __init__(self, model: Any):
+    def __init__(self, model: Any, *, strict: bool = True):
+        # The audit reads CONFIGURATION, not the trace, so it runs first: a user
+        # who configured price levers should be told the forecast is unavailable
+        # before paying for the fit, not after.
+        self.unsupported = audit_forward_pass(model)
+        if self.unsupported:
+            if strict:
+                _raise_first(self.unsupported)
+            for feature, reason in self.unsupported:
+                logger.warning(
+                    f"PosteriorForecaster(strict=False): {feature} is part of "
+                    f"the fitted mean and will be OMITTED from the forecast — "
+                    f"{reason}."
+                )
+
         if model._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
+
         self._trend_type = str(
             getattr(model.trend_config.type, "value", model.trend_config.type)
         ).lower()
@@ -202,24 +508,69 @@ class PosteriorForecaster:
         self._get = get
         self._intercept = get("intercept")
         self._sigma = get("sigma")
+        # Student-t degrees of freedom, when that is the fitted family — read
+        # once so _draw_noise stays a pure dispatch.
+        _lik = getattr(model.model_config, "likelihood", None)
+        _fam = getattr(getattr(_lik, "family", None), "value", None)
+        self._nu = (
+            float((getattr(_lik, "params", None) or {}).get("nu", 4.0))
+            if _fam == "student_t"
+            else None
+        )
         self._trend_slope = get("trend_slope")
         # Flexible trends (spline / GP / piecewise) have no closed-form out-of-time
         # extrapolation, so we replay the fitted per-period trend component and hold
         # its LAST value beyond the training window (see _trend_at).
-        self._trend_component = get("trend_component")
-        if self._trend_type not in ("none", "linear") and self._trend_component is None:
-            raise NotImplementedError(
-                f"Trend type {self._trend_type!r} has no 'trend_component' in the "
-                "trace, so out-of-time extrapolation is unavailable."
-            )
+        # `trend_component` is registered per-OBS (model/base.py: every flexible
+        # branch ends in `trend_unique[time_idx]`), NOT per-period. Obs are
+        # period-major / cell-minor and the trend is constant across cells within
+        # a period, so collapse to one value per period. Without this, a geo panel
+        # indexed `tc[:, period]` reads obs `period` — i.e. period `period //
+        # n_cells` — stretching the trend by a factor of n_cells (measured: 12.6%
+        # of KPI level on a 6-cell spline panel) AND making the documented
+        # hold-last-flat clamp unreachable, since positions never reach n_obs - 1.
+        tc = get("trend_component")
+        n_cells_ = max(int(getattr(model, "n_cells", 1) or 1), 1)
+        if tc is not None and n_cells_ > 1 and tc.shape[-1] == n_cells_ * int(
+            getattr(model, "n_periods", 0) or 0
+        ):
+            tc = tc[:, ::n_cells_]
+        self._trend_component = tc
         self._beta_controls = get("beta_controls")
-        # Per-obs geo offset (constant within a geo). For geo panels the obs layout
-        # is period-major / cell-minor (obs = period*n_cells + cell), so the first
-        # n_cells obs carry one offset per cell — see _geo_offsets / _forecast_geo.
+        # Per-obs geo and product offsets (each constant within its cell). The obs
+        # layout is period-major / cell-minor (obs = period*n_cells + cell), so the
+        # first n_cells obs carry one offset per cell — see _cell_offsets.
+        # ``product_component`` was previously never read, so on a geo x product
+        # panel with product pooling the forecast omitted the product level offset.
         self._geo_component = get("geo_component")
+        self._product_component = get("product_component")
         self._season = {
             name: get(f"season_{name}") for name in model.seasonality_features
         }
+
+        # Policy mirrors _trend_at's three branches exactly. A 'linear' trend
+        # whose slope is absent from the trace degrades to 'none' there, so it
+        # must degrade here too or the reported policy would be a fiction.
+        if self._trend_type == "none":
+            policy = "none"
+        elif self._trend_type == "linear":
+            policy = "none" if self._trend_slope is None else "linear"
+        else:
+            policy = "held_flat"
+        self.trend_extrapolation = TrendExtrapolation(
+            policy=policy,
+            trend_type=self._trend_type,
+            n_train_periods=int(getattr(model, "n_periods", 0) or 0),
+        )
+        if (
+            self.trend_extrapolation.policy == "held_flat"
+            and self._trend_component is None
+        ):
+            raise ForecastUnsupportedError(
+                f"{self._trend_type} trend",
+                "the trace carries no 'trend_component', so there is no fitted "
+                "per-period level to carry forward",
+            )
 
     @property
     def n_samples(self) -> int:
@@ -263,13 +614,20 @@ class PosteriorForecaster:
         idx = np.clip(positions - train_offset, 0, n_train - 1)
         return tc[:, idx].T
 
-    def _seasonality_at(self, positions: np.ndarray) -> np.ndarray:
+    def _seasonality_at(
+        self, positions: np.ndarray, train_offset: int = 0
+    ) -> np.ndarray:
         """Fourier seasonality evaluated at absolute period positions.
 
-        The features are periodic, so evaluating them at future positions on
-        the same integer time axis the model trained on keeps the phase
-        aligned.
+        ``train_offset`` mirrors :meth:`_trend_at`: the model built its features
+        on ``t = np.arange(n_periods)`` starting at 0, so for a clone whose
+        window starts at absolute period ``s`` the basis must be evaluated at
+        ``position - s``. It is 0 on the backtest path (every prefix starts at
+        period 0) but nonzero for the validator's ROLLING-window cross
+        validation, which previously evaluated the basis ``s`` periods out of
+        phase.
         """
+        positions = np.asarray(positions) - train_offset
         out = np.zeros((len(positions), self._n_samples))
         freq = getattr(self.model.mff_config, "frequency", "W") or "W"
         component_periods = _PERIODS_BY_FREQ.get(freq, _PERIODS_BY_FREQ["W"])
@@ -454,7 +812,11 @@ class PosteriorForecaster:
         if self._intercept is not None:
             mu += self._intercept[None, :]
         mu += self._trend_at(positions, train_offset)
-        mu += self._seasonality_at(positions)
+        mu += self._seasonality_at(positions, train_offset)
+        # Exactly zero on a true national panel (one cell => no geo/product
+        # hierarchy), but summed rather than assumed so the component-sum
+        # identity holds structurally rather than by coincidence.
+        mu += self._level_offsets()[:, 0][None, :]  # (1, n_samples)
         mu += self._media_at(X_media_full_raw, positions)
 
         if model.n_controls > 0:
@@ -470,23 +832,52 @@ class PosteriorForecaster:
                 mu += x_ctrl @ self._beta_controls.T
 
         if include_noise and self._sigma is not None:
-            rng = np.random.default_rng(random_seed)
-            mu = mu + rng.normal(0.0, 1.0, size=mu.shape) * self._sigma[None, :]
+            mu = mu + self._draw_noise(mu.shape, random_seed) * self._sigma[None, :]
 
         y = mu * model.y_std + model.y_mean
         return y.T  # (n_samples, n_pos)
 
-    def _geo_offsets(self) -> np.ndarray:
-        """Per-cell geo offset, ``(n_samples, n_cells)``.
+    def _draw_noise(self, shape: tuple[int, ...], random_seed: int | None) -> np.ndarray:
+        """Standardized observation noise matching the fitted likelihood family.
 
-        ``geo_component`` is constant within a cell, and obs are period-major /
-        cell-minor (obs = period*n_cells + cell), so the first ``n_cells`` obs are
-        period 0's cells — one offset per cell.
+        ``include_noise=True`` exists so ``BacktestResult.coverage()`` grades the
+        *predictive* distribution. Drawing Gaussian noise for a Student-t fit
+        would understate the tails and report interval coverage that is simply
+        not the model's — so the family is honoured here rather than assumed.
+        """
+        rng = np.random.default_rng(random_seed)
+        if self._nu is not None:
+            # StudentT(nu, mu, sigma) — sigma is the SCALE, not the sd.
+            return rng.standard_t(self._nu, size=shape)
+        return rng.normal(0.0, 1.0, size=shape)
+
+    def _cell_offsets(self, component: np.ndarray | None) -> np.ndarray:
+        """Per-cell level offset, ``(n_samples, n_cells)``.
+
+        ``geo_component`` and ``product_component`` are each constant within a
+        cell, and obs are period-major / cell-minor (obs = period*n_cells +
+        cell), so the first ``n_cells`` obs are period 0's cells — one offset
+        per cell.
         """
         n_cells = self.model.n_cells
-        if self._geo_component is None or self._geo_component.shape[-1] < n_cells:
+        if component is None or component.shape[-1] < n_cells:
             return np.zeros((self._n_samples, n_cells))
-        return self._geo_component[:, :n_cells]
+        return component[:, :n_cells]
+
+    def _geo_offsets(self) -> np.ndarray:
+        """Per-cell geo offset, ``(n_samples, n_cells)``. Back-compat alias."""
+        return self._cell_offsets(self._geo_component)
+
+    def _level_offsets(self) -> np.ndarray:
+        """Combined geo + product per-cell level offset, ``(n_samples, n_cells)``.
+
+        Both enter the fitted mean as ``effect[idx_data]`` level terms, so the
+        forecast needs their sum. ``product_component`` was omitted entirely
+        before v1.3.1.
+        """
+        return self._cell_offsets(self._geo_component) + self._cell_offsets(
+            self._product_component
+        )
 
     def _forecast_geo(
         self,
@@ -523,9 +914,9 @@ class PosteriorForecaster:
         if self._intercept is not None:
             shared += self._intercept[None, :]
         shared += self._trend_at(all_periods, train_offset)
-        shared += self._seasonality_at(all_periods)
+        shared += self._seasonality_at(all_periods, train_offset)
 
-        geo_off = self._geo_offsets()  # (n_samples, n_cells)
+        geo_off = self._level_offsets()  # (n_samples, n_cells): geo + product
 
         mu_grid = np.empty((n_full, n_cells, self._n_samples))
         for j in range(n_cells):
@@ -545,9 +936,9 @@ class PosteriorForecaster:
         mu_obs = mu_grid.reshape(n_full * n_cells, self._n_samples)[obs_positions]
 
         if include_noise and self._sigma is not None:
-            rng = np.random.default_rng(random_seed)
             mu_obs = (
-                mu_obs + rng.normal(0.0, 1.0, size=mu_obs.shape) * self._sigma[None, :]
+                mu_obs
+                + self._draw_noise(mu_obs.shape, random_seed) * self._sigma[None, :]
             )
 
         return (mu_obs * model.y_std + model.y_mean).T  # (n_samples, n_pos)
@@ -737,19 +1128,64 @@ def _slice_panel_prefix(panel: Any, n_train: int) -> Any:
     )
 
 
-def _clone_for_prefix(model: Any, n_train: int) -> Any:
-    """A fresh, unfitted BayesianMMM on the first ``n_train`` periods."""
-    from ..model import BayesianMMM
+def rebuild_like(model: Any, panel: Any, **overrides: Any) -> Any:
+    """A fresh, unfitted model of ``type(model)`` on ``panel``.
 
-    sliced = _slice_panel_prefix(model.panel, n_train)
-    # Experiment-calibration likelihoods are intentionally dropped: their
-    # estimands are defined on the full-period spend, not a training prefix.
-    return BayesianMMM(
-        panel=sliced,
-        model_config=model.model_config,
-        trend_config=model.trend_config,
-        adstock_alphas=model.adstock_alphas,
-    )
+    The single place that reconstructs a model from another one. Preserving the
+    CLASS and ``model_params`` is load-bearing: hard-constructing ``BayesianMMM``
+    means a garden or custom model is fit and graded as a plain additive MMM and
+    its results reported under the custom model's name.
+
+    Raises
+    ------
+    ForecastUnsupportedError
+        The class cannot be rebuilt from ``(panel, model_config, trend_config,
+        adstock_alphas, model_params)`` — e.g. a model declaring
+        ``REQUIRED_DATASET_CAPABILITIES`` the sliced panel no longer satisfies.
+        Refusing beats falling back to a different model class.
+    """
+    cls = type(model)
+    kwargs: dict[str, Any] = {
+        "panel": panel,
+        "model_config": model.model_config,
+        "trend_config": model.trend_config,
+        "adstock_alphas": model.adstock_alphas,
+    }
+    if getattr(model, "model_params", None) is not None:
+        kwargs["model_params"] = model.model_params
+    kwargs.update(overrides)
+    try:
+        return cls(**kwargs)
+    except Exception as exc:
+        raise ForecastUnsupportedError(
+            f"Model class {cls.__name__}",
+            "it cannot be reconstructed on a modified panel from "
+            "(panel, model_config, trend_config, adstock_alphas, model_params) "
+            f"— {type(exc).__name__}: {exc}. Refusing rather than falling back "
+            "to a plain BayesianMMM, which would report a different model's "
+            "results under this model's name",
+        ) from exc
+
+
+def _clone_for_prefix(model: Any, n_train: int) -> Any:
+    """A fresh, unfitted model **of the same class** on the first ``n_train`` periods.
+
+    Preserving ``type(model)`` is load-bearing. This used to hard-construct
+    ``BayesianMMM(...)``, so backtesting a garden or custom model
+    (:class:`~mmm_framework.garden.base.CustomMMM` subclasses such as
+    ``LatentFactorMMM`` or the awareness model) silently fit and graded a plain
+    additive MMM and reported its MAPE under the custom model's name.
+
+    ``model_params`` (a garden model's ``CONFIG_SCHEMA`` payload) is forwarded
+    for the same reason: without it the clone falls back to schema defaults and
+    grades a differently-configured model.
+
+    Experiment-calibration likelihoods are still dropped — their estimands are
+    defined on the full-period spend — which is why :func:`run_backtest` refuses
+    a calibrated model up front via :func:`audit_refit` rather than quietly
+    grading the uncalibrated one.
+    """
+    return rebuild_like(model, _slice_panel_prefix(model.panel, n_train))
 
 
 def _seasonal_naive_pred(
@@ -793,6 +1229,12 @@ def run_backtest(
     BacktestResult
     """
     config = config or BacktestConfig()
+
+    # Audit the ORIGINAL model, before the refit loop: _clone_for_prefix drops
+    # experiment calibration, so auditing only the clone would never see it, and
+    # a refusal is worth far more before N expensive refits than after them.
+    _raise_first(audit_forward_pass(model) + audit_refit(model))
+
     # Obs are period-major / cell-minor: periods [a, b) over all cells map to the
     # contiguous obs block [a*cells, b*cells). cells == 1 reduces to national.
     cells = max(model.n_cells, 1)

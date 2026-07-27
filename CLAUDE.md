@@ -110,7 +110,11 @@ version, and every "current version" claim across the site went stale with them.
 
 Cutting `vX.Y.Z`:
 
-1. Bump `version` in `pyproject.toml`.
+1. Bump `version` in `pyproject.toml` **and `__version__` in `src/mmm_framework/__init__.py`** —
+   two sources of truth for one fact. They drifted during 1.3.1 (`docs/troubleshooting.html` tells
+   users to check `mmm_framework.__version__`, which would have reported the previous version).
+   `tests/test_api_contracts.py::test_package_version_matches_pyproject` now gates this. NB
+   `server/pyproject.toml` versions independently and has not tracked core since 1.2.0.
 2. Write the release section in `CHANGELOG.md` (source of truth, full detail).
 3. **Mirror it into `docs/changelog.html`** — a summarised `<div class="release">` block at the
    top of the `#releases` list, and **move the `<span class="release-tag">Current</span>` chip**

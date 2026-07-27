@@ -455,6 +455,21 @@ class ModelValidator:
         if not splits:
             raise ValueError("Could not create CV splits with given configuration")
 
+        from .backtest import (
+            ForecastUnsupportedError,
+            _raise_first,
+            audit_forward_pass,
+            audit_refit,
+        )
+
+        # Audit the ORIGINAL model before the fold loop, exactly as run_backtest
+        # does. Two reasons: a refusal discovered inside the loop costs one full
+        # MCMC refit per fold first, and `_clone_model_for_subset` drops
+        # `experiments` the same way `_clone_for_prefix` does — so without
+        # `audit_refit` here, CV would silently grade an uncalibrated model while
+        # the backtest harness refuses it.
+        _raise_first(audit_forward_pass(self.model) + audit_refit(self.model))
+
         fold_results = []
 
         for fold_idx, (train_idx, test_idx) in enumerate(splits):
@@ -491,6 +506,13 @@ class ModelValidator:
                 )
                 fold_results.append(fold_result)
 
+            except ForecastUnsupportedError:
+                # A configuration-level refusal, not a transient fold failure —
+                # and NOT uniform across folds (event regressors are rebuilt from
+                # each sliced window, so a fold containing no configured holiday
+                # would pass while one containing a holiday is dropped). Surface
+                # it to the caller instead of logging it per fold.
+                raise
             except Exception as e:
                 logger.warning(f"CV fold {fold_idx + 1} failed: {e}")
                 continue
@@ -609,14 +631,9 @@ class ModelValidator:
         sliced_panel = self._slice_panel_data(panel, train_indices)
 
         # Create new model with same config
-        from mmm_framework import BayesianMMM
+        from .backtest import rebuild_like
 
-        new_model = BayesianMMM(
-            panel=sliced_panel,
-            model_config=original_model.model_config,
-            trend_config=original_model.trend_config,
-            adstock_alphas=original_model.adstock_alphas,
-        )
+        new_model = rebuild_like(original_model, sliced_panel)
 
         return new_model
 
@@ -712,11 +729,14 @@ class ModelValidator:
 
         Raises
         ------
-        NotImplementedError
-            For panel (multi-cell) models or non-linear trend types. The
-            previous hand-rolled implementation silently produced wrong
-            predictions in those cases (and for parametric-adstock models);
-            failing loudly is the correct behavior.
+        ForecastUnsupportedError
+            When the model carries a term the forward pass cannot replay —
+            price/promo levers, events, cross-channel interactions,
+            reach/frequency, time-varying coefficients, or the multiplicative
+            specification. Geo/product panels and every trend family ARE
+            supported (this docstring previously claimed otherwise); flexible
+            trends are held flat past the training window, which
+            ``forecaster.trend_extrapolation`` states explicitly.
 
         Returns
         -------
@@ -984,7 +1004,6 @@ class ModelValidator:
         BayesianMMM
             New model with modified priors.
         """
-        from mmm_framework import BayesianMMM
 
         original_model = self.model
 
@@ -994,12 +1013,9 @@ class ModelValidator:
         # the prior scales by overriding the model building
 
         # Create new model with same data
-        new_model = BayesianMMM(
-            panel=original_model.panel,
-            model_config=original_model.model_config,
-            trend_config=original_model.trend_config,
-            adstock_alphas=original_model.adstock_alphas,
-        )
+        from .backtest import rebuild_like
+
+        new_model = rebuild_like(original_model, original_model.panel)
 
         # Store the multiplier for use in a custom model build
         new_model._prior_multiplier = multiplier
@@ -1355,7 +1371,6 @@ class ModelValidator:
         BayesianMMM
             Model with synthetic data.
         """
-        from mmm_framework import BayesianMMM
         from mmm_framework.data_loader import PanelDataset
         import pandas as pd
 
@@ -1383,12 +1398,9 @@ class ModelValidator:
         )
 
         # Create new model
-        new_model = BayesianMMM(
-            panel=synthetic_panel,
-            model_config=original_model.model_config,
-            trend_config=original_model.trend_config,
-            adstock_alphas=original_model.adstock_alphas,
-        )
+        from .backtest import rebuild_like
+
+        new_model = rebuild_like(original_model, synthetic_panel)
 
         return new_model
 
@@ -1788,14 +1800,9 @@ class ModelValidator:
             )
 
     def _fit_clone(self, panel: Any, rc: Any) -> Any:
-        from mmm_framework import BayesianMMM
+        from .backtest import rebuild_like
 
-        new_model = BayesianMMM(
-            panel=panel,
-            model_config=self.model.model_config,
-            trend_config=self.model.trend_config,
-            adstock_alphas=self.model.adstock_alphas,
-        )
+        new_model = rebuild_like(self.model, panel)
         new_model.fit(
             draws=rc.draws, tune=rc.tune, chains=rc.chains, random_seed=rc.random_seed
         )

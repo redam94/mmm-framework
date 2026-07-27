@@ -118,6 +118,27 @@ def test_package_version_is_semver_1x():
     assert major >= 1
 
 
+def test_package_version_matches_pyproject():
+    """``__version__`` and ``pyproject.toml`` are two sources of truth for one fact.
+
+    They drifted during the 1.3.1 release: bumping ``pyproject.toml`` leaves the
+    hardcoded ``mmm_framework.__version__`` behind, and nothing noticed —
+    ``docs/troubleshooting.html`` tells users to check exactly that attribute.
+    """
+    import tomllib
+    from pathlib import Path
+
+    import mmm_framework
+
+    root = Path(__file__).resolve().parents[1]
+    declared = tomllib.loads((root / "pyproject.toml").read_text())["project"]["version"]
+    assert mmm_framework.__version__ == declared, (
+        f"mmm_framework.__version__ is {mmm_framework.__version__!r} but "
+        f"pyproject.toml declares {declared!r}. Bump both — see the release "
+        "checklist in CLAUDE.md."
+    )
+
+
 # ── Model-spec keys (agent spec registry) ─────────────────────────────────────
 
 #: A plain (non-DAG) spec context — channel/control entries are {"name": ...}
