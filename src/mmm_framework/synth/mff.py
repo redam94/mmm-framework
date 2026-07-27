@@ -94,7 +94,14 @@ class _Dropped:
 
 
 def _json_safe(value: Any) -> Any:
-    """Recursively keep JSON-serializable content; drop arrays/Series."""
+    """Recursively convert to JSON-serializable content.
+
+    Arrays and Series are CONVERTED, not dropped. The previous behaviour
+    silently discarded any ndarray/Series in ``notes`` while the answer key
+    still looked complete — so a per-period truth written as an array vanished
+    and nothing said so. An answer key that quietly loses an answer is worse
+    than one that fails.
+    """
     if isinstance(value, (str, bool, int, float)) or value is None:
         return value
     if isinstance(value, (np.integer, np.floating, np.bool_)):
@@ -103,6 +110,10 @@ def _json_safe(value: Any) -> Any:
         return {str(k): _json_safe(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_json_safe(v) for v in value]
+    if isinstance(value, np.ndarray):
+        return [_json_safe(v) for v in value.tolist()]
+    if hasattr(value, "to_numpy") and hasattr(value, "index"):  # Series
+        return [_json_safe(v) for v in value.to_numpy().tolist()]
     return _Dropped()
 
 

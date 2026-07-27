@@ -107,6 +107,79 @@ class Scenario:
     representable: bool = True  # is the truth inside the model's hypothesis space?
     control_roles: dict | None = None  # control name -> CausalControlRole
     notes: dict = field(default_factory=dict)
+    #: Noiseless structural mean per period. ``y`` is this plus noise (then
+    #: floored at 1.0). Grading a forecast interval against ``y`` conflates
+    #: model error with irreducible noise, so an over-wide interval scores as
+    #: well calibrated; grading against ``mu`` does not. Trailing + optional so
+    #: every existing factory keeps byte-identical y / truth.
+    mu: pd.Series | None = None
+    #: The world's structural response, ``spend (n, C) -> mean (n,)``. Kept so a
+    #: window's truth can be RECOMPUTED rather than truncated (see ``slice``).
+    response_fn: "ResponseFn | None" = None
+
+    def slice(self, start: int, end: int) -> "Scenario":
+        """The window ``[start, end)`` with its truth RECOMPUTED, not truncated.
+
+        This method exists to close a specific trap. ``true_contribution`` and
+        ``true_roas`` are whole-window TOTALS; truncating them to a sub-window
+        by any proportional rule is simply wrong, because the response is
+        non-linear in spend and carries over across periods. Grading a
+        rolling-origin forecast against a naively truncated total would produce
+        a confident, fictional error.
+
+        Carryover semantics: the contribution is evaluated on the FULL spend
+        history and then summed over the window, so spend before ``start`` still
+        carries into it — the honest attribution for a forecast or variance
+        window. At ``start == 0`` this coincides exactly with recomputing on the
+        sliced spend.
+
+        Requires ``response_fn`` (present on every world built by ``_finish``).
+        """
+        if self.response_fn is None:
+            raise ValueError(
+                f"scenario {self.name!r} carries no response_fn, so a window's "
+                "truth cannot be recomputed — and truncating the totals would "
+                "be wrong. Rebuild it through a factory."
+            )
+        n = len(self.weeks)
+        start, end = int(start), int(end)
+        if not (0 <= start < end <= n):
+            raise ValueError(f"window [{start}, {end}) outside [0, {n})")
+
+        spend_full = self.spend.to_numpy(float)
+        mu_full = self.response_fn(spend_full)
+        chans = list(self.spend.columns)
+        contrib = {}
+        for i, c in enumerate(chans):
+            s0 = spend_full.copy()
+            s0[:, i] = 0.0
+            per_period = mu_full - self.response_fn(s0)
+            contrib[c] = float(per_period[start:end].sum())
+        truth = pd.Series(contrib, name="true_contribution")
+        win_spend = self.spend.iloc[start:end]
+        roas = pd.Series(
+            {
+                c: (truth[c] / win_spend[c].sum() if win_spend[c].sum() > 0 else np.nan)
+                for c in chans
+            },
+            name="true_roas",
+        )
+        return Scenario(
+            name=f"{self.name}[{start}:{end}]",
+            violates=self.violates,
+            description=f"{self.description} (window {start}:{end})",
+            weeks=self.weeks[start:end],
+            spend=win_spend,
+            y=self.y.iloc[start:end],
+            controls=self.controls.iloc[start:end],
+            true_contribution=truth,
+            true_roas=roas,
+            representable=self.representable,
+            control_roles=self.control_roles,
+            notes={**self.notes, "sliced_from": [start, end]},
+            mu=None if self.mu is None else self.mu.iloc[start:end],
+            response_fn=self.response_fn,
+        )
 
     @property
     def channels(self) -> list[str]:
@@ -181,6 +254,35 @@ def _counterfactual_truth(
     return pd.Series(out, name="true_contribution")
 
 
+def _adstock_truth(channels: list[str], *, l_max: int = 8) -> dict:
+    """Planted carryover truth, in the estimator's own units.
+
+    ``_geom_adstock`` plants a kernel that is **truncated at l_max and
+    normalized to sum to 1**, so exporting a bare ``alpha`` would grade a
+    payback horizon against an untruncated geometric and every such test would
+    fail for the wrong reason. Export the kernel the DGP actually applied:
+    ``cum_share[k]`` is the fraction of a channel's total effect realized by lag
+    ``k``, which is exactly what a payback horizon reads.
+    """
+    out: dict[str, dict] = {}
+    for c in channels:
+        alpha = _ALPHA.get(c)
+        if alpha is None:
+            continue
+        if alpha <= 0:
+            w = np.array([1.0])
+        else:
+            w = alpha ** np.arange(l_max, dtype=float)
+            w = w / w.sum()
+        out[c] = {
+            "alpha": float(alpha),
+            "l_max": int(l_max if alpha > 0 else 1),
+            "normalize": True,
+            "cum_share": [float(v) for v in np.cumsum(w)],
+        }
+    return out
+
+
 def _finish(
     name: str,
     violates: str,
@@ -200,7 +302,13 @@ def _finish(
     channels = list(spend.columns)
     truth = _counterfactual_truth(response_fn, spend.to_numpy(float), channels)
     roas = pd.Series({c: truth[c] / spend[c].sum() for c in channels}, name="true_roas")
-    y = pd.Series(np.clip(mu_struct + noise, 1.0, None), index=weeks, name="Sales")
+    raw = mu_struct + noise
+    y = pd.Series(np.clip(raw, 1.0, None), index=weeks, name="Sales")
+    notes = dict(notes or {})
+    # y == mu + noise only ABOVE the floor; record how often the floor bit so a
+    # test asserting that identity knows where it legitimately does not hold.
+    notes.setdefault("n_clipped", int((raw < 1.0).sum()))
+    notes.setdefault("true_adstock", _adstock_truth(list(spend.columns)))
     return Scenario(
         name=name,
         violates=violates,
@@ -213,7 +321,9 @@ def _finish(
         true_roas=roas,
         representable=representable,
         control_roles=control_roles,
-        notes=notes or {},
+        notes=notes,
+        mu=pd.Series(np.asarray(mu_struct, dtype=float), index=weeks, name="mu"),
+        response_fn=response_fn,
     )
 
 
@@ -827,7 +937,9 @@ def make_negative_effect(seed: int = 10, *, n_weeks: int | None = None) -> Scena
     )
 
 
-def make_trend_break(seed: int = 11, *, n_weeks: int | None = None) -> Scenario:
+def make_trend_break(
+    seed: int = 11, *, n_weeks: int | None = None, break_at: int | None = None
+) -> Scenario:
     """A structural break in the baseline, confounded with a media ramp.
 
     Mid-series the category takes a level shock (think COVID, a distribution
@@ -846,7 +958,15 @@ def make_trend_break(seed: int = 11, *, n_weeks: int | None = None) -> Scenario:
     """
     rng, weeks, n, spend, baseline, controls, maxes = _base_world(seed, n_weeks)
     t = np.arange(n)
-    brk = int(n * 0.5)
+    # `break_at` places the shock in a caller-chosen period. The default keeps
+    # the historical mid-series position byte-identical. It is a parameter
+    # because a break fixed at n/2 lands DEEP INSIDE training under any
+    # rolling-origin harness (at 182 weeks / 156 train it is week 91), so the
+    # default cannot serve as a forecast honest-failure control — the break has
+    # to be placeable inside the holdout.
+    brk = int(n * 0.5) if break_at is None else int(break_at)
+    if not 0 < brk < n:
+        raise ValueError(f"break_at must be in (0, {n}), got {break_at!r}")
     # Level drop of ~140 KPI units at the break, then a recovery slope that
     # claws back most (not all) of it by the end of the series.
     shock = np.where(t >= brk, -140.0 + 1.45 * (t - brk), 0.0)
