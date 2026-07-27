@@ -6,15 +6,15 @@ already does, so that neither planning nor contribution proposes work that shipp
 Milestones on GitHub mirror this file; each quarter's theme is an epic issue.
 Dates are *targets for a release*, not commitments for individual issues.
 
-| Quarter | Milestone | Theme | Epic |
-|---|---|---|---|
-| Q3 2026 | `v1.3` | Frequentist estimation | [#180](https://github.com/redam94/mmm-framework/issues/180) |
-| Q4 2026 | `v1.4` | Finance-grade planning | [#195](https://github.com/redam94/mmm-framework/issues/195) |
-| Q1 2027 | `v1.5` | Competition & dynamic baselines | [#191](https://github.com/redam94/mmm-framework/issues/191) |
-| Q2 2027 | `v1.6` | Media modeling breadth | [#192](https://github.com/redam94/mmm-framework/issues/192) |
-| Q3 2027 | `v1.7` | Measurement operations & data layer | [#196](https://github.com/redam94/mmm-framework/issues/196) |
-| Q4 2027 | `v1.8` | Portfolio scale | [#197](https://github.com/redam94/mmm-framework/issues/197) |
-| Q1 2028 | `v2.0` | Contract cleanup & scale | [#193](https://github.com/redam94/mmm-framework/issues/193) |
+| Quarter | Milestone | Theme | Epic | Status |
+|---|---|---|---|---|
+| Q3 2026 | `v1.3` | Frequentist estimation | [#180](https://github.com/redam94/mmm-framework/issues/180) | **shipped** v1.3.0 |
+| Q4 2026 | `v1.4` | Finance-grade planning | [#195](https://github.com/redam94/mmm-framework/issues/195) | **in flight** · #215–#228 |
+| Q1 2027 | `v1.5` | Competition & dynamic baselines | [#191](https://github.com/redam94/mmm-framework/issues/191) | planned |
+| Q2 2027 | `v1.6` | Media modeling breadth | [#192](https://github.com/redam94/mmm-framework/issues/192) | planned |
+| Q3 2027 | `v1.7` | Measurement operations & data layer | [#196](https://github.com/redam94/mmm-framework/issues/196) | planned |
+| Q4 2027 | `v1.8` | Portfolio scale | [#197](https://github.com/redam94/mmm-framework/issues/197) | planned |
+| Q1 2028 | `v2.0` | Contract cleanup & scale | [#193](https://github.com/redam94/mmm-framework/issues/193) | planned |
 
 ### Re-sequenced 2026-07-25
 
@@ -28,7 +28,9 @@ this file's own rule, the reasons rather than a quiet retcon:
   no forward forecast on a fiscal calendar, no variance to plan, no payback
   horizon, and an optimizer that ignores the price and promo levers the model
   already estimates. Most of it is wiring machinery that exists to the right
-  consumer, which makes it unusually cheap for its value.
+  consumer, which makes it unusually cheap for its value. — *That last sentence
+  did not survive decomposition on 2026-07-26; see the Q4 2026 section for what
+  verification found and why the quarter is front-loaded with bug fixes.*
 - **Competitive / share-of-voice moved out of #192 and into #191**, which
   becomes the bias-fix quarter. #192 itself identified competition as "a
   confounding problem rather than a missing feature" and then scheduled it
@@ -44,9 +46,9 @@ this file's own rule, the reasons rather than a quiet retcon:
   breaking changes with an entry rule of "nothing lands here for being tidier";
   four quarters of feature work legitimately precede it.
 
-Only the in-flight quarter has its issues broken out (#180 · #181–#189).
-Future quarters carry a *Proposed issues* list in the epic and get decomposed
-when they start.
+Only the in-flight quarter has its issues broken out (#195 · #215–#228; the
+shipped v1.3 quarter was #180 · #181–#189). Future quarters carry a *Proposed
+issues* list in the epic and get decomposed when they start.
 
 ---
 
@@ -70,11 +72,20 @@ Two corollaries that have already changed decisions in this codebase:
 
 ---
 
-## Q3 2026 — `v1.3`, Frequentist estimation
+## Q3 2026 — `v1.3`, Frequentist estimation — **shipped 2026-07-26**
 
-**Epic [#180](https://github.com/redam94/mmm-framework/issues/180) · issues #181–#189**
+**Epic [#180](https://github.com/redam94/mmm-framework/issues/180) · issues #181–#189 · released as v1.3.0**
 
-`InferenceMethod.FREQUENTIST_RIDGE` and `FREQUENTIST_CVXPY` have been declared
+Delivered all three justifications below. The headline result is a *negative*
+one, and it is stated in the docs rather than buried: graded against planted
+truth on five synthetic worlds, ridge wins only on the positive control and is
+worse everywhere else — most starkly under unobserved confounding, where it
+over-credits media by **+41.6%** against MAP's +5.9%, because the shipped media
+priors shrink effects in a way a data-selected L2 penalty does not. Reach for the
+frequentist path for a **hard constraint**, a fast second opinion, or iteration
+speed — not to publish intervals, and not on data you suspect of confounding.
+
+`InferenceMethod.FREQUENTIST_RIDGE` and `FREQUENTIST_CVXPY` had been declared
 since early in the project and never implemented; until v1.2.0 they silently fit
 Bayesian NUTS instead ([#181](https://github.com/redam94/mmm-framework/issues/181),
 now fixed — they refuse).
@@ -107,44 +118,85 @@ posterior everywhere).
 
 ## Q4 2026 — `v1.4`, Finance-grade planning
 
-**Epic [#195](https://github.com/redam94/mmm-framework/issues/195)**
+**Epic [#195](https://github.com/redam94/mmm-framework/issues/195) · issues #215–#228**
 
 The framework estimates well and, since #139, optimizes well. It cannot produce
-a number a CFO will **commit to**. The pattern across all five gaps is the same,
-and is the reason this quarter is cheap for its value: **the machinery mostly
-exists and is wired to the wrong consumer.**
+a number a CFO will **commit to**: no forward forecast on a fiscal calendar, no
+variance to plan, no payback horizon, and an optimizer that ignores the price and
+promo levers the model already estimates.
 
-1. **Plan of record → forward forecast → variance.**
-   `validation/backtest.py::PosteriorForecaster.forecast()` already takes future
-   media and returns original-scale draws with carryover handled across the
-   boundary — reachable only through the rolling-origin backtest, a validation
-   tool. Missing is the finance-shaped wrapper: a locked plan, a forecast on the
-   *fiscal* calendar, and dollar variance as actuals land. `pacing.py` (#107)
-   closes the loop on spend; nothing closes it on the outcome anyone committed to.
-2. **Payback period and NPV.** Carryover means a Q4 dollar returns across Q1 — a
-   working-capital fact with no representation. `discount_rate_annual` exists
-   only in `planning/experiment_value.py`. The return profile is already computed
-   by `compute_adstock_weights`; a payback horizon is arithmetic on top of it. A
-   CFO comparing brand against performance is implicitly comparing payback
-   horizons the framework can compute and does not show.
-3. **Optimization across levers, not just media.** `PriceConfig` / `PromoConfig`
-   (#138) and `EventsConfig` (#143) ship as first-class model terms; `budget.py`
-   optimizes media spend curves only. So the model knows the price elasticity and
-   the promo lift, and the optimizer cannot say whether the next dollar belongs
-   in TV or in promo depth — the actual planning question for CPG, retail and DTC.
-4. **Margin as a first-class dimension.** `value_per_kpi` is a scalar knob;
-   `opportunity_cost.py` reads a project-level `gross_margin`. Profit ROI and
-   breakeven CPA are not native to the estimand or reporting stack, so a
-   revenue-optimal recommendation can be margin-destructive and the report will
-   not say so.
-5. **A bridge to the booked P&L.** Decomposition sums to the modeled KPI, which
-   is rarely the finance line — gross vs net, returns, trade spend, price/mix.
-   Low science, high trust: without a stated reconciliation, finance treats the
-   model as marketing's number rather than the company's.
+### The premise changed when we decomposed it
 
-The standing "reads as more trustworthy than it is" rule bites hardest here. A
-forecast under a plan is a counterfactual and inherits every caveat the model
-carries; it ships saying so.
+This quarter was scoped on the belief that **the machinery mostly exists and is
+wired to the wrong consumer**, which made it look cheap for its value. A
+six-area survey with an adversarial verification pass on each found that much of
+the machinery exists and is **wrong**, and that two wrong numbers ship to users
+today. Recorded here rather than quietly re-planned, per this file's own rule:
+
+- **The forecaster is structurally incomplete.** `PosteriorForecaster.forecast()`
+  sums 5 of the fitted `mu`'s 10 terms — it silently drops the product, event
+  (#143), cross-channel interaction (#142) and price/promo lever (#138)
+  contributions, substitutes a time-averaged beta for a time-varying channel,
+  forecasts reach on raw reach, and `_clone_for_prefix` downcasts any garden or
+  custom model class to plain `BayesianMMM`. Nothing raises. Those numbers ship
+  today through `run_backtest`, the `cross_validation` agent tool, a Validation-tab
+  REST job and a client artifact. Same defect class as #202 and #171: a code path
+  that reads as complete and silently does nothing for one configuration.
+- **The carryover reader is family-blind**, builds `alpha_mean ** lags`
+  unconditionally, collapses the posterior *before* a transform convex in alpha,
+  and always reports `l_max = 8` because it probes a field name the panel does
+  not have. A payback horizon cannot be built on it — so "payback is arithmetic
+  on top of `compute_adstock_weights`" was wrong, and the reader is fixed first.
+- **The Planner already emits a fabricated dollar figure.** "Fund to breakeven"
+  never sends `value_per_kpi`; the server defaults it to `1.0`, and the free-mode
+  objective then funds every channel until marginal KPI equals one KPI-unit per
+  dollar. On a KPI denominated in thousands, the recommended budget is ~1000×
+  off — rendered with credible intervals.
+- **The same fitted model already gives two opposite recommendations.** The PPTX
+  deck resolves break-even as `1/margin` from saved project economics; the Augur
+  HTML report takes the `1.0` default. At a 40% margin a channel with ROI 1.8 is
+  *Scale* in one artifact and *Reduce* in the other. Margin is not missing — it
+  is present twice and inconsistent, so the work is convention reconciliation.
+- **Plan and delivery do not join by period.** Actual rows are emitted in
+  lexicographic label order (`P1, P10, P11, …, P2`) and aligned *positionally*
+  against the plan. Per-channel totals survive because sums are order-invariant,
+  which is why it went unnoticed; the per-period series a user reads are shuffled
+  once there are more than nine periods.
+- **There is no realized-KPI store.** `delivery` records spend only, so there is
+  no variance to compute — only a forecast restated under actual spend.
+- **The synthetic worlds cannot grade a forecast.** `Scenario` keeps window
+  totals and discards the per-period noiseless mean, so an interval graded
+  against realized `y` conflates model error with irreducible noise.
+
+Four items were cut to non-goals on identifiability grounds: a **price
+recommendation** (the framework's own published measurement recovers 39% of a
+true elasticity from a typical panel, so price ships as a what-if evaluator that
+refuses to recommend), **NPV as a headline** (the repo measured the discounting
+correction at 0.33–2.4% against posterior intervals of ±30–50%), **cash timing**
+(no payment-terms concept exists to declare, and emitting one from undeclared
+zero lags would assert we pay and collect instantly), and **per-product profit
+ROI** (media betas are shared across products, so a per-product scalar margin
+rescales every channel equally and cannot reorder them).
+
+### The shape of the quarter
+
+Six `priority:P0` correctness issues land first — three shared foundations
+(#215 valuation, #216 calendar, #217 the planted-truth substrate) and three
+standing bugs (#218 carryover reader, #219 forecaster audit, #220 decomposition
+closure) — followed by #221, this quarter's integration-risk issue and the
+analogue of v1.3's #188: one value basis and one break-even convention, gated at
+every render site. The features build on top: #223 forward forecast, #224
+payback, #225 plan of record, #226 promo-depth optimization, #227 actuals and
+variance.
+
+The standing "reads as more trustworthy than it is" rule bites hardest here, and
+it forced the quarter's governing split. A forward interval is knowingly too
+narrow twice — a spline trend is held flat beyond the panel, and observation
+noise is iid on residuals the framework routinely finds autocorrelated — and
+both fixes are v1.5 modelling work (state-space baselines). Rather than
+disclose-and-commit-anyway, v1.4 separates the two: a forecast is always
+**computable** with its caveats attached (#223), and **committable** only through
+a gate that can refuse (#225).
 
 ---
 
