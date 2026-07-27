@@ -18,7 +18,12 @@ This module closes that loop with pure, testable numpy:
 The plan and the actuals can be given as a flighting schedule
 (``{"schedule": [{"period", "<channel>": spend, ...}]}``), a list of period rows,
 a ``{channel: [per-period]}`` map, or a ``{channel: total}`` map — all normalize
-to per-channel per-period arrays aligned by period.
+to per-channel per-period arrays.
+
+Alignment: when both sides carry real period labels the join is **by label**;
+inputs without a usable vocabulary fall back to positional truncation. Before
+v1.4 the claim above read "aligned by period" and was false — the join was
+always positional, so a mid-flight upload was compared against the wrong weeks.
 """
 
 from __future__ import annotations
@@ -136,9 +141,14 @@ class PacingResult:
     divergence_pct: float
     flagged: list[str]
     outcome_delta: dict[str, float] | None = None
+    #: 'label' when plan and actual were joined on a shared period vocabulary,
+    #: 'positional' when either side had none. Recorded rather than assumed:
+    #: a positional join on labelled data was the pre-v1.4 defect.
+    join: str = "positional"
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "join": self.join,
             "channels": [c.to_dict() for c in self.channels],
             "periods": list(self.periods),
             "threshold": self.threshold,
@@ -158,6 +168,43 @@ def _status(divergence: float, planned: float, actual: float, threshold: float) 
     return "over-pacing" if divergence > 0 else "under-pacing"
 
 
+def _join_periods(
+    plan_periods: list[str], act_periods: list[str]
+) -> tuple[str, np.ndarray, np.ndarray, list[str]]:
+    """Align plan and actual rows BY LABEL when both carry a real vocabulary.
+
+    Returns ``(join, plan_take, act_take, periods)`` where the take-arrays index
+    each side's per-period series down to the shared, plan-ordered labels.
+
+    Falls back to ``'positional'`` when either side has no usable labels — the
+    ``_normalize`` placeholders (``['total']`` for scalars, ``['0','1',...]`` for
+    bare arrays) are not a vocabulary and must not be joined on.
+    """
+    placeholder = {"total"}
+
+    def usable(labels: list[str]) -> bool:
+        if not labels or set(labels) & placeholder:
+            return False
+        if len(set(labels)) != len(labels):
+            return False  # duplicates: no unambiguous join
+        return not all(lab.isdigit() for lab in labels)
+
+    if not (usable(plan_periods) and usable(act_periods)):
+        return "positional", np.array([]), np.array([]), []
+
+    plan_at = {lab: i for i, lab in enumerate(plan_periods)}
+    act_at = {lab: i for i, lab in enumerate(act_periods)}
+    shared = [lab for lab in plan_periods if lab in act_at]
+    if not shared:
+        return "positional", np.array([]), np.array([]), []
+    return (
+        "label",
+        np.array([plan_at[lab] for lab in shared], dtype=int),
+        np.array([act_at[lab] for lab in shared], dtype=int),
+        shared,
+    )
+
+
 def compute_pacing(
     planned: Any,
     actual: Any,
@@ -166,17 +213,31 @@ def compute_pacing(
 ) -> PacingResult:
     """Compare a plan against actual delivery, per channel and overall.
 
-    Both inputs normalize to per-channel per-period arrays; comparison is over
-    the periods present in ``actual`` (the elapsed window) — the planned series is
-    truncated to the same length so mid-flight pacing compares like with like.
+    Both inputs normalize to per-channel per-period arrays. When both sides
+    carry real period labels the comparison joins **by label**, so a
+    mid-flight upload covering weeks 5-8 is compared against the plan's
+    weeks 5-8. Inputs without labels fall back to positional truncation.
+    ``PacingResult.join`` records which happened.
     """
     plan_series, plan_periods = _normalize(planned)
     act_series, act_periods = _normalize(actual)
     channels = list(dict.fromkeys([*plan_series.keys(), *act_series.keys()]))
 
-    # Elapsed window = the number of actual periods (truncate the plan to match).
-    n_elapsed = max((v.size for v in act_series.values()), default=0)
-    periods = act_periods[:n_elapsed] if act_periods else plan_periods
+    # Join by LABEL when both sides carry a real period vocabulary. The old
+    # positional truncation compared a mid-flight upload covering weeks 5-8
+    # against the plan's weeks 1-4 — on a non-flat plan that reports +296%
+    # over-pacing where the truth is +52%. A flat plan hides it entirely, which
+    # is why it survived. Positional alignment remains the fallback for inputs
+    # with no labels (scalars, bare arrays), byte-identically.
+    join, plan_take, act_take, periods = _join_periods(plan_periods, act_periods)
+    if join == "label":
+        plan_series = {c: v[plan_take] for c, v in plan_series.items() if v.size}
+        act_series = {c: v[act_take] for c, v in act_series.items() if v.size}
+        n_elapsed = len(periods)
+    else:
+        # Elapsed window = number of actual periods (truncate the plan to match).
+        n_elapsed = max((v.size for v in act_series.values()), default=0)
+        periods = act_periods[:n_elapsed] if act_periods else plan_periods
 
     rows: list[PacingChannel] = []
     flagged: list[str] = []
@@ -218,6 +279,8 @@ def compute_pacing(
         actual_total=a_total,
         divergence_pct=port_div,
         flagged=flagged,
+    
+        join=join,
     )
 
 

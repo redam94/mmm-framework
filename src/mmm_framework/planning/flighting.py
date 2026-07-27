@@ -95,6 +95,7 @@ def build_flighting_schedule(
     *,
     pattern: str = "even",
     period_labels: list[str] | None = None,
+    calendar: Any = None,
     front_load: float = 0.65,
     pulse_on: int = 1,
     pulse_off: int = 1,
@@ -120,6 +121,17 @@ def build_flighting_schedule(
     n = int(n_periods)
     if period_labels and len(period_labels) >= n:
         labels = [str(x) for x in period_labels[:n]]
+    elif calendar is not None:
+        # A real calendar gives dated labels, which sort correctly as strings.
+        # The P1..Pn fallback does NOT: lexicographic order puts P10 before P2,
+        # which is what shuffled the per-period pacing series (#216).
+        cal_labels = list(calendar.periods())
+        if len(cal_labels) < n:
+            raise ValueError(
+                f"calendar covers {len(cal_labels)} periods but the schedule "
+                f"needs {n} — refusing rather than labelling the tail P{n}."
+            )
+        labels = cal_labels[:n]
     else:
         labels = [f"P{i + 1}" for i in range(n)]
 
