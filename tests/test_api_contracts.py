@@ -91,6 +91,21 @@ PUBLIC_SURFACE = {
         "compute_contribution_summary",
     ],
     "mmm_framework.estimands": ["Estimand"],
+    # v1.3.1 documented these as "exported from mmm_framework.validation" and
+    # three of the five were not — nothing pinned the set, and the docs-snippet
+    # gate only reads code fences, so a prose claim about the API surface had
+    # nothing checking it.
+    "mmm_framework.validation": [
+        "BacktestConfig",
+        "BacktestResult",
+        "ForecastUnsupportedError",
+        "PosteriorForecaster",
+        "TrendExtrapolation",
+        "audit_forward_pass",
+        "audit_refit",
+        "rebuild_like",
+        "run_backtest",
+    ],
     "mmm_framework.reporting": ["MMMReportGenerator", "ReportConfig"],
     "mmm_framework.platform.sessions": ["resolve_db_path", "init_db"],
     "mmm_framework.synth": ["generate_mff"],

@@ -116,6 +116,9 @@ from .backtest import (
     ForecastUnsupportedError,
     PosteriorForecaster,
     TrendExtrapolation,
+    audit_forward_pass,
+    audit_refit,
+    rebuild_like,
     rolling_origins,
     run_backtest,
 )
@@ -153,6 +156,9 @@ __all__ = [
     "rolling_origins",
     "ForecastUnsupportedError",
     "TrendExtrapolation",
+    "audit_forward_pass",
+    "audit_refit",
+    "rebuild_like",
     "run_backtest",
     # Spec-curve / model-averaging robustness
     "SpecSet",
