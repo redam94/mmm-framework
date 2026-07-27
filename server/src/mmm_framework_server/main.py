@@ -2413,7 +2413,7 @@ class PlannerOptimizeRequest(BaseModel):
     min_channel_spend: float | dict[str, float] | None = None
     objective: str = "mean"
     mode: str = "fixed"
-    value_per_kpi: float = 1.0
+    value_per_kpi: float | None = None
     frontier: bool | dict[str, Any] | None = None
     target_kpi: float | None = None
 
@@ -2451,7 +2451,7 @@ async def start_planner_optimization(project_id: str, body: PlannerOptimizeReque
         "min_channel_spend": body.min_channel_spend,
         "objective": body.objective,
         "mode": body.mode,
-        "value_per_kpi": float(body.value_per_kpi),
+        "value_per_kpi": _resolved_value_per_kpi(project_id, body),
         "frontier": body.frontier,
         "target_kpi": body.target_kpi,
     }
@@ -3557,11 +3557,64 @@ def _sim_job_patch(job_id: str, **patch) -> None:
     sessions_store.update_artifact_payload(job_id, payload)
 
 
+def _project_valuation(project_id: str, override=None):
+    """Resolve what one KPI unit is worth for this project (#215).
+
+    Delegates to the single resolver so the server, the agent tools and the
+    planning layer cannot disagree about the number or its provenance.
+    """
+    from mmm_framework.finance import kpi_to_dollars
+
+    prefs = branding = None
+    try:
+        prefs = {"economics": sessions_store.get_preference(project_id, "economics")}
+    except Exception:
+        pass
+    try:
+        branding = {"economics": sessions_store.get_preference(project_id, "branding")}
+    except Exception:
+        pass
+    return kpi_to_dollars(override=override, preferences=prefs, branding=branding)
+
+
+def _resolved_value_per_kpi(project_id: str, body) -> float | None:
+    """value_per_kpi for a planner optimize request, or 400 when it is required.
+
+    Required ONLY for ``mode='free'``, which trades KPI against spend and so
+    needs the exchange rate. A frontier sweep and a goal-seek both run
+    ``optimize_budget(mode='fixed')`` under the hood and target a KPI total, so
+    the value cancels — refusing them would remove a capability that works.
+    """
+    if body.value_per_kpi is not None:
+        # An explicit number from the caller is already dollars-per-KPI-unit and
+        # is the highest-precedence source; it needs no margin/price derivation.
+        return float(body.value_per_kpi)
+
+    resolved = _project_valuation(project_id)
+    if body.mode == "free" and not resolved.is_dollar:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Fund-to-breakeven (mode='free') needs a KPI valuation: it funds "
+                "each channel until the next dollar returns one dollar, so one "
+                "KPI unit is not assumed to be worth one dollar. Set the "
+                "project's `economics` preference (gross_margin, and price for a "
+                "unit-denominated KPI) or pass value_per_kpi. A fixed-budget "
+                "allocation needs no valuation."
+            ),
+        )
+    return resolved.value_per_kpi
+
+
 def _resolve_project_margin(
     project_id: str, body_margin: float | None, body_price: float | None
 ) -> tuple[float | None, float | None]:
     """(margin, price) — explicit body wins, else the project's saved economics
-    preference (set via the preferences store), else (None, None)."""
+    preference (set via the preferences store), else (None, None).
+
+    Kept as the (margin, price) shape its callers expect; the resolution itself
+    now goes through :func:`_project_valuation` so there is one precedence chain.
+    """
     if body_margin is not None:
         return body_margin, body_price
     try:

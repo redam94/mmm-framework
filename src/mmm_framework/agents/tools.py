@@ -4199,6 +4199,34 @@ def save_preference(
             }
         )
 
+    if key == "economics" and isinstance(parsed, dict):
+        # An LLM writing {"gross_margin": 40} used to persist, and every profit
+        # number downstream was then multiplied by 40 — the old resolver guarded
+        # only `m <= 0`. Validate through the same model the planner reads (#215).
+        from mmm_framework.finance import KpiValuation
+
+        known = {k: v for k, v in parsed.items() if k in KpiValuation.model_fields}
+        try:
+            KpiValuation.model_validate(known)
+        except Exception as exc:
+            hint = ""
+            gm = known.get("gross_margin")
+            if isinstance(gm, (int, float)) and gm > 1:
+                hint = (
+                    f" gross_margin is a FRACTION in (0, 1] — "
+                    f"{float(gm) / 100:g}, not {gm:g}."
+                )
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content=f"Invalid economics payload: {exc}.{hint}",
+                            tool_call_id=tool_call_id,
+                        )
+                    ]
+                }
+            )
+
     if key == "branding" and isinstance(parsed, dict):
         from mmm_framework.agents.branding import Branding
 
