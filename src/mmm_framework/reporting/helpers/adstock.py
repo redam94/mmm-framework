@@ -9,7 +9,6 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from loguru import logger
 
 from .results import AdstockResult
 from .utils import (
@@ -58,45 +57,64 @@ def compute_adstock_weights(
     if channels is None:
         channels = _get_channel_names(model)
 
+    from ...transforms.carryover import carryover_half_life, posterior_carryover_kernels
+
+    kernels = posterior_carryover_kernels(model, list(channels))
+
     results = {}
-
     for channel in channels:
-        # Get alpha parameter
-        alpha_samples = _get_adstock_alpha(posterior, channel)
-
-        if alpha_samples is None:
-            logger.warning(f"No adstock parameter found for {channel}")
+        k = kernels.get(channel)
+        if k is None:  # pragma: no cover - posterior_carryover_kernels is total
             continue
 
-        # Get l_max
-        l_max = _get_adstock_lmax(model, channel)
+        weights = k.mean_kernel
+        if not np.all(np.isfinite(weights)):
+            # Kernel unreadable — RETURN it with a reason rather than dropping
+            # the channel, which is what used to make Weibull channels vanish.
+            results[channel] = AdstockResult(
+                channel=channel,
+                decay_weights=np.array([np.nan]),
+                alpha_mean=float("nan"),
+                alpha_lower=float("nan"),
+                alpha_upper=float("nan"),
+                half_life=float("nan"),
+                total_carryover=float("nan"),
+                l_max=int(k.l_max),
+                family=k.family,
+                status=k.status,
+            )
+            continue
 
-        # Compute decay weights using mean alpha
-        alpha_mean = float(np.mean(alpha_samples))
-        alpha_lower, alpha_upper = _compute_hdi(alpha_samples, hdi_prob)
+        # Half-life from the PER-DRAW kernels, then averaged — not from a
+        # collapsed alpha. mean(alpha) ** lags is not mean(alpha ** lags): on a
+        # real posterior the lag-5 weight was understated 7x and the half-life
+        # by 41%.
+        hl = carryover_half_life(k.kernel)
+        half_life = float(np.nanmean(hl)) if np.any(np.isfinite(hl)) else float("nan")
 
-        lags = np.arange(l_max)
-        weights = alpha_mean**lags
-        weights = weights / weights.sum()  # Normalize
-
-        # Half-life calculation
-        if alpha_mean > 0 and alpha_mean < 1:
-            half_life = np.log(0.5) / np.log(alpha_mean)
+        alpha_mean = k.alpha_mean
+        if alpha_mean is None:
+            alpha_lower = alpha_upper = float("nan")
+            alpha_mean = float("nan")
         else:
-            half_life = 0.0
-
-        # Total carryover (sum of weights beyond t=0)
-        total_carryover = float(weights[1:].sum())
+            samples = _get_adstock_alpha(posterior, channel)
+            if samples is not None and k.family in ("geometric", "delayed"):
+                alpha_lower, alpha_upper = _compute_hdi(samples, hdi_prob)
+            else:
+                alpha_lower = alpha_upper = float("nan")
 
         results[channel] = AdstockResult(
             channel=channel,
             decay_weights=weights,
-            alpha_mean=alpha_mean,
-            alpha_lower=alpha_lower,
-            alpha_upper=alpha_upper,
-            half_life=float(half_life),
-            total_carryover=total_carryover,
-            l_max=l_max,
+            alpha_mean=float(alpha_mean),
+            alpha_lower=float(alpha_lower),
+            alpha_upper=float(alpha_upper),
+            half_life=half_life,
+            total_carryover=float(weights[1:].sum() / weights.sum()),
+            l_max=int(k.l_max),
+            family=k.family,
+            status=k.status,
+            truncated_tail_mass=float(k.truncated_tail_mass),
         )
 
     return results
