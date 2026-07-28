@@ -13,6 +13,7 @@ import pytest
 from mmm_framework.planning.eig import (
     DEFAULT_RETEST_THRESHOLD_NATS,
     channel_half_life,
+    information_half_life,
     decayed_sigma,
     eig_gaussian,
     eig_monte_carlo,
@@ -87,11 +88,23 @@ class TestInformationDecay:
         sds = [decayed_sigma(0.3, w, 39.0) for w in (0, 10, 30, 80)]
         assert all(a < b for a, b in zip(sds, sds[1:]))
 
-    def test_channel_half_life_classes_and_overrides(self):
-        assert channel_half_life("Paid_Search_Brand") == 26.0
-        assert channel_half_life("Linear_TV") == 52.0
-        assert channel_half_life("Mystery_Channel") == 39.0
-        assert channel_half_life("Linear_TV", {"Linear_TV": 10.0}) == 10.0
+    def test_information_half_life_classes_and_overrides(self):
+        assert information_half_life("Paid_Search_Brand") == 26.0
+        assert information_half_life("Linear_TV") == 52.0
+        assert information_half_life("Mystery_Channel") == 39.0
+        assert information_half_life("Linear_TV", {"Linear_TV": 10.0}) == 10.0
+
+    def test_channel_half_life_is_a_deprecated_alias(self):
+        """The old name did not say WHICH half-life it meant, and `planning`
+        sat one import away from the model-derived carryover half-life, which
+        answers a different question and differs by roughly 10x."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert channel_half_life("Linear_TV") == 52.0
+        assert any(issubclass(w.category, DeprecationWarning) for w in caught)
+        assert any("information_half_life" in str(w.message) for w in caught)
 
     def test_retest_trigger_crosses_threshold_over_time(self):
         # freshly calibrated: tight posterior, EIG below threshold -> not due

@@ -38,6 +38,7 @@ from .eig import (
     DEFAULT_HALF_LIVES_WEEKS,
     DESIGN_PRECISION,
     channel_half_life,
+    information_half_life,
     decayed_sigma,
     eig_gaussian,
     eig_monte_carlo,
@@ -143,7 +144,8 @@ __all__ = [
     "eig_monte_carlo",
     "sigma_exp_for_design",
     "decayed_sigma",
-    "channel_half_life",
+    "channel_half_life",  # deprecated alias
+    "information_half_life",
     "reexperiment_due",
     "DESIGN_PRECISION",
     "DEFAULT_HALF_LIVES_WEEKS",

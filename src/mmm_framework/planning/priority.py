@@ -34,7 +34,7 @@ from .budget import (
 )
 from .eig import (
     DEFAULT_RETEST_THRESHOLD_NATS,
-    channel_half_life,
+    information_half_life,
     eig_gaussian,
     eig_monte_carlo,
     reexperiment_due,
@@ -219,7 +219,7 @@ def compute_experiment_priorities(
         ev_date = _parse_date(ev.get("end_date")) if ev else None
         if ev_date is not None:
             weeks_since = max((as_of_date - ev_date).days, 0) / 7.0
-            hl = channel_half_life(name, half_life_overrides)
+            hl = information_half_life(name, half_life_overrides)
             retest, eig_dec = reexperiment_due(
                 roi_sd,
                 weeks_since,
