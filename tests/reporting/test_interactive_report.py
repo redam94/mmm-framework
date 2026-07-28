@@ -1034,3 +1034,50 @@ class TestEndToEnd:
 
         with pytest.raises(ValueError):
             interactive_report_facts(_NoTrace())
+
+
+class TestNonMMMFamiliesAreRefused:
+    """The interactive report is MMM-shaped; a non-MMM family must be told so.
+
+    It recomputes ROI / marginal ROAS / reallocation client-side, none of which
+    a CFA- or LCA-style family defines. Before this gate the first MMM-only
+    attribute access escaped as a bare
+    `AttributeError: 'BayesianCFA' object has no attribute 'y_raw'` from deep
+    inside fact extraction (reproduced identically on LCA), which reads as a
+    bug rather than an unsupported combination.
+    """
+
+    class _NonMMM:
+        __garden_model_kind__ = "cfa"
+
+    class _PlainModel:
+        """No __garden_model_kind__ at all — must still be treated as an MMM."""
+
+    def test_generator_refuses_non_mmm_with_an_actionable_message(self):
+        with pytest.raises(NotImplementedError) as exc:
+            InteractiveReportGenerator(self._NonMMM())
+        msg = str(exc.value)
+        assert "MMM-specific" in msg
+        assert "'cfa'" in msg                      # names the declared kind
+        assert "MMMReportGenerator" in msg         # names the alternative
+        # NOT an AttributeError leaking from extraction
+        assert "y_raw" not in msg
+
+    def test_facts_entry_refuses_non_mmm_too(self):
+        from mmm_framework.reporting.interactive.facts import (
+            interactive_report_facts,
+        )
+
+        with pytest.raises(NotImplementedError):
+            interactive_report_facts(self._NonMMM())
+
+    def test_undeclared_model_is_still_treated_as_mmm(self):
+        """Duck-typed / historical models must not start refusing."""
+        from mmm_framework.reporting.interactive.facts import _require_mmm
+
+        _require_mmm(self._PlainModel())   # must not raise
+        _require_mmm(None)                 # facts-only path
+
+    def test_canned_facts_still_render_without_a_model(self):
+        html = InteractiveReportGenerator(facts=_canned_facts()).generate_report()
+        assert "<!DOCTYPE html>" in html or "<!doctype html>" in html

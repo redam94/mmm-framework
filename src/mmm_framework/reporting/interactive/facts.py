@@ -1245,6 +1245,36 @@ def _headline_facts(
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────
+def _require_mmm(model: Any) -> None:
+    """Refuse a non-MMM family before any fact extraction touches the model.
+
+    This report is MMM-shaped by construction: it recomputes ROI, marginal
+    ROAS, response curves and a budget reallocation in the browser, none of
+    which a CFA/LCA-style family has. Without this gate the first MMM-only
+    attribute access surfaced as a bare
+    ``AttributeError: 'BayesianCFA' object has no attribute 'y_raw'`` from deep
+    inside extraction, which reads as a bug rather than an unsupported
+    combination.
+
+    ``is_mmm_model`` treats anything not explicitly declaring a non-``"mmm"``
+    ``__garden_model_kind__`` as an MMM, so duck-typed and historical models are
+    unaffected.
+    """
+    from ...garden.contract import is_mmm_model
+
+    if model is None or is_mmm_model(model):
+        return
+    kind = getattr(type(model), "__garden_model_kind__", "unknown")
+    raise NotImplementedError(
+        f"The interactive results report is MMM-specific, but "
+        f"{type(model).__name__} declares __garden_model_kind__={kind!r}. "
+        "It recomputes ROI, marginal ROAS and a budget reallocation client-side, "
+        "which this family does not define. Use MMMReportGenerator instead — it "
+        "renders the latent-structure sections (factor loadings / class profiles) "
+        "for non-MMM families."
+    )
+
+
 def interactive_report_facts(
     model: Any,
     results: Any = None,
@@ -1270,6 +1300,7 @@ def interactive_report_facts(
     grid level), and ``include_counterfactual_spec`` adds one zero-out
     counterfactual pass per channel to the sensitivity battery.
     """
+    _require_mmm(model)
     trace = getattr(model, "_trace", None) or getattr(results, "trace", None)
     if trace is None:
         raise ValueError("interactive_report_facts requires a fitted model.")
