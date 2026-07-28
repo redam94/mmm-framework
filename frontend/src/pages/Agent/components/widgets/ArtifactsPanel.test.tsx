@@ -127,6 +127,34 @@ describe('ArtifactsPanel', () => {
     expect(screen.getByText('run_007')).toBeInTheDocument();
   });
 
+  // The inference line used to be `${method} (approximate)` for anything that
+  // was not nuts or smc — a rule written before the frequentist path shipped, so
+  // it printed "frequentist_ridge (approximate)" for a fit that has no posterior
+  // to approximate (#221). It now reads the generated registry.
+  function inferenceTextFor(method: string): string {
+    const a = art({
+      kind: 'model_run',
+      created_at: 10,
+      payload: {
+        run_name: 'r1',
+        inference: { method, chains: 4, draws: 1000, tune: 500 },
+      },
+    });
+    render(<ArtifactsPanel artifacts={[a]} {...handlers()} />);
+    fireEvent.click(screen.getByText('r1'));
+    return screen.getByText(new RegExp(method)).textContent ?? '';
+  }
+
+  it('does not call a frequentist fit approximate', () => {
+    const text = inferenceTextFor('frequentist_ridge');
+    expect(text).not.toContain('approximate');
+    expect(text).toContain('bootstrap CIs');
+  });
+
+  it('still calls an approximate Bayesian fit approximate', () => {
+    expect(inferenceTextFor('map')).toContain('approximate');
+  });
+
   it('keeps the existing actions wired (rerun / delete / load run)', () => {
     const h = handlers();
     const arts = [

@@ -32,6 +32,10 @@ from mmm_framework import (
 )
 from mmm_framework.builders.model import SeasonalityConfigBuilder
 from mmm_framework.builders.prior import AdstockConfigBuilder, SaturationConfigBuilder
+from mmm_framework.config.inference_methods import (
+    frequentist_method_values as _frequentist_method_values,
+)
+from mmm_framework.config.inference_methods import method_values as _method_values
 
 # Where auto-saved models land (relative to the running process cwd). PR-C.3
 # workspace-resolves this so a subprocess-kernel-written model is findable by the
@@ -348,28 +352,13 @@ _INFERENCE_KEYS = {
     "method",
     "metrics_draws",
 }
-# Mirrors config.enums.FitMethod — "nuts" is full MCMC and "smc" is tempered
-# Sequential Monte Carlo (both EXACT); the rest are the approximate methods
-# BayesianMMM.fit dispatches to (_fit_approx).
-#: Values `inference.method` accepts. The first two are exact Bayesian
-#: samplers, the next five are approximate Bayesian fits, and the last two
-#: select the FREQUENTIST paradigm (#188) — a penalized point estimate with
-#: bootstrap confidence intervals, not a posterior. Validated here so a typo is
-#: caught when the setting is written rather than at fit time.
-_INFERENCE_METHODS = {
-    "nuts",
-    "smc",
-    "map",
-    "laplace",
-    "advi",
-    "fullrank_advi",
-    "pathfinder",
-    "frequentist_ridge",
-    "frequentist_cvxpy",
-}
-
-#: The subset that leaves the Bayesian paradigm entirely.
-_FREQUENTIST_METHODS = {"frequentist_ridge", "frequentist_cvxpy"}
+#: Values `inference.method` accepts, and the subset that leaves the Bayesian
+#: paradigm entirely (#188). Derived from `config.inference_methods`, which owns
+#: the union of FitMethod + the frequentist InferenceMethod members — this used
+#: to be a hand-copied list, one of four, and the copies drifted. Validated here
+#: so a typo is caught when the setting is written rather than at fit time.
+_INFERENCE_METHODS = _method_values()
+_FREQUENTIST_METHODS = _frequentist_method_values()
 _TREND_KEYS = {
     "type",
     "n_changepoints",

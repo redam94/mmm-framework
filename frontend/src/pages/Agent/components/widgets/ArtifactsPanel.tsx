@@ -9,6 +9,7 @@ import { DashWidget } from '../common/DashWidget';
 import { API_BASE } from '../../constants';
 import { truncate } from '../../utils/text';
 import type { Artifact } from '../../types';
+import { methodInfo } from '../../../../api/generated/inferenceMethods';
 
 // Newest first — the API returns artifacts created_at ASC (oldest first).
 const byNewest = (a: Artifact, b: Artifact) => b.created_at - a.created_at;
@@ -242,10 +243,19 @@ function ModelRunsWidget({
                               {(() => {
                                 const method = r.inference?.method ?? 'nuts';
                                 const sampler = `${r.inference?.chains ?? '?'} chains × ${r.inference?.draws ?? '?'} draws${r.inference?.tune ? ` (${r.inference.tune} tune)` : ''}`;
-                                // NUTS and SMC are exact samplers; everything else is approximate.
                                 if (method === 'nuts') return `nuts · ${sampler}`;
                                 if (method === 'smc') return `smc · ${r.inference?.chains ?? '?'} runs × ${r.inference?.draws ?? '?'} particles`;
-                                return `${method} (approximate)`;
+                                // Was `${method} (approximate)` for everything
+                                // else, which printed "frequentist_ridge
+                                // (approximate)" — the opposite of the shipped
+                                // rule. The qualifier now comes from the
+                                // generated registry.
+                                const info = methodInfo(method);
+                                if (!info) return method;
+                                if (info.approximate) return `${method} (approximate)`;
+                                if (info.paradigm === 'frequentist')
+                                  return `${method} (bootstrap CIs)`;
+                                return method;
                               })()}
                             </p>
                           </div>

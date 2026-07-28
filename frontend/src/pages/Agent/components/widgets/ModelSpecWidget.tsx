@@ -6,28 +6,26 @@ import {
 import { Badge } from '../common/Badge';
 import { FLabel, iCls, sCls } from '../common/form';
 import { lockPathLabel, specWithDefaults } from '../../utils/spec';
+import {
+  INFERENCE_METHODS,
+  methodInfo,
+  methodLabel,
+} from '../../../../api/generated/inferenceMethods';
 import type { ModelSpec } from '../../types';
 
 // The fully-defaulted, editable working model produced by specWithDefaults. Its
 // leaves are concrete (numbers/strings/arrays), unlike the loose incoming spec.
 type DraftSpec = ReturnType<typeof specWithDefaults>;
 
-// Fit methods the backend dispatches on (config.enums.FitMethod). NUTS and
-// SMC are exact samplers; the rest are fast approximate fits with
-// uncalibrated uncertainty (mirrors FitMethod.is_approximate).
-const FIT_METHODS: ReadonlyArray<readonly [string, string]> = [
-  ['nuts', 'NUTS (full MCMC)'],
-  ['smc', 'SMC (Sequential Monte Carlo)'],
-  ['map', 'MAP (point estimate)'],
-  ['laplace', 'Laplace (MAP + Gaussian)'],
-  ['advi', 'ADVI (variational)'],
-  ['fullrank_advi', 'Full-rank ADVI (variational)'],
-  ['pathfinder', 'Pathfinder'],
-];
-const EXACT_METHODS = new Set(['nuts', 'smc']);
-const isApproximateMethod = (m: string) => !EXACT_METHODS.has(m);
-const fitMethodLabel = (m: string) =>
-  FIT_METHODS.find(([v]) => v === m)?.[1] ?? m;
+// Every value `inference.method` accepts, generated from
+// config/inference_methods.py and gated by tests/test_fe_enum_mirror.py. This
+// was a hand-copied list with its own `!(nuts|smc)` approximate test, written
+// before the frequentist path shipped — so a `frequentist_ridge` spec rendered
+// an amber "approximate" badge and told the user to re-fit with NUTS, about a
+// fit that never had a posterior to approximate.
+const isApproximateMethod = (m: string) => methodInfo(m)?.approximate ?? false;
+const isFrequentistMethod = (m: string) => methodInfo(m)?.paradigm === 'frequentist';
+const fitMethodLabel = (m: string) => methodLabel(m);
 
 function SpecRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -222,6 +220,9 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
             {isApproximateMethod(inference?.method ?? 'nuts') && (
               <Badge label="approximate" color="amber" />
             )}
+            {isFrequentistMethod(inference?.method ?? 'nuts') && (
+              <Badge label="frequentist" color="blue" />
+            )}
           </span>
         } />
         <SpecRow label="Chains" value={inference?.chains ?? 4} />
@@ -229,18 +230,18 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
         <SpecRow label="Tune" value={inference?.tune ?? 1000} />
         <SpecRow label="Target Accept" value={inference?.target_accept ?? 0.85} />
         <SpecRow label="Seed" value={inference?.random_seed ?? 42} />
-        {isApproximateMethod(inference?.method ?? 'nuts') && (
-          <p className="text-[11px] text-amber-700 py-1">
-            Approximate fits run in seconds for model checking, but their
-            uncertainty is <em>not</em> calibrated — re-fit with NUTS before
-            trusting intervals or making spend decisions.
-          </p>
-        )}
-        {(inference?.method ?? 'nuts') === 'smc' && (
-          <p className="text-[11px] text-ink-400 py-1">
-            SMC is an exact sampler — slower than NUTS, but robust to
-            multimodal posteriors and it estimates the log marginal
-            likelihood for model comparison.
+        {/* One caveat per method, carried on the generated descriptor so the
+            frequentist estimators get their own sentence instead of the
+            approximate-fit one. Amber only when it IS an approximate fit. */}
+        {methodInfo(inference?.method ?? 'nuts')?.caveat && (
+          <p
+            className={
+              isApproximateMethod(inference?.method ?? 'nuts')
+                ? 'text-[11px] text-amber-700 py-1'
+                : 'text-[11px] text-ink-400 py-1'
+            }
+          >
+            {methodInfo(inference?.method ?? 'nuts')?.caveat}
           </p>
         )}
       </SpecSection>
@@ -339,20 +340,19 @@ export function ModelSpecWidget({ spec, editable, onApplySpec, lockedFields = []
           <FLabel>Fit Method</FLabel>
           <select className={sCls} value={draft.inference.method}
             onChange={e => setDraftField(['inference', 'method'], e.target.value)}>
-            {FIT_METHODS.map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
+            {INFERENCE_METHODS.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
             ))}
           </select>
-          {isApproximateMethod(draft.inference.method) && (
-            <p className="text-[11px] text-amber-700 mt-1">
-              Approximate fit — seconds instead of minutes, but uncertainty is
-              not calibrated. Use NUTS for final inference.
-            </p>
-          )}
-          {draft.inference.method === 'smc' && (
-            <p className="text-[11px] text-ink-400 mt-1">
-              Exact sampler — slower than NUTS, but robust to multimodal
-              posteriors and estimates the log marginal likelihood.
+          {methodInfo(draft.inference.method)?.caveat && (
+            <p
+              className={
+                isApproximateMethod(draft.inference.method)
+                  ? 'text-[11px] text-amber-700 mt-1'
+                  : 'text-[11px] text-ink-400 mt-1'
+              }
+            >
+              {methodInfo(draft.inference.method)?.caveat}
             </p>
           )}
         </div>
