@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 
 import numpy as np
+import pytest
 
 from mmm_framework.agents import model_ops as M
 from mmm_framework.reporting.helpers.cfo import cfo_facts
@@ -32,7 +33,11 @@ class TestCfoFacts:
         assert f["kpi_total"] == 5000.0
         mc = f["marketing_contribution"]
         assert mc["lower"] <= mc["mean"] <= mc["upper"]
-        # base = total - marketing
+        # FakeMMM exposes no fitted total, so this exercises the documented
+        # FALLBACK, where the baseline does absorb the residual. Asserted
+        # explicitly so the test cannot quietly stop covering the primary path.
+        assert f["baseline_basis"] == "observed_minus_media"
+        assert f["unexplained"] is None
         assert abs(f["base_contribution"] - (f["kpi_total"] - mc["mean"])) < 1e-6
         # deeper cuts put more at risk; profit = revenue * margin
         cuts = f["spend_cuts"]
@@ -142,3 +147,58 @@ def test_extractor_fills_cfo_for_mmm():
     _X()._extract_cfo(bundle)
     assert bundle.cfo is not None
     assert bundle.cfo["kpi_total"] == 5000.0
+
+
+class _FittedFakeMMM(FakeMMM):
+    """FakeMMM that also reports a fitted total, i.e. the primary path.
+
+    Its fitted total deliberately differs from the observed 5000 so there is a
+    real residual for the rollup to disclose.
+    """
+
+    FITTED = 4800.0
+
+    class _Pred:
+        pass
+
+    def predict(self, return_original_scale=True, random_seed=None):
+        p = _FittedFakeMMM._Pred()
+        p.y_pred_mean = np.full(10, _FittedFakeMMM.FITTED / 10.0)
+        return p
+
+
+class TestFittedBaseline:
+    """The baseline is the model's FITTED non-marketing outcome, and the gap to
+    observed is broken out instead of being folded into base demand."""
+
+    def _facts(self):
+        return cfo_facts(_FittedFakeMMM(), margin=0.4, cut_levels=(0.1,))
+
+    def test_baseline_is_fitted_not_observed_minus_media(self):
+        f = self._facts()
+        mc = f["marketing_contribution"]
+        assert f["baseline_basis"] == "fitted"
+        assert f["fitted_total"] == pytest.approx(4800.0)
+        assert f["base_contribution"] == pytest.approx(4800.0 - mc["mean"])
+        # explicitly NOT the old identity
+        assert f["base_contribution"] != pytest.approx(f["kpi_total"] - mc["mean"])
+
+    def test_residual_is_broken_out_and_the_rollup_reconciles(self):
+        f = self._facts()
+        mc = f["marketing_contribution"]
+        assert f["unexplained"] == pytest.approx(5000.0 - 4800.0)
+        assert (
+            f["base_contribution"] + mc["mean"] + f["unexplained"]
+        ) == pytest.approx(f["kpi_total"])
+
+    def test_section_states_the_basis_and_shows_the_residual(self):
+        from mmm_framework.reporting.config import ReportConfig
+        from mmm_framework.reporting.sections import CFOSection
+
+        f = self._facts()
+        bundle = type("B", (), {"cfo": f})()
+        html = CFOSection(data=bundle, config=ReportConfig()).render()
+        assert "fitted" in html.lower()
+        assert "Unexplained (model residual)" in html
+        # and it must not still claim the remainder is simply base demand
+        assert "the rest is base demand" not in html
