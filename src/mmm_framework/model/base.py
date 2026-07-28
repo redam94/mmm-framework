@@ -872,6 +872,16 @@ class BayesianMMM:
         # linear control block (so they are not double-counted) and stash their
         # raw series for the dedicated lever blocks in _build_model. No-op (linear
         # controls unchanged) when no levers are configured.
+        # Bad-control refusal runs over the PRE-STRIP control set, so promoting a
+        # variable to a lever cannot bypass it. A mediator is still a mediator
+        # when it enters as a log-elasticity instead of a linear coefficient: the
+        # term is still in `mu`, so it still blocks part of the media effect.
+        # Deliberately NOT done by moving the role resolution above the strip —
+        # `_control_prior_sigmas` and `conf_mask` index the resolved roles against
+        # the POST-strip `control_names`, so that raises IndexError. The refusal
+        # and the resolution are separate concerns and are separated here.
+        self._refuse_blocked_control_roles(self.control_names)
+
         self._price_lever = None  # (PriceConfig, raw series)
         self._promo_levers: list = []  # [(PromoConfig, raw series)]
         # The swappable lever block: a design matrix behind a `pm.Data` container
@@ -1026,11 +1036,34 @@ class BayesianMMM:
         mediator produces a confidently wrong number.
         """
         roles: list[CausalControlRole | None] = []
-        blocked: list[str] = []
         for name in self.control_names:
             cfg = self.mff_config.get_control_config(name)
+            roles.append(getattr(cfg, "causal_role", None) if cfg is not None else None)
+        # The refusal itself runs earlier, over the pre-strip set — see
+        # `_refuse_blocked_control_roles`. Re-checking here is a cheap backstop
+        # for any subclass that reaches this method by another path.
+        self._refuse_blocked_control_roles(self.control_names)
+        return roles
+
+    def _refuse_blocked_control_roles(self, names: list[str]) -> None:
+        """Refuse to condition on any mediator/collider among ``names``.
+
+        Split out of :meth:`_resolve_control_causal_roles` so it can run over the
+        **pre-strip** control set (#222). Promoting a variable to a price/promo
+        lever removed it from ``control_names`` before the check ran, so marking
+        ``Price`` a ``MEDIATOR`` raised without a lever and built **silently**
+        with one — a refusal bypass. The lever term is still in ``mu``, so it
+        still blocks part of the media effect; the bias does not care whether the
+        variable enters as a log-elasticity or a linear coefficient.
+
+        Only the refusal moves. The resolved role *list* stays 1:1 with the
+        post-strip ``control_names``, because ``_control_prior_sigmas`` and the
+        confounder mask index it positionally.
+        """
+        blocked: list[str] = []
+        for name in names:
+            cfg = self.mff_config.get_control_config(name)
             role = getattr(cfg, "causal_role", None) if cfg is not None else None
-            roles.append(role)
             if role in _BLOCKED_CONTROL_ROLES:
                 reason = getattr(cfg, "causal_role_reason", None)
                 detail = f" ({reason})" if reason else ""
@@ -1045,9 +1078,10 @@ class BayesianMMM:
                 "and conditioning on a collider opens a spurious path -- either "
                 "biases a total-effect estimate. Remove these from `controls`. "
                 "If a variable is genuinely a common cause of media and the KPI, "
-                "mark it `causal_role=CausalControlRole.CONFOUNDER` instead."
+                "mark it `causal_role=CausalControlRole.CONFOUNDER` instead. "
+                "Promoting it to a price/promo lever does NOT resolve this: the "
+                "lever term is still in the mean, so it still blocks the path."
             )
-        return roles
 
     def _control_prior_sigmas(self) -> np.ndarray:
         """Per-control coefficient-prior standard deviations, keyed by role.

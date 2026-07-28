@@ -460,3 +460,95 @@ class TestLeverCounterfactualsOnAFit:
         a = m.predict_under(Observed(), random_seed=1).y_pred_mean
         b = m.predict_under(Observed(), random_seed=1).y_pred_mean
         assert np.allclose(a, b)
+
+
+# ===========================================================================
+# The bad-control refusal survives promotion to a lever (#222, commit 4)
+#
+# `_resolve_control_causal_roles` ran AFTER `_prepare_levers`, so promoting a
+# variable to a lever removed it from `control_names` before the check saw it:
+# marking Price a MEDIATOR raised without a lever and built SILENTLY with one.
+# That is a refusal bypass — the lever term is still in `mu`, so it still blocks
+# part of the media effect.
+# ===========================================================================
+
+
+def _panel_with_extra_control(role_for_price=None, role_for_extra=None):
+    """Price + Promo (both promotable) plus a third control that SURVIVES the
+    strip — so the role list can be checked for 1:1 alignment afterwards."""
+    from mmm_framework.config import CausalControlRole  # noqa: F401
+
+    p = _panel()
+    rng = np.random.default_rng(11)
+    p.X_controls = p.X_controls.assign(Weather=rng.normal(0, 1, len(p.X_controls)))
+    p.coords.controls = ["Price", "Promo", "Weather"]
+    p.config.controls.append(
+        ControlVariableConfig(name="Weather", dimensions=[DimensionType.PERIOD])
+    )
+    if role_for_price is not None:
+        p.config.get_control_config("Price").causal_role = role_for_price
+    if role_for_extra is not None:
+        p.config.get_control_config("Weather").causal_role = role_for_extra
+    return p
+
+
+class TestBadControlRefusalSurvivesPromotion:
+    def test_a_mediator_is_refused_with_and_without_a_lever(self):
+        from mmm_framework.config import CausalControlRole
+
+        panel = _panel()
+        panel.config.get_control_config("Price").causal_role = (
+            CausalControlRole.MEDIATOR
+        )
+        # the pre-existing behaviour, kept
+        with pytest.raises(ValueError, match="Refusing to condition"):
+            BayesianMMM(panel, ModelConfig(), TrendConfig(type=TrendType.LINEAR))
+        # and the bypass, closed
+        with pytest.raises(ValueError, match="Refusing to condition"):
+            BayesianMMM(
+                panel, ModelConfig(**_levers()), TrendConfig(type=TrendType.LINEAR)
+            )
+
+    def test_the_message_says_promotion_does_not_resolve_it(self):
+        from mmm_framework.config import CausalControlRole
+
+        panel = _panel()
+        panel.config.get_control_config("Promo").causal_role = (
+            CausalControlRole.COLLIDER
+        )
+        with pytest.raises(ValueError, match="lever term is still in the mean"):
+            BayesianMMM(
+                panel, ModelConfig(**_levers()), TrendConfig(type=TrendType.LINEAR)
+            )
+
+    def test_roles_stay_aligned_with_the_post_strip_controls(self):
+        """The naive fix — moving the role resolution above the strip — raises
+        IndexError in `_control_prior_sigmas`, because the roles are indexed
+        positionally against the POST-strip control_names. Only the refusal
+        moved; this pins the alignment."""
+        from mmm_framework.config import CausalControlRole
+
+        panel = _panel_with_extra_control(role_for_extra=CausalControlRole.CONFOUNDER)
+        m = BayesianMMM(
+            panel, ModelConfig(**_levers()), TrendConfig(type=TrendType.LINEAR)
+        )
+        _ = m.model
+        assert m.control_names == ["Weather"]  # Price/Promo promoted away
+        assert len(m._control_causal_roles) == m.n_controls == 1
+        assert m._control_causal_roles[0] == CausalControlRole.CONFOUNDER
+        # the confounder's wide prior lands on the surviving control, not an
+        # index shifted by the two stripped columns
+        sigmas = m._control_prior_sigmas()
+        assert sigmas.shape == (1,)
+        assert sigmas[0] == max(sigmas)  # confounder gets the wide prior
+
+    def test_a_confounder_lever_still_builds(self):
+        """Only mediators and colliders are refused. A price that is a genuine
+        common cause is a legitimate lever."""
+        from mmm_framework.config import CausalControlRole
+
+        panel = _panel_with_extra_control(role_for_price=CausalControlRole.CONFOUNDER)
+        m = BayesianMMM(
+            panel, ModelConfig(**_levers()), TrendConfig(type=TrendType.LINEAR)
+        )
+        assert "price_elasticity" in set(m.model.named_vars)
