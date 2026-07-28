@@ -693,6 +693,7 @@ def _prior_posterior_rows(
 # ─────────────────────────────────────────────────────────────────────────────
 def _yoy_facts(
     actual_national: np.ndarray,
+    fitted_national: np.ndarray | None,
     contrib_dp: dict[str, np.ndarray],
     periods: list[str],
     channels: list[str],
@@ -702,9 +703,14 @@ def _yoy_facts(
 
     The waterfall itself recomputes any year pair client-side from the same
     embedded draws; this mirrors that math in Python for the most recent
-    qualifying pair: per-channel contribution deltas (posterior draws → CI)
-    plus the residual "baseline & other" delta that closes to the observed
-    total change.
+    qualifying pair: per-channel contribution deltas (posterior draws → CI),
+    the MODELLED "baseline & other" delta, and — separately — the unexplained
+    gap between the fitted and observed change.
+
+    Media + baseline close to the **fitted** change, not the observed one.
+    Closing to observed would fold the model residual into a bar labelled base
+    demand; measured on a shipped report that bar carried 15.7% of its own
+    value as absorbed residual.
     """
     year_idx: dict[str, list[int]] = {}
     for i, p in enumerate(periods):
@@ -728,7 +734,38 @@ def _yoy_facts(
         media_delta = d if media_delta is None else media_delta + d
         lo, hi = _eti(d, interval)
         drivers.append({"name": ch, "mean": float(d.mean()), "lower": lo, "upper": hi})
-    base = (tot_b - tot_a) - media_delta
+    # The baseline is the MODELLED non-media movement, not "whatever is left
+    # over from the observed change". Deriving it from observed totals folds the
+    # model's residual into a bar labelled base demand — measured on a shipped
+    # report, that bar carried 15.7% of its own value as absorbed residual.
+    #
+    # Components sum to the FITTED total; the gap to observed is a real quantity
+    # with a name, and it belongs on the chart as its own bar. Same convention
+    # the fit plot already uses (script.py derives baseline = predMean - media).
+    fitted_a = fitted_b = None
+    if fitted_national is not None:
+        fn = np.asarray(fitted_national, dtype=float)
+        if fn.shape[0] == len(periods):
+            with np.errstate(invalid="ignore"):
+                fitted_a = float(np.nansum(fn[ia]))
+                fitted_b = float(np.nansum(fn[ib]))
+
+    if fitted_a is not None and np.isfinite(fitted_a) and np.isfinite(fitted_b):
+        fitted_delta = fitted_b - fitted_a
+        base = fitted_delta - media_delta
+        # A residual, not a random variable: it is one number per year-pair, so
+        # it carries no interval.
+        unexplained = (tot_b - tot_a) - fitted_delta
+        closes_to = "fitted"
+    else:
+        # No predictive series (e.g. predict() unavailable): fall back to the old
+        # observed-minus-media baseline, but SAY that it absorbs the residual
+        # rather than letting the chart imply the model explained everything.
+        base = (tot_b - tot_a) - media_delta
+        fitted_delta = None
+        unexplained = None
+        closes_to = "observed"
+
     b_lo, b_hi = _eti(base, interval)
     return {
         "years": qual,
@@ -738,8 +775,14 @@ def _yoy_facts(
             "total_a": tot_a,
             "total_b": tot_b,
             "delta": tot_b - tot_a,
+            "fitted_delta": fitted_delta,
             "drivers": drivers,
+            # Kept under the historical key so existing consumers keep working;
+            # its MEANING is now the modelled baseline when `closes_to` is
+            # "fitted".
             "baseline": {"mean": float(base.mean()), "lower": b_lo, "upper": b_hi},
+            "unexplained_delta": unexplained,
+            "closes_to": closes_to,
         },
     }
 
@@ -1464,7 +1507,18 @@ def interactive_report_facts(
         evidence,
     )
 
-    yoy = _yoy_facts(actual_national, contrib_dp, periods, channels, interval)
+    # Predictive mean per period — lets the bridge close to the FITTED total and
+    # disclose the residual separately, instead of hiding it in the baseline bar.
+    _nat_fit = ((fit or {}).get("series", {}) or {}).get("National", {}) or {}
+    _fitted_national = _nat_fit.get("mean")
+    yoy = _yoy_facts(
+        actual_national,
+        _fitted_national,
+        contrib_dp,
+        periods,
+        channels,
+        interval,
+    )
 
     mediation = _mediation_facts(model, trace, channels, interval)
     latent = _latent_facts(model, trace, time_idx, n_periods, interval)

@@ -1498,24 +1498,49 @@ INTERACTIVE_REPORT_JS = r"""
       return { name: ch, sum: summar(d) };
     }).filter(function (x) { return x.sum; });
     drivers.sort(function (a, b) { return b.sum.mean - a.sum.mean; });
+    // The baseline bar is the MODELLED non-media movement. Deriving it from
+    // observed totals folds the model's residual into a bar labelled base
+    // demand (measured: 15.7% of that bar's own value). Components sum to the
+    // FITTED total; the gap to observed is disclosed as its own bar.
+    var natFit = ((IR.fit.series || {}).National || {}).mean || null;
+    var fitA = natFit ? sumIdx(natFit, ia) : null;
+    var fitB = natFit ? sumIdx(natFit, ib) : null;
+    var haveFit = (fitA !== null && isFinite(fitA) && isFinite(fitB));
+    var fitDelta = haveFit ? (fitB - fitA) : (totB - totA);
     var baseD = new Float64Array(D);
-    for (var k = 0; k < D; k++) baseD[k] = (totB - totA) - mediaDelta[k];
+    for (var k = 0; k < D; k++) baseD[k] = fitDelta - mediaDelta[k];
     var baseSum = summar(baseD);
+    // A residual, not a random variable: one number per year-pair, no interval.
+    var unexplained = haveFit ? ((totB - totA) - fitDelta) : 0;
 
     var labels = [ya], vals = [totA], bases = [0],
       colors = [TH.ink || '#3a4838'], errHi = [0], errLo = [0],
       hovers = [ya + ' total: ' + fmt(totA)];
     var running = totA;
     var steps = [{ name: 'Baseline & other', sum: baseSum }].concat(drivers);
+    // Closes the bridge to the OBSERVED total without hiding the gap inside a
+    // driver. Suppressed when it rounds to nothing on this chart's scale.
+    if (haveFit && Math.abs(unexplained) > 1e-9) {
+      steps.push({
+        name: 'Unexplained (model residual)',
+        sum: { mean: unexplained, lower: unexplained, upper: unexplained },
+        residual: true
+      });
+    }
     steps.forEach(function (s) {
       labels.push(s.name);
       bases.push(running);
       vals.push(s.sum.mean);
-      colors.push(s.sum.mean >= 0 ? (TH.accent || '#5a7a3a') : (TH.rust || '#a04535'));
+      colors.push(s.residual ? (TH.muted || '#7a8a78')
+        : (s.sum.mean >= 0 ? (TH.accent || '#5a7a3a') : (TH.rust || '#a04535')));
       errHi.push(s.sum.upper - s.sum.mean);
       errLo.push(s.sum.mean - s.sum.lower);
-      hovers.push(esc(s.name) + ': ' + (s.sum.mean >= 0 ? '+' : '') + fmt(s.sum.mean) +
-        ' (' + ivPct + '% CI ' + fmt(s.sum.lower) + ' – ' + fmt(s.sum.upper) + ')');
+      hovers.push(s.residual
+        ? esc(s.name) + ': ' + (s.sum.mean >= 0 ? '+' : '') + fmt(s.sum.mean) +
+          '<br>The gap between what the model fits and what was observed.' +
+          '<br>Not an estimate — it carries no interval.'
+        : esc(s.name) + ': ' + (s.sum.mean >= 0 ? '+' : '') + fmt(s.sum.mean) +
+          ' (' + ivPct + '% CI ' + fmt(s.sum.lower) + ' – ' + fmt(s.sum.upper) + ')');
       running += s.sum.mean;
     });
     labels.push(yb); vals.push(totB); bases.push(0);
@@ -1560,10 +1585,17 @@ INTERACTIVE_REPORT_JS = r"""
         ? ' Note: ' + ya + ' has ' + ia.length + ' weeks of data vs ' +
           ib.length + ' for ' + yb + '.'
         : '';
+      // Must not claim the bridge closes to observed: the whole point of the
+      // residual bar is that media + baseline close to the FITTED change.
+      var resid = (haveFit && Math.abs(unexplained) > 1e-9)
+        ? ' The model fits ' + (fitDelta >= 0 ? '+' : '') + fmt(fitDelta) +
+          ' of that; the remaining ' + (unexplained >= 0 ? '+' : '') +
+          fmt(unexplained) + ' is shown as unexplained model residual.'
+        : '';
       note.textContent = ya + ' → ' + yb + ': ' + (totB - totA >= 0 ? '+' : '') +
         fmt(totB - totA) + pct + '. Media driver bars carry ' + ivPct +
-        '% credible intervals; "Baseline & other" is the residual (trend, ' +
-        'seasonality, controls, intercept) that closes to the observed change.' + wks;
+        '% credible intervals; "Baseline & other" is the modelled non-media ' +
+        'change (trend, seasonality, controls, intercept).' + resid + wks;
     }
   }
 

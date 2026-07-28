@@ -506,20 +506,74 @@ class TestFactsHelpers:
         actual[52:] = 110.0  # year B runs 10/wk hotter
         contrib = np.full((D, P), 10.0)
         contrib[:, 52:] = 12.0  # TV contributes 2/wk more in year B
-        out = _yoy_facts(actual, {"TV": contrib}, periods, ["TV"], 0.9)
+        # A fitted series that deliberately UNDER-shoots the observed by 5/wk in
+        # year B, so there is a real residual for the bridge to disclose.
+        fitted = np.full(P, 100.0)
+        fitted[52:] = 105.0
+        out = _yoy_facts(actual, fitted, {"TV": contrib}, periods, ["TV"], 0.9)
         latest = out["latest"]
         assert out["years"] == ["2023", "2024"]
         assert latest["delta"] == pytest.approx(52 * 10.0)
         tv = latest["drivers"][0]
         assert tv["mean"] == pytest.approx(52 * 2.0)
-        # baseline closes the bridge exactly: delta = media + baseline
-        assert latest["baseline"]["mean"] + tv["mean"] == pytest.approx(latest["delta"])
+
+        # The bridge now closes to the FITTED total, and the gap to observed is
+        # disclosed rather than absorbed into the baseline bar.
+        assert latest["closes_to"] == "fitted"
+        assert latest["fitted_delta"] == pytest.approx(52 * 5.0)
+        assert latest["baseline"]["mean"] + tv["mean"] == pytest.approx(
+            latest["fitted_delta"]
+        )
+        # observed = fitted + unexplained
+        assert latest["unexplained_delta"] == pytest.approx(52 * 5.0)
+        assert (
+            latest["baseline"]["mean"] + tv["mean"] + latest["unexplained_delta"]
+        ) == pytest.approx(latest["delta"])
+
+    def test_yoy_baseline_no_longer_absorbs_the_residual(self):
+        """The regression this guards: with the old observed-minus-media rule the
+        baseline bar silently carried the model's residual."""
+        P, D = 104, 50
+        periods = [
+            str(p)[:10] for p in pd.date_range("2023-01-02", periods=P, freq="W-MON")
+        ]
+        actual = np.full(P, 100.0)
+        actual[52:] = 110.0
+        fitted = np.full(P, 100.0)
+        fitted[52:] = 105.0          # model explains only half the rise
+        contrib = np.full((D, P), 10.0)
+        contrib[:, 52:] = 12.0
+        latest = _yoy_facts(actual, fitted, {"TV": contrib}, periods, ["TV"], 0.9)[
+            "latest"
+        ]
+        absorbed = (52 * 10.0) - (52 * 2.0)          # old baseline = 416
+        assert latest["baseline"]["mean"] != pytest.approx(absorbed)
+        assert latest["baseline"]["mean"] == pytest.approx(52 * 3.0)  # fitted - media
+
+    def test_yoy_falls_back_and_says_so_without_a_fitted_series(self):
+        """No predictive series -> old behaviour, but flagged, so the chart does
+        not imply the model explained everything."""
+        P, D = 104, 50
+        periods = [
+            str(p)[:10] for p in pd.date_range("2023-01-02", periods=P, freq="W-MON")
+        ]
+        actual = np.full(P, 100.0)
+        actual[52:] = 110.0
+        contrib = np.full((D, P), 10.0)
+        contrib[:, 52:] = 12.0
+        latest = _yoy_facts(actual, None, {"TV": contrib}, periods, ["TV"], 0.9)[
+            "latest"
+        ]
+        assert latest["closes_to"] == "observed"
+        assert latest["unexplained_delta"] is None
 
     def test_yoy_facts_none_without_two_years(self):
         periods = [
             str(p)[:10] for p in pd.date_range("2023-01-02", periods=30, freq="W-MON")
         ]
-        out = _yoy_facts(np.ones(30), {"TV": np.ones((10, 30))}, periods, ["TV"], 0.9)
+        out = _yoy_facts(
+            np.ones(30), None, {"TV": np.ones((10, 30))}, periods, ["TV"], 0.9
+        )
         assert out is None
 
     @staticmethod
@@ -992,7 +1046,10 @@ class TestEndToEnd:
         # YoY decomposition present and closes to the observed delta
         yoy = f["yoy"]["latest"]
         media = sum(d["mean"] for d in yoy["drivers"])
-        assert yoy["delta"] == pytest.approx(media + yoy["baseline"]["mean"], rel=1e-6)
+        # media + modelled baseline closes to the FITTED delta; the gap to the
+        # observed delta is disclosed as unexplained rather than absorbed.
+        closing = media + yoy["baseline"]["mean"] + (yoy.get("unexplained_delta") or 0.0)
+        assert yoy["delta"] == pytest.approx(closing, rel=1e-6)
         # headline rows carry CIs
         rows = f["headline"]["channels"]
         assert {r["channel"] for r in rows} == {"TV", "Digital"}
