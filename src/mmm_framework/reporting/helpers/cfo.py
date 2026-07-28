@@ -33,6 +33,56 @@ def _eti(draws: np.ndarray, hdi_prob: float) -> tuple[float, float]:
     return lo, hi
 
 
+#: Component totals that sum to the model's fitted outcome. Kept explicit (not
+#: a wildcard over the dataclass) so a new component added upstream shows up as
+#: a widening residual rather than silently changing what "fitted" means.
+_FITTED_COMPONENT_FIELDS = (
+    "total_intercept",
+    "total_trend",
+    "total_seasonality",
+    "total_media",
+    "total_controls",
+    "total_geo",
+    "total_product",
+    "total_events",
+    "total_interactions",
+    "total_levers",
+)
+
+
+def _fitted_total(model: Any) -> float | None:
+    """The model's own fitted total, or ``None`` if it cannot be established.
+
+    The baseline must be the MODELLED non-media outcome. Deriving it as
+    ``observed − modelled media`` instead folds the model's residual into a
+    number labelled "base demand", which is the defect this exists to avoid.
+    """
+    try:
+        decomp = model.compute_component_decomposition()
+    except Exception:  # noqa: BLE001 — fall through to the predictive mean
+        decomp = None
+    if decomp is not None:
+        total = 0.0
+        seen = False
+        for field in _FITTED_COMPONENT_FIELDS:
+            v = getattr(decomp, field, None)
+            if v is None:
+                continue
+            fv = float(np.sum(np.asarray(v, dtype=float)))
+            if np.isfinite(fv):
+                total += fv
+                seen = True
+        if seen and np.isfinite(total):
+            return float(total)
+    try:
+        pred = model.predict(return_original_scale=True, random_seed=0)
+        mean = np.asarray(pred.y_pred_mean, dtype=float)
+        tot = float(np.nansum(mean))
+        return tot if np.isfinite(tot) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def cfo_facts(
     model: Any,
     *,
@@ -57,10 +107,23 @@ def cfo_facts(
 
     Returns
     -------
-    dict with ``kpi_total``, ``marketing_contribution`` (mean/lower/upper),
-    ``base_contribution``, ``marketing_pct``, ``margin``, ``hdi_prob`` and
-    ``spend_cuts`` (a list of ``{cut_pct, revenue_at_risk, revenue_lower,
-    revenue_upper, pct_of_kpi, [profit_*]}``).
+    dict with ``kpi_total`` (observed), ``marketing_contribution``
+    (mean/lower/upper), ``base_contribution``, ``fitted_total``,
+    ``unexplained``, ``baseline_basis``, ``marketing_pct``, ``margin``,
+    ``hdi_prob`` and ``spend_cuts`` (a list of ``{cut_pct, revenue_at_risk,
+    revenue_lower, revenue_upper, pct_of_kpi, [profit_*]}``).
+
+    ``base_contribution`` is the model's **fitted** non-marketing outcome, not
+    "observed minus modelled media" — the latter hides the model's residual
+    inside a number a CFO reads as base demand. The residual is reported
+    separately as ``unexplained``, so the rollup still reconciles::
+
+        base_contribution + marketing_contribution + unexplained == kpi_total
+
+    ``baseline_basis`` is ``"fitted"`` normally, or ``"observed_minus_media"``
+    when no fitted total could be established — in which case ``unexplained``
+    is ``None`` and the baseline does absorb the residual, which every renderer
+    must say rather than imply otherwise.
     """
     X = np.asarray(model.X_media_raw, dtype=float)
     y_total = float(np.nansum(np.asarray(model.y_raw, dtype=float)))
@@ -73,7 +136,26 @@ def cfo_facts(
     m_mean = float(np.mean(marketing_draws))
     m_lo, m_hi = _eti(marketing_draws, hdi_prob)
 
-    base_contribution = y_total - m_mean  # the non-marketing (base) outcome
+    # The baseline is the model's FITTED non-marketing outcome, and it is
+    # labelled as such. Computing it as `observed - modelled media` would fold
+    # every discrepancy between what the model fits and what happened into a
+    # number a CFO reads as base demand.
+    #
+    # The gap that remains is a real quantity with a name and is reported
+    # separately, so the rollup still reconciles to the observed KPI:
+    #     base_contribution + marketing_contribution + unexplained == kpi_total
+    fitted_total = _fitted_total(model)
+    if fitted_total is not None:
+        base_contribution = fitted_total - m_mean
+        unexplained = y_total - fitted_total
+        baseline_basis = "fitted"
+    else:
+        # No fitted total available: fall back to the historical definition, but
+        # SAY that the baseline absorbs the residual rather than implying the
+        # model accounted for everything.
+        base_contribution = y_total - m_mean
+        unexplained = None
+        baseline_basis = "observed_minus_media"
     marketing_pct = m_mean / y_total if abs(y_total) > 1e-9 else None
 
     spend_cuts: list[dict[str, Any]] = []
@@ -104,6 +186,9 @@ def cfo_facts(
         "kpi_total": y_total,
         "marketing_contribution": {"mean": m_mean, "lower": m_lo, "upper": m_hi},
         "base_contribution": base_contribution,
+        "fitted_total": fitted_total,
+        "unexplained": unexplained,
+        "baseline_basis": baseline_basis,
         "marketing_pct": marketing_pct,
         "margin": margin,
         "hdi_prob": hdi_prob,

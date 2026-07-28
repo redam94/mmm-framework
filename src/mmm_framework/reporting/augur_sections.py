@@ -1637,10 +1637,28 @@ class AugurCFOSection(AugurSection):
         pct_s = f"{pct * 100:.0f}%" if isinstance(pct, (int, float)) else "—"
         has_margin = cfo.get("margin") is not None
 
+        # "the rest is base demand" was only true because the baseline was
+        # computed as observed-minus-media, i.e. it silently included the
+        # model's error. Name the split for what it is.
+        _basis = str(cfo.get("baseline_basis") or "fitted")
+        _unex = cfo.get("unexplained")
+        if _basis == "fitted" and _unex is not None:
+            _rest = (
+                f"the model attributes <strong>{self._money(cfo.get('base_contribution'))}"
+                "</strong> to fitted base demand, leaving "
+                f"<strong>{self._money(_unex)}</strong> unexplained (the gap "
+                "between the fitted and observed totals, not attributed to "
+                "anything)"
+            )
+        else:
+            _rest = (
+                "the rest is base demand <em>and model error</em>, which this "
+                "fit could not separate"
+            )
         lede = (
             f"<p class='lede'>Marketing contributes <strong>{self._money(mc.get('mean'))}</strong> "
-            f"of the <strong>{self._money(cfo.get('kpi_total'))}</strong> total ({pct_s}); the rest "
-            f"is base demand. {ci}% range [{self._money(mc.get('lower'))}, "
+            f"of the <strong>{self._money(cfo.get('kpi_total'))}</strong> total ({pct_s}); "
+            f"{_rest}. {ci}% range [{self._money(mc.get('lower'))}, "
             f"{self._money(mc.get('upper'))}].</p>"
         )
         body = []

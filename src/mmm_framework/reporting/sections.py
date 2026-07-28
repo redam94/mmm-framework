@@ -1913,6 +1913,40 @@ class CFOSection(Section):
         pct_s = f"{pct * 100:.0f}%" if isinstance(pct, (int, float)) else "—"
         has_margin = cfo.get("margin") is not None
 
+        # State the basis plainly rather than letting a reader assume the
+        # baseline is observed-minus-media. When the fitted total is available
+        # the baseline is the model's FITTED non-marketing outcome and the gap
+        # to observed is broken out as its own card; otherwise the baseline does
+        # absorb the residual, and the gloss says so.
+        _basis = str(cfo.get("baseline_basis") or "fitted")
+        _unex = cfo.get("unexplained")
+        if _basis == "fitted":
+            _base_label = "Base (non-marketing) outcome — fitted"
+            _base_gloss = "the model's non-marketing fitted total"
+            _pct_gloss = "the rest is fitted base demand"
+        else:
+            _base_label = "Base (non-marketing) outcome"
+            _base_gloss = "observed minus modelled marketing — includes model error"
+            _pct_gloss = "the rest is base demand and model error"
+
+        _unexplained_card = ""
+        _reconcile_note = ""
+        if _basis == "fitted" and _unex is not None:
+            _unexplained_card = f"""
+                <div class="metric-card">
+                    <div class="value">{self._format_currency(float(_unex))}</div>
+                    <div class="label">Unexplained (model residual)</div>
+                    <div class="ci">observed minus fitted — not attributed</div>
+                </div>"""
+            _reconcile_note = (
+                '<p class="chart-caption">Fitted base + incremental marketing + '
+                "unexplained residual reconciles to the observed total. The "
+                "residual is the gap between what the model fits and what "
+                "happened; it is reported rather than folded into base demand. "
+                "A small residual means the model tracks the data — it is "
+                "<strong>not</strong> evidence that the split is right.</p>"
+            )
+
         rollup = f"""
             <div class="metrics-grid">
                 <div class="metric-card">
@@ -1923,13 +1957,16 @@ class CFOSection(Section):
                 <div class="metric-card">
                     <div class="value">{pct_s}</div>
                     <div class="label">of total outcome</div>
-                    <div class="ci">the rest is base demand</div>
+                    <div class="ci">{_pct_gloss}</div>
                 </div>
                 <div class="metric-card">
                     <div class="value">{self._format_currency(float(cfo.get('base_contribution', 0.0)))}</div>
-                    <div class="label">Base (non-marketing) outcome</div>
+                    <div class="label">{_base_label}</div>
+                    <div class="ci">{_base_gloss}</div>
                 </div>
+                {_unexplained_card}
             </div>
+            {_reconcile_note}
         """
 
         rows = []
