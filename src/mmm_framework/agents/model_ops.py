@@ -1515,6 +1515,169 @@ def _budget_v2_extras(
     return extras, notes
 
 
+def forecast_plan(
+    mmm: Any,
+    results: Any = None,
+    *,
+    future_media: Any = None,
+    future_controls: Any = None,
+    n_periods: int = 13,
+    pattern: str = "even",
+    channel_budgets: dict | None = None,
+    interval: float = 0.9,
+    include_noise: bool = True,
+    max_draws: int = 200,
+    start_date: str | None = None,
+) -> dict:
+    """Forward KPI forecast under a spend plan, with its caveats attached (#223).
+
+    Either pass ``future_media`` directly (``{channel: [per-period]}`` or a
+    flighting schedule), or pass ``channel_budgets`` and let the op spread them
+    over ``n_periods`` with the given ``pattern`` — the same flighting the
+    planner uses, on the same derived forward calendar, so the forecast covers
+    exactly the periods a saved plan would.
+
+    The markdown deliberately leads with the caveats rather than trailing them:
+    the number is a counterfactual under a plan the model has never observed,
+    and a reader who stops after the headline should already have been told the
+    ways the interval is optimistic.
+    """
+    import pandas as pd
+
+    from mmm_framework import planning as _pl
+    from mmm_framework.planning.forecast import forecast_under_plan
+
+    if getattr(mmm, "_trace", None) is None:
+        return _err("Fit a model before forecasting — there is no posterior yet.")
+
+    flighting_spec = {
+        "n_periods": int(n_periods),
+        "pattern": pattern,
+        **({"start_date": start_date} if start_date else {}),
+    }
+    cal = _forward_calendar(mmm, int(n_periods), flighting_spec)
+
+    if future_media is None:
+        if not channel_budgets:
+            return _err(
+                "Provide either future_media (per-period spend per channel) or "
+                "channel_budgets (a total per channel to spread over n_periods)."
+            )
+        try:
+            future_media = _pl.build_flighting_schedule(
+                {str(k): float(v) for k, v in channel_budgets.items()},
+                int(n_periods),
+                pattern=pattern,
+                calendar=cal,
+            )
+        except Exception as e:  # noqa: BLE001
+            return _err(f"Could not build the spend plan: {e}")
+
+    try:
+        fc = forecast_under_plan(
+            mmm,
+            future_media,
+            calendar=cal,
+            future_controls=future_controls,
+            interval=float(interval),
+            include_noise=bool(include_noise),
+            max_draws=int(max_draws),
+            random_seed=42,
+        )
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Forecast failed: {e}")
+
+    head = fc.headline()
+    lines = ["### KPI Forecast Under Plan", ""]
+    # Caveats FIRST. A reader who stops at the headline has still been told.
+    for c in fc.caveats.statements():
+        lines.append(f"- ⚠️ {c}")
+    if fc.caveats.statements():
+        lines.append("")
+    lines.append(
+        f"- Horizon: {len(fc.periods)} periods "
+        f"({fc.periods[0]} → {fc.periods[-1]})"
+    )
+    if head["total_lower"] is None:
+        lines.append(
+            f"- Total forecast KPI: **{head['total']:,.0f}** "
+            "(point estimate — no interval, see above)"
+        )
+    else:
+        lines.append(
+            f"- Total forecast KPI: **{head['total']:,.0f}** "
+            f"({int(round(interval * 100))}% {fc.caveats.interval_noun} "
+            f"{head['total_lower']:,.0f} – {head['total_upper']:,.0f})"
+        )
+    if fc.by_channel:
+        lines.append(
+            "- Media-driven: "
+            + ", ".join(
+                f"{ch} {float(np.sum(v)):,.0f}"
+                for ch, v in sorted(
+                    fc.by_channel.items(), key=lambda kv: -float(np.sum(kv[1]))
+                )
+            )
+        )
+    lines.append(f"- Baseline (non-media): {float(np.sum(fc.baseline)):,.0f}")
+
+    payload = {
+        "periods": list(fc.periods),
+        "mean": [float(x) for x in fc.mean],
+        "lower": [None if np.isnan(x) else float(x) for x in fc.lower],
+        "upper": [None if np.isnan(x) else float(x) for x in fc.upper],
+        "baseline": [float(x) for x in fc.baseline],
+        "by_channel": {ch: [float(x) for x in v] for ch, v in fc.by_channel.items()},
+        "interval": float(fc.interval),
+        "headline": head,
+        "caveats": fc.caveats.statements(),
+        "caveat_fields": {
+            "trend_extrapolation": fc.caveats.trend_extrapolation,
+            "interval_widens_with_horizon": fc.caveats.interval_widens_with_horizon,
+            "extrapolated_channels": fc.caveats.extrapolated_channels,
+            "residual_autocorrelation": fc.caveats.residual_autocorrelation,
+            "interval_noun": fc.caveats.interval_noun,
+            "inference_family": fc.caveats.inference_family,
+            "approximate": fc.caveats.approximate,
+            "fit_method": fc.caveats.fit_method,
+            "interval_available": fc.caveats.interval_available,
+        },
+        # The per-period DRAWS ride along: a window-total interval cannot be
+        # recovered from per-period bounds, and a committed plan is graded
+        # against draws, not against a summary.
+        "draws_b64": fc.draws_b64,
+        "n_draws": int(fc.n_draws),
+        "calendar": (
+            None
+            if cal is None
+            else {
+                "start": str(cal.start.date()),
+                "n_periods": int(cal.n_periods),
+                "cadence": str(cal.cadence),
+                "fy_start_month": int(cal.fy_start_month),
+            }
+        ),
+    }
+    out = _ok("\n".join(lines), {"forecast": payload})
+    out["tables"] = [
+        df_to_table_json(
+            pd.DataFrame(
+                {
+                    "period": fc.periods,
+                    "forecast": np.round(fc.mean, 1),
+                    "lower": np.round(fc.lower, 1),
+                    "upper": np.round(fc.upper, 1),
+                    "baseline": np.round(fc.baseline, 1),
+                }
+            ),
+            title=f"KPI forecast ({len(fc.periods)} periods)",
+            source="forecast_plan",
+            group="results",
+        )
+    ]
+    return out
+
+
 def plan_budget(
     mmm: Any,
     results: Any = None,
@@ -4368,6 +4531,7 @@ OPS = {
     "saturation_curves": saturation_curves,
     "budget_scenario": budget_scenario,
     "plan_budget": plan_budget,
+    "forecast_plan": forecast_plan,
     "plan_scenario": plan_scenario,
     "marginal_analysis": marginal_analysis,
     "prior_predictive_check": prior_predictive_check,

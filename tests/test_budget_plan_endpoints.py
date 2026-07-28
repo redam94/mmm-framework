@@ -157,3 +157,44 @@ def test_planner_optimize_job_without_model(client, project):
             break
         time.sleep(0.05)
     assert status in ("done", "error")
+
+
+# ── forecast endpoint (#223) ─────────────────────────────────────────────────
+
+
+def test_planner_forecast_requires_a_plan_shape(client, project):
+    """Neither future_media nor channel_budgets → 400 up front, rather than a
+    background job that fails 20 seconds later."""
+    r = client.post(f"/projects/{project}/planner/forecast", json={"n_periods": 4})
+    assert r.status_code == 400, r.text
+    assert "channel_budgets" in r.json()["detail"]
+
+
+def test_planner_forecast_unknown_project_is_404(client):
+    r = client.post(
+        "/projects/does-not-exist/planner/forecast",
+        json={"channel_budgets": {"TV": 100.0}},
+    )
+    assert r.status_code == 404
+
+
+def test_planner_forecast_job_without_model(client, project):
+    """No fitted model → the async job resolves to an error, not a 500."""
+    import time
+
+    start = client.post(
+        f"/projects/{project}/planner/forecast",
+        json={"channel_budgets": {"TV": 1000.0}, "n_periods": 4},
+    )
+    assert start.status_code == 202, start.text
+    job_id = start.json()["job_id"]
+    status = None
+    for _ in range(40):
+        poll = client.get(f"/projects/{project}/planner/forecast/{job_id}").json()
+        status = poll["status"]
+        if status in ("done", "error"):
+            assert status == "error"
+            assert "model" in (poll.get("error") or "").lower()
+            break
+        time.sleep(0.05)
+    assert status in ("done", "error")

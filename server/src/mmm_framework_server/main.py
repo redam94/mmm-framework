@@ -2500,6 +2500,75 @@ async def get_planner_scenario(project_id: str, job_id: str):
     return _poll_planner_job(project_id, job_id)
 
 
+class PlannerForecastRequest(BaseModel):
+    """A forward forecast under a spend plan (#223).
+
+    Either ``future_media`` (per-period spend per channel) or ``channel_budgets``
+    (a total per channel, spread over ``n_periods`` by ``pattern``). Controls are
+    required when the model has them: their future values are a planning
+    assumption with no defensible default, so the op refuses rather than guesses.
+    """
+
+    future_media: dict[str, list[float]] | None = None
+    future_controls: dict[str, list[float]] | None = None
+    channel_budgets: dict[str, float] | None = None
+    n_periods: int = 13
+    pattern: str = "even"
+    interval: float = 0.9
+    include_noise: bool = True
+    start_date: str | None = None
+    max_draws: int = 200
+
+
+@app.post(
+    "/projects/{project_id}/planner/forecast",
+    dependencies=[_proj_write, _rl_heavy],
+)
+async def start_planner_forecast(project_id: str, body: PlannerForecastRequest):
+    """Start a NON-BLOCKING KPI forecast under a plan. Poll the returned job_id.
+
+    Background from day one: the forward pass rebuilds adstock kernels per
+    (channel, draw) and a long geo forecast is a large intermediate, so this is
+    not a request to hold a connection open on.
+    """
+    from mmm_framework.platform.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    if not body.future_media and not body.channel_budgets:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Provide future_media (per-period spend per channel) or "
+                "channel_budgets (a total per channel to spread over n_periods)."
+            ),
+        )
+    run = latest_model_run_payload(project_id)
+    op_kwargs: dict = {
+        "future_media": body.future_media,
+        "future_controls": body.future_controls,
+        "channel_budgets": body.channel_budgets,
+        "n_periods": int(body.n_periods),
+        "pattern": body.pattern,
+        "interval": float(body.interval),
+        "include_noise": bool(body.include_noise),
+        "start_date": body.start_date,
+        "max_draws": int(body.max_draws),
+    }
+    return _start_planner_job(
+        project_id, "forecast_plan", op_kwargs, "forecast", run
+    )
+
+
+@app.get(
+    "/projects/{project_id}/planner/forecast/{job_id}",
+    dependencies=[_proj_read],
+)
+async def get_planner_forecast(project_id: str, job_id: str):
+    """Poll a planner forecast job: {status, result|null, error|null}."""
+    return _poll_planner_job(project_id, job_id)
+
+
 def _start_planner_job(
     project_id: str, op_name: str, op_kwargs: dict, result_key: str, run: dict | None
 ):

@@ -1134,6 +1134,52 @@ def check_pacing(
     return _modelop_command(res, state, tool_call_id)
 
 
+@tool
+def forecast_under_plan(
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    channel_budgets: dict | None = None,
+    future_media: dict | None = None,
+    future_controls: dict | None = None,
+    n_periods: int = 13,
+    pattern: str = "even",
+    interval: float = 0.9,
+    config: InjectedConfig = None,
+) -> Command:
+    """Forecast the KPI forward under a spend plan, with its caveats.
+
+    Call this when the user asks what the KPI will be next quarter / next year
+    under a given budget, or "what happens if we spend X".
+
+    Give either ``channel_budgets`` (``{channel: total $}``, spread over
+    ``n_periods`` by ``pattern`` — even / front_loaded / pulsed) or
+    ``future_media`` (``{channel: [per-period spend]}``). ``future_controls``
+    (``{control: [per-period value]}``) is REQUIRED when the model has controls:
+    their future values are a planning assumption and the tool refuses rather
+    than inventing them.
+
+    The result is a counterfactual under a plan the model has never observed,
+    not a measurement. Always relay the caveats it returns — a held-flat trend
+    whose interval cannot widen with horizon, autocorrelated residuals making
+    the interval too narrow, and any channel funded past its observed spend
+    (where the saturation curve has no data). They lead the output for that
+    reason.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "forecast_plan",
+        {
+            "channel_budgets": channel_budgets,
+            "future_media": future_media,
+            "future_controls": future_controls,
+            "n_periods": int(n_periods),
+            "pattern": pattern,
+            "interval": float(interval),
+        },
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
 def _project_experiment_readouts(config) -> list[dict]:
     """Calibrated/completed experiment readouts for the active session's project,
     slimmed to the fields triangulation needs and JSON-clean for the kernel
@@ -7648,6 +7694,7 @@ TOOLS = [
     # Analysis
     get_roi_metrics,
     check_pacing,
+    forecast_under_plan,
     triangulate_channel_effects,
     get_estimands,
     get_component_decomposition,

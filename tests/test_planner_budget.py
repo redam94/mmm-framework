@@ -549,3 +549,99 @@ class TestPlanCalendar:
         a = project_pacing({"flighting": flat_undated}, mid)
         b = project_pacing({"flighting": flat_dated}, mid)
         assert a["channels"][0]["planned"] == b["channels"][0]["planned"]
+
+
+# ---------------------------------------------------------------------------
+# forecast_plan op (#223 wiring)
+#
+# `planning/forecast.py` shipped reachable only by a direct library call. This
+# is the op behind the agent tool and the REST job.
+# ---------------------------------------------------------------------------
+
+
+class TestForecastOp:
+    def _fitted(self, n_weeks=120):
+        import contextlib
+        import io
+        import warnings
+
+        from mmm_framework import BayesianMMM, ModelConfigBuilder, TrendConfig
+        from mmm_framework.model import TrendType
+        from mmm_framework.synth import dgp
+
+        w = dgp.make_clean(seed=0, n_weeks=n_weeks)
+        m = BayesianMMM(
+            w.panel(),
+            ModelConfigBuilder()
+            .bayesian_numpyro()
+            .with_chains(2)
+            .with_draws(200)
+            .with_tune(200)
+            .build(),
+            TrendConfig(type=TrendType.LINEAR),
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with contextlib.redirect_stderr(io.StringIO()):
+                m.fit(random_seed=0)
+        return m, w
+
+    def _controls(self, w, n):
+        return {c: [float(w.controls[c].mean())] * n for c in w.controls.columns}
+
+    def test_an_unfitted_model_is_refused(self):
+        res = M.OPS["forecast_plan"](FakeGeoMMM(), None, channel_budgets={"TV": 100.0})
+        assert res["error"] and "no posterior" in res["error"]
+
+    def test_neither_plan_shape_supplied_is_refused(self):
+        m, _ = self._fitted()
+        res = M.OPS["forecast_plan"](m, None)
+        assert res["error"] and "future_media" in res["error"]
+
+    @pytest.mark.slow
+    def test_budgets_are_spread_and_the_payload_is_complete(self):
+        m, w = self._fitted()
+        res = M.OPS["forecast_plan"](
+            m,
+            None,
+            channel_budgets={c: 800.0 for c in w.channels},
+            n_periods=8,
+            future_controls=self._controls(w, 8),
+        )
+        assert not res.get("error"), res.get("error")
+        d = res["dashboard"]["forecast"]
+        assert len(d["periods"]) == 8 and len(d["mean"]) == 8
+        # dated, not P1..Pn — the plan window starts after training
+        assert d["periods"][0].startswith("20")
+        assert d["calendar"]["cadence"] == "weekly"
+        # the DRAWS ride along: a window total cannot be rebuilt from bounds
+        assert d["draws_b64"] and d["n_draws"] > 1
+        assert set(d["by_channel"]) == set(w.channels)
+        assert res["tables"]
+
+    @pytest.mark.slow
+    def test_the_markdown_leads_with_the_caveats(self):
+        """A reader who stops after the headline has still been told how the
+        interval is optimistic — so the caveats come first, not last."""
+        m, w = self._fitted()
+        res = M.OPS["forecast_plan"](
+            m,
+            None,
+            # 5x the observed spend, so the extrapolation caveat definitely fires
+            channel_budgets={c: 20000.0 for c in w.channels},
+            n_periods=8,
+            future_controls=self._controls(w, 8),
+        )
+        body = res["content"]
+        assert "⚠️" in body
+        first_caveat = body.index("⚠️")
+        assert first_caveat < body.index("Total forecast KPI")
+        assert "Planned above observed spend" in body
+
+    @pytest.mark.slow
+    def test_missing_controls_surface_as_an_op_error_not_a_crash(self):
+        m, w = self._fitted()
+        res = M.OPS["forecast_plan"](
+            m, None, channel_budgets={c: 800.0 for c in w.channels}, n_periods=8
+        )
+        assert res["error"] and "planning assumption" in res["error"]
