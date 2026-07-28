@@ -140,7 +140,13 @@ def build_deck(
     """
     from ..helpers import compute_response_zones, compute_roi_with_uncertainty
 
-    eff_be = (1.0 / float(margin)) if margin else float(break_even)
+    # One resolver, shared with the Augur HTML report, so the two cannot tier
+    # the same channel differently (measured: Scale in HTML vs Reduce in the
+    # deck at margin 0.4).
+    from ..helpers.measurement import resolve_break_even
+
+    _be = resolve_break_even(margin, default=break_even)
+    eff_be = _be.value
     chan = list(channels or list(getattr(model, "channel_names", []) or []))
 
     # --- pull model-derived numbers (each best-effort; a missing piece just

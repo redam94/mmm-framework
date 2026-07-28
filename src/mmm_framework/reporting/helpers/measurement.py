@@ -58,6 +58,68 @@ __all__ = [
 ]
 
 
+def resolve_break_even(
+    margin: float | None = None,
+    *,
+    default: float = 1.0,
+    value_source: str | None = None,
+) -> "BreakEven":
+    """THE break-even for a revenue-basis ROI. One definition, one caller shape.
+
+    This exists because there were two. ``deck/engine.py`` computed
+    ``1/margin`` while the Augur HTML took ``channel_rows``' default of ``1.0``,
+    so at margin 0.4 the same fitted channel was tiered **Scale** in the report
+    and **Reduce** in the deck, with no cross-reference. A 0.6x profit ROI and a
+    1.5x revenue ROI are the same channel, and one of them says stop spending.
+
+    Convention: **move the reference, do not scale the number.** A
+    margin-scaled figure is a profit number wearing a revenue label; moving the
+    bar leaves the number itself unchanged and self-describing.
+    """
+    if margin is None:
+        return BreakEven(value=float(default), basis="revenue", margin=None,
+                         value_source=value_source)
+    m = float(margin)
+    if not (0.0 < m <= 1.0):
+        raise ValueError(
+            f"margin must be a fraction in (0, 1]; got {margin!r}. "
+            "A percentage (e.g. 40) is not accepted — pass 0.40."
+        )
+    return BreakEven(value=1.0 / m, basis="profit", margin=m,
+                     value_source=value_source)
+
+
+@dataclass(frozen=True)
+class BreakEven:
+    """A resolved break-even plus the assumption that produced it.
+
+    Carried rather than passed as a bare float so any surface rendering a
+    non-1.0 reference can name the margin and its source, which is what makes
+    a profit-basis tier defensible to the person reading it.
+    """
+
+    value: float
+    basis: str            # "revenue" | "profit"
+    margin: float | None
+    value_source: str | None = None
+
+    @property
+    def is_profit_basis(self) -> bool:
+        return self.basis == "profit"
+
+    def disclosure(self) -> str:
+        """One sentence a report can render verbatim; empty on a plain 1.0."""
+        if not self.is_profit_basis:
+            return ""
+        src = f", from {self.value_source}" if self.value_source else ""
+        return (
+            f"Channels are judged against a profit break-even of "
+            f"{self.value:.2f}x revenue ROI, implied by a gross margin of "
+            f"{self.margin:.0%}{src}. This assumes a constant gross margin "
+            "across channels and periods."
+        )
+
+
 @dataclass(frozen=True)
 class MetricMeta:
     """How a channel's ROI-style number should be labeled and interpreted.
@@ -85,8 +147,23 @@ class MetricMeta:
     #: (``"$"`` / ``"1K impressions"`` / ``"clicks"`` / ``"units"``).
     divisor_units: str
     #: The no-effect / break-even reference the value is judged against:
-    #: ``1.0`` for ROI (return per dollar), ``0.0`` for efficiency.
+    #: ``1.0`` for a revenue ROI (return per dollar), ``0.0`` for efficiency,
+    #: ``1/margin`` for a revenue ROI judged on a PROFIT basis.
     reference: float
+    #: What the number is measured against. ``"revenue"`` (the default, so every
+    #: existing number is byte-identical) means a dollar of revenue per dollar
+    #: spent. ``"profit"`` means the same revenue number judged against a
+    #: margin-adjusted break-even — the reference MOVES, the number does not.
+    #:
+    #: Moving the reference rather than scaling the number is deliberate: a
+    #: margin-scaled figure would be a profit number wearing a revenue label,
+    #: and nothing downstream could tell them apart.
+    basis: str = "revenue"
+    #: Dollars per KPI unit used to resolve the reference, when known.
+    value_per_kpi: float | None = None
+    #: Where that value came from (e.g. ``"project_economics"``,
+    #: ``"explicit"``), so a report can name its own assumption.
+    value_source: str | None = None
 
     @property
     def supports_profitability(self) -> bool:
@@ -105,6 +182,9 @@ class MetricMeta:
             "value_units": self.value_units,
             "divisor_units": self.divisor_units,
             "reference": self.reference,
+            "basis": self.basis,
+            "value_per_kpi": self.value_per_kpi,
+            "value_source": self.value_source,
             "supports_profitability": self.supports_profitability,
         }
 
@@ -327,15 +407,40 @@ def _channel_spend_series(model: Any, channel: str) -> np.ndarray | None:
     return np.asarray(series, dtype=np.float64)
 
 
-def _masked_sum(series: np.ndarray, mask: np.ndarray | None) -> float:
+def _masked_sum(
+    series: np.ndarray, mask: np.ndarray | None, *, channel: str | None = None
+) -> float:
+    """Sum ``series`` over ``mask``, or raise if the mask cannot be applied.
+
+    This used to "tolerate" a dtype/length mismatch by returning the FULL
+    series sum. That is not a tolerant fallback, it is a wrong divisor: a
+    windowed ROI silently divided by every period's spend instead of the
+    window's, understating the metric with no error. Every masked ROI rides
+    this — windowed marginal ROAS, the interactive per-period divisor, and
+    ``analysis.py`` — so the failure was broad and invisible.
+
+    The geo-panel case its comment cited does not actually reach here: measured
+    on a geo panel through ``build_and_fit``, this ran 12 times and took the
+    masked branch every time.
+    """
     if mask is None:
         return float(np.asarray(series, dtype=np.float64).sum())
     series = np.asarray(series, dtype=np.float64)
     m = np.asarray(mask)
-    # tolerate a length mismatch (e.g. a geo panel mask vs a national series)
-    if m.dtype == bool and m.shape[0] == series.shape[0]:
-        return float(series[m].sum())
-    return float(series.sum())
+    if m.dtype != bool:
+        raise ValueError(
+            f"mask for {channel or 'channel'} must be boolean, got dtype "
+            f"{m.dtype}. Refusing rather than summing the full series, which "
+            "would silently return an unwindowed divisor."
+        )
+    if m.shape[0] != series.shape[0]:
+        raise ValueError(
+            f"mask length {m.shape[0]} does not match the resolved series "
+            f"length {series.shape[0]} for {channel or 'channel'}. Refusing "
+            "rather than summing the full series, which would silently return "
+            "an unwindowed divisor."
+        )
+    return float(series[m].sum())
 
 
 def _efficiency_divisor(unit: MeasurementUnit, volume: float) -> float:
@@ -369,7 +474,7 @@ def resolve_channel_divisor(
     vol_series = _channel_volume_series(model, channel)
     if vol_series is None:
         return ChannelDivisor(0.0, False, metric_meta_for_channel(model, channel))
-    volume = _masked_sum(vol_series, mask)
+    volume = _masked_sum(vol_series, mask, channel=channel)
 
     # (d) default / explicit spend — byte-identical to the legacy sum.
     if cfg is None or unit is MeasurementUnit.SPEND:
@@ -379,7 +484,7 @@ def resolve_channel_divisor(
     if getattr(cfg, "spend_column", None) is not None:
         spend_series = _channel_spend_series(model, channel)
         if spend_series is not None:
-            spend = _masked_sum(spend_series, mask)
+            spend = _masked_sum(spend_series, mask, channel=channel)
             return ChannelDivisor(spend, True, _meta_monetary(unit, "spend_column"))
         warnings.warn(
             f"Channel '{channel}' declares spend_column="
