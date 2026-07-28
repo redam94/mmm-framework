@@ -178,3 +178,42 @@ class TestMaskedSumRefusesInsteadOfWideningTheWindow:
         assert full == 10.0
         with pytest.raises(ValueError):
             self._fn()(s, np.array([True, True, False]), channel="TV")
+
+
+class TestClassicReportDisclosesItsMargin:
+    """An artifact carrying a profit-basis number must name its assumption.
+
+    The classic CFO note was inverted: empty exactly when a margin WAS given,
+    so a rendered "Profit at risk" column never said what margin produced it.
+    """
+
+    def _html(self, margin):
+        from mmm_framework.reporting.config import ReportConfig
+        from mmm_framework.reporting.sections import CFOSection
+
+        cfo = {
+            "kpi_total": 5000.0,
+            "marketing_contribution": {"mean": 1200.0, "lower": 1000.0, "upper": 1400.0},
+            "base_contribution": 3800.0,
+            "marketing_pct": 0.24,
+            "margin": margin,
+            "hdi_prob": 0.9,
+            "spend_cuts": [
+                {"cut_pct": 0.1, "revenue_at_risk": 100.0, "revenue_lower": 80.0,
+                 "revenue_upper": 120.0, "pct_of_kpi": 0.02,
+                 **({"profit_at_risk": 40.0} if margin else {})},
+            ],
+        }
+        bundle = type("B", (), {"cfo": cfo})()
+        return CFOSection(data=bundle, config=ReportConfig()).render()
+
+    def test_names_the_margin_and_the_assumption(self):
+        html = self._html(0.4)
+        assert "Profit at risk" in html          # the profit number is rendered
+        assert "40%" in html                     # ...and its margin is named
+        assert "constant gross margin" in html   # ...and the assumption stated
+
+    def test_without_a_margin_it_asks_for_one(self):
+        html = self._html(None)
+        assert "Provide a gross margin" in html
+        assert "constant gross margin" not in html
