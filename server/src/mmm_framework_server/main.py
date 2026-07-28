@@ -2451,10 +2451,12 @@ async def start_planner_optimization(project_id: str, body: PlannerOptimizeReque
         "min_channel_spend": body.min_channel_spend,
         "objective": body.objective,
         "mode": body.mode,
-        "value_per_kpi": _resolved_value_per_kpi(project_id, body),
         "frontier": body.frontier,
         "target_kpi": body.target_kpi,
     }
+    op_kwargs["value_per_kpi"], op_kwargs["value_source"] = _resolved_value_per_kpi(
+        project_id, body
+    )
     return _start_planner_job(project_id, "plan_budget", op_kwargs, "budget_plan", run)
 
 
@@ -3577,18 +3579,21 @@ def _project_valuation(project_id: str, override=None):
     return kpi_to_dollars(override=override, preferences=prefs, branding=branding)
 
 
-def _resolved_value_per_kpi(project_id: str, body) -> float | None:
-    """value_per_kpi for a planner optimize request, or 400 when it is required.
+def _resolved_value_per_kpi(project_id: str, body) -> tuple[float | None, str | None]:
+    """``(value_per_kpi, source)`` for a planner optimize request, or 400.
 
     Required ONLY for ``mode='free'``, which trades KPI against spend and so
     needs the exchange rate. A frontier sweep and a goal-seek both run
     ``optimize_budget(mode='fixed')`` under the hood and target a KPI total, so
     the value cancels — refusing them would remove a capability that works.
+
+    The ``source`` rides along so the persisted plan states which objective it
+    optimized (#221); it never affects the allocation.
     """
     if body.value_per_kpi is not None:
         # An explicit number from the caller is already dollars-per-KPI-unit and
         # is the highest-precedence source; it needs no margin/price derivation.
-        return float(body.value_per_kpi)
+        return float(body.value_per_kpi), "param"
 
     resolved = _project_valuation(project_id)
     if body.mode == "free" and not resolved.is_dollar:
@@ -3603,7 +3608,7 @@ def _resolved_value_per_kpi(project_id: str, body) -> float | None:
                 "allocation needs no valuation."
             ),
         )
-    return resolved.value_per_kpi
+    return resolved.value_per_kpi, (resolved.source if resolved.is_dollar else None)
 
 
 def _resolve_project_margin(

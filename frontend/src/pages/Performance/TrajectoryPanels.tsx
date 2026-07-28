@@ -6,6 +6,7 @@ import { Card, StatHero } from '../../components/ui';
 import { CHART_COLORWAY, COLORS } from '../../theme/colors';
 import { mmmPlotlyLayout, PLOTLY_CONFIG } from '../../theme/plotlyTheme';
 import type { HistoryPayload, RoiPoint } from '../../api/services/measurementService';
+import { groupByObjective, objectiveLabel, sameObjective } from '../../lib/objective';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -88,15 +89,22 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
   );
 
   // ── chart c: misallocation (expected uplift) ──
-  const upliftTrace: Data = {
+  // One trace PER OBJECTIVE, not one line through all of them. `expected_uplift`
+  // is denominated by the allocator's objective, so joining a profit-objective
+  // run to a KPI-uplift run draws a confident trend through two different units
+  // (#221). Segmenting keeps every point visible and refuses only the false
+  // continuity.
+  const upliftGroups = groupByObjective(portfolio);
+  const mixedObjectives = upliftGroups.length > 1;
+  const upliftTraces: Data[] = upliftGroups.map((g, i) => ({
     type: 'scatter',
     mode: 'lines+markers',
-    name: 'Expected uplift',
-    x: portfolio.map((p) => runs.findIndex((r) => r.run_id === p.run_id)),
-    y: portfolio.map((p) => p.expected_uplift),
-    line: { color: COLORS.rust600, width: 2 },
-    marker: { size: 7, color: COLORS.rust600 },
-  };
+    name: mixedObjectives ? g.label : 'Expected uplift',
+    x: g.points.map((p) => runs.findIndex((r) => r.run_id === p.run_id)),
+    y: g.points.map((p) => p.expected_uplift),
+    line: { color: i === 0 ? COLORS.rust600 : COLORS.steel600, width: 2 },
+    marker: { size: 7, color: i === 0 ? COLORS.rust600 : COLORS.steel600 },
+  }));
 
   // ── chart d: portfolio mROI (+ EVPI on a secondary axis when present) ──
   const portfolioX = portfolio.map((p) => runs.findIndex((r) => r.run_id === p.run_id));
@@ -191,9 +199,20 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
           value={
             last?.expected_uplift != null ? Math.round(last.expected_uplift).toLocaleString() : '—'
           }
-          delta={pctDelta(first?.expected_uplift, last?.expected_uplift)}
+          // No period-over-period delta across an objective change: the two
+          // endpoints are different quantities, so their percent change has no
+          // unit and a confident sign (#221).
+          delta={
+            sameObjective(first, last)
+              ? pctDelta(first?.expected_uplift, last?.expected_uplift)
+              : null
+          }
           increaseIsGood={false}
-          hint="expected uplift left unclaimed"
+          hint={
+            sameObjective(first, last)
+              ? 'expected uplift left unclaimed'
+              : `no trend: objective changed to ${objectiveLabel(last)}`
+          }
         />
         <StatHero
           label="Mean ROI CI width"
@@ -246,14 +265,18 @@ export function TrajectoryPanels({ history }: { history: HistoryPayload }) {
 
         <ChartCard
           title="Misallocation"
-          caption="KPI left on the table vs the optimal allocation — should fall as estimates sharpen."
+          caption={
+            mixedObjectives
+              ? 'Left on the table vs the optimal allocation. These runs were optimized under different objectives, so each is drawn as its own series — the values are not on one scale and the trend across them is not a trend.'
+              : 'KPI left on the table vs the optimal allocation — should fall as estimates sharpen.'
+          }
         >
           <Plot
-            data={[upliftTrace]}
+            data={upliftTraces}
             layout={mmmPlotlyLayout({
               height: 340,
               margin: CHART_MARGIN,
-              showlegend: false,
+              showlegend: mixedObjectives,
               xaxis: runAxis,
               yaxis: { title: { text: 'Expected uplift' }, rangemode: 'tozero' },
             })}
