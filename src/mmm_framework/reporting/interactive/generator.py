@@ -564,9 +564,14 @@ class InteractiveReportGenerator:
             '<p class="chart-caption">Waterfall from the first year\'s total '
             "to the second's: green bars are drivers that added KPI, rust "
             "bars drivers that cost KPI. Media bars are posterior "
-            "contribution deltas with credible intervals; the baseline bar "
-            "is the residual non-media change, so the bridge always closes "
-            "to the observed totals.</p>"
+            "contribution deltas with credible intervals, and the baseline "
+            "bar is the <em>modelled</em> non-media change — not whatever is "
+            "left over. The two sum to the change the model <em>fits</em>; "
+            "any remaining gap to the observed change is shown separately as "
+            "<em>Unexplained (model residual)</em>, in grey and without an "
+            "interval, because it is an accounting difference rather than an "
+            "estimate. A small residual means the model tracks the data; it "
+            "is <strong>not</strong> evidence that the baseline is right.</p>"
         )
         return _NavEntry("yoy-drivers", "YoY drivers"), self._wrap(
             "yoy-drivers",
