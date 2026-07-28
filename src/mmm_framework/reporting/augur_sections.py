@@ -46,10 +46,34 @@ class AugurSection(Section):
     _rows_cache: list | None = None
 
     # ── shared accessors ────────────────────────────────────────────────────
+    def break_even(self):
+        """THE break-even for this report, resolved once from the same margin
+        the deck uses.
+
+        Previously `rows()` took `channel_rows`' default of 1.0 while the deck
+        computed 1/margin, so at margin 0.4 the same fitted channel was tiered
+        Scale here and Reduce there — two artifacts from one model giving
+        opposite instructions.
+        """
+        from .helpers.measurement import resolve_break_even
+
+        cfo = getattr(self.data, "cfo", None) or {}
+        margin = cfo.get("margin") if isinstance(cfo, dict) else None
+        try:
+            return resolve_break_even(
+                margin, value_source="project economics" if margin else None
+            )
+        except ValueError:
+            # A malformed margin must not silently fall back to a DIFFERENT
+            # break-even than the deck's; refuse the profit basis instead.
+            return resolve_break_even(None)
+
     def rows(self) -> list[dict]:
         if self._rows_cache is None:
             try:
-                self._rows_cache = channel_rows(self.data)
+                self._rows_cache = channel_rows(
+                    self.data, break_even=self.break_even().value
+                )
             except Exception:
                 self._rows_cache = []
         return self._rows_cache
@@ -159,16 +183,33 @@ class AugurHeadlineSection(AugurSection):
         title = html.escape(headline) if headline else html.escape(self.title)
         eyebrow = f'<div class="section-eyebrow">{html.escape(self.eyebrow)}</div>'
         caveat = self._caveat_banner()
+        basis_note = self._basis_banner()
         return f"""
         <section class="section" id="{self.section_id}">
             {eyebrow}
             <h2>{title}</h2>
             {caveat}
+            {basis_note}
             {lede}
             {kpis}
             {recs}
         </section>
         """
+
+    def _basis_banner(self) -> str:
+        """Name the margin whenever tiers are judged on a profit basis.
+
+        Presence is implied by the DATA (a non-1.0 break-even), not by a config
+        flag, so a profit-basis recommendation cannot be rendered without its
+        assumption attached.
+        """
+        be = self.break_even()
+        if not be.is_profit_basis:
+            return ""
+        return (
+            '<div class="callout callout-note">'
+            f"<p>{html.escape(be.disclosure())}</p></div>"
+        )
 
     def _caveat_banner(self) -> str:
         """A client-facing stop sign when the model was fit APPROXIMATELY (MAP /

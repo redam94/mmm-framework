@@ -16,6 +16,33 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Fixed
 
+- **The HTML report and the slide deck gave opposite recommendations for the same channel**
+  ([#221]). `deck/engine.py` computed a margin-adjusted break-even (`1/margin`) while the Augur HTML
+  took `channel_rows`' default of `1.0`. At a 40% gross margin a channel with ROI 1.8 was tiered
+  **Scale** in the report and **Reduce** in the deck, with no cross-reference. Both now resolve one
+  break-even through `reporting.helpers.measurement.resolve_break_even`.
+
+  The convention is **move the reference, not the number**: a margin-scaled figure would be a profit
+  number wearing a revenue label. `MetricMeta` gains `basis` (`"revenue"` by default, so every
+  existing number is byte-identical), `value_per_kpi` and `value_source`, so a metric's definition
+  travels with it. Any artifact judging channels on a profit basis now carries a banner naming the
+  margin, its source, and the constant-margin assumption — triggered by the data, not a config flag.
+  A margin passed as a percentage (`40` rather than `0.40`) is refused rather than silently
+  producing a 0.025 break-even that tiers everything Scale.
+
+- **`_masked_sum` silently returned an unwindowed divisor** ([#221]). On a dtype or length mismatch
+  it fell back to the FULL-series sum, so a windowed ROI divided by every period's spend instead of
+  the window's — understating the metric with no error, across windowed marginal ROAS, the
+  interactive per-period divisor and `analysis.py`. It now raises, naming the channel and both
+  shapes. The geo-panel case its comment cited as justification does not reach it: measured on a geo
+  panel through `build_and_fit`, it ran 12 times and took the masked branch every time.
+
+- **The CFO baseline is the model's fitted non-marketing outcome, with the residual named**
+  ([#220]). It was `observed_total − modelled_media`, so model error landed inside a number read as
+  base demand. `cfo_facts` now reports `fitted_total`, `unexplained` and `baseline_basis`, the
+  rollup reconciles as `base + marketing + unexplained == observed`, and both surfaces state which
+  basis they are on rather than leaving it to be assumed.
+
 - **Models that consume a control column could be saved but never reloaded** ([#237], [#222]).
   A reach/frequency `frequency_column`, and price/promo levers, are stripped out of
   `model.control_names` because they are consumed as model terms rather than linear controls. The
@@ -61,6 +88,7 @@ frozen public contract breaks, and the contract itself is pinned by
   matters most.
 
 [#220]: https://github.com/redam94/mmm-framework/issues/220
+[#221]: https://github.com/redam94/mmm-framework/issues/221
 [#222]: https://github.com/redam94/mmm-framework/issues/222
 [#237]: https://github.com/redam94/mmm-framework/issues/237
 
