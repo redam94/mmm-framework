@@ -874,6 +874,13 @@ class BayesianMMM:
         # controls unchanged) when no levers are configured.
         self._price_lever = None  # (PriceConfig, raw series)
         self._promo_levers: list = []  # [(PromoConfig, raw series)]
+        # The swappable lever block: a design matrix behind a `pm.Data` container
+        # plus the normalization constants FROZEN at fit time (see
+        # `_prepare_levers` for why recomputing them voids every counterfactual).
+        self._lever_names: list[str] = []
+        self.X_levers_raw: np.ndarray | None = None
+        self._price_ref: float | None = None
+        self._promo_scale: dict[str, float] = {}
         self._prepare_levers()
 
         # Reach & frequency channels (#141): pull each channel's frequency
@@ -1234,11 +1241,24 @@ class BayesianMMM:
         ``control_names`` / ``X_controls_raw`` (so it is not double-counted as a
         linear control) and its raw series stashed for the dedicated lever block.
         No-op when no levers are configured — the control block is unchanged.
+
+        Also **freezes both normalization constants** here, at fit time, rather
+        than recomputing them in-graph. This is load-bearing for counterfactuals
+        and is the same defect class as the StructuralNestedMMM in-graph-centering
+        blocker: a reference recomputed from the swapped series renormalizes the
+        swap away exactly. ``log(0.5p / mean(0.5p)) == log(p / mean(p))``, and
+        ``0.5·promo / max|0.5·promo| == promo / max|promo|`` — so a uniform lever
+        intervention would return "no effect" with full confidence, which looks
+        exactly like a well-identified null.
         """
         price_cfg = getattr(self.model_config, "price", None)
         promo_cfgs = list(getattr(self.model_config, "promotions", []) or [])
-        if (price_cfg is None and not promo_cfgs) or self.n_controls == 0:
+        if price_cfg is None and not promo_cfgs:
             return
+        # NB no `n_controls == 0` short-circuit: falling through to the
+        # per-variable lookup below is what makes a lever configured against a
+        # panel with no controls WARN rather than vanish silently — the same
+        # silent-drop class this issue closes.
 
         idx = {name: i for i, name in enumerate(self.control_names)}
         remove: set[str] = set()
@@ -1269,10 +1289,35 @@ class BayesianMMM:
 
         if not remove:
             return
+
+        # The lever design matrix + the frozen constants the graph reads. Column
+        # order is price first, then promos in config order; `_lever_names` is the
+        # `lever` coord and the target vocabulary for an intervention.
+        lever_cols: list[np.ndarray] = []
+        if self._price_lever is not None:
+            cfg, price_raw = self._price_lever
+            self._lever_names.append(cfg.variable)
+            lever_cols.append(price_raw)
+            self._price_ref = self._resolve_price_reference(cfg, price_raw)
+        for cfg, promo_raw in self._promo_levers:
+            self._lever_names.append(cfg.variable)
+            lever_cols.append(promo_raw)
+            self._promo_scale[cfg.variable] = float(np.max(np.abs(promo_raw))) + 1e-9
+        self.X_levers_raw = np.column_stack(lever_cols).astype(np.float64)
+
         keep = [i for i, name in enumerate(self.control_names) if name not in remove]
         self.control_names = [self.control_names[i] for i in keep]
         self.X_controls_raw = self.X_controls_raw[:, keep] if keep else None
         self.n_controls = len(self.control_names)
+
+    @property
+    def n_levers(self) -> int:
+        return len(self._lever_names)
+
+    @property
+    def lever_names(self) -> list[str]:
+        """Price/promo lever columns, in `X_levers_raw` column order."""
+        return list(self._lever_names)
 
     def _prepare_reach_frequency(self):
         """Split each reach/frequency channel's frequency column out of the
@@ -1458,6 +1503,10 @@ class BayesianMMM:
             coords["product"] = self.product_names
         if self.n_controls > 0:
             coords["control"] = self.control_names
+        # Lever-guarded, on the `n_controls > 0` precedent above: a model with no
+        # lever must keep a byte-identical graph.
+        if self.n_levers > 0:
+            coords["lever"] = self._lever_names
 
         for name, features in self.seasonality_features.items():
             n_features = features.shape[1]
@@ -1860,25 +1909,30 @@ class BayesianMMM:
         if self._price_lever is None and not self._promo_levers:
             return None
 
+        # Read the RAW lever series from the container so `pm.set_data` reaches
+        # this block, and normalize against the constants frozen in
+        # `_prepare_levers`. Recomputing either constant here would make a
+        # uniform intervention an exact no-op — see that method for the algebra.
+        _lever_data = pm.modelcontext(None)["X_levers_raw"]
+        col = {name: i for i, name in enumerate(self._lever_names)}
+
         contribs: list = []
         if self._price_lever is not None:
-            cfg, price_raw = self._price_lever
-            ref = self._resolve_price_reference(cfg, price_raw)
-            log_price = np.log(np.maximum(price_raw, 1e-9) / ref).astype(np.float64)
+            cfg, _price_raw = self._price_lever
+            x_price = _lever_data[:, col[cfg.variable]]
+            log_price = pt.log(pt.maximum(x_price, 1e-9) / self._price_ref)
             # Sign guard: elasticity ≤ 0 (a price rise cannot raise demand here).
             mag = pm.HalfNormal(
                 "price_elasticity_mag", sigma=float(cfg.elasticity_prior_sigma)
             )
             elasticity = pm.Deterministic("price_elasticity", -mag)
-            price_contrib = elasticity * pt.as_tensor_variable(log_price)
+            price_contrib = elasticity * log_price
             pm.Deterministic("price_component", price_contrib)
             contribs.append(price_contrib)
 
         promo_contribs: list = []
-        for cfg, promo_raw in self._promo_levers:
-            scale = float(np.max(np.abs(promo_raw))) + 1e-9
-            promo_norm = (promo_raw / scale).astype(np.float64)
-            x = pt.as_tensor_variable(promo_norm)
+        for cfg, _promo_raw in self._promo_levers:
+            x = _lever_data[:, col[cfg.variable]] / self._promo_scale[cfg.variable]
             if cfg.adstock_lmax > 1:
                 from ..transforms.adstock_pt import parametric_adstock_pt
 
@@ -2355,6 +2409,13 @@ class BayesianMMM:
                 X_controls_data = pm.Data(
                     "X_controls", self.X_controls, dims=("obs", "control")
                 )
+
+            # Price/promo levers ride a container so they can be intervened on,
+            # exactly as media does through `X_media_raw`. RAW here — the
+            # normalization is applied in-graph against constants frozen at fit
+            # time, so a swap is not renormalized away.
+            if self.n_levers > 0:
+                pm.Data("X_levers_raw", self.X_levers_raw, dims=("obs", "lever"))
 
             time_idx_data = pm.Data("time_idx", self.time_idx)
             geo_idx_data = pm.Data("geo_idx", self.geo_idx)
@@ -3562,6 +3623,7 @@ class BayesianMMM:
         self,
         X_media: np.ndarray | None,
         X_controls: np.ndarray | None = None,
+        X_levers: np.ndarray | None = None,
     ):
         """Temporarily swap counterfactual data into the model's ``pm.Data``
         containers, **restoring the training values on exit**.
@@ -3614,6 +3676,24 @@ class BayesianMMM:
                 saved["X_controls"] = self.model["X_controls"].get_value()
                 X_controls_std = (X_controls - self.control_mean) / self.control_std
                 pm.set_data({"X_controls": X_controls_std})
+
+            if X_levers is not None:
+                if self.n_levers == 0:
+                    raise ValueError(
+                        "X_levers was supplied but this model has no price or "
+                        "promotion lever. Configure one with "
+                        "ModelConfigBuilder().with_price(...) / .with_promotions(...)."
+                    )
+                arr = np.asarray(X_levers, dtype=np.float64)
+                if arr.shape != (self.n_obs, self.n_levers):
+                    raise ValueError(
+                        f"X_levers must be ({self.n_obs}, {self.n_levers}) for "
+                        f"levers {self._lever_names}; got {arr.shape}."
+                    )
+                # RAW, not normalized: the graph divides by the frozen constants,
+                # which is what makes the swap survive rather than cancel.
+                saved["X_levers_raw"] = self.model["X_levers_raw"].get_value()
+                pm.set_data({"X_levers_raw": arr})
 
             try:
                 yield
