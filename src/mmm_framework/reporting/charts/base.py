@@ -44,8 +44,21 @@ class NumpyEncoder(json.JSONEncoder):
 
 
 def _to_json(data: Any) -> str:
-    """Convert data to JSON string for Plotly."""
-    return json.dumps(data, cls=NumpyEncoder)
+    """Convert data to a JSON string for embedding in an inline ``<script>``.
+
+    The ``</`` escape is load-bearing, not cosmetic. Every caller interpolates
+    the result straight into a ``<script>`` block, and ``json.dumps`` escapes
+    neither ``<`` nor ``/`` -- so a payload string containing ``</script>``
+    closes the block early and the browser parses the rest as HTML. Channel
+    names cannot carry that (PyMC rejects ``/`` in RV names) but control and
+    geography names are coords, not RV names, and they reach chart traces,
+    hovertemplates and axis titles.
+
+    ``\\/`` is a legal JSON string escape and legal JavaScript, so Plotly
+    decodes a byte-identical string while the literal ``</script>`` never
+    appears. Mirrors the guard in ``reporting/interactive/generator.py``.
+    """
+    return json.dumps(data, cls=NumpyEncoder).replace("</", "<\\/")
 
 
 def _hsl_to_rgb(h: float, s: float, lightness: float) -> tuple[int, int, int]:
