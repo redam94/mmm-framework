@@ -385,6 +385,15 @@ _SATURATION_TYPES = {
     "none",
 }
 _MEASUREMENT_UNITS = {"spend", "impressions", "clicks", "other"}
+# Price / promotion levers (#138, reachable from a spec since #222). `price` is
+# a single object; `promotions` is a LIST of objects, so it is validated as a
+# whole-value write rather than by dotted path.
+_PRICE_KEYS = {"variable", "reference", "elasticity_prior_sigma"}
+_PROMO_KEYS = {"variable", "adstock_lmax", "lift_prior_sigma", "allow_negative"}
+#: `reference` accepts a number OR one of these; anything else silently becomes
+#: the "median" default inside PriceConfig's own validation, which is exactly
+#: the accept-then-no-op this registry exists to prevent.
+_PRICE_REFERENCES = {"mean", "median", "max"}
 _CHANNEL_SCALAR_FIELDS = {"name", "measurement_unit", "spend_column", "cpm", "cpc"}
 _CONTROL_FIELDS = {"name", "role"}
 # Enum-valued top-level scalars whose reads fall back to a default on any
@@ -420,6 +429,83 @@ def _spec_leaves(parts: list[str], value) -> list[tuple[list[str], object]]:
             out.extend(_spec_leaves(parts + [str(k)], sub))
         return out
     return [(parts, value)]
+
+
+def _lever_reference_error(value) -> str | None:
+    """`price.reference` accepts a number or mean/median/max; anything else."""
+    if value is None or isinstance(value, (int, float)) and not isinstance(value, bool):
+        return None
+    if str(value).strip().lower() in _PRICE_REFERENCES:
+        return None
+    return (
+        f"`price.reference` = {value!r} is not a reference the builder "
+        f"recognizes: a number, or one of {', '.join(sorted(_PRICE_REFERENCES))} "
+        "(or null for log(price) with the constant absorbed by the intercept)."
+    )
+
+
+def _unconsumed_lever_path(parts: list[str], value, _bad) -> str | None:
+    """Validate a write to `price.*` or `promotions`.
+
+    `price` is one object, addressed by dotted path. `promotions` is a LIST of
+    objects, so it is validated as a whole-value write — there is no stable key
+    to address an element by, and inventing one (`promotions.0.variable`) would
+    be a path the builder does not read.
+    """
+    top = parts[0]
+
+    if top == "price":
+        # `price: null` removes the lever — a legitimate write.
+        if len(parts) == 1 and value is None:
+            return None
+        for leaf, leaf_val in _spec_leaves(list(parts), value):
+            path = ".".join(leaf)
+            if len(leaf) < 2:
+                continue  # replacing the whole (empty) dict is a no-op write
+            if leaf[1] not in _PRICE_KEYS:
+                return _bad(
+                    path,
+                    "the model builder never reads it. Valid `price.*` keys: "
+                    f"{', '.join(sorted(_PRICE_KEYS))}.",
+                )
+            if leaf[1] == "reference":
+                err = _lever_reference_error(leaf_val)
+                if err:
+                    return err
+        return None
+
+    # promotions. The element-path check comes FIRST: `promotions.0.variable`
+    # is a path the builder never reads, and diagnosing it as a type error
+    # ("expected a list, got a string") would describe the wrong mistake.
+    if len(parts) > 1:
+        return _bad(
+            ".".join(parts),
+            "`promotions` is a list — write the whole list, not an element path.",
+        )
+    if value is None or value == []:
+        return None
+    if not isinstance(value, list):
+        return _bad(
+            ".".join(parts),
+            "`promotions` is a list of promo objects, e.g. "
+            '[{"variable": "Promo", "adstock_lmax": 4}].',
+        )
+    for i, item in enumerate(value):
+        if not isinstance(item, dict):
+            return _bad(f"promotions[{i}]", "each promotion must be an object.")
+        unknown = set(item) - _PROMO_KEYS
+        if unknown:
+            return _bad(
+                f"promotions[{i}].{sorted(unknown)[0]}",
+                "the model builder never reads it. Valid promo keys: "
+                f"{', '.join(sorted(_PROMO_KEYS))}.",
+            )
+        if not str(item.get("variable", "")).strip():
+            return _bad(
+                f"promotions[{i}].variable",
+                "a promotion must name the control column it promotes.",
+            )
+    return None
 
 
 def unconsumed_spec_path(parts: list[str], value, spec: dict) -> str | None:
@@ -521,6 +607,9 @@ def unconsumed_spec_path(parts: list[str], value, spec: dict) -> str | None:
                 f"the builder only recognizes: {', '.join(sorted(allowed))}."
             )
         return None
+
+    if top in ("price", "promotions"):
+        return _unconsumed_lever_path(parts, value, _bad)
 
     _grouped = {
         "inference": _INFERENCE_KEYS,
@@ -805,6 +894,40 @@ def _canonical_trend_type(trend_spec: dict) -> str:
 # ── Saved-model settings (single source of truth for load/list surfaces) ─────
 
 
+def _apply_lever_settings(settings: dict, price, promotions) -> None:
+    """Record price/promo levers and REMOVE them from the controls list.
+
+    `saved_model_settings` reported the lever variables under `controls` (they
+    are control columns in the MFF config), telling a reader they were fit as
+    ordinary linear coefficients — the opposite of what happened. The model
+    strips them from the control block precisely so they are not double-counted,
+    so the settings digest has to strip them too.
+    """
+    promotions = list(promotions or [])
+    if not price and not promotions:
+        return
+    levers: dict = {}
+    if price:
+        levers["price"] = {
+            "variable": price.get("variable"),
+            "reference": price.get("reference", "median"),
+        }
+    if promotions:
+        levers["promotions"] = [
+            {
+                "variable": p.get("variable"),
+                "adstock_lmax": p.get("adstock_lmax", 4),
+            }
+            for p in promotions
+        ]
+    settings["levers"] = levers
+    promoted = {price.get("variable")} if price else set()
+    promoted |= {p.get("variable") for p in promotions}
+    settings["controls"] = [
+        c for c in (settings.get("controls") or []) if c not in promoted
+    ]
+
+
 def saved_model_settings(save_dir: str) -> dict:
     """Read the complete settings of a saved model directory.
 
@@ -857,6 +980,9 @@ def saved_model_settings(save_dir: str) -> dict:
             if spec:
                 settings["likelihood"] = spec.get("likelihood")
                 settings["media_prior_mode"] = spec.get("media_prior_mode")
+                _apply_lever_settings(
+                    settings, spec.get("price"), spec.get("promotions")
+                )
                 for m in spec.get("media_channels", []):
                     adstock = m.get("adstock") or {}
                     sat = m.get("saturation") or {}
@@ -913,6 +1039,7 @@ def saved_model_settings(save_dir: str) -> dict:
                 ],
                 "controls": [c.get("name") for c in mff.get("controls") or []],
             }
+            _apply_lever_settings(settings, mc.get("price"), mc.get("promotions"))
             # Model class + fit provenance from metadata.json (MMMSerializer).
             meta_path = _os.path.join(save_dir, "metadata.json")
             if _os.path.exists(meta_path):
@@ -990,6 +1117,23 @@ def settings_digest_markdown(settings: dict) -> str:
     controls = settings.get("controls") or []
     if controls:
         lines.append(f"- Controls: {', '.join(map(str, controls))}")
+    # Levers are NOT linear controls — they are a log-price elasticity and a
+    # promo lift with its own carryover, and they were removed from the controls
+    # line above so the digest cannot imply otherwise.
+    levers = settings.get("levers") or {}
+    if levers:
+        parts = []
+        if levers.get("price"):
+            p = levers["price"]
+            parts.append(
+                f"price {p.get('variable')} (log elasticity vs "
+                f"{p.get('reference')})"
+            )
+        for pr in levers.get("promotions") or []:
+            parts.append(
+                f"promo {pr.get('variable')} (adstock l_max={pr.get('adstock_lmax')})"
+            )
+        lines.append(f"- Levers: {'; '.join(parts)}")
     return "\n".join(lines)
 
 
@@ -1135,6 +1279,29 @@ def _model_config_from_spec(spec: dict):
             f"spec.specification must be 'additive' or 'multiplicative', "
             f"got {spec_form!r}."
         )
+    # Price / promotion levers (#138). Reachable from a spec only since #222,
+    # deliberately after the persistence fix in #253 — building them from a spec
+    # first would have made every agent-fit lever model unloadable, converting a
+    # loud failure into a broken build_and_fit -> load_fitted_model pipeline.
+    price_spec = spec.get("price")
+    if price_spec:
+        from mmm_framework.config import PriceConfig
+
+        try:
+            model_config_builder.with_price(PriceConfig(**dict(price_spec)))
+        except Exception as e:  # noqa: BLE001
+            raise ValueError(f"spec.price is not a valid price lever: {e}") from e
+    promo_spec = spec.get("promotions")
+    if promo_spec:
+        from mmm_framework.config import PromoConfig
+
+        try:
+            model_config_builder.with_promotions(
+                *[PromoConfig(**dict(p)) for p in promo_spec]
+            )
+        except Exception as e:  # noqa: BLE001
+            raise ValueError(f"spec.promotions is not a valid promo list: {e}") from e
+
     intercept_prior = spec.get("priors", {}).get("intercept", {})
     if "mu" in intercept_prior or "sigma" in intercept_prior:
         model_config_builder.with_intercept_prior(
