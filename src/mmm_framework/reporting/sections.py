@@ -8,6 +8,7 @@ and customized independently.
 from __future__ import annotations
 
 import html
+import numbers
 from typing import TYPE_CHECKING
 import numpy as np
 
@@ -17,6 +18,26 @@ from .evidence import evidence_chip_html, evidence_legend_html
 
 if TYPE_CHECKING:
     from .data_extractors import MMMDataBundle
+
+
+def _is_finite_number(value: object) -> bool:
+    """True only for a real, finite number.
+
+    Two traps this exists to avoid. ``isinstance(float("nan"), float)`` is True,
+    so an isinstance check alone lets NaN/inf through and they render as the
+    literal ``"nan"``. And ``np.float32``/``np.int64`` are *not* subclasses of
+    ``float``/``int``, so an isinstance check alone would also reject perfectly
+    good numpy scalars — coercing instead keeps every numeric dtype working.
+    ``bool`` is excluded because ``isinstance(True, int)`` is True.
+    """
+    if isinstance(value, bool) or not isinstance(value, numbers.Number):
+        # A numeric *string* would survive float() here and then blow up in the
+        # caller's f"{value:.3f}", so screen on the numeric ABC, not on coercion.
+        return False
+    try:
+        return bool(np.isfinite(float(value)))
+    except (TypeError, ValueError):
+        return False
 
 
 class Section:
@@ -1984,9 +2005,18 @@ class CausalAssumptionsSection(Section):
             # A prior-dominated coefficient's RV is an artifact of prior
             # tightness, not evidence — it must never render as green "Robust".
             prior_dominated = bool(ch.get("is_prior_dominated"))
-            rv_s = f"{rv:.3f}" if isinstance(rv, (int, float)) else "-"
-            pr2_s = f"{pr2:.3f}" if isinstance(pr2, (int, float)) else "-"
-            if fragile:
+            # NB `isinstance(nan, float)` is True, so an isinstance guard alone
+            # prints the literal "nan"; and `is_fragile` is
+            # `isfinite(rv) and rv < thr`, so a non-finite RV is *not fragile*
+            # and would otherwise fall through to green "Robust" — a passed
+            # sensitivity check that was never computed. Approximate (MAP/ADVI)
+            # fits produce exactly this.
+            assessable = _is_finite_number(rv)
+            rv_s = f"{rv:.3f}" if assessable else "n/a"
+            pr2_s = f"{pr2:.3f}" if _is_finite_number(pr2) else "n/a"
+            if not assessable:
+                cls, status = "uncertain", "Not assessable (no value)"
+            elif fragile:
                 cls, status = "negative", "Fragile"
             elif prior_dominated:
                 cls, status = "uncertain", "Not assessable (prior-driven)"
@@ -2002,6 +2032,20 @@ class CausalAssumptionsSection(Section):
                 </tr>
                 """)
         caveat = robustness.get("caveat", "")
+        any_unassessable = any(
+            not _is_finite_number(ch.get("robustness_value"))
+            for ch in robustness["channels"]
+        )
+        unassessable_note = (
+            '<p class="chart-caption">Channels marked <em>not assessable (no '
+            "value)</em> have no robustness value to report: it grows with "
+            "|posterior mean / posterior sd|, and this fit produced no usable "
+            "posterior sd for them. An approximate (MAP / ADVI) fit is the usual "
+            "cause, since its posterior is degenerate. This is <strong>not</strong> "
+            "a passed check — re-fit with NUTS to assess these channels.</p>"
+            if any_unassessable
+            else ""
+        )
         any_prior_dominated = any(
             ch.get("is_prior_dominated") for ch in robustness["channels"]
         )
@@ -2026,6 +2070,7 @@ class CausalAssumptionsSection(Section):
                 more robust; channels flagged "Fragile" could be overturned by a weak
                 confounder.
             </p>
+            {unassessable_note}
             {footnote}
             <table class="data-table">
                 <thead>

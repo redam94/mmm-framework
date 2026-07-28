@@ -3823,11 +3823,25 @@ def refutation_suite(mmm: Any, results: Any = None, *, q: float = 1.0) -> dict:
 
         sens = UnobservedConfoundingAnalysis(mmm).run(q=q)
         fragile = sens.fragile_channels
-        verdict = (
-            "✅ no channel is fragile to plausible unobserved confounding"
-            if not fragile
-            else "⚠️ fragile to plausible confounding: " + ", ".join(fragile)
-        )
+        # A non-finite RV is not "fragile" (the `rv < threshold` test fails), so
+        # an empty `fragile` list does NOT mean every channel passed — it can
+        # mean none could be assessed. Approximate fits produce exactly that.
+        unassessable = sens.unassessable_channels
+        if fragile:
+            verdict = "⚠️ fragile to plausible confounding: " + ", ".join(fragile)
+        elif unassessable and len(unassessable) == len(sens.channels):
+            verdict = (
+                "⚠️ not assessable — no channel produced a usable robustness "
+                "value (an approximate fit is the usual cause; re-fit with NUTS)"
+            )
+        elif unassessable:
+            verdict = (
+                "⚠️ no *assessable* channel is fragile, but "
+                + ", ".join(unassessable)
+                + " could not be assessed"
+            )
+        else:
+            verdict = "✅ no channel is fragile to plausible unobserved confounding"
         thr = sens.channels[0].fragile_threshold if sens.channels else 0.10
         content = (
             "### Unobserved-confounding robustness\n\n"
@@ -4010,11 +4024,19 @@ def validate_model(mmm: Any, results: Any = None, *, random_seed: int = 42) -> d
 
         sens = UnobservedConfoundingAnalysis(mmm).run()
         fragile = sens.fragile_channels
-        _row(
-            "Confounding robustness",
-            "Pass" if not fragile else "Warn",
-            "robust" if not fragile else "fragile: " + ", ".join(fragile),
-        )
+        # An empty `fragile` list can mean "all robust" OR "none assessable" —
+        # the latter must not render as a green Pass.
+        unassessable = sens.unassessable_channels
+        if fragile:
+            _row("Confounding robustness", "Warn", "fragile: " + ", ".join(fragile))
+        elif unassessable:
+            _row(
+                "Confounding robustness",
+                "Warn",
+                "not assessable: " + ", ".join(unassessable),
+            )
+        else:
+            _row("Confounding robustness", "Pass", "robust")
         dash["validation_refutation"] = sens.to_dict()
     except Exception as e:  # noqa: BLE001
         _row("Confounding robustness", "Error", str(e))

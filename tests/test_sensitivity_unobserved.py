@@ -114,6 +114,57 @@ class TestChannelRobustnessFlags:
         assert d["prior_contraction"] == pytest.approx(0.05)
 
 
+class TestNonFiniteRobustnessValue:
+    """A non-finite RV must read as *uncomputed*, never as a passed check.
+
+    `is_fragile` is `isfinite(rv) and rv < threshold`, so a NaN is "not
+    fragile" — and every consumer that treats an empty `fragile_channels` as
+    "all robust" would report a sensitivity check that never ran. Approximate
+    (MAP/ADVI) fits produce a degenerate posterior and hence a NaN RV.
+    """
+
+    def test_nan_channel_is_not_assessable_and_not_fragile(self):
+        ch = _channel(rv=float("nan"), contraction=0.9)
+        assert not ch.is_assessable
+        assert not ch.is_fragile  # the trap: "not fragile" != "robust"
+        assert not ch.rv_is_quotable
+        assert ch.to_dict()["is_assessable"] is False
+
+    def test_finite_channel_is_assessable(self):
+        ch = _channel(rv=0.42, contraction=0.9)
+        assert ch.is_assessable
+        assert ch.to_dict()["is_assessable"] is True
+
+    def _sens(self, *channels):
+        from mmm_framework.validation.results import UnobservedConfoundingSensitivity
+
+        return UnobservedConfoundingSensitivity(
+            channels=list(channels), dof=100, q=1.0, caveat="c"
+        )
+
+    def test_unassessable_channels_are_listed_separately(self):
+        sens = self._sens(
+            _channel(rv=float("nan"), contraction=0.9, name="TV"),
+            _channel(rv=0.42, contraction=0.9, name="Search"),
+        )
+        assert sens.fragile_channels == []          # neither is fragile...
+        assert sens.unassessable_channels == ["TV"]  # ...but TV was never assessed
+        assert sens.to_dict()["unassessable_channels"] == ["TV"]
+
+    def test_summary_never_prints_the_literal_nan(self):
+        sens = self._sens(_channel(rv=float("nan"), contraction=0.9, name="TV"))
+        row = sens.summary().iloc[0]
+        assert row["Robustness Value"] == "n/a"
+        # "No" here would read as a passed fragility check
+        assert row["Fragile"] == "n/a"
+
+    def test_summary_still_formats_a_real_value(self):
+        sens = self._sens(_channel(rv=0.42, contraction=0.9, name="TV"))
+        row = sens.summary().iloc[0]
+        assert row["Robustness Value"] == "0.420"
+        assert row["Fragile"] == "No"
+
+
 class TestReportNeverShowsPriorDrivenAsRobust:
     """The user-visible face of the inversion."""
 
