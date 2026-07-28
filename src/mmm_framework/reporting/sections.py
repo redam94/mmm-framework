@@ -40,6 +40,41 @@ def _is_finite_number(value: object) -> bool:
         return False
 
 
+def _format_interval(lo: object, hi: object, fmt, ci_level: object) -> str:
+    """Render a credible/confidence interval, or say plainly that it collapsed.
+
+    An approximate (MAP/ADVI) fit has a degenerate posterior, so every interval
+    collapses onto its point estimate and renders as ``80% CI: [0.48 – 0.48]``.
+    A zero-width interval is the visual language of an *extremely precise*
+    estimate — the opposite of what an approximate fit means.
+
+    The comparison is on the **formatted** bounds, not the raw ones: an
+    approximate fit can produce a tiny-but-nonzero interval that still displays
+    as an identical pair once rounded, which misleads exactly as much.
+    """
+    if not (_is_finite_number(lo) and _is_finite_number(hi)):
+        return ""
+    lo_s, hi_s = fmt(lo), fmt(hi)
+    if lo_s == hi_s:
+        return "point estimate — no interval (approximate fit)"
+    return f"{ci_level}% CI: [{lo_s} – {hi_s}]"
+
+
+def _interval_span(lo: object, hi: object, fmt=lambda v: f"{v:.2f}") -> str:
+    """``[lo, hi]`` for a table cell, or ``n/a`` when the bounds have collapsed.
+
+    Same rationale as :func:`_format_interval`, for the many table cells that
+    render a bare bracketed pair: an approximate fit prints ``[0.50, 0.50]``,
+    which reads as a razor-sharp estimate rather than as an absent one.
+    Compared on the formatted strings so a pair that merely *rounds* together is
+    caught too.
+    """
+    if not (_is_finite_number(lo) and _is_finite_number(hi)):
+        return "n/a"
+    lo_s, hi_s = fmt(lo), fmt(hi)
+    return "n/a" if lo_s == hi_s else f"[{lo_s}, {hi_s}]"
+
+
 class Section:
     """Base class for report sections."""
 
@@ -322,7 +357,12 @@ class ExecutiveSummarySection(Section):
                         self.data.marketing_attributed_revenue["mean"]
                     ),
                     "label": "Marketing-Attributed Revenue",
-                    "ci": f"{ci_level}% CI: [{self.config.format_currency(self.data.marketing_attributed_revenue['lower'])} – {self.config.format_currency(self.data.marketing_attributed_revenue['upper'])}]",
+                    "ci": _format_interval(
+                        self.data.marketing_attributed_revenue["lower"],
+                        self.data.marketing_attributed_revenue["upper"],
+                        self.config.format_currency,
+                        ci_level,
+                    ),
                     "highlight": True,
                 }
             )
@@ -333,7 +373,12 @@ class ExecutiveSummarySection(Section):
                 {
                     "value": f"{self.data.blended_roi['mean']:.2f}",
                     "label": "Blended Marketing ROI",
-                    "ci": f"{ci_level}% CI: [{self.data.blended_roi['lower']:.2f} – {self.data.blended_roi['upper']:.2f}]",
+                    "ci": _format_interval(
+                        self.data.blended_roi["lower"],
+                        self.data.blended_roi["upper"],
+                        lambda v: f"{v:.2f}",
+                        ci_level,
+                    ),
                 }
             )
 
@@ -343,7 +388,12 @@ class ExecutiveSummarySection(Section):
                 {
                     "value": f"{self.data.marketing_contribution_pct['mean']:.1%}",
                     "label": "Marketing Contribution",
-                    "ci": f"{ci_level}% CI: [{self.data.marketing_contribution_pct['lower']:.1%} – {self.data.marketing_contribution_pct['upper']:.1%}]",
+                    "ci": _format_interval(
+                        self.data.marketing_contribution_pct["lower"],
+                        self.data.marketing_contribution_pct["upper"],
+                        lambda v: f"{v:.1%}",
+                        ci_level,
+                    ),
                 }
             )
 
@@ -709,7 +759,7 @@ class ChannelROISection(Section):
                     <td>{html.escape(ch)}</td>
                     <td>{html.escape(str(metric_label))}</td>
                     <td class="{value_cls}">{mean:.2f}</td>
-                    <td class="{value_cls}">[{lower:.2f}, {upper:.2f}]</td>
+                    <td class="{value_cls}">{_interval_span(lower, upper)}</td>
                     <td class="{conf_class}">{status}</td>
                     <td>{chip}</td>
                 </tr>
@@ -1495,9 +1545,10 @@ class TriangulationSection(Section):
             return '<td class="mono">—</td>'
         val = f"{src['value']:.2f}×"
         lo, hi = src.get("lower"), src.get("upper")
+        span = _interval_span(lo, hi)
         ci = (
-            f" <span class='mono' style='opacity:.7'>[{lo:.2f}, {hi:.2f}]</span>"
-            if lo is not None and hi is not None
+            f" <span class='mono' style='opacity:.7'>{span}</span>"
+            if span != "n/a"
             else ""
         )
         flag = "" if src.get("incremental", True) else " ⚠"
@@ -1640,11 +1691,9 @@ class SpecCurveSection(Section):
             primary = rob.get("primary")
             primary_str = f"{primary:.2f}" if isinstance(primary, (int, float)) else "—"
             bma_str = f"{b['mean']:.2f}" if b.get("mean") is not None else "—"
-            bma_ci = (
-                f"[{b['lower']:.2f}, {b['upper']:.2f}]"
-                if b.get("lower") is not None and b.get("upper") is not None
-                else "—"
-            )
+            bma_ci = _interval_span(b.get("lower"), b.get("upper"))
+            if bma_ci == "n/a":
+                bma_ci = "—"
             rng = rob.get("range")
             range_str = f"{rng:.2f}" if isinstance(rng, (int, float)) else "—"
             span = (
@@ -1869,8 +1918,7 @@ class CFOSection(Section):
                 <div class="metric-card">
                     <div class="value">{self._format_currency(float(mc.get('mean', 0.0)))}</div>
                     <div class="label">Incremental marketing contribution</div>
-                    <div class="ci">{ci}% CI [{self._format_currency(float(mc.get('lower', 0.0)))},
-                        {self._format_currency(float(mc.get('upper', 0.0)))}]</div>
+                    <div class="ci">{ci}% CI {_interval_span(mc.get('lower'), mc.get('upper'), self._format_currency)}</div>
                 </div>
                 <div class="metric-card">
                     <div class="value">{pct_s}</div>
@@ -1888,9 +1936,10 @@ class CFOSection(Section):
         for c in cuts:
             cut_lbl = f"−{float(c.get('cut_pct', 0.0)) * 100:.0f}%"
             rev = self._format_currency(float(c.get("revenue_at_risk", 0.0)))
-            band = (
-                f"[{self._format_currency(float(c.get('revenue_lower', 0.0)))}, "
-                f"{self._format_currency(float(c.get('revenue_upper', 0.0)))}]"
+            band = _interval_span(
+                c.get("revenue_lower", 0.0),
+                c.get("revenue_upper", 0.0),
+                self._format_currency,
             )
             prof_cell = ""
             if has_margin:
@@ -2220,7 +2269,7 @@ class GeographicSection(Section):
 
             rev_str = self._format_currency(revenue.get("mean", 0))
             roi_str = f"{roi.get('mean', 0):.2f}x"
-            roi_ci = f"[{roi.get('lower', 0):.2f}, {roi.get('upper', 0):.2f}]"
+            roi_ci = _interval_span(roi.get("lower"), roi.get("upper"))
             contrib_str = self._format_percentage(contribution.get("mean", 0))
 
             table_rows.append(f"""
@@ -2343,7 +2392,7 @@ class MediatorSection(Section):
             indirect_mean = get_val(indirect_effect)
 
             total_str = f"{total_mean:.3f}"
-            total_ci = f"[{total_lower:.3f}, {total_upper:.3f}]"
+            total_ci = _interval_span(total_lower, total_upper, lambda v: f"{v:.3f}")
             direct_str = f"{direct_mean:.3f}"
             indirect_str = f"{indirect_mean:.3f}"
 
@@ -2695,6 +2744,11 @@ class FactorAnalysisSection(Section):
                 """)
         return f'<div class="metrics-grid">{"".join(cards)}</div>'
 
+    #: Interval-bound column names this renderer knows how to pair up, so a
+    #: collapsed interval can be reported as collapsed.
+    _LO_KEYS = ("hdi_low", "hdi_lower", "lower", "ci_low")
+    _HI_KEYS = ("hdi_high", "hdi_upper", "upper", "ci_high")
+
     def _render_table(self, rows: list[dict]) -> str:
         """Column-agnostic table: renders whatever columns the summary rows carry
         (so one renderer serves CFA loadings, LCA class profiles, …)."""
@@ -2702,20 +2756,51 @@ class FactorAnalysisSection(Section):
             return ""
         cols = list(rows[0].keys())
         header = "".join(f"<th>{c.replace('_', ' ').title()}</th>" for c in cols)
+        lo_key = next((c for c in cols if c.lower() in self._LO_KEYS), None)
+        hi_key = next((c for c in cols if c.lower() in self._HI_KEYS), None)
+
+        def _collapsed(row: dict) -> bool:
+            """An approximate fit's single-draw posterior collapses the HDI onto
+            the point estimate, which then renders as e.g. ``0.660 | 0.660 |
+            0.660`` — three identical numbers that read as high precision."""
+            if not (lo_key and hi_key):
+                return False
+            lo, hi = row.get(lo_key), row.get(hi_key)
+            if not (_is_finite_number(lo) and _is_finite_number(hi)):
+                return False
+            return f"{float(lo):.3f}" == f"{float(hi):.3f}"
+
+        any_collapsed = False
         body = []
         for r in rows:
+            collapsed = _collapsed(r)
+            any_collapsed = any_collapsed or collapsed
             cells = []
             for c in cols:
                 v = r.get(c, "")
+                if collapsed and c in (lo_key, hi_key):
+                    cells.append('<td class="mono">n/a</td>')
+                    continue
                 cell = f"{v:.3f}" if isinstance(v, float) else html.escape(str(v))
                 klass = ' class="mono"' if isinstance(v, float) else ""
                 cells.append(f"<td{klass}>{cell}</td>")
             body.append(f"<tr>{''.join(cells)}</tr>")
+
+        note = (
+            '<p class="chart-caption">Interval bounds shown as <em>n/a</em> '
+            "collapsed onto the point estimate — the fit produced no spread to "
+            "report for them. An approximate (MAP / ADVI) fit is the usual cause, "
+            "since its posterior is a single draw. The point estimates stand; the "
+            "absent intervals are not evidence of precision.</p>"
+            if any_collapsed
+            else ""
+        )
         return f"""
             <table class="data-table">
                 <thead><tr>{header}</tr></thead>
                 <tbody>{"".join(body)}</tbody>
             </table>
+            {note}
         """
 
 
@@ -2826,10 +2911,11 @@ class EstimandsSection(Section):
 
             val_str = self._fmt_value(kind, units, mean)
             if lower is not None and upper is not None:
-                ci_str = (
-                    f"[{self._fmt_value(kind, units, float(lower))}, "
-                    f"{self._fmt_value(kind, units, float(upper))}]"
+                ci_str = _interval_span(
+                    lower, upper, lambda x: self._fmt_value(kind, units, float(x))
                 )
+                if ci_str == "n/a":
+                    ci_str = "—"
             else:
                 ci_str = "—"
 
@@ -3150,7 +3236,7 @@ class AllocationSection(Section):
                 <div class="metric-card">
                     <div class="value">{self._format_currency(uplift)}</div>
                     <div class="label">Expected KPI uplift</div>
-                    <div class="ci">90% [{self._format_currency(hdi[0])}, {self._format_currency(hdi[1])}]</div>
+                    <div class="ci">90% {_interval_span(hdi[0], hdi[1], self._format_currency)}</div>
                 </div>
                 {regret_card}
                 <div class="metric-card">

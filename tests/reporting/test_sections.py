@@ -980,3 +980,69 @@ class TestPosteriorPredictiveSection:
             section_config=SectionConfig(enabled=True),
         )
         assert section.render() == ""
+
+
+class TestDegenerateIntervals:
+    """A collapsed interval must not read as a precise one.
+
+    An approximate (MAP/ADVI) fit has a single-draw posterior, so every interval
+    collapses onto its point estimate and renders as `80% CI: [0.48 – 0.48]` or
+    `0.660 | 0.660 | 0.660`. A zero-width interval is the visual language of an
+    extremely precise estimate — the opposite of what an approximate fit means.
+    """
+
+    def test_format_interval_reports_the_collapse(self):
+        from mmm_framework.reporting.sections import _format_interval
+
+        f = lambda v: f"{v:.2f}"  # noqa: E731
+        assert _format_interval(0.48, 0.48, f, 80) == (
+            "point estimate — no interval (approximate fit)"
+        )
+        assert _format_interval(0.40, 0.56, f, 80) == "80% CI: [0.40 – 0.56]"
+
+    def test_format_interval_catches_bounds_that_merely_round_together(self):
+        """Compared on the FORMATTED bounds: a tiny-but-nonzero interval still
+        displays as an identical pair, and misleads exactly as much."""
+        from mmm_framework.reporting.sections import _format_interval
+
+        f = lambda v: f"{v:.2f}"  # noqa: E731
+        assert "point estimate" in _format_interval(0.4800001, 0.4800002, f, 80)
+
+    def test_interval_span_collapses_to_na(self):
+        from mmm_framework.reporting.sections import _interval_span
+
+        assert _interval_span(0.5, 0.5) == "n/a"
+        assert _interval_span(0.4, 0.6) == "[0.40, 0.60]"
+        assert _interval_span(None, 0.6) == "n/a"
+        assert _interval_span(float("nan"), float("nan")) == "n/a"
+
+    def test_latent_table_marks_collapsed_hdi_and_explains(self):
+        from mmm_framework.reporting.sections import FactorAnalysisSection
+
+        bundle = type("B", (), {
+            "factor_loadings": [
+                {"indicator": "x1", "loading": 0.66, "hdi_low": 0.66, "hdi_high": 0.66},
+            ],
+            "cfa_fit_indices": {},
+            "estimands": {},
+            "latent_section_title": None,
+            "latent_table_title": None,
+            "latent_estimands_title": None,
+        })()
+        section = FactorAnalysisSection(data=bundle, config=ReportConfig())
+        html = section._render_table(bundle.factor_loadings)
+        # both bound CELLS (the third ">n/a<" is inside the explanatory note)
+        assert html.count('<td class="mono">n/a</td>') == 2
+        assert "0.660" in html                    # the point estimate stands
+        assert "collapsed onto the point estimate" in html
+
+    def test_latent_table_leaves_a_real_interval_alone(self):
+        from mmm_framework.reporting.sections import FactorAnalysisSection
+
+        bundle = type("B", (), {})()
+        rows = [{"indicator": "x1", "loading": 0.66,
+                 "hdi_low": 0.51, "hdi_high": 0.79}]
+        html = FactorAnalysisSection(data=bundle, config=ReportConfig())._render_table(rows)
+        assert "0.510" in html and "0.790" in html
+        assert "n/a" not in html
+        assert "collapsed onto the point estimate" not in html
