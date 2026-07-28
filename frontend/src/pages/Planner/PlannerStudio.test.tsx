@@ -79,3 +79,65 @@ describe('PlannerStudio per-channel bounds', () => {
     expect(startOptimize.mock.calls[0][1].channel_bounds).toEqual({ TV: [0, 1.5] });
   });
 });
+
+// ── fund-to-breakeven needs an exchange rate (#215) ─────────────────────────
+//
+// The control shipped with no field for the value of a KPI unit, so the server
+// filled in 1.0 — on a KPI denominated in thousands the recommended total came
+// out ~1000x too large, rendered with credible intervals. The server refuses
+// now; this is the field that lets the user answer it.
+
+describe('PlannerStudio KPI valuation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    startOptimize.mockResolvedValue({ job_id: 'j1', status: 'pending' });
+    pollOptimize.mockResolvedValue({
+      status: 'pending',
+      project_id: 'p1',
+      result: null,
+      error: null,
+    });
+  });
+
+  function selectMode(mode: string) {
+    fireEvent.change(screen.getByLabelText(/budget mode/i), { target: { value: mode } });
+  }
+
+  it('offers the valuation field only for fund-to-breakeven', () => {
+    render(<PlannerStudio projectId="p1" channels={['TV']} />, { wrapper: wrap() });
+    expect(screen.queryByLabelText(/value of one KPI unit/i)).not.toBeInTheDocument();
+    selectMode('free');
+    expect(screen.getByLabelText(/value of one KPI unit/i)).toBeInTheDocument();
+  });
+
+  it('sends the value when supplied under breakeven mode', async () => {
+    render(<PlannerStudio projectId="p1" channels={['TV']} />, { wrapper: wrap() });
+    selectMode('free');
+    fireEvent.change(screen.getByLabelText(/value of one KPI unit/i), {
+      target: { value: '2.5' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /build plan/i }));
+    await waitFor(() => expect(startOptimize).toHaveBeenCalled());
+    expect(startOptimize.mock.calls[0][1].value_per_kpi).toBe(2.5);
+  });
+
+  it('omits it when blank, so the project economics still resolve it', async () => {
+    render(<PlannerStudio projectId="p1" channels={['TV']} />, { wrapper: wrap() });
+    selectMode('free');
+    fireEvent.click(screen.getByRole('button', { name: /build plan/i }));
+    await waitFor(() => expect(startOptimize).toHaveBeenCalled());
+    expect(startOptimize.mock.calls[0][1].value_per_kpi).toBeUndefined();
+  });
+
+  it('never sends it under a fixed budget, where it cannot move the argmax', async () => {
+    render(<PlannerStudio projectId="p1" channels={['TV']} />, { wrapper: wrap() });
+    selectMode('free');
+    fireEvent.change(screen.getByLabelText(/value of one KPI unit/i), {
+      target: { value: '2.5' },
+    });
+    selectMode('fixed');
+    fireEvent.click(screen.getByRole('button', { name: /build plan/i }));
+    await waitFor(() => expect(startOptimize).toHaveBeenCalled());
+    expect(startOptimize.mock.calls[0][1].value_per_kpi).toBeUndefined();
+  });
+});
