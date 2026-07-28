@@ -222,9 +222,20 @@ class AdstockResult:
     alpha_mean: float
     alpha_lower: float
     alpha_upper: float
-    half_life: float  # Periods until 50% decay
+    half_life: float  # Periods until 50% of the effect has landed
     total_carryover: float  # Sum of weights beyond t=0
     l_max: int
+    #: Adstock family actually fitted. Trailing + defaulted so the 8 positional
+    #: fields above stay compatible.
+    family: str = ""
+    #: 'ok' | 'legacy_blend' | 'unsupported' | 'missing_params'. A channel whose
+    #: kernel cannot be read is now RETURNED with a reason instead of dropped —
+    #: Weibull and no-adstock channels used to vanish from the table entirely.
+    status: str = "ok"
+    #: Fraction of the untruncated kernel beyond ``l_max``. ``half_life`` is
+    #: truncation-biased (geometric alpha=0.95: 3.6 at l_max=8 vs 13.5
+    #: untruncated), so any surface rendering the horizon must render this too.
+    truncated_tail_mass: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -236,6 +247,9 @@ class AdstockResult:
             "half_life": self.half_life,
             "total_carryover": self.total_carryover,
             "l_max": self.l_max,
+            "family": self.family,
+            "status": self.status,
+            "truncated_tail_mass": self.truncated_tail_mass,
         }
 
 

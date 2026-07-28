@@ -18,7 +18,6 @@ optional ``insights`` map; everything here is deterministic.
 from __future__ import annotations
 
 import io
-import math
 from pathlib import Path
 from typing import Any
 
@@ -63,15 +62,22 @@ def _read_action(mean: float, lo: float, hi: float, be: float) -> tuple[str, str
 
 
 def _half_life_weeks(model: Any, channel: str) -> float | None:
+    # This called `_get_adstock_alpha(model, posterior, channel)` — three
+    # positional args into a two-arg signature — so it raised TypeError on every
+    # call and the deck's carryover half-life was unconditionally None, for
+    # geometric channels too. It also derived the horizon from log(0.5)/log(alpha),
+    # which is meaningless for a delayed or Weibull kernel.
     try:
-        from ..helpers import _get_adstock_alpha
-        from ..helpers.utils import _get_posterior
+        from ...transforms.carryover import (
+            carryover_half_life,
+            posterior_carryover_kernels,
+        )
 
-        alpha = _get_adstock_alpha(model, _get_posterior(model), channel)
-        alpha = float(np.mean(alpha)) if alpha is not None else None
-        if alpha is None or not (0 < alpha < 1):
+        k = posterior_carryover_kernels(model, [channel]).get(channel)
+        if k is None or not np.all(np.isfinite(k.kernel)):
             return None
-        return math.log(0.5) / math.log(alpha)
+        hl = carryover_half_life(k.kernel)
+        return float(np.nanmean(hl)) if np.any(np.isfinite(hl)) else None
     except Exception:
         return None
 

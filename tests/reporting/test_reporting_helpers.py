@@ -361,19 +361,67 @@ class TestSaturationCurves:
 
 
 class TestAdstockWeights:
-    """Test adstock weight computation."""
+    """Adstock weights from a real posterior kernel (#218).
 
-    def test_compute_adstock_weights(self):
-        """Test adstock weight computation."""
+    The previous test here was vacuous. Against a `MagicMock` model the old
+    reader returned `l_max` as a MagicMock, `len(decay_weights) == 1` and
+    `total_carryover == 0.0` — so `0 <= total_carryover <= 1` asserted on a
+    literal zero and the length was never checked. It passed while the reader
+    was wrong five different ways.
+    """
+
+    def test_a_mock_model_degrades_with_a_status_rather_than_lying(self):
+        """A model with no readable adstock config must SAY so."""
         model = create_mock_model()
-
         adstock = compute_adstock_weights(model)
 
         assert isinstance(adstock, dict)
-        for ch, result in adstock.items():
+        for result in adstock.values():
             assert isinstance(result, AdstockResult)
-            assert result.half_life > 0
-            assert 0 <= result.total_carryover <= 1
+            assert result.status != "ok", (
+                "a duck-typed mock has no adstock config; reporting 'ok' with a "
+                "fabricated kernel is what this fix removes"
+            )
+
+    def test_a_real_kernel_is_family_aware_and_full_length(self):
+        import numpy as np
+        import xarray as xr
+
+        from mmm_framework.config.enums import AdstockType
+
+        n = 32
+
+        class _Cfg:
+            type = AdstockType.DELAYED
+            l_max = 12
+            normalize = True
+
+        class _Trace:
+            posterior = xr.Dataset(
+                {
+                    "adstock_alpha_TV": xr.DataArray(
+                        np.full((1, n), 0.6), dims=("chain", "draw")
+                    ),
+                    "adstock_theta_TV": xr.DataArray(
+                        np.full((1, n), 3.0), dims=("chain", "draw")
+                    ),
+                }
+            )
+
+        class _M:
+            _trace = _Trace()
+            channel_names = ["TV"]
+            use_parametric_adstock = True
+
+            def _get_adstock_config(self, ch):
+                return _Cfg()
+
+        r = compute_adstock_weights(_M())["TV"]
+        assert r.status == "ok" and r.family == "delayed"
+        assert r.l_max == 12 and len(r.decay_weights) == 12
+        assert int(np.argmax(r.decay_weights)) == 3, "a delayed peak is not at lag 0"
+        assert r.half_life > 0
+        assert 0 <= r.total_carryover <= 1
 
 
 class TestDecomposition:
