@@ -17,6 +17,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import pymc as pm
 import pytest
 
 from mmm_framework import BayesianMMM, ModelConfig, ModelConfigBuilder, TrendConfig
@@ -186,3 +187,368 @@ class TestLeverFit:
         from mmm_framework.reporting.extractors.bayesian import BayesianMMMExtractor
 
         assert "Price & Promotion" in BayesianMMMExtractor(m)._get_component_totals()
+
+
+# ===========================================================================
+# Swappable levers, with both normalization constants frozen at fit time (#222)
+#
+# Levers shipped as `pt.as_tensor_variable` constants, so there was no container
+# to intervene on. Adding one is not enough: the price reference was resolved
+# INSIDE the graph builder and the promo scale computed inline from the same
+# series, so a uniform swap renormalizes itself away EXACTLY —
+#   log(0.5p / mean(0.5p)) == log(p / mean(p))
+#   0.5·promo / max|0.5·promo| == promo / max|promo|
+# The counterfactual would return "no effect" with full confidence, which is
+# indistinguishable from a well-identified null. Both constants are therefore
+# frozen in `_prepare_levers` and read as Python floats in-graph.
+# ===========================================================================
+
+
+def _lever_model():
+    m = BayesianMMM(
+        _panel(), ModelConfig(**_levers()), TrendConfig(type=TrendType.LINEAR)
+    )
+    _ = m.model  # the graph builds lazily
+    return m
+
+
+def _draw(model, names, seed=7):
+    """Paired draw: the same seed gives identical RV values, so any difference
+    between two calls is attributable to the data swap alone."""
+    with model:
+        out = pm.draw([model[n] for n in names], draws=1, random_seed=seed)
+    return [np.asarray(o) for o in out]
+
+
+class TestSwappableLevers:
+    def test_container_and_coord_exist_with_frozen_constants(self):
+        m = _lever_model()
+        assert m.lever_names == ["Price", "Promo"]
+        assert "X_levers_raw" in m.model.named_vars
+        assert list(m.model.coords["lever"]) == ["Price", "Promo"]
+        # Frozen, not recomputed: the reference is the declared statistic of the
+        # TRAINING price (the fixture declares "median"), and the promo scale the
+        # max of the TRAINING promo.
+        price_raw = m.X_levers_raw[:, 0]
+        promo_raw = m.X_levers_raw[:, 1]
+        assert m._price_ref == pytest.approx(float(np.median(price_raw)))
+        assert m._promo_scale["Promo"] == pytest.approx(
+            float(np.max(np.abs(promo_raw))) + 1e-9
+        )
+
+    def test_in_graph_log_price_matches_numpy(self):
+        m = _lever_model()
+        comp, el = _draw(m.model, ["price_component", "price_elasticity"])
+        expected = float(el) * np.log(
+            np.maximum(m.X_levers_raw[:, 0], 1e-9) / m._price_ref
+        )
+        assert np.allclose(comp, expected, atol=1e-12)
+
+    def test_uniform_price_swap_moves_the_component_by_log_of_the_factor(self):
+        """THE regression. Under a recomputed reference this delta is exactly 0
+        for every factor — the swap cancels in the ratio."""
+        m = _lever_model()
+        X0 = m.X_levers_raw.copy()
+        base, el = _draw(m.model, ["price_component", "price_elasticity"])
+        with m.model:
+            pm.set_data({"X_levers_raw": X0 * np.array([0.95, 1.0])})
+        swapped, _ = _draw(m.model, ["price_component", "price_elasticity"])
+
+        shift = (swapped - base) / float(el)
+        assert np.allclose(shift, np.log(0.95), atol=1e-10)
+        # and state what the broken version produced, so a regression is caught
+        # rather than merely untested:
+        recomputed_ref = float(np.median(X0[:, 0] * 0.95))
+        renormalized = np.log(X0[:, 0] * 0.95 / recomputed_ref) - np.log(
+            X0[:, 0] / float(np.median(X0[:, 0]))
+        )
+        assert np.allclose(renormalized, 0.0, atol=1e-12), (
+            "a recomputed reference makes this swap an exact no-op — that is "
+            "the bug this test exists for"
+        )
+
+    def test_uniform_promo_swap_scales_the_component(self):
+        m = _lever_model()
+        X0 = m.X_levers_raw.copy()
+        (base,) = _draw(m.model, ["promo_component"])
+        with m.model:
+            pm.set_data({"X_levers_raw": X0 * np.array([1.0, 0.5])})
+        (swapped,) = _draw(m.model, ["promo_component"])
+        assert np.abs(swapped - base).max() > 1e-6  # NOT a no-op
+        assert np.allclose(swapped, 0.5 * base, atol=1e-12)
+
+    def test_zero_promo_zeroes_its_component_and_leaves_media_untouched(self):
+        m = _lever_model()
+        X0 = m.X_levers_raw.copy()
+        (media_before,) = _draw(m.model, ["channel_contributions"])
+        with m.model:
+            pm.set_data({"X_levers_raw": X0 * np.array([1.0, 0.0])})
+        promo, media_after = _draw(m.model, ["promo_component", "channel_contributions"])
+        assert np.allclose(promo, 0.0, atol=1e-12)
+        assert np.array_equal(media_before, media_after)
+
+    def test_the_swap_context_restores_the_training_values(self):
+        m = _lever_model()
+        X0 = m.X_levers_raw.copy()
+        with m._swapped_media_data(None, None, X_levers=X0 * 0.5):
+            assert not np.allclose(m.model["X_levers_raw"].get_value(), X0)
+        assert np.allclose(m.model["X_levers_raw"].get_value(), X0)
+
+    def test_swap_refuses_a_wrong_shape_and_a_lever_free_model(self):
+        m = _lever_model()
+        with pytest.raises(ValueError, match=r"must be \(\d+, 2\)"):
+            with m._swapped_media_data(None, None, X_levers=np.zeros((m.n_obs, 1))):
+                pass
+        plain = BayesianMMM(_panel(), ModelConfig(), TrendConfig(type=TrendType.LINEAR))
+        _ = plain.model
+        with pytest.raises(ValueError, match="no price or promotion lever"):
+            with plain._swapped_media_data(None, None, X_levers=np.zeros((plain.n_obs, 1))):
+                pass
+
+
+def test_a_lever_on_a_panel_with_no_controls_warns_rather_than_vanishing():
+    """`_prepare_levers` short-circuited on `n_controls == 0` BEFORE the
+    per-variable lookup, so a configured lever on a control-free panel was a
+    silent no-op that never reached the "not a control column" warning."""
+    panel = _panel()
+    panel.X_controls = None
+    panel.coords.controls = []
+    with pytest.warns(UserWarning, match="not a control column"):
+        m = BayesianMMM(
+            panel,
+            ModelConfig(price=PriceConfig(variable="Price")),
+            TrendConfig(type=TrendType.LINEAR),
+        )
+    assert m.n_levers == 0
+
+
+# ---------------------------------------------------------------------------
+# no-lever byte identity
+#
+# The issue asks for a stored reference and notes none exists. These are it:
+# a model with no lever configured must be unchanged by any of the above.
+# ---------------------------------------------------------------------------
+
+#: Captured from `main` before the lever container was added.
+_NO_LEVER_NAMED_VAR_COUNT = 26
+_NO_LEVER_INITIAL_POINT = {
+    "beta_Search_log__": 0.4054651081081644,
+    "beta_TV_log__": 0.4054651081081644,
+    "beta_controls": 0.0,
+    "intercept": 0.0,
+    "sat_lam_Search_log__": 0.40663425997828095,
+    "sat_lam_TV_log__": 0.40663425997828095,
+    "season_yearly": 0.0,
+    "sigma_log__": -0.6931471805599453,
+    "trend_slope": 0.0,
+}
+
+
+def test_no_lever_graph_is_byte_identical():
+    m = BayesianMMM(_panel(), ModelConfig(), TrendConfig(type=TrendType.LINEAR))
+    mod = m.model
+    assert len(mod.named_vars) == _NO_LEVER_NAMED_VAR_COUNT
+    assert "lever" not in mod.coords
+    assert "X_levers_raw" not in mod.named_vars
+    assert m.n_levers == 0 and m.X_levers_raw is None
+
+    point = {k: float(np.asarray(v).sum()) for k, v in mod.initial_point().items()}
+    assert point == pytest.approx(_NO_LEVER_INITIAL_POINT)
+
+
+# ===========================================================================
+# Levers as intervention targets (#222, commit 3)
+#
+# `_intervention_to_X_media` resolved `target` against channel_names only, so a
+# lever target raised "Unknown intervention target" — a refusal, not a wrong
+# number, but it meant no price or promo counterfactual was expressible at all.
+# The resolver now returns (X_media, X_levers) and resolves against channels ∪
+# levers, and BOTH call sites use it (`predict_under` and `sample_latent_under`,
+# the second of which the issue did not name).
+# ===========================================================================
+
+
+class TestLeverInterventions:
+    def _iv(self):
+        from mmm_framework.estimands.spec import Observed, ScaleInput, ZeroInput
+
+        return Observed, ScaleInput, ZeroInput
+
+    def test_resolver_routes_targets_to_the_right_block(self):
+        Observed, ScaleInput, ZeroInput = self._iv()
+        m = _lever_model()
+
+        media, levers = m._intervention_to_inputs(Observed())
+        assert media is None and levers is None
+
+        media, levers = m._intervention_to_inputs(ZeroInput(target="TV"))
+        assert levers is None and np.all(media[:, m.channel_names.index("TV")] == 0)
+
+        media, levers = m._intervention_to_inputs(ScaleInput(target="Price", factor=0.9))
+        assert media is None
+        assert np.allclose(levers[:, 0], m.X_levers_raw[:, 0] * 0.9)
+        assert np.allclose(levers[:, 1], m.X_levers_raw[:, 1])  # promo untouched
+
+        media, levers = m._intervention_to_inputs(ZeroInput(target="Promo"))
+        assert media is None and np.all(levers[:, 1] == 0)
+
+    def test_unknown_target_names_channels_and_levers(self):
+        _, _, ZeroInput = self._iv()
+        m = _lever_model()
+        with pytest.raises(ValueError, match="channels and price/promo levers"):
+            m._intervention_to_inputs(ZeroInput(target="Nope"))
+
+    def test_zeroing_the_price_lever_is_refused_not_floored(self):
+        """log(0) is undefined; the 1e-9 floor would return an arbitrary large
+        number that reads as an answer."""
+        _, _, ZeroInput = self._iv()
+        m = _lever_model()
+        with pytest.raises(ValueError, match="Cannot zero the price lever"):
+            m._intervention_to_inputs(ZeroInput(target="Price"))
+
+    def test_media_only_callers_refuse_a_lever_target(self):
+        """The narrow helper must not quietly return the FACTUAL media, which
+        would evaluate the wrong counterfactual under a lever target."""
+        _, ScaleInput, _ = self._iv()
+        m = _lever_model()
+        with pytest.raises(ValueError, match="can only swap media"):
+            m._intervention_to_X_media(ScaleInput(target="Price", factor=0.9))
+        # a channel target still passes through unchanged
+        assert m._intervention_to_X_media(ScaleInput(target="TV", factor=0.5)) is not None
+
+
+@pytest.mark.slow
+class TestLeverCounterfactualsOnAFit:
+    def _fit(self):
+        cfg = (
+            ModelConfigBuilder()
+            .map_fit()
+            .with_price(_levers()["price"])
+            .with_promotions(*_levers()["promotions"])
+            .build()
+        )
+        m = BayesianMMM(_panel(), cfg, TrendConfig(type=TrendType.LINEAR))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            m.fit(random_seed=0)
+        return m
+
+    def test_price_and_promo_counterfactuals_move_the_kpi_the_right_way(self):
+        from mmm_framework.estimands.spec import Observed, ScaleInput, ZeroInput
+
+        m = self._fit()
+
+        def kpi(iv):
+            return float(m.predict_under(iv, random_seed=1).y_pred_mean.sum())
+
+        base = kpi(Observed())
+        # elasticity is sign-guarded ≤ 0, so a price CUT raises the KPI
+        assert kpi(ScaleInput(target="Price", factor=0.95)) > base
+        # the promo lift is non-negative, so removing promo lowers it
+        assert kpi(ZeroInput(target="Promo")) < base
+        # and the media path is unaffected by any of this
+        assert kpi(ZeroInput(target="TV")) < base
+
+    def test_a_lever_counterfactual_leaves_the_model_in_its_training_state(self):
+        from mmm_framework.estimands.spec import Observed, ScaleInput
+
+        m = self._fit()
+        before = m.model["X_levers_raw"].get_value().copy()
+        m.predict_under(ScaleInput(target="Price", factor=0.5), random_seed=1)
+        assert np.allclose(m.model["X_levers_raw"].get_value(), before)
+        # and the factual prediction is unchanged afterwards
+        a = m.predict_under(Observed(), random_seed=1).y_pred_mean
+        b = m.predict_under(Observed(), random_seed=1).y_pred_mean
+        assert np.allclose(a, b)
+
+
+# ===========================================================================
+# The bad-control refusal survives promotion to a lever (#222, commit 4)
+#
+# `_resolve_control_causal_roles` ran AFTER `_prepare_levers`, so promoting a
+# variable to a lever removed it from `control_names` before the check saw it:
+# marking Price a MEDIATOR raised without a lever and built SILENTLY with one.
+# That is a refusal bypass — the lever term is still in `mu`, so it still blocks
+# part of the media effect.
+# ===========================================================================
+
+
+def _panel_with_extra_control(role_for_price=None, role_for_extra=None):
+    """Price + Promo (both promotable) plus a third control that SURVIVES the
+    strip — so the role list can be checked for 1:1 alignment afterwards."""
+    from mmm_framework.config import CausalControlRole  # noqa: F401
+
+    p = _panel()
+    rng = np.random.default_rng(11)
+    p.X_controls = p.X_controls.assign(Weather=rng.normal(0, 1, len(p.X_controls)))
+    p.coords.controls = ["Price", "Promo", "Weather"]
+    p.config.controls.append(
+        ControlVariableConfig(name="Weather", dimensions=[DimensionType.PERIOD])
+    )
+    if role_for_price is not None:
+        p.config.get_control_config("Price").causal_role = role_for_price
+    if role_for_extra is not None:
+        p.config.get_control_config("Weather").causal_role = role_for_extra
+    return p
+
+
+class TestBadControlRefusalSurvivesPromotion:
+    def test_a_mediator_is_refused_with_and_without_a_lever(self):
+        from mmm_framework.config import CausalControlRole
+
+        panel = _panel()
+        panel.config.get_control_config("Price").causal_role = (
+            CausalControlRole.MEDIATOR
+        )
+        # the pre-existing behaviour, kept
+        with pytest.raises(ValueError, match="Refusing to condition"):
+            BayesianMMM(panel, ModelConfig(), TrendConfig(type=TrendType.LINEAR))
+        # and the bypass, closed
+        with pytest.raises(ValueError, match="Refusing to condition"):
+            BayesianMMM(
+                panel, ModelConfig(**_levers()), TrendConfig(type=TrendType.LINEAR)
+            )
+
+    def test_the_message_says_promotion_does_not_resolve_it(self):
+        from mmm_framework.config import CausalControlRole
+
+        panel = _panel()
+        panel.config.get_control_config("Promo").causal_role = (
+            CausalControlRole.COLLIDER
+        )
+        with pytest.raises(ValueError, match="lever term is still in the mean"):
+            BayesianMMM(
+                panel, ModelConfig(**_levers()), TrendConfig(type=TrendType.LINEAR)
+            )
+
+    def test_roles_stay_aligned_with_the_post_strip_controls(self):
+        """The naive fix — moving the role resolution above the strip — raises
+        IndexError in `_control_prior_sigmas`, because the roles are indexed
+        positionally against the POST-strip control_names. Only the refusal
+        moved; this pins the alignment."""
+        from mmm_framework.config import CausalControlRole
+
+        panel = _panel_with_extra_control(role_for_extra=CausalControlRole.CONFOUNDER)
+        m = BayesianMMM(
+            panel, ModelConfig(**_levers()), TrendConfig(type=TrendType.LINEAR)
+        )
+        _ = m.model
+        assert m.control_names == ["Weather"]  # Price/Promo promoted away
+        assert len(m._control_causal_roles) == m.n_controls == 1
+        assert m._control_causal_roles[0] == CausalControlRole.CONFOUNDER
+        # the confounder's wide prior lands on the surviving control, not an
+        # index shifted by the two stripped columns
+        sigmas = m._control_prior_sigmas()
+        assert sigmas.shape == (1,)
+        assert sigmas[0] == max(sigmas)  # confounder gets the wide prior
+
+    def test_a_confounder_lever_still_builds(self):
+        """Only mediators and colliders are refused. A price that is a genuine
+        common cause is a legitimate lever."""
+        from mmm_framework.config import CausalControlRole
+
+        panel = _panel_with_extra_control(role_for_price=CausalControlRole.CONFOUNDER)
+        m = BayesianMMM(
+            panel, ModelConfig(**_levers()), TrendConfig(type=TrendType.LINEAR)
+        )
+        assert "price_elasticity" in set(m.model.named_vars)

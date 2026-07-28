@@ -872,8 +872,25 @@ class BayesianMMM:
         # linear control block (so they are not double-counted) and stash their
         # raw series for the dedicated lever blocks in _build_model. No-op (linear
         # controls unchanged) when no levers are configured.
+        # Bad-control refusal runs over the PRE-STRIP control set, so promoting a
+        # variable to a lever cannot bypass it. A mediator is still a mediator
+        # when it enters as a log-elasticity instead of a linear coefficient: the
+        # term is still in `mu`, so it still blocks part of the media effect.
+        # Deliberately NOT done by moving the role resolution above the strip —
+        # `_control_prior_sigmas` and `conf_mask` index the resolved roles against
+        # the POST-strip `control_names`, so that raises IndexError. The refusal
+        # and the resolution are separate concerns and are separated here.
+        self._refuse_blocked_control_roles(self.control_names)
+
         self._price_lever = None  # (PriceConfig, raw series)
         self._promo_levers: list = []  # [(PromoConfig, raw series)]
+        # The swappable lever block: a design matrix behind a `pm.Data` container
+        # plus the normalization constants FROZEN at fit time (see
+        # `_prepare_levers` for why recomputing them voids every counterfactual).
+        self._lever_names: list[str] = []
+        self.X_levers_raw: np.ndarray | None = None
+        self._price_ref: float | None = None
+        self._promo_scale: dict[str, float] = {}
         self._prepare_levers()
 
         # Reach & frequency channels (#141): pull each channel's frequency
@@ -1019,11 +1036,34 @@ class BayesianMMM:
         mediator produces a confidently wrong number.
         """
         roles: list[CausalControlRole | None] = []
-        blocked: list[str] = []
         for name in self.control_names:
             cfg = self.mff_config.get_control_config(name)
+            roles.append(getattr(cfg, "causal_role", None) if cfg is not None else None)
+        # The refusal itself runs earlier, over the pre-strip set — see
+        # `_refuse_blocked_control_roles`. Re-checking here is a cheap backstop
+        # for any subclass that reaches this method by another path.
+        self._refuse_blocked_control_roles(self.control_names)
+        return roles
+
+    def _refuse_blocked_control_roles(self, names: list[str]) -> None:
+        """Refuse to condition on any mediator/collider among ``names``.
+
+        Split out of :meth:`_resolve_control_causal_roles` so it can run over the
+        **pre-strip** control set (#222). Promoting a variable to a price/promo
+        lever removed it from ``control_names`` before the check ran, so marking
+        ``Price`` a ``MEDIATOR`` raised without a lever and built **silently**
+        with one — a refusal bypass. The lever term is still in ``mu``, so it
+        still blocks part of the media effect; the bias does not care whether the
+        variable enters as a log-elasticity or a linear coefficient.
+
+        Only the refusal moves. The resolved role *list* stays 1:1 with the
+        post-strip ``control_names``, because ``_control_prior_sigmas`` and the
+        confounder mask index it positionally.
+        """
+        blocked: list[str] = []
+        for name in names:
+            cfg = self.mff_config.get_control_config(name)
             role = getattr(cfg, "causal_role", None) if cfg is not None else None
-            roles.append(role)
             if role in _BLOCKED_CONTROL_ROLES:
                 reason = getattr(cfg, "causal_role_reason", None)
                 detail = f" ({reason})" if reason else ""
@@ -1038,9 +1078,10 @@ class BayesianMMM:
                 "and conditioning on a collider opens a spurious path -- either "
                 "biases a total-effect estimate. Remove these from `controls`. "
                 "If a variable is genuinely a common cause of media and the KPI, "
-                "mark it `causal_role=CausalControlRole.CONFOUNDER` instead."
+                "mark it `causal_role=CausalControlRole.CONFOUNDER` instead. "
+                "Promoting it to a price/promo lever does NOT resolve this: the "
+                "lever term is still in the mean, so it still blocks the path."
             )
-        return roles
 
     def _control_prior_sigmas(self) -> np.ndarray:
         """Per-control coefficient-prior standard deviations, keyed by role.
@@ -1234,11 +1275,24 @@ class BayesianMMM:
         ``control_names`` / ``X_controls_raw`` (so it is not double-counted as a
         linear control) and its raw series stashed for the dedicated lever block.
         No-op when no levers are configured — the control block is unchanged.
+
+        Also **freezes both normalization constants** here, at fit time, rather
+        than recomputing them in-graph. This is load-bearing for counterfactuals
+        and is the same defect class as the StructuralNestedMMM in-graph-centering
+        blocker: a reference recomputed from the swapped series renormalizes the
+        swap away exactly. ``log(0.5p / mean(0.5p)) == log(p / mean(p))``, and
+        ``0.5·promo / max|0.5·promo| == promo / max|promo|`` — so a uniform lever
+        intervention would return "no effect" with full confidence, which looks
+        exactly like a well-identified null.
         """
         price_cfg = getattr(self.model_config, "price", None)
         promo_cfgs = list(getattr(self.model_config, "promotions", []) or [])
-        if (price_cfg is None and not promo_cfgs) or self.n_controls == 0:
+        if price_cfg is None and not promo_cfgs:
             return
+        # NB no `n_controls == 0` short-circuit: falling through to the
+        # per-variable lookup below is what makes a lever configured against a
+        # panel with no controls WARN rather than vanish silently — the same
+        # silent-drop class this issue closes.
 
         idx = {name: i for i, name in enumerate(self.control_names)}
         remove: set[str] = set()
@@ -1269,10 +1323,35 @@ class BayesianMMM:
 
         if not remove:
             return
+
+        # The lever design matrix + the frozen constants the graph reads. Column
+        # order is price first, then promos in config order; `_lever_names` is the
+        # `lever` coord and the target vocabulary for an intervention.
+        lever_cols: list[np.ndarray] = []
+        if self._price_lever is not None:
+            cfg, price_raw = self._price_lever
+            self._lever_names.append(cfg.variable)
+            lever_cols.append(price_raw)
+            self._price_ref = self._resolve_price_reference(cfg, price_raw)
+        for cfg, promo_raw in self._promo_levers:
+            self._lever_names.append(cfg.variable)
+            lever_cols.append(promo_raw)
+            self._promo_scale[cfg.variable] = float(np.max(np.abs(promo_raw))) + 1e-9
+        self.X_levers_raw = np.column_stack(lever_cols).astype(np.float64)
+
         keep = [i for i, name in enumerate(self.control_names) if name not in remove]
         self.control_names = [self.control_names[i] for i in keep]
         self.X_controls_raw = self.X_controls_raw[:, keep] if keep else None
         self.n_controls = len(self.control_names)
+
+    @property
+    def n_levers(self) -> int:
+        return len(self._lever_names)
+
+    @property
+    def lever_names(self) -> list[str]:
+        """Price/promo lever columns, in `X_levers_raw` column order."""
+        return list(self._lever_names)
 
     def _prepare_reach_frequency(self):
         """Split each reach/frequency channel's frequency column out of the
@@ -1458,6 +1537,10 @@ class BayesianMMM:
             coords["product"] = self.product_names
         if self.n_controls > 0:
             coords["control"] = self.control_names
+        # Lever-guarded, on the `n_controls > 0` precedent above: a model with no
+        # lever must keep a byte-identical graph.
+        if self.n_levers > 0:
+            coords["lever"] = self._lever_names
 
         for name, features in self.seasonality_features.items():
             n_features = features.shape[1]
@@ -1860,25 +1943,30 @@ class BayesianMMM:
         if self._price_lever is None and not self._promo_levers:
             return None
 
+        # Read the RAW lever series from the container so `pm.set_data` reaches
+        # this block, and normalize against the constants frozen in
+        # `_prepare_levers`. Recomputing either constant here would make a
+        # uniform intervention an exact no-op — see that method for the algebra.
+        _lever_data = pm.modelcontext(None)["X_levers_raw"]
+        col = {name: i for i, name in enumerate(self._lever_names)}
+
         contribs: list = []
         if self._price_lever is not None:
-            cfg, price_raw = self._price_lever
-            ref = self._resolve_price_reference(cfg, price_raw)
-            log_price = np.log(np.maximum(price_raw, 1e-9) / ref).astype(np.float64)
+            cfg, _price_raw = self._price_lever
+            x_price = _lever_data[:, col[cfg.variable]]
+            log_price = pt.log(pt.maximum(x_price, 1e-9) / self._price_ref)
             # Sign guard: elasticity ≤ 0 (a price rise cannot raise demand here).
             mag = pm.HalfNormal(
                 "price_elasticity_mag", sigma=float(cfg.elasticity_prior_sigma)
             )
             elasticity = pm.Deterministic("price_elasticity", -mag)
-            price_contrib = elasticity * pt.as_tensor_variable(log_price)
+            price_contrib = elasticity * log_price
             pm.Deterministic("price_component", price_contrib)
             contribs.append(price_contrib)
 
         promo_contribs: list = []
-        for cfg, promo_raw in self._promo_levers:
-            scale = float(np.max(np.abs(promo_raw))) + 1e-9
-            promo_norm = (promo_raw / scale).astype(np.float64)
-            x = pt.as_tensor_variable(promo_norm)
+        for cfg, _promo_raw in self._promo_levers:
+            x = _lever_data[:, col[cfg.variable]] / self._promo_scale[cfg.variable]
             if cfg.adstock_lmax > 1:
                 from ..transforms.adstock_pt import parametric_adstock_pt
 
@@ -2355,6 +2443,13 @@ class BayesianMMM:
                 X_controls_data = pm.Data(
                     "X_controls", self.X_controls, dims=("obs", "control")
                 )
+
+            # Price/promo levers ride a container so they can be intervened on,
+            # exactly as media does through `X_media_raw`. RAW here — the
+            # normalization is applied in-graph against constants frozen at fit
+            # time, so a swap is not renormalized away.
+            if self.n_levers > 0:
+                pm.Data("X_levers_raw", self.X_levers_raw, dims=("obs", "lever"))
 
             time_idx_data = pm.Data("time_idx", self.time_idx)
             geo_idx_data = pm.Data("geo_idx", self.geo_idx)
@@ -3562,6 +3657,7 @@ class BayesianMMM:
         self,
         X_media: np.ndarray | None,
         X_controls: np.ndarray | None = None,
+        X_levers: np.ndarray | None = None,
     ):
         """Temporarily swap counterfactual data into the model's ``pm.Data``
         containers, **restoring the training values on exit**.
@@ -3614,6 +3710,24 @@ class BayesianMMM:
                 saved["X_controls"] = self.model["X_controls"].get_value()
                 X_controls_std = (X_controls - self.control_mean) / self.control_std
                 pm.set_data({"X_controls": X_controls_std})
+
+            if X_levers is not None:
+                if self.n_levers == 0:
+                    raise ValueError(
+                        "X_levers was supplied but this model has no price or "
+                        "promotion lever. Configure one with "
+                        "ModelConfigBuilder().with_price(...) / .with_promotions(...)."
+                    )
+                arr = np.asarray(X_levers, dtype=np.float64)
+                if arr.shape != (self.n_obs, self.n_levers):
+                    raise ValueError(
+                        f"X_levers must be ({self.n_obs}, {self.n_levers}) for "
+                        f"levers {self._lever_names}; got {arr.shape}."
+                    )
+                # RAW, not normalized: the graph divides by the frozen constants,
+                # which is what makes the swap survive rather than cancel.
+                saved["X_levers_raw"] = self.model["X_levers_raw"].get_value()
+                pm.set_data({"X_levers_raw": arr})
 
             try:
                 yield
@@ -3672,6 +3786,7 @@ class BayesianMMM:
         return_original_scale: bool = True,
         hdi_prob: float = 0.94,
         random_seed: int | None = None,
+        X_levers: np.ndarray | None = None,
     ) -> PredictionResults:
         """
         Generate predictions from the fitted model.
@@ -3682,6 +3797,10 @@ class BayesianMMM:
             New media data for counterfactual. If None, uses training data.
         X_controls : np.ndarray, optional
             New control data. If None, uses training data.
+        X_levers : np.ndarray, optional
+            New RAW price/promo lever data, shaped ``(n_obs, n_levers)`` in
+            :attr:`lever_names` order. Raw, not normalized — the graph divides by
+            constants frozen at fit time. If None, uses training data.
         return_original_scale : bool
             If True, returns predictions in original scale.
         hdi_prob : float
@@ -3697,7 +3816,7 @@ class BayesianMMM:
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
-        with self._swapped_media_data(X_media, X_controls):
+        with self._swapped_media_data(X_media, X_controls, X_levers):
             pp = pm.sample_posterior_predictive(
                 self._trace,
                 var_names=["y_obs"],
@@ -4229,37 +4348,92 @@ class BayesianMMM:
     # Declarative estimands (counterfactual causal lens)
     # ------------------------------------------------------------------
 
-    def _intervention_to_X_media(
+    def _intervention_to_inputs(
         self, intervention: "Intervention"
-    ) -> np.ndarray | None:
-        """Materialize an :class:`Intervention` as a media matrix for ``predict``.
+    ) -> tuple[np.ndarray | None, np.ndarray | None]:
+        """Materialize an :class:`Intervention` as ``(X_media, X_levers)``.
 
-        Returns ``None`` for the factual world (``Observed``) so ``predict``
-        reuses the training media; otherwise a transformed copy of
-        ``X_media_raw``. ``predict`` already routes the raw matrix through the
-        per-channel normalization / adstock path, so these are raw-scale edits.
+        Either element is ``None`` when that block is untouched, so the caller
+        reuses the training values for it. Both are RAW-scale edits: ``predict``
+        routes media through the per-channel normalization / adstock path, and
+        the lever block divides by constants frozen at fit time.
+
+        ``target`` resolves against **channels ∪ levers**, so a price or promo
+        lever is a first-class intervention target rather than an unknown name.
         """
         kind = getattr(intervention, "type", None)
         if kind == "observed":
-            return None
-        X = self.X_media_raw.copy()
+            return None, None
         target = getattr(intervention, "target", None)
+
         if kind in ("zero_input", "scale_input", "set_input"):
-            if target not in self.channel_names:
-                raise ValueError(f"Unknown intervention target: {target!r}")
-            idx = self.channel_names.index(target)
-            if kind == "zero_input":
-                X[:, idx] = 0.0
-            elif kind == "scale_input":
-                X[:, idx] *= float(intervention.factor)
-            else:  # set_input
-                X[:, idx] = float(intervention.value)
-            return X
+            if target in self.channel_names:
+                X = self.X_media_raw.copy()
+                idx = self.channel_names.index(target)
+                if kind == "zero_input":
+                    X[:, idx] = 0.0
+                elif kind == "scale_input":
+                    X[:, idx] *= float(intervention.factor)
+                else:
+                    X[:, idx] = float(intervention.value)
+                return X, None
+
+            if target in self._lever_names:
+                is_price = (
+                    self._price_lever is not None
+                    and self._price_lever[0].variable == target
+                )
+                if kind == "zero_input" and is_price:
+                    # log(0) is undefined and the 1e-9 floor would return an
+                    # arbitrary large number that looks like an answer. A
+                    # zero-price world is not a counterfactual this model can
+                    # evaluate; a proportional change is.
+                    raise ValueError(
+                        f"Cannot zero the price lever {target!r}: the term is "
+                        "log(price / reference), so zero price is undefined and "
+                        "the numerical floor would return an arbitrary number. "
+                        "Use a scale (e.g. factor=0.95) or set a price level."
+                    )
+                L = self.X_levers_raw.copy()
+                idx = self._lever_names.index(target)
+                if kind == "zero_input":
+                    L[:, idx] = 0.0
+                elif kind == "scale_input":
+                    L[:, idx] *= float(intervention.factor)
+                else:
+                    L[:, idx] = float(intervention.value)
+                return None, L
+
+            known = ", ".join(self.channel_names + self._lever_names) or "(none)"
+            raise ValueError(
+                f"Unknown intervention target: {target!r}. Known targets are "
+                f"channels and price/promo levers: {known}."
+            )
+
         if kind == "custom":
             from ..estimands.interventions import apply_custom_intervention
 
-            return apply_custom_intervention(self, intervention, X)
+            # The registry contract is (model, params, X_media) -> X_media, so a
+            # custom intervention is media-only by construction. Widening it
+            # would break every registered callable; a lever scenario belongs in
+            # a set/scale intervention on the lever by name.
+            return apply_custom_intervention(self, intervention, self.X_media_raw.copy()), None
         raise ValueError(f"Unsupported intervention: {intervention!r}")
+
+    def _intervention_to_X_media(
+        self, intervention: "Intervention"
+    ) -> np.ndarray | None:
+        """Media-only view of :meth:`_intervention_to_inputs`, kept for callers
+        that cannot act on a lever swap. Refuses a lever target rather than
+        returning the factual media, which would silently evaluate the wrong
+        counterfactual."""
+        X_media, X_levers = self._intervention_to_inputs(intervention)
+        if X_levers is not None:
+            raise ValueError(
+                f"Intervention target {getattr(intervention, 'target', None)!r} is "
+                "a price/promo lever, and this caller can only swap media."
+            )
+        return X_media
 
     def predict_under(
         self,
@@ -4274,9 +4448,12 @@ class BayesianMMM:
         (:class:`mmm_framework.estimands.spec.SupportsEstimands`); windowing is
         applied by the estimand reducer, so the full series is returned here.
         """
-        X = self._intervention_to_X_media(intervention)
+        X_media, X_levers = self._intervention_to_inputs(intervention)
         return self.predict(
-            X_media=X, return_original_scale=True, random_seed=random_seed
+            X_media=X_media,
+            X_levers=X_levers,
+            return_original_scale=True,
+            random_seed=random_seed,
         )
 
     def model_capabilities(self) -> set[str]:
@@ -4515,8 +4692,10 @@ class BayesianMMM:
         estimand contrasts (see :mod:`mmm_framework.estimands.evaluate`)."""
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
-        X_media = self._intervention_to_X_media(intervention) if intervention else None
-        with self._swapped_media_data(X_media):
+        X_media, X_levers = (
+            self._intervention_to_inputs(intervention) if intervention else (None, None)
+        )
+        with self._swapped_media_data(X_media, None, X_levers):
             pp = pm.sample_posterior_predictive(
                 self._trace,
                 var_names=[var_name],
