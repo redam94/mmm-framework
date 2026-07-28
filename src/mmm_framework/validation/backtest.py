@@ -655,9 +655,32 @@ class PosteriorForecaster:
         per-geo effectiveness (V3): ``beta_{ch}`` is then (n_samples, n_geos) and
         we index column ``cell``. A scalar (n_samples,) beta is geo-shared and
         used for every cell.
+
+        Delegates to :meth:`media_by_channel_at` and sums, so a per-channel
+        decomposition can never drift from the pooled path it is supposed to
+        decompose — the same "summed rather than assumed" discipline the geo
+        level-offsets use above.
+        """
+        per_channel = self.media_by_channel_at(X_media_full_raw, positions, cell)
+        out = np.zeros((len(positions), self._n_samples))
+        for contrib in per_channel.values():
+            out += contrib
+        return out
+
+    def media_by_channel_at(
+        self,
+        X_media_full_raw: np.ndarray,
+        positions: np.ndarray,
+        cell: int | None = None,
+    ) -> dict[str, np.ndarray]:
+        """Saturated contribution PER CHANNEL, each ``(n_pos, n_samples)``.
+
+        The decomposition behind :meth:`_media_at`. A channel whose ``beta_`` is
+        absent from the trace is omitted rather than zero-filled, so a caller
+        cannot mistake "not estimated" for "estimated at zero".
         """
         model = self.model
-        out = np.zeros((len(positions), self._n_samples))
+        out: dict[str, np.ndarray] = {}
         for c, ch in enumerate(model.channel_names):
             x_raw = np.asarray(X_media_full_raw[:, c], dtype=float)
             if model.use_parametric_adstock:
@@ -675,7 +698,7 @@ class PosteriorForecaster:
                     beta = beta[:, cell // n_products]
                 else:
                     beta = beta.mean(axis=1)
-            out += x_sat * beta[None, :]
+            out[ch] = x_sat * beta[None, :]
         return out
 
     def _legacy_adstock(
