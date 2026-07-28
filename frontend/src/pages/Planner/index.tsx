@@ -7,6 +7,7 @@ import { useExperimentPriorities } from '../../api/hooks/useMeasurement';
 import { useBudgetPlans } from '../../api/hooks/useBudgetPlans';
 import { PlannerStudio } from './PlannerStudio';
 import { ScenarioStudio } from './ScenarioStudio';
+import { ForecastPanel } from './ForecastPanel';
 import { SavedPlans } from './SavedPlans';
 
 /**
@@ -65,25 +66,30 @@ export function PlannerPage() {
           tabs={[
             { id: 'optimize', label: 'Build plan' },
             { id: 'scenario', label: 'What-if' },
+            { id: 'forecast', label: 'Forecast' },
           ]}
           active={tab}
           onChange={setTab}
         />
         <div className="mt-4">
-          {tab === 'optimize' ? (
+          {tab === 'optimize' && (
             <PlannerStudio
               projectId={currentProjectId}
               channels={channels}
               modelId={modelId}
               onSaved={() => plansQuery.refetch()}
             />
-          ) : (
+          )}
+          {tab === 'scenario' && (
             <ScenarioStudio
               projectId={currentProjectId}
               channels={channels}
               modelId={modelId}
               onSaved={() => plansQuery.refetch()}
             />
+          )}
+          {tab === 'forecast' && (
+            <ForecastPanel projectId={currentProjectId} channels={channels} />
           )}
         </div>
       </Card>

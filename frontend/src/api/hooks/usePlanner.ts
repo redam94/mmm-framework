@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { plannerService } from '../services/plannerService';
 import type {
+  PlannerForecastRequest,
   PlannerOptimizeRequest,
   PlannerScenarioRequest,
 } from '../services/plannerService';
@@ -12,6 +13,8 @@ export const plannerKeys = {
     [...plannerKeys.all, 'optimize', projectId, jobId] as const,
   scenario: (projectId: string | null, jobId: string | null) =>
     [...plannerKeys.all, 'scenario', projectId, jobId] as const,
+  forecast: (projectId: string | null, jobId: string | null) =>
+    [...plannerKeys.all, 'forecast', projectId, jobId] as const,
 };
 
 /**
@@ -57,6 +60,37 @@ export function usePlannerScenario(projectId: string | null) {
   const job = useQuery({
     queryKey: plannerKeys.scenario(projectId, jobId),
     queryFn: () => plannerService.pollScenario(projectId!, jobId!),
+    enabled: !!projectId && !!jobId,
+    refetchInterval: (q) =>
+      ['done', 'error'].includes(q.state.data?.status ?? '') ? false : 2000,
+  });
+
+  const reset = () => {
+    setJobId(null);
+    start.reset();
+  };
+
+  return { start, job, reset, jobId };
+}
+
+
+/**
+ * Forward KPI forecast under a spend plan (#223). Same start/poll/reset shape as
+ * the optimization above — the forward pass rebuilds adstock kernels per
+ * (channel, draw), so it is a background job rather than a held connection.
+ */
+export function usePlannerForecast(projectId: string | null) {
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const start = useMutation({
+    mutationFn: (body: PlannerForecastRequest) =>
+      plannerService.startForecast(projectId!, body),
+    onSuccess: (data) => setJobId(data.job_id),
+  });
+
+  const job = useQuery({
+    queryKey: plannerKeys.forecast(projectId, jobId),
+    queryFn: () => plannerService.pollForecast(projectId!, jobId!),
     enabled: !!projectId && !!jobId,
     refetchInterval: (q) =>
       ['done', 'error'].includes(q.state.data?.status ?? '') ? false : 2000,

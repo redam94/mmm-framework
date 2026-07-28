@@ -161,6 +161,53 @@ export interface PlannerScenarioRequest {
   max_draws?: number;
 }
 
+export interface PlannerForecastRequest {
+  channel_budgets?: Record<string, number> | null;
+  future_media?: Record<string, number[]> | null;
+  future_controls?: Record<string, number[]> | null;
+  n_periods?: number;
+  pattern?: string;
+  interval?: number;
+  include_noise?: boolean;
+  start_date?: string | null;
+  max_draws?: number;
+}
+
+/** A forecast is a counterfactual under a plan the model never observed, so the
+ *  caveats are part of the payload rather than page furniture. `lower`/`upper`
+ *  are null per period when the posterior had too few draws to form an interval
+ *  (a MAP fit has one) — a collapsed band would read as extreme precision. */
+export interface ForecastResultPayload {
+  periods: string[];
+  mean: number[];
+  lower: (number | null)[];
+  upper: (number | null)[];
+  baseline: number[];
+  by_channel: Record<string, number[]>;
+  interval: number;
+  caveats: string[];
+  caveat_fields: {
+    trend_extrapolation: { policy?: string; trend_type?: string; n_train_periods?: number };
+    interval_widens_with_horizon: boolean;
+    extrapolated_channels: { channel: string; multiple: number }[];
+    residual_autocorrelation: { ljung_box_p: number | null; autocorrelated: boolean | null };
+    interval_noun: string;
+    inference_family: string;
+    approximate: boolean;
+    fit_method: string | null;
+    interval_available: boolean;
+  };
+  headline: {
+    total: number;
+    total_lower: number | null;
+    total_upper: number | null;
+    interval_available: boolean;
+    interval_noun: string;
+  };
+  n_draws: number;
+  calendar: { start: string; n_periods: number; cadence: string } | null;
+}
+
 export interface PlannerJob<T> {
   status: 'pending' | 'running' | 'done' | 'error';
   project_id: string;
@@ -206,6 +253,25 @@ export const plannerService = {
   ): Promise<PlannerJob<PlannerScenarioResult>> {
     const { data } = await apiClient.get<PlannerJob<PlannerScenarioResult>>(
       `/projects/${projectId}/planner/scenario/${jobId}`,
+    );
+    return data;
+  },
+  async startForecast(
+    projectId: string,
+    body: PlannerForecastRequest,
+  ): Promise<{ job_id: string; status: string }> {
+    const { data } = await apiClient.post<{ job_id: string; status: string }>(
+      `/projects/${projectId}/planner/forecast`,
+      body,
+    );
+    return data;
+  },
+  async pollForecast(
+    projectId: string,
+    jobId: string,
+  ): Promise<PlannerJob<{ forecast: ForecastResultPayload }>> {
+    const { data } = await apiClient.get<PlannerJob<{ forecast: ForecastResultPayload }>>(
+      `/projects/${projectId}/planner/forecast/${jobId}`,
     );
     return data;
   },
