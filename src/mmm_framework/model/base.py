@@ -3598,7 +3598,19 @@ class BayesianMMM:
                     }
                 )
 
-            if X_controls is not None and self.n_controls > 0:
+            if X_controls is not None:
+                # Several features CONSUME a control column and strip it from
+                # `control_names` (price/promo levers, a reach/frequency
+                # frequency_column). The old `and self.n_controls > 0` guard
+                # meant that when they consumed EVERY control, a caller-supplied
+                # X_controls was silently ignored and the model returned the
+                # baseline — a wrong number with no error.
+                #
+                # Refuse only when there is genuinely nothing to swap. A partial
+                # strip still has a legitimate remaining-controls swap, so that
+                # keeps working; it just has to be the surviving columns, in
+                # order, rather than whatever the panel started with.
+                self._check_controls_swappable(X_controls)
                 saved["X_controls"] = self.model["X_controls"].get_value()
                 X_controls_std = (X_controls - self.control_mean) / self.control_std
                 pm.set_data({"X_controls": X_controls_std})
@@ -3609,6 +3621,49 @@ class BayesianMMM:
                 # Restore the training inputs so the fitted model is never left
                 # holding a counterfactual scenario's data.
                 pm.set_data(saved)
+
+    def _consumed_control_names(self) -> list[str]:
+        """Panel control columns this model consumed as something other than a
+        linear control (a price/promo lever, a reach/frequency driver)."""
+        panel = getattr(self, "panel", None)
+        coords = getattr(panel, "coords", None)
+        panel_controls = list(getattr(coords, "controls", None) or [])
+        surviving = set(self.control_names or [])
+        return [c for c in panel_controls if c not in surviving]
+
+    def _check_controls_swappable(self, X_controls: np.ndarray) -> None:
+        """Refuse an ``X_controls`` that cannot be applied as the caller intends.
+
+        Raises rather than silently predicting the baseline (no controls left)
+        or silently applying the array to the wrong column (partial strip with a
+        mismatched width).
+        """
+        consumed = self._consumed_control_names()
+        if self.n_controls == 0:
+            detail = (
+                f" The panel's control column(s) {consumed} were promoted to "
+                "model terms (price/promo levers or a reach/frequency driver), "
+                "so this model has no linear controls to swap."
+                if consumed
+                else " This model was fit without controls."
+            )
+            raise ValueError(
+                "X_controls was passed but cannot be applied." + detail
+            )
+
+        n_given = int(np.asarray(X_controls).shape[-1])
+        if n_given != self.n_controls:
+            extra = (
+                f" (the panel's {consumed} were promoted to model terms and are "
+                "no longer linear controls)"
+                if consumed
+                else ""
+            )
+            raise ValueError(
+                f"X_controls has {n_given} column(s) but this model has "
+                f"{self.n_controls}: {list(self.control_names)}{extra}. Pass the "
+                "surviving controls, in that order."
+            )
 
     def predict(
         self,

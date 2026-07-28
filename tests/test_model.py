@@ -1742,3 +1742,99 @@ class TestMultiplicativeContributionGuard:
         m = self._fit(ModelSpecification.ADDITIVE)
         contrib = m.sample_channel_contributions(max_draws=10)
         assert contrib.ndim == 3 and contrib.shape[-1] == 1
+
+
+class TestPredictControlsGuard:
+    """`predict(X_controls=...)` must not silently ignore its argument (#222).
+
+    Price/promo levers and a reach/frequency `frequency_column` CONSUME a
+    control column. The old guard was `if X_controls is not None and
+    self.n_controls > 0`, so when they consumed EVERY control the argument was
+    dropped and the model returned the baseline — a wrong number, no error.
+    """
+
+    def _panel(self):
+        import numpy as np
+        import pandas as pd
+
+        from mmm_framework.config import (
+            ControlVariableConfig, DimensionType, KPIConfig,
+            MediaChannelConfig, MFFConfig,
+        )
+        from mmm_framework.data_loader import PanelCoordinates, PanelDataset
+
+        n = 48
+        periods = pd.date_range("2021-01-04", periods=n, freq="W-MON")
+        rng = np.random.default_rng(7)
+        tv = np.abs(rng.normal(100, 20, n))
+        price = rng.normal(10, 1.0, n)
+        promo = rng.binomial(1, 0.3, n).astype(float)
+        y = pd.Series(1000 + 2.0 * tv - 15 * price + 40 * promo, name="Sales")
+        return PanelDataset(
+            y=y,
+            X_media=pd.DataFrame({"TV": tv}),
+            X_controls=pd.DataFrame({"price": price, "promo": promo}),
+            coords=PanelCoordinates(
+                periods=periods, geographies=None, products=None,
+                channels=["TV"], controls=["price", "promo"],
+            ),
+            index=periods,
+            config=MFFConfig(
+                kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
+                media_channels=[
+                    MediaChannelConfig(name="TV", dimensions=[DimensionType.PERIOD])
+                ],
+                controls=[
+                    ControlVariableConfig(name=c, dimensions=[DimensionType.PERIOD])
+                    for c in ("price", "promo")
+                ],
+            ),
+        )
+
+    def _fit(self, freq_cols):
+        from mmm_framework.config import ModelConfig, ReachFrequencyConfig
+        from mmm_framework.model import BayesianMMM, TrendConfig, TrendType
+
+        panel = self._panel()
+        rf = [
+            ReachFrequencyConfig(channel="TV", frequency_column=c) for c in freq_cols
+        ]
+        m = BayesianMMM(
+            panel, ModelConfig(reach_frequency=rf), TrendConfig(type=TrendType.LINEAR)
+        )
+        m.fit(method="map", random_seed=0)
+        return m, panel
+
+    @pytest.mark.slow
+    def test_refuses_when_every_control_was_consumed(self):
+        import numpy as np
+
+        m, panel = self._fit(["price"])
+        # consume the survivor too, so n_controls == 0
+        m.control_names = []
+        m.n_controls = 0
+        with pytest.raises(ValueError) as exc:
+            m.predict(X_controls=np.zeros((len(panel.y), 2)), random_seed=0)
+        assert "cannot be applied" in str(exc.value)
+
+    @pytest.mark.slow
+    def test_refuses_a_mismatched_width_instead_of_misapplying_it(self):
+        """With one surviving control, a 2-column array used to be applied to
+        whichever control happened to survive."""
+        import numpy as np
+
+        m, panel = self._fit(["price"])
+        with pytest.raises(ValueError) as exc:
+            m.predict(X_controls=np.zeros((len(panel.y), 2)), random_seed=0)
+        msg = str(exc.value)
+        assert "2 column(s)" in msg and "promo" in msg   # names what it wants
+        assert "price" in msg                            # and what was consumed
+
+    @pytest.mark.slow
+    def test_the_legitimate_partial_swap_still_works(self):
+        """Not a blanket refusal: swapping the surviving controls is valid."""
+        import numpy as np
+
+        m, panel = self._fit(["price"])
+        out = m.predict(X_controls=np.zeros((len(panel.y), 1)), random_seed=0)
+        assert out.y_pred_mean is not None

@@ -609,6 +609,18 @@ class MMMSerializer:
             if _panel is not None
             else list(model.channel_names)
         )
+        # The panel's own control columns, for the same reason as
+        # ``panel_channels`` above: several features CONSUME a control column
+        # and strip it from ``model.control_names`` — a reach/frequency
+        # frequency_column, and price/promo levers. Recording the post-strip
+        # list and comparing it to the panel's pre-strip set made every such
+        # model save fine and fail to load. Scoped by the strip mechanism, not
+        # by any one feature, so it covers both.
+        panel_controls = (
+            list(_panel.coords.controls or [])
+            if _panel is not None
+            else list(model.control_names)
+        )
         metadata = {
             "version": model._VERSION,
             "format_version": cls._FORMAT_VERSION,
@@ -619,6 +631,7 @@ class MMMSerializer:
             "channel_names": model.channel_names,
             "panel_channels": panel_channels,
             "control_names": model.control_names,
+            "panel_controls": panel_controls,
             "has_geo": model.has_geo,
             "has_product": model.has_product,
             "adstock_alphas": model.adstock_alphas,
@@ -901,10 +914,16 @@ class MMMSerializer:
                 f"saved model channels {expected}"
             )
 
-        if panel.coords.controls != metadata["control_names"]:
+        # Compare against the panel's own control columns, not the model's
+        # post-strip axis. Falls back to ``control_names`` for saves written
+        # before ``panel_controls`` existed, where the two coincide unless a
+        # column was consumed — those old saves stay exactly as loadable (or
+        # not) as they were.
+        expected_controls = metadata.get("panel_controls", metadata["control_names"])
+        if list(panel.coords.controls or []) != list(expected_controls or []):
             raise ValueError(
                 f"Panel controls {panel.coords.controls} don't match "
-                f"saved model controls {metadata['control_names']}"
+                f"saved model controls {expected_controls}"
             )
 
     @classmethod

@@ -16,6 +16,24 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Fixed
 
+- **Models that consume a control column could be saved but never reloaded** ([#237], [#222]).
+  A reach/frequency `frequency_column`, and price/promo levers, are stripped out of
+  `model.control_names` because they are consumed as model terms rather than linear controls. The
+  serializer recorded that **post-strip** list and compared it against the panel's **pre-strip**
+  columns, so `MMMSerializer.load` raised
+  `ValueError: Panel controls ['Price'] don't match saved model controls []` every time. Save
+  succeeded; load always failed. Metadata now carries `panel_controls` — mirroring the
+  `panel_channels` field that already existed for the same reason on the media axis — and the gate
+  compares against that, falling back to `control_names` for saves written before it existed. Scoped
+  by the strip mechanism rather than by any one feature, so it covers both.
+
+- **`predict(X_controls=...)` silently returned the baseline** when levers or reach/frequency had
+  consumed every control ([#222]). The guard was `if X_controls is not None and self.n_controls > 0`,
+  so the argument was dropped without an error. A narrower case was also wrong: with one surviving
+  control, a mismatched-width array was applied to whichever control happened to survive. Both now
+  raise, naming the consumed columns and the accepted order. The legitimate partial swap — passing
+  the surviving controls — still works and is not blanket-refused.
+
 - **`sample_channel_contributions()` now refuses a multiplicative specification** instead of
   returning log-scale numbers as though they were original-scale contributions ([#220]). Its
   docstring rests on "the model is additive in channels" and it ends in `contrib * y_std`, both of
@@ -43,6 +61,8 @@ frozen public contract breaks, and the contract itself is pinned by
   matters most.
 
 [#220]: https://github.com/redam94/mmm-framework/issues/220
+[#222]: https://github.com/redam94/mmm-framework/issues/222
+[#237]: https://github.com/redam94/mmm-framework/issues/237
 
 ## [1.3.3] — 2026-07-27
 

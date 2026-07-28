@@ -551,3 +551,99 @@ class TestMMMSerializerSaveLoadPath:
 
         with pytest.raises(FileNotFoundError):
             MMMSerializer.load(nonexistent_path, MockPanel())
+
+
+class TestConsumedControlColumnsRoundTrip:
+    """A model that CONSUMES a control column must still reload (#237, #222).
+
+    `_prepare_reach_frequency` (and price/promo levers) strip the consumed
+    column out of `control_names`. The serializer recorded that post-strip list
+    and compared it against the panel's pre-strip columns, so every such model
+    saved fine and raised on load — unrecoverable.
+    """
+
+    def _panel(self):
+        import numpy as np
+        import pandas as pd
+
+        from mmm_framework.config import (
+            ControlVariableConfig, DimensionType, KPIConfig,
+            MediaChannelConfig, MFFConfig,
+        )
+        from mmm_framework.data_loader import PanelCoordinates, PanelDataset
+
+        n = 48
+        periods = pd.date_range("2021-01-04", periods=n, freq="W-MON")
+        rng = np.random.default_rng(5)
+        tv = np.abs(rng.normal(100, 20, n))
+        price = rng.normal(10, 1.0, n)
+        promo = rng.binomial(1, 0.3, n).astype(float)
+        y = pd.Series(1000 + 2.0 * tv - 15 * price + 40 * promo, name="Sales")
+        return PanelDataset(
+            y=y,
+            X_media=pd.DataFrame({"TV": tv}),
+            X_controls=pd.DataFrame({"price": price, "promo": promo}),
+            coords=PanelCoordinates(
+                periods=periods, geographies=None, products=None,
+                channels=["TV"], controls=["price", "promo"],
+            ),
+            index=periods,
+            config=MFFConfig(
+                kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
+                media_channels=[
+                    MediaChannelConfig(name="TV", dimensions=[DimensionType.PERIOD])
+                ],
+                controls=[
+                    ControlVariableConfig(name=c, dimensions=[DimensionType.PERIOD])
+                    for c in ("price", "promo")
+                ],
+            ),
+        )
+
+    @pytest.mark.slow
+    def test_reach_frequency_model_reloads(self, tmp_path):
+        from mmm_framework.config import ModelConfig, ReachFrequencyConfig
+        from mmm_framework.model import BayesianMMM, TrendConfig, TrendType
+        from mmm_framework.serialization import MMMSerializer
+
+        panel = self._panel()
+        m = BayesianMMM(
+            panel,
+            ModelConfig(
+                reach_frequency=[
+                    ReachFrequencyConfig(channel="TV", frequency_column="price")
+                ]
+            ),
+            TrendConfig(type=TrendType.LINEAR),
+        )
+        m.fit(method="map", random_seed=0)
+        assert list(m.control_names) == ["promo"]      # 'price' was consumed
+
+        path = str(tmp_path / "rf")
+        MMMSerializer.save(m, path)
+        reloaded = MMMSerializer.load(path, panel)     # used to raise ValueError
+        assert list(reloaded.control_names) == ["promo"]
+        # and it must actually be usable, not merely constructible
+        assert reloaded.predict(random_seed=0).y_pred_mean is not None
+
+    @pytest.mark.slow
+    def test_plain_model_control_check_still_bites(self, tmp_path):
+        """The gate must still reject a genuinely mismatched panel."""
+        import dataclasses
+
+        from mmm_framework.config import ModelConfig
+        from mmm_framework.model import BayesianMMM, TrendConfig, TrendType
+        from mmm_framework.serialization import MMMSerializer
+
+        panel = self._panel()
+        m = BayesianMMM(panel, ModelConfig(), TrendConfig(type=TrendType.LINEAR))
+        m.fit(method="map", random_seed=0)
+        path = str(tmp_path / "plain")
+        MMMSerializer.save(m, path)
+
+        wrong = dataclasses.replace(
+            panel,
+            coords=dataclasses.replace(panel.coords, controls=["price", "OTHER"]),
+        )
+        with pytest.raises(ValueError, match="don't match"):
+            MMMSerializer.load(path, wrong)
