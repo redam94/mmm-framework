@@ -3752,6 +3752,7 @@ class BayesianMMM:
         return_original_scale: bool = True,
         hdi_prob: float = 0.94,
         random_seed: int | None = None,
+        X_levers: np.ndarray | None = None,
     ) -> PredictionResults:
         """
         Generate predictions from the fitted model.
@@ -3762,6 +3763,10 @@ class BayesianMMM:
             New media data for counterfactual. If None, uses training data.
         X_controls : np.ndarray, optional
             New control data. If None, uses training data.
+        X_levers : np.ndarray, optional
+            New RAW price/promo lever data, shaped ``(n_obs, n_levers)`` in
+            :attr:`lever_names` order. Raw, not normalized — the graph divides by
+            constants frozen at fit time. If None, uses training data.
         return_original_scale : bool
             If True, returns predictions in original scale.
         hdi_prob : float
@@ -3777,7 +3782,7 @@ class BayesianMMM:
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
-        with self._swapped_media_data(X_media, X_controls):
+        with self._swapped_media_data(X_media, X_controls, X_levers):
             pp = pm.sample_posterior_predictive(
                 self._trace,
                 var_names=["y_obs"],
@@ -4309,37 +4314,92 @@ class BayesianMMM:
     # Declarative estimands (counterfactual causal lens)
     # ------------------------------------------------------------------
 
-    def _intervention_to_X_media(
+    def _intervention_to_inputs(
         self, intervention: "Intervention"
-    ) -> np.ndarray | None:
-        """Materialize an :class:`Intervention` as a media matrix for ``predict``.
+    ) -> tuple[np.ndarray | None, np.ndarray | None]:
+        """Materialize an :class:`Intervention` as ``(X_media, X_levers)``.
 
-        Returns ``None`` for the factual world (``Observed``) so ``predict``
-        reuses the training media; otherwise a transformed copy of
-        ``X_media_raw``. ``predict`` already routes the raw matrix through the
-        per-channel normalization / adstock path, so these are raw-scale edits.
+        Either element is ``None`` when that block is untouched, so the caller
+        reuses the training values for it. Both are RAW-scale edits: ``predict``
+        routes media through the per-channel normalization / adstock path, and
+        the lever block divides by constants frozen at fit time.
+
+        ``target`` resolves against **channels ∪ levers**, so a price or promo
+        lever is a first-class intervention target rather than an unknown name.
         """
         kind = getattr(intervention, "type", None)
         if kind == "observed":
-            return None
-        X = self.X_media_raw.copy()
+            return None, None
         target = getattr(intervention, "target", None)
+
         if kind in ("zero_input", "scale_input", "set_input"):
-            if target not in self.channel_names:
-                raise ValueError(f"Unknown intervention target: {target!r}")
-            idx = self.channel_names.index(target)
-            if kind == "zero_input":
-                X[:, idx] = 0.0
-            elif kind == "scale_input":
-                X[:, idx] *= float(intervention.factor)
-            else:  # set_input
-                X[:, idx] = float(intervention.value)
-            return X
+            if target in self.channel_names:
+                X = self.X_media_raw.copy()
+                idx = self.channel_names.index(target)
+                if kind == "zero_input":
+                    X[:, idx] = 0.0
+                elif kind == "scale_input":
+                    X[:, idx] *= float(intervention.factor)
+                else:
+                    X[:, idx] = float(intervention.value)
+                return X, None
+
+            if target in self._lever_names:
+                is_price = (
+                    self._price_lever is not None
+                    and self._price_lever[0].variable == target
+                )
+                if kind == "zero_input" and is_price:
+                    # log(0) is undefined and the 1e-9 floor would return an
+                    # arbitrary large number that looks like an answer. A
+                    # zero-price world is not a counterfactual this model can
+                    # evaluate; a proportional change is.
+                    raise ValueError(
+                        f"Cannot zero the price lever {target!r}: the term is "
+                        "log(price / reference), so zero price is undefined and "
+                        "the numerical floor would return an arbitrary number. "
+                        "Use a scale (e.g. factor=0.95) or set a price level."
+                    )
+                L = self.X_levers_raw.copy()
+                idx = self._lever_names.index(target)
+                if kind == "zero_input":
+                    L[:, idx] = 0.0
+                elif kind == "scale_input":
+                    L[:, idx] *= float(intervention.factor)
+                else:
+                    L[:, idx] = float(intervention.value)
+                return None, L
+
+            known = ", ".join(self.channel_names + self._lever_names) or "(none)"
+            raise ValueError(
+                f"Unknown intervention target: {target!r}. Known targets are "
+                f"channels and price/promo levers: {known}."
+            )
+
         if kind == "custom":
             from ..estimands.interventions import apply_custom_intervention
 
-            return apply_custom_intervention(self, intervention, X)
+            # The registry contract is (model, params, X_media) -> X_media, so a
+            # custom intervention is media-only by construction. Widening it
+            # would break every registered callable; a lever scenario belongs in
+            # a set/scale intervention on the lever by name.
+            return apply_custom_intervention(self, intervention, self.X_media_raw.copy()), None
         raise ValueError(f"Unsupported intervention: {intervention!r}")
+
+    def _intervention_to_X_media(
+        self, intervention: "Intervention"
+    ) -> np.ndarray | None:
+        """Media-only view of :meth:`_intervention_to_inputs`, kept for callers
+        that cannot act on a lever swap. Refuses a lever target rather than
+        returning the factual media, which would silently evaluate the wrong
+        counterfactual."""
+        X_media, X_levers = self._intervention_to_inputs(intervention)
+        if X_levers is not None:
+            raise ValueError(
+                f"Intervention target {getattr(intervention, 'target', None)!r} is "
+                "a price/promo lever, and this caller can only swap media."
+            )
+        return X_media
 
     def predict_under(
         self,
@@ -4354,9 +4414,12 @@ class BayesianMMM:
         (:class:`mmm_framework.estimands.spec.SupportsEstimands`); windowing is
         applied by the estimand reducer, so the full series is returned here.
         """
-        X = self._intervention_to_X_media(intervention)
+        X_media, X_levers = self._intervention_to_inputs(intervention)
         return self.predict(
-            X_media=X, return_original_scale=True, random_seed=random_seed
+            X_media=X_media,
+            X_levers=X_levers,
+            return_original_scale=True,
+            random_seed=random_seed,
         )
 
     def model_capabilities(self) -> set[str]:
@@ -4595,8 +4658,10 @@ class BayesianMMM:
         estimand contrasts (see :mod:`mmm_framework.estimands.evaluate`)."""
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
-        X_media = self._intervention_to_X_media(intervention) if intervention else None
-        with self._swapped_media_data(X_media):
+        X_media, X_levers = (
+            self._intervention_to_inputs(intervention) if intervention else (None, None)
+        )
+        with self._swapped_media_data(X_media, None, X_levers):
             pp = pm.sample_posterior_predictive(
                 self._trace,
                 var_names=[var_name],

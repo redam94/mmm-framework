@@ -354,3 +354,109 @@ def test_no_lever_graph_is_byte_identical():
 
     point = {k: float(np.asarray(v).sum()) for k, v in mod.initial_point().items()}
     assert point == pytest.approx(_NO_LEVER_INITIAL_POINT)
+
+
+# ===========================================================================
+# Levers as intervention targets (#222, commit 3)
+#
+# `_intervention_to_X_media` resolved `target` against channel_names only, so a
+# lever target raised "Unknown intervention target" — a refusal, not a wrong
+# number, but it meant no price or promo counterfactual was expressible at all.
+# The resolver now returns (X_media, X_levers) and resolves against channels ∪
+# levers, and BOTH call sites use it (`predict_under` and `sample_latent_under`,
+# the second of which the issue did not name).
+# ===========================================================================
+
+
+class TestLeverInterventions:
+    def _iv(self):
+        from mmm_framework.estimands.spec import Observed, ScaleInput, ZeroInput
+
+        return Observed, ScaleInput, ZeroInput
+
+    def test_resolver_routes_targets_to_the_right_block(self):
+        Observed, ScaleInput, ZeroInput = self._iv()
+        m = _lever_model()
+
+        media, levers = m._intervention_to_inputs(Observed())
+        assert media is None and levers is None
+
+        media, levers = m._intervention_to_inputs(ZeroInput(target="TV"))
+        assert levers is None and np.all(media[:, m.channel_names.index("TV")] == 0)
+
+        media, levers = m._intervention_to_inputs(ScaleInput(target="Price", factor=0.9))
+        assert media is None
+        assert np.allclose(levers[:, 0], m.X_levers_raw[:, 0] * 0.9)
+        assert np.allclose(levers[:, 1], m.X_levers_raw[:, 1])  # promo untouched
+
+        media, levers = m._intervention_to_inputs(ZeroInput(target="Promo"))
+        assert media is None and np.all(levers[:, 1] == 0)
+
+    def test_unknown_target_names_channels_and_levers(self):
+        _, _, ZeroInput = self._iv()
+        m = _lever_model()
+        with pytest.raises(ValueError, match="channels and price/promo levers"):
+            m._intervention_to_inputs(ZeroInput(target="Nope"))
+
+    def test_zeroing_the_price_lever_is_refused_not_floored(self):
+        """log(0) is undefined; the 1e-9 floor would return an arbitrary large
+        number that reads as an answer."""
+        _, _, ZeroInput = self._iv()
+        m = _lever_model()
+        with pytest.raises(ValueError, match="Cannot zero the price lever"):
+            m._intervention_to_inputs(ZeroInput(target="Price"))
+
+    def test_media_only_callers_refuse_a_lever_target(self):
+        """The narrow helper must not quietly return the FACTUAL media, which
+        would evaluate the wrong counterfactual under a lever target."""
+        _, ScaleInput, _ = self._iv()
+        m = _lever_model()
+        with pytest.raises(ValueError, match="can only swap media"):
+            m._intervention_to_X_media(ScaleInput(target="Price", factor=0.9))
+        # a channel target still passes through unchanged
+        assert m._intervention_to_X_media(ScaleInput(target="TV", factor=0.5)) is not None
+
+
+@pytest.mark.slow
+class TestLeverCounterfactualsOnAFit:
+    def _fit(self):
+        cfg = (
+            ModelConfigBuilder()
+            .map_fit()
+            .with_price(_levers()["price"])
+            .with_promotions(*_levers()["promotions"])
+            .build()
+        )
+        m = BayesianMMM(_panel(), cfg, TrendConfig(type=TrendType.LINEAR))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            m.fit(random_seed=0)
+        return m
+
+    def test_price_and_promo_counterfactuals_move_the_kpi_the_right_way(self):
+        from mmm_framework.estimands.spec import Observed, ScaleInput, ZeroInput
+
+        m = self._fit()
+
+        def kpi(iv):
+            return float(m.predict_under(iv, random_seed=1).y_pred_mean.sum())
+
+        base = kpi(Observed())
+        # elasticity is sign-guarded ≤ 0, so a price CUT raises the KPI
+        assert kpi(ScaleInput(target="Price", factor=0.95)) > base
+        # the promo lift is non-negative, so removing promo lowers it
+        assert kpi(ZeroInput(target="Promo")) < base
+        # and the media path is unaffected by any of this
+        assert kpi(ZeroInput(target="TV")) < base
+
+    def test_a_lever_counterfactual_leaves_the_model_in_its_training_state(self):
+        from mmm_framework.estimands.spec import Observed, ScaleInput
+
+        m = self._fit()
+        before = m.model["X_levers_raw"].get_value().copy()
+        m.predict_under(ScaleInput(target="Price", factor=0.5), random_seed=1)
+        assert np.allclose(m.model["X_levers_raw"].get_value(), before)
+        # and the factual prediction is unchanged afterwards
+        a = m.predict_under(Observed(), random_seed=1).y_pred_mean
+        b = m.predict_under(Observed(), random_seed=1).y_pred_mean
+        assert np.allclose(a, b)
