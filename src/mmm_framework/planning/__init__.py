@@ -26,6 +26,7 @@ from .frontier import (
     goal_seek,
 )
 from .flighting import FLIGHTING_PATTERNS, build_flighting_schedule
+from .forecast import ForecastCaveats, ForecastResult, forecast_under_plan
 from .pacing import (
     DEFAULT_PACING_THRESHOLD,
     PacingChannel,
@@ -126,6 +127,9 @@ __all__ = [
     "DEFAULT_PACING_THRESHOLD",
     "FLIGHTING_PATTERNS",
     "build_flighting_schedule",
+    "ForecastCaveats",
+    "ForecastResult",
+    "forecast_under_plan",
     "recommend_experiments",
     "ChannelPriority",
     "compute_experiment_priorities",
