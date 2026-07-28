@@ -94,6 +94,12 @@ bash .claude/skills/run-app/scripts/stop.sh   # kills by PORT (8000, 5173)
 - **Playwright `name="Publish"` is ambiguous** once any registry row shows a
   "Published" chip (the row's accessible name contains "Published"). Use
   `get_by_role("button", name="Publish", exact=True)`.
+- **Docs is a TAB, not a field on the create form.** The old
+  `input[placeholder*="docs"]` selector no longer exists — the New-model form is
+  just the name input plus Code/Docs/Notebook tabs. Click the **Docs** tab, then
+  fill the textarea there. Beware: Monaco mounts its own `readonly`
+  `aria-hidden` textarea that still reports `is_visible() == True`, so filter on
+  `bounding_box()["height"] > 20` rather than trusting visibility.
 - **Monaco loads from a CDN at runtime by default** — fine for online dev; an
   offline/CSP-restricted environment needs `monaco-editor` self-hosted via
   `loader.config`.

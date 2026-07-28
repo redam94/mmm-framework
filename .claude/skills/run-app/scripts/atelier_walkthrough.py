@@ -89,7 +89,20 @@ def drive_ui():
             page.get_by_role("button", name="New model").click()
             page.wait_for_timeout(600)
             page.locator('input[placeholder*="model name"]').fill(MODEL)
-            page.locator('input[placeholder*="docs"]').fill("Run-skill walkthrough model.")
+            # Docs live in their own tab now, not an inline field on the create
+            # form. Monaco also mounts a readonly aria-hidden textarea that
+            # reports as visible, so match on a real height instead.
+            page.get_by_role("button", name="Docs").click()
+            page.wait_for_timeout(800)
+            for i in range(page.locator("textarea").count()):
+                ta = page.locator("textarea").nth(i)
+                box = ta.bounding_box()
+                if ta.is_visible() and not ta.get_attribute("readonly") \
+                        and box and box["height"] > 20:
+                    ta.fill("Run-skill walkthrough model.")
+                    break
+            page.get_by_role("button", name="Code").click()
+            page.wait_for_timeout(600)
             shot(page, "02-authoring")
             page.get_by_role("button", name="Register draft").click()
             page.wait_for_selector(f"text={MODEL}", timeout=15000)
