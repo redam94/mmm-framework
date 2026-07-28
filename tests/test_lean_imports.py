@@ -80,6 +80,9 @@ CORE_IMPORTS = [
     "mmm_framework.platform.runs",
     "mmm_framework.platform.pacing",
     "mmm_framework.platform.triangulation",
+    # Shares the estimand grading rule with the reporting stack via
+    # finance.evidence; it must not drag the reporting stack in to get it.
+    "mmm_framework.platform.estimands",
     # Auth core is stdlib + cryptography (a declared core dep); fastapi lives
     # only in auth.deps/auth.routes, which the server imports.
     "mmm_framework.auth",

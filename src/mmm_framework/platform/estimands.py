@@ -8,13 +8,13 @@ KPI lands in its own cluster and is never silently compared. Two ROI estimands
 of the same statistical *kind* but different methodology (``contribution_roi``
 vs ``counterfactual_roi``) stay distinct clusters — they are different numbers.
 
-The labeling / reference-value / evidence logic mirrors the report's
-``EstimandsSection`` exactly (``reporting/sections.py``) so the dashboard and the
-generated report tell the same story:
-
-* reference value: ``1.0`` for ratio kinds (ROI / ROAS / x / multiple), else ``0.0``
-* evidence vs the credible interval: lower > ref -> "strong"; upper < ref ->
-  "below"; otherwise "uncertain"; missing/unsupported -> "na".
+The labeling / reference-value / evidence logic is *shared* with the report's
+``EstimandsSection`` (``reporting/sections.py``) rather than mirrored, so the
+dashboard and the generated report cannot tell different stories: both call
+:mod:`mmm_framework.finance.evidence`, which owns the grading bar, the
+direction (a cost per outcome is graded LOWER-is-better) and the verdict. It
+lives in ``finance`` because ``platform`` must not import the reporting stack
+and ``reporting`` must not import the services layer.
 
 ``group_estimands`` is pure (no DB) and unit-tested; ``build_project_estimands``
 reads the sessions store.
@@ -23,6 +23,14 @@ reads the sessions store.
 from __future__ import annotations
 
 from typing import Any
+
+from mmm_framework.finance.evidence import (
+    UNRESOLVED_COST_REASON,
+    EvidenceReference,
+)
+from mmm_framework.finance.evidence import classify_evidence as _classify_evidence
+from mmm_framework.finance.evidence import is_ratio_kind as _is_ratio_kind
+from mmm_framework.finance.evidence import resolve_reference
 
 # Display labels mirror reporting/sections.py::EstimandsSection._KIND_LABELS.
 _ESTIMAND_LABELS: dict[str, str] = {
@@ -51,29 +59,10 @@ def estimand_label(name: str) -> str:
     return _ESTIMAND_LABELS.get(name, name.replace("_", " ").title())
 
 
-def is_ratio_kind(kind: str | None, units: str | None) -> bool:
-    """A ratio estimand (reference 1.0) — mirrors EstimandsSection._is_ratio_kind."""
-    k = (kind or "").lower()
-    u = (units or "").lower()
-    return "roi" in k or "roas" in k or u in {"ratio", "x", "multiple"}
-
-
-def classify_evidence(
-    *,
-    status: str | None,
-    mean: float | None,
-    lower: float | None,
-    upper: float | None,
-    reference: float,
-) -> str:
-    """Evidence label vs the no-effect reference: strong / below / uncertain / na."""
-    if status not in (None, "ok") or mean is None or lower is None or upper is None:
-        return "na"
-    if lower > reference:
-        return "strong"
-    if upper < reference:
-        return "below"
-    return "uncertain"
+# The grading rule lives in finance.evidence (one mint, two consumers). These
+# names stay importable from here because callers and tests already use them.
+is_ratio_kind = _is_ratio_kind
+classify_evidence = _classify_evidence
 
 
 def _estimand_sort_key(name: str) -> tuple[int, str]:
@@ -143,15 +132,20 @@ def group_estimands(runs: list[dict[str, Any]]) -> dict[str, Any]:
             if grp is None:
                 kind = row.get("kind") or ""
                 units = row.get("units") or ""
-                # Prefer the row's explicit measurement reference (impression-
+                # The row's explicit measurement reference wins (impression-
                 # level ROI: efficiency metrics carry reference 0 even though
-                # their kind is still "roi"); else fall back to the heuristic.
-                if row.get("reference") is not None:
-                    reference = float(row["reference"])
-                    ratio = reference == 1.0
-                else:
-                    ratio = is_ratio_kind(kind, units)
-                    reference = 1.0 if ratio else 0.0
+                # their kind is still "roi"; a profit basis carries 1/margin);
+                # else the kind/units rule decides, and a cost per outcome
+                # resolves to *no* reference rather than a fabricated 0.
+                ref_obj = resolve_reference(
+                    kind,
+                    units,
+                    explicit=(
+                        float(row["reference"])
+                        if row.get("reference") is not None
+                        else None
+                    ),
+                )
                 grp = {
                     "key": gkey,
                     "estimand": name,
@@ -159,8 +153,20 @@ def group_estimands(runs: list[dict[str, Any]]) -> dict[str, Any]:
                     "kpi": kpi,
                     "kind": kind,
                     "units": units,
-                    "is_ratio": ratio,
-                    "reference": reference,
+                    "is_ratio": ref_obj.is_ratio,
+                    "reference": ref_obj.value,
+                    # Which way is better, and the sentence naming the bar. The
+                    # UI renders `reference_hint` rather than deriving one: it
+                    # used to print "vs 0 (no effect)" beside a profit
+                    # break-even of 2.5, and "Strong" for every cost.
+                    "direction": ref_obj.direction,
+                    "reference_hint": ref_obj.hint,
+                    "reference_basis": ref_obj.basis,
+                    "reference_note": (
+                        UNRESOLVED_COST_REASON
+                        if ref_obj.basis == "unresolved"
+                        else None
+                    ),
                     "channels": [],
                     "_models": {},  # run_id -> model entry (collapsed below)
                 }
@@ -187,10 +193,23 @@ def group_estimands(runs: list[dict[str, Any]]) -> dict[str, Any]:
                 }
                 grp["_models"][run_id] = model
 
+            # Per-row reference: a row may carry its own (a mixed-measurement
+            # portfolio puts an efficiency channel beside a spend one), else the
+            # group's. Direction always comes from the metric, not the row.
             ref = (
-                float(row["reference"])
+                EvidenceReference(
+                    value=float(row["reference"]),
+                    direction=grp["direction"],
+                    hint=grp["reference_hint"],
+                    basis=grp["reference_basis"],
+                )
                 if row.get("reference") is not None
-                else (1.0 if grp["is_ratio"] else 0.0)
+                else EvidenceReference(
+                    value=grp["reference"],
+                    direction=grp["direction"],
+                    hint=grp["reference_hint"],
+                    basis=grp["reference_basis"],
+                )
             )
             mean = row.get("mean")
             lower = row.get("hdi_low")

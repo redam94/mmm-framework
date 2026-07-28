@@ -28,6 +28,14 @@ const EVIDENCE_STYLE: Record<Evidence, { fg: string; bg: string; label: string }
   na: { fg: COLORS.ink400, bg: COLORS.cream200, label: 'N/A' },
 };
 
+// `below` means "credibly on the wrong side of the bar". For a cost per outcome
+// the wrong side is ABOVE it, so the literal label would read backwards — the
+// same reason finance.evidence.verdict_label exists on the Python side.
+function evidenceLabel(evidence: Evidence, direction?: string): string {
+  if (evidence === 'below' && direction === 'lower_is_better') return 'Above ref';
+  return EVIDENCE_STYLE[evidence].label;
+}
+
 // Evidence *tier* — where the number's credibility comes from. Colors mirror the
 // report/augur chip (t-scale=sage, t-hold=steel, t-reduce=rust) so the dashboard
 // and the report never disagree (issue #124). Distinct from EVIDENCE_STYLE above,
@@ -69,12 +77,13 @@ function modelHasData(m: EstimandModel): boolean {
   return m.rows.some((r) => r.status === 'ok' && r.mean != null);
 }
 
-function EvidenceDot({ evidence }: { evidence: Evidence }) {
+function EvidenceDot({ evidence, direction }: { evidence: Evidence; direction?: string }) {
   const s = EVIDENCE_STYLE[evidence];
+  const label = evidenceLabel(evidence, direction);
   return (
     <span
-      title={s.label}
-      aria-label={s.label}
+      title={label}
+      aria-label={label}
       className="inline-block h-2 w-2 shrink-0 rounded-full"
       style={{ backgroundColor: s.fg }}
     />
@@ -151,7 +160,7 @@ function ValueCell({ cell, group }: { cell: EstimandCell | undefined; group: Est
       aria-label={label}
     >
       <div className="flex items-center gap-1.5">
-        <EvidenceDot evidence={cell.evidence} />
+        <EvidenceDot evidence={cell.evidence} direction={group.direction} />
         <span className="num font-medium text-ink-900">{fmtVal(group, cell.mean)}</span>
       </div>
       {(ci || cell.tier) && (
@@ -204,7 +213,10 @@ function GroupCard({ group, models }: { group: EstimandGroup; models: EstimandMo
   ];
 
   const comparable = shown.length > 1;
-  const refHint = group.is_ratio ? 'vs 1.0 (break-even)' : 'vs 0 (no effect)';
+  // Server-minted: the bar and the direction are decided once, in
+  // finance.evidence, so this cannot describe a bar the grading did not use.
+  const refHint =
+    group.reference_hint ?? (group.is_ratio ? 'vs 1.0 (break-even)' : 'vs 0 (no effect)');
 
   return (
     <Card padding="md" className="space-y-3">
@@ -231,6 +243,9 @@ function GroupCard({ group, models }: { group: EstimandGroup; models: EstimandMo
         </div>
       </div>
       <DataTable<Row> columns={columns} rows={rows} rowKey={(r) => r.channel} />
+      {group.reference_note && (
+        <p className="text-xs leading-relaxed text-ink-400">{group.reference_note}</p>
+      )}
     </Card>
   );
 }

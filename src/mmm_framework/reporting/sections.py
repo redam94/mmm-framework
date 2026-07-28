@@ -12,9 +12,27 @@ import numbers
 from typing import TYPE_CHECKING
 import numpy as np
 
+from mmm_framework.finance.evidence import (
+    UNRESOLVED_COST_REASON,
+    classify_evidence,
+    resolve_reference,
+    verdict_label,
+)
+from mmm_framework.finance.evidence import is_cost_kind as _is_cost_kind
+from mmm_framework.finance.evidence import is_ratio_kind as _is_ratio_kind
+
 from .config import ReportConfig, SectionConfig, ChartConfig
 from . import charts
 from .evidence import evidence_chip_html, evidence_legend_html
+
+#: finance.evidence verdict -> CSS class for the estimand table. The cell TEXT
+#: comes from ``verdict_label``, which needs the metric's direction.
+_EVIDENCE_CLASS = {
+    "strong": "positive",
+    "below": "negative",
+    "uncertain": "uncertain",
+    "na": "uncertain",
+}
 
 if TYPE_CHECKING:
     from .data_extractors import MMMDataBundle
@@ -2893,9 +2911,17 @@ class EstimandsSection(Section):
             return ""
         note = (
             '<div class="methodology-note"><p><strong>Reading this table:</strong> '
-            f'"Strong" means the {self.interval_noun} excludes the no-effect reference '
-            '(ROI/ROAS against 1.0, contribution against 0); "Uncertain" means it '
-            "does not, so the sign of the effect is not resolved by the data.</p></div>"
+            f'"Strong" means the {self.interval_noun} clears the reference in the '
+            "metric's favourable direction (ROI/ROAS above 1.0, contribution above "
+            "0, a cost per outcome <em>below</em> what one outcome is worth); "
+            '"Uncertain" means it straddles the reference, so the data does not '
+            "resolve the decision.</p>"
+            + (
+                f"<p>{html.escape(UNRESOLVED_COST_REASON)}</p>"
+                if getattr(self, "_unresolved_reference", False)
+                else ""
+            )
+            + "</div>"
         )
         return self._render_section_wrapper(f"{intro}{table}{note}")
 
@@ -2904,14 +2930,18 @@ class EstimandsSection(Section):
             name, (name or "Estimand").replace("_", " ").title()
         )
 
-    @staticmethod
-    def _is_ratio_kind(kind: str, units: str) -> bool:
-        k, u = (kind or "").lower(), (units or "").lower()
-        return "roi" in k or "roas" in k or u in {"ratio", "x", "multiple"}
+    #: The grading bar, the direction and the ratio test come from
+    #: ``finance.evidence`` — the same mint the Performance dashboard reads, so
+    #: the report and the UI cannot disagree about what a number means.
+    _is_ratio_kind = staticmethod(_is_ratio_kind)
+    _is_cost_kind = staticmethod(_is_cost_kind)
 
     def _fmt_value(self, kind: str, units: str, value: float) -> str:
         if self._is_ratio_kind(kind, units):
             return f"{value:.2f}"
+        if self._is_cost_kind(kind, units):
+            # A cost per outcome is money; "45.000" is not how it reads.
+            return self._format_currency(value)
         if "contribution" in (kind or "").lower() or (units or "").lower() in {
             "$",
             "usd",
@@ -2946,6 +2976,9 @@ class EstimandsSection(Section):
             key=lambda kv: (_name_of(kv[0]), -abs(float(kv[1].get("mean", 0.0))))
         )
 
+        # Set when at least one row could not be graded for want of a reference,
+        # so render() can say why rather than leaving an unexplained blank.
+        self._unresolved_reference = False
         rows = []
         for key, v in items:
             kind = str(v.get("kind", ""))
@@ -2968,17 +3001,28 @@ class EstimandsSection(Section):
 
             # Break-even reference: trust the estimand's measurement metadata
             # when present (efficiency metrics carry reference 0 even though their
-            # kind is still "roi"); else fall back to the kind/units heuristic.
-            if v.get("reference") is not None:
-                ref = float(v["reference"])
-            else:
-                ref = 1.0 if self._is_ratio_kind(kind, units) else 0.0
-            if lower is not None and upper is not None and float(lower) > ref:
-                conf_class, status = "positive", "Strong"
-            elif lower is not None and upper is not None and float(upper) < ref:
-                conf_class, status = "negative", "Below reference"
-            else:
-                conf_class, status = "uncertain", "Uncertain"
+            # kind is still "roi"); else the kind/units rule. A cost per outcome
+            # resolves to NO reference and is graded lower-is-better — see
+            # finance.evidence for why zero marked every CPA "Strong".
+            ref_obj = resolve_reference(
+                kind,
+                units,
+                explicit=(
+                    float(v["reference"]) if v.get("reference") is not None else None
+                ),
+            )
+            verdict = classify_evidence(
+                status=v.get("status"),
+                mean=mean,
+                lower=None if lower is None else float(lower),
+                upper=None if upper is None else float(upper),
+                reference=ref_obj,
+            )
+            conf_class = _EVIDENCE_CLASS[verdict]
+            status = verdict_label(verdict, ref_obj.direction)
+            if verdict == "na" and not ref_obj.resolved:
+                status = "No reference"
+                self._unresolved_reference = True
 
             # Evidence tier + identifiability chip (issue #102), stamped by the
             # extractor onto per-channel estimand entries.
