@@ -840,3 +840,57 @@ class TestDefaultSbcRun:
         monkeypatch.setattr(sbc_mod, "run_mmm_sbc", boom)
         gen = PrefitReadoutGenerator(facts=_canned_facts())
         assert gen.generate_report()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Price / promotion levers get their own priors group (#222, commit 7)
+#
+# `beta_promo_<var>` starts with "beta_" and matched no channel name, so it fell
+# through to **Media effects** — inflating the media group in the priors table
+# with a promo lift. `price_elasticity_mag` and the promo carryover
+# `promo_alpha_<var>` both landed in "Other".
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestLeverPriorGroup:
+    def test_lever_params_are_grouped_as_levers(self):
+        from mmm_framework.reporting.helpers.prefit import _classify_param
+
+        channels, controls = ["TV", "Search"], ["Weather"]
+        for name in ("price_elasticity_mag", "beta_promo_Promo", "promo_alpha_Promo"):
+            assert (
+                _classify_param(name, channels, controls) == "Price & promotion levers"
+            ), name
+
+    def test_the_pre_fix_misfiling_is_pinned(self):
+        """`beta_promo_*` reached Media effects via the generic beta_ branch —
+        worse than "Other", because it inflated the media group."""
+        from mmm_framework.reporting.helpers.prefit import _classify_param
+
+        # the branch that used to catch it still catches genuine media betas
+        assert _classify_param("beta_TV", ["TV"], []) == "Media effects"
+        assert _classify_param("beta_promo_TV", ["TV"], []) == "Price & promotion levers"
+
+    def test_media_and_control_params_are_unaffected(self):
+        from mmm_framework.reporting.helpers.prefit import _classify_param
+
+        cases = {
+            "beta_TV": "Media effects",
+            "roi_TV": "Media effects",
+            "adstock_alpha_TV": "Carryover (adstock)",
+            "sat_lam_TV": "Saturation",
+            "beta_controls": "Controls",
+            "sigma": "Observation noise",
+            "intercept": "Baseline",
+        }
+        for name, expected in cases.items():
+            assert _classify_param(name, ["TV"], ["Weather"]) == expected, name
+
+    def test_the_group_has_a_place_in_the_display_order(self):
+        from mmm_framework.reporting.helpers.prefit import PRIOR_GROUP_ORDER
+
+        assert "Price & promotion levers" in PRIOR_GROUP_ORDER
+        # ahead of the catch-all, so it is not rendered as an afterthought
+        assert PRIOR_GROUP_ORDER.index("Price & promotion levers") < (
+            PRIOR_GROUP_ORDER.index("Other")
+        )

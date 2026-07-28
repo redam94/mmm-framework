@@ -144,6 +144,16 @@ def _classify_param(name: str, channels: list[str], controls: list[str]) -> str:
     if n.startswith("roi_"):
         # media_prior_mode="roi": the free RV is the channel's prior ROI itself
         return "Media effects"
+    # Price/promo levers (#138) — checked BEFORE the `beta_` branch below, which
+    # was classifying `beta_promo_<var>` as **Media effects** and so inflating
+    # the media group in the priors table. `price_elasticity_mag` and the promo
+    # carryover `promo_alpha_<var>` were both falling through to "Other".
+    if (
+        n.startswith("price_elasticity")
+        or n.startswith("beta_promo_")
+        or n.startswith("promo_alpha_")
+    ):
+        return "Price & promotion levers"
     if n.startswith("beta_") or n.startswith("logmu_") or n.endswith("_z"):
         for ch in channels:
             cl = ch.lower()
@@ -176,6 +186,7 @@ PRIOR_GROUP_ORDER = [
     "Trend",
     "Seasonality",
     "Controls",
+    "Price & promotion levers",
     "Pooling (geo/product)",
     "Observation noise",
     "Other",

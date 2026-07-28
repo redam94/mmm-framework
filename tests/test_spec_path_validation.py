@@ -128,3 +128,86 @@ def test_channel_name_check_skipped_when_spec_has_no_channels():
         ["media_channels", "TV", "adstock", "l_max"], 6, {"media_channels": []}
     )
     assert err is None
+
+
+# ---------------------------------------------------------------------------
+# price / promotion levers (#222, commit 6)
+#
+# Levers shipped as first-class model terms but no spec key built them, so the
+# only way to configure one was a direct library call. Reachability had to land
+# AFTER the persistence fix (#253): making `spec["price"]` buildable first would
+# have made every agent-fit lever model unloadable — converting a loud failure
+# into a broken build_and_fit -> load_fitted_model pipeline.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        ("price", {"variable": "price", "reference": "median"}),
+        ("price.variable", "price"),
+        ("price.reference", "mean"),
+        ("price.reference", 9.99),  # an absolute reference is legal
+        ("price.reference", None),  # log(price), constant absorbed by intercept
+        ("price.elasticity_prior_sigma", 0.3),
+        ("promotions", [{"variable": "promo", "adstock_lmax": 6}]),
+        ("promotions", [{"variable": "promo", "allow_negative": True}]),
+        ("promotions", []),  # clearing the list
+    ],
+)
+def test_lever_paths_are_consumed(path, value):
+    assert check(path, value) is None, f"{path} should be accepted"
+
+
+@pytest.mark.parametrize(
+    "path,value,fragment",
+    [
+        # a typo'd reference silently becomes the "median" default inside
+        # PriceConfig — exactly the accept-then-no-op this registry prevents
+        ("price.reference", "avg", "not a reference"),
+        ("price.reference", "mediann", "not a reference"),
+        ("price.nope", 1, "never reads it"),
+        ("price.elasticity", 0.5, "never reads it"),
+        ("promotions", [{"variable": "promo", "bogus": 1}], "never reads it"),
+        ("promotions", [{"adstock_lmax": 6}], "must name the control column"),
+        ("promotions", [{"variable": "promo", "lmax": 6}], "never reads it"),
+        ("promotions", {"variable": "promo"}, "is a list of promo objects"),
+        # a list has no stable key to address an element by; inventing one
+        # would be a path the builder does not read
+        ("promotions.0.variable", "promo", "write the whole list"),
+    ],
+    ids=lambda v: str(v)[:40],
+)
+def test_bad_lever_paths_rejected(path, value, fragment):
+    err = check(path, value)
+    assert err is not None, f"{path} should have been rejected"
+    assert fragment.lower() in err.lower(), err
+
+
+def test_lever_spec_reaches_the_model_config():
+    """The registry accepting a path is only half — the builder has to read it."""
+    from mmm_framework.agents.fitting import _model_config_from_spec
+
+    mc = _model_config_from_spec(
+        {
+            "price": {"variable": "Price", "reference": "mean"},
+            "promotions": [{"variable": "Promo", "adstock_lmax": 6}],
+        }
+    )
+    assert mc.price is not None and mc.price.variable == "Price"
+    assert mc.price.reference == "mean"
+    assert [p.variable for p in mc.promotions] == ["Promo"]
+    assert mc.promotions[0].adstock_lmax == 6
+
+    # and a spec with no lever leaves the config untouched
+    plain = _model_config_from_spec({})
+    assert plain.price is None and not plain.promotions
+
+
+def test_an_invalid_lever_spec_raises_at_build_rather_than_dropping():
+    from mmm_framework.agents.fitting import _model_config_from_spec
+
+    with pytest.raises(ValueError, match="not a valid price lever"):
+        _model_config_from_spec({"price": {"variable": "P", "elasticity_prior_sigma": -1}})
+    with pytest.raises(ValueError, match="not a valid promo list"):
+        _model_config_from_spec({"promotions": [{"variable": "P", "adstock_lmax": 999}]})

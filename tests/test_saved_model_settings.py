@@ -262,3 +262,61 @@ def test_load_model_core_restores_saved_spec(tmp_path, monkeypatch):
     assert "yearly order 2" in res["message"]
     assert "map" in res["message"]
     assert "restored" in res["message"].lower()
+
+
+# ── price / promotion levers (#222) ───────────────────────────────────────────
+#
+# `saved_model_settings` reported the lever variables under `controls` — they
+# ARE control columns in the MFF config — telling a reader they were fit as
+# ordinary linear coefficients. The model strips them from the control block
+# precisely so they are NOT double-counted, so the digest has to strip them too.
+
+
+LEVER_SPEC = {
+    **RUN_SPEC,
+    "control_variables": [{"name": "price"}, {"name": "promo"}, {"name": "weather"}],
+    "price": {"variable": "price", "reference": "median"},
+    "promotions": [{"variable": "promo", "adstock_lmax": 6}],
+}
+
+
+def test_levers_are_not_reported_as_linear_controls(tmp_path):
+    save_dir = _write_run_record(tmp_path / "run_lever", spec=LEVER_SPEC)
+    s = saved_model_settings(str(save_dir))["settings"]
+
+    # promoted columns are gone from the controls line; the ordinary one stays
+    assert s["controls"] == ["weather"]
+    assert s["levers"]["price"] == {"variable": "price", "reference": "median"}
+    assert s["levers"]["promotions"] == [{"variable": "promo", "adstock_lmax": 6}]
+
+
+def test_digest_names_the_levers_and_omits_them_from_controls(tmp_path):
+    save_dir = _write_run_record(tmp_path / "run_lever2", spec=LEVER_SPEC)
+    md = settings_digest_markdown(saved_model_settings(str(save_dir))["settings"])
+
+    assert "- Levers: price price (log elasticity vs median)" in md
+    assert "promo promo (adstock l_max=6)" in md
+    controls_line = next(ln for ln in md.splitlines() if ln.startswith("- Controls:"))
+    assert "weather" in controls_line
+    assert "price" not in controls_line and "promo" not in controls_line
+
+
+def test_a_model_without_levers_is_unchanged(tmp_path):
+    save_dir = _write_run_record(tmp_path / "run_plain")
+    s = saved_model_settings(str(save_dir))["settings"]
+    assert "levers" not in s
+    assert s["controls"] == ["price"]  # a plain linear control keeps its name
+    assert "Levers" not in settings_digest_markdown(s)
+
+
+def test_levers_also_read_from_the_serialized_config_fallback(tmp_path):
+    """The manual-save path (`configs.json`) has to strip them too, otherwise
+    the two sources disagree about the same model."""
+    save_dir = _write_serialized_configs(tmp_path / "run_cfg")
+    configs = json.loads((save_dir / "configs.json").read_text())
+    configs["model_config"]["price"] = {"variable": "price", "reference": "mean"}
+    (save_dir / "configs.json").write_text(json.dumps(configs))
+
+    s = saved_model_settings(str(save_dir))["settings"]
+    assert s["controls"] == []
+    assert s["levers"]["price"]["variable"] == "price"
