@@ -78,7 +78,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-26",
+          "dateModified": "2026-07-27",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/troubleshooting.html#breadcrumb"
           },
@@ -149,7 +149,7 @@
                 </p>
                 <div class="code-wrapper">
                     <pre><code class="language-python">import mmm_framework
-print(mmm_framework.__version__)   # expect 1.3.2
+print(mmm_framework.__version__)   # expect 1.3.3
 
 from mmm_framework import load_example, BayesianMMM
 panel = load_example("national")   # bundled data — no files needed
@@ -405,7 +405,7 @@ print(results.diagnostics["log_marginal_likelihood"])  # model evidence, for Bay
             <div class="symptom">"cloudpickle version" errors across machines</div>
             <p>
                 Keep the modeling environment consistent — pin <code>mmm-framework</code> to an exact
-                release (<code>==1.3.2</code>) and use the same lockfile everywhere you save and load models,
+                release (<code>==1.3.3</code>) and use the same lockfile everywhere you save and load models,
                 so <code>cloudpickle</code> and the core stack match.
             </p>
 

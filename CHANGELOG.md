@@ -16,6 +16,43 @@ frozen public contract breaks, and the contract itself is pinned by
 
 Nothing yet.
 
+## [1.3.3] — 2026-07-27
+
+A security release. Cut from the `v1.3.2` tag with only the fix below, so 1.3.x users can take it
+without adopting in-progress v1.4 work.
+
+### Fixed
+
+- **Generated HTML reports did not escape `</` in embedded chart JSON**
+  ([GHSA-7q6v-xpwm-4937]). `reporting/charts/base.py::_to_json` serialised Plotly payloads with a
+  bare `json.dumps`, which escapes neither `<` nor `/`. Every caller interpolates the result
+  straight into an inline `<script>` block, so a payload string containing `</script>` closed the
+  block early and the browser parsed the remainder as **HTML**.
+
+  Affects the **classic** (`ReportConfig.full()` / `.minimal()` / `.presentation()`) and **augur
+  readout** shells. `InteractiveReportGenerator` was never affected — it already applied the same
+  guard.
+
+  Channel names could not carry the payload, because PyMC rejects `/` in random-variable names and
+  a hostile channel name therefore fails at fit time. **Control-variable and geography names are
+  xarray coords / DataFrame columns, not RV names**, and they reach chart traces, hovertemplates
+  and axis titles — so the vector is reachable from any untrusted modeled dataset (a client CSV, an
+  upload, a Data Studio import). HTML-body interpolation of the same names was already correctly
+  `html.escape`d; only the chart-JSON path was affected.
+
+  `_to_json` now appends `.replace("</", "<\/")`. `\/` is a legal JSON string escape and legal
+  JavaScript, so Plotly decodes a byte-identical string while the literal `</script>` never
+  appears. Because `_to_json` is the single choke point for those shells, one change covers every
+  chart in them.
+
+  The premature tag also corrupted the surrounding chart payloads, so this is a rendering fix as
+  well: in the reproduction, charts rendered went from 26/28 to 28/28 and JS errors from 2 to 0.
+
+  Found by pressure-testing the report generators against a nine-model matrix that included
+  deliberately hostile channel, control and geography names.
+
+[GHSA-7q6v-xpwm-4937]: https://github.com/redam94/mmm-framework/security/advisories/GHSA-7q6v-xpwm-4937
+
 ## [1.3.2] — 2026-07-27
 
 ### Fixed
