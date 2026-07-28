@@ -28,6 +28,7 @@ def test_ops_registry_complete():
         "saturation_curves",
         "budget_scenario",
         "plan_budget",
+        "forecast_plan",
         "plan_scenario",
         "marginal_analysis",
         "prior_predictive_check",

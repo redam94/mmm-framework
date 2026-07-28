@@ -1,810 +1,818 @@
 [
- {
-  "method": "DELETE",
-  "path": "/analysis-plans/{plan_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/artifacts/{artifact_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/assumption/{thread_id}/{key}"
- },
- {
-  "method": "DELETE",
-  "path": "/auth/invites/{token}"
- },
- {
-  "method": "DELETE",
-  "path": "/auth/members/{user_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/budget-plans/{plan_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/experiments/{experiment_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/files/{file_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/kb/{document_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/model-garden/{name}/{version}"
- },
- {
-  "method": "DELETE",
-  "path": "/projects/{project_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/projects/{project_id}/data-connections/{connection_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/projects/{project_id}/delivery"
- },
- {
-  "method": "DELETE",
-  "path": "/projects/{project_id}/learning-programs/{program_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/projects/{project_id}/platform-figures"
- },
- {
-  "method": "DELETE",
-  "path": "/sessions/{thread_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/state/{thread_id}"
- },
- {
-  "method": "DELETE",
-  "path": "/users/{user_id}"
- },
- {
-  "method": "GET",
-  "path": "/analysis-plans"
- },
- {
-  "method": "GET",
-  "path": "/analysis-plans/{plan_id}"
- },
- {
-  "method": "GET",
-  "path": "/artifacts/{artifact_id}/download"
- },
- {
-  "method": "GET",
-  "path": "/artifacts/{thread_id}"
- },
- {
-  "method": "GET",
-  "path": "/assumption_history/{thread_id}/{key}"
- },
- {
-  "method": "GET",
-  "path": "/assumptions/{thread_id}"
- },
- {
-  "method": "GET",
-  "path": "/auth/audit-export"
- },
- {
-  "method": "GET",
-  "path": "/auth/invites"
- },
- {
-  "method": "GET",
-  "path": "/auth/me"
- },
- {
-  "method": "GET",
-  "path": "/auth/members"
- },
- {
-  "method": "GET",
-  "path": "/auth/usage"
- },
- {
-  "method": "GET",
-  "path": "/budget-plans"
- },
- {
-  "method": "GET",
-  "path": "/budget-plans/{plan_id}"
- },
- {
-  "method": "GET",
-  "path": "/budget-plans/{plan_id}/export.csv"
- },
- {
-  "method": "GET",
-  "path": "/client-report"
- },
- {
-  "method": "GET",
-  "path": "/client-report/download"
- },
- {
-  "method": "GET",
-  "path": "/client-slides"
- },
- {
-  "method": "GET",
-  "path": "/client-slides/download"
- },
- {
-  "method": "GET",
-  "path": "/dag/{thread_id}"
- },
- {
-  "method": "GET",
-  "path": "/data-studio/{thread_id}"
- },
- {
-  "method": "GET",
-  "path": "/dataset/preview/{thread_id}"
- },
- {
-  "method": "GET",
-  "path": "/experiments"
- },
- {
-  "method": "GET",
-  "path": "/experiments/{experiment_id}"
- },
- {
-  "method": "GET",
-  "path": "/files/{file_id}/download"
- },
- {
-  "method": "GET",
-  "path": "/files/{thread_id}"
- },
- {
-  "method": "GET",
-  "path": "/health"
- },
- {
-  "method": "GET",
-  "path": "/history/{thread_id}"
- },
- {
-  "method": "GET",
-  "path": "/integrations/catalog"
- },
- {
-  "method": "GET",
-  "path": "/lmstudio-models"
- },
- {
-  "method": "GET",
-  "path": "/metrics"
- },
- {
-  "method": "GET",
-  "path": "/model-config"
- },
- {
-  "method": "GET",
-  "path": "/model-defense"
- },
- {
-  "method": "GET",
-  "path": "/model-defense/download"
- },
- {
-  "method": "GET",
-  "path": "/model-garden"
- },
- {
-  "method": "GET",
-  "path": "/model-garden/copilot/chat"
- },
- {
-  "method": "GET",
-  "path": "/model-garden/notebook"
- },
- {
-  "method": "GET",
-  "path": "/model-garden/notebook/cell/{job_id}"
- },
- {
-  "method": "GET",
-  "path": "/model-garden/{name}/versions"
- },
- {
-  "method": "GET",
-  "path": "/model-garden/{name}/{version}"
- },
- {
-  "method": "GET",
-  "path": "/model-garden/{name}/{version}/source"
- },
- {
-  "method": "GET",
-  "path": "/model-garden/{name}/{version}/test/{job_id}"
- },
- {
-  "method": "GET",
-  "path": "/models"
- },
- {
-  "method": "GET",
-  "path": "/models/{model_id}"
- },
- {
-  "method": "GET",
-  "path": "/models/{model_id}/dashboard"
- },
- {
-  "method": "GET",
-  "path": "/observability"
- },
- {
-  "method": "GET",
-  "path": "/plots/{plot_id}"
- },
- {
-  "method": "GET",
-  "path": "/portfolio"
- },
- {
-  "method": "GET",
-  "path": "/portfolio-benchmark"
- },
- {
-  "method": "GET",
-  "path": "/preferences"
- },
- {
-  "method": "GET",
-  "path": "/prefit-report"
- },
- {
-  "method": "GET",
-  "path": "/prefit-report/download"
- },
- {
-  "method": "GET",
-  "path": "/project-report"
- },
- {
-  "method": "GET",
-  "path": "/project-report/download"
- },
- {
-  "method": "GET",
-  "path": "/project-slides"
- },
- {
-  "method": "GET",
-  "path": "/project-slides/download"
- },
- {
-  "method": "GET",
-  "path": "/projects"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/branding"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/calibration-coverage"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/data-connections"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/data-quality"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/delivery"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/estimands"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/experiment-design/identify/{job_id}"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/experiment-design/optimize/{job_id}"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/experiment-design/options"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/experiment-design/simulate/{job_id}"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/experiment-priorities"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/generate-deck/{job_id}"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/generate-deck/{job_id}/download"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/history"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/kb"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/kb/search"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/learning-programs"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/learning-programs/{program_id}"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/learning-programs/{program_id}/jobs/{job_id}"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/members"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/onboarding-status"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/pacing"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/pacing/alert"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/planner/optimize/{job_id}"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/planner/scenario/{job_id}"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/platform-figures"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/scorecard"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/signoffs"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/spec-curve/{job_id}"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/triangulation"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/validate/{job_id}"
- },
- {
-  "method": "GET",
-  "path": "/projects/{project_id}/validations"
- },
- {
-  "method": "GET",
-  "path": "/report"
- },
- {
-  "method": "GET",
-  "path": "/report/download"
- },
- {
-  "method": "GET",
-  "path": "/results-report"
- },
- {
-  "method": "GET",
-  "path": "/results-report/download"
- },
- {
-  "method": "GET",
-  "path": "/runs"
- },
- {
-  "method": "GET",
-  "path": "/runs/compare"
- },
- {
-  "method": "GET",
-  "path": "/sessions"
- },
- {
-  "method": "GET",
-  "path": "/sessions/{thread_id}"
- },
- {
-  "method": "GET",
-  "path": "/sessions/{thread_id}/artifacts"
- },
- {
-  "method": "GET",
-  "path": "/sessions/{thread_id}/export"
- },
- {
-  "method": "GET",
-  "path": "/sessions/{thread_id}/files"
- },
- {
-  "method": "GET",
-  "path": "/slide-deck/download"
- },
- {
-  "method": "GET",
-  "path": "/state/{thread_id}"
- },
- {
-  "method": "GET",
-  "path": "/tables/{table_id}"
- },
- {
-  "method": "GET",
-  "path": "/users"
- },
- {
-  "method": "GET",
-  "path": "/vertex-models"
- },
- {
-  "method": "GET",
-  "path": "/workflow/{thread_id}"
- },
- {
-  "method": "GET",
-  "path": "/workspace/{thread_id}/files"
- },
- {
-  "method": "PATCH",
-  "path": "/auth/members/{user_id}"
- },
- {
-  "method": "PATCH",
-  "path": "/model-garden/{name}/{version}"
- },
- {
-  "method": "PATCH",
-  "path": "/projects/{project_id}"
- },
- {
-  "method": "PATCH",
-  "path": "/projects/{project_id}/data-connections/{connection_id}"
- },
- {
-  "method": "PATCH",
-  "path": "/sessions/{thread_id}"
- },
- {
-  "method": "PATCH",
-  "path": "/sessions/{thread_id}/mode"
- },
- {
-  "method": "PATCH",
-  "path": "/spec/{thread_id}"
- },
- {
-  "method": "PATCH",
-  "path": "/users/{user_id}"
- },
- {
-  "method": "PATCH",
-  "path": "/workflow/{thread_id}/{step}"
- },
- {
-  "method": "POST",
-  "path": "/analysis-plans"
- },
- {
-  "method": "POST",
-  "path": "/assumptions/{thread_id}"
- },
- {
-  "method": "POST",
-  "path": "/auth/accept-invite"
- },
- {
-  "method": "POST",
-  "path": "/auth/change-password"
- },
- {
-  "method": "POST",
-  "path": "/auth/invite"
- },
- {
-  "method": "POST",
-  "path": "/auth/login"
- },
- {
-  "method": "POST",
-  "path": "/auth/logout"
- },
- {
-  "method": "POST",
-  "path": "/auth/logout-all"
- },
- {
-  "method": "POST",
-  "path": "/auth/password-reset/confirm"
- },
- {
-  "method": "POST",
-  "path": "/auth/password-reset/request"
- },
- {
-  "method": "POST",
-  "path": "/auth/refresh"
- },
- {
-  "method": "POST",
-  "path": "/auth/signup"
- },
- {
-  "method": "POST",
-  "path": "/auth/users/{user_id}/deactivate"
- },
- {
-  "method": "POST",
-  "path": "/budget-plans"
- },
- {
-  "method": "POST",
-  "path": "/chat"
- },
- {
-  "method": "POST",
-  "path": "/data-studio/{thread_id}/commit"
- },
- {
-  "method": "POST",
-  "path": "/data-studio/{thread_id}/discard"
- },
- {
-  "method": "POST",
-  "path": "/data-studio/{thread_id}/eda"
- },
- {
-  "method": "POST",
-  "path": "/data-studio/{thread_id}/upload"
- },
- {
-  "method": "POST",
-  "path": "/experiments"
- },
- {
-  "method": "POST",
-  "path": "/experiments/{experiment_id}/transition"
- },
- {
-  "method": "POST",
-  "path": "/model-garden"
- },
- {
-  "method": "POST",
-  "path": "/model-garden/copilot"
- },
- {
-  "method": "POST",
-  "path": "/model-garden/format"
- },
- {
-  "method": "POST",
-  "path": "/model-garden/lint"
- },
- {
-  "method": "POST",
-  "path": "/model-garden/notebook/cell"
- },
- {
-  "method": "POST",
-  "path": "/model-garden/notebook/dataset"
- },
- {
-  "method": "POST",
-  "path": "/model-garden/{name}/{version}/promote"
- },
- {
-  "method": "POST",
-  "path": "/model-garden/{name}/{version}/test"
- },
- {
-  "method": "POST",
-  "path": "/outliers/{thread_id}/apply"
- },
- {
-  "method": "POST",
-  "path": "/projects"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/branding/extract"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/data-connections"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/data-connections/{connection_id}/preview"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/data-connections/{connection_id}/test"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/delivery"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/experiment-design"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/experiment-design/identify"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/experiment-design/optimize"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/experiment-design/simulate"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/generate-deck"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/ghost-ads/power"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/guide"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/kb"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/learning-programs"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/learning-programs/{program_id}/design-wave"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/learning-programs/{program_id}/fit"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/learning-programs/{program_id}/waves"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/onboarding"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/planner/optimize"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/planner/scenario"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/platform-figures"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/signoff"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/spec-curve"
- },
- {
-  "method": "POST",
-  "path": "/projects/{project_id}/validate"
- },
- {
-  "method": "POST",
-  "path": "/rewind/{thread_id}"
- },
- {
-  "method": "POST",
-  "path": "/sessions"
- },
- {
-  "method": "POST",
-  "path": "/sessions/{thread_id}/load-model"
- },
- {
-  "method": "POST",
-  "path": "/spec/{thread_id}/resolve"
- },
- {
-  "method": "POST",
-  "path": "/upload"
- },
- {
-  "method": "POST",
-  "path": "/users"
- },
- {
-  "method": "PUT",
-  "path": "/dag/{thread_id}"
- },
- {
-  "method": "PUT",
-  "path": "/data-studio/{thread_id}/pipeline"
- },
- {
-  "method": "PUT",
-  "path": "/model-garden/copilot/chat"
- },
- {
-  "method": "PUT",
-  "path": "/model-garden/notebook"
- },
- {
-  "method": "PUT",
-  "path": "/preferences"
- },
- {
-  "method": "PUT",
-  "path": "/projects/{project_id}/branding"
- },
- {
-  "method": "PUT",
-  "path": "/projects/{project_id}/members"
- }
+  {
+    "method": "GET",
+    "path": "/analysis-plans"
+  },
+  {
+    "method": "POST",
+    "path": "/analysis-plans"
+  },
+  {
+    "method": "DELETE",
+    "path": "/analysis-plans/{plan_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/analysis-plans/{plan_id}"
+  },
+  {
+    "method": "DELETE",
+    "path": "/artifacts/{artifact_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/artifacts/{artifact_id}/download"
+  },
+  {
+    "method": "GET",
+    "path": "/artifacts/{thread_id}"
+  },
+  {
+    "method": "DELETE",
+    "path": "/assumption/{thread_id}/{key}"
+  },
+  {
+    "method": "GET",
+    "path": "/assumption_history/{thread_id}/{key}"
+  },
+  {
+    "method": "GET",
+    "path": "/assumptions/{thread_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/assumptions/{thread_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/accept-invite"
+  },
+  {
+    "method": "GET",
+    "path": "/auth/audit-export"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/change-password"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/invite"
+  },
+  {
+    "method": "GET",
+    "path": "/auth/invites"
+  },
+  {
+    "method": "DELETE",
+    "path": "/auth/invites/{token}"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/login"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/logout"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/logout-all"
+  },
+  {
+    "method": "GET",
+    "path": "/auth/me"
+  },
+  {
+    "method": "GET",
+    "path": "/auth/members"
+  },
+  {
+    "method": "DELETE",
+    "path": "/auth/members/{user_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/auth/members/{user_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/password-reset/confirm"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/password-reset/request"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/refresh"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/signup"
+  },
+  {
+    "method": "GET",
+    "path": "/auth/usage"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/users/{user_id}/deactivate"
+  },
+  {
+    "method": "GET",
+    "path": "/budget-plans"
+  },
+  {
+    "method": "POST",
+    "path": "/budget-plans"
+  },
+  {
+    "method": "DELETE",
+    "path": "/budget-plans/{plan_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/budget-plans/{plan_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/budget-plans/{plan_id}/export.csv"
+  },
+  {
+    "method": "POST",
+    "path": "/chat"
+  },
+  {
+    "method": "GET",
+    "path": "/client-report"
+  },
+  {
+    "method": "GET",
+    "path": "/client-report/download"
+  },
+  {
+    "method": "GET",
+    "path": "/client-slides"
+  },
+  {
+    "method": "GET",
+    "path": "/client-slides/download"
+  },
+  {
+    "method": "GET",
+    "path": "/dag/{thread_id}"
+  },
+  {
+    "method": "PUT",
+    "path": "/dag/{thread_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/data-studio/{thread_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/data-studio/{thread_id}/commit"
+  },
+  {
+    "method": "POST",
+    "path": "/data-studio/{thread_id}/discard"
+  },
+  {
+    "method": "POST",
+    "path": "/data-studio/{thread_id}/eda"
+  },
+  {
+    "method": "PUT",
+    "path": "/data-studio/{thread_id}/pipeline"
+  },
+  {
+    "method": "POST",
+    "path": "/data-studio/{thread_id}/upload"
+  },
+  {
+    "method": "GET",
+    "path": "/dataset/preview/{thread_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/experiments"
+  },
+  {
+    "method": "POST",
+    "path": "/experiments"
+  },
+  {
+    "method": "DELETE",
+    "path": "/experiments/{experiment_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/experiments/{experiment_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/experiments/{experiment_id}/transition"
+  },
+  {
+    "method": "DELETE",
+    "path": "/files/{file_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/files/{file_id}/download"
+  },
+  {
+    "method": "GET",
+    "path": "/files/{thread_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/health"
+  },
+  {
+    "method": "GET",
+    "path": "/history/{thread_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/integrations/catalog"
+  },
+  {
+    "method": "DELETE",
+    "path": "/kb/{document_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/lmstudio-models"
+  },
+  {
+    "method": "GET",
+    "path": "/metrics"
+  },
+  {
+    "method": "GET",
+    "path": "/model-config"
+  },
+  {
+    "method": "GET",
+    "path": "/model-defense"
+  },
+  {
+    "method": "GET",
+    "path": "/model-defense/download"
+  },
+  {
+    "method": "GET",
+    "path": "/model-garden"
+  },
+  {
+    "method": "POST",
+    "path": "/model-garden"
+  },
+  {
+    "method": "POST",
+    "path": "/model-garden/copilot"
+  },
+  {
+    "method": "GET",
+    "path": "/model-garden/copilot/chat"
+  },
+  {
+    "method": "PUT",
+    "path": "/model-garden/copilot/chat"
+  },
+  {
+    "method": "POST",
+    "path": "/model-garden/format"
+  },
+  {
+    "method": "POST",
+    "path": "/model-garden/lint"
+  },
+  {
+    "method": "GET",
+    "path": "/model-garden/notebook"
+  },
+  {
+    "method": "PUT",
+    "path": "/model-garden/notebook"
+  },
+  {
+    "method": "POST",
+    "path": "/model-garden/notebook/cell"
+  },
+  {
+    "method": "GET",
+    "path": "/model-garden/notebook/cell/{job_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/model-garden/notebook/dataset"
+  },
+  {
+    "method": "GET",
+    "path": "/model-garden/{name}/versions"
+  },
+  {
+    "method": "DELETE",
+    "path": "/model-garden/{name}/{version}"
+  },
+  {
+    "method": "GET",
+    "path": "/model-garden/{name}/{version}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/model-garden/{name}/{version}"
+  },
+  {
+    "method": "POST",
+    "path": "/model-garden/{name}/{version}/promote"
+  },
+  {
+    "method": "GET",
+    "path": "/model-garden/{name}/{version}/source"
+  },
+  {
+    "method": "POST",
+    "path": "/model-garden/{name}/{version}/test"
+  },
+  {
+    "method": "GET",
+    "path": "/model-garden/{name}/{version}/test/{job_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/models"
+  },
+  {
+    "method": "GET",
+    "path": "/models/{model_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/models/{model_id}/dashboard"
+  },
+  {
+    "method": "GET",
+    "path": "/observability"
+  },
+  {
+    "method": "POST",
+    "path": "/outliers/{thread_id}/apply"
+  },
+  {
+    "method": "GET",
+    "path": "/plots/{plot_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/portfolio"
+  },
+  {
+    "method": "GET",
+    "path": "/portfolio-benchmark"
+  },
+  {
+    "method": "GET",
+    "path": "/preferences"
+  },
+  {
+    "method": "PUT",
+    "path": "/preferences"
+  },
+  {
+    "method": "GET",
+    "path": "/prefit-report"
+  },
+  {
+    "method": "GET",
+    "path": "/prefit-report/download"
+  },
+  {
+    "method": "GET",
+    "path": "/project-report"
+  },
+  {
+    "method": "GET",
+    "path": "/project-report/download"
+  },
+  {
+    "method": "GET",
+    "path": "/project-slides"
+  },
+  {
+    "method": "GET",
+    "path": "/project-slides/download"
+  },
+  {
+    "method": "GET",
+    "path": "/projects"
+  },
+  {
+    "method": "POST",
+    "path": "/projects"
+  },
+  {
+    "method": "DELETE",
+    "path": "/projects/{project_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/projects/{project_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/branding"
+  },
+  {
+    "method": "PUT",
+    "path": "/projects/{project_id}/branding"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/branding/extract"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/calibration-coverage"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/data-connections"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/data-connections"
+  },
+  {
+    "method": "DELETE",
+    "path": "/projects/{project_id}/data-connections/{connection_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/projects/{project_id}/data-connections/{connection_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/data-connections/{connection_id}/preview"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/data-connections/{connection_id}/test"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/data-quality"
+  },
+  {
+    "method": "DELETE",
+    "path": "/projects/{project_id}/delivery"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/delivery"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/delivery"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/estimands"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/experiment-design"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/experiment-design/identify"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/experiment-design/identify/{job_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/experiment-design/optimize"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/experiment-design/optimize/{job_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/experiment-design/options"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/experiment-design/simulate"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/experiment-design/simulate/{job_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/experiment-priorities"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/generate-deck"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/generate-deck/{job_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/generate-deck/{job_id}/download"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/ghost-ads/power"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/guide"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/history"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/kb"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/kb"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/kb/search"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/learning-programs"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/learning-programs"
+  },
+  {
+    "method": "DELETE",
+    "path": "/projects/{project_id}/learning-programs/{program_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/learning-programs/{program_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/learning-programs/{program_id}/design-wave"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/learning-programs/{program_id}/fit"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/learning-programs/{program_id}/jobs/{job_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/learning-programs/{program_id}/waves"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/members"
+  },
+  {
+    "method": "PUT",
+    "path": "/projects/{project_id}/members"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/onboarding"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/onboarding-status"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/pacing"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/pacing/alert"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/planner/forecast"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/planner/forecast/{job_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/planner/optimize"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/planner/optimize/{job_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/planner/scenario"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/planner/scenario/{job_id}"
+  },
+  {
+    "method": "DELETE",
+    "path": "/projects/{project_id}/platform-figures"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/platform-figures"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/platform-figures"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/scorecard"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/signoff"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/signoffs"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/spec-curve"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/spec-curve/{job_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/triangulation"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/validate"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/validate/{job_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/validations"
+  },
+  {
+    "method": "GET",
+    "path": "/report"
+  },
+  {
+    "method": "GET",
+    "path": "/report/download"
+  },
+  {
+    "method": "GET",
+    "path": "/results-report"
+  },
+  {
+    "method": "GET",
+    "path": "/results-report/download"
+  },
+  {
+    "method": "POST",
+    "path": "/rewind/{thread_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/runs"
+  },
+  {
+    "method": "GET",
+    "path": "/runs/compare"
+  },
+  {
+    "method": "GET",
+    "path": "/sessions"
+  },
+  {
+    "method": "POST",
+    "path": "/sessions"
+  },
+  {
+    "method": "DELETE",
+    "path": "/sessions/{thread_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/sessions/{thread_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/sessions/{thread_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/sessions/{thread_id}/artifacts"
+  },
+  {
+    "method": "GET",
+    "path": "/sessions/{thread_id}/export"
+  },
+  {
+    "method": "GET",
+    "path": "/sessions/{thread_id}/files"
+  },
+  {
+    "method": "POST",
+    "path": "/sessions/{thread_id}/load-model"
+  },
+  {
+    "method": "PATCH",
+    "path": "/sessions/{thread_id}/mode"
+  },
+  {
+    "method": "GET",
+    "path": "/slide-deck/download"
+  },
+  {
+    "method": "PATCH",
+    "path": "/spec/{thread_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/spec/{thread_id}/resolve"
+  },
+  {
+    "method": "DELETE",
+    "path": "/state/{thread_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/state/{thread_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/tables/{table_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/upload"
+  },
+  {
+    "method": "GET",
+    "path": "/users"
+  },
+  {
+    "method": "POST",
+    "path": "/users"
+  },
+  {
+    "method": "DELETE",
+    "path": "/users/{user_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/users/{user_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/vertex-models"
+  },
+  {
+    "method": "GET",
+    "path": "/workflow/{thread_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/workflow/{thread_id}/{step}"
+  },
+  {
+    "method": "GET",
+    "path": "/workspace/{thread_id}/files"
+  }
 ]
