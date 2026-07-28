@@ -1401,6 +1401,54 @@ def _validate_groups(mmm: Any, groups: list | None) -> tuple[list | None, str | 
     return out, None
 
 
+#: Panel cadence -> the calendar's cadence vocabulary.
+_CADENCE_BY_DAYS = {1: "daily", 7: "weekly"}
+
+
+def _forward_calendar(mmm: Any, n_periods: int, flighting: dict) -> Any:
+    """The plan's forward calendar, starting one step after the training data.
+
+    A plan is for the periods AFTER the model's history, and the model knows
+    when that history ends and at what cadence — so the dates are derivable and
+    a caller should not have to supply them for the plan to be joinable to
+    delivery. An explicit ``flighting['start_date']`` wins; an
+    undated/irregular index yields ``None``, and the schedule keeps its
+    positional labels rather than inventing dates.
+    """
+    from mmm_framework.planning.calendar import PlanningCalendar
+
+    explicit = flighting.get("start_date")
+    cadence = str(flighting.get("cadence") or "").strip().lower() or None
+    start = None
+    try:
+        import pandas as _pd
+
+        idx = getattr(getattr(mmm, "panel", None), "index", None)
+        if idx is not None and len(idx) >= 2 and isinstance(idx, _pd.DatetimeIndex):
+            step = idx[-1] - idx[-2]
+            if cadence is None:
+                cadence = _CADENCE_BY_DAYS.get(int(step.days))
+                if cadence is None and 28 <= int(step.days) <= 31:
+                    cadence = "monthly"
+            start = idx[-1] + step
+    except Exception:  # noqa: BLE001 — an undated panel simply has no calendar
+        start = None
+
+    if explicit:
+        start = explicit
+    if start is None or cadence is None:
+        return None
+    try:
+        return PlanningCalendar(
+            start=start,
+            n_periods=int(n_periods),
+            cadence=cadence,
+            fy_start_month=int(flighting.get("fy_start_month", 1)),
+        )
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _budget_v2_extras(
     mmm: Any,
     *,
@@ -1653,17 +1701,38 @@ def plan_budget(
 
     if flighting:
         try:
+            n_periods = int(flighting.get("n_periods", 13))
+            # DATED periods, not P1..Pn. A plan whose labels are positional can
+            # never be joined to delivery by date, so `compute_pacing` falls back
+            # to positional truncation and compares a mid-flight upload against
+            # the plan's FIRST periods. Measured on a ramped 4-week plan with
+            # delivery for weeks 3-4: +25.0% over-pacing reported where the truth
+            # is +87.5% (#216). The forward window is knowable — it starts one
+            # cadence step after the training data ends — so it is derived rather
+            # than left to the caller.
+            cal = _forward_calendar(mmm, n_periods, flighting)
             fl = _pl.build_flighting_schedule(
                 channel_budgets,
-                int(flighting.get("n_periods", 13)),
+                n_periods,
                 pattern=str(flighting.get("pattern", "even")),
                 front_load=float(flighting.get("front_load", 0.65)),
                 pulse_on=int(flighting.get("pulse_on", 1)),
                 pulse_off=int(flighting.get("pulse_off", 1)),
                 seasonal=flighting.get("seasonal"),
                 period_labels=flighting.get("period_labels"),
+                calendar=cal,
             )
             plan["flighting"] = fl
+            if cal is not None:
+                # Persisted with the plan so a saved plan carries its own date
+                # vocabulary, rather than depending on whoever reads it back to
+                # reconstruct one.
+                plan["calendar"] = {
+                    "start": str(cal.start.date()),
+                    "n_periods": int(cal.n_periods),
+                    "cadence": str(cal.cadence),
+                    "fy_start_month": int(cal.fy_start_month),
+                }
         except Exception as e:  # noqa: BLE001
             plan["notes"].append(f"Flighting skipped: {e}")
 

@@ -9,6 +9,7 @@ without a real MCMC fit. One slow end-to-end test runs the op against a real fit
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from mmm_framework.agents import model_ops as M
@@ -433,3 +434,118 @@ class TestDefaultReallocation:
 
         with pytest.raises(ValueError):
             default_reallocation(FakeNationalMMM(), deviation=1.5)
+
+
+# ---------------------------------------------------------------------------
+# A saved plan carries its own dates (#216)
+#
+# `build_flighting_schedule` was called with no calendar, so every planner-built
+# plan got P1..Pn labels. `compute_pacing` cannot join those to dated delivery,
+# falls back to POSITIONAL truncation, and compares a mid-flight upload against
+# the plan's FIRST periods. Measured on a ramped 4-week plan with delivery for
+# weeks 3-4: +25.0% over-pacing reported where the truth is +87.5%.
+# ---------------------------------------------------------------------------
+
+
+class _DatedMMM(FakeGeoMMM):
+    """FakeGeoMMM plus the dated panel index a real model always has."""
+
+    def __init__(self, freq="W-MON", periods=6):
+        super().__init__()
+
+        class _P:
+            pass
+
+        self.panel = _P()
+        self.panel.index = pd.date_range("2025-01-06", periods=periods, freq=freq)
+
+
+class TestPlanCalendar:
+    def test_the_plan_window_starts_after_the_training_data(self):
+        from mmm_framework.agents.model_ops import _forward_calendar
+
+        cal = _forward_calendar(_DatedMMM(), 4, {})
+        assert cal is not None
+        # training ends 2025-02-10; the plan starts the NEXT week
+        assert str(cal.start.date()) == "2025-02-17"
+        assert cal.cadence == "weekly" and cal.n_periods == 4
+
+    def test_an_explicit_start_date_wins(self):
+        from mmm_framework.agents.model_ops import _forward_calendar
+
+        cal = _forward_calendar(_DatedMMM(), 4, {"start_date": "2030-01-07"})
+        assert str(cal.start.date()) == "2030-01-07"
+
+    def test_an_undated_panel_yields_no_calendar_rather_than_invented_dates(self):
+        from mmm_framework.agents.model_ops import _forward_calendar
+
+        assert _forward_calendar(FakeGeoMMM(), 4, {}) is None
+
+    def test_the_schedule_and_the_saved_plan_carry_the_dates(self):
+        res = M.OPS["plan_budget"](
+            _DatedMMM(),
+            None,
+            by_geo=False,
+            flighting={"pattern": "front_loaded", "n_periods": 4},
+            max_draws=4,
+        )
+        plan = res["dashboard"]["budget_plan"]
+        assert plan["flighting"]["periods"][0] == "2025-02-17"
+        # persisted, so a plan read back does not depend on its reader
+        # reconstructing a calendar
+        assert plan["calendar"] == {
+            "start": "2025-02-17",
+            "n_periods": 4,
+            "cadence": "weekly",
+            "fy_start_month": 1,
+        }
+
+    def test_dated_labels_change_the_pacing_verdict_mid_flight(self):
+        """The bug, end to end. Same plan, same delivery — only the labels
+        differ, and the reported over-pacing is 3.5x off without them."""
+        from mmm_framework.planning.calendar import PlanningCalendar
+        from mmm_framework.planning.flighting import build_flighting_schedule
+        from mmm_framework.platform.pacing import project_pacing
+
+        # delivery for the LAST two weeks only, as a mid-flight upload is
+        mid = [
+            {"channel": "TV", "period": d, "spend": 150.0}
+            for d in ("2025-01-20", "2025-01-27")
+        ]
+        cal = PlanningCalendar(start="2025-01-06", n_periods=4, cadence="weekly")
+
+        undated = build_flighting_schedule({"TV": 400.0}, 4, pattern="front_loaded")
+        dated = build_flighting_schedule(
+            {"TV": 400.0}, 4, pattern="front_loaded", calendar=cal
+        )
+        assert undated["periods"] == ["P1", "P2", "P3", "P4"]
+
+        a = project_pacing({"flighting": undated}, mid)
+        b = project_pacing({"flighting": dated}, mid)
+        assert a["join"] == "positional" and b["join"] == "label"
+
+        # the plan ramps 130/110/90/70; weeks 3-4 are 160, not the first two's 240
+        assert a["channels"][0]["planned"] == pytest.approx(240.0)
+        assert b["channels"][0]["planned"] == pytest.approx(160.0)
+        assert a["channels"][0]["divergence_pct"] == pytest.approx(0.25)
+        assert b["channels"][0]["divergence_pct"] == pytest.approx(0.875)
+
+    def test_a_flat_plan_cannot_detect_this(self):
+        """Companion to the above, so a future 'simplification' to a flat
+        fixture cannot silently disarm the guard (#216's own test-design note)."""
+        from mmm_framework.planning.calendar import PlanningCalendar
+        from mmm_framework.planning.flighting import build_flighting_schedule
+        from mmm_framework.platform.pacing import project_pacing
+
+        mid = [
+            {"channel": "TV", "period": d, "spend": 150.0}
+            for d in ("2025-01-20", "2025-01-27")
+        ]
+        cal = PlanningCalendar(start="2025-01-06", n_periods=4, cadence="weekly")
+        flat_undated = build_flighting_schedule({"TV": 400.0}, 4, pattern="even")
+        flat_dated = build_flighting_schedule(
+            {"TV": 400.0}, 4, pattern="even", calendar=cal
+        )
+        a = project_pacing({"flighting": flat_undated}, mid)
+        b = project_pacing({"flighting": flat_dated}, mid)
+        assert a["channels"][0]["planned"] == b["channels"][0]["planned"]
