@@ -93,6 +93,11 @@ export interface BudgetPlanResult {
   objective?: string;
   objective_label?: string;
   mode?: string;
+  /** What one KPI unit was taken to be worth, and where that came from (#215,
+   *  #221). Present only under mode='free' — the only mode whose recommendation
+   *  depends on it. A dollar recommendation must name its exchange rate. */
+  value_per_kpi?: number | null;
+  value_source?: string | null;
   shadow_price?: number | null;
   marginal_roas?: Record<string, number> | null;
   frontier?: FrontierResult;

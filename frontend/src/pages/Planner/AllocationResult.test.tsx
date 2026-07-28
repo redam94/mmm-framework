@@ -126,3 +126,26 @@ describe('AllocationResult', () => {
     expect(screen.getByText('Marg. ROAS')).toBeInTheDocument();
   });
 });
+
+// ── a breakeven total names its exchange rate (#215) ────────────────────────
+//
+// The total under fund-to-breakeven IS derived from what a KPI unit is worth,
+// so presenting it without that number lets a reader take it as standing on its
+// own — which is how a ~1000x-off recommendation read as a plan.
+
+describe('AllocationResult valuation disclosure', () => {
+  it('names the valuation and its source on a breakeven plan', () => {
+    render(
+      <AllocationResult
+        plan={{ ...PLAN, mode: 'free', value_per_kpi: 2.5, value_source: 'preference' }}
+      />,
+    );
+    expect(screen.getByText(/1 KPI unit = 2\.50/)).toBeInTheDocument();
+    expect(screen.getByText(/from preference/)).toBeInTheDocument();
+  });
+
+  it('shows no valuation chip on a fixed-budget plan', () => {
+    render(<AllocationResult plan={{ ...PLAN, mode: 'fixed' }} />);
+    expect(screen.queryByText(/1 KPI unit =/)).not.toBeInTheDocument();
+  });
+});

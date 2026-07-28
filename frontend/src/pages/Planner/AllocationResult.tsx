@@ -192,6 +192,15 @@ export function AllocationResult({ plan }: { plan: BudgetPlanResult }) {
               Breakeven mode
             </span>
           )}
+          {/* A breakeven total IS a dollar recommendation derived from this
+              exchange rate, so the plan names it and where it came from rather
+              than presenting the total as if it stood on its own (#215). */}
+          {plan.mode === 'free' && plan.value_per_kpi != null && (
+            <span className="rounded-full bg-cream-200 px-2.5 py-1 text-ink-600">
+              1 KPI unit = {fmt2(plan.value_per_kpi)}
+              {plan.value_source ? ` (from ${plan.value_source})` : ''}
+            </span>
+          )}
           {plan.shadow_price != null && (
             <span className="rounded-full bg-sage-100 px-2.5 py-1 text-sage-800">
               Shadow price (next-$ return): {fmt2(plan.shadow_price)}

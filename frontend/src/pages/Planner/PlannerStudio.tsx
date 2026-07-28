@@ -50,6 +50,14 @@ export function PlannerStudio({
   // Budget optimizer v2 (#139): decision mode.
   const [objective, setObjective] = useState<'mean' | 'p10' | 'cvar5'>('mean');
   const [optMode, setOptMode] = useState<'fixed' | 'free'>('fixed');
+  // Fund-to-breakeven funds each channel until the next dollar returns one
+  // dollar, so it needs to know what a KPI unit is worth. The control shipped
+  // without a field for it and the server filled in 1.0 — on a KPI denominated
+  // in thousands that made the recommended total ~1000x too large, rendered
+  // with credible intervals (#215). The server now refuses instead; this is the
+  // field that lets the user answer it. Blank falls through to the project's
+  // saved economics preference.
+  const [valuePerKpi, setValuePerKpi] = useState<string>('');
   const [withFrontier, setWithFrontier] = useState(false);
   const [targetKpi, setTargetKpi] = useState<string>('');
   const [keepOnFloor, setKeepOnFloor] = useState<string>('');
@@ -131,6 +139,11 @@ export function PlannerStudio({
       channel_bounds: channelBounds,
       objective,
       mode: optMode,
+      // Only under 'free': in fixed mode a positive constant cannot move the
+      // argmax, so sending one would imply the plan depended on it.
+      ...(optMode === 'free' && valuePerKpi.trim()
+        ? { value_per_kpi: Number(valuePerKpi) }
+        : {}),
       ...(budgetMode === 'change' ? { budget_change_pct: budgetChangePct } : {}),
       ...(withFrontier ? { frontier: true } : {}),
       ...(targetKpi.trim() ? { target_kpi: Number(targetKpi) } : {}),
@@ -223,6 +236,31 @@ export function PlannerStudio({
             </select>
           </label>
         </div>
+        {optMode === 'free' && (
+          <div>
+            {/* The hint sits OUTSIDE the label: a paragraph this long inside it
+                becomes the field's accessible name. */}
+            <label className="block">
+              <span className={labelCls}>$ value of one KPI unit</span>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={valuePerKpi}
+                placeholder="from project economics if blank"
+                onChange={(e) => setValuePerKpi(e.target.value)}
+                className={inputCls}
+              />
+            </label>
+            <p className="mt-1 text-xs text-ink-400">
+              Fund-to-breakeven spends until the next dollar returns one dollar, so
+              it needs this exchange rate — one KPI unit is not assumed to be worth
+              one dollar. Leave blank to use the project&rsquo;s saved economics
+              (gross margin, and price for a unit-denominated KPI). Spending a fixed
+              budget needs no valuation.
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className={labelCls}>Goal-seek: target KPI (optional)</span>
