@@ -2160,6 +2160,20 @@ class ModelValidator:
                 "geo-lift / incrementality experiment (mmm_framework.calibration)."
             )
 
+        # Channels with no computable RV are absent from `fragile_channels`, so
+        # without this they would pass silently as though they had been checked.
+        if (
+            summary.unobserved_confounding
+            and summary.unobserved_confounding.unassessable_channels
+        ):
+            recommendations.append(
+                "Confounding robustness could not be assessed for "
+                + ", ".join(summary.unobserved_confounding.unassessable_channels)
+                + " - the fit produced no usable posterior sd for them (an "
+                "approximate MAP/ADVI fit is the usual cause). Re-fit with NUTS "
+                "before treating these channels as robust."
+            )
+
         if summary.causal_refutation and not summary.causal_refutation.all_passed:
             recommendations.append(
                 "One or more causal refutation tests failed - investigate possible "

@@ -867,6 +867,18 @@ class CalibrationResults:
 # =============================================================================
 
 
+def _fmt(value: float | None, places: int) -> str:
+    """Format a statistic, rendering a non-finite one as ``n/a`` rather than
+    the literal ``nan``/``inf``.
+
+    ``f"{float('nan'):.3f}"`` yields the string ``"nan"``, which reads in a
+    report table as though a number had been computed.
+    """
+    if value is None or not np.isfinite(value):
+        return "n/a"
+    return f"{value:.{places}f}"
+
+
 @dataclass(frozen=True)
 class ChannelRobustness:
     """Per-channel sensitivity of the media effect to unobserved confounding."""
@@ -910,6 +922,22 @@ class ChannelRobustness:
         return c is not None and np.isfinite(c) and c < self.prior_dominated_threshold
 
     @property
+    def is_assessable(self) -> bool:
+        """Whether a robustness value could be computed at all.
+
+        A non-finite RV means ``|t| = |mean| / sd`` was undefined — typically an
+        approximate (MAP/ADVI) fit, whose degenerate posterior gives a zero or
+        undefined sd. This is distinct from :attr:`is_prior_dominated`, where the
+        RV exists but reflects the prior: here there is no value to quote.
+
+        Load-bearing because ``is_fragile`` is ``isfinite(rv) and rv < thr``, so
+        a non-finite RV is *not fragile* — and every consumer that reads "not
+        fragile" as "robust" would otherwise report a passed sensitivity check
+        that was never computed.
+        """
+        return bool(np.isfinite(self.robustness_value))
+
+    @property
     def rv_is_quotable(self) -> bool:
         """Whether the robustness value can be quoted as evidence at all."""
         return np.isfinite(self.robustness_value) and not self.is_prior_dominated
@@ -925,6 +953,7 @@ class ChannelRobustness:
             "robustness_value": self.robustness_value,
             "robustness_value_half": self.robustness_value_half,
             "is_fragile": self.is_fragile,
+            "is_assessable": self.is_assessable,
             "prior_contraction": self.prior_contraction,
             "is_prior_dominated": self.is_prior_dominated,
             "rv_is_quotable": self.rv_is_quotable,
@@ -944,17 +973,33 @@ class UnobservedConfoundingSensitivity:
     def fragile_channels(self) -> list[str]:
         return [c.channel for c in self.channels if c.is_fragile]
 
+    @property
+    def unassessable_channels(self) -> list[str]:
+        """Channels whose RV could not be computed (see
+        :attr:`ChannelRobustness.is_assessable`).
+
+        These are NOT in :attr:`fragile_channels` — a non-finite RV fails the
+        ``rv < threshold`` test — so any caller reading an empty
+        ``fragile_channels`` as "all robust" must consult this list too.
+        """
+        return [c.channel for c in self.channels if not c.is_assessable]
+
     def summary(self) -> pd.DataFrame:
         return pd.DataFrame(
             {
                 "Channel": [c.channel for c in self.channels],
-                "Estimate": [f"{c.estimate:.3f}" for c in self.channels],
-                "t-value": [f"{c.t_value:.2f}" for c in self.channels],
-                "Partial R²": [f"{c.partial_r2:.3f}" for c in self.channels],
+                "Estimate": [_fmt(c.estimate, 3) for c in self.channels],
+                "t-value": [_fmt(c.t_value, 2) for c in self.channels],
+                "Partial R²": [_fmt(c.partial_r2, 3) for c in self.channels],
                 "Robustness Value": [
-                    f"{c.robustness_value:.3f}" for c in self.channels
+                    _fmt(c.robustness_value, 3) for c in self.channels
                 ],
-                "Fragile": ["Yes" if c.is_fragile else "No" for c in self.channels],
+                # Not a yes/no when the RV does not exist: "No" there would read
+                # as a passed check rather than an uncomputed one.
+                "Fragile": [
+                    ("Yes" if c.is_fragile else "No") if c.is_assessable else "n/a"
+                    for c in self.channels
+                ],
             }
         )
 
@@ -964,6 +1009,7 @@ class UnobservedConfoundingSensitivity:
             "dof": self.dof,
             "q": self.q,
             "fragile_channels": self.fragile_channels,
+            "unassessable_channels": self.unassessable_channels,
             "caveat": self.caveat,
         }
 
