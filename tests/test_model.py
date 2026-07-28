@@ -1664,3 +1664,81 @@ class TestBayesianMMMGetPrior:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-m", "not slow"])
+
+
+class TestMultiplicativeContributionGuard:
+    """`sample_channel_contributions` must refuse a multiplicative spec (#220).
+
+    Its own docstring rests on "the model is additive in channels", and it ends
+    in `contrib * y_std` — an additive-scale rescale. Under a multiplicative
+    specification the graph is additive in LOG space, so both are wrong on the
+    original scale, and wrong *quietly*: measured on a MAP fit, the CFO
+    one-pager reported marketing at 0.005% of KPI where the additive equivalent
+    of the same world reported 10.7%.
+
+    Its sibling `compute_marginal_contributions` has refused this since it
+    shipped; this closes the asymmetry.
+    """
+
+    def _fit(self, spec):
+        import numpy as np
+        import pandas as pd
+
+        from mmm_framework.config import (
+            DimensionType,
+            KPIConfig,
+            MediaChannelConfig,
+            MFFConfig,
+            ModelConfig,
+            ModelSpecification,
+        )
+        from mmm_framework.data_loader import PanelCoordinates, PanelDataset
+        from mmm_framework.model import BayesianMMM, TrendConfig, TrendType
+
+        n = 48
+        periods = pd.date_range("2021-01-04", periods=n, freq="W-MON")
+        rng = np.random.default_rng(3)
+        tv = np.abs(rng.normal(100, 25, n))
+        y = pd.Series(1000 + 3.0 * tv + rng.normal(0, 25, n), name="Sales")
+        panel = PanelDataset(
+            y=y,
+            X_media=pd.DataFrame({"TV": tv}),
+            X_controls=None,
+            coords=PanelCoordinates(
+                periods=periods, geographies=None, products=None,
+                channels=["TV"], controls=None,
+            ),
+            index=periods,
+            config=MFFConfig(
+                kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
+                media_channels=[
+                    MediaChannelConfig(name="TV", dimensions=[DimensionType.PERIOD])
+                ],
+                controls=[],
+            ),
+        )
+        m = BayesianMMM(
+            panel, ModelConfig(specification=spec), TrendConfig(type=TrendType.LINEAR)
+        )
+        m.fit(method="map", random_seed=0)
+        return m
+
+    @pytest.mark.slow
+    def test_refuses_on_multiplicative(self):
+        from mmm_framework.config import ModelSpecification
+
+        m = self._fit(ModelSpecification.MULTIPLICATIVE)
+        with pytest.raises(NotImplementedError) as exc:
+            m.sample_channel_contributions(max_draws=10)
+        msg = str(exc.value)
+        assert "multiplicative" in msg.lower()
+        # names the correct alternative rather than just refusing
+        assert "compute_component_decomposition" in msg
+
+    @pytest.mark.slow
+    def test_additive_is_unaffected(self):
+        from mmm_framework.config import ModelSpecification
+
+        m = self._fit(ModelSpecification.ADDITIVE)
+        contrib = m.sample_channel_contributions(max_draws=10)
+        assert contrib.ndim == 3 and contrib.shape[-1] == 1

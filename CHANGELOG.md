@@ -14,7 +14,35 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **`sample_channel_contributions()` now refuses a multiplicative specification** instead of
+  returning log-scale numbers as though they were original-scale contributions ([#220]). Its
+  docstring rests on "the model is additive in channels" and it ends in `contrib * y_std`, both of
+  which hold only on the log scale for a multiplicative fit. It was wrong *quietly*: measured on a
+  MAP fit, the CFO one-pager reported marketing at **0.005%** of KPI where the additive equivalent
+  of the same world reported **10.7%**. Its sibling `compute_marginal_contributions()` has refused
+  this since it shipped; this closes the asymmetry.
+
+  **Behaviour change.** Roughly twenty reporting and planning call sites reach this method, so a
+  multiplicative model now loses those surfaces rather than showing wrong numbers — reports still
+  render, with the affected sections absent. `garden/compat.py::_ops_smoke_tier` executes real ops,
+  so a multiplicative garden model's ops-smoke tier turns **red**; red-because-refused is the
+  intended outcome. Use `compute_component_decomposition()` (exact LMDI, original scale) or
+  `compute_counterfactual_contributions()` / `compute_channel_roi()`.
+
+- **Component shares are computed against the signed total, not a sum of magnitudes** ([#220]).
+  Components sum to the fitted outcome, so a magnitude denominator made "% of total" wrong whenever
+  any component was negative — a declining trend or a negative control was enough, and shares did
+  not add to 1. A stability rule falls back to the magnitude denominator, flagged, when the signed
+  total is near zero (a naive signed share there renders Baseline −1105.8% and Trend +1613.0%).
+
+- **The fallback decomposition's Baseline was short by `y_mean × n_obs`** ([#220]).
+  `_compute_decomposition_from_trace` computed `intercept * y_std` with no `+ y_mean`, and that
+  path is taken exactly when `compute_component_decomposition()` raised — when a trustworthy number
+  matters most.
+
+[#220]: https://github.com/redam94/mmm-framework/issues/220
 
 ## [1.3.3] — 2026-07-27
 

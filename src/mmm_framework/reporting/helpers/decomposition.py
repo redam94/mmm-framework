@@ -74,6 +74,34 @@ def compute_component_decomposition(
     return _compute_decomposition_from_trace(model, include_time_series, hdi_prob)
 
 
+#: Below this ratio of |signed total| to sum-of-magnitudes, the signed
+#: denominator is numerically unusable and percentages are suppressed. Measured
+#: on a near-zero signed total, a naive signed share renders Baseline -1105.8%
+#: and Trend +1613.0% — arithmetically correct and useless.
+_SIGNED_SHARE_MIN_RATIO = 0.10
+
+
+def _share_denominator(values: "list[float]") -> tuple[float, bool]:
+    """(denominator, shares_are_meaningful) for component percentages.
+
+    The denominator must be the SIGNED total: components sum to the fitted
+    outcome, and a sum of magnitudes is not that sum whenever any component is
+    negative (a declining trend, a negative control), so shares computed
+    against it do not add to 1.
+
+    Falls back to the magnitude sum, flagged, when the signed total is so close
+    to zero that shares explode — better an admittedly-approximate denominator
+    than a page of ±1000% figures.
+    """
+    signed = float(sum(values))
+    magnitude = float(sum(abs(v) for v in values))
+    if magnitude <= 0:
+        return 1.0, False
+    if abs(signed) < _SIGNED_SHARE_MIN_RATIO * magnitude:
+        return magnitude, False
+    return signed, True
+
+
 def _convert_model_decomposition(
     decomp: Any,
     hdi_prob: float,
@@ -81,17 +109,18 @@ def _convert_model_decomposition(
     """Convert model's ComponentDecomposition to DecompositionResult list."""
     results = []
 
-    # Calculate total for percentages
-    total = (
-        abs(decomp.total_intercept)
-        + abs(decomp.total_trend)
-        + abs(decomp.total_seasonality)
-        + abs(decomp.total_media)
-        + abs(decomp.total_controls)
+    # Calculate total for percentages. SIGNED, not a sum of magnitudes: the
+    # components sum to the fitted outcome, so a magnitude denominator makes
+    # shares fail to add to 1 the moment any component is negative.
+    total, _shares_ok = _share_denominator(
+        [
+            decomp.total_intercept,
+            decomp.total_trend,
+            decomp.total_seasonality,
+            decomp.total_media,
+            decomp.total_controls,
+        ]
     )
-
-    if total == 0:
-        total = 1.0
 
     # Baseline
     results.append(
@@ -173,17 +202,25 @@ def _compute_decomposition_from_trace(
     n_obs = getattr(model, "n_obs", 52)
 
     results = []
-    total = 0.0
+    # Signed component totals, accumulated for the share denominator. Must be
+    # initialised here, not inside the intercept branch: a model without an
+    # `intercept` posterior var would otherwise hit an unbound name.
+    component_totals: list[float] = []
 
     # Intercept
     if "intercept" in posterior:
         intercept_samples = _flatten_samples(posterior["intercept"].values)
-        intercept_mean = float(np.mean(intercept_samples)) * y_std
+        # `+ y_mean` is required: the standardized intercept unstandardizes as
+        # `intercept * y_std + y_mean`. Omitting it left this fallback Baseline
+        # short by `y_mean * n_obs` — and this path is taken precisely when
+        # compute_component_decomposition() raised, i.e. when a trustworthy
+        # number matters most.
+        intercept_mean = float(np.mean(intercept_samples)) * y_std + y_mean
         intercept_lower, intercept_upper = _compute_hdi(
-            intercept_samples * y_std, hdi_prob
+            intercept_samples * y_std + y_mean, hdi_prob
         )
         total_intercept = intercept_mean * n_obs
-        total += abs(total_intercept)
+        component_totals.append(total_intercept)
 
         results.append(
             DecompositionResult(
@@ -207,7 +244,7 @@ def _compute_decomposition_from_trace(
         if contrib_samples is not None:
             contrib_mean = float(np.mean(contrib_samples))
             contrib_lower, contrib_upper = _compute_hdi(contrib_samples, hdi_prob)
-            total += abs(contrib_mean)
+            component_totals.append(contrib_mean)
 
             results.append(
                 DecompositionResult(
@@ -219,10 +256,10 @@ def _compute_decomposition_from_trace(
                 )
             )
 
-    # Update percentages
-    if total > 0:
-        for r in results:
-            r.pct_of_total = r.total_contribution / total
+    # Update percentages against the SIGNED total (see _share_denominator).
+    total, _shares_ok = _share_denominator(component_totals)
+    for r in results:
+        r.pct_of_total = r.total_contribution / total
 
     return results
 

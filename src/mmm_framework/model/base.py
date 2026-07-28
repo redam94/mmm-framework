@@ -4394,9 +4394,33 @@ class BayesianMMM:
         ``max_draws`` thins the trace evenly to at most that many draws per
         chain-flattened posterior — response-curve grids don't need the full
         posterior.
+
+        Raises ``NotImplementedError`` on a multiplicative specification: the
+        additivity this method relies on holds on the LOG scale there, so the
+        returned numbers are not original-scale contributions.
         """
         if self._trace is None:
             raise ValueError("Model not fitted. Call fit() first.")
+
+        # The docstring above states the premise this method rests on — "the
+        # model is additive in channels" — and `contrib * self.y_std` is an
+        # additive-scale rescale. Under a multiplicative specification the
+        # graph is additive in LOG space, so both are wrong on the original
+        # scale, and wrong QUIETLY: measured on a MAP fit, the CFO one-pager
+        # reported marketing at 0.005% of KPI where the additive equivalent of
+        # the same world reported 10.7%.
+        #
+        # Mirrors the guard on the sibling `compute_marginal_contributions`,
+        # which has refused this since it shipped.
+        if self._multiplicative:
+            raise NotImplementedError(
+                "Per-channel contribution draws are computed on the additive "
+                "(log) scale and would be wrong on the original scale for the "
+                "multiplicative model. Use compute_component_decomposition(), "
+                "which is an exact LMDI attribution on the original scale, or "
+                "compute_counterfactual_contributions() / compute_channel_roi(), "
+                "which diff exp-back-transformed predictions."
+            )
 
         trace = self._trace
         if max_draws is not None:

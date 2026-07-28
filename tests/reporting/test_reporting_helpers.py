@@ -687,3 +687,86 @@ if __name__ == "__main__":
 
     # Run pytest
     pytest.main([__file__, "-v", "--tb=short"])
+
+
+class TestSignedShareDenominator:
+    """Component shares must be computed against the SIGNED total (issue #220).
+
+    Components sum to the fitted outcome, so a sum-of-magnitudes denominator
+    makes shares fail to add to 1 the moment any component is negative — a
+    declining trend or a negative control is enough.
+    """
+
+    def _fn(self):
+        from mmm_framework.reporting.helpers.decomposition import _share_denominator
+
+        return _share_denominator
+
+    def test_signed_total_is_used_when_stable(self):
+        denom, ok = self._fn()([100.0, -20.0, 30.0])
+        assert ok is True
+        assert denom == pytest.approx(110.0)          # signed, not 150
+
+    def test_shares_sum_to_one_with_a_negative_component(self):
+        vals = [100.0, -20.0, 30.0]
+        denom, ok = self._fn()(vals)
+        assert sum(v / denom for v in vals) == pytest.approx(1.0)
+        # the old magnitude denominator does NOT have this property
+        magnitude = sum(abs(v) for v in vals)
+        assert sum(v / magnitude for v in vals) != pytest.approx(1.0)
+
+    def test_falls_back_when_the_signed_total_is_near_zero(self):
+        """A near-zero signed total makes shares explode (measured: Baseline
+        -1105.8%, Trend +1613.0%). Fall back to magnitude, flagged."""
+        vals = [1000.0, -999.0]
+        denom, ok = self._fn()(vals)
+        assert ok is False
+        assert denom == pytest.approx(1999.0)         # magnitude fallback
+        assert all(abs(v / denom) <= 1.0 for v in vals)
+
+    def test_all_zero_components_do_not_divide_by_zero(self):
+        denom, ok = self._fn()([0.0, 0.0])
+        assert denom == 1.0 and ok is False
+
+
+class TestFallbackBaselineIncludesYMean:
+    """`_compute_decomposition_from_trace` omitted `+ y_mean` (issue #220).
+
+    The standardized intercept unstandardizes as `intercept * y_std + y_mean`,
+    so the fallback Baseline was short by `y_mean * n_obs`. That path runs
+    precisely when `compute_component_decomposition()` raised — when a
+    trustworthy number matters most.
+    """
+
+    def test_baseline_carries_y_mean(self):
+        import numpy as np
+
+        from mmm_framework.reporting.helpers import decomposition as D
+
+        y_mean, y_std, n_obs = 500.0, 10.0, 20
+        intercept = np.full((1, 40), 2.0)
+
+        class _M:
+            n_obs = 20
+
+        posterior = {"intercept": type("V", (), {"values": intercept})()}
+        monkey = {
+            "_get_posterior": lambda m: posterior,
+            "_get_scaling_params": lambda m: (y_mean, y_std),
+        }
+        orig = {k: getattr(D, k) for k in monkey}
+        try:
+            for k, v in monkey.items():
+                setattr(D, k, v)
+            rows = D._compute_decomposition_from_trace(
+                _M(), include_time_series=False, hdi_prob=0.9
+            )
+        finally:
+            for k, v in orig.items():
+                setattr(D, k, v)
+
+        base = next(r for r in rows if r.component == "Baseline")
+        # 2.0 * y_std + y_mean = 520 per obs, x 20 obs
+        assert base.total_contribution == pytest.approx((2.0 * y_std + y_mean) * n_obs)
+        # the old, y_mean-less value would have been 400 -- short by y_mean*n_obs
+        assert base.total_contribution != pytest.approx(2.0 * y_std * n_obs)
