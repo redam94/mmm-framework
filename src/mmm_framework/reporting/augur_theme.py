@@ -95,7 +95,11 @@ body{font-family:var(--font-sans);background:var(--cream-50);color:var(--ink-700
 
 /* Table */
 .data-table{width:100%;border-collapse:collapse;margin:.5rem 0 0;font-size:.9rem;border:1px solid var(--line-200);}
-.data-table th,.data-table td{padding:.7rem 1rem;text-align:left;}
+/* `anywhere` (not `break-word`) because only `anywhere` shrinks a cell's
+   min-content width: a long unbreakable token (a 90-char channel name) would
+   otherwise set the table's minimum width, widen it past the page and force
+   horizontal scrolling on the whole document. */
+.data-table th,.data-table td{padding:.7rem 1rem;text-align:left;overflow-wrap:anywhere;}
 .data-table thead tr{background:var(--cream-100);}
 .data-table th{font-weight:600;color:var(--ink-400);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;}
 .data-table tbody tr{border-top:1px solid var(--line-200);}
@@ -164,7 +168,10 @@ body{font-family:var(--font-sans);background:var(--cream-50);color:var(--ink-700
 .dd{border-top:1px solid var(--line-200);padding:2rem 0 .5rem;scroll-margin-top:1.25rem;}
 .dd:first-of-type{border-top:none;padding-top:.5rem;}
 .dd-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1.25rem;flex-wrap:wrap;}
-.dd-title{font-family:var(--font-display);font-size:1.45rem;font-weight:600;color:var(--ink-900);letter-spacing:-.01em;display:flex;align-items:center;gap:.6rem;}
+/* min-width:0 is required as well as overflow-wrap: a flex item's default
+   min-width is auto, which refuses to shrink below its content and would keep
+   a long channel name widening the page even with wrapping enabled. */
+.dd-title{font-family:var(--font-display);font-size:1.45rem;font-weight:600;color:var(--ink-900);letter-spacing:-.01em;display:flex;align-items:center;gap:.6rem;min-width:0;overflow-wrap:anywhere;}
 .dd-title .dot{width:13px;height:13px;border-radius:3px;flex:none;}
 .dd-read{color:var(--ink-600);font-size:.95rem;max-width:62ch;margin-top:.4rem;}
 .dd-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:.7rem;margin:1.25rem 0 1.1rem;}

@@ -701,3 +701,53 @@ class TestEstimandsAndPPCSections:
         ).render()
         assert 'id="estimands"' not in html
         assert 'id="posterior-predictive"' not in html
+
+
+class TestLongNameLayoutOverflow:
+    """A long, unbreakable channel name must not widen the page.
+
+    A 90-char name set the table's min-content width, pushing the document into
+    horizontal scrolling (measured 298-465px of overflow across the shells).
+    `overflow-wrap: anywhere` is the specific property required: unlike
+    `break-word`, `anywhere` shrinks intrinsic min-content width, which is what
+    lets the table fit its container.
+    """
+
+    LONG = "A" * 90
+
+    def test_classic_theme_lets_table_cells_break(self):
+        html = MMMReportGenerator(
+            data=MMMDataBundle(channel_names=["TV", self.LONG]),
+            config=ReportConfig.full(),
+        ).render()
+        css = html[html.find("<style") : html.find("</style>")]
+        assert "overflow-wrap: anywhere" in css.replace("\n", " ")
+
+    def test_augur_theme_lets_table_cells_and_deep_dive_titles_break(self):
+        from mmm_framework.reporting.augur_theme import augur_css
+        from mmm_framework.reporting.config import ColorPalette, ColorScheme
+
+        css = augur_css(ColorScheme.from_palette(ColorPalette.AUGUR))
+        # tables
+        assert "overflow-wrap:anywhere" in css
+        # the deep-dive heading is a flex container, which also needs min-width:0
+        dd = css[css.find(".dd-title{") : css.find(".dd-title .dot")]
+        assert "overflow-wrap:anywhere" in dd
+        assert "min-width:0" in dd
+
+    def test_long_channel_name_still_renders_in_full(self):
+        """Wrapping must not truncate the name -- CSS breaks it, never elides."""
+        bundle = MMMDataBundle(
+            channel_names=["TV", self.LONG],
+            causal_assumptions={
+                "robustness": {
+                    "channels": [
+                        {"channel": self.LONG, "robustness_value": 0.4,
+                         "partial_r2": 0.2, "is_fragile": False},
+                    ],
+                    "caveat": "c",
+                },
+            },
+        )
+        html = MMMReportGenerator(data=bundle, config=ReportConfig.full()).render()
+        assert self.LONG in html
