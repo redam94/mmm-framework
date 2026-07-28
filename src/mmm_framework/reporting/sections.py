@@ -1990,12 +1990,22 @@ class CFOSection(Section):
                 f'<td class="mono">{band}</td>{prof_cell}</tr>'
             )
         prof_head = "<th>Profit at risk</th>" if has_margin else ""
-        margin_note = (
-            ""
-            if has_margin
-            else "<p class='ci'>Provide a gross margin to convert revenue at risk "
-            "into profit at risk.</p>"
-        )
+        # Inverted before: the note was empty exactly when a margin WAS
+        # supplied, so a rendered "Profit at risk" column never said what
+        # margin produced it or that a constant margin is assumed. An artifact
+        # carrying a profit-basis number must name its assumption.
+        if has_margin:
+            _m = float(cfo.get("margin"))
+            margin_note = (
+                f"<p class='ci'>Profit at risk applies a gross margin of "
+                f"{_m:.0%} to revenue at risk. This assumes a constant gross "
+                "margin across channels and periods.</p>"
+            )
+        else:
+            margin_note = (
+                "<p class='ci'>Provide a gross margin to convert revenue at "
+                "risk into profit at risk.</p>"
+            )
         table = f"""
             <h3>If marketing spend is cut</h3>
             <table class="data-table">
