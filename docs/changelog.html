@@ -136,7 +136,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-26",
+          "dateModified": "2026-07-27",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/changelog.html#breadcrumb"
           },
@@ -186,7 +186,7 @@
         <main class="main-content">
             <h1 id="status">Versioning &amp; Changelog</h1>
             <p class="lead">
-                The MMM Framework is at <strong>version 1.3.2</strong>, published on
+                The MMM Framework is at <strong>version 1.3.3</strong>, published on
                 <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>
                 (<code>pip install mmm-framework</code>).
                 From 1.0.0 on, the project follows <a href="https://semver.org" target="_blank" rel="noopener">semantic
@@ -204,7 +204,7 @@
                     (see <a href="rest-api.html">REST API reference</a>). Modules marked
                     <em>Experimental</em> below may still change in minor releases &mdash; they are
                     flagged in the stability grid and in their docstrings. Pinning
-                    (<code>pip install mmm-framework==1.3.2</code>) remains good production hygiene.
+                    (<code>pip install mmm-framework==1.3.3</code>) remains good production hygiene.
                 </p>
             </div>
 
@@ -274,9 +274,38 @@
 
             <div class="release">
                 <div class="release-header">
-                    <span class="release-version">1.3.2</span>
+                    <span class="release-version">1.3.3</span>
                     <span class="release-date">2026-07-27</span>
                     <span class="release-tag">Current</span>
+                </div>
+                <p style="margin: 0.5rem 0 0.5rem 0;">
+                    A security release. Generated HTML reports did not escape <code>&lt;/</code> in
+                    the Plotly chart JSON embedded in inline <code>&lt;script&gt;</code> blocks, so a
+                    string in a chart payload containing <code>&lt;/script&gt;</code> closed the block
+                    early and the browser parsed the rest as HTML. It affects the classic and augur
+                    report shells; the interactive report already carried the same guard.
+                </p>
+                <p style="margin: 0.5rem 0 0.5rem 0;">
+                    Channel names could not reach it &mdash; PyMC rejects <code>/</code> in
+                    random-variable names, so a hostile channel name fails at fit time. But control
+                    and geography names are coords, not variable names, and they flow into chart
+                    traces, hover templates and axis titles, which makes the vector reachable from
+                    any untrusted modeled dataset. Details in
+                    <a href="https://github.com/redam94/mmm-framework/security/advisories/GHSA-7q6v-xpwm-4937" target="_blank" rel="noopener">GHSA-7q6v-xpwm-4937</a>.
+                </p>
+                <p style="margin: 0.5rem 0 0 0; color: var(--color-text-muted);">
+                    Cut from the 1.3.2 tag with only this fix, so 1.3.x users can take it without
+                    adopting in-progress 1.4 work. The premature tag also corrupted the surrounding
+                    chart payloads, so this repairs rendering too &mdash; charts drawn went from
+                    26/28 to 28/28 in the reproduction. Found by pressure-testing the report
+                    generators against a nine-model matrix carrying deliberately hostile names.
+                </p>
+            </div>
+
+            <div class="release">
+                <div class="release-header">
+                    <span class="release-version">1.3.2</span>
+                    <span class="release-date">2026-07-27</span>
                 </div>
                 <p style="margin: 0.5rem 0 0.5rem 0;">
                     Three names 1.3.1&rsquo;s release notes described as public were not actually

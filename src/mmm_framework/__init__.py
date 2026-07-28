@@ -152,7 +152,7 @@ from .dag_model_builder import (
     create_mediation_dag,
 )
 
-__version__ = "1.3.2"
+__version__ = "1.3.3"
 
 __all__ = [
     # Enums

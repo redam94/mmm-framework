@@ -71,7 +71,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-26",
+          "dateModified": "2026-07-27",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/evaluator.html#breadcrumb"
           },
@@ -130,7 +130,7 @@
                     </tr>
                     <tr>
                         <td>Packaging</td>
-                        <td>On <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>: <code>pip install mmm-framework</code>. Pin an exact version for production use (<code>mmm-framework==1.3.2</code>). The base install is the lean modeling core; the agent stack is the <code>[agents]</code> extra, and the FastAPI web app ships as the separate <code>mmm-framework-server</code> package. Source install remains the development path: <code>uv sync</code> = the full dev workspace (core + agents + server), <code>uv sync --no-dev</code> = the lean library only.</td>
+                        <td>On <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>: <code>pip install mmm-framework</code>. Pin an exact version for production use (<code>mmm-framework==1.3.3</code>). The base install is the lean modeling core; the agent stack is the <code>[agents]</code> extra, and the FastAPI web app ships as the separate <code>mmm-framework-server</code> package. Source install remains the development path: <code>uv sync</code> = the full dev workspace (core + agents + server), <code>uv sync --no-dev</code> = the lean library only.</td>
                     </tr>
                     <tr>
                         <td>Maintainer</td>
@@ -175,7 +175,7 @@
             <div class="note">
                 <h4>1.0 shipped 2026-07-24</h4>
                 <p style="margin-bottom: 0;">
-                    The criterion set out on this page &mdash; stabilizing the Beta-tier APIs &mdash; was met, and 1.0.0 shipped on 2026-07-24. (PyPI publication, the other original criterion, happened at 0.1.0.) Pinning an exact release for production use remains good hygiene: <code>pip install mmm-framework==1.3.2</code>.
+                    The criterion set out on this page &mdash; stabilizing the Beta-tier APIs &mdash; was met, and 1.0.0 shipped on 2026-07-24. (PyPI publication, the other original criterion, happened at 0.1.0.) Pinning an exact release for production use remains good hygiene: <code>pip install mmm-framework==1.3.3</code>.
                 </p>
             </div>
         </div>
@@ -286,7 +286,7 @@
             <div class="warning-box">
                 <h4>⚠️ Read before depending</h4>
                 <ul style="margin-bottom: 0;">
-                    <li><strong>Stable 1.0 on PyPI.</strong> Pin an exact version (<code>mmm-framework==1.3.2</code>) for anything production-facing and read the release notes before upgrading; SemVer applies from 1.0.0.</li>
+                    <li><strong>Stable 1.0 on PyPI.</strong> Pin an exact version (<code>mmm-framework==1.3.3</code>) for anything production-facing and read the release notes before upgrading; SemVer applies from 1.0.0.</li>
                     <li><strong>Solo maintainer.</strong> No SLA, no commercial support, real bus-factor risk (mitigations <a href="#team">above</a>).</li>
                     <li><strong>Experimental-module churn.</strong> Modules flagged Experimental may change in minor releases; the Stable tier is frozen under SemVer.</li>
                     <li><strong>No SaaS offering.</strong> You operate the stack (the <code>mmm-framework-server</code> FastAPI agent API + React frontend) yourself.</li>
