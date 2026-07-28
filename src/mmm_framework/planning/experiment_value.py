@@ -16,7 +16,7 @@ passes), ``P(net > 0)``, and the break-even horizon.
 Two honesty devices:
 
 * **Decay haircut** — EVOI values a posterior that stays sharp forever; channel
-  information decays with a half-life (`eig.channel_half_life`). The gain is
+  information decays with a half-life (`eig.information_half_life`). The gain is
   the naive horizon-total × the average informativeness retained over the
   horizon, ``(1/H) Σ_w 0.5^(w/h) · disc^w`` — always ≤ 1.
 * **EVPI cap** — the gain can never exceed the value of PERFECT information.
@@ -125,7 +125,7 @@ def compute_experiment_net_value(
             savings).
         margin_per_kpi: $ per KPI unit (the opportunity-cost module's resolved
             value). ``None`` → KPI-units basis, spend excluded.
-        half_life_weeks: information half-life (``eig.channel_half_life``);
+        half_life_weeks: information half-life (``eig.information_half_life``);
             ``None`` disables the decay haircut.
         opportunity_cost_result: an ``OpportunityCostResult`` to pull draws /
             spend / margin / half-life defaults from (fields explicitly passed

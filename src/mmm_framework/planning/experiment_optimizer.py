@@ -519,10 +519,10 @@ def _apply_net_value_axis(
     front)."""
     from types import SimpleNamespace
 
-    from .eig import channel_half_life
+    from .eig import information_half_life
     from .experiment_value import compute_experiment_net_value
 
-    half_life = channel_half_life(channel)
+    half_life = information_half_life(channel)
     surrogate = anchor["surrogate"]
     staged: list[tuple[CandidateEval, float, float, Any]] = []
     for c in cands:

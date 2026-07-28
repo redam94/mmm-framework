@@ -544,6 +544,13 @@ class EstimandPPCMixin:
             estimated = estimated_long_term_split(model)
             # Caveat-only otherwise (no multiplier); the LongTermSection applies the
             # optional long-term-multiplier scenario from the report config.
+            # Model-derived carryover half-life per channel. `build_long_term_facts`
+            # has always accepted `half_lives=`, but no caller ever passed it, so
+            # the classic report's half-life column was permanently empty. Read
+            # from the fitted kernel via the canonical per-draw reader, which is
+            # family-aware (geometric / delayed / weibull) — the old
+            # log(0.5)/log(alpha) shortcut is meaningless for a humped kernel.
+            half_lives = self._carryover_half_lives(model, channels)
             facts = build_long_term_facts(
                 channels,
                 bundle.adstock_curves,
@@ -551,12 +558,49 @@ class EstimandPPCMixin:
                 multiplier=None,
                 has_structural_funnel=has_funnel,
                 estimated=estimated,
+                half_lives=half_lives,
             )
             if facts is not None:
                 bundle.long_term = facts
         except Exception:  # noqa: BLE001 — reporting must never hard-fail
             logger.debug("long-term extraction skipped", exc_info=True)
         return bundle
+
+    @staticmethod
+    def _carryover_half_lives(model, channels: list[str]) -> dict[str, float]:
+        """Posterior-mean carryover half-life per channel, best-effort.
+
+        Uses the canonical per-draw reader, so a delayed or Weibull channel gets
+        its true cumulative-50% horizon rather than a decay constant that only
+        means anything for a geometric kernel. Channels the reader cannot
+        resolve are simply absent from the mapping — ``build_long_term_facts``
+        skips a missing or non-finite entry rather than inventing one.
+        """
+        if model is None or not channels:
+            return {}
+        try:
+            from ...transforms.carryover import (
+                carryover_half_life,
+                posterior_carryover_kernels,
+            )
+        except Exception:  # noqa: BLE001
+            return {}
+        out: dict[str, float] = {}
+        try:
+            kernels = posterior_carryover_kernels(model, list(channels))
+        except Exception:  # noqa: BLE001
+            return {}
+        for ch, k in (kernels or {}).items():
+            try:
+                if k is None or getattr(k, "status", "ok") != "ok":
+                    continue
+                hl = carryover_half_life(k.kernel)
+                mean_hl = float(np.nanmean(hl))
+                if np.isfinite(mean_hl):
+                    out[str(ch)] = mean_hl
+            except Exception:  # noqa: BLE001
+                continue
+        return out
 
     # -- evidence tier + identifiability gate (issue #102) --------------------
 

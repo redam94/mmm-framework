@@ -23,7 +23,7 @@ from typing import Any
 
 from mmm_framework.platform import sessions as sessions_store
 from mmm_framework.planning.eig import (
-    channel_half_life,
+    information_half_life,
     reexperiment_due,
 )
 
@@ -256,7 +256,7 @@ def build_calibration_coverage(
         tier = "model_only"
         retest_due = False
         eig_decayed = None
-        half_life = channel_half_life(name)
+        half_life = information_half_life(name)
         if ev is not None:
             tier = "calibrated"
             roi_sd = ch.get("roi_sd")
@@ -354,7 +354,7 @@ def build_priorities_payload(
         row["retest_due"] = False
         roi_sd, sigma_exp = ch.get("roi_sd"), ch.get("sigma_exp")
         if age_days is not None and roi_sd and sigma_exp:
-            hl = channel_half_life(name)
+            hl = information_half_life(name)
             row["retest_due"], row["eig_decayed"] = reexperiment_due(
                 float(roi_sd), age_days / 7.0, hl, float(sigma_exp)
             )

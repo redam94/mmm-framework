@@ -233,3 +233,60 @@ def test_real_fit_long_term_extracted():
     row = bundle.long_term["channels"][0]
     assert 0.0 <= row["immediate_pct"] <= 1.0
     assert abs(row["immediate_pct"] + row["carryover_pct"] - 1.0) < 1e-6
+
+
+class TestCarryoverHalfLifeWiring:
+    """`build_long_term_facts` always accepted `half_lives=`, but its only
+    caller never passed it, so the classic report's half-life column was
+    permanently empty (issue #218)."""
+
+    def _mixin(self):
+        from mmm_framework.reporting.extractors.mixins import EstimandPPCMixin
+
+        return EstimandPPCMixin
+
+    def test_returns_empty_without_a_model(self):
+        m = self._mixin()
+        assert m._carryover_half_lives(None, ["TV"]) == {}
+        assert m._carryover_half_lives(object(), []) == {}
+
+    def test_degrades_quietly_on_a_model_with_no_carryover(self):
+        """Reporting must never hard-fail: an unreadable model yields no
+        half-lives rather than an exception."""
+        m = self._mixin()
+        assert m._carryover_half_lives(object(), ["TV"]) == {}
+
+    def test_reads_the_posterior_kernel_when_available(self, monkeypatch):
+        import numpy as np
+
+        from mmm_framework.reporting.extractors import mixins as mod
+
+        class _K:
+            status = "ok"
+            # two draws, geometric-ish kernel
+            kernel = np.array([[1.0, 0.5, 0.25, 0.125]] * 2)
+
+        monkeypatch.setattr(
+            "mmm_framework.transforms.carryover.posterior_carryover_kernels",
+            lambda model, chans: {"TV": _K()},
+        )
+        out = mod.EstimandPPCMixin._carryover_half_lives(object(), ["TV"])
+        assert "TV" in out
+        assert np.isfinite(out["TV"]) and out["TV"] > 0
+
+    def test_skips_a_channel_the_reader_could_not_resolve(self, monkeypatch):
+        import numpy as np
+
+        from mmm_framework.reporting.extractors import mixins as mod
+
+        class _Bad:
+            status = "unsupported"          # e.g. a legacy blended-adstock fit
+            kernel = np.zeros((2, 4))
+
+        monkeypatch.setattr(
+            "mmm_framework.transforms.carryover.posterior_carryover_kernels",
+            lambda model, chans: {"TV": _Bad()},
+        )
+        # absent, not zero -- build_long_term_facts skips a missing entry rather
+        # than rendering a fabricated 0-week half-life
+        assert mod.EstimandPPCMixin._carryover_half_lives(object(), ["TV"]) == {}

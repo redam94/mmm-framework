@@ -153,9 +153,23 @@ def eig_monte_carlo(
 # ── Information decay & re-experimentation ────────────────────────────────────
 
 
-def channel_half_life(channel: str, overrides: dict[str, float] | None = None) -> float:
-    """Half-life (weeks) for a channel, by exact-name override first, then
-    keyword match of the channel name against the class table."""
+def information_half_life(
+    channel: str, overrides: dict[str, float] | None = None
+) -> float:
+    """How fast *evidence* about a channel goes stale, in weeks.
+
+    This is an **information**-decay half-life, not a media-carryover one. It
+    reads nothing from the model — it is a keyword table over the channel name
+    (see :data:`DEFAULT_HALF_LIVES_WEEKS`) answering "when is this channel's
+    last read old enough to re-test?".
+
+    Do not confuse it with
+    :func:`mmm_framework.transforms.carryover.carryover_half_life`, which is
+    per-draw, read from the fitted kernel, and answers "how long does a exposure
+    keep working?". The two legitimately disagree by ~10x, which is why this one
+    is no longer called ``channel_half_life``: ``planning`` exported two
+    similarly-named half-lives for the same channel meaning different things.
+    """
     if overrides and channel in overrides:
         return float(overrides[channel])
     name = channel.lower()
@@ -163,6 +177,27 @@ def channel_half_life(channel: str, overrides: dict[str, float] | None = None) -
         if key != "default" and key in name:
             return hl
     return DEFAULT_HALF_LIVES_WEEKS["default"]
+
+
+def channel_half_life(
+    channel: str, overrides: dict[str, float] | None = None
+) -> float:
+    """Deprecated alias for :func:`information_half_life`.
+
+    The old name did not say *which* half-life it meant, and `planning` sat one
+    import away from the model-derived carryover half-life.
+    """
+    import warnings
+
+    warnings.warn(
+        "channel_half_life() is deprecated; use information_half_life(). The "
+        "rename disambiguates it from the model-derived "
+        "transforms.carryover.carryover_half_life, which answers a different "
+        "question and differs by roughly 10x.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return information_half_life(channel, overrides)
 
 
 def decayed_sigma(

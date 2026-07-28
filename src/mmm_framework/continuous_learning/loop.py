@@ -823,9 +823,9 @@ def due_for_retest(
     ``lambda = ln2 / half_life``) rather than a private one. Returns
     ``(due, current_eig_nats)``.
     """
-    from mmm_framework.planning.eig import channel_half_life, reexperiment_due
+    from mmm_framework.planning.eig import information_half_life, reexperiment_due
 
-    half_life = channel_half_life(channel, half_life_overrides)
+    half_life = information_half_life(channel, half_life_overrides)
     return reexperiment_due(sigma_post, weeks_elapsed, half_life, sigma_exp)
 
 

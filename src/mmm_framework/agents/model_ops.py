@@ -2360,7 +2360,7 @@ def experiment_economics(
         # ── Net value: reallocation gain vs test loss (the headline figure) ──
         try:
             from mmm_framework.planning import compute_experiment_net_value
-            from mmm_framework.planning.eig import channel_half_life
+            from mmm_framework.planning.eig import information_half_life
 
             nv = compute_experiment_net_value(
                 channel=channel,
@@ -2368,7 +2368,7 @@ def experiment_economics(
                 evpi_kpi_units=evpi_portfolio,
                 opportunity_cost_result=_oc_res,
                 response_horizon_weeks=int(getattr(mmm, "n_periods", 0) or 0) or 26,
-                half_life_weeks=channel_half_life(channel),
+                half_life_weeks=information_half_life(channel),
                 model_anchored=bool(payload.get("anchor", {}).get("evoi") is not None),
             )
             payload["net_value"] = nv.to_dict()
