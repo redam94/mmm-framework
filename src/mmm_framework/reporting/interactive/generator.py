@@ -31,7 +31,7 @@ from ..augur_theme import AUGUR_FONTS_LINK, MASTHEAD_LOGO_SVG, augur_css
 from ..charts.base import NumpyEncoder
 from ..charts.prior import create_prior_predictive_fan, create_prior_stat_distribution
 from ..config import ChannelColors, ColorPalette, ColorScheme, ReportConfig
-from .facts import interactive_report_facts
+from .facts import _require_mmm, interactive_report_facts
 from .insights import build_interactive_insights
 from .script import INTERACTIVE_REPORT_JS
 
@@ -168,6 +168,11 @@ class InteractiveReportGenerator:
             raise ValueError(
                 "InteractiveReportGenerator needs a model or precomputed facts."
             )
+        # Refuse a non-MMM family up front rather than failing on the first
+        # MMM-only attribute during fact extraction. Skipped when `facts` are
+        # supplied, since those are already-extracted numbers.
+        if facts is None:
+            _require_mmm(model)
         self.model = model
         self.config = config or ReportConfig(
             title="MMM Results Report",
