@@ -74,6 +74,18 @@ class TestComputeRunMetrics:
         assert p["evpi"] >= 0
         json.dumps(metrics)  # must round-trip without numpy leakage
 
+    def test_portfolio_states_which_objective_produced_the_uplift(self, metrics):
+        """`expected_uplift` is denominated by the allocator's objective, so the
+        number has to carry it — otherwise nothing downstream can tell a
+        profit-objective run from a KPI-uplift one (#221)."""
+        p = metrics["portfolio"]
+        assert p["objective"] == "mean"
+        assert p["mode"] == "fixed"
+        assert p["objective_label"]
+        # No valuation under a fixed budget: a positive constant cannot move the
+        # argmax there, so recording one would imply a dependence that is absent.
+        assert p["value_source"] is None
+
     def test_response_curves_block(self, metrics):
         rc = metrics["response_curves"]
         mults = rc["multipliers"]

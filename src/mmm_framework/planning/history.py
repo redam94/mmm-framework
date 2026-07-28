@@ -19,7 +19,7 @@ import numpy as np
 from .budget import compute_response_curves, optimize_budget
 from .priority import compute_experiment_priorities
 
-RUN_METRICS_SCHEMA_VERSION = 2
+RUN_METRICS_SCHEMA_VERSION = 3
 
 
 def compute_run_metrics(
@@ -174,6 +174,19 @@ def compute_run_metrics(
                 if marginal_total_den > 0
                 else 0.0
             ),
+            # WHICH OBJECTIVE produced `expected_uplift`. It means "KPI left on
+            # the table versus the optimum", a quantity defined BY the objective
+            # and the mode — a profit-objective run and a KPI-uplift run put
+            # different quantities under one name. Stamped so the trajectory can
+            # refuse rather than assume; `compare_runs` and the Performance
+            # charts read it. Every run recorded before schema v3 was produced by
+            # the defaults below (this function has always called
+            # `optimize_budget` with no objective arguments), so absence reads as
+            # mean/fixed rather than unknown.
+            "objective": optimization.objective,
+            "objective_label": optimization.objective_label,
+            "mode": optimization.mode,
+            "value_source": optimization.value_source,
             # Misallocation proxy: what the current allocation leaves on the
             # table vs the optimum, per response window (median across draws).
             "expected_uplift": float(optimization.expected_uplift),

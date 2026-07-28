@@ -172,6 +172,16 @@ def build_history_series(project_id: str) -> dict[str, Any]:
                 "v_current": p.get("v_current"),
                 "prob_positive_uplift": p.get("prob_positive_uplift"),
                 "total_spend": p.get("total_spend"),
+                # WHICH OBJECTIVE this point's `expected_uplift` is denominated
+                # in. Absence reads as the historical default — every run
+                # predating run-metrics schema v3 was optimized mean/fixed. The
+                # trajectory chart uses this to refuse to draw one line through
+                # points that measure different quantities.
+                "objective": p.get("objective") or "mean",
+                "objective_label": p.get("objective_label")
+                or "expected KPI (posterior mean)",
+                "mode": p.get("mode") or "fixed",
+                "value_source": p.get("value_source"),
             }
         )
 

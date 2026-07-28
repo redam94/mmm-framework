@@ -165,6 +165,34 @@ _COMPARE_PORTFOLIO_FIELDS = (
     "expected_uplift",
 )
 
+#: Portfolio fields whose MEANING is set by the allocator's objective, so a
+#: delta across two runs optimized differently is arithmetic on two different
+#: quantities. `expected_uplift` is "KPI left on the table versus the optimum" —
+#: under a profit objective that is dollars of forgone profit, under the default
+#: it is KPI units.
+_OBJECTIVE_DEPENDENT_FIELDS = ("expected_uplift",)
+
+#: Absence reads as the historical default, the `diagnostics/provenance.py`
+#: convention: every run predating run-metrics schema v3 was produced by
+#: `compute_run_metrics`, which has always called `optimize_budget` with no
+#: objective arguments. So a missing key is not "unknown" — it is mean/fixed.
+_DEFAULT_OBJECTIVE = ("mean", "fixed", None)
+
+
+def _objective_key(portfolio: dict[str, Any]) -> tuple[str, str, str | None]:
+    return (
+        str(portfolio.get("objective") or _DEFAULT_OBJECTIVE[0]),
+        str(portfolio.get("mode") or _DEFAULT_OBJECTIVE[1]),
+        portfolio.get("value_source"),
+    )
+
+
+def _describe_objective(portfolio: dict[str, Any]) -> str:
+    obj, mode, source = _objective_key(portfolio)
+    label = portfolio.get("objective_label") or obj
+    src = f", valued from {source}" if source else ""
+    return f"{label} ({mode} budget{src})"
+
 
 def _delta_cell(a: Any, b: Any) -> dict[str, Any]:
     delta = (
@@ -207,6 +235,23 @@ def compare_runs(run_a: str, run_b: str) -> dict[str, Any]:
         f: _delta_cell(pa.get(f), pb.get(f)) for f in _COMPARE_PORTFOLIO_FIELDS
     }
 
+    # Refuse the delta rather than compute it, when the two runs optimized
+    # different quantities. The values still render side by side — they are each
+    # correct for their own run — but `delta` is dropped and the reason is
+    # carried, because subtracting forgone profit from forgone KPI produces a
+    # number with no unit and a confident sign.
+    comparable = _objective_key(pa) == _objective_key(pb)
+    if not comparable:
+        reason = (
+            "These runs optimized different objectives — "
+            f"A: {_describe_objective(pa)}; B: {_describe_objective(pb)}. "
+            "Expected uplift means 'left on the table versus the optimum', which "
+            "is denominated by the objective, so the two are not differences of "
+            "one quantity. Re-run both under one objective to compare them."
+        )
+        for f in _OBJECTIVE_DEPENDENT_FIELDS:
+            portfolio[f] = {**portfolio[f], "delta": None, "incomparable": reason}
+
     return {
         "run_a": {
             "run_id": run_a,
@@ -220,6 +265,11 @@ def compare_runs(run_a: str, run_b: str) -> dict[str, Any]:
         },
         "channels": channels,
         "portfolio": portfolio,
+        "objective": {
+            "a": _describe_objective(pa),
+            "b": _describe_objective(pb),
+            "comparable": comparable,
+        },
     }
 
 

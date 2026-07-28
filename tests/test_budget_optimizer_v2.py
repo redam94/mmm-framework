@@ -276,3 +276,44 @@ def test_optimize_budget_op_frontier_and_goal_seek():
     summ = out["dashboard"]["budget_optimization"]
     assert "frontier" in summ and "goal_seek" in summ
     assert summ["objective"] == "mean"
+
+
+# ── objective provenance (#221) ─────────────────────────────────────────────
+
+
+def test_free_mode_records_the_valuation_it_used():
+    """A fund-to-breakeven plan trades KPI against spend, so its recommendation
+    depends on what one KPI unit is worth. The plan must say so — and say where
+    the number came from — before anything compares it to another plan."""
+    c = _curves()
+    res = optimize_budget(
+        curves=c, mode="free", value_per_kpi=2.5, value_source="preference"
+    )
+    assert res.value_per_kpi == 2.5
+    assert res.value_source == "preference"
+    assert res.objective_key() == ("mean", "free", "preference")
+
+
+def test_fixed_mode_records_no_valuation():
+    """A positive constant cannot move the argmax of a fixed-budget allocation,
+    so recording one would assert a dependence that is not there — and would
+    then make two identical plans look incomparable."""
+    c = _curves()
+    res = optimize_budget(
+        curves=c, total_budget=250.0, value_per_kpi=2.5, value_source="preference"
+    )
+    assert res.value_per_kpi is None
+    assert res.value_source is None
+    assert res.objective_key() == ("mean", "fixed", None)
+
+    plain = optimize_budget(curves=c, total_budget=250.0)
+    assert plain.objective_key() == res.objective_key()
+
+
+def test_objective_key_separates_plans_that_measure_different_things():
+    c = _curves()
+    fixed = optimize_budget(curves=c, total_budget=250.0)
+    downside = optimize_budget(curves=c, total_budget=250.0, objective="p10")
+    free = optimize_budget(curves=c, mode="free", value_per_kpi=1.0, value_source="param")
+    keys = {fixed.objective_key(), downside.objective_key(), free.objective_key()}
+    assert len(keys) == 3

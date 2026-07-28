@@ -444,6 +444,24 @@ class BudgetOptimizationResult:
     mode: str = "fixed"
     shadow_price: float | None = None
     marginal_roas: dict[str, float] | None = None
+    # What one KPI unit was taken to be worth, and where that came from (#215,
+    # #221). Load-bearing only in mode="free", which trades KPI against spend;
+    # in mode="fixed" a positive constant does not move the argmax, so it is
+    # recorded as `value_source=None` rather than a number that implies the plan
+    # depended on it. Carried so a persisted plan can say which objective it
+    # optimized before anything deltas it against another plan.
+    value_per_kpi: float | None = None
+    value_source: str | None = None
+
+    def objective_key(self) -> tuple[str, str, str | None]:
+        """What must match before two runs' uplifts may be compared.
+
+        ``expected_uplift`` means "KPI left on the table versus the optimum" —
+        a quantity defined *by* the objective and the mode. A profit-objective
+        run and a KPI-uplift run put different quantities under one name, so a
+        delta between them is arithmetic on two different units.
+        """
+        return (self.objective, self.mode, self.value_source)
 
 
 def optimize_budget(
@@ -461,6 +479,7 @@ def optimize_budget(
     objective: str = "mean",
     mode: str = "fixed",
     value_per_kpi: float | None = None,
+    value_source: str | None = None,
     n_steps: int = 400,
     max_draws: int = 200,
     random_seed: int | None = None,
@@ -491,6 +510,10 @@ def optimize_budget(
             breakeven (marginal value = $1), the total becomes an output (#139).
         value_per_kpi: $ value of one KPI unit (for breakeven / marginal ROAS
             when the KPI is not already revenue). Default 1.0.
+        value_source: where ``value_per_kpi`` came from (``finance.ResolvedValue.
+            source``). Recorded on the result under ``mode="free"`` so a
+            persisted plan states the objective it optimized; it does not affect
+            the allocation.
         n_steps: greedy increments (granularity of the default allocation).
         max_draws: posterior draws used for curves and stability analysis.
     """
@@ -703,6 +726,11 @@ def optimize_budget(
         mode=mode,
         shadow_price=shadow_price,
         marginal_roas=marginal_roas,
+        # Only mode="free" trades KPI against spend, so only there did the
+        # valuation shape the plan. Recording it under "fixed" would imply the
+        # allocation depended on a number that cannot move its argmax.
+        value_per_kpi=(float(value_per_kpi) if mode == "free" else None),
+        value_source=(value_source if mode == "free" else None),
     )
 
 

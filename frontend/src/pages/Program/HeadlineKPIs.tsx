@@ -1,5 +1,6 @@
 import { StatHero } from '../../components/ui';
 import { useCalibrationCoverage, useProjectHistory } from '../../api/hooks/useMeasurement';
+import { objectiveLabel, sameObjective } from '../../lib/objective';
 
 function pctDelta(first: number | null | undefined, last: number | null | undefined): number | null {
   if (first == null || last == null || !Number.isFinite(first) || Math.abs(first) < 1e-12) return null;
@@ -32,9 +33,19 @@ export function HeadlineKPIs({ projectId }: { projectId: string | null }) {
             ? Math.round(last.expected_uplift).toLocaleString()
             : '—'
         }
-        delta={pctDelta(first?.expected_uplift, last.expected_uplift)}
+        // Suppressed across an objective change: forgone KPI and forgone profit
+        // are different quantities, so their percent change means nothing (#221).
+        delta={
+          sameObjective(first, last)
+            ? pctDelta(first?.expected_uplift, last.expected_uplift)
+            : null
+        }
         increaseIsGood={false}
-        hint="KPI left vs optimal allocation"
+        hint={
+          sameObjective(first, last)
+            ? 'KPI left vs optimal allocation'
+            : `no trend: objective changed to ${objectiveLabel(last)}`
+        }
       />
       <StatHero
         label="Spend experiment-backed"

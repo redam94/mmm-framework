@@ -126,3 +126,26 @@ def test_server_resolver_delegates_to_the_single_chain():
     # and the refusal is scoped to free mode only
     refusal = inspect.getsource(main._resolved_value_per_kpi)
     assert 'body.mode == "free"' in refusal
+
+
+def test_server_resolver_returns_the_source_alongside_the_value():
+    """The plan must be able to state which objective it optimized, and a
+    dollar-denominated objective is only defensible if it names where the
+    exchange rate came from (#221). The value alone is not enough."""
+    import mmm_framework_server.main as main
+
+    class _ExplicitBody:
+        mode = "free"
+        value_per_kpi = 4.0
+
+    # An explicit number from the caller IS the highest-precedence source.
+    assert main._resolved_value_per_kpi("p", _ExplicitBody()) == (4.0, "param")
+
+    class _FixedBody:
+        mode = "fixed"
+        value_per_kpi = None
+
+    # Fixed mode never refuses, and reports whatever resolved (possibly nothing)
+    # without inventing a source for it.
+    value, source = main._resolved_value_per_kpi("p", _FixedBody())
+    assert source is None or isinstance(source, str)

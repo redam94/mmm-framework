@@ -1163,6 +1163,7 @@ def optimize_budget(
     objective: str = "mean",
     mode: str = "fixed",
     value_per_kpi: float = 1.0,
+    value_source: str | None = None,
     frontier: bool | dict | None = None,
     target_kpi: float | None = None,
     max_draws: int = 200,
@@ -1209,6 +1210,7 @@ def optimize_budget(
             objective=objective,
             mode=mode,
             value_per_kpi=value_per_kpi,
+            value_source=value_source,
             max_draws=max_draws,
             random_seed=42,
         )
@@ -1313,6 +1315,8 @@ def optimize_budget(
         "objective": getattr(res, "objective", "mean"),
         "objective_label": getattr(res, "objective_label", "expected KPI"),
         "mode": getattr(res, "mode", "fixed"),
+        "value_per_kpi": getattr(res, "value_per_kpi", None),
+        "value_source": getattr(res, "value_source", None),
         "shadow_price": (
             None
             if getattr(res, "shadow_price", None) is None
@@ -1478,6 +1482,7 @@ def plan_budget(
     objective: str = "mean",
     mode: str = "fixed",
     value_per_kpi: float = 1.0,
+    value_source: str | None = None,
     frontier: bool | dict | None = None,
     target_kpi: float | None = None,
     by_geo: bool = False,
@@ -1537,6 +1542,7 @@ def plan_budget(
         objective=objective,
         mode=mode,
         value_per_kpi=value_per_kpi,
+        value_source=value_source,
     )
 
     try:
@@ -1610,6 +1616,12 @@ def plan_budget(
         "objective": getattr(res, "objective", "mean"),
         "objective_label": getattr(res, "objective_label", "expected KPI"),
         "mode": getattr(res, "mode", "fixed"),
+        # What one KPI unit was taken to be worth, and where it came from —
+        # present only under mode="free", the only mode whose plan depends on it
+        # (#215, #221). A persisted plan must state the objective it optimized
+        # before anything deltas it against another plan.
+        "value_per_kpi": getattr(res, "value_per_kpi", None),
+        "value_source": getattr(res, "value_source", None),
         "shadow_price": (
             None
             if getattr(res, "shadow_price", None) is None

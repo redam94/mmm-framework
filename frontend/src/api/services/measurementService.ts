@@ -122,6 +122,13 @@ export interface PortfolioPoint {
   v_current: number | null;
   prob_positive_uplift: number | null;
   total_spend: number | null;
+  /** Which allocator objective `expected_uplift` is denominated in. Absent on
+   *  runs predating run-metrics schema v3, where it reads as mean/fixed — see
+   *  lib/objective.ts. */
+  objective?: string | null;
+  objective_label?: string | null;
+  mode?: string | null;
+  value_source?: string | null;
 }
 
 export interface HistoryPayload {

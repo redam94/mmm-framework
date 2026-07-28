@@ -85,3 +85,89 @@ def test_compare_runs_missing_metrics_raises(store):
     store.record_run_metrics("runA", _metrics(2.0, 1.0, 200.0), project_id="p1")
     with pytest.raises(ValueError, match="No run metrics"):
         runs_mod.compare_runs("runA", "does-not-exist")
+
+
+# ---------------------------------------------------------------------------
+# objective provenance (#221)
+#
+# `expected_uplift` means "left on the table versus the optimum" — a quantity
+# defined BY the allocator's objective and mode. Under the default it is KPI
+# units; under a profit objective it is dollars of forgone profit. Subtracting
+# one from the other yields a number with no unit and a confident sign.
+# ---------------------------------------------------------------------------
+
+
+def _metrics_with_objective(uplift, **objective):
+    m = _metrics(2.0, 1.0, 200.0)
+    m["portfolio"]["expected_uplift"] = uplift
+    m["portfolio"].update(objective)
+    return m
+
+
+def test_uplift_deltas_when_the_objective_matches(store):
+    store.record_run_metrics(
+        "runA", _metrics_with_objective(500.0, objective="mean", mode="fixed"), project_id="p1"
+    )
+    store.record_run_metrics(
+        "runB", _metrics_with_objective(300.0, objective="mean", mode="fixed"), project_id="p1"
+    )
+    cmp = runs_mod.compare_runs("runA", "runB")
+    assert cmp["portfolio"]["expected_uplift"]["delta"] == pytest.approx(-200.0)
+    assert cmp["objective"]["comparable"] is True
+    assert "incomparable" not in cmp["portfolio"]["expected_uplift"]
+
+
+def test_uplift_delta_is_refused_across_objectives(store):
+    store.record_run_metrics(
+        "runA", _metrics_with_objective(500.0, objective="mean", mode="fixed"), project_id="p1"
+    )
+    store.record_run_metrics(
+        "runB",
+        _metrics_with_objective(
+            300.0,
+            objective="cvar5",
+            objective_label="downside KPI (worst 5%)",
+            mode="free",
+            value_source="preference",
+        ),
+        project_id="p1",
+    )
+    cmp = runs_mod.compare_runs("runA", "runB")
+    cell = cmp["portfolio"]["expected_uplift"]
+    # Both values still render — each is correct for its own run.
+    assert cell["a"] == 500.0 and cell["b"] == 300.0
+    # The DELTA is refused, with a stated reason.
+    assert cell["delta"] is None
+    assert "different objectives" in cell["incomparable"]
+    assert cmp["objective"]["comparable"] is False
+    assert "free budget" in cmp["objective"]["b"]
+
+    # Objective-independent portfolio fields still delta normally.
+    assert cmp["portfolio"]["total_spend"]["delta"] == pytest.approx(0.0)
+
+
+def test_a_mode_change_alone_refuses(store):
+    """Fixed-budget reallocation and fund-to-breakeven leave different amounts
+    on the table by construction, even under the same risk objective."""
+    store.record_run_metrics(
+        "runA", _metrics_with_objective(500.0, objective="mean", mode="fixed"), project_id="p1"
+    )
+    store.record_run_metrics(
+        "runB",
+        _metrics_with_objective(300.0, objective="mean", mode="free", value_source="param"),
+        project_id="p1",
+    )
+    assert runs_mod.compare_runs("runA", "runB")["portfolio"]["expected_uplift"]["delta"] is None
+
+
+def test_absence_reads_as_the_historical_default(store):
+    """Runs predating schema v3 carry no objective. `compute_run_metrics` has
+    always called `optimize_budget` with no objective arguments, so they ARE
+    mean/fixed — absence must not be read as "unknown" and refuse everything."""
+    store.record_run_metrics("runA", _metrics_with_objective(500.0), project_id="p1")
+    store.record_run_metrics(
+        "runB", _metrics_with_objective(300.0, objective="mean", mode="fixed"), project_id="p1"
+    )
+    cmp = runs_mod.compare_runs("runA", "runB")
+    assert cmp["objective"]["comparable"] is True
+    assert cmp["portfolio"]["expected_uplift"]["delta"] == pytest.approx(-200.0)
