@@ -1002,6 +1002,11 @@ class MMMReportGenerator:
             padding: 0.75rem 1rem;
             text-align: left;
             border-bottom: 1px solid var(--color-border);
+            /* `anywhere` (not `break-word`) because only `anywhere` shrinks a
+               cell's min-content width: a long unbreakable token (a 90-char
+               channel name) would otherwise set the table's minimum width,
+               widen it past the page and scroll the whole document sideways. */
+            overflow-wrap: anywhere;
         }}
 
         .data-table th {{
