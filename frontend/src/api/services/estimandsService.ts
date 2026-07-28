@@ -72,7 +72,18 @@ export interface EstimandGroup {
   kind: string;
   units: string;
   is_ratio: boolean;
-  reference: number;
+  /** The grading bar. `null` when none is defensible — a cost per outcome with
+   *  no declared value for an outcome. Never substitute 0. */
+  reference: number | null;
+  /** 'higher_is_better' | 'lower_is_better' — from finance.evidence. */
+  direction?: string;
+  /** Server-minted sentence naming the bar, e.g. "vs 1.0 (break-even)". Render
+   *  this rather than deriving one from `is_ratio`: that derivation printed
+   *  "vs 0 (no effect)" beside a profit break-even of 2.5. */
+  reference_hint?: string;
+  reference_basis?: string;
+  /** Why the rows are ungraded, when `reference` is null. */
+  reference_note?: string | null;
   channels: string[];
   models: EstimandModel[];
   n_models: number;

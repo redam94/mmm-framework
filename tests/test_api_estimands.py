@@ -222,6 +222,86 @@ def test_contribution_kind_uses_zero_reference():
     assert g["models"][0]["rows"][0]["evidence"] == "strong"  # lower 800 > 0
 
 
+# ---------------------------------------------------------------------------
+# cost-per-outcome grading (#221)
+#
+# Before this, `cost_per_conversion` (kind "cost_per_outcome", units
+# "$/conversion") fell to the else-branch: reference 0.0, higher-is-better. A
+# cost is above zero by construction, so EVERY channel read "Strong" — a $45
+# CPA and a $2 CPA got the same verdict.
+# ---------------------------------------------------------------------------
+
+
+def _cpa_group(reference=None, lo=30.0, hi=62.0):
+    extra = {} if reference is None else {"reference": reference}
+    rows = [
+        _row(
+            "cost_per_conversion",
+            "TV",
+            "cost_per_outcome",
+            "$/conversion",
+            (lo + hi) / 2,
+            lo,
+            hi,
+            **extra,
+        )
+    ]
+    out = E.group_estimands([_run("a", "conversions", ["TV"], rows, 100.0)])
+    return out["groups"][0]
+
+
+def test_cost_per_outcome_is_not_a_ratio_and_runs_the_other_way():
+    assert E.is_ratio_kind("cost_per_outcome", "$/conversion") is False
+    g = _cpa_group()
+    assert g["direction"] == "lower_is_better"
+    assert g["is_ratio"] is False
+
+
+def test_cost_with_no_declared_value_is_ungraded_not_strong():
+    """The pre-fix verdict is pinned so a 'simplification' cannot restore it."""
+    g = _cpa_group()
+    assert g["reference"] is None, "zero is not a break-even cost — nothing beats free"
+    assert g["models"][0]["rows"][0]["evidence"] == "na"
+    assert g["reference_note"], "an ungraded cell must say why"
+    # What the old rule did with the same numbers, kept as the regression pin.
+    assert (
+        E.classify_evidence(status="ok", mean=46.0, lower=30.0, upper=62.0, reference=0.0)
+        == "strong"
+    )
+
+
+def test_cost_is_graded_against_the_value_of_one_outcome():
+    """A conversion worth $20: a $30–62 CPA is bad, a $1–3 CPA is good."""
+    assert _cpa_group(reference=20.0)["models"][0]["rows"][0]["evidence"] == "below"
+    assert (
+        _cpa_group(reference=20.0, lo=1.0, hi=3.0)["models"][0]["rows"][0]["evidence"]
+        == "strong"
+    )
+    assert (
+        _cpa_group(reference=20.0, lo=12.0, hi=31.0)["models"][0]["rows"][0]["evidence"]
+        == "uncertain"
+    )
+
+
+def test_reference_hint_is_server_minted_and_matches_the_bar_used():
+    """The UI printed "vs 0 (no effect)" beside any bar that was not 1.0 —
+    including a profit break-even of 2.5 it was actually grading against."""
+    rows = [_row("contribution_roi", "TV", "roi", "ROI", 1.8, 1.2, 2.4, reference=2.5)]
+    g = E.group_estimands([_run("a", "revenue", ["TV"], rows, 100.0)])["groups"][0]
+    assert g["reference"] == 2.5
+    assert "2.5" in g["reference_hint"]
+    # 1.2–2.4 clears 1.0 but lies entirely below the profit bar: "Scale" on a
+    # revenue basis, "Reduce" on a profit one. That is the tier flip #221 exists
+    # to keep consistent, and the hint must name the bar actually used.
+    assert g["models"][0]["rows"][0]["evidence"] == "below"
+
+    plain = E.group_estimands(
+        [_run("b", "revenue", ["TV"], [_row("contribution_roi", "TV", "roi", "ROI", 2.0, 1.5, 2.6)], 100.0)]
+    )["groups"][0]
+    assert plain["reference_hint"] == "vs 1.0 (break-even)"
+    assert plain["reference_note"] is None
+
+
 def test_unsupported_rows_are_na_and_not_counted_as_data():
     rows = [
         _row(

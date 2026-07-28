@@ -7,6 +7,8 @@ Tests cover:
 - Section registry
 """
 
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -831,6 +833,55 @@ class TestEstimandsSection:
         html = section.render()
         assert "Strong" in html  # TV ROI CI [1.4, 2.9] excludes 1.0
         assert "Uncertain" in html  # Search ROI CI [0.3, 1.3] straddles 1.0
+
+    def _cpa_html(self, sample_config, *, reference=None, lower=30.0, upper=62.0):
+        bundle = MMMDataBundle()
+        bundle.channel_names = ["TV"]
+        row = {
+            "mean": (lower + upper) / 2,
+            "lower": lower,
+            "upper": upper,
+            "kind": "cost_per_outcome",
+            "units": "$/conversion",
+            "hdi_prob": 0.94,
+        }
+        if reference is not None:
+            row["reference"] = reference
+        bundle.estimands = {"cost_per_conversion:TV": row}
+        html_out = EstimandsSection(
+            data=bundle,
+            config=sample_config,
+            section_config=SectionConfig(enabled=True),
+        ).render()
+        # The verdict lives in the row's status cell; the prose below the table
+        # legitimately contains the word "Strong", so assert on the cell.
+        verdicts = re.findall(
+            r'<td class="(?:positive|negative|uncertain)">([^<]+)</td>', html_out
+        )
+        return html_out, verdicts
+
+    def test_cost_per_outcome_without_a_value_is_not_strong(self, sample_config):
+        """A cost is above zero by construction, so grading it against 0 marked
+        every CPA "Strong" — a $45 one and a $2 one alike (#221)."""
+        html_out, verdicts = self._cpa_html(sample_config)
+        assert verdicts == ["No reference"]
+        # and the table says why, rather than leaving an unexplained blank
+        assert "what one outcome is worth" in html_out
+
+    def test_cost_per_outcome_grades_against_the_value_of_one_outcome(
+        self, sample_config
+    ):
+        """A conversion worth $20: $30–62 is adverse, $1–3 is strong."""
+        # "Above reference" — NOT "Below reference": the cost is above the bar,
+        # and the literal token would read backwards for a lower-is-better metric.
+        assert self._cpa_html(sample_config, reference=20.0)[1] == ["Above reference"]
+        assert self._cpa_html(
+            sample_config, reference=20.0, lower=1.0, upper=3.0
+        )[1] == ["Strong"]
+
+    def test_cost_per_outcome_renders_as_money(self, sample_config):
+        """"46.000" is not how a cost per conversion reads."""
+        assert "$46" in self._cpa_html(sample_config, reference=20.0)[0]
 
     def test_skips_unsupported_none_mean(self, sample_config):
         bundle = MMMDataBundle()

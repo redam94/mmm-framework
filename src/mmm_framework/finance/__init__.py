@@ -24,6 +24,15 @@ web, no LLM — planning, agents and the server all import it.
 
 from __future__ import annotations
 
+from .evidence import (
+    HIGHER_IS_BETTER,
+    LOWER_IS_BETTER,
+    EvidenceReference,
+    classify_evidence,
+    is_cost_kind,
+    is_ratio_kind,
+    resolve_reference,
+)
 from .valuation import (
     KpiKind,
     KpiValuation,
@@ -33,9 +42,16 @@ from .valuation import (
 )
 
 __all__ = [
+    "HIGHER_IS_BETTER",
+    "LOWER_IS_BETTER",
+    "EvidenceReference",
     "KpiKind",
     "KpiValuation",
     "ResolvedValue",
     "UnresolvedValueError",
+    "classify_evidence",
+    "is_cost_kind",
+    "is_ratio_kind",
     "kpi_to_dollars",
+    "resolve_reference",
 ]

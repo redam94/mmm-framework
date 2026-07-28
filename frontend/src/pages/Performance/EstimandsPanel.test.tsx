@@ -164,6 +164,70 @@ describe('EstimandsPanel', () => {
     expect(screen.getByText('Comparable · 3 models')).toBeInTheDocument();
   });
 
+  // ---- cost metrics + the reference hint (#221) -------------------------
+  //
+  // The hint used to be derived from `is_ratio`, so it printed "vs 0 (no
+  // effect)" beside any bar that was not 1.0 — including a profit break-even
+  // the grading actually used. It is now server-minted.
+
+  function costPayload(overrides: Partial<EstimandGroup>): ProjectEstimands {
+    const c = cell('TV', 46, 'below');
+    c.units = '$/conversion';
+    const group: EstimandGroup = {
+      key: 'cost_per_conversion|||conversions',
+      estimand: 'cost_per_conversion',
+      label: 'Cost per conversion',
+      kpi: 'conversions',
+      kind: 'cost_per_outcome',
+      units: '$/conversion',
+      is_ratio: false,
+      reference: 20,
+      direction: 'lower_is_better',
+      reference_hint: 'vs 20.00 (break-even cost)',
+      reference_basis: 'declared',
+      reference_note: null,
+      channels: ['TV'],
+      models: [model('r1', 2000, [c])],
+      n_models: 1,
+      n_models_with_data: 1,
+      ...overrides,
+    };
+    return {
+      runs: [runSummary('r1', 'conversions', 'm1', true)],
+      kpis: ['conversions'],
+      groups: [group],
+    };
+  }
+
+  it('renders the server-minted reference hint, not a derived one', () => {
+    useProjectEstimands.mockReturnValue({ data: costPayload({}), isLoading: false, isError: false });
+    render(<EstimandsPanel projectId="p" />);
+    expect(screen.getByText(/vs 20\.00 \(break-even cost\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/no effect/)).not.toBeInTheDocument();
+  });
+
+  it('labels an adverse cost "Above ref", since below its bar is the good side', () => {
+    useProjectEstimands.mockReturnValue({ data: costPayload({}), isLoading: false, isError: false });
+    render(<EstimandsPanel projectId="p" />);
+    expect(screen.getByLabelText('Above ref')).toBeInTheDocument();
+  });
+
+  it('states why an ungraded cost is ungraded', () => {
+    const c = cell('TV', 46, 'na');
+    c.units = '$/conversion';
+    const data = costPayload({
+      reference: null,
+      reference_hint: 'no break-even cost declared',
+      reference_basis: 'unresolved',
+      reference_note: 'A cost per outcome is only good or bad relative to what one outcome is worth.',
+      models: [model('r1', 2000, [c])],
+    });
+    useProjectEstimands.mockReturnValue({ data, isLoading: false, isError: false });
+    render(<EstimandsPanel projectId="p" />);
+    expect(screen.getByText(/only good or bad relative to/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Strong')).not.toBeInTheDocument();
+  });
+
   it('renders the evidence-tier chip + legend (issue #124)', () => {
     const tvCell = cell('TV', 2.1, 'strong');
     tvCell.tier = tier('experiment-validated', 'Validated');
