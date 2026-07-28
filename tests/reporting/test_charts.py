@@ -232,6 +232,35 @@ class TestChartUtilities:
         parsed = json.loads(result)
         assert parsed["arr"] == [1, 2, 3]
 
+    def test_to_json_escapes_script_close(self):
+        """``</`` must never survive into an inline <script> block.
+
+        Callers interpolate this straight into ``<script>``; an unescaped
+        ``</script>`` in the payload closes the block and the rest of the
+        document parses as HTML. Control and geography names reach chart
+        payloads and are not constrained to PyMC RV-name rules, so they can
+        carry it. See GHSA-7q6v-xpwm-4937.
+        """
+        payload = {"name": "</script><img src=x onerror=alert(1)>"}
+        result = _to_json(payload)
+        assert "</script>" not in result
+        assert "</" not in result
+        assert "<\\/script>" in result
+        # ...and it must still decode to the ORIGINAL string, so Plotly is
+        # handed byte-identical data (``\/`` is a legal JSON escape).
+        assert json.loads(result) == payload
+
+    def test_to_json_script_escape_survives_plotly_div(self):
+        """The guard holds through the real embedding path, not just _to_json."""
+        div = create_plotly_div(
+            [{"type": "bar", "x": ["</script><img src=x onerror=alert(1)>"], "y": [1]}],
+            {"title": {"text": "</script>"}},
+            "chartX",
+        )
+        assert "<script>" in div  # the div really is an inline script block
+        # exactly one opening and one closing tag -- no premature close
+        assert div.count("</script>") == 1
+
     def test_hex_to_rgb_conversion(self):
         """Test hex to RGB conversion."""
         result = _hex_to_rgb("#FF0000")
