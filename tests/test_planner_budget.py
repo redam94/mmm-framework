@@ -645,3 +645,85 @@ class TestForecastOp:
             m, None, channel_budgets={c: 800.0 for c in w.channels}, n_periods=8
         )
         assert res["error"] and "planning assumption" in res["error"]
+
+
+# ---------------------------------------------------------------------------
+# Non-weekly cadences (#264 follow-up)
+#
+# `_forward_calendar` advanced by the raw gap between the last two periods. A
+# month is not a fixed number of days, so a monthly panel ending 2025-07-01 got
+# a plan starting 2025-07-31 instead of 2025-08-01 — labels that miss a monthly
+# delivery feed, so the join falls back to POSITIONAL, which is the failure the
+# derivation exists to avoid. Measured on a ramped 3-month plan with delivery
+# for months 2-3: +4.3% "on-track" reported where the truth is +41.2%
+# "over-pacing" — the status itself flips, not merely the magnitude.
+# ---------------------------------------------------------------------------
+
+
+class TestNonWeeklyCadence:
+    def _cal(self, freq, periods=6, n_plan=3):
+        from mmm_framework.agents.model_ops import _forward_calendar
+
+        m = _DatedMMM()
+        m.panel.index = pd.date_range("2025-01-06", periods=periods, freq=freq)
+        return m.panel.index[-1], _forward_calendar(m, n_plan, {})
+
+    def test_a_monthly_panel_starts_on_the_next_month_not_30_days_later(self):
+        last, cal = self._cal("MS")
+        assert str(last.date()) == "2025-07-01"
+        assert cal.cadence == "monthly"
+        assert cal.periods() == ["2025-08-01", "2025-09-01", "2025-10-01"]
+
+    def test_a_month_end_panel_stays_on_month_ends(self):
+        """PlanningCalendar is deliberately start-anchored (#216), so advancing
+        a 06-30 by one month gives 07-30 — not the 07-31 a month-end delivery
+        feed carries."""
+        last, cal = self._cal("ME")
+        assert str(last.date()) == "2025-06-30"
+        assert cal.periods() == ["2025-07-31", "2025-08-31", "2025-09-30"]
+
+    def test_daily_and_weekly_are_unchanged(self):
+        assert self._cal("D")[1].periods() == [
+            "2025-01-12",
+            "2025-01-13",
+            "2025-01-14",
+        ]
+        assert self._cal("W-MON")[1].periods() == [
+            "2025-02-17",
+            "2025-02-24",
+            "2025-03-03",
+        ]
+
+    def test_an_unrecognized_cadence_yields_no_calendar(self):
+        """Better a positional label than an invented date on a cadence the
+        plan vocabulary cannot express."""
+        assert self._cal("2W-MON")[1] is None
+
+    def test_a_monthly_plan_joins_by_label_mid_flight(self):
+        """The end-to-end consequence: same plan, same delivery, and only the
+        drifted labels turn a +41.2% over-pace into '+4.3%, on-track'."""
+        from mmm_framework.planning.calendar import PlanningCalendar
+        from mmm_framework.planning.flighting import build_flighting_schedule
+        from mmm_framework.platform.pacing import project_pacing
+
+        mid = [
+            {"channel": "TV", "period": d, "spend": 120.0}
+            for d in ("2025-09-01", "2025-10-01")
+        ]
+        _, derived = self._cal("MS")
+        drifted = PlanningCalendar(start="2025-07-31", n_periods=3, cadence="monthly")
+
+        def pace(cal):
+            fl = build_flighting_schedule(
+                {"TV": 300.0}, 3, pattern="front_loaded", calendar=cal
+            )
+            out = project_pacing({"flighting": fl}, mid)
+            return out["join"], out["channels"][0]
+
+        join_ok, ch_ok = pace(derived)
+        join_bad, ch_bad = pace(drifted)
+
+        assert join_ok == "label" and join_bad == "positional"
+        assert ch_ok["divergence_pct"] == pytest.approx(0.4118, abs=1e-3)
+        assert ch_bad["divergence_pct"] == pytest.approx(0.0435, abs=1e-3)
+        assert ch_ok["status"] == "over-pacing" and ch_bad["status"] == "on-track"
