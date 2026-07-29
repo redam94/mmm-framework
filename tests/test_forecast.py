@@ -368,3 +368,120 @@ class TestForecastAccuracyAndCoverage:
             ]
         )
         assert ratio < 0.75, f"mean/predictive width ratio {ratio:.3f}"
+
+
+# ---------------------------------------------------------------------------
+# Geo panels
+#
+# The issue's first criterion is that ONE signature covers national and geo
+# panels with the obs/period asymmetry invisible to callers — the forward pass
+# addresses national models on the period axis and geo models on the obs axis
+# (period-major, cell-minor). That was claimed and not tested; this is the test.
+#
+# The geo branch also carries a heuristic worth pinning: a national plan is split
+# across cells in proportion to each cell's share of TRAINING spend, so a geo
+# forecast answers the same plan a national one would.
+# ---------------------------------------------------------------------------
+
+
+def _geo_model(n_weeks=104):
+    import contextlib
+    import io
+
+    from mmm_framework.synth import dgp_geo
+
+    world = dgp_geo.make_geo_clean(seed=0, n_weeks=n_weeks)
+    m = BayesianMMM(
+        world.panel(),
+        ModelConfigBuilder().map_fit().build(),
+        TrendConfig(type=TrendType.LINEAR),
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with contextlib.redirect_stderr(io.StringIO()):
+            m.fit(random_seed=0)
+    return m
+
+
+def _flat_plan(model, n=6):
+    media = {
+        c: [float(model.X_media_raw[:, i].mean())] * n
+        for i, c in enumerate(model.channel_names)
+    }
+    controls = (
+        {
+            c: [float(model.X_controls_raw[:, i].mean())] * n
+            for i, c in enumerate(model.control_names)
+        }
+        if model.n_controls
+        else None
+    )
+    return media, controls
+
+
+class TestGeoPanel:
+    def test_a_geo_forecast_is_returned_per_PERIOD_not_per_obs(self):
+        """The asymmetry the signature hides: positions are obs indices for a
+        geo model, so a naive implementation returns n_periods x n_cells rows."""
+        m = _geo_model()
+        assert m.n_cells > 1
+        media, controls = _flat_plan(m, n=6)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fc = forecast_under_plan(m, media, future_controls=controls, random_seed=1)
+        assert len(fc.periods) == 6
+        assert fc.mean.shape == (6,)
+        assert fc.baseline.shape == (6,)
+
+    def test_the_geo_total_is_the_national_total(self):
+        """A plan is judged on the national number, so the cells are summed back
+        — a per-cell figure would be a different quantity under the same name."""
+        m = _geo_model()
+        media, controls = _flat_plan(m, n=6)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fc = forecast_under_plan(m, media, future_controls=controls, random_seed=1)
+        # planned at mean spend, so the level should sit near the observed
+        # per-period national total rather than near one cell's
+        observed_national = float(np.mean(m.y_raw)) * m.n_cells
+        assert 0.5 * observed_national < fc.mean.mean() < 2.0 * observed_national
+
+    def test_parts_equal_whole_on_a_geo_panel(self):
+        m = _geo_model()
+        media, controls = _flat_plan(m, n=6)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fc = forecast_under_plan(m, media, future_controls=controls, random_seed=1)
+        np.testing.assert_allclose(
+            sum(fc.by_channel.values()) + fc.baseline, fc.mean, atol=1e-9
+        )
+        assert set(fc.by_channel) == set(m.channel_names)
+
+    def test_a_larger_plan_forecasts_a_larger_number(self):
+        """The cell split must actually carry the plan through — if the national
+        plan were dropped and training spend reused, doubling it would change
+        nothing."""
+        m = _geo_model()
+        media, controls = _flat_plan(m, n=6)
+        doubled = {c: [v * 2 for v in vals] for c, vals in media.items()}
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            base = forecast_under_plan(
+                m, media, future_controls=controls, random_seed=1
+            )
+            more = forecast_under_plan(
+                m, doubled, future_controls=controls, random_seed=1
+            )
+        assert more.mean.sum() > base.mean.sum()
+
+    def test_the_geo_caveats_are_computed_the_same_way(self):
+        m = _geo_model()
+        media, controls = _flat_plan(m, n=6)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fc = forecast_under_plan(m, media, future_controls=controls, random_seed=1)
+        assert fc.caveats is not None
+        assert fc.caveats.trend_extrapolation["policy"] == "linear"
+        # a MAP fit on a geo panel is still a single-draw posterior
+        assert fc.caveats.approximate is True
+        assert fc.caveats.interval_available is False
