@@ -549,9 +549,19 @@ def init_db() -> None:
                 created_at      REAL NOT NULL
             )
             """)
+        # UNIQUE per (org, family, version) — NOT (family, version). A family
+        # name is caller-supplied, so two tenants both calling theirs "FY25"
+        # would otherwise share one version sequence: the second org's commit
+        # supersedes the first org's plan of record, its first plan is numbered
+        # v2, a family-scoped list leaks the other tenant's payload, and one
+        # org's hash chain depends on the other's rows. Measured before fixing.
+        try:  # drop the pre-tenant-scoped index from an early install
+            c.execute("DROP INDEX IF EXISTS idx_plan_versions_family_version")
+        except Exception:
+            pass
         c.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_versions_family_version"
-            " ON plan_versions(plan_family, version)"
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_versions_org_family_version"
+            " ON plan_versions(org_id, plan_family, version)"
         )
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_plan_versions_project"
@@ -2517,7 +2527,12 @@ class ImmutablePlanVersionError(ValueError):
 
 
 def _plan_version_hash(
-    prev_hash: str, plan_family: str, version: int, payload_json: str, created_at: float
+    prev_hash: str,
+    org_id: str,
+    plan_family: str,
+    version: int,
+    payload_json: str,
+    created_at: float,
 ) -> str:
     """Tamper-evident chain hash covering the prior row's hash + this record.
 
@@ -2527,7 +2542,9 @@ def _plan_version_hash(
     """
     import hashlib
 
-    payload = f"{prev_hash}|{plan_family}|{version}|{payload_json}|{created_at!r}"
+    payload = (
+        f"{prev_hash}|{org_id}|{plan_family}|{version}|{payload_json}|{created_at!r}"
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -2577,14 +2594,19 @@ def commit_plan_version(
     now = _now()
     payload_json = json.dumps(payload, sort_keys=True, default=str)
     with _conn() as c:
+        # Every family lookup is org-scoped: the lineage a version counts within
+        # is (org, family), never family alone.
         row = c.execute(
-            "SELECT version, hash FROM plan_versions WHERE plan_family = ?"
+            "SELECT version, hash FROM plan_versions"
+            " WHERE org_id = ? AND plan_family = ?"
             " ORDER BY version DESC LIMIT 1",
-            (plan_family,),
+            (org_id, plan_family),
         ).fetchone()
         version = (int(row["version"]) + 1) if row else 1
         prev_hash = row["hash"] if row else ""
-        h = _plan_version_hash(prev_hash, plan_family, version, payload_json, now)
+        h = _plan_version_hash(
+            prev_hash, org_id, plan_family, version, payload_json, now
+        )
         vid = f"pv_{uuid.uuid4().hex[:12]}"
         # Supersede the prior versions FIRST; status is the only mutable column
         # on a committed row, and it is a lifecycle marker rather than content —
@@ -2592,8 +2614,8 @@ def commit_plan_version(
         # unaffected.
         c.execute(
             "UPDATE plan_versions SET status = 'superseded'"
-            " WHERE plan_family = ? AND status = 'committed'",
-            (plan_family,),
+            " WHERE org_id = ? AND plan_family = ? AND status = 'committed'",
+            (org_id, plan_family),
         )
         c.execute(
             "INSERT INTO plan_versions (id, plan_family, org_id, project_id, version,"
@@ -2631,7 +2653,17 @@ def list_plan_versions(
     project_id: str | None = None,
     org_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Committed versions, newest first."""
+    """Committed versions, newest first.
+
+    Filtering by ``plan_family`` REQUIRES ``org_id``: a family name is
+    caller-supplied, so a family-only query would return another tenant's
+    versions to anyone who guessed the name.
+    """
+    if plan_family is not None and not org_id:
+        raise ValueError(
+            "list_plan_versions(plan_family=...) requires org_id — a family "
+            "name is not unique across tenants."
+        )
     q = "SELECT * FROM plan_versions WHERE 1=1"
     params: list[Any] = []
     if plan_family is not None:
@@ -2687,21 +2719,26 @@ def update_plan_version(version_id: str, **fields: Any) -> dict[str, Any]:
     )
 
 
-def verify_plan_chain(plan_family: str) -> dict[str, Any]:
+def verify_plan_chain(plan_family: str, org_id: str) -> dict[str, Any]:
     """Re-derive the hash chain oldest→newest: ``{intact, n, broken_at?}``.
 
     ``False`` means a payload or a record was altered after the fact — the chain
     covers the payload JSON, so editing a committed number breaks it.
+
+    Scoped to ``(org_id, plan_family)``: the chain is per tenant, so one org's
+    verification never depends on another org's rows.
     """
     with _conn() as c:
         rows = c.execute(
-            "SELECT * FROM plan_versions WHERE plan_family = ? ORDER BY version ASC",
-            (plan_family,),
+            "SELECT * FROM plan_versions WHERE org_id = ? AND plan_family = ?"
+            " ORDER BY version ASC",
+            (org_id, plan_family),
         ).fetchall()
     prev = ""
     for r in rows:
         expected = _plan_version_hash(
             prev,
+            r["org_id"],
             r["plan_family"],
             int(r["version"]),
             r["payload_json"],
