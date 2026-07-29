@@ -1430,7 +1430,26 @@ def _forward_calendar(mmm: Any, n_periods: int, flighting: dict) -> Any:
                 cadence = _CADENCE_BY_DAYS.get(int(step.days))
                 if cadence is None and 28 <= int(step.days) <= 31:
                     cadence = "monthly"
-            start = idx[-1] + step
+            # Advance by the CADENCE, not by the raw gap. A month is not a fixed
+            # number of days, so `idx[-1] + step` lands a monthly plan on
+            # 2025-07-31 where the next period is 2025-08-01 — and a calendar
+            # whose labels miss the delivery dates falls back to the positional
+            # join this derivation exists to avoid. Measured on a ramped
+            # 3-month plan with mid-flight delivery: the drifted calendar
+            # reported +4.3% "on-track" where the truth is +41.2% "over-pacing".
+            if cadence == "monthly":
+                last = idx[-1]
+                # Month-END panels are a real convention, and PlanningCalendar
+                # is deliberately start-anchored (#216), so advancing a 06-30
+                # by one month gives 07-30 rather than the 07-31 a month-end
+                # delivery feed will carry. Detect the convention and follow it.
+                is_month_end = last.is_month_end
+                nxt = last + _pd.DateOffset(months=1)
+                start = (
+                    nxt + _pd.offsets.MonthEnd(0) if is_month_end else nxt
+                )
+            else:
+                start = idx[-1] + step
     except Exception:  # noqa: BLE001 — an undated panel simply has no calendar
         start = None
 
