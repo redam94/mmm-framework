@@ -514,6 +514,50 @@ def init_db() -> None:
             " ON platform_figures(project_id, updated_at)"
         )
 
+        # Plan of record (issue #225): APPEND-ONLY committed plan versions.
+        #
+        # Distinct from `budget_plans`, which stays the mutable working draft —
+        # its upsert overwrites every column, so editing an old plan silently
+        # retargets what pacing compares delivery against, and every historical
+        # variance becomes retroactively wrong while the audit trail still looks
+        # clean. A committed version is immutable, hash-chained (the `signoffs`
+        # idiom below), and reproducible from its own provenance: a locked plan
+        # whose numbers cannot be regenerated is a screenshot wearing a
+        # commitment's clothes.
+        #
+        # Scoped by (org_id, plan_family) with a nullable project_id, matching
+        # `budget_plans` — a family is the lineage a version number counts
+        # within.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS plan_versions (
+                id              TEXT PRIMARY KEY,
+                plan_family     TEXT NOT NULL,
+                org_id          TEXT NOT NULL,
+                project_id      TEXT,
+                version         INTEGER NOT NULL,
+                status          TEXT NOT NULL DEFAULT 'committed',
+                name            TEXT,
+                window_start    TEXT,
+                window_end      TEXT,
+                run_id          TEXT,
+                spec_hash       TEXT,
+                data_fingerprint TEXT,
+                payload_json    TEXT NOT NULL,
+                prev_hash       TEXT NOT NULL,
+                hash            TEXT NOT NULL,
+                committed_by    TEXT,
+                created_at      REAL NOT NULL
+            )
+            """)
+        c.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_versions_family_version"
+            " ON plan_versions(plan_family, version)"
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_plan_versions_project"
+            " ON plan_versions(project_id, created_at)"
+        )
+
         # Assumption sign-off audit (issue #110): a named approval of the model's
         # assumptions/priors, hash-chained so any tampering with a past record is
         # detectable (each row's hash covers the prior row's hash). Append-only.
@@ -2463,6 +2507,215 @@ def list_signoffs(project_id: str) -> list[dict[str, Any]]:
             (project_id,),
         ).fetchall()
     return [_signoff_row_to_dict(r) for r in rows]
+
+
+# ── Plan of record (issue #225) ──────────────────────────────────────────────
+
+
+class ImmutablePlanVersionError(ValueError):
+    """A committed plan version cannot be altered. Mapped to 409 by the API."""
+
+
+def _plan_version_hash(
+    prev_hash: str, plan_family: str, version: int, payload_json: str, created_at: float
+) -> str:
+    """Tamper-evident chain hash covering the prior row's hash + this record.
+
+    The PAYLOAD itself is hashed, not a digest of it: the payload is the
+    commitment, and a chain that only covers metadata would leave the committed
+    numbers editable while the chain still verified.
+    """
+    import hashlib
+
+    payload = f"{prev_hash}|{plan_family}|{version}|{payload_json}|{created_at!r}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _plan_version_row_to_dict(r: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": r["id"],
+        "plan_family": r["plan_family"],
+        "org_id": r["org_id"],
+        "project_id": r["project_id"],
+        "version": int(r["version"]),
+        "status": r["status"],
+        "name": r["name"],
+        "window_start": r["window_start"],
+        "window_end": r["window_end"],
+        "run_id": r["run_id"],
+        "spec_hash": r["spec_hash"],
+        "data_fingerprint": r["data_fingerprint"],
+        "payload": json.loads(r["payload_json"]),
+        "prev_hash": r["prev_hash"],
+        "hash": r["hash"],
+        "committed_by": r["committed_by"],
+        "created_at": r["created_at"],
+    }
+
+
+def commit_plan_version(
+    *,
+    plan_family: str,
+    org_id: str,
+    payload: dict[str, Any],
+    project_id: str | None = None,
+    name: str | None = None,
+    window_start: str | None = None,
+    window_end: str | None = None,
+    run_id: str | None = None,
+    spec_hash: str | None = None,
+    data_fingerprint: str | None = None,
+    committed_by: str | None = None,
+) -> dict[str, Any]:
+    """Append an immutable committed version to ``plan_family``.
+
+    ``version`` is ``MAX(version) + 1`` within the family, allocated inside the
+    same transaction as the insert so two concurrent commits cannot collide (the
+    unique index on ``(plan_family, version)`` is the backstop). Earlier versions
+    are marked ``superseded`` but their payloads are never touched.
+    """
+    now = _now()
+    payload_json = json.dumps(payload, sort_keys=True, default=str)
+    with _conn() as c:
+        row = c.execute(
+            "SELECT version, hash FROM plan_versions WHERE plan_family = ?"
+            " ORDER BY version DESC LIMIT 1",
+            (plan_family,),
+        ).fetchone()
+        version = (int(row["version"]) + 1) if row else 1
+        prev_hash = row["hash"] if row else ""
+        h = _plan_version_hash(prev_hash, plan_family, version, payload_json, now)
+        vid = f"pv_{uuid.uuid4().hex[:12]}"
+        # Supersede the prior versions FIRST; status is the only mutable column
+        # on a committed row, and it is a lifecycle marker rather than content —
+        # the payload and the chain hash stay untouched, so verification is
+        # unaffected.
+        c.execute(
+            "UPDATE plan_versions SET status = 'superseded'"
+            " WHERE plan_family = ? AND status = 'committed'",
+            (plan_family,),
+        )
+        c.execute(
+            "INSERT INTO plan_versions (id, plan_family, org_id, project_id, version,"
+            " status, name, window_start, window_end, run_id, spec_hash,"
+            " data_fingerprint, payload_json, prev_hash, hash, committed_by, created_at)"
+            " VALUES (?,?,?,?,?,'committed',?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                vid,
+                plan_family,
+                org_id,
+                project_id,
+                version,
+                name,
+                window_start,
+                window_end,
+                run_id,
+                spec_hash,
+                data_fingerprint,
+                payload_json,
+                prev_hash,
+                h,
+                committed_by,
+                now,
+            ),
+        )
+        stored = c.execute(
+            "SELECT * FROM plan_versions WHERE id = ?", (vid,)
+        ).fetchone()
+    return _plan_version_row_to_dict(stored)
+
+
+def list_plan_versions(
+    plan_family: str | None = None,
+    *,
+    project_id: str | None = None,
+    org_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Committed versions, newest first."""
+    q = "SELECT * FROM plan_versions WHERE 1=1"
+    params: list[Any] = []
+    if plan_family is not None:
+        q += " AND plan_family = ?"
+        params.append(plan_family)
+    if project_id is not None:
+        q += " AND project_id = ?"
+        params.append(project_id)
+    if org_id is not None:
+        q += " AND org_id = ?"
+        params.append(org_id)
+    q += " ORDER BY created_at DESC, version DESC"
+    with _conn() as c:
+        rows = c.execute(q, params).fetchall()
+    return [_plan_version_row_to_dict(r) for r in rows]
+
+
+def get_plan_version(version_id: str) -> dict[str, Any] | None:
+    with _conn() as c:
+        r = c.execute(
+            "SELECT * FROM plan_versions WHERE id = ?", (version_id,)
+        ).fetchone()
+    return _plan_version_row_to_dict(r) if r else None
+
+
+def latest_committed_plan(project_id: str) -> dict[str, Any] | None:
+    """The project's current plan of record, or ``None``.
+
+    What pacing and variance should compare delivery against — a committed
+    version, not whichever draft was edited most recently.
+    """
+    with _conn() as c:
+        r = c.execute(
+            "SELECT * FROM plan_versions WHERE project_id = ? AND status = 'committed'"
+            " ORDER BY created_at DESC, version DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+    return _plan_version_row_to_dict(r) if r else None
+
+
+def update_plan_version(version_id: str, **fields: Any) -> dict[str, Any]:
+    """Refuse to mutate a committed version.
+
+    Present so the refusal has one home and one error type rather than each
+    caller reinventing it — the whole point of the table is that the numbers a
+    variance is computed against cannot move after the fact.
+    """
+    raise ImmutablePlanVersionError(
+        f"Plan version {version_id} is committed and immutable. Commit a NEW "
+        "version instead — editing this one would make every variance already "
+        "computed against it retroactively wrong while the audit trail still "
+        "looked intact."
+    )
+
+
+def verify_plan_chain(plan_family: str) -> dict[str, Any]:
+    """Re-derive the hash chain oldest→newest: ``{intact, n, broken_at?}``.
+
+    ``False`` means a payload or a record was altered after the fact — the chain
+    covers the payload JSON, so editing a committed number breaks it.
+    """
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM plan_versions WHERE plan_family = ? ORDER BY version ASC",
+            (plan_family,),
+        ).fetchall()
+    prev = ""
+    for r in rows:
+        expected = _plan_version_hash(
+            prev,
+            r["plan_family"],
+            int(r["version"]),
+            r["payload_json"],
+            r["created_at"],
+        )
+        if r["prev_hash"] != prev or r["hash"] != expected:
+            return {
+                "intact": False,
+                "n": len(rows),
+                "broken_at": r["id"],
+                "broken_version": int(r["version"]),
+            }
+        prev = r["hash"]
+    return {"intact": True, "n": len(rows)}
 
 
 def verify_signoff_chain(project_id: str) -> dict[str, Any]:
