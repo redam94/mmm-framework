@@ -79,6 +79,9 @@ CORE_IMPORTS = [
     "mmm_framework.platform.history",
     "mmm_framework.platform.runs",
     "mmm_framework.platform.pacing",
+    # The commitment gate is stdlib-only by design — the server and the agent
+    # both import it, and neither should pull the reporting stack to get it.
+    "mmm_framework.platform.plan_of_record",
     "mmm_framework.platform.triangulation",
     # Shares the estimand grading rule with the reporting stack via
     # finance.evidence; it must not drag the reporting stack in to get it.
