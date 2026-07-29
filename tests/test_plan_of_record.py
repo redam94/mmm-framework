@@ -710,3 +710,39 @@ class TestTenantIsolation:
         a = _plan_version_hash("", "org_a", "FY25", 1, "{}", 1.0)
         b = _plan_version_hash("", "org_b", "FY25", 1, "{}", 1.0)
         assert a != b
+
+
+class TestFrequentistCommitment:
+    """A frequentist fit must be committable on the same terms as a Bayesian one.
+
+    Its bootstrap replicates ARE an interval, so it must not trip the
+    `interval_available` gate that exists for single-draw approximate
+    posteriors — the two states look alike from a distance (both are "not a
+    NUTS posterior") and mean opposite things for a commitment.
+    """
+
+    def _payload(self, **fields):
+        f = {
+            "interval_widens_with_horizon": True,
+            "trend_extrapolation": {"policy": "linear", "trend_type": "linear"},
+            "residual_autocorrelation": {"autocorrelated": False, "ljung_box_p": 0.4},
+            "extrapolated_channels": [],
+            "interval_available": True,
+        }
+        f.update(fields)
+        return {"periods": ["p"] * 6, "caveat_fields": f}
+
+    def test_a_frequentist_forecast_is_committable(self):
+        r = assess_committability(self._payload(), provenance=PROVENANCE)
+        assert r.committable, r.blocking_gates()
+
+    def test_the_gates_still_bite_on_a_frequentist_fit(self):
+        """Being frequentist is not an exemption — the refusals are about the
+        plan and the residuals, not about the paradigm."""
+        r = assess_committability(
+            self._payload(
+                extrapolated_channels=[{"channel": "TV", "multiple": 1.6}]
+            ),
+            provenance=PROVENANCE,
+        )
+        assert "spend_support" in r.blocking_gates()
