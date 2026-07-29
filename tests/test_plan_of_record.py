@@ -358,3 +358,281 @@ class TestCommitPayload:
         payload = build_commit_payload(forecast=fc, provenance=PROVENANCE)
         size = len(json.dumps(payload))
         assert size < 100_000, f"committed payload is {size} bytes"
+
+
+# ---------------------------------------------------------------------------
+# Reproduce from provenance — #225's graded criterion
+#
+# The claim a commitment makes is not "here is a number" but "here is a number
+# anyone can regenerate". A stored forecast nobody can reproduce is a screenshot
+# wearing a commitment's clothes, and the variance measured against it cannot be
+# defended.
+# ---------------------------------------------------------------------------
+
+
+class TestReproductionRefusals:
+    """Refusals need no model — they are about the inputs, not the fit.
+
+    Note the distinction these pin: "I refuse to check" and "I checked and it
+    differs" are different statements about a commitment, and conflating them
+    would blame the model for a moved file.
+    """
+
+    def _version(self, prov, payload_extra=None):
+        return {
+            "payload": {
+                "forecast": {"mean": [1.0], "lower": [0.5], "upper": [1.5]},
+                "provenance": prov,
+                **(payload_extra or {}),
+            }
+        }
+
+    def test_missing_provenance_refuses_rather_than_reporting_a_mismatch(self):
+        from mmm_framework.platform.plan_of_record import reproduce_committed_plan
+
+        r = reproduce_committed_plan(self._version({"run_id": "r"}))
+        assert r.refused and not r.reproduced
+        assert "spec_hash" in r.reason
+
+    def test_a_missing_model_directory_refuses(self, tmp_path):
+        from mmm_framework.platform.plan_of_record import reproduce_committed_plan
+
+        r = reproduce_committed_plan(
+            self._version({**PROVENANCE, "model_path": str(tmp_path / "gone")})
+        )
+        assert r.refused
+        assert "is gone" in r.reason
+
+    def test_a_changed_dataset_refuses_and_says_which_hash(self, tmp_path):
+        """The committed number was correct for the data it was made on;
+        recomputing against different data would not verify it."""
+        from mmm_framework.platform.plan_of_record import reproduce_committed_plan
+
+        model_dir = tmp_path / "model"
+        model_dir.mkdir()
+        csv = tmp_path / "data.csv"
+        csv.write_text("a,b\n1,2\n")
+
+        r = reproduce_committed_plan(
+            self._version(
+                {
+                    **PROVENANCE,
+                    "model_path": str(model_dir),
+                    "dataset_path": str(csv),
+                    "data_fingerprint": "not-the-current-hash",
+                }
+            )
+        )
+        assert r.refused and not r.reproduced
+        assert "has changed" in r.reason
+        assert "not-the-current-hash" in r.reason
+
+    def test_an_unreadable_dataset_refuses(self, tmp_path):
+        from mmm_framework.platform.plan_of_record import reproduce_committed_plan
+
+        model_dir = tmp_path / "model"
+        model_dir.mkdir()
+        r = reproduce_committed_plan(
+            self._version(
+                {
+                    **PROVENANCE,
+                    "model_path": str(model_dir),
+                    "dataset_path": str(tmp_path / "vanished.csv"),
+                }
+            )
+        )
+        assert r.refused and "no longer readable" in r.reason
+
+    def test_no_dataset_path_refuses(self, tmp_path):
+        """The panel is rebuilt from the dataset, so its path is part of what
+        makes a commitment reproducible."""
+        from mmm_framework.platform.plan_of_record import reproduce_committed_plan
+
+        model_dir = tmp_path / "model"
+        model_dir.mkdir()
+        r = reproduce_committed_plan(
+            self._version({**PROVENANCE, "model_path": str(model_dir)})
+        )
+        assert r.refused and "no dataset path" in r.reason
+
+    def test_a_run_without_a_saved_spec_refuses(self, tmp_path):
+        """Without the run's own spec the panel cannot be rebuilt AS FITTED —
+        and a current session spec may have been edited since."""
+        from mmm_framework.platform.plan_of_record import reproduce_committed_plan
+
+        model_dir = tmp_path / "model"
+        model_dir.mkdir()
+        csv = tmp_path / "data.csv"
+        csv.write_text("a,b\n1,2\n")
+        from mmm_framework.platform.runs import data_fingerprint
+
+        fp = data_fingerprint(str(csv))
+        r = reproduce_committed_plan(
+            self._version(
+                {
+                    **PROVENANCE,
+                    "model_path": str(model_dir),
+                    "dataset_path": str(csv),
+                    "data_fingerprint": fp["md5"],
+                }
+            )
+        )
+        assert r.refused and "no model spec" in r.reason
+
+
+def _fp(path):
+    from mmm_framework.platform.runs import data_fingerprint
+
+    return data_fingerprint(path)["md5"]
+
+
+@pytest.mark.slow
+class TestReproductionEndToEnd:
+    """The graded criterion: commit, reload from provenance, recompute."""
+
+    def _fit_and_save(self, tmp_path):
+        """Fit from the SAME long-format MFF the reproduction path will reload,
+        so the round trip exercises the real loader rather than a shortcut."""
+        import contextlib
+        import io
+        import warnings
+
+        from mmm_framework.agents.fitting import build_model
+        from mmm_framework.serialization import MMMSerializer
+        from mmm_framework.synth.mff import generate_mff
+
+        frame, _answer = generate_mff("clean", seed=0, n_weeks=120)
+        csv = tmp_path / "world.csv"
+        frame.to_csv(csv, index=False)
+
+        spec = {
+            "kpi": "Sales",
+            "media_channels": [
+                {"name": c} for c in ("TV", "Search", "Social", "Display")
+            ],
+            "control_variables": [{"name": "Price"}],
+            "trend": {"type": "linear"},
+            "inference": {"method": "map"},
+        }
+        model = build_model(spec, str(csv))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with contextlib.redirect_stderr(io.StringIO()):
+                model.fit(method="map", random_seed=0)
+        save_dir = str(tmp_path / "run_1")
+        MMMSerializer.save(model, save_dir)
+        import json
+
+        (tmp_path / "run_1" / "run_metadata.json").write_text(
+            json.dumps({"spec": spec, "kpi": spec["kpi"]})
+        )
+        return model, frame, spec, save_dir, str(csv)
+
+    def test_a_committed_forecast_regenerates_to_tolerance(self, store, tmp_path):
+        import json
+        import warnings
+
+        from mmm_framework.planning.forecast import forecast_under_plan
+        from mmm_framework.platform.plan_of_record import reproduce_committed_plan
+
+        model, frame, spec, save_dir, csv_path = self._fit_and_save(tmp_path)
+
+        # Plan the LAST 8 weeks of observed spend forward — inside observed
+        # support, so the commitment gate would not refuse it either.
+        plan = {
+            c: [float(x) for x in model.X_media_raw[-8:, i]]
+            for i, c in enumerate(model.channel_names)
+        }
+        controls = {
+            c: [float(model.X_controls_raw[-8:, i].mean())] * 8
+            for i, c in enumerate(model.control_names)
+        }
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fc = forecast_under_plan(
+                model, plan, future_controls=controls, random_seed=42
+            )
+
+
+        payload = {
+            "forecast": {
+                "mean": [float(x) for x in fc.mean],
+                "lower": [float(x) for x in fc.lower],
+                "upper": [float(x) for x in fc.upper],
+                "interval": fc.interval,
+                "n_draws": fc.n_draws,
+            },
+            "plan_media": plan,
+            "plan_controls": controls,
+            "random_seed": 42,
+            "provenance": {
+                "run_id": "run_1",
+                "spec_hash": "abc",
+                "data_fingerprint": _fp(csv_path),
+                "dataset_path": csv_path,
+                "model_path": save_dir,
+            },
+        }
+        v = store.commit_plan_version(
+            plan_family="fam", org_id="o", project_id="p", payload=payload
+        )
+
+        r = reproduce_committed_plan(store.get_plan_version(v["id"]))
+        assert not r.refused, r.reason
+        assert r.reproduced, f"max diff {r.max_abs_diff} > {r.tolerance}: {r.diffs}"
+        assert r.max_abs_diff <= 1e-9
+
+    def test_a_tampered_snapshot_reproduces_FALSE_rather_than_refusing(
+        self, store, tmp_path
+    ):
+        """The other half of the distinction: inputs intact, numbers moved."""
+        import json
+        import warnings
+
+        from mmm_framework.planning.forecast import forecast_under_plan
+        from mmm_framework.platform.plan_of_record import reproduce_committed_plan
+
+        model, frame, spec, save_dir, csv_path = self._fit_and_save(tmp_path)
+        # Plan the LAST 8 weeks of observed spend forward — inside observed
+        # support, so the commitment gate would not refuse it either.
+        plan = {
+            c: [float(x) for x in model.X_media_raw[-8:, i]]
+            for i, c in enumerate(model.channel_names)
+        }
+        controls = {
+            c: [float(model.X_controls_raw[-8:, i].mean())] * 8
+            for i, c in enumerate(model.control_names)
+        }
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fc = forecast_under_plan(
+                model, plan, future_controls=controls, random_seed=42
+            )
+
+        inflated = [float(x) * 1.10 for x in fc.mean]  # someone "improved" it
+        payload = {
+            "forecast": {
+                "mean": inflated,
+                "lower": [float(x) for x in fc.lower],
+                "upper": [float(x) for x in fc.upper],
+                "interval": fc.interval,
+                "n_draws": fc.n_draws,
+            },
+            "plan_media": plan,
+            "plan_controls": controls,
+            "random_seed": 42,
+            "provenance": {
+                "run_id": "run_1",
+                "spec_hash": "abc",
+                "data_fingerprint": _fp(csv_path),
+                "dataset_path": csv_path,
+                "model_path": save_dir,
+            },
+        }
+        v = store.commit_plan_version(
+            plan_family="fam2", org_id="o", project_id="p", payload=payload
+        )
+        r = reproduce_committed_plan(store.get_plan_version(v["id"]))
+        assert not r.refused, "the inputs are intact — this is a mismatch, not a refusal"
+        assert not r.reproduced
+        assert r.max_abs_diff > 1e-9

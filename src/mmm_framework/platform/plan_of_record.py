@@ -49,9 +49,11 @@ __all__ = [
     "CommitRefusal",
     "Committability",
     "DEFAULT_FLEXIBLE_TREND_HORIZON_CAP",
+    "ReproductionResult",
     "assess_committability",
     "build_commit_payload",
     "provenance_gaps",
+    "reproduce_committed_plan",
 ]
 
 #: Periods beyond which a held-flat trend's interval stops meaning anything.
@@ -322,3 +324,226 @@ def build_commit_payload(
             else {"committable": True, "refusals": [], "overrides": {}}
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# Reproduction
+#
+# The claim a commitment makes is not "here is a number" but "here is a number
+# anyone can regenerate". This is where that claim is checked. Heavy imports are
+# function-local so the module stays lean-core — the gate above is imported by
+# the server and the agent, neither of which should pull PyMC to read it.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ReproductionResult:
+    """Whether a committed plan regenerates from its own provenance."""
+
+    reproduced: bool
+    #: Set when reproduction could not even be ATTEMPTED (missing model, changed
+    #: data). Distinct from a mismatch: "I refuse to check" and "I checked and it
+    #: differs" are different statements about a commitment.
+    refused: bool
+    reason: str | None = None
+    max_abs_diff: float | None = None
+    tolerance: float = 1e-9
+    #: What moved, when reproduction ran and disagreed.
+    diffs: dict[str, float] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "reproduced": self.reproduced,
+            "refused": self.refused,
+            "reason": self.reason,
+            "max_abs_diff": self.max_abs_diff,
+            "tolerance": self.tolerance,
+            "diffs": dict(self.diffs),
+        }
+
+
+def reproduce_committed_plan(
+    version: dict[str, Any],
+    *,
+    tolerance: float = 1e-9,
+    models_dir: str | None = None,
+) -> ReproductionResult:
+    """Regenerate a committed plan's forecast from its recorded provenance.
+
+    Reloads the model from the run's saved directory, rebuilds the panel from the
+    **saved** run's spec (not any current session spec, which may have been
+    edited since), and re-runs the forecast with the recorded plan and seed. The
+    recomputed mean and interval bounds must match the stored snapshot.
+
+    **Refuses rather than reports a mismatch** when the inputs are not the ones
+    that were committed — a changed dataset, a missing model directory. Those are
+    different statements: "this commitment no longer reproduces" would blame the
+    model for a moved file.
+    """
+    import numpy as np
+
+    payload = version.get("payload") or {}
+    snapshot = payload.get("forecast") or {}
+    prov = payload.get("provenance") or {}
+
+    gaps = provenance_gaps(prov)
+    if gaps:
+        return ReproductionResult(
+            reproduced=False,
+            refused=True,
+            reason=(
+                "Cannot reproduce: the commitment is missing "
+                f"{', '.join(gaps)}. It should not have been committable."
+            ),
+            tolerance=tolerance,
+        )
+
+    import os
+
+    model_path = prov.get("model_path")
+    if models_dir:
+        model_path = os.path.join(models_dir, os.path.basename(str(model_path)))
+    if not model_path or not os.path.exists(model_path):
+        return ReproductionResult(
+            reproduced=False,
+            refused=True,
+            reason=(
+                f"Cannot reproduce: the saved model at {model_path!r} is gone, "
+                "so the committed number cannot be regenerated."
+            ),
+            tolerance=tolerance,
+        )
+
+    # The dataset must be the one that was committed against. A silent
+    # re-fingerprint mismatch is the difference between "the model drifted" and
+    # "somebody replaced the data".
+    from .runs import data_fingerprint
+
+    recorded = prov.get("data_fingerprint")
+    recorded_fp = recorded.get("md5") if isinstance(recorded, dict) else recorded
+    # The panel has to be rebuilt from the dataset, so its path is part of what
+    # makes a commitment reproducible — recorded explicitly, else carried on the
+    # fingerprint dict that `data_fingerprint()` returns.
+    dataset_path = prov.get("dataset_path") or (
+        recorded.get("path") if isinstance(recorded, dict) else None
+    )
+    if not dataset_path:
+        return ReproductionResult(
+            reproduced=False,
+            refused=True,
+            reason=(
+                "Cannot reproduce: the commitment records no dataset path, so "
+                "the panel cannot be rebuilt as it was fitted."
+            ),
+            tolerance=tolerance,
+        )
+    if dataset_path:
+        current = data_fingerprint(dataset_path)
+        current_md5 = (current or {}).get("md5")
+        if current_md5 is None:
+            return ReproductionResult(
+                reproduced=False,
+                refused=True,
+                reason=(
+                    f"Cannot reproduce: the dataset at {dataset_path!r} is no "
+                    "longer readable."
+                ),
+                tolerance=tolerance,
+            )
+        if current_md5 != recorded_fp:
+            return ReproductionResult(
+                reproduced=False,
+                refused=True,
+                reason=(
+                    "Cannot reproduce: the dataset behind this commitment has "
+                    f"changed (committed {recorded_fp}, now {current_md5}). The "
+                    "committed number was correct for the data it was made on; "
+                    "recomputing it against different data would not verify it."
+                ),
+                tolerance=tolerance,
+            )
+
+    try:
+        from mmm_framework.agents.fitting import build_model, saved_model_settings
+        from mmm_framework.planning.forecast import forecast_under_plan
+        from mmm_framework.serialization import MMMSerializer
+
+        saved = saved_model_settings(model_path)
+        saved_spec = saved.get("spec")
+        if not saved_spec:
+            return ReproductionResult(
+                reproduced=False,
+                refused=True,
+                reason=(
+                    "Cannot reproduce: the saved run carries no model spec, so "
+                    "the panel cannot be rebuilt as it was fitted."
+                ),
+                tolerance=tolerance,
+            )
+        # Rebuild from the SAVED spec — a current session spec may have been
+        # edited since the fit, and the serializer validates the panel against
+        # what the model was actually trained on.
+        rebuilt = build_model(saved_spec, str(dataset_path))
+        panel = getattr(rebuilt, "panel", None)
+        model = MMMSerializer.load(model_path, panel)
+
+        plan = payload.get("plan_media") or snapshot.get("plan_media")
+        controls = payload.get("plan_controls")
+        seed = payload.get("random_seed", 42)
+        if not plan:
+            return ReproductionResult(
+                reproduced=False,
+                refused=True,
+                reason=(
+                    "Cannot reproduce: the commitment records no per-period "
+                    "spend plan, so there is nothing to re-forecast."
+                ),
+                tolerance=tolerance,
+            )
+        recomputed = forecast_under_plan(
+            model,
+            plan,
+            future_controls=controls,
+            interval=float(snapshot.get("interval", 0.9)),
+            max_draws=int(snapshot.get("n_draws", 200)),
+            random_seed=seed,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return ReproductionResult(
+            reproduced=False,
+            refused=True,
+            reason=f"Cannot reproduce: {exc}",
+            tolerance=tolerance,
+        )
+
+    diffs: dict[str, float] = {}
+    for key, got in (
+        ("mean", recomputed.mean),
+        ("lower", recomputed.lower),
+        ("upper", recomputed.upper),
+    ):
+        want = np.asarray(snapshot.get(key) or [], dtype=float)
+        have = np.asarray(got, dtype=float)
+        if want.shape != have.shape:
+            return ReproductionResult(
+                reproduced=False,
+                refused=False,
+                reason=(
+                    f"Recomputed {key} has {have.shape} periods against the "
+                    f"committed {want.shape}."
+                ),
+                tolerance=tolerance,
+            )
+        both_nan = np.isnan(want) & np.isnan(have)
+        d = np.abs(np.where(both_nan, 0.0, want - have))
+        diffs[key] = float(np.nanmax(d)) if d.size else 0.0
+
+    worst = max(diffs.values()) if diffs else 0.0
+    return ReproductionResult(
+        reproduced=bool(worst <= tolerance),
+        refused=False,
+        reason=None if worst <= tolerance else "Recomputed values differ.",
+        max_abs_diff=worst,
+        tolerance=tolerance,
+        diffs=diffs,
+    )
