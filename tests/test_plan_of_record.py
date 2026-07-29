@@ -117,7 +117,7 @@ class TestChainVerification:
     def test_an_untouched_chain_verifies(self, store):
         for i in range(3):
             store.commit_plan_version(plan_family="f", org_id="o", payload={"n": i})
-        assert store.verify_plan_chain("f") == {"intact": True, "n": 3}
+        assert store.verify_plan_chain("f", "o") == {"intact": True, "n": 3}
 
     def test_tampering_with_a_payload_breaks_it_and_names_the_revision(self, store):
         v1 = store.commit_plan_version(plan_family="f", org_id="o", payload={"n": 1})
@@ -129,12 +129,12 @@ class TestChainVerification:
                 "UPDATE plan_versions SET payload_json = ? WHERE id = ?",
                 ('{"n": 999}', v1["id"]),
             )
-        out = store.verify_plan_chain("f")
+        out = store.verify_plan_chain("f", "o")
         assert out["intact"] is False
         assert out["broken_at"] == v1["id"] and out["broken_version"] == 1
 
     def test_an_empty_family_verifies_vacuously(self, store):
-        assert store.verify_plan_chain("nothing-here") == {"intact": True, "n": 0}
+        assert store.verify_plan_chain("nothing-here", "o") == {"intact": True, "n": 0}
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +339,7 @@ class TestCommitPayload:
         back = store.get_plan_version(v["id"])
         assert back["payload"] == payload
         assert back["run_id"] == "run_1" and back["spec_hash"] == "spec_abc"
-        assert store.verify_plan_chain("f")["intact"]
+        assert store.verify_plan_chain("f", "o")["intact"]
 
     def test_a_52_week_4_channel_commitment_stays_small(self, store):
         """The sessions.db checkpoint-bloat precedent: per-period draws are
@@ -636,3 +636,77 @@ class TestReproductionEndToEnd:
         assert not r.refused, "the inputs are intact — this is a mismatch, not a refusal"
         assert not r.reproduced
         assert r.max_abs_diff > 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Tenant isolation (#225 follow-up)
+#
+# `plan_family` is a caller-supplied string. Keying versions on it ALONE — as
+# the first cut did — means two tenants who both call theirs "FY25" share one
+# lineage. Measured before fixing: org B's commit superseded org A's plan of
+# record, org B's FIRST plan was numbered v2, a family-scoped list returned org
+# A's payload, and org A's hash chain depended on org B's rows.
+# ---------------------------------------------------------------------------
+
+
+class TestTenantIsolation:
+    def test_two_orgs_can_use_the_same_family_name(self, store):
+        a = store.commit_plan_version(
+            plan_family="FY25", org_id="org_a", project_id="pa", payload={"who": "A"}
+        )
+        b = store.commit_plan_version(
+            plan_family="FY25", org_id="org_b", project_id="pb", payload={"who": "B"}
+        )
+        assert a["version"] == 1 and b["version"] == 1, "version sequences are per org"
+
+    def test_one_orgs_commit_does_not_supersede_anothers(self, store):
+        a = store.commit_plan_version(
+            plan_family="FY25", org_id="org_a", project_id="pa", payload={"who": "A"}
+        )
+        store.commit_plan_version(
+            plan_family="FY25", org_id="org_b", project_id="pb", payload={"who": "B"}
+        )
+        assert store.get_plan_version(a["id"])["status"] == "committed"
+
+    def test_a_family_scoped_list_does_not_leak_another_tenant(self, store):
+        store.commit_plan_version(
+            plan_family="FY25", org_id="org_a", project_id="pa", payload={"who": "A"}
+        )
+        store.commit_plan_version(
+            plan_family="FY25", org_id="org_b", project_id="pb", payload={"who": "B"}
+        )
+        rows = store.list_plan_versions(plan_family="FY25", org_id="org_b")
+        assert [r["payload"]["who"] for r in rows] == ["B"]
+
+    def test_a_family_only_query_is_refused_rather_than_answered(self, store):
+        """Answering it would return whichever tenants happened to pick that
+        name — so it is not a query the store will serve."""
+        with pytest.raises(ValueError, match="requires org_id"):
+            store.list_plan_versions(plan_family="FY25")
+
+    def test_each_orgs_chain_verifies_independently(self, store):
+        store.commit_plan_version(plan_family="FY25", org_id="org_a", payload={"n": 1})
+        store.commit_plan_version(plan_family="FY25", org_id="org_b", payload={"n": 1})
+        assert store.verify_plan_chain("FY25", "org_a") == {"intact": True, "n": 1}
+        assert store.verify_plan_chain("FY25", "org_b") == {"intact": True, "n": 1}
+
+    def test_tampering_in_one_org_does_not_break_anothers_chain(self, store):
+        a = store.commit_plan_version(
+            plan_family="FY25", org_id="org_a", payload={"n": 1}
+        )
+        store.commit_plan_version(plan_family="FY25", org_id="org_b", payload={"n": 1})
+        with store._conn() as c:
+            c.execute(
+                "UPDATE plan_versions SET payload_json = ? WHERE id = ?",
+                ('{"n": 999}', a["id"]),
+            )
+        assert store.verify_plan_chain("FY25", "org_a")["intact"] is False
+        assert store.verify_plan_chain("FY25", "org_b")["intact"] is True
+
+    def test_the_chain_hash_covers_the_org(self, store):
+        """Otherwise a row could be moved between tenants and still verify."""
+        from mmm_framework.platform.sessions import _plan_version_hash
+
+        a = _plan_version_hash("", "org_a", "FY25", 1, "{}", 1.0)
+        b = _plan_version_hash("", "org_b", "FY25", 1, "{}", 1.0)
+        assert a != b
