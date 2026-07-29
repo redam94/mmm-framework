@@ -485,3 +485,82 @@ class TestGeoPanel:
         # a MAP fit on a geo panel is still a single-draw posterior
         assert fc.caveats.approximate is True
         assert fc.caveats.interval_available is False
+
+
+# ---------------------------------------------------------------------------
+# Frequentist fits
+#
+# The hazard #223 names explicitly: a bootstrap trace is (chain=1, draw=n_boot)
+# carrying the SAME variable names as a posterior, so it runs through the
+# forward pass unchanged and would render a CONFIDENCE interval as a credible
+# one. `_fit_provenance` routes through `diagnostics.provenance` to prevent
+# that — which was claimed and, like the geo path, not tested.
+# ---------------------------------------------------------------------------
+
+
+def _frequentist_model(n_weeks=104):
+    import contextlib
+    import io
+
+    world = _world()
+    m = BayesianMMM(
+        world.slice(0, n_weeks).panel(),
+        ModelConfigBuilder().frequentist_ridge().build(),
+        TrendConfig(type=TrendType.LINEAR),
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with contextlib.redirect_stderr(io.StringIO()):
+            m.fit(random_seed=0)
+    return m
+
+
+def _mean_plan(model, n=6):
+    media = {
+        c: [float(model.X_media_raw[:, i].mean())] * n
+        for i, c in enumerate(model.channel_names)
+    }
+    controls = (
+        {
+            c: [float(model.X_controls_raw[:, i].mean())] * n
+            for i, c in enumerate(model.control_names)
+        }
+        if model.n_controls
+        else None
+    )
+    return media, controls
+
+
+class TestFrequentistForecast:
+    def test_the_interval_is_named_a_CONFIDENCE_interval(self):
+        m = _frequentist_model()
+        media, controls = _mean_plan(m)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fc = forecast_under_plan(m, media, future_controls=controls, random_seed=1)
+        assert fc.caveats.inference_family == "frequentist"
+        assert fc.caveats.interval_noun == "confidence interval"
+        # and it reaches the headline, which is what a reader actually quotes
+        assert fc.headline()["interval_noun"] == "confidence interval"
+
+    def test_a_frequentist_fit_is_not_flagged_approximate(self):
+        """The shipped rule (#188): a penalized point estimate with bootstrap
+        intervals is not an approximation of a posterior."""
+        m = _frequentist_model()
+        media, controls = _mean_plan(m)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fc = forecast_under_plan(m, media, future_controls=controls, random_seed=1)
+        assert fc.caveats.approximate is False
+        assert not any("not calibrated" in s for s in fc.caveats.statements())
+
+    def test_the_bootstrap_replicates_give_a_real_interval(self):
+        """(chain=1, draw=n_boot) still has draws to take quantiles of, so this
+        must NOT hit the collapsed-interval path an approximate fit does."""
+        m = _frequentist_model()
+        media, controls = _mean_plan(m)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fc = forecast_under_plan(m, media, future_controls=controls, random_seed=1)
+        assert fc.caveats.interval_available is True
+        assert float(np.nanmax(fc.upper - fc.lower)) > 0
