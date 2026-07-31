@@ -66,8 +66,10 @@ def _contribution_roi() -> Estimand:
         units="ROI",
         causal_assumptions=(
             "Decomposition ROI from the in-graph channel_contributions "
-            "Deterministic over the full period; assumes the fitted additive "
-            "decomposition is causal."
+            "Deterministic; assumes the fitted additive decomposition is causal. "
+            "Covers the whole series unless the estimand carries a window, in "
+            "which case both the contribution and the divisor are restricted to "
+            "it."
         ),
     )
 

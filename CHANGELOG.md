@@ -16,6 +16,49 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Fixed
 
+- **A windowed `contribution_roi` silently returned the full-series value, and the estimand engine
+  had no multiplicative guard** ([#278]). Two gaps in `estimands/evaluate.py`, both of which
+  returned a plausible number rather than an error.
+
+  `_contribution_quantity` accepted a time mask and never used it, and
+  `_get_contribution_samples` had no mask parameter at all. Measured on a 60-week MAP fit: an
+  estimand with `window=TimeWindow(0, 9)` returned **0.4335166608306849** — byte-identical to the
+  full-series value, `status="ok"` — where the true windowed ROI is **0.3942**. The mask is now
+  threaded through, and the denominator honours it too, since a windowed numerator over a
+  full-series divisor is a ratio of neither period. Where a shape genuinely cannot carry a window
+  — a per-draw scalar contribution has no observation axis — it raises
+  `ContributionWindowUnsupported` by name. The unwindowed path is untouched (an all-true mask
+  takes the original branch), so the bit-stability gate in `tests/test_estimands.py` still holds.
+
+  Five further defects, found by an adversarial review of the first commit. The scale refusal now
+  lives in `_get_contribution_samples` itself rather than in one caller, because that function has
+  **two** consumers — the estimand engine and `compute_roi_with_uncertainty`, which the classic
+  report's ROI table renders — and guarding one produced a *self-contradicting report*: the
+  Estimand Results section omitted `contribution_roi` as unsupported while the ROI table in the
+  same file printed 0.00 "Underperforming", a 550x understatement. The predicate also covers
+  **link-scale** models, not just multiplicative ones: a count/bounded likelihood sets
+  `y_std = 1.0`, so on the shipped binomial awareness garden model an unguarded `contribution_roi`
+  published 0.0071 against an original-scale ROI-equivalent of ~1.5 — over 200x too small, with
+  `status="ok"` and `units="ROI"`. It refuses only on a **known-bad** configuration, never on an
+  unrecognized one, since a loose predicate refuses every duck-typed model and test double. A
+  refusal raised from a **denominator** no longer escapes as a private control-flow exception —
+  that discarded every result already computed in the batch, contradicting the documented "never
+  raises" contract. A window selecting **no observations** now says so instead of vanishing from
+  the results dict. And `contribution_roi`'s stated assumptions no longer claim "over the full
+  period" on a windowed instance.
+
+  Separately, `model/base.py` refused a multiplicative specification in **two** places
+  (`sample_channel_contributions`, `compute_marginal_contributions`) and the estimand engine in
+  **none** — and `contribution_roi` reaches the in-graph Deterministic without calling either, so
+  it was the one remaining unguarded instance of the same defect: an additive-scale quantity
+  rescaled by `y_std` and published as an original-scale number, when the graph is additive in
+  *log* space.
+
+  The asymmetry was the actual bug, and it is resolved **per quantity, not per engine**. The
+  in-graph contribution path now refuses. The **contrast**-based estimands stay available on
+  purpose: they go through `predict_under`, which returns the original scale, so differencing them
+  is precisely the remedy both of the model's own error messages prescribe. Refusing those would
+  have been the over-broad reading.
 - **The classic report published `contribution_roi` twice, at two masses and two interval
   definitions** ([#277]). `ChannelROISection` renders it at an **80% equal-tailed** interval and
   `EstimandsSection` at a **94% true HDI**; both are default-on, neither said which it was, and
@@ -289,6 +332,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#275]: https://github.com/redam94/mmm-framework/issues/275
 [#276]: https://github.com/redam94/mmm-framework/issues/276
 [#277]: https://github.com/redam94/mmm-framework/issues/277
+[#278]: https://github.com/redam94/mmm-framework/issues/278
 
 ## [1.3.3] — 2026-07-27
 

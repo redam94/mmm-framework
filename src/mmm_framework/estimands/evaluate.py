@@ -162,6 +162,23 @@ class EstimandEvaluator:
             )
 
         mask = self._window_mask(est)
+        # A window selecting NO observations is a refusal, not an empty result.
+        # Now that the denominator is windowed too, such a window drives the
+        # divisor to 0 and `op_ratio_zero_denominator="skip"` drops the key from
+        # the results dict entirely — neither a refusal nor an answer, and a
+        # KeyError for the caller. Say what happened.
+        if est.window is not None and not np.any(mask):
+            return EstimandResult(
+                name=key,
+                kind=est.kind,
+                status="unsupported",
+                reason=(
+                    f"window [{est.window.start}, {est.window.end}] selects no "
+                    f"observations of this model's {int(np.asarray(mask).size)}"
+                ),
+                units=est.units,
+                hdi_prob=est.hdi_prob,
+            )
         marginal_factor = self._marginal_factor(est)
         self._last_divisor_meta = None
 
@@ -197,9 +214,29 @@ class EstimandEvaluator:
             result_point = num_point
             result_samples = num_samples
         else:
-            den_point, den_samples = self._eval_node(
-                est.denominator, mask, marginal_factor
-            )
+            # The denominator can refuse too — `Contribution` is a legal
+            # denominator, and it is exactly where the new scale/window refusals
+            # live. Leaving this unwrapped let a PRIVATE control-flow exception
+            # escape `evaluate_estimands`, contradicting its documented "never
+            # raises" contract and discarding every result already computed in
+            # the batch.
+            try:
+                den_point, den_samples = self._eval_node(
+                    est.denominator, mask, marginal_factor
+                )
+            except _SkipChannel as exc:
+                return (
+                    None
+                    if exc.skip
+                    else EstimandResult(
+                        name=key,
+                        kind=est.kind,
+                        status="unsupported",
+                        reason=str(exc),
+                        units=est.units,
+                        hdi_prob=est.hdi_prob,
+                    )
+                )
             extra["spend"] = den_point if den_samples is None else None
             result_point, result_samples, skip = self._combine_ratio(
                 est, num_point, num_samples, den_point, den_samples
@@ -440,11 +477,18 @@ class EstimandEvaluator:
     def _observed_spend(self, q: ObservedInput, mask: np.ndarray) -> float:
         from mmm_framework.reporting.helpers.measurement import resolve_channel_divisor
 
-        # ``panel`` is the full-series dashboard spend (mask ignored, matching
-        # the legacy extractor); ``raw`` is windowed. For ordinary spend
-        # channels both reproduce the old ``X_media_raw`` sums exactly.
+        # ``panel`` is the full-series dashboard spend, ignoring the mask to
+        # reproduce the legacy extractor bit-for-bit; ``raw`` is windowed. For
+        # ordinary spend channels both reproduce the old ``X_media_raw`` sums
+        # exactly.
+        #
+        # An explicit WINDOW overrides that: the numerator is now windowed, so
+        # a full-series denominator would make the ratio a quantity of neither
+        # period. `mask.all()` is exactly "no window was set", so the unwindowed
+        # path is untouched and the bit-stability gate still holds.
+        ignore_mask = q.source == "panel" and bool(np.asarray(mask).all())
         resolved = resolve_channel_divisor(
-            self.model, q.target, mask=None if q.source == "panel" else mask
+            self.model, q.target, mask=None if ignore_mask else mask
         )
         self._last_divisor_meta = resolved.meta
         return resolved.total
@@ -465,17 +509,40 @@ class EstimandEvaluator:
 
     def _contribution_quantity(self, q: Contribution, mask: np.ndarray) -> _NodeValue:
         if q.source == "in_graph_deterministic":
-            from mmm_framework.reporting.helpers.roi import _get_contribution_samples
+            from mmm_framework.reporting.helpers.roi import (
+                ContributionScaleUnsupported,
+                ContributionWindowUnsupported,
+                _get_contribution_samples,
+            )
             from mmm_framework.reporting.helpers.utils import (
                 _get_posterior,
                 _get_scaling_params,
             )
 
+            # The scale refusal lives in `_get_contribution_samples` itself, not
+            # here: that function has TWO callers — this engine and
+            # `compute_roi_with_uncertainty`, which the classic report's ROI
+            # table renders — so guarding one produced a self-contradicting
+            # report. It covers a multiplicative specification AND a link-scale
+            # (non-Gaussian likelihood) model, which are the two ways
+            # `to_kpi_units` fails to reach KPI units.
+            #
+            # CONTRAST-based estimands are deliberately unaffected: they go
+            # through `predict_under`, which returns the original scale, so
+            # differencing them is exactly the remedy this refusal points to.
             posterior = _get_posterior(self.model)
             y_mean, y_std = _get_scaling_params(self.model)
-            samples = _get_contribution_samples(
-                self.model, posterior, q.target, y_mean, y_std
-            )
+            try:
+                samples = _get_contribution_samples(
+                    self.model, posterior, q.target, y_mean, y_std, mask=mask
+                )
+            except (
+                ContributionScaleUnsupported,
+                ContributionWindowUnsupported,
+            ) as exc:
+                # A request that cannot be answered correctly is a refusal, never
+                # a silent wrong-scale or full-series answer.
+                raise _SkipChannel(str(exc), skip=False) from exc
             if samples is None or len(samples) == 0:
                 raise _SkipChannel(
                     f"no contribution samples for {q.target!r}", skip=True
