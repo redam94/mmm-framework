@@ -75,7 +75,7 @@ from loguru import logger
 
 from ..frequentist._transforms import SATURATION_PARAMS, saturate
 from ..transforms.adstock import adstock_weights, geometric_adstock_2d
-from ..transforms.seasonality import create_fourier_features
+from ..transforms.seasonality import PERIODS_BY_FREQ, create_fourier_features
 
 __all__ = [
     "BacktestConfig",
@@ -167,13 +167,10 @@ class TrendExtrapolation:
             "understates long-horizon uncertainty."
         )
 
-# Same component-period table as BayesianMMM._prepare_seasonality, so the
-# forecaster evaluates the Fourier features at exactly the training phase.
-_PERIODS_BY_FREQ: dict[str, dict[str, float]] = {
-    "W": {"yearly": 52.0, "monthly": 52.0 / 12.0},
-    "D": {"yearly": 365.25, "monthly": 365.25 / 12.0, "weekly": 7.0},
-    "M": {"yearly": 12.0},
-}
+# THE component-period table, not a copy of it: the forecaster must evaluate the
+# Fourier features at exactly the training phase, and a copy-pasted literal is
+# how two implementations of "the same" period drift apart (#275).
+_PERIODS_BY_FREQ = PERIODS_BY_FREQ
 
 # Default seasonal-naive lag per data frequency (used for the baseline and
 # the MASE denominator).

@@ -205,27 +205,97 @@ def test_to_dict_round_trips_the_vocabulary():
 
 
 def test_seasonality_period_constant_matches():
-    """`model/base.py` and `validation/backtest.py` duplicate this table.
+    """The seasonality period table has ONE definition, not copies that agree.
 
-    They must agree or a forecast evaluates the Fourier basis at a different
-    phase than the fit. Nothing pinned them equal before #216.
+    `model/base.py` and `validation/backtest.py` used to hold separate literals
+    of this table; they must agree or a forecast evaluates the Fourier basis at
+    a different phase than the fit, and nothing pinned them equal before #216.
+    That version of this test scraped the inlined literal out of
+    `_prepare_seasonality` with a regex and compared the two dicts.
+
+    Since #275 there is nothing to compare: both sites read
+    `transforms.seasonality.PERIODS_BY_FREQ`. So this asserts the stronger
+    property — same object, not equal copies — and fails loudly if either site
+    goes back to inlining one. (A third implementation, the extension graphs'
+    datetime-median rule, is a deliberate divergence behind
+    `SeasonalityConfig.period_source`; see
+    tests/mmm_extensions/test_seasonal_period_source.py.)
     """
     import inspect
-    import re
 
     from mmm_framework.model import base
+    from mmm_framework.transforms.seasonality import PERIODS_BY_FREQ
     from mmm_framework.validation import backtest
 
-    src = inspect.getsource(base.BayesianMMM._prepare_seasonality)
-    block = re.search(r"periods_by_freq[^=]*=\s*\{(.+?)\n        \}", src, re.S)
-    assert block, "model/base.py no longer inlines periods_by_freq"
-    model_table = eval("{" + block.group(1) + "}")  # noqa: S307 - our own literal
-
-    assert model_table == backtest._PERIODS_BY_FREQ, (
-        "model/base.py and validation/backtest.py duplicate the seasonality "
-        f"period table and they have drifted:\n  model:    {model_table}\n"
-        f"  backtest: {backtest._PERIODS_BY_FREQ}"
+    assert backtest._PERIODS_BY_FREQ is PERIODS_BY_FREQ, (
+        "validation/backtest.py no longer reads the shared seasonality period "
+        "table; a copy here is how the two drifted in the first place"
     )
+
+    src = inspect.getsource(base.BayesianMMM._prepare_seasonality)
+    assert "periods_for_frequency" in src, (
+        "model/base.py no longer resolves periods through the shared table"
+    )
+    assert '"yearly":' not in src, (
+        "model/base.py has re-inlined a seasonality period literal:\n" + src
+    )
+
+    # The values themselves, so a change to the shared table is a deliberate act.
+    assert PERIODS_BY_FREQ == {
+        "W": {"yearly": 52.0, "monthly": 52.0 / 12.0},
+        "D": {"yearly": 365.25, "monthly": 365.25 / 12.0, "weekly": 7.0},
+        "M": {"yearly": 12.0},
+    }
+
+
+def test_the_fitted_seasonal_basis_is_the_shared_tables():
+    """Behavioural, not textual: what the model BUILDS, at every frequency.
+
+    The source-level assertions above catch a re-inlined literal. This catches
+    the subtler drift they cannot — the indirection resolving to the wrong
+    number — by grading the design matrix the model actually constructs against
+    the shared table, for each tabulated frequency and each component it
+    tabulates.
+    """
+    import numpy as np
+
+    from mmm_framework.config import InferenceMethod, ModelConfig, SeasonalityConfig
+    from mmm_framework.model import BayesianMMM, TrendConfig, TrendType
+    from mmm_framework.synth import dgp
+    from mmm_framework.transforms.seasonality import (
+        PERIODS_BY_FREQ,
+        create_fourier_features,
+    )
+
+    panel = dgp.build("clean", seed=3, n_weeks=80).panel()
+
+    for freq, table in PERIODS_BY_FREQ.items():
+        cfg = ModelConfig(
+            inference_method=InferenceMethod.BAYESIAN_PYMC, n_chains=1, n_draws=4
+        )
+        cfg.seasonality = SeasonalityConfig(
+            yearly=1 if "yearly" in table else None,
+            monthly=1 if "monthly" in table else None,
+            weekly=1 if "weekly" in table else None,
+        )
+        m = BayesianMMM(panel, cfg, TrendConfig(type=TrendType.LINEAR))
+        m.mff_config.frequency = freq
+        m._prepare_seasonality()
+
+        t = np.arange(m.n_periods)
+        for component, features in m.seasonality_features.items():
+            order = features.shape[1] // 2
+            want = create_fourier_features(t, table[component], order)
+            np.testing.assert_allclose(
+                features,
+                want,
+                rtol=0,
+                atol=1e-12,
+                err_msg=(
+                    f"{freq}/{component} basis is not the shared table's "
+                    f"period {table[component]}"
+                ),
+            )
 
 
 def test_calendar_from_model_uses_the_panels_own_cadence():

@@ -16,6 +16,42 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Fixed
 
+- **The extension seasonal period was 52.178571, not 52.0, under a docstring claiming
+  comparability** ([#275]). The core graph looks the data frequency up in a table and gets exactly
+  52.0 weekly observations per year; the extension graphs
+  (`NestedMMM` / `StructuralNestedMMM` / `MultivariateMMM` / `CombinedMMM`) divide 365.25 by the
+  datetime index's median spacing and get 52.178571. `components/temporal.py` stated that its
+  periods mirrored "the core model's frequency→period logic … so the component is comparable
+  across models". They did not, and it was not: measured on the yearly Fourier design over 104
+  weekly points, max |Δ| is 0.04216 at order 1, **0.08174** at order 2 and 0.12376 at order 3 — on
+  a basis whose amplitude is O(1). Small enough to look like noise in a plot, large enough to move
+  a decomposition.
+
+  Because fixing it changes extension-model numbers, it ships behind a flag whose default
+  reproduces today (R0.1). `SeasonalityConfig.period_source` is `None` by default, leaving every
+  site on its historical source; set it to `SeasonalityPeriodSource.FREQUENCY_TABLE` and an
+  extension model's seasonal basis becomes identical to a core model's, which is what makes the
+  two genuinely comparable. A spacing matching no tabulated frequency warns and falls back rather
+  than inventing a period. The core model has no median-spacing path and **refuses** an explicit
+  `DATETIME_MEDIAN` instead of ignoring it — a silently-ignored setting is how the two diverged
+  unnoticed.
+
+  Two things the flag needed to be usable rather than merely present. The table's rows are
+  deliberately **partial** — weekly data tabulates no `weekly` period, monthly data only `yearly`
+  — while the median rule always yields all three, so the opt-in path crashed with a bare
+  `KeyError` on configurations the default path (and the core model) accept and skip with a
+  warning; it now mirrors the core's warn-and-skip. And the frequency is recognised from the index
+  spacing within **5%**, not 25%: at 25% a 4-weekly retail calendar (28-day median) resolved to
+  "monthly" and was handed a yearly period of 12.0 against a true 13.04, a max |Δ| of **1.99999**
+  — fully anti-phase, 24x the divergence the flag exists to remove, delivered silently. It now
+  warns and falls back. `seasonality.period_source` is also settable from the agent spec, which is
+  the path that builds every extension model in the product.
+
+  The frequency→period table now has one definition,
+  `transforms.seasonality.PERIODS_BY_FREQ`. `validation/backtest.py` held a copy-pasted literal
+  linked to the core only by a comment; the drift guard added in #216 scraped that literal with a
+  regex, and now asserts the stronger property — both sites read the same object.
+
 - **Extension models' components and ROI were scaled by `y_std` twice** ([#274]). The two model
   families register the same component Deterministics on **different scales** — the core graph
   standardized, the extension graphs (`NestedMMM` / `StructuralNestedMMM` / `MultivariateMMM` /
@@ -156,6 +192,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#237]: https://github.com/redam94/mmm-framework/issues/237
 [#273]: https://github.com/redam94/mmm-framework/issues/273
 [#274]: https://github.com/redam94/mmm-framework/issues/274
+[#275]: https://github.com/redam94/mmm-framework/issues/275
 
 ## [1.3.3] — 2026-07-27
 

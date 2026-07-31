@@ -14,6 +14,7 @@ from .levers import PriceConfig, PromoConfig
 from .reach_frequency import ReachFrequencyConfig
 from .likelihood import LikelihoodConfig
 from .priors import PriorConfig
+from ..transforms.seasonality import SeasonalityPeriodSource
 
 
 class HierarchicalConfig(BaseModel):
@@ -72,6 +73,17 @@ class SeasonalityConfig(BaseModel):
     yearly_prior_sigma: float | None = None
     monthly_prior_sigma: float | None = None
     weekly_prior_sigma: float | None = None
+
+    #: Where observations-per-seasonal-period comes from. ``None`` (the default)
+    #: leaves every site on its historical source, so no existing fit moves: the
+    #: core model uses the frequency table (yearly = 52.0 on weekly data) and the
+    #: extension graphs divide 365.25 by the datetime index's median spacing
+    #: (52.178571). Those are different bases — max |Δ| 0.08174 on the order-2
+    #: yearly design over 104 weekly points — so set this to
+    #: ``FREQUENCY_TABLE`` to make an extension model's seasonality directly
+    #: comparable to a plain MMM's. ``DATETIME_MEDIAN`` is not implemented on
+    #: the core model, which refuses it rather than ignoring it.
+    period_source: SeasonalityPeriodSource | None = None
 
     model_config = {"extra": "forbid"}
 

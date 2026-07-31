@@ -64,6 +64,10 @@ from ..transforms import (
     create_bspline_basis,
     create_piecewise_trend_matrix,
 )
+from ..transforms.seasonality import (
+    SeasonalityPeriodSource,
+    periods_for_frequency,
+)
 from ..transforms.adstock_pt import (
     adstock_weights_pt,
     parametric_adstock_panel_pt,
@@ -1446,12 +1450,34 @@ class BayesianMMM:
             float(by_name.get(name) or cfg.prior_sigma) for name in self.event_names
         ]
 
+    def _refuse_unsupported_period_source(self) -> None:
+        """This model's seasonal period always comes from the frequency table.
+
+        ``SeasonalityConfig.period_source`` exists so an *extension* model can
+        be told to use that same table instead of its datetime-median rule. The
+        core model has no median-spacing path, so an explicit request for one is
+        refused rather than silently ignored — a silently-ignored setting is how
+        the two families diverged without anyone noticing (#275).
+        """
+        requested = getattr(self.seasonality_config, "period_source", None)
+        if requested is not None and (
+            SeasonalityPeriodSource(requested) is SeasonalityPeriodSource.DATETIME_MEDIAN
+        ):
+            raise NotImplementedError(
+                "SeasonalityConfig.period_source='datetime_median' is not "
+                "implemented on BayesianMMM: it derives seasonal periods from "
+                "MFFConfig.frequency (the frequency table). Leave period_source "
+                "unset, or set it to 'frequency_table'. The datetime-median rule "
+                "is the extension models' historical default."
+            )
+
     def _prepare_seasonality(self):
         """Prepare Fourier features for seasonality.
 
-        Periods are derived from the data frequency (MFFConfig.frequency), so
-        yearly/monthly/weekly components mean the same thing on weekly and
-        daily data. Components that the sampling frequency cannot represent
+        Periods are derived from the data frequency (MFFConfig.frequency) via
+        the shared :data:`~mmm_framework.transforms.seasonality.PERIODS_BY_FREQ`
+        table, so yearly/monthly/weekly components mean the same thing on weekly
+        and daily data. Components that the sampling frequency cannot represent
         (e.g. weekly seasonality in weekly data) are skipped with a warning —
         previously monthly/weekly were silently ignored for ALL data.
         """
@@ -1459,12 +1485,11 @@ class BayesianMMM:
         t = np.arange(self.n_periods)
 
         freq = getattr(self.mff_config, "frequency", "W") or "W"
-        periods_by_freq: dict[str, dict[str, float]] = {
-            "W": {"yearly": 52.0, "monthly": 52.0 / 12.0},
-            "D": {"yearly": 365.25, "monthly": 365.25 / 12.0, "weekly": 7.0},
-            "M": {"yearly": 12.0},
-        }
-        component_periods = periods_by_freq.get(freq, periods_by_freq["W"])
+        # One table, shared with the forecaster and (opt-in) the extension
+        # graphs — see transforms.seasonality.PERIODS_BY_FREQ. This model is
+        # always SeasonalityPeriodSource.FREQUENCY_TABLE.
+        component_periods = periods_for_frequency(freq)
+        self._refuse_unsupported_period_source()
 
         for component in ("yearly", "monthly", "weekly"):
             order = getattr(self.seasonality_config, component, None)

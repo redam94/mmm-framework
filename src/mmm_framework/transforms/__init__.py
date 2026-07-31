@@ -14,7 +14,13 @@ from .adstock import (
 )
 from .saturation import logistic_saturation, root_saturation
 from .events import build_event_regressors
-from .seasonality import create_fourier_features
+from .seasonality import (
+    PERIODS_BY_FREQ,
+    SeasonalityPeriodSource,
+    create_fourier_features,
+    frequency_from_median_days,
+    periods_for_frequency,
+)
 from .trend import create_bspline_basis, create_piecewise_trend_matrix
 
 __all__ = [
