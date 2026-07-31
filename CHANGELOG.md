@@ -36,6 +36,17 @@ frozen public contract breaks, and the contract itself is pinned by
   `DATETIME_MEDIAN` instead of ignoring it — a silently-ignored setting is how the two diverged
   unnoticed.
 
+  Two things the flag needed to be usable rather than merely present. The table's rows are
+  deliberately **partial** — weekly data tabulates no `weekly` period, monthly data only `yearly`
+  — while the median rule always yields all three, so the opt-in path crashed with a bare
+  `KeyError` on configurations the default path (and the core model) accept and skip with a
+  warning; it now mirrors the core's warn-and-skip. And the frequency is recognised from the index
+  spacing within **5%**, not 25%: at 25% a 4-weekly retail calendar (28-day median) resolved to
+  "monthly" and was handed a yearly period of 12.0 against a true 13.04, a max |Δ| of **1.99999**
+  — fully anti-phase, 24x the divergence the flag exists to remove, delivered silently. It now
+  warns and falls back. `seasonality.period_source` is also settable from the agent spec, which is
+  the path that builds every extension model in the product.
+
   The frequency→period table now has one definition,
   `transforms.seasonality.PERIODS_BY_FREQ`. `validation/backtest.py` held a copy-pasted literal
   linked to the core only by a comment; the drift guard added in #216 scraped that literal with a
@@ -179,9 +190,9 @@ frozen public contract breaks, and the contract itself is pinned by
 [#221]: https://github.com/redam94/mmm-framework/issues/221
 [#222]: https://github.com/redam94/mmm-framework/issues/222
 [#237]: https://github.com/redam94/mmm-framework/issues/237
-[#275]: https://github.com/redam94/mmm-framework/issues/275
 [#273]: https://github.com/redam94/mmm-framework/issues/273
 [#274]: https://github.com/redam94/mmm-framework/issues/274
+[#275]: https://github.com/redam94/mmm-framework/issues/275
 
 ## [1.3.3] — 2026-07-27
 

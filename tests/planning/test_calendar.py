@@ -248,6 +248,56 @@ def test_seasonality_period_constant_matches():
     }
 
 
+def test_the_fitted_seasonal_basis_is_the_shared_tables():
+    """Behavioural, not textual: what the model BUILDS, at every frequency.
+
+    The source-level assertions above catch a re-inlined literal. This catches
+    the subtler drift they cannot — the indirection resolving to the wrong
+    number — by grading the design matrix the model actually constructs against
+    the shared table, for each tabulated frequency and each component it
+    tabulates.
+    """
+    import numpy as np
+
+    from mmm_framework.config import InferenceMethod, ModelConfig, SeasonalityConfig
+    from mmm_framework.model import BayesianMMM, TrendConfig, TrendType
+    from mmm_framework.synth import dgp
+    from mmm_framework.transforms.seasonality import (
+        PERIODS_BY_FREQ,
+        create_fourier_features,
+    )
+
+    panel = dgp.build("clean", seed=3, n_weeks=80).panel()
+
+    for freq, table in PERIODS_BY_FREQ.items():
+        cfg = ModelConfig(
+            inference_method=InferenceMethod.BAYESIAN_PYMC, n_chains=1, n_draws=4
+        )
+        cfg.seasonality = SeasonalityConfig(
+            yearly=1 if "yearly" in table else None,
+            monthly=1 if "monthly" in table else None,
+            weekly=1 if "weekly" in table else None,
+        )
+        m = BayesianMMM(panel, cfg, TrendConfig(type=TrendType.LINEAR))
+        m.mff_config.frequency = freq
+        m._prepare_seasonality()
+
+        t = np.arange(m.n_periods)
+        for component, features in m.seasonality_features.items():
+            order = features.shape[1] // 2
+            want = create_fourier_features(t, table[component], order)
+            np.testing.assert_allclose(
+                features,
+                want,
+                rtol=0,
+                atol=1e-12,
+                err_msg=(
+                    f"{freq}/{component} basis is not the shared table's "
+                    f"period {table[component]}"
+                ),
+            )
+
+
 def test_calendar_from_model_uses_the_panels_own_cadence():
     """Derived from the panel, never invented."""
 

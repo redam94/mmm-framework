@@ -142,6 +142,19 @@ class SeasonalityConfigBuilder:
         self._yearly_prior_sigma: float | None = None
         self._monthly_prior_sigma: float | None = None
         self._weekly_prior_sigma: float | None = None
+        self._period_source = None
+
+    def with_period_source(self, source) -> Self:
+        """Where observations-per-seasonal-period comes from.
+
+        ``None`` (the default) leaves every site on its historical source — the
+        core model's frequency table, the extension graphs' datetime-median
+        rule, which differ (52.0 vs 52.178571 on weekly data).
+        ``SeasonalityPeriodSource.FREQUENCY_TABLE`` makes an extension model's
+        seasonal basis identical to a core model's.
+        """
+        self._period_source = source
+        return self
 
     def with_yearly(self, order: int = 2, prior_sigma: float | None = None) -> Self:
         """Add yearly seasonality with given Fourier order (and optionally a
@@ -194,6 +207,7 @@ class SeasonalityConfigBuilder:
             yearly_prior_sigma=self._yearly_prior_sigma,
             monthly_prior_sigma=self._monthly_prior_sigma,
             weekly_prior_sigma=self._weekly_prior_sigma,
+            period_source=self._period_source,
         )
 
 

@@ -90,7 +90,10 @@ class TestComponentPeriods:
         assert got == PERIODS_BY_FREQ[freq]
 
     def test_a_real_month_resolves_to_the_monthly_row(self):
-        for days in (28.0, 30.0, 31.0, 365.25 / 12.0):
+        # 28 is deliberately absent: a 28-day MEDIAN is a 4-weekly calendar, not
+        # months (a monthly panel's median spacing is 30 or 31). See
+        # TestToleranceIsTight.
+        for days in (30.0, 31.0, 365.25 / 12.0):
             assert (
                 _component_periods(days, SeasonalityPeriodSource.FREQUENCY_TABLE)
                 == PERIODS_BY_FREQ["M"]
@@ -111,12 +114,12 @@ class TestComponentPeriods:
 class TestFrequencyFromMedianDays:
     @pytest.mark.parametrize(
         "days,freq",
-        [(7.0, "W"), (1.0, "D"), (30.0, "M"), (31.0, "M"), (6.9, "W"), (1.05, "D")],
+        [(7.0, "W"), (1.0, "D"), (30.0, "M"), (31.0, "M"), (6.9, "W"), (1.02, "D")],
     )
     def test_recognised_spacings(self, days, freq):
         assert frequency_from_median_days(days) == freq
 
-    @pytest.mark.parametrize("days", [3.0, 0.0, -1.0, 100.0])
+    @pytest.mark.parametrize("days", [3.0, 0.0, -1.0, 100.0, 28.0, 35.0, 8.75])
     def test_unrecognised_spacings(self, days):
         assert frequency_from_median_days(days) is None
 
@@ -156,6 +159,127 @@ class TestItReachesTheGraph:
         a = self._design(None)
         b = self._design(SeasonalityPeriodSource.FREQUENCY_TABLE)
         assert np.abs(a - b).max() == pytest.approx(0.08174, abs=5e-5)
+
+
+class TestPartialTableRows:
+    """The table's rows are deliberately partial; the consumer must cope.
+
+    `PERIODS_BY_FREQ["W"]` tabulates no `weekly` period and `["M"]` only
+    `yearly`, while the median rule always yields all three. Indexing with `[]`
+    made the opt-in flag crash with a bare `KeyError` on configurations the
+    default path — and the core model — accept and skip with a warning.
+    """
+
+    @pytest.mark.parametrize(
+        "freq,missing", [("W", "weekly"), ("M", "monthly"), ("M", "weekly")]
+    )
+    def test_untabulated_component_warns_and_skips(self, freq, missing):
+        import pymc as pm
+
+        from mmm_framework.config import SeasonalityConfig
+
+        days = {"W": 7.0, "M": 30.0}[freq]
+        idx = pd.date_range("2022-01-03", periods=60, freq=f"{days:.0f}D")
+        cfg = SeasonalityConfig(
+            yearly=1,
+            **{missing: 1},
+            period_source=SeasonalityPeriodSource.FREQUENCY_TABLE,
+        )
+        with pm.Model():
+            with pytest.warns(UserWarning, match="cannot be represented"):
+                term = build_seasonality_contribution("", idx, 60, cfg)
+        assert term is not None  # yearly survives
+
+    def test_the_whole_graph_builds(self):
+        """End to end: this raised KeyError('weekly') before the fix."""
+        from mmm_framework.config import ModelConfig, SeasonalityConfig
+        from mmm_framework.mmm_extensions.config import (
+            MediatorConfig,
+            MediatorType,
+            NestedModelConfig,
+        )
+        from mmm_framework.mmm_extensions.models.nested import NestedMMM
+
+        idx = pd.date_range("2022-01-03", periods=60, freq="W-MON")
+        rng = np.random.default_rng(0)
+        media = np.abs(rng.normal(100, 20, (60, 2)))
+        y = 1000 + 4 * (40 + 0.3 * media[:, 0]) + 2 * media[:, 1]
+
+        mc = ModelConfig()
+        mc.seasonality = SeasonalityConfig(
+            yearly=2, weekly=1, period_source=SeasonalityPeriodSource.FREQUENCY_TABLE
+        )
+        m = NestedMMM(
+            media,
+            y,
+            ["TV", "Digital"],
+            NestedModelConfig(
+                mediators=(
+                    MediatorConfig(name="A", mediator_type=MediatorType.FULLY_LATENT),
+                )
+            ),
+            index=idx,
+            model_config=mc,
+        )
+        with pytest.warns(UserWarning):
+            assert m.model is not None
+
+
+class TestToleranceIsTight:
+    """A 4-weekly calendar is not monthly, and must not be silently called one."""
+
+    def test_four_weekly_cadence_is_not_monthly(self):
+        assert frequency_from_median_days(28.0) is None
+
+    def test_the_mismatch_it_prevents_is_severe(self):
+        """Anti-phase: 24x the divergence this module exists to remove."""
+        t = np.arange(78)
+        wrong = create_fourier_features(t, 12.0, 2)  # what "M" would have given
+        right = create_fourier_features(t, 365.25 / 28.0, 2)
+        assert np.abs(wrong - right).max() == pytest.approx(2.0, abs=1e-4)
+
+    def test_real_month_ends_still_resolve(self):
+        for days in (30.0, 31.0, 30.4375):
+            assert frequency_from_median_days(days) == "M"
+
+    def test_a_four_weekly_panel_warns_rather_than_inventing_a_period(self):
+        with pytest.warns(UserWarning, match="matches no tabulated frequency"):
+            got = _component_periods(28.0, SeasonalityPeriodSource.FREQUENCY_TABLE)
+        assert got["yearly"] == pytest.approx(365.25 / 28.0)
+
+
+class TestReachableFromASpec:
+    """A remedy the product's own build path cannot apply is half a fix."""
+
+    def test_spec_key_is_accepted_by_the_registry(self):
+        from mmm_framework.agents.fitting import unconsumed_spec_path
+
+        assert (
+            unconsumed_spec_path(["seasonality", "period_source"], "frequency_table", {})
+            is None
+        )
+
+    def test_spec_reaches_the_model_config(self):
+        from mmm_framework.agents.fitting import _model_config_from_spec
+
+        mc = _model_config_from_spec(
+            {"seasonality": {"yearly": 2, "period_source": "frequency_table"}}
+        )
+        assert mc.seasonality.period_source is SeasonalityPeriodSource.FREQUENCY_TABLE
+
+    def test_default_spec_leaves_it_unset(self):
+        from mmm_framework.agents.fitting import _model_config_from_spec
+
+        mc = _model_config_from_spec({"seasonality": {"yearly": 2}})
+        assert mc.seasonality.period_source is None
+
+    def test_a_typo_is_refused(self):
+        from mmm_framework.agents.fitting import _model_config_from_spec
+
+        with pytest.raises(ValueError, match="period_source"):
+            _model_config_from_spec(
+                {"seasonality": {"yearly": 2, "period_source": "freq_table"}}
+            )
 
 
 class TestCoreRefusesTheOtherSource:

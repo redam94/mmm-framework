@@ -367,7 +367,7 @@ _TREND_KEYS = {
     "spline_degree",
 }
 _TREND_TYPES = {"linear", "piecewise", "spline", "gaussian_process", "none"}
-_SEASONALITY_KEYS = {"yearly", "monthly", "weekly"}
+_SEASONALITY_KEYS = {"yearly", "monthly", "weekly", "period_source"}
 _LIKELIHOOD_KEYS = {"family", "link", "params"}
 _ADSTOCK_KEYS = {"type", "l_max"}
 # "none" disables the transform (AdstockType.NONE) — the library supported it
@@ -1329,6 +1329,23 @@ def _model_config_from_spec(spec: dict):
             sb.with_monthly(order=monthly, prior_sigma=_seas_sigma("monthly"))
         if weekly > 0:
             sb.with_weekly(order=weekly, prior_sigma=_seas_sigma("weekly"))
+        # The remedy for the core/extension period divergence has to be
+        # reachable from the path that BUILDS the affected models (#275): every
+        # extension model in the product is built from a spec, so a flag only
+        # settable in Python would be a fix nobody could apply.
+        if season.get("period_source"):
+            from mmm_framework.transforms.seasonality import SeasonalityPeriodSource
+
+            try:
+                sb.with_period_source(
+                    SeasonalityPeriodSource(season["period_source"])
+                )
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid spec.seasonality.period_source "
+                    f"{season['period_source']!r}: expected one of "
+                    f"{[m.value for m in SeasonalityPeriodSource]}."
+                ) from e
         model_config_builder.with_seasonality_builder(sb)
     # Observation model: the spec may declare a non-default likelihood family
     # (e.g. binomial for an awareness model). Default is normal/identity.

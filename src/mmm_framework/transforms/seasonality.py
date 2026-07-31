@@ -63,11 +63,23 @@ class SeasonalityPeriodSource(str, Enum):
     DATETIME_MEDIAN = "datetime_median"
 
 
-def frequency_from_median_days(median_days: float, tolerance: float = 0.25) -> str | None:
+def frequency_from_median_days(median_days: float, tolerance: float = 0.05) -> str | None:
     """The :data:`PERIODS_BY_FREQ` key matching an observed spacing, or None.
 
-    ``tolerance`` is a relative band, so a monthly panel whose median spacing is
-    30 or 31 days still resolves to ``"M"`` (tabulated at 30.4375).
+    ``tolerance`` is a relative band around each tabulated spacing, sized to
+    absorb calendar wobble and nothing else: a monthly panel's median spacing is
+    30 or 31 days against a tabulated 30.4375 (1.4% and 1.9%), so 5% covers it
+    with room to spare.
+
+    It is deliberately **tight**. At 25% the monthly band would run 22.8–38.1
+    days, which silently swallows a 4-weekly retail/fiscal calendar: 28-day
+    observations would resolve to ``"M"`` and be given a yearly period of 12.0
+    when the truth is 365.25/28 = 13.04. Measured over 78 observations, the
+    order-2 yearly design under that mismatch differs from the correct one by
+    max |Δ| **1.99999** — fully anti-phase on a basis of amplitude 1, roughly 24
+    times the divergence this module exists to remove, and delivered without a
+    warning. Returning ``None`` and letting the caller warn is the right answer
+    for a cadence the table does not describe.
     """
     if not median_days or median_days <= 0:
         return None

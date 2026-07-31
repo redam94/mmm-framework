@@ -292,7 +292,21 @@ def build_seasonality_contribution(
         order = orders[component]
         if order <= 0:
             continue
-        period = component_periods[component]
+        # `.get`, not `[]`: the frequency table's rows are deliberately PARTIAL
+        # (weekly data tabulates no "weekly" period, monthly data tabulates only
+        # "yearly"), while the median rule always yields all three. A bare
+        # subscript therefore crashed the FREQUENCY_TABLE path with a bare
+        # KeyError on a config the median path — and the core model — accept and
+        # skip with a warning. Mirrors model/base.py::_prepare_seasonality.
+        period = component_periods.get(component)
+        if period is None:
+            warnings.warn(
+                f"{component} seasonality cannot be represented at this data "
+                f"frequency; skipping this component.",
+                UserWarning,
+                stacklevel=2,
+            )
+            continue
         if period < 2.0:  # Nyquist: cannot resolve a period below 2 observations
             warnings.warn(
                 f"{component} seasonality needs >= 2 observations per period "
