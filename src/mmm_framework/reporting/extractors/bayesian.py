@@ -1602,6 +1602,7 @@ class BayesianMMMExtractor(
         engine's is a separate question, tracked in #277.
         """
         try:
+            from mmm_framework.estimands.spec import INTERVAL_KIND_ETI
             from mmm_framework.reporting.helpers.measurement import (
                 resolve_channel_divisor,
             )
@@ -1659,6 +1660,14 @@ class BayesianMMMExtractor(
                         "upper": float(
                             np.percentile(roi_samples, (1 + self.ci_prob) / 2 * 100)
                         ),
+                        # Interval provenance (#277). This section computes an
+                        # EQUAL-TAILED interval at `ci_prob`, while
+                        # EstimandsSection publishes the same estimand at a true
+                        # HDI and a different mass. Both are rendered, so each
+                        # number states which it is rather than leaving a reader
+                        # to infer that the narrower one is more precise.
+                        "interval_mass": float(self.ci_prob),
+                        "interval_kind": INTERVAL_KIND_ETI,
                         # Measurement metadata so the section/chart render ROI vs
                         # efficiency (and the right break-even reference).
                         "reference": meta.reference,

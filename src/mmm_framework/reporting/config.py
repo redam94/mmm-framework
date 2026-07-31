@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Any
 from enum import Enum
 
+from ..estimands.spec import DASHBOARD_INTERVAL_MASS
 from .design_tokens import TOKENS
 
 
@@ -160,7 +161,11 @@ class SectionConfig:
     title: str | None = None  # Override default title
     subtitle: str | None = None
     show_uncertainty: bool = True
-    credible_interval: float = 0.8  # HDI width (0.8 = 80% CI)
+    # Equal-tailed, NOT a highest-density interval, despite the historic
+    # naming. Stated alongside the estimand default in
+    # `estimands.spec` — the two differ on purpose and every rendered
+    # interval is labelled with its mass and kind (#277).
+    credible_interval: float = DASHBOARD_INTERVAL_MASS
     chart_height: int = 400
     chart_width: int | None = None  # None = responsive
     custom_notes: str | None = None

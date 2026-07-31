@@ -16,6 +16,30 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Fixed
 
+- **The classic report published `contribution_roi` twice, at two masses and two interval
+  definitions** ([#277]). `ChannelROISection` renders it at an **80% equal-tailed** interval and
+  `EstimandsSection` at a **94% true HDI**; both are default-on, neither said which it was, and
+  there was no cross-reference. The trap is that one interval is visibly narrower, which invites
+  the reader to treat it as the better estimate. It is not — it is the same posterior at a lower
+  mass under a different definition, and on a skewed posterior the two differ in both endpoints.
+
+  Two renders of one estimand is a product decision rather than a bug in either section. The
+  decision taken is to **keep both and label each**: every rendered interval now states its mass
+  *and* its definition ("80% ETI", "94% HDI"), sourced from provenance that travels with the
+  number rather than from a literal at the render site. `EstimandResult` gains `interval_kind`,
+  derived from the estimand's own `Realization.hdi_method` — only `az_hdi` is a true
+  highest-density interval, since `compute_hdi_bounds` is percentile-based despite its name. A
+  bundle carrying no provenance renders the neutral "N% CI" rather than asserting a definition it
+  does not have.
+
+  The two defaults were set **1,500 lines apart in different packages**; they are now stated
+  together in `estimands.spec` (`ESTIMAND_INTERVAL_MASS` = 0.94, `DASHBOARD_INTERVAL_MASS` = 0.80)
+  with the reason they differ. Both are left as they are — changing either would move published
+  numbers — so labelling is what closes the gap.
+
+  The other two shells were checked for the same duplication and do not have it: the Augur deck
+  wires neither section, and the interactive report renders one estimand panel with a selector.
+
 - **Two arithmetically wrong fallback branches in the report's ROI extractor** ([#276]).
   `BayesianMMMExtractor._compute_channel_roi` re-implemented
   `reporting.helpers.roi._get_contribution_samples`' three-branch precedence rather than calling
@@ -243,6 +267,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#274]: https://github.com/redam94/mmm-framework/issues/274
 [#275]: https://github.com/redam94/mmm-framework/issues/275
 [#276]: https://github.com/redam94/mmm-framework/issues/276
+[#277]: https://github.com/redam94/mmm-framework/issues/277
 
 ## [1.3.3] — 2026-07-27
 
