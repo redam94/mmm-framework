@@ -228,6 +228,57 @@ class TestForecastOffsetUnits:
             )
 
 
+def _legacy_create_cv_splits(n_obs, cv_config):
+    """The pre-fix `_create_cv_splits`, verbatim, as the national reference.
+
+    Kept as a literal copy so "the national path is unchanged" is a claim about
+    the actual prior arithmetic rather than about invariants that survive a
+    boundary shift.
+    """
+    splits = []
+    n_folds = cv_config.n_folds
+    min_train = cv_config.min_train_size
+    gap = cv_config.gap
+    test_size = cv_config.test_size
+
+    if cv_config.strategy == "expanding":
+        fold_size = (n_obs - min_train) // n_folds
+        if fold_size < 1:
+            fold_size = 1
+        for i in range(n_folds):
+            train_end = min_train + i * fold_size
+            test_start = train_end + gap
+            test_end = min(test_start + fold_size, n_obs)
+            if test_end <= test_start:
+                continue
+            splits.append((np.arange(0, train_end), np.arange(test_start, test_end)))
+    elif cv_config.strategy == "rolling":
+        actual_test_size = test_size or max(1, (n_obs - min_train) // (n_folds + 1))
+        for i in range(n_folds):
+            test_start = min_train + i * actual_test_size + gap
+            test_end = min(test_start + actual_test_size, n_obs)
+            train_start = max(0, test_start - gap - min_train)
+            train_end = test_start - gap
+            if test_end <= test_start or train_end <= train_start:
+                continue
+            splits.append(
+                (np.arange(train_start, train_end), np.arange(test_start, test_end))
+            )
+    elif cv_config.strategy == "blocked":
+        total_usable = n_obs - min_train
+        block_size = total_usable // n_folds
+        for i in range(n_folds):
+            train_end = min_train + i * block_size
+            test_start = train_end + gap
+            test_end = min(train_end + block_size, n_obs)
+            if test_end <= test_start:
+                continue
+            splits.append((np.arange(0, train_end), np.arange(test_start, test_end)))
+    else:  # pragma: no cover
+        raise ValueError(f"Unknown CV strategy: {cv_config.strategy}")
+    return splits
+
+
 class _StubValidator:
     """Enough of ``ModelValidator`` to exercise the split/slice arithmetic."""
 
@@ -281,16 +332,39 @@ class TestCVSplitsCoverWholePeriods:
         with pytest.raises(ValueError, match="count.*PERIODS, not observations"):
             v._create_cv_splits(mmm.n_obs, cfg)
 
-    def test_national_splits_are_unchanged(self):
-        """n_cells == 1 makes the period axis the observation axis."""
+    @pytest.mark.parametrize(
+        "strategy,kwargs",
+        [
+            ("expanding", {}),
+            ("rolling", {"test_size": 10}),
+            ("rolling", {}),
+            ("blocked", {"gap": 2}),
+            ("blocked", {}),
+        ],
+    )
+    def test_national_splits_are_unchanged(self, strategy, kwargs):
+        """n_cells == 1 makes the period axis the observation axis.
+
+        Asserted against `_legacy_create_cv_splits` — a verbatim copy of the
+        pre-fix implementation — rather than against loose invariants like
+        "train precedes test", which every boundary could move while still
+        satisfying.
+        """
         mmm = _national_model()
+        assert mmm.n_cells == 1
         v = _StubValidator(mmm)
-        cfg = CrossValidationConfig(strategy="expanding", n_folds=5, min_train_size=30)
-        splits = v._create_cv_splits(mmm.n_obs, cfg)
-        assert splits
-        for train_idx, test_idx in splits:
-            assert train_idx.min() == 0
-            assert train_idx.max() < test_idx.min()
+        cfg = CrossValidationConfig(
+            strategy=strategy, n_folds=5, min_train_size=30, **kwargs
+        )
+
+        got = v._create_cv_splits(mmm.n_obs, cfg)
+        want = _legacy_create_cv_splits(mmm.n_obs, cfg)
+
+        assert got, "no splits produced"
+        assert len(got) == len(want)
+        for (g_tr, g_te), (w_tr, w_te) in zip(got, want):
+            np.testing.assert_array_equal(g_tr, w_tr)
+            np.testing.assert_array_equal(g_te, w_te)
 
     def test_ragged_slice_is_refused_not_reshaped(self):
         """101 observations of a 4-cell panel used to rebuild as 26 periods."""
