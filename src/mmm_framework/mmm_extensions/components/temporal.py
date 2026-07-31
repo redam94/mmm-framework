@@ -5,8 +5,12 @@ built no baseline dynamics — every mean was ``intercept + media (+ mediation /
 cross-effects)`` only, so a real trend or seasonal pattern leaked into the media
 coefficients. These helpers add lightweight, always-identified additive terms on
 the **standardized-outcome scale** (the scale the extension likelihoods fit on),
-reusing the SAME Fourier basis as the core :class:`BayesianMMM` so a nested
-model's seasonality means the same thing as a plain MMM's.
+reusing the same Fourier basis *builder* as the core :class:`BayesianMMM`.
+The seasonal PERIOD, though, is derived here from the datetime index's median
+spacing rather than from the frequency table, which on weekly data means
+52.178571 observations per year against the core model's 52.0 — a different
+basis, so the two are not directly comparable unless
+``SeasonalityConfig.period_source`` says ``frequency_table`` (#275).
 
 They are deliberately self-contained: the term is a numpy design matrix (a
 data-fixed constant — normalized time for the trend, sin/cos harmonics for
@@ -28,7 +32,13 @@ import pymc as pm
 if TYPE_CHECKING:
     import pytensor.tensor as pt
 
-from ...transforms.seasonality import create_fourier_features
+from ...transforms.seasonality import (
+    PERIODS_BY_FREQ,
+    SeasonalityPeriodSource,
+    create_fourier_features,
+    frequency_from_median_days,
+    periods_for_frequency,
+)
 
 
 def _index_median_days(index: Any, n_obs: int) -> float | None:
@@ -182,20 +192,71 @@ def build_trend_contribution(
     return slope * t_t
 
 
+def _component_periods(
+    median_days: float, period_source: Any
+) -> dict[str, float]:
+    """Observations per natural period, from the requested source.
+
+    ``None`` keeps this site's historical rule (the median spacing), so an
+    extension model built without an explicit choice is byte-identical.
+    """
+    source = (
+        SeasonalityPeriodSource(period_source)
+        if period_source is not None
+        else SeasonalityPeriodSource.DATETIME_MEDIAN
+    )
+    if source is SeasonalityPeriodSource.FREQUENCY_TABLE:
+        freq = frequency_from_median_days(median_days)
+        if freq is not None:
+            return dict(periods_for_frequency(freq))
+        warnings.warn(
+            f"period_source='frequency_table' was requested but a median "
+            f"spacing of {median_days:.4g} days matches no tabulated frequency "
+            f"({', '.join(PERIODS_BY_FREQ)}); falling back to the "
+            f"datetime-median rule, so this component is NOT comparable to a "
+            f"core-model seasonality.",
+            UserWarning,
+            stacklevel=3,
+        )
+
+    period_yearly = 365.25 / median_days
+    return {
+        "yearly": period_yearly,
+        "monthly": period_yearly / 12.0,
+        "weekly": period_yearly / 52.0,
+    }
+
+
 def build_seasonality_contribution(
     prefix: str,
     index: Any,
     n_obs: int,
     seasonality_config: Any,
     prior_sigma: float = 1.0,
+    period_source: Any = None,
 ) -> "pt.TensorVariable | None":
     """A standardized-scale additive Fourier seasonality term, or None.
 
-    Periods are derived from the datetime index spacing (weekly data → yearly
-    period ~52, etc.), mirroring the core model's frequency→period logic, so the
-    component is comparable across models. Harmonics above the Nyquist limit are
-    clamped. Returns None when: no config, all orders 0, or the index is not
-    datetime (no way to fix a period) — the last case warns.
+    Harmonics above the Nyquist limit are clamped. Returns None when: no config,
+    all orders 0, or the index is not datetime (no way to fix a period) — the
+    last case warns.
+
+    **Where the period comes from, and why it is not the core model's.** This
+    builder divides 365.25 by the datetime index's median spacing, which on
+    weekly data gives a yearly period of **52.178571**. The core model looks the
+    frequency up in :data:`~mmm_framework.transforms.seasonality.PERIODS_BY_FREQ`
+    and gets exactly **52.0**. This docstring used to claim the two mirrored each
+    other and that the component was therefore "comparable across models"; they
+    did not, and it was not — measured on the order-2 yearly design over 104
+    weekly points, max |Δ| is **0.08174** on a basis whose amplitude is O(1)
+    (order 1: 0.04216; order 3: 0.12376).
+
+    The median rule stays the default here so no existing extension fit moves.
+    Set ``SeasonalityConfig.period_source`` (or pass ``period_source``) to
+    :attr:`~mmm_framework.transforms.seasonality.SeasonalityPeriodSource.FREQUENCY_TABLE`
+    to get exactly the core model's basis, which is what makes the two
+    genuinely comparable. That falls back to the median rule, with a warning,
+    when the index spacing matches no tabulated frequency.
     """
     if seasonality_config is None:
         return None
@@ -216,13 +277,12 @@ def build_seasonality_contribution(
         )
         return None
 
-    # Observations per natural period, from the median inter-observation spacing.
-    period_yearly = 365.25 / median_days
-    component_periods = {
-        "yearly": period_yearly,
-        "monthly": period_yearly / 12.0,
-        "weekly": period_yearly / 52.0,
-    }
+    component_periods = _component_periods(
+        median_days,
+        period_source
+        if period_source is not None
+        else getattr(seasonality_config, "period_source", None),
+    )
 
     import pytensor.tensor as pt
 
