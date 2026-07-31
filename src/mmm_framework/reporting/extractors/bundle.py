@@ -145,11 +145,13 @@ class MMMDataBundle:
 
     # Summary metrics
     total_revenue: float | None = None
-    marketing_attributed_revenue: dict[str, float] | None = (
+    # `lower`/`upper` may be None: the model gave no interval. Consumers must
+    # render the mean and say the interval is unavailable, never fabricate one.
+    marketing_attributed_revenue: dict[str, float | None] | None = (
         None  # {"mean", "lower", "upper"}
     )
-    blended_roi: dict[str, float] | None = None  # {"mean", "lower", "upper"}
-    marketing_contribution_pct: dict[str, float] | None = (
+    blended_roi: dict[str, float | None] | None = None  # {"mean", "lower", "upper"}
+    marketing_contribution_pct: dict[str, float | None] | None = (
         None  # {"mean", "lower", "upper"}
     )
 

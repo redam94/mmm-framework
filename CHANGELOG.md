@@ -44,6 +44,26 @@ frozen public contract breaks, and the contract itself is pinned by
   number with no posterior behind it, rendered in the credible-interval slot, is indistinguishable
   from a real one.
 
+  Models on the primary branch (a registered `channel_contributions`) are byte-identical, verified
+  by running both revisions against the same fitted model.
+
+  Four further defects, found by an adversarial review of the first commit rather than by the
+  issue. Returning `None` bounds is only honest if every consumer survives them, and there were
+  **four** consumers, two of which are derived metrics rather than render sites:
+  `_compute_marketing_contribution_pct` divided by the bound with no guard and `extract()` calls
+  it unguarded, so an absent interval took down the **entire report** instead of leaving one gap
+  in it; `_compute_blended_roi` did the same inside a bare `except`, silently dropping a
+  *computable mean* because a bound was absent; and `insights._triple` raised on `float(None)`,
+  dropping the whole revenue line — mean included — from the narrative. The two sibling Augur KPI
+  cards still rendered "— – —" under a "80% range" label. All four now keep the mean and say the
+  interval is unavailable.
+
+  Two indexing defects came with the delegation. The extractor iterated a **non-deduplicated**
+  channel list while the canonical reader indexes a deduplicated one, so on a model with a
+  repeated channel name every channel after the duplicate read the wrong column of
+  `channel_contributions`. And a `(chain, draw, obs)` `channel_contributions` — which has no
+  channel axis — had its **time** axis indexed, returning the value at one period instead of the
+  window total, roughly `1/n_obs` of the answer. Both are now size-checked rather than assumed.
   Models on the primary branch (a registered `channel_contributions`) are byte-identical.
 - **The extension seasonal period was 52.178571, not 52.0, under a docstring claiming
   comparability** ([#275]). The core graph looks the data frequency up in a table and gets exactly
@@ -222,6 +242,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#273]: https://github.com/redam94/mmm-framework/issues/273
 [#274]: https://github.com/redam94/mmm-framework/issues/274
 [#275]: https://github.com/redam94/mmm-framework/issues/275
+[#276]: https://github.com/redam94/mmm-framework/issues/276
 
 ## [1.3.3] — 2026-07-27
 

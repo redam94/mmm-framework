@@ -276,13 +276,25 @@ class BayesianMMMExtractor(
     # -------------------------------------------------------------------------
 
     def _get_channel_names(self) -> list[str]:
-        """Get channel names from model or panel."""
-        if hasattr(self.mmm, "channel_names"):
-            logger.debug("Retrieving channel names from model")
-            return list(self.mmm.channel_names)
+        """Channel names from model or panel, de-duplicated and order-preserving.
+
+        The de-duplication matters beyond rendering a channel twice: the
+        canonical contribution reader computes its channel INDEX from
+        ``helpers.utils._get_channel_names``, which dedupes. Iterating a
+        non-deduped list here while it indexes a deduped one shifts every
+        channel positioned after a duplicate onto the wrong column of
+        ``channel_contributions`` — silently, with no error.
+        """
+        from mmm_framework.reporting.helpers.utils import (
+            _get_channel_names as _canonical_channel_names,
+        )
+
+        names = _canonical_channel_names(self.mmm)
+        if names:
+            return names
         if self.panel is not None and hasattr(self.panel, "channel_names"):
             logger.debug("Retrieving channel names from panel data")
-            return list(self.panel.channel_names)
+            return list(dict.fromkeys(self.panel.channel_names))
         logger.debug("Channel names not found")
         return []
 
@@ -1861,7 +1873,7 @@ class BayesianMMMExtractor(
             logger.debug(traceback.format_exc())
             return None
 
-    def _compute_marketing_attribution(self) -> dict[str, float] | None:
+    def _compute_marketing_attribution(self) -> dict[str, float | None] | None:
         """Compute total marketing-attributed revenue with uncertainty."""
         try:
             # First, try using the model's compute_contributions method
@@ -1953,18 +1965,25 @@ class BayesianMMMExtractor(
             if total_spend == 0:
                 return None
 
-            # Simple division (would need full posterior for proper uncertainty)
-            mean_roi = attribution["mean"] / total_spend
-            lower_roi = attribution["lower"] / total_spend
-            upper_roi = attribution["upper"] / total_spend
+            # Simple division (would need full posterior for proper uncertainty).
+            # An absent BOUND must not cost the MEAN: `except Exception` below
+            # would swallow a TypeError here and drop the whole blended-ROI card,
+            # so a computable number would vanish because an interval was not.
+            def _scaled(key: str) -> float | None:
+                v = attribution.get(key)
+                return None if v is None else v / total_spend
 
-            return {"mean": mean_roi, "lower": lower_roi, "upper": upper_roi}
+            return {
+                "mean": attribution["mean"] / total_spend,
+                "lower": _scaled("lower"),
+                "upper": _scaled("upper"),
+            }
         except Exception:
             return None
 
     def _compute_marketing_contribution_pct(
         self, total_revenue: float | None
-    ) -> dict[str, float] | None:
+    ) -> dict[str, float | None] | None:
         """Compute marketing contribution as percentage of total."""
         if total_revenue is None or total_revenue == 0:
             return None
@@ -1973,10 +1992,18 @@ class BayesianMMMExtractor(
         if attribution is None:
             return None
 
+        # Bounds may legitimately be absent (the model gave no HDI). Dividing
+        # None here raised TypeError with no guard, and `extract()` calls this
+        # unguarded — so an absent interval took down the ENTIRE report rather
+        # than leaving one gap in it.
+        def _scaled(key: str) -> float | None:
+            v = attribution.get(key)
+            return None if v is None else v / total_revenue
+
         return {
             "mean": attribution["mean"] / total_revenue,
-            "lower": attribution["lower"] / total_revenue,
-            "upper": attribution["upper"] / total_revenue,
+            "lower": _scaled("lower"),
+            "upper": _scaled("upper"),
         }
 
     # -------------------------------------------------------------------------

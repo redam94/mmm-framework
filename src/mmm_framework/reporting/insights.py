@@ -86,17 +86,31 @@ def report_facts(bundle: Any, break_even: float = 1.0) -> dict[str, Any]:
     for r in rows:
         groups[r["tier"]].append(r)
 
-    def _triple(d: Any) -> dict[str, float] | None:
+    def _triple(d: Any) -> dict[str, float | None] | None:
+        """Mean plus optional bounds.
+
+        A bound may legitimately be **absent** (`None`) when the model gave no
+        interval. Falling back to `d["mean"]` only covers a MISSING key, not a
+        present-but-None one, so `float(None)` raised and the except dropped the
+        whole entry — mean included — from the facts the narrative is built
+        from. A real posterior mean is not lost because its interval was.
+        """
         if not isinstance(d, dict):
             return None
-        try:
-            return {
-                "mean": float(d["mean"]),
-                "lower": float(d.get("lower", d["mean"])),
-                "upper": float(d.get("upper", d["mean"])),
-            }
-        except (KeyError, TypeError, ValueError):
+
+        def _num(key: str) -> float | None:
+            v = d.get(key)
+            if v is None:
+                return None
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return None
+
+        mean = _num("mean")
+        if mean is None:
             return None
+        return {"mean": mean, "lower": _num("lower"), "upper": _num("upper")}
 
     # Goodness-of-fit summary for the "does the model hold up?" gloss.
     r2 = None

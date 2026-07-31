@@ -275,3 +275,121 @@ class TestNoManufacturedInterval:
         from mmm_framework.reporting.sections import _format_interval
 
         assert _format_interval(None, None, lambda v: f"{v}", 80) == ""
+
+
+def _no_hdi_model():
+    """A model whose counterfactual contributions carry no interval."""
+    from types import SimpleNamespace
+
+    m = _beta_only_model()
+    m.compute_counterfactual_contributions = lambda **kw: SimpleNamespace(
+        total_contributions=np.array([100.0, 200.0]),
+        contribution_hdi_low=None,
+        contribution_hdi_high=None,
+    )
+    return m
+
+
+class TestAbsentBoundsDoNotBreakTheReport:
+    """An absent interval must cost the interval — nothing else.
+
+    Returning `None` bounds is only honest if every consumer survives them.
+    There are four, and two are derived metrics rather than render sites:
+    `_compute_marketing_contribution_pct` divided by the bound with no guard,
+    and `extract()` calls it unguarded, so an absent interval took down the
+    ENTIRE report rather than leaving one gap in it.
+    """
+
+    def test_extract_does_not_raise(self):
+        m = _no_hdi_model()
+        bundle = BayesianMMMExtractor(m).extract()
+        assert bundle is not None
+
+    def test_the_derived_means_survive(self):
+        """A computable mean must not vanish because a bound was absent."""
+        m = _no_hdi_model()
+        ex = BayesianMMMExtractor(m)
+
+        pct = ex._compute_marketing_contribution_pct(1000.0)
+        assert pct is not None
+        assert pct["mean"] == pytest.approx(0.3)
+        assert pct["lower"] is None and pct["upper"] is None
+
+        roi = ex._compute_blended_roi()
+        assert roi is not None, "blended ROI dropped because an interval was absent"
+        assert roi["mean"] is not None
+        assert roi["lower"] is None and roi["upper"] is None
+
+    def test_the_narrative_keeps_the_mean(self):
+        from mmm_framework.reporting.insights import report_facts
+
+        m = _no_hdi_model()
+        bundle = BayesianMMMExtractor(m).extract()
+        facts = report_facts(bundle)
+        rev = facts.get("marketing_revenue") if facts else None
+        assert rev is not None, "the whole entry was dropped, mean included"
+        assert rev["mean"] == pytest.approx(300.0)
+        assert rev["lower"] is None
+
+    def test_the_augur_cards_say_so_rather_than_rendering_dashes(self):
+        from mmm_framework.reporting.augur_sections import AugurHeadlineSection
+
+        line = AugurHeadlineSection._range_line(
+            80, {"mean": 1.0, "lower": None, "upper": None}, lambda v: f"${v}"
+        )
+        assert line == "no interval available"
+        assert "—" not in line
+
+        real = AugurHeadlineSection._range_line(
+            80, {"mean": 1.0, "lower": 0.5, "upper": 1.5}, lambda v: f"${v}"
+        )
+        assert "80% range" in real
+
+
+class TestChannelIndexingIsConsistent:
+    def test_duplicate_channel_names_do_not_shift_the_table(self):
+        """The loop and the index must come from the SAME list.
+
+        The extractor iterated a non-deduped list while the canonical reader
+        indexed a deduped one, so every channel after a duplicate read the
+        wrong column of `channel_contributions`.
+        """
+        m = _panel_contribution_model()
+        original = list(m.channel_names)
+        m.channel_names = [original[0], original[0], *original[1:]]
+
+        ex = BayesianMMMExtractor(m)
+        names = ex._get_channel_names()
+        assert names == list(dict.fromkeys(names)), "extractor list is not deduped"
+
+        from mmm_framework.reporting.helpers.utils import _get_channel_names
+
+        assert names == _get_channel_names(m), (
+            "extractor and canonical reader disagree on the channel index"
+        )
+
+    def test_a_time_only_contribution_is_summed_not_indexed(self):
+        """A (chain, draw, obs) `channel_contributions` has no channel axis.
+
+        Indexing its last axis returned the value at period `ch_idx` — about
+        1/n_obs of the answer — rather than the window total.
+        """
+        m = _model()
+        rng = np.random.default_rng(1)
+        series = rng.normal(0.05, 0.01, (1, N_DRAWS, m.n_obs))
+        m._trace = posterior_from_dict(
+            {
+                "intercept": np.zeros((1, N_DRAWS)),
+                "sigma": np.full((1, N_DRAWS), 0.1),
+                "channel_contributions": series,
+            }
+        )
+        want = float(np.mean(series.reshape(-1, m.n_obs).sum(axis=-1) * m.y_std))
+
+        for ch in m.channel_names:
+            got = _get_contribution_samples(
+                m, m._trace.posterior, ch, m.y_mean, m.y_std
+            )
+            assert float(np.mean(got)) == pytest.approx(want, rel=1e-9)
+            # Non-vacuity: indexing a period would be ~1/n_obs of this.
+            assert want / m.n_obs < 0.5 * want
