@@ -30,13 +30,26 @@ frozen public contract breaks, and the contract itself is pinned by
   — and derives the period offset itself; `train_offset` remains, documented as a period offset.
   A window that does not start on a period boundary is refused by name rather than rounded.
 
-  Two structural fixes ship with it. **CV splits are now generated on the period axis** and
-  expanded to observations, so every window covers whole periods; `CrossValidationConfig`'s
-  `min_train_size`, `test_size` and `gap` therefore count **periods** (unchanged on a national
-  panel, where `n_cells == 1`). And `_slice_panel_data` **refuses a ragged slice** instead of
-  rebuilding coordinates from whatever index values survive: 101 observations of a 4-cell panel
-  previously produced a clone claiming `n_periods=26` — 104 observations' worth — after which
-  every downstream reshape read the wrong cell.
+  Three structural fixes ship with it.
+
+  **CV splits are now generated on the period axis** and expanded to observations, so every
+  window covers whole periods. `CrossValidationConfig`'s `min_train_size`, `test_size` and `gap`
+  therefore count **periods** — unchanged on a national panel, where `n_cells == 1`. Because the
+  shipped default of 52 is a full year of weekly history, a one-year *geo* panel can no longer
+  spare it, so that case now raises a message naming both numbers instead of returning zero folds
+  and surfacing as a generic warning with no CV section and no stated reason.
+
+  **`_slice_panel_data` refuses a slice that does not cover whole periods** instead of rebuilding
+  coordinates from whatever index values survive: 101 observations of a 4-cell panel previously
+  produced a clone claiming `n_periods=26` — 104 observations' worth — after which every
+  downstream reshape read the wrong cell. The check is exact rather than a divisibility test,
+  because `[0,1,2,3,5,6,7,8]` is eight observations starting on a period boundary and still
+  straddles three periods.
+
+  **The causal-refutation `data_subset` test samples whole periods on a geo panel.** It drew a
+  random subset of raw observations, so the refit ran against a fabricated period axis and the
+  "effects should be stable" verdict was partly measuring that. The national path — including its
+  RNG draw — is byte-identical.
 
 - **The HTML report and the slide deck gave opposite recommendations for the same channel**
   ([#221]). `deck/engine.py` computed a margin-adjusted break-even (`1/margin`) while the Augur HTML

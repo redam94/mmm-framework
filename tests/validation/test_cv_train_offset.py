@@ -20,6 +20,8 @@ isolates the trend and seasonality arithmetic exactly, with no MCMC.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -266,6 +268,19 @@ class TestCVSplitsCoverWholePeriods:
             assert train_idx.max() < test_idx.min()
             assert not (set(train_idx.tolist()) & set(test_idx.tolist()))
 
+    def test_training_window_longer_than_the_series_says_so(self):
+        """The shipped default is a year; a one-year geo panel cannot spare it.
+
+        Returning zero folds would surface as a generic "could not create CV
+        splits" swallowed into `summary.warnings` — a report with no CV section
+        and no stated reason.
+        """
+        mmm = _geo_model(n_weeks=52)
+        v = _StubValidator(mmm)
+        cfg = CrossValidationConfig()  # min_train_size=52 periods
+        with pytest.raises(ValueError, match="count.*PERIODS, not observations"):
+            v._create_cv_splits(mmm.n_obs, cfg)
+
     def test_national_splits_are_unchanged(self):
         """n_cells == 1 makes the period axis the observation axis."""
         mmm = _national_model()
@@ -285,6 +300,29 @@ class TestCVSplitsCoverWholePeriods:
             v._slice_panel_data(mmm.panel, np.arange(101))
         with pytest.raises(ValueError, match="whole periods"):
             v._slice_panel_data(mmm.panel, np.arange(2, 2 + 40))
+
+    def test_cell_aligned_but_straddling_slice_is_refused(self):
+        """Length and start divisibility are not sufficient.
+
+        [0,1,2,3, 5,6,7,8] on a 4-cell panel is 8 observations starting on a
+        period boundary and still straddles three periods.
+        """
+        mmm = _geo_model()
+        v = _StubValidator(mmm)
+        straddling = np.array([0, 1, 2, 3, 5, 6, 7, 8])
+        assert len(straddling) % mmm.n_cells == 0
+        assert straddling.min() % mmm.n_cells == 0
+        with pytest.raises(ValueError, match="whole periods"):
+            v._slice_panel_data(mmm.panel, straddling)
+
+    def test_non_contiguous_whole_periods_are_allowed(self):
+        """What `_refute_data_subset` produces: gaps, but never a partial period."""
+        mmm = _geo_model()
+        v = _StubValidator(mmm)
+        idx = _periods_to_obs(np.array([0, 2, 5, 9]), mmm.n_cells)
+        sliced = v._slice_panel_data(mmm.panel, idx)
+        assert len(sliced.y) == 4 * mmm.n_cells
+        assert sliced.coords.n_periods == 4
 
     def test_cv_prediction_path_is_in_phase(self):
         """The call site itself, not just the forecaster it calls.
@@ -319,3 +357,59 @@ class TestCVSplitsCoverWholePeriods:
         sliced = v._slice_panel_data(mmm.panel, np.arange(n_train * mmm.n_cells))
         assert len(sliced.y) == n_train * mmm.n_cells
         assert sliced.coords.n_periods == n_train
+
+    def test_refutation_subset_samples_whole_periods(self):
+        """`_slice_panel_data`'s other caller must satisfy the same contract.
+
+        `_refute_data_subset` drew a random subset of raw observations, which on
+        a geo panel is ragged by construction — so the refit ran against a
+        fabricated period axis, and with the new guard in place it would raise
+        and report the refutation as failed.
+        """
+        mmm = _geo_model()
+        v = _StubValidator(mmm)
+        rng = np.random.default_rng(0)
+        captured = {}
+
+        def capture(panel, indices):
+            captured["idx"] = np.asarray(indices, dtype=int)
+            return ModelValidator._slice_panel_data(v, panel, indices)
+
+        v._slice_panel_data = capture
+        v._fit_clone = lambda panel, rc: None
+        v._stability_test = lambda *a, **k: None
+
+        rc = SimpleNamespace(subset_fraction=0.8)
+        ModelValidator._refute_data_subset(v, rc, rng, {})
+
+        idx = captured["idx"]
+        assert len(idx) % mmm.n_cells == 0
+        assert int(idx.min()) % mmm.n_cells == 0
+        # Whole periods: every retained period contributes all of its cells.
+        cells = idx % mmm.n_cells
+        assert sorted(np.bincount(cells).tolist()) == [len(idx) // mmm.n_cells] * mmm.n_cells
+
+    def test_national_refutation_subset_is_byte_identical(self):
+        """The national rng draw must not move."""
+        mmm = _national_model()
+        v = _StubValidator(mmm)
+        captured = {}
+
+        def capture(panel, indices):
+            captured["idx"] = np.asarray(indices, dtype=int)
+            return ModelValidator._slice_panel_data(v, panel, indices)
+
+        v._slice_panel_data = capture
+        v._fit_clone = lambda panel, rc: None
+        v._stability_test = lambda *a, **k: None
+
+        rc = SimpleNamespace(subset_fraction=0.8)
+        ModelValidator._refute_data_subset(v, rc, np.random.default_rng(0), {})
+
+        n = len(mmm.panel.y)
+        want = np.sort(
+            np.random.default_rng(0).choice(
+                n, size=max(5, int(round(0.8 * n))), replace=False
+            )
+        )
+        np.testing.assert_array_equal(captured["idx"], want)

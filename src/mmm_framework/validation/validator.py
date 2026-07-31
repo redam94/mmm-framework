@@ -575,7 +575,27 @@ class ModelValidator:
         test_size = cv_config.test_size
 
         n_cells = max(int(getattr(self.model, "n_cells", 1) or 1), 1)
-        n_obs = int(n_obs) // n_cells  # period axis; identity when n_cells == 1
+        n_periods = int(n_obs) // n_cells  # identity when n_cells == 1
+
+        # Say so, rather than returning zero folds. Because these sizes now count
+        # periods, the shipped default (52) is a full year of weekly history —
+        # which a one-year geo panel cannot spare, and the caller would otherwise
+        # see only a generic "could not create CV splits" swallowed into
+        # `summary.warnings`, i.e. a report with no CV section and no reason.
+        if min_train >= n_periods:
+            extra = (
+                f" ({n_obs} observations across {n_cells} cells)"
+                if n_cells > 1
+                else ""
+            )
+            raise ValueError(
+                f"Cross-validation needs a training window shorter than the "
+                f"series: min_train_size={min_train} periods, but the panel has "
+                f"{n_periods} periods{extra}. Lower "
+                f"CrossValidationConfig.min_train_size — its sizes count "
+                f"PERIODS, not observations."
+            )
+        n_obs = n_periods
 
         if cv_config.strategy == "expanding":
             # Expanding window: train grows, test is fixed size
@@ -698,14 +718,21 @@ class ModelValidator:
 
         n_cells = max(int(getattr(self.model, "n_cells", 1) or 1), 1)
         indices = np.asarray(indices, dtype=int)
-        if n_cells > 1 and (len(indices) % n_cells or int(indices.min()) % n_cells):
-            raise ValueError(
-                f"Cannot slice a {n_cells}-cell panel to observations "
-                f"[{int(indices.min())}:{int(indices.max()) + 1}] "
-                f"(length {len(indices)}): observations are period-major / "
-                f"cell-minor, so both the start and the length must be "
-                f"multiples of {n_cells} for the slice to cover whole periods."
-            )
+        if n_cells > 1 and len(indices):
+            # Exact, not a divisibility heuristic: checking only the length and
+            # the start lets a slice like [0,1,2,3, 5,6,7,8] through on a 4-cell
+            # panel, which is 8 observations starting at a period boundary and
+            # still straddles three periods. The slice must be precisely the
+            # cell-minor expansion of the periods it touches.
+            periods = np.unique(indices // n_cells)
+            if not np.array_equal(indices, _periods_to_obs(periods, n_cells)):
+                raise ValueError(
+                    f"Cannot slice a {n_cells}-cell panel to observations "
+                    f"[{int(indices.min())}:{int(indices.max()) + 1}] "
+                    f"(length {len(indices)}): observations are period-major / "
+                    f"cell-minor, so a slice must be ascending and cover whole "
+                    f"periods — all {n_cells} cells of each period it touches."
+                )
 
         # Slice dataframes
         y_sliced = panel.y.iloc[indices]
@@ -2013,8 +2040,22 @@ class ModelValidator:
     def _refute_data_subset(self, rc: Any, rng: Any, original_betas: dict) -> Any:
         panel = self.model.panel
         n = len(panel.y)
-        k = max(5, int(round(rc.subset_fraction * n)))
-        idx = np.sort(rng.choice(n, size=k, replace=False))
+        n_cells = max(int(getattr(self.model, "n_cells", 1) or 1), 1)
+        if n_cells == 1:
+            k = max(5, int(round(rc.subset_fraction * n)))
+            idx = np.sort(rng.choice(n, size=k, replace=False))
+        else:
+            # Sample whole PERIODS, not raw observations. Dropping a random
+            # subset of (period, cell) observations leaves a ragged panel, and
+            # the slicer rebuilds coordinates from whatever index values
+            # survive — so the refit would run against a fabricated period axis
+            # and the "effects should be stable" verdict would be measuring
+            # that, not the subset. The national path is untouched, including
+            # its rng draw, so its numbers are byte-identical.
+            n_periods = n // n_cells
+            k = min(max(5, int(round(rc.subset_fraction * n_periods))), n_periods)
+            periods = np.sort(rng.choice(n_periods, size=k, replace=False))
+            idx = _periods_to_obs(periods, n_cells)
         sliced = self._slice_panel_data(panel, idx)
         refit = self._fit_clone(sliced, rc)
         return self._stability_test(
