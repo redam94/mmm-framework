@@ -699,14 +699,20 @@ def prior_estimand_facts(
 
     from .measurement import resolve_channel_divisor
 
+    from ...model.component_scale import to_kpi_units
+
     channels = [str(c) for c in getattr(model, "channel_names", [])]
-    y_std = float(getattr(model, "y_std", 1.0) or 1.0)
     arr = np.asarray(prior_ds["channel_contributions"].values, dtype=float)
     # (chain, draw, obs, channel) -> (S, obs, channel)
     arr = arr.reshape(-1, *arr.shape[-2:])
     if arr.shape[-1] != len(channels):
         return {}
-    contrib = arr.sum(axis=1) * y_std  # (S, channel), KPI units
+    # `channel_contributions` is one of the governed component Deterministics:
+    # the core graph registers it standardized, the extension graphs already in
+    # KPI units. Hard-coding `* y_std` here reported an extension model's prior
+    # ROI y_std times too large, in the same document — and beside the very
+    # bands #274 corrected.
+    contrib = to_kpi_units(arr.sum(axis=1), model)  # (S, channel), KPI units
 
     lo_q, hi_q = (1 - interval) / 2 * 100, (1 + interval) / 2 * 100
     rows: list[dict[str, Any]] = []

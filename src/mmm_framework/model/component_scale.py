@@ -83,11 +83,22 @@ def component_scale(model: Any) -> ComponentScale:
 
 
 def to_kpi_units(values: np.ndarray, model: Any) -> np.ndarray:
-    """Bridge component-Deterministic ``values`` to original KPI units.
+    """Undo the standardization a component Deterministic was registered under.
 
-    A no-op when the model's graph already did it. Note this bridges a
-    *contribution* (a deviation), so it applies ``y_std`` only — never
-    ``y_mean``, which belongs to the intercept.
+    A no-op when the model's graph already did it. This bridges a *contribution*
+    (a deviation), so it applies ``y_std`` only — never ``y_mean``, which
+    belongs to the intercept.
+
+    **It is the standardization bridge, not a link inverse.** On an additive,
+    Gaussian model the result is in original KPI units, which is the usual case
+    and the one every caller here is written for. On a model whose outcome is
+    not the KPI itself the result is on that model's own scale: a
+    ``MULTIPLICATIVE`` specification standardizes ``log(y)``, so the result is
+    log-scale (use ``compute_component_decomposition``'s LMDI index to reach KPI
+    units), and a count/bounded likelihood sets ``y_std = 1.0``, so the result is
+    on the link scale. Neither is expressible in a per-family constant, and
+    neither is changed by this function — it is named here so a caller does not
+    read "KPI units" into a number that is not.
     """
     arr = np.asarray(values, dtype=float)
     if component_scale(model) is ComponentScale.ORIGINAL:

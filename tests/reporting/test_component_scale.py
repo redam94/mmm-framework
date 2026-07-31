@@ -171,6 +171,67 @@ class TestExtensionReadoutIsInKpiUnits:
             assert upper * m.y_std > kpi_max
 
 
+class TestChannelContributionsConsumers:
+    """The bug is per-variable, not per-helper (#274 acceptance criterion 3).
+
+    `channel_contributions` is governed by the same convention, and its two
+    consumers hard-coded the core rule — one in the very same readout, one on
+    the default post-fit ROI path.
+    """
+
+    def test_prior_estimand_facts_matches_the_graphs_own_contributions(
+        self, nested_model
+    ):
+        from mmm_framework.reporting.helpers.prefit import prior_estimand_facts
+
+        m = nested_model
+        idata = sample_prior(m, n_samples=120, random_seed=0)
+        facts = prior_estimand_facts(m, idata)
+        assert facts.get("channels"), "no prior estimand rows"
+
+        raw = np.asarray(
+            idata.prior["channel_contributions"].values, dtype=float
+        )
+        raw = raw.reshape(-1, *raw.shape[-2:]).sum(axis=1)  # (S, channel)
+
+        from mmm_framework.reporting.helpers.measurement import (
+            resolve_channel_divisor,
+        )
+
+        by_name = {r["channel"]: r for r in facts["channels"]}
+        for c, ch in enumerate(m.channel_names):
+            if ch not in by_name:
+                continue
+            div = resolve_channel_divisor(m, ch)
+            want = float(np.mean(raw[:, c] / div.total))
+            assert by_name[ch]["mean"] == pytest.approx(want, rel=1e-9)
+
+    @pytest.mark.slow
+    def test_post_fit_roi_matches_the_graphs_own_contributions(self, nested_model):
+        """Measured pre-fix: contribution 797,050 on a total KPI of 88,685."""
+        from mmm_framework.reporting.helpers import compute_roi_with_uncertainty
+
+        m = nested_model
+        m.fit(method="map", random_seed=0, progressbar=False)
+
+        raw = np.asarray(
+            m._trace.posterior["channel_contributions"].values, dtype=float
+        )
+        raw = raw.reshape(-1, *raw.shape[-2:]).sum(axis=1).mean(axis=0)
+
+        df = compute_roi_with_uncertainty(m, hdi_prob=0.94)
+        got = dict(zip(df["channel"], df["contribution_mean"]))
+        for c, ch in enumerate(m.channel_names):
+            assert got[ch] == pytest.approx(float(raw[c]), rel=1e-9)
+
+        total_kpi = float(np.asarray(m.y, dtype=float).sum())
+        for ch, contrib in got.items():
+            assert abs(contrib) < total_kpi, (
+                f"{ch} contribution {contrib:,.0f} exceeds the whole KPI "
+                f"{total_kpi:,.0f} — the y_std inflation"
+            )
+
+
 class TestCoreReadoutIsUnchanged:
     def test_core_components_still_get_the_y_std_bridge(self):
         """The core path must be byte-identical: standardized x y_std."""
