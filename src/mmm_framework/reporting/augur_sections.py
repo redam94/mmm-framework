@@ -277,18 +277,33 @@ class AugurHeadlineSection(AugurSection):
             f"⚠️ {msg}</div>"
         )
 
+    @staticmethod
+    def _range_line(ci: int, d: dict, fmt) -> str:
+        """The interval sub-line, or a plain statement that there isn't one.
+
+        An absent bound means the model could give no interval, not that the
+        interval is zero-width — so rendering "— – —" under a "{ci}% range"
+        label promises something the number does not have.
+        """
+        lo, hi = d.get("lower"), d.get("upper")
+        if lo is None or hi is None:
+            return "no interval available"
+        return f"{ci}% range&nbsp; {fmt(lo)} – {fmt(hi)}"
+
     def _kpi_strip(self) -> str:
         ci = int((self.section_config.credible_interval or 0.8) * 100)
         cards: list[str] = []
 
         rev = getattr(self.data, "marketing_attributed_revenue", None)
         if isinstance(rev, dict) and rev.get("mean") is not None:
+            # An absent bound means the model could give no interval, not that
+            # the interval is zero-width — so drop the sub-line rather than
+            # render "— – —" under a "{ci}% range" label that promises one.
             cards.append(
                 self._kpi(
                     "Marketing-attributed revenue",
                     self._money(rev["mean"]),
-                    f"{ci}% range&nbsp; {self._money(rev.get('lower'))} – "
-                    f"{self._money(rev.get('upper'))}",
+                    self._range_line(ci, rev, self._money),
                 )
             )
         share = getattr(self.data, "marketing_contribution_pct", None)
@@ -297,8 +312,7 @@ class AugurHeadlineSection(AugurSection):
                 self._kpi(
                     "Share of total revenue",
                     self._pct(share["mean"]),
-                    f"{ci}% range&nbsp; {self._pct(share.get('lower'))} – "
-                    f"{self._pct(share.get('upper'))}",
+                    self._range_line(ci, share, self._pct),
                 )
             )
         roi = getattr(self.data, "blended_roi", None)
@@ -307,8 +321,7 @@ class AugurHeadlineSection(AugurSection):
                 self._kpi(
                     "Blended return per $1",
                     self._ratio(roi["mean"]),
-                    f"{ci}% range&nbsp; {self._ratio(roi.get('lower'))} – "
-                    f"{self._ratio(roi.get('upper'))}",
+                    self._range_line(ci, roi, self._ratio),
                 )
             )
         if not cards:

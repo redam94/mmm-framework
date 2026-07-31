@@ -16,6 +16,55 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Fixed
 
+- **Two arithmetically wrong fallback branches in the report's ROI extractor** ([#276]).
+  `BayesianMMMExtractor._compute_channel_roi` re-implemented
+  `reporting.helpers.roi._get_contribution_samples`' three-branch precedence rather than calling
+  it, and got two branches wrong: a scalar-per-draw contribution was multiplied by `n_obs` (the
+  canonical form has no such factor), and the `beta_<channel>` fallback used
+  `beta * y_std * n_obs * 0.5` — under a comment calling itself a rough estimate — against a
+  canonical `beta * media_sum * y_std`.
+
+  The second contains **no spend term at all**, so every channel received the same contribution
+  however much was spent on it. Measured on a 60-week panel with `y_std = 56.66` and `beta = 0.4`
+  everywhere: all four channels reported 679.9, against canonical totals of 79,575 / 52,300 /
+  41,060 / 33,343 — ratios of 117.05x, 76.93x, 60.39x, 49.04x, each exactly
+  `media_sum / (0.5 · n_obs)`.
+
+  These branches fire precisely for models exposing only a coefficient — the bespoke garden
+  models — and the section rendered a clean per-channel ROI table with no marker distinguishing
+  them from the primary path. **This changes a published number on those paths**, which is the
+  point: the previous one was wrong.
+
+  The two other `# Rough estimate` sites in the same file are fixed with it, since this was one
+  habit rather than four incidents. `_get_component_totals` now reads through the same canonical
+  path (it held the second copy of the `* 0.5` formula, and which branch fired depended on whether
+  spend happened to be available — so one model could report two different totals for one channel).
+  And `_compute_marketing_attribution` no longer manufactures a `±15%` interval when the model
+  gives no HDI: it returns no interval, which both render sites already degrade gracefully on. A
+  number with no posterior behind it, rendered in the credible-interval slot, is indistinguishable
+  from a real one.
+
+  Models on the primary branch (a registered `channel_contributions`) are byte-identical, verified
+  by running both revisions against the same fitted model.
+
+  Four further defects, found by an adversarial review of the first commit rather than by the
+  issue. Returning `None` bounds is only honest if every consumer survives them, and there were
+  **four** consumers, two of which are derived metrics rather than render sites:
+  `_compute_marketing_contribution_pct` divided by the bound with no guard and `extract()` calls
+  it unguarded, so an absent interval took down the **entire report** instead of leaving one gap
+  in it; `_compute_blended_roi` did the same inside a bare `except`, silently dropping a
+  *computable mean* because a bound was absent; and `insights._triple` raised on `float(None)`,
+  dropping the whole revenue line — mean included — from the narrative. The two sibling Augur KPI
+  cards still rendered "— – —" under a "80% range" label. All four now keep the mean and say the
+  interval is unavailable.
+
+  Two indexing defects came with the delegation. The extractor iterated a **non-deduplicated**
+  channel list while the canonical reader indexes a deduplicated one, so on a model with a
+  repeated channel name every channel after the duplicate read the wrong column of
+  `channel_contributions`. And a `(chain, draw, obs)` `channel_contributions` — which has no
+  channel axis — had its **time** axis indexed, returning the value at one period instead of the
+  window total, roughly `1/n_obs` of the answer. Both are now size-checked rather than assumed.
+  Models on the primary branch (a registered `channel_contributions`) are byte-identical.
 - **The extension seasonal period was 52.178571, not 52.0, under a docstring claiming
   comparability** ([#275]). The core graph looks the data frequency up in a table and gets exactly
   52.0 weekly observations per year; the extension graphs
@@ -193,6 +242,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#273]: https://github.com/redam94/mmm-framework/issues/273
 [#274]: https://github.com/redam94/mmm-framework/issues/274
 [#275]: https://github.com/redam94/mmm-framework/issues/275
+[#276]: https://github.com/redam94/mmm-framework/issues/276
 
 ## [1.3.3] — 2026-07-27
 

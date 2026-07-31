@@ -226,10 +226,21 @@ def _get_contribution_samples(
                     # Use integer index
                     arr = da.isel(channel=ch_idx).values
                 elif len(dims) > 2:
-                    # Assume last dim is channel: (chain, draw, time, channel) or (chain, draw, channel)
+                    # The last axis is the channel axis only when its LENGTH
+                    # says so. Assuming it unconditionally meant a
+                    # (chain, draw, obs) variable — which has no channel axis —
+                    # had its TIME axis indexed: `arr[..., ch_idx]` returned the
+                    # value at period `ch_idx` instead of the window total, i.e.
+                    # roughly 1/n_obs of the right answer, published as the
+                    # channel's contribution. Falling through leaves a
+                    # (samples, time) array for the sum below.
                     arr = da.values  # Get numpy FIRST
                     arr = _flatten_samples(arr)
-                    if arr.ndim > 1 and ch_idx < arr.shape[-1]:
+                    if (
+                        arr.ndim > 1
+                        and arr.shape[-1] == len(channels)
+                        and ch_idx < arr.shape[-1]
+                    ):
                         arr = arr[..., ch_idx]
                 else:
                     arr = da.values
