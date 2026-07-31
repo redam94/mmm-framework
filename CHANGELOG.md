@@ -16,6 +16,34 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Fixed
 
+- **Extension models' components and ROI were scaled by `y_std` twice** ([#274]). The two model
+  families register the same component Deterministics on **different scales** — the core graph
+  standardized, the extension graphs (`NestedMMM` / `StructuralNestedMMM` / `MultivariateMMM` /
+  `CombinedMMM`) already multiplied by `y_std`, i.e. in KPI units — and nothing said so. Three
+  consumers hard-coded the core rule.
+
+  In the **pre-fit Model Design Readout**, `prior_component_facts` rendered an extension model's
+  trend and seasonality bands scaled by `y_std**2`. Measured on a 60-week nested model with
+  `y_std = 68.8` and a KPI topping out at 1,646: the seasonality band reached **3,940** — 2.4x the
+  entire KPI. That reads as "the prior is uninformative", the opposite of what a pre-registration
+  document is for.
+
+  `prior_estimand_facts` — the same file, the same `prefit_facts()` call, rendered on the same
+  page — had it on `channel_contributions`, so the readout's prior-ROI section was `y_std` times
+  too large beside the now-corrected bands.
+
+  Worst, `reporting/helpers/roi.py::_get_contribution_samples` had it on the **default post-fit
+  path**, reached by `compute_roi_with_uncertainty` from the Oracle's `roi_metrics` op,
+  `build_and_fit`, the Augur deck and the summary helpers. Measured on the same nested model: a
+  channel contribution of **797,050 against a total KPI of 88,685** — nine times the whole KPI —
+  published as **ROI 132.9**. It is 11,585 and ROI 1.93.
+
+  The convention now lives in one place, `mmm_framework.model.component_scale`, and each family
+  *declares* which side it is on. A model that declares nothing is treated as standardized, the
+  historical assumption, so every existing consumer is byte-identical. Consumers bridge through
+  `to_kpi_units` rather than multiplying by `y_std` — and that function documents what it is not:
+  the standardization bridge, not a link inverse, so on a multiplicative or count-likelihood model
+  the result is on the model's own scale rather than the KPI's.
 - **Rolling-window cross-validation on a geo panel forecast out of phase with its own training
   window** ([#273]). `validator.py` passed `min(train_indices)` — an *observation* index — into
   `PosteriorForecaster.forecast`'s `train_offset`, which is a *period* offset. The two axes
@@ -127,6 +155,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#222]: https://github.com/redam94/mmm-framework/issues/222
 [#237]: https://github.com/redam94/mmm-framework/issues/237
 [#273]: https://github.com/redam94/mmm-framework/issues/273
+[#274]: https://github.com/redam94/mmm-framework/issues/274
 
 ## [1.3.3] — 2026-07-27
 

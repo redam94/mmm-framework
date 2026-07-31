@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
+from ...model.component_scale import to_kpi_units
 from .results import ROIResult
 from .utils import (
     _check_model_fitted,
@@ -205,7 +206,7 @@ def _get_contribution_samples(
             samples = _flatten_samples(arr)
             if samples.ndim > 1:
                 samples = samples.sum(axis=-1)
-            return samples * y_std
+            return to_kpi_units(samples, model)
 
     # Fall back to channel_contributions with index
     if "channel_contributions" in posterior:
@@ -244,7 +245,14 @@ def _get_contribution_samples(
             if arr.ndim > 1:
                 arr = arr.sum(axis=-1)
 
-            return arr * y_std
+            # The scale of `channel_contributions` is a per-family convention,
+            # not a constant: the core graph registers it standardized, the
+            # extension graphs already multiplied by y_std. Hard-coding the
+            # core rule published an extension model's contribution — and so
+            # its ROI — inflated by a factor of y_std. Measured on a nested
+            # model with y_std = 68.8: contribution 797,050 against a total KPI
+            # of 88,685, i.e. nine times the whole KPI, rendered as ROI 132.9.
+            return to_kpi_units(arr, model)
 
         except Exception as e:
             logger.warning(
