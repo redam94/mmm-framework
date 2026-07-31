@@ -331,8 +331,8 @@ frozen public contract breaks, and the contract itself is pinned by
 [#274]: https://github.com/redam94/mmm-framework/issues/274
 [#275]: https://github.com/redam94/mmm-framework/issues/275
 [#276]: https://github.com/redam94/mmm-framework/issues/276
-[#278]: https://github.com/redam94/mmm-framework/issues/278
 [#277]: https://github.com/redam94/mmm-framework/issues/277
+[#278]: https://github.com/redam94/mmm-framework/issues/278
 
 ## [1.3.3] — 2026-07-27
 

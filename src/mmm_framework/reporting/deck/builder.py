@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from loguru import logger
 from pptx.util import Inches
 
 from . import charts, template as T, textfit
@@ -651,11 +652,26 @@ def build_pptx(
     from pptx import Presentation
 
     from ..helpers import compute_response_zones, compute_roi_with_uncertainty
+    from ..helpers.roi import ContributionScaleUnsupported
 
     template_path = template_path or default_template_path()
     eff_be = (1.0 / float(margin)) if margin else float(break_even)
 
-    roi_df = compute_roi_with_uncertainty(model, hdi_prob=hdi_prob)
+    # Degrades like the `zones` and `bundle` calls below rather than taking the
+    # whole deck down. `compute_roi_with_uncertainty` refuses a model whose
+    # in-graph contributions are not on the KPI scale (a multiplicative
+    # specification, or a link-scale likelihood) — the right answer is a deck
+    # without ROI slides, not a traceback (#278).
+    roi_df = None
+    try:
+        roi_df = compute_roi_with_uncertainty(model, hdi_prob=hdi_prob)
+    except ContributionScaleUnsupported as exc:
+        # ONLY the scale refusal. A broken or unfitted model must still fail
+        # loudly here — `tests/test_model_ops.py::test_ops_return_error_as_data_on_bad_model`
+        # exists precisely so an op cannot answer a bad model with a
+        # plausible-looking artifact, and a bare `except Exception` would let a
+        # deck render from one.
+        logger.warning(f"Deck ROI slides omitted: {exc}")
     roi_records = (
         roi_df.to_dict("records") if roi_df is not None and len(roi_df) else []
     )
