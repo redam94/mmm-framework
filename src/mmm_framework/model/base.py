@@ -70,6 +70,7 @@ from ..transforms.adstock_pt import (
     parametric_adstock_pt,
 )
 
+from .component_scale import ComponentScale
 from .results import (
     MMMResults,
     PredictionResults,
@@ -639,6 +640,16 @@ class BayesianMMM:
     #: specification. Set in ``_prepare_data``; class default keeps subclasses
     #: that override ``_prepare_data`` (garden models) safe if they never touch it.
     _multiplicative: bool = False
+
+    #: Scale of the registered component Deterministics (``trend_component``,
+    #: ``seasonality_component``, ``controls_total``, ``media_total``,
+    #: ``channel_contributions``). This graph registers them on the
+    #: **standardized** outcome scale, so a consumer bridges to KPI units by
+    #: multiplying by ``y_std`` — via
+    #: :func:`~mmm_framework.model.component_scale.to_kpi_units`, never by hand.
+    #: The extension graphs register the same names in original KPI units and
+    #: declare ``ORIGINAL``; see that module for why the convention lives there.
+    COMPONENT_DETERMINISTIC_SCALE: ComponentScale = ComponentScale.STANDARDIZED
 
     def __init__(
         self,

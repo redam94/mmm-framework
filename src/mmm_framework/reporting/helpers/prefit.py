@@ -584,9 +584,15 @@ def prior_predictive_facts(
 # Prior structural components over time (original scale)
 # ─────────────────────────────────────────────────────────────────────────────
 # The graph's registered component deterministics (name → display label). Each
-# is an additive term of the standardized mean, so original-scale contribution
-# per observation is ``component * y_std``; per period we sum across geo rows,
+# is an additive term of the outcome mean; per period we sum across geo rows,
 # matching the KPI fan's aggregation.
+#
+# The bridge to KPI units is NOT ``* y_std`` unconditionally: the core graph
+# registers these standardized while the extension graphs register them already
+# in KPI units, so the conversion goes through
+# ``mmm_framework.model.component_scale.to_kpi_units``, which is where that
+# convention is stated. Applying the core rule to a nested model multiplied by
+# ``y_std`` twice and rendered a prior band 2.4x the entire KPI (#274).
 _COMPONENT_VARS = (
     ("trend", "trend_component", "Baseline trend"),
     ("seasonality", "seasonality_component", "Seasonality"),
@@ -611,11 +617,12 @@ def prior_component_facts(
     seasonality shape, trend direction and control/media magnitudes before
     any data has spoken.
     """
+    from ...model.component_scale import to_kpi_units
+
     prior_ds = getattr(idata, "prior", None)
     if prior_ds is None:
         return {}
 
-    y_std = float(getattr(model, "y_std", 1.0) or 1.0)
     n_obs = int(getattr(model, "n_obs", 0) or 0)
     time_idx = np.asarray(getattr(model, "time_idx", np.arange(n_obs)), dtype=int)
     n_periods = int(time_idx.max()) + 1 if time_idx.size else 0
@@ -641,7 +648,8 @@ def prior_component_facts(
         arr = np.asarray(prior_ds[var].values, dtype=float)
         if arr.shape[-1] != time_idx.size:
             continue  # not obs-indexed (unexpected shape) — skip, don't guess
-        arr = arr.reshape(-1, time_idx.size) * y_std  # (S, n_obs), KPI units
+        # (S, n_obs) in KPI units — the bridge depends on the model family.
+        arr = to_kpi_units(arr.reshape(-1, time_idx.size), model)
         S = arr.shape[0]
         period = np.zeros((S, n_periods), dtype=float)
         np.add.at(period, (np.arange(S)[:, None], time_idx[None, :]), arr)

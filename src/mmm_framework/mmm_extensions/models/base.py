@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from ...calibration.likelihood import ExperimentMeasurement
     from ...config.enums import FitMethod
 
+from ...model.component_scale import ComponentScale
 from ..results import ModelResults
 
 # Adstock kernel length (lags) for the extension models' media transform.
@@ -45,6 +46,16 @@ class BaseExtendedMMM:
     # Saved-model format version for the extension family (read by
     # MMMSerializer's extended branch; the core BayesianMMM has its own).
     _VERSION = "1.0"
+
+    #: Scale of the registered component Deterministics (``trend_component``,
+    #: ``seasonality_component``, ``controls_total``, ``channel_contributions``).
+    #: These graphs register them **already multiplied by ``y_std``**, i.e. in
+    #: original KPI units, because their own consumers read them directly — the
+    #: opposite of the core graph, which registers them standardized. Consumers
+    #: must bridge via :func:`~mmm_framework.model.component_scale.to_kpi_units`
+    #: rather than multiplying by ``y_std``, or an extension model's components
+    #: come out scaled by ``y_std**2``.
+    COMPONENT_DETERMINISTIC_SCALE: ComponentScale = ComponentScale.ORIGINAL
 
     def __init__(
         self,
