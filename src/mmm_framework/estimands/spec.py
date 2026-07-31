@@ -208,6 +208,63 @@ class Summary(BaseModel):
     side: Literal["gt", "lt"] = "gt"
 
 
+#: Interval mass the ESTIMAND surfaces use (`Estimand.hdi_prob`).
+#:
+#: This and :data:`DASHBOARD_INTERVAL_MASS` are the two credible-interval
+#: defaults in the reporting stack, and they DIFFER on purpose. They are stated
+#: together here because they were previously set 1,500 lines apart, in
+#: different packages, so a reader of a report that renders both had no way to
+#: know one number was at 94% and the other at 80% — and the narrower one reads
+#: as the more precise estimate when it is the same posterior at a lower mass.
+#:
+#: * 0.94 is the estimand convention: arviz's own default, and the mass every
+#:   `Estimand` carries into `evaluate_estimands`.
+#: * 0.80 is the dashboard convention (`SectionConfig.credible_interval`),
+#:   inherited from the classic report's charts and tables.
+#:
+#: Changing either moves published numbers, so they are left as they are and
+#: every rendered interval is LABELLED with its mass and kind instead.
+ESTIMAND_INTERVAL_MASS: float = 0.94
+
+#: Interval mass the classic report's own sections use
+#: (`reporting.config.SectionConfig.credible_interval`). See
+#: :data:`ESTIMAND_INTERVAL_MASS` for why the two differ.
+DASHBOARD_INTERVAL_MASS: float = 0.80
+
+#: Human labels for the two interval DEFINITIONS in use. They are not
+#: interchangeable: an equal-tailed interval cuts equal probability from each
+#: tail, a highest-density interval is the shortest interval at that mass, and
+#: on a skewed posterior they differ in both endpoints.
+INTERVAL_KIND_ETI = "ETI"
+INTERVAL_KIND_HDI = "HDI"
+
+#: `Realization.hdi_method` -> which definition it actually computes.
+#: `compute_hdi_bounds` is percentile-based despite its name, so only
+#: ``az_hdi`` is a true highest-density interval.
+INTERVAL_KIND_BY_HDI_METHOD: dict[str, str] = {
+    "percentile": INTERVAL_KIND_ETI,
+    "finite_percentile": INTERVAL_KIND_ETI,
+    "az_hdi": INTERVAL_KIND_HDI,
+}
+
+
+def interval_label(mass: float | None, kind: str | None) -> str:
+    """``"94% HDI"`` — the mass and the definition, never one without the other.
+
+    Returns ``""`` when either is unknown, so a caller falls back to a neutral
+    label rather than printing a mass with no definition (or, worse, asserting
+    a definition the data does not carry).
+    """
+    if mass is None or not kind:
+        return ""
+    pct = float(mass) * 100.0
+    # `round()` to whole percent turned 0.995 into "100%" — a claim of a
+    # full-support interval — and 0.005 into "0%". Keep whatever precision the
+    # number actually has, without trailing zeros.
+    text = f"{pct:.2f}".rstrip("0").rstrip(".")
+    return f"{text}% {kind}"
+
+
 class Realization(BaseModel):
     """Per-estimand realization knobs that pin bit-stable arithmetic.
 
@@ -262,7 +319,7 @@ class Estimand(BaseModel):
     denominator: Contrast | Quantity | None = None
     op_ratio_zero_denominator: Literal["zero", "skip", "nan"] = "zero"
     window: TimeWindow | None = None
-    hdi_prob: float = 0.94
+    hdi_prob: float = ESTIMAND_INTERVAL_MASS
     summaries: list[Summary] = Field(default_factory=list)
     realization: Realization = Field(default_factory=Realization)
     required_capabilities: list[str] = Field(default_factory=list)
@@ -294,7 +351,12 @@ class EstimandResult(BaseModel):
     mean: float | None = None
     hdi_low: float | None = None
     hdi_high: float | None = None
-    hdi_prob: float = 0.94
+    hdi_prob: float = ESTIMAND_INTERVAL_MASS
+    #: Which interval DEFINITION `hdi_low`/`hdi_high` are, derived from the
+    #: estimand's `Realization.hdi_method`. Travels with the number so a render
+    #: site can state it instead of assuming (#277) — the classic report shows
+    #: `contribution_roi` in two places, at two masses and two definitions.
+    interval_definition: str = INTERVAL_KIND_ETI
     units: str = ""
     extra: dict[str, Any] = Field(default_factory=dict)
     reason: str = ""

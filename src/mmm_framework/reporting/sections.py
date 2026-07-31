@@ -21,6 +21,11 @@ from mmm_framework.finance.evidence import (
 from mmm_framework.finance.evidence import is_cost_kind as _is_cost_kind
 from mmm_framework.finance.evidence import is_ratio_kind as _is_ratio_kind
 
+from mmm_framework.estimands.spec import (
+    ESTIMAND_INTERVAL_MASS,
+    interval_label,
+)
+
 from .config import ReportConfig, SectionConfig, ChartConfig
 from . import charts
 from .evidence import evidence_chip_html, evidence_legend_html
@@ -128,6 +133,15 @@ class Section:
     def is_frequentist(self) -> bool:
         """True when the fit behind this report produced no posterior."""
         return bool(getattr(self.data, "is_frequentist", False))
+
+    @property
+    def interval_noun_short(self) -> str:
+        """``"CI"`` either way — the neutral abbreviation.
+
+        Used where a header states only the MASS, leaving the definition to be
+        stated per row (or omitted when unknown).
+        """
+        return "CI"
 
     @property
     def interval_noun(self) -> str:
@@ -731,7 +745,22 @@ class ChannelROISection(Section):
         roi_upper: np.ndarray,
     ) -> str:
         """Render detailed ROI table."""
-        ci_level = int(self.section_config.credible_interval * 100)
+        # Interval provenance (#277). This section's interval is EQUAL-TAILED at
+        # `credible_interval`; `EstimandsSection` publishes the same estimand at
+        # a true HDI and a different mass, and both are default-on. Labelling
+        # each is what stops a reader treating the narrower one as the more
+        # precise estimate — it is the same posterior at a lower mass under a
+        # different definition. Read from the data where the extractor supplied
+        # it, so the label cannot drift from the arithmetic.
+        roi_meta_all = self.data.channel_roi or {}
+        first = next((v for v in roi_meta_all.values() if isinstance(v, dict)), {})
+        mass = first.get("interval_mass", self.section_config.credible_interval)
+        # Suppressed on a fit with no posterior: "ETI"/"HDI" is posterior
+        # vocabulary and `interval_noun` already carries the right word there.
+        kind = "" if self.is_frequentist else first.get("interval_definition", "")
+        interval_header = interval_label(mass, kind or None) or (
+            f"{int(float(mass) * 100)}% {self.interval_noun_short}"
+        )
 
         # Sort by mean ROI
         sort_idx = np.argsort(roi_mean)[::-1]
@@ -790,7 +819,7 @@ class ChannelROISection(Section):
                         <th>Channel</th>
                         <th>Metric</th>
                         <th>{value_header}</th>
-                        <th>{ci_level}% CI</th>
+                        <th>{interval_header}</th>
                         <th>Confidence</th>
                         <th>Evidence</th>
                     </tr>
@@ -2961,10 +2990,27 @@ class EstimandsSection(Section):
         if not items:
             return ""
 
-        # Header CI label from the modal hdi_prob across rows (estimands usually
-        # share one; differing probs still get a sensible single header).
-        probs = [v.get("hdi_prob", 0.94) for _, v in items]
-        ci_pct = int(round((max(set(probs), key=probs.count) if probs else 0.94) * 100))
+        # Header interval label from the modal mass AND definition across rows
+        # (estimands usually share one; differing values still get a sensible
+        # single header). The DEFINITION is load-bearing here (#277): the
+        # classic report also renders `contribution_roi` in ChannelROISection,
+        # at a lower mass and an equal-tailed interval, and the narrower one
+        # reads as more precise unless both say which they are.
+        probs = [v.get("interval_mass", v.get("hdi_prob", ESTIMAND_INTERVAL_MASS))
+                 for _, v in items]
+        modal_mass = max(set(probs), key=probs.count) if probs else ESTIMAND_INTERVAL_MASS
+        ci_pct = int(round(float(modal_mass) * 100))
+
+        # The header states the MASS only, because the definitions in this table
+        # are genuinely MIXED: the default set is contribution_roi (az_hdi ->
+        # HDI) plus marginal_roas and contribution (both ETI), so any single
+        # modal label asserts a definition that is false for some rows — and ETI
+        # outvotes HDI 2:1, so a modal header would publish contribution_roi's
+        # true HDI as an equal-tailed interval, in every default report. That is
+        # a WORSE claim than the neutral one it replaced. The definition is
+        # therefore stated PER ROW, which is what "provenance travels with the
+        # number" actually requires (#277).
+        interval_header = f"{ci_pct}% {self.interval_noun_short}"
 
         # Group by estimand name (the dict key prefix, e.g. "contribution_roi"),
         # then by descending |mean| within each group. The label comes from the
@@ -3030,12 +3076,23 @@ class EstimandsSection(Section):
             chip = evidence_chip_html(ev, theme="classic")
             val_cls = "mono muted" if (ev and ev.get("gated")) else "mono"
 
+            # The DEFINITION, per row. Suppressed for a fit with no posterior:
+            # "HDI"/"ETI" is posterior vocabulary, and this section already owns
+            # `interval_noun` precisely so a bootstrap interval is not described
+            # in terms a credible interval licenses.
+            row_mass = v.get("interval_mass", v.get("hdi_prob"))
+            row_def = ""
+            if not self.is_frequentist:
+                label = interval_label(row_mass, v.get("interval_definition"))
+                if label:
+                    row_def = f'<span class="interval-def"> {html.escape(label)}</span>'
+
             rows.append(f"""
                 <tr>
                     <td>{html.escape(self._kind_label(name))}</td>
                     <td>{html.escape(target)}</td>
                     <td class="{val_cls}">{val_str}</td>
-                    <td class="{val_cls}">{ci_str}</td>
+                    <td class="{val_cls}">{ci_str}{row_def}</td>
                     <td class="{conf_class}">{status}</td>
                     <td>{chip}</td>
                 </tr>
@@ -3055,7 +3112,7 @@ class EstimandsSection(Section):
                         <th>Estimand</th>
                         <th>Target</th>
                         <th>Estimate</th>
-                        <th>{ci_pct}% CI</th>
+                        <th>{interval_header}</th>
                         <th>Confidence</th>
                         <th>Evidence</th>
                     </tr>

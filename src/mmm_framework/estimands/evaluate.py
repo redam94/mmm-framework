@@ -29,6 +29,8 @@ from .capabilities import (
     model_capabilities,
 )
 from .spec import (
+    INTERVAL_KIND_BY_HDI_METHOD,
+    INTERVAL_KIND_ETI,
     ALL_CHANNELS,
     Constant,
     Contrast,
@@ -214,6 +216,9 @@ class EstimandEvaluator:
             hdi_low=hdi_low,
             hdi_high=hdi_high,
             hdi_prob=est.hdi_prob,
+            interval_definition=INTERVAL_KIND_BY_HDI_METHOD.get(
+                est.realization.hdi_method, INTERVAL_KIND_ETI
+            ),
             units=est.units,
             extra=extra,
         )

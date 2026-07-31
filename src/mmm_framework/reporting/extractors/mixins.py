@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from loguru import logger
 
+from ...estimands.spec import ESTIMAND_INTERVAL_MASS
+
 if TYPE_CHECKING:
     from .bundle import MMMDataBundle
 
@@ -484,8 +486,17 @@ class EstimandPPCMixin:
                     "upper": _finite(getattr(r, "hdi_high", None)),
                     "kind": getattr(r, "kind", "") or "",
                     "units": getattr(r, "units", "") or "",
-                    "hdi_prob": float(getattr(r, "hdi_prob", 0.94) or 0.94),
+                    "hdi_prob": float(
+                        getattr(r, "hdi_prob", ESTIMAND_INTERVAL_MASS)
+                        or ESTIMAND_INTERVAL_MASS
+                    ),
                 }
+                # Interval provenance (#277): the mass AND the definition. The
+                # classic report also renders `contribution_roi` in
+                # ChannelROISection, at a different mass and an equal-tailed
+                # interval, so each number says which it is.
+                entry["interval_mass"] = entry["hdi_prob"]
+                entry["interval_definition"] = str(getattr(r, "interval_definition", "") or "")
                 extra = getattr(r, "extra", None) or {}
                 for k in ("contribution_pct", "prob_positive", "prob_profitable"):
                     val = _finite(extra.get(k)) if isinstance(extra, dict) else None
