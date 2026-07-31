@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from ...model.component_scale import to_kpi_units
+from ...model.component_scale import kpi_scale_bridge_reason, to_kpi_units
 from .results import ROIResult
 from .utils import (
     _check_model_fitted,
@@ -179,6 +179,19 @@ def _extract_spend_from_model(model: Any) -> dict[str, float]:
     return resolve_spend_dict(model)
 
 
+class ContributionScaleUnsupported(ValueError):
+    """The in-graph contribution cannot be expressed in KPI units for this model.
+
+    Raised where the arithmetic lives rather than in one caller, because
+    :func:`_get_contribution_samples` has two: the estimand engine AND
+    :func:`compute_roi_with_uncertainty`, which is what the classic report's ROI
+    table renders. Guarding only the engine produced a self-contradicting
+    report — the Estimand Results section omitted ``contribution_roi`` as
+    unsupported while the ROI table in the same file printed 0.00
+    "Underperforming", a 550x understatement of the correct original-scale 0.61.
+    """
+
+
 class ContributionWindowUnsupported(ValueError):
     """A windowed contribution was asked for on a shape that cannot carry one.
 
@@ -206,6 +219,22 @@ def _get_contribution_samples(
     """
     if posterior is None:
         return None
+
+    # The in-graph Deterministic is an additive-scale quantity and this function
+    # ends in `to_kpi_units`, which only undoes STANDARDIZATION. Where that does
+    # not reach KPI units — a multiplicative specification, or a non-Gaussian
+    # likelihood / non-identity link keeping the outcome on the link scale —
+    # every number downstream is a log- or logit-scale figure wearing a KPI
+    # label. The refusal lives here so it covers BOTH callers (#278).
+    reason = kpi_scale_bridge_reason(model)
+    if reason is not None:
+        raise ContributionScaleUnsupported(
+            f"the in-graph contribution Deterministic cannot be expressed in KPI "
+            f"units for channel {channel!r}: {reason}. Use a counterfactual "
+            "contrast instead — the `counterfactual_roi` / `contribution` "
+            "estimands, or compute_counterfactual_contributions() — which diff "
+            "predictions on the original scale."
+        )
 
     if mask is not None:
         mask = np.asarray(mask, dtype=bool)
@@ -455,5 +484,6 @@ __all__ = [
     "compute_marginal_roi",
     "_extract_spend_from_model",
     "_get_contribution_samples",
+    "ContributionScaleUnsupported",
     "ContributionWindowUnsupported",
 ]

@@ -37,6 +37,7 @@ import numpy as np
 
 __all__ = [
     "ComponentScale",
+    "kpi_scale_bridge_reason",
     "COMPONENT_DETERMINISTICS",
     "component_scale",
     "to_kpi_units",
@@ -104,3 +105,72 @@ def to_kpi_units(values: np.ndarray, model: Any) -> np.ndarray:
     if component_scale(model) is ComponentScale.ORIGINAL:
         return arr
     return arr * float(getattr(model, "y_std", 1.0) or 1.0)
+
+
+#: Likelihood families whose outcome — and therefore whose in-graph components
+#: — live on a LINK scale rather than the KPI's. Listed explicitly, so an
+#: unrecognized or absent family is treated as the historical Gaussian default
+#: rather than refused.
+_LINK_SCALE_FAMILIES = frozenset(
+    {
+        "lognormal",
+        "binomial",
+        "beta_binomial",
+        "poisson",
+        "negative_binomial",
+        "beta",
+    }
+)
+
+#: Non-identity links, for a model that declares one without a listed family.
+_NON_IDENTITY_LINKS = frozenset({"logit", "log"})
+
+
+def kpi_scale_bridge_reason(model: Any) -> str | None:
+    """Why :func:`to_kpi_units` would NOT reach KPI units for ``model``.
+
+    Returns ``None`` when the bridge is genuine — the usual additive, Gaussian
+    case — and otherwise a phrase naming the reason, for a caller to put in a
+    refusal.
+
+    There are **two** ways the bridge falls short, and they are stated together
+    in this module's own docstring because guarding only one is the natural
+    mistake:
+
+    * a ``MULTIPLICATIVE`` specification standardizes ``log(y)``, so the
+      component is on the log scale;
+    * a non-Gaussian likelihood or a non-identity link keeps the outcome on the
+      link scale and sets ``y_std = 1.0``, so ``to_kpi_units`` is the identity
+      over (for example) logits.
+
+    Measured on the binomial awareness garden model, whose contributions are
+    logit-scale goodwill: an unguarded ``contribution_roi`` published 0.0071 for
+    a channel whose original-scale ROI-equivalent is 1.57 — over 200x too small,
+    with ``status="ok"`` and ``units="ROI"``.
+    """
+    # Refuse only on a KNOWN-bad configuration, never on an unrecognized one.
+    # `_get_contribution_samples` is deliberately tolerant of duck-typed models,
+    # and `getattr(mock, "_multiplicative", False)` on a `Mock` returns a truthy
+    # `Mock` — so a loose predicate refuses every test double and every
+    # third-party object, which is the over-broad direction this guard exists to
+    # avoid. Hence `is True` and an explicit family list.
+    if getattr(model, "_multiplicative", False) is True:
+        return (
+            "the model uses the multiplicative (semi-log) specification, so the "
+            "in-graph components are on the LOG scale"
+        )
+
+    likelihood = getattr(getattr(model, "model_config", None), "likelihood", None)
+    family = getattr(getattr(likelihood, "family", None), "value", None)
+    link = getattr(getattr(likelihood, "link", None), "value", None)
+    if isinstance(family, str) and family in _LINK_SCALE_FAMILIES:
+        return (
+            f"the model has a {family!r} likelihood, so the outcome — and the "
+            "in-graph components with it — are on the LINK scale, not the KPI's"
+        )
+    if isinstance(link, str) and link in _NON_IDENTITY_LINKS:
+        return (
+            f"the model uses a {link!r} link, so the in-graph components are on "
+            "the link scale, not the KPI's"
+        )
+    return None

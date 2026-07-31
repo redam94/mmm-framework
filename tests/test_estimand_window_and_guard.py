@@ -32,6 +32,7 @@ from mmm_framework.estimands.registry import get as get_estimand
 from mmm_framework.estimands.spec import TimeWindow
 from mmm_framework.model import BayesianMMM, TrendConfig, TrendType
 from mmm_framework.reporting.helpers.roi import (
+    ContributionScaleUnsupported,
     ContributionWindowUnsupported,
     _get_contribution_samples,
 )
@@ -262,3 +263,132 @@ class TestMultiplicativeGuardAgrees:
             ),
         )
         assert res.status == "ok" and res.mean is not None
+
+
+class TestTheRefusalCoversBothCallers:
+    """A guard in one caller left the higher-traffic surface publishing it.
+
+    `_get_contribution_samples` has two consumers: the estimand engine AND
+    `compute_roi_with_uncertainty`, which the classic report's ROI table
+    renders. Guarding only the engine produced a SELF-CONTRADICTING report — the
+    Estimand Results section omitted `contribution_roi` as unsupported while the
+    ROI table in the same file printed 0.00 "Underperforming", a 550x
+    understatement of the correct original-scale 0.61.
+    """
+
+    def test_compute_roi_with_uncertainty_refuses(self):
+        from mmm_framework.reporting.helpers.roi import compute_roi_with_uncertainty
+
+        m = _fitted(spec=ModelSpecification.MULTIPLICATIVE)
+        with pytest.raises(ContributionScaleUnsupported, match="LOG scale"):
+            compute_roi_with_uncertainty(m, hdi_prob=0.94)
+
+    def test_the_report_section_degrades_rather_than_publishing(self):
+        from mmm_framework.reporting.extractors.bayesian import BayesianMMMExtractor
+
+        m = _fitted(spec=ModelSpecification.MULTIPLICATIVE)
+        assert BayesianMMMExtractor(m)._compute_channel_roi() is None
+
+    def test_additive_models_are_untouched(self, additive_model):
+        from mmm_framework.reporting.helpers.roi import compute_roi_with_uncertainty
+
+        df = compute_roi_with_uncertainty(additive_model, hdi_prob=0.94)
+        assert len(df) == len(additive_model.channel_names)
+
+
+class TestLinkScaleModelsAreCaughtToo:
+    """`_multiplicative` is only ONE of the two ways the KPI bridge fails.
+
+    A count/bounded likelihood sets `y_std = 1.0`, so `to_kpi_units` is the
+    identity over logits. Measured on the binomial awareness garden model, an
+    unguarded `contribution_roi` published 0.0071 for a channel whose
+    original-scale ROI-equivalent is ~1.5 — over 200x too small, `status="ok"`,
+    `units="ROI"`.
+    """
+
+    def test_the_two_reasons_are_both_named(self):
+        from mmm_framework.config import LikelihoodConfig
+        from mmm_framework.model.component_scale import kpi_scale_bridge_reason
+
+        m = _fitted()
+        assert kpi_scale_bridge_reason(m) is None
+
+        mult = _fitted(spec=ModelSpecification.MULTIPLICATIVE)
+        assert "LOG scale" in (kpi_scale_bridge_reason(mult) or "")
+
+        m.model_config.likelihood = LikelihoodConfig(family="binomial")
+        assert "LINK scale" in (kpi_scale_bridge_reason(m) or "")
+
+    @pytest.mark.parametrize("family", ["normal", "student_t"])
+    def test_gaussian_families_are_allowed(self, family):
+        from mmm_framework.config import LikelihoodConfig
+        from mmm_framework.model.component_scale import kpi_scale_bridge_reason
+
+        m = _fitted()
+        m.model_config.likelihood = LikelihoodConfig(family=family)
+        assert kpi_scale_bridge_reason(m) is None
+
+    def test_an_unrecognized_model_is_not_refused(self):
+        """Over-broad is the other failure mode: a Mock must not be refused.
+
+        `getattr(mock, "_multiplicative", False)` returns a truthy Mock, so a
+        loose predicate refuses every duck-typed model and test double — and
+        `_get_contribution_samples` is deliberately tolerant of those.
+        """
+        from unittest.mock import Mock
+
+        from mmm_framework.model.component_scale import kpi_scale_bridge_reason
+
+        assert kpi_scale_bridge_reason(Mock()) is None
+        assert kpi_scale_bridge_reason(object()) is None
+
+
+class TestRefusalsNeverEscapeTheBatch:
+    def test_a_denominator_refusal_returns_unsupported(self):
+        from mmm_framework.estimands.spec import (
+            Contrast,
+            Contribution,
+            Estimand,
+            Outcome,
+            ZeroInput,
+        )
+
+        m = _fitted(spec=ModelSpecification.MULTIPLICATIVE)
+        ch = m.channel_names[0]
+        share = Estimand(
+            name="contribution_share",
+            kind="share",
+            numerator=Contrast(
+                quantity=Outcome(),
+                baseline=ZeroInput(target=ch),
+                op="difference",
+                reduce="sum",
+            ),
+            denominator=Contribution(target=ch, source="in_graph_deterministic"),
+        )
+        res = m.evaluate_estimands([get_estimand("contribution"), share])
+        # The batch survives: the other estimand still has its result.
+        assert any(v.status == "ok" for v in res.values())
+        assert res["contribution_share"].status == "unsupported"
+        assert res["contribution_share"].reason
+
+
+class TestAnEmptyWindowIsARefusal:
+    def test_out_of_range_window_says_so(self, additive_model):
+        """It used to vanish from the results dict — neither answer nor refusal."""
+        est = get_estimand("contribution_roi").model_copy(
+            update={
+                "target": additive_model.channel_names[0],
+                "window": TimeWindow(start=500, end=600),
+            }
+        )
+        res = EstimandEvaluator(additive_model).evaluate([est])
+        assert res, "the estimand vanished from the results dict"
+        got = list(res.values())[0]
+        assert got.status == "unsupported"
+        assert "selects no observations" in got.reason
+
+    def test_the_causal_assumptions_no_longer_claim_the_full_period(self):
+        text = get_estimand("contribution_roi").causal_assumptions
+        assert "over the full period" not in text
+        assert "window" in text

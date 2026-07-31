@@ -30,6 +30,23 @@ frozen public contract breaks, and the contract itself is pinned by
   `ContributionWindowUnsupported` by name. The unwindowed path is untouched (an all-true mask
   takes the original branch), so the bit-stability gate in `tests/test_estimands.py` still holds.
 
+  Five further defects, found by an adversarial review of the first commit. The scale refusal now
+  lives in `_get_contribution_samples` itself rather than in one caller, because that function has
+  **two** consumers — the estimand engine and `compute_roi_with_uncertainty`, which the classic
+  report's ROI table renders — and guarding one produced a *self-contradicting report*: the
+  Estimand Results section omitted `contribution_roi` as unsupported while the ROI table in the
+  same file printed 0.00 "Underperforming", a 550x understatement. The predicate also covers
+  **link-scale** models, not just multiplicative ones: a count/bounded likelihood sets
+  `y_std = 1.0`, so on the shipped binomial awareness garden model an unguarded `contribution_roi`
+  published 0.0071 against an original-scale ROI-equivalent of ~1.5 — over 200x too small, with
+  `status="ok"` and `units="ROI"`. It refuses only on a **known-bad** configuration, never on an
+  unrecognized one, since a loose predicate refuses every duck-typed model and test double. A
+  refusal raised from a **denominator** no longer escapes as a private control-flow exception —
+  that discarded every result already computed in the batch, contradicting the documented "never
+  raises" contract. A window selecting **no observations** now says so instead of vanishing from
+  the results dict. And `contribution_roi`'s stated assumptions no longer claim "over the full
+  period" on a windowed instance.
+
   Separately, `model/base.py` refused a multiplicative specification in **two** places
   (`sample_channel_contributions`, `compute_marginal_contributions`) and the estimand engine in
   **none** — and `contribution_roi` reaches the in-graph Deterministic without calling either, so
