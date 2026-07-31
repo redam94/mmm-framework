@@ -1667,7 +1667,7 @@ class BayesianMMMExtractor(
                         # number states which it is rather than leaving a reader
                         # to infer that the narrower one is more precise.
                         "interval_mass": float(self.ci_prob),
-                        "interval_kind": INTERVAL_KIND_ETI,
+                        "interval_definition": INTERVAL_KIND_ETI,
                         # Measurement metadata so the section/chart render ROI vs
                         # efficiency (and the right break-even reference).
                         "reference": meta.reference,

@@ -257,7 +257,12 @@ def interval_label(mass: float | None, kind: str | None) -> str:
     """
     if mass is None or not kind:
         return ""
-    return f"{round(float(mass) * 100)}% {kind}"
+    pct = float(mass) * 100.0
+    # `round()` to whole percent turned 0.995 into "100%" — a claim of a
+    # full-support interval — and 0.005 into "0%". Keep whatever precision the
+    # number actually has, without trailing zeros.
+    text = f"{pct:.2f}".rstrip("0").rstrip(".")
+    return f"{text}% {kind}"
 
 
 class Realization(BaseModel):
@@ -351,7 +356,7 @@ class EstimandResult(BaseModel):
     #: estimand's `Realization.hdi_method`. Travels with the number so a render
     #: site can state it instead of assuming (#277) — the classic report shows
     #: `contribution_roi` in two places, at two masses and two definitions.
-    interval_kind: str = INTERVAL_KIND_ETI
+    interval_definition: str = INTERVAL_KIND_ETI
     units: str = ""
     extra: dict[str, Any] = Field(default_factory=dict)
     reason: str = ""

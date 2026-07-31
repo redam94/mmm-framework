@@ -135,6 +135,15 @@ class Section:
         return bool(getattr(self.data, "is_frequentist", False))
 
     @property
+    def interval_noun_short(self) -> str:
+        """``"CI"`` either way — the neutral abbreviation.
+
+        Used where a header states only the MASS, leaving the definition to be
+        stated per row (or omitted when unknown).
+        """
+        return "CI"
+
+    @property
     def interval_noun(self) -> str:
         """``"credible interval"`` / ``"confidence interval"``.
 
@@ -746,9 +755,11 @@ class ChannelROISection(Section):
         roi_meta_all = self.data.channel_roi or {}
         first = next((v for v in roi_meta_all.values() if isinstance(v, dict)), {})
         mass = first.get("interval_mass", self.section_config.credible_interval)
-        kind = first.get("interval_kind", "")
+        # Suppressed on a fit with no posterior: "ETI"/"HDI" is posterior
+        # vocabulary and `interval_noun` already carries the right word there.
+        kind = "" if self.is_frequentist else first.get("interval_definition", "")
         interval_header = interval_label(mass, kind or None) or (
-            f"{int(self.section_config.credible_interval * 100)}% CI"
+            f"{int(float(mass) * 100)}% {self.interval_noun_short}"
         )
 
         # Sort by mean ROI
@@ -2987,14 +2998,19 @@ class EstimandsSection(Section):
         # reads as more precise unless both say which they are.
         probs = [v.get("interval_mass", v.get("hdi_prob", ESTIMAND_INTERVAL_MASS))
                  for _, v in items]
-        # Absent provenance means the DEFINITION is unknown, not that it is
-        # equal-tailed — an old bundle cannot be labelled with a claim it
-        # does not carry, so it falls back to the neutral "N% CI".
-        kinds = [str(v.get("interval_kind", "") or "") for _, v in items]
         modal_mass = max(set(probs), key=probs.count) if probs else ESTIMAND_INTERVAL_MASS
-        modal_kind = max(set(kinds), key=kinds.count) if kinds else ""
         ci_pct = int(round(float(modal_mass) * 100))
-        interval_header = interval_label(modal_mass, modal_kind) or f"{ci_pct}% CI"
+
+        # The header states the MASS only, because the definitions in this table
+        # are genuinely MIXED: the default set is contribution_roi (az_hdi ->
+        # HDI) plus marginal_roas and contribution (both ETI), so any single
+        # modal label asserts a definition that is false for some rows — and ETI
+        # outvotes HDI 2:1, so a modal header would publish contribution_roi's
+        # true HDI as an equal-tailed interval, in every default report. That is
+        # a WORSE claim than the neutral one it replaced. The definition is
+        # therefore stated PER ROW, which is what "provenance travels with the
+        # number" actually requires (#277).
+        interval_header = f"{ci_pct}% {self.interval_noun_short}"
 
         # Group by estimand name (the dict key prefix, e.g. "contribution_roi"),
         # then by descending |mean| within each group. The label comes from the
@@ -3060,12 +3076,23 @@ class EstimandsSection(Section):
             chip = evidence_chip_html(ev, theme="classic")
             val_cls = "mono muted" if (ev and ev.get("gated")) else "mono"
 
+            # The DEFINITION, per row. Suppressed for a fit with no posterior:
+            # "HDI"/"ETI" is posterior vocabulary, and this section already owns
+            # `interval_noun` precisely so a bootstrap interval is not described
+            # in terms a credible interval licenses.
+            row_mass = v.get("interval_mass", v.get("hdi_prob"))
+            row_def = ""
+            if not self.is_frequentist:
+                label = interval_label(row_mass, v.get("interval_definition"))
+                if label:
+                    row_def = f'<span class="interval-def"> {html.escape(label)}</span>'
+
             rows.append(f"""
                 <tr>
                     <td>{html.escape(self._kind_label(name))}</td>
                     <td>{html.escape(target)}</td>
                     <td class="{val_cls}">{val_str}</td>
-                    <td class="{val_cls}">{ci_str}</td>
+                    <td class="{val_cls}">{ci_str}{row_def}</td>
                     <td class="{conf_class}">{status}</td>
                     <td>{chip}</td>
                 </tr>

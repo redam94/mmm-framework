@@ -496,7 +496,7 @@ class EstimandPPCMixin:
                 # ChannelROISection, at a different mass and an equal-tailed
                 # interval, so each number says which it is.
                 entry["interval_mass"] = entry["hdi_prob"]
-                entry["interval_kind"] = str(getattr(r, "interval_kind", "") or "")
+                entry["interval_definition"] = str(getattr(r, "interval_definition", "") or "")
                 extra = getattr(r, "extra", None) or {}
                 for k in ("contribution_pct", "prob_positive", "prob_profitable"):
                     val = _finite(extra.get(k)) if isinstance(extra, dict) else None

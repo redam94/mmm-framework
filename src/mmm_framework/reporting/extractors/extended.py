@@ -21,6 +21,8 @@ from typing import Any
 import numpy as np
 from loguru import logger
 
+from ...estimands.spec import INTERVAL_KIND_ETI
+
 from ...transforms.adstock import adstock_weights, apply_adstock
 from .base import DataExtractor
 from .bundle import MMMDataBundle
@@ -769,6 +771,12 @@ class ExtendedMMMExtractor(DataExtractor, EstimandPPCMixin):
                 contribution = coef * float(x_sat.sum())
                 roi[ch] = {
                     **self._stats(contribution / spend),
+                    # `_stats` is `_compute_percentile_bounds` at `ci_prob`, so
+                    # this extractor KNOWS its interval is equal-tailed. Stamping
+                    # it means an extended-model report is labelled like a core
+                    # one instead of falling back to an ambiguous "N% CI" (#277).
+                    "interval_mass": float(self.ci_prob),
+                    "interval_definition": INTERVAL_KIND_ETI,
                     "reference": meta.reference,
                     "metric_label": meta.roi_label,
                     "value_units": meta.value_units,

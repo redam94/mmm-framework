@@ -37,6 +37,27 @@ frozen public contract breaks, and the contract itself is pinned by
   with the reason they differ. Both are left as they are — changing either would move published
   numbers — so labelling is what closes the gap.
 
+  The definition is stated **per row** in the estimand table, not once in its header, because the
+  default estimand set is deliberately mixed — `contribution_roi` is a true HDI while
+  `marginal_roas` and `contribution` are equal-tailed. A single modal header let ETI outvote HDI
+  2:1 and published `contribution_roi`'s true HDI as an equal-tailed interval in **every** default
+  report, turning a missing label into a wrong one on the exact estimand this issue is about. The
+  header now states the mass only. "HDI"/"ETI" is posterior vocabulary, so it is suppressed for a
+  fit with no posterior, where the existing `interval_noun` already says "confidence interval".
+  The extended-model extractor stamps its provenance too, so a Nested/MV/Combined report is
+  labelled like a core one.
+
+  Two smaller corrections: the label no longer rounds to whole percent (0.995 read as "100%", a
+  claim of certainty), and the new result field is `interval_definition` rather than
+  `interval_kind`, which was already taken by a different vocabulary on the bundle
+  (`bootstrap_percentile` / `credible` / `confidence`).
+
+  A pre-existing mislabel is fixed as a side effect: `BayesianMMMExtractor.ci_prob` is pinned at
+  0.8 and is not wired to `SectionConfig.credible_interval`, so a section configured at 90%
+  previously printed "90% CI" over 80% percentiles. The label now follows the arithmetic. The
+  underlying disconnect — a `credible_interval` setting that never reaches the extractor — is a
+  separate bug and is untouched here.
+
   The other two shells were checked for the same duplication and do not have it: the Augur deck
   wires neither section, and the interactive report renders one estimand panel with a selector.
 
