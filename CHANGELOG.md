@@ -16,6 +16,35 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Fixed
 
+- **Two arithmetically wrong fallback branches in the report's ROI extractor** ([#276]).
+  `BayesianMMMExtractor._compute_channel_roi` re-implemented
+  `reporting.helpers.roi._get_contribution_samples`' three-branch precedence rather than calling
+  it, and got two branches wrong: a scalar-per-draw contribution was multiplied by `n_obs` (the
+  canonical form has no such factor), and the `beta_<channel>` fallback used
+  `beta * y_std * n_obs * 0.5` — under a comment calling itself a rough estimate — against a
+  canonical `beta * media_sum * y_std`.
+
+  The second contains **no spend term at all**, so every channel received the same contribution
+  however much was spent on it. Measured on a 60-week panel with `y_std = 56.66` and `beta = 0.4`
+  everywhere: all four channels reported 679.9, against canonical totals of 79,575 / 52,300 /
+  41,060 / 33,343 — ratios of 117.05x, 76.93x, 60.39x, 49.04x, each exactly
+  `media_sum / (0.5 · n_obs)`.
+
+  These branches fire precisely for models exposing only a coefficient — the bespoke garden
+  models — and the section rendered a clean per-channel ROI table with no marker distinguishing
+  them from the primary path. **This changes a published number on those paths**, which is the
+  point: the previous one was wrong.
+
+  The two other `# Rough estimate` sites in the same file are fixed with it, since this was one
+  habit rather than four incidents. `_get_component_totals` now reads through the same canonical
+  path (it held the second copy of the `* 0.5` formula, and which branch fired depended on whether
+  spend happened to be available — so one model could report two different totals for one channel).
+  And `_compute_marketing_attribution` no longer manufactures a `±15%` interval when the model
+  gives no HDI: it returns no interval, which both render sites already degrade gracefully on. A
+  number with no posterior behind it, rendered in the credible-interval slot, is indistinguishable
+  from a real one.
+
+  Models on the primary branch (a registered `channel_contributions`) are byte-identical.
 - **The extension seasonal period was 52.178571, not 52.0, under a docstring claiming
   comparability** ([#275]). The core graph looks the data frequency up in a table and gets exactly
   52.0 weekly observations per year; the extension graphs

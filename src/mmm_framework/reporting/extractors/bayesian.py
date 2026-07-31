@@ -1580,10 +1580,21 @@ class BayesianMMMExtractor(
     # -------------------------------------------------------------------------
 
     def _compute_channel_roi(self) -> dict[str, dict[str, float]] | None:
-        """Compute channel ROI with uncertainty."""
+        """Compute channel ROI with uncertainty.
+
+        The numerator comes from :func:`_get_contribution_samples` and the
+        denominator from :func:`resolve_channel_divisor` — the canonical
+        readers, not a private re-implementation of them (#276). The point rule
+        (mean of ratios) and the interval (equal-tailed at ``ci_prob``, default
+        0.8) stay this section's own; that they differ from the estimand
+        engine's is a separate question, tracked in #277.
+        """
         try:
             from mmm_framework.reporting.helpers.measurement import (
                 resolve_channel_divisor,
+            )
+            from mmm_framework.reporting.helpers.roi import (
+                _get_contribution_samples,
             )
 
             channels = self._get_channel_names()
@@ -1596,7 +1607,7 @@ class BayesianMMMExtractor(
 
             posterior = trace.posterior
             y_std = getattr(self.mmm, "y_std", 1.0)
-            n_obs = getattr(self.mmm, "n_obs", 52)
+            y_mean = getattr(self.mmm, "y_mean", 0.0)
 
             roi_results = {}
 
@@ -1610,52 +1621,20 @@ class BayesianMMMExtractor(
                 if not resolved.found or spend <= 0:
                     continue
 
-                # Try to get contribution samples
-                contrib_samples = None
-
-                # Method 1: Direct contribution variable
-                contrib_names = [
-                    f"contribution_{ch}",
-                    f"channel_contribution_{ch}",
-                ]
-                for contrib_name in contrib_names:
-                    if contrib_name in posterior:
-                        vals = posterior[contrib_name].values
-                        # Flatten chains and draws, sum over time if needed
-                        if vals.ndim > 2:
-                            contrib_samples = (
-                                vals.reshape(-1, *vals.shape[2:]).sum(axis=-1) * y_std
-                            )
-                        else:
-                            contrib_samples = vals.flatten() * y_std * n_obs
-                        break
-
-                # Method 2: From channel_contributions array
-                if contrib_samples is None and "channel_contributions" in posterior:
-                    try:
-                        ch_idx = channels.index(ch)
-                        contrib_da = posterior["channel_contributions"]
-                        vals = contrib_da.values  # numpy first!
-
-                        # Flatten chains/draws, extract channel, sum over time
-                        flat = vals.reshape(-1, *vals.shape[2:])
-                        if flat.ndim == 2:  # (samples, time)
-                            contrib_samples = flat.sum(axis=-1) * y_std
-                        elif flat.ndim == 3:  # (samples, time, channels)
-                            contrib_samples = flat[:, :, ch_idx].sum(axis=-1) * y_std
-                    except Exception as e:
-                        logger.debug(
-                            f"Could not extract from channel_contributions: {e}"
-                        )
-
-                # Method 3: Estimate from beta
-                if contrib_samples is None:
-                    for beta_name in [f"beta_{ch}", f"beta_media_{ch}"]:
-                        if beta_name in posterior:
-                            beta_vals = posterior[beta_name].values.flatten()
-                            # Rough estimate
-                            contrib_samples = beta_vals * y_std * n_obs * 0.5
-                            break
+                # The canonical reader, not a fourth re-implementation of it.
+                # This block used to hand-roll the same three-branch precedence
+                # and got two of the branches arithmetically wrong: a
+                # scalar-per-draw contribution was multiplied by `n_obs` (the
+                # canonical form has no such factor), and the beta fallback used
+                # `beta * y_std * n_obs * 0.5` under a comment calling itself a
+                # rough estimate — off from `beta * media_sum * y_std` by
+                # `media_sum / (0.5 * n_obs)`, i.e. twice the mean per-period
+                # spend, so orders of magnitude for any real spend series.
+                # Those branches fire exactly for bespoke garden models, whose
+                # ROI table is the number they are read for.
+                contrib_samples = _get_contribution_samples(
+                    self.mmm, posterior, ch, y_mean, y_std
+                )
 
                 if contrib_samples is not None and len(contrib_samples) > 0:
                     roi_samples = contrib_samples / spend
@@ -1760,47 +1739,22 @@ class BayesianMMMExtractor(
                 totals["Baseline"] = intercept
 
             # Media channels
-            channels = self._get_channel_names()
-            current_spend = self._get_current_spend()
+            from mmm_framework.reporting.helpers.roi import (
+                _get_contribution_samples,
+            )
 
-            for ch in channels:
-                # Try to get contribution from trace
-                contrib_names = [
-                    f"contribution_{ch}",
-                    f"channel_contribution_{ch}",
-                    f"media_contribution_{ch}",
-                ]
-
-                found = False
-                for contrib_name in contrib_names:
-                    if contrib_name in posterior:
-                        # Sum over time
-                        contrib_vals = posterior[contrib_name].values
-                        total_contrib = float(contrib_vals.mean()) * y_std
-                        if contrib_vals.ndim > 2:
-                            # Has time dimension - sum it
-                            total_contrib = (
-                                float(contrib_vals.sum(axis=-1).mean()) * y_std
-                            )
-                        totals[ch] = total_contrib
-                        found = True
-                        break
-
-                if not found:
-                    # Estimate from beta
-                    for beta_name in [f"beta_{ch}", f"beta_media_{ch}"]:
-                        if beta_name in posterior:
-                            beta_val = float(posterior[beta_name].values.mean())
-
-                            # Try to get media sum
-                            if current_spend and ch in current_spend:
-                                # Rough estimate
-                                totals[ch] = (
-                                    beta_val * y_std * n_obs * 0.5
-                                )  # Approximate
-                            else:
-                                totals[ch] = beta_val * y_std * n_obs
-                            break
+            for ch in self._get_channel_names():
+                # Same canonical reader as the ROI table, so a channel's total
+                # here and its contribution there cannot disagree. This block
+                # carried the second copy of the `beta * y_std * n_obs * 0.5`
+                # rough estimate; whether it fired depended on whether spend
+                # happened to be available, so the same model could report two
+                # different totals for one channel across two runs.
+                samples = _get_contribution_samples(
+                    self.mmm, posterior, ch, y_mean, y_std
+                )
+                if samples is not None and len(samples) > 0:
+                    totals[ch] = float(np.mean(samples))
 
             return totals if totals else None
 
@@ -1922,9 +1876,15 @@ class BayesianMMMExtractor(
                     lower = float(contrib_results.contribution_hdi_low.sum())
                     upper = float(contrib_results.contribution_hdi_high.sum())
                 else:
-                    # Rough estimate: +/- 15% of total
-                    lower = total * 0.85
-                    upper = total * 1.15
+                    # No interval, rather than a manufactured one. This used to
+                    # return `total * 0.85` and `total * 1.15` under a comment
+                    # reading "Rough estimate: +/- 15% of total" — a number with
+                    # no posterior behind it, rendered in the same credible-
+                    # interval slot as a real one and indistinguishable from it.
+                    # Both render sites already degrade gracefully on a
+                    # non-finite bound (`_format_interval` returns "", the Augur
+                    # KPI card omits the range line).
+                    lower = upper = None
                 return {"mean": total, "lower": lower, "upper": upper}
 
             logger.debug("Computing total marketing-attributed revenue")

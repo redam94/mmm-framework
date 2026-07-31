@@ -283,13 +283,17 @@ class AugurHeadlineSection(AugurSection):
 
         rev = getattr(self.data, "marketing_attributed_revenue", None)
         if isinstance(rev, dict) and rev.get("mean") is not None:
+            # An absent bound means the model could give no interval, not that
+            # the interval is zero-width — so drop the sub-line rather than
+            # render "— – —" under a "{ci}% range" label that promises one.
+            lo, hi = rev.get("lower"), rev.get("upper")
+            sub = (
+                f"{ci}% range&nbsp; {self._money(lo)} – {self._money(hi)}"
+                if lo is not None and hi is not None
+                else "no interval available"
+            )
             cards.append(
-                self._kpi(
-                    "Marketing-attributed revenue",
-                    self._money(rev["mean"]),
-                    f"{ci}% range&nbsp; {self._money(rev.get('lower'))} – "
-                    f"{self._money(rev.get('upper'))}",
-                )
+                self._kpi("Marketing-attributed revenue", self._money(rev["mean"]), sub)
             )
         share = getattr(self.data, "marketing_contribution_pct", None)
         if isinstance(share, dict) and share.get("mean") is not None:
