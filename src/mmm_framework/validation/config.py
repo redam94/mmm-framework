@@ -67,11 +67,14 @@ class ChannelDiagnosticsConfig:
 class CrossValidationConfig:
     """Configuration for cross-validation."""
 
+    # Sizes below count PERIODS, not raw observations: splits are generated on
+    # the period axis so every window covers whole periods on a geo/product
+    # panel (identical on a national panel, where one period is one observation).
     strategy: Literal["expanding", "rolling", "blocked"] = "expanding"
     n_folds: int = 5
-    min_train_size: int = 52  # Minimum training observations
-    gap: int = 0  # Gap between train and test (for blocked CV)
-    test_size: int | None = None  # Fixed test size (for rolling)
+    min_train_size: int = 52  # Minimum training periods
+    gap: int = 0  # Gap between train and test, in periods (for blocked CV)
+    test_size: int | None = None  # Fixed test size in periods (for rolling)
 
     # Fitting options for CV runs
     draws_per_fold: int = 500

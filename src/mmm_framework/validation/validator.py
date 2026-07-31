@@ -54,6 +54,16 @@ def pareto_k_warning(n_bad_k: int | None) -> str | None:
     )
 
 
+def _periods_to_obs(period_idx: np.ndarray, n_cells: int) -> np.ndarray:
+    """Expand period positions to observation positions.
+
+    Observations are period-major / cell-minor (``obs = period * n_cells +
+    cell``), so a period expands to the ``n_cells`` observations of its row.
+    """
+    period_idx = np.asarray(period_idx, dtype=int)
+    return (period_idx[:, None] * n_cells + np.arange(n_cells)[None, :]).ravel()
+
+
 class ModelValidator:
     """
     Main validation orchestrator.
@@ -534,23 +544,38 @@ class ModelValidator:
         """
         Create train/test index splits for cross-validation.
 
+        Splits are generated on the **period** axis and then expanded to
+        observations, so every window covers whole periods. On a geo/product
+        panel observations are period-major / cell-minor, so slicing by raw
+        observation index produced windows starting mid-period and lengths that
+        were not a multiple of ``n_cells`` — a ragged panel whose clone then
+        fabricated its own period axis (measured: 101 obs on a 4-cell panel
+        rebuilt as ``n_periods=26, n_cells=4``, i.e. 104). ``n_cells == 1``
+        makes periods and observations the same axis, so a national panel is
+        unchanged.
+
         Parameters
         ----------
         n_obs : int
             Total number of observations.
         cv_config : CrossValidationConfig
-            CV configuration with strategy, n_folds, etc.
+            CV configuration with strategy, n_folds, etc. Its sizes
+            (``min_train_size``, ``test_size``, ``gap``) count **periods**;
+            on a national panel that is the same as observations.
 
         Returns
         -------
         list[tuple[np.ndarray, np.ndarray]]
-            List of (train_indices, test_indices) tuples.
+            List of (train_indices, test_indices) tuples, in observation units.
         """
         splits = []
         n_folds = cv_config.n_folds
         min_train = cv_config.min_train_size
         gap = cv_config.gap
         test_size = cv_config.test_size
+
+        n_cells = max(int(getattr(self.model, "n_cells", 1) or 1), 1)
+        n_obs = int(n_obs) // n_cells  # period axis; identity when n_cells == 1
 
         if cv_config.strategy == "expanding":
             # Expanding window: train grows, test is fixed size
@@ -607,7 +632,12 @@ class ModelValidator:
         else:
             raise ValueError(f"Unknown CV strategy: {cv_config.strategy}")
 
-        return splits
+        if n_cells == 1:
+            return splits
+        return [
+            (_periods_to_obs(train_idx, n_cells), _periods_to_obs(test_idx, n_cells))
+            for train_idx, test_idx in splits
+        ]
 
     def _clone_model_for_subset(self, train_indices: np.ndarray) -> Any:
         """
@@ -652,9 +682,30 @@ class ModelValidator:
         -------
         PanelDataset
             Sliced panel data.
+
+        Raises
+        ------
+        ValueError
+            The slice does not cover whole periods of a geo/product panel. The
+            sliced coordinates are rebuilt from the surviving index values, so a
+            ragged slice silently fabricates a period axis — 101 observations of
+            a 4-cell panel rebuilt as ``n_periods=26``, i.e. 104 — and every
+            downstream reshape then reads the wrong cell. Refusing beats
+            reshaping.
         """
         import pandas as pd
         from mmm_framework.data_loader import PanelDataset, PanelCoordinates
+
+        n_cells = max(int(getattr(self.model, "n_cells", 1) or 1), 1)
+        indices = np.asarray(indices, dtype=int)
+        if n_cells > 1 and (len(indices) % n_cells or int(indices.min()) % n_cells):
+            raise ValueError(
+                f"Cannot slice a {n_cells}-cell panel to observations "
+                f"[{int(indices.min())}:{int(indices.max()) + 1}] "
+                f"(length {len(indices)}): observations are period-major / "
+                f"cell-minor, so both the start and the length must be "
+                f"multiples of {n_cells} for the slice to cover whole periods."
+            )
 
         # Slice dataframes
         y_sliced = panel.y.iloc[indices]
@@ -722,10 +773,13 @@ class ModelValidator:
         kernels -- the default -- and the legacy fixed-alpha blend) and all
         configured saturation types. Adstock is convolved over the full spend
         history so carryover crosses the train/test boundary correctly, the
-        linear trend is extrapolated on the clone's training time scale
-        (``train_offset`` handles rolling windows that do not start at period
-        zero), and Fourier seasonality is evaluated at the absolute test
-        positions, keeping the phase aligned.
+        linear trend is extrapolated on the clone's training time scale, and
+        Fourier seasonality is evaluated at the absolute test positions, keeping
+        the phase aligned. The training window is handed over as ``train_positions``
+        — observation positions, the same units as ``positions`` — and the
+        forecaster derives the period offset itself, because the two axes differ
+        on a geo panel and passing the observation index as a period offset
+        mis-phased both components.
 
         Raises
         ------
@@ -752,7 +806,12 @@ class ModelValidator:
             positions=np.asarray(test_indices, dtype=int),
             include_noise=True,
             random_seed=42,
-            train_offset=int(np.asarray(train_indices).min()),
+            # The forecaster derives the PERIOD offset from these observation
+            # positions. Passing `train_offset=min(train_indices)` instead is
+            # an obs index in a period slot: on a 6-cell panel a window starting
+            # at observation 120 (period 20) shifted the Fourier phase by 120
+            # periods and drove the linear trend far negative.
+            train_positions=np.asarray(train_indices, dtype=int),
         )
         y_pred_mean = y_pred_samples.mean(axis=0)
 

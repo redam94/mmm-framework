@@ -16,6 +16,28 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Fixed
 
+- **Rolling-window cross-validation on a geo panel forecast out of phase with its own training
+  window** ([#273]). `validator.py` passed `min(train_indices)` — an *observation* index — into
+  `PosteriorForecaster.forecast`'s `train_offset`, which is a *period* offset. The two axes
+  coincide on a national panel and differ by `n_cells` on a geo/product one, so a 4-cell window
+  starting at observation 80 (period 20) shifted the Fourier basis by 80 periods and drove the
+  linear trend far negative. Measured on a 4-cell panel: the forecast mean was **175.2 against an
+  actual of 232.3** (25% low), a 139.6-unit error against a 35.3-unit noise tolerance. A
+  mis-phased seasonality moves the forecast *level* while leaving the interval width untouched, so
+  the miss reads as an effectiveness change rather than as an index.
+
+  `forecast()` now takes `train_positions` — observation positions, the same units as `positions`
+  — and derives the period offset itself; `train_offset` remains, documented as a period offset.
+  A window that does not start on a period boundary is refused by name rather than rounded.
+
+  Two structural fixes ship with it. **CV splits are now generated on the period axis** and
+  expanded to observations, so every window covers whole periods; `CrossValidationConfig`'s
+  `min_train_size`, `test_size` and `gap` therefore count **periods** (unchanged on a national
+  panel, where `n_cells == 1`). And `_slice_panel_data` **refuses a ragged slice** instead of
+  rebuilding coordinates from whatever index values survive: 101 observations of a 4-cell panel
+  previously produced a clone claiming `n_periods=26` — 104 observations' worth — after which
+  every downstream reshape read the wrong cell.
+
 - **The HTML report and the slide deck gave opposite recommendations for the same channel**
   ([#221]). `deck/engine.py` computed a margin-adjusted break-even (`1/margin`) while the Augur HTML
   took `channel_rows`' default of `1.0`. At a 40% gross margin a channel with ROI 1.8 was tiered
@@ -91,6 +113,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#221]: https://github.com/redam94/mmm-framework/issues/221
 [#222]: https://github.com/redam94/mmm-framework/issues/222
 [#237]: https://github.com/redam94/mmm-framework/issues/237
+[#273]: https://github.com/redam94/mmm-framework/issues/273
 
 ## [1.3.3] — 2026-07-27
 

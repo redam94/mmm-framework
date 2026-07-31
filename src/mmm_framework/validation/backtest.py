@@ -786,6 +786,35 @@ class PosteriorForecaster:
 
     # -- forecast -----------------------------------------------------------
 
+    def _period_offset(self, train_positions: np.ndarray) -> int:
+        """Period offset of a training window given its **observation** positions.
+
+        Exists because ``positions`` and ``train_offset`` are in *different*
+        units on a geo/product panel — ``positions`` indexes observations
+        (period-major / cell-minor), ``train_offset`` indexes periods — and a
+        caller holding train indices naturally has the former. Deriving the
+        offset here rather than at the call site is what keeps the two from
+        being confused: passing ``min(train_indices)`` straight through shifted
+        a 6-cell panel's Fourier phase by 120 periods instead of 20.
+
+        Raises
+        ------
+        ForecastUnsupportedError
+            The window does not start on a period boundary, so it does not
+            correspond to a whole number of periods and no offset is correct.
+        """
+        first = int(np.asarray(train_positions, dtype=int).min())
+        n_cells = max(int(getattr(self.model, "n_cells", 1) or 1), 1)
+        if first % n_cells:
+            raise ForecastUnsupportedError(
+                f"a training window starting at observation {first}",
+                f"the panel has {n_cells} cells and observations are "
+                "period-major / cell-minor, so a window must start on a period "
+                f"boundary (a multiple of {n_cells}) to have a period offset at "
+                "all. Slice the panel by period, not by raw observation index",
+            )
+        return first // n_cells
+
     def forecast(
         self,
         X_media_full_raw: np.ndarray,
@@ -795,8 +824,9 @@ class PosteriorForecaster:
         include_noise: bool = True,
         random_seed: int | None = None,
         train_offset: int = 0,
+        train_positions: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Posterior predictive draws at absolute period ``positions``.
+        """Posterior predictive draws at absolute ``positions``.
 
         Parameters
         ----------
@@ -807,11 +837,20 @@ class PosteriorForecaster:
             Raw controls over the full history (required if the model has
             controls; future control values are assumed known/planned).
         positions : np.ndarray
-            Absolute period positions (0-based on the full axis) to forecast.
+            Absolute 0-based positions to forecast, on the model's
+            **observation** axis. On a national panel one observation is one
+            period; on a geo/product panel observations are period-major /
+            cell-minor, so ``positions`` runs over ``n_periods * n_cells``.
         train_offset : int
-            Absolute position of the trained model's first period. 0 for
-            prefix training (the backtest); the window start for
-            rolling-window clones (validator cross-validation).
+            Absolute **period** position of the trained model's first period.
+            0 for prefix training (the backtest); the window start for
+            rolling-window clones (validator cross-validation). Note the unit
+            differs from ``positions`` on a geo panel — prefer
+            ``train_positions``, which cannot be misread.
+        train_positions : np.ndarray or None
+            The trained model's **observation** positions, in the same units as
+            ``positions``. When given, the period offset is derived from it and
+            ``train_offset`` must be left at 0. This is the safe form.
 
         Returns
         -------
@@ -820,6 +859,14 @@ class PosteriorForecaster:
         """
         model = self.model
         positions = np.asarray(positions, dtype=int)
+
+        if train_positions is not None:
+            if train_offset:
+                raise ValueError(
+                    "Pass train_positions or train_offset, not both: they are "
+                    "in different units (observations vs periods)."
+                )
+            train_offset = self._period_offset(train_positions)
 
         if model.n_cells > 1:
             return self._forecast_geo(
