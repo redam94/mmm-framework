@@ -179,16 +179,60 @@ def _extract_spend_from_model(model: Any) -> dict[str, float]:
     return resolve_spend_dict(model)
 
 
+class ContributionWindowUnsupported(ValueError):
+    """A windowed contribution was asked for on a shape that cannot carry one.
+
+    Raised rather than returning the full-series value, which is
+    self-consistent and wrong: a windowed request that silently answers the
+    whole series is indistinguishable from a correct one at the call site.
+    """
+
+
 def _get_contribution_samples(
     model: Any,
     posterior: Any,
     channel: str,
     y_mean: float,
     y_std: float,
+    mask: np.ndarray | None = None,
 ) -> np.ndarray | None:
-    """Extract contribution samples for a channel."""
+    """Extract contribution samples for a channel.
+
+    ``mask`` is an optional boolean array over observations. When given, the
+    contribution is summed over the selected observations only. A per-draw
+    SCALAR contribution has no observation axis to window, so a masked request
+    against one raises :class:`ContributionWindowUnsupported` instead of
+    quietly returning the full-series total.
+    """
     if posterior is None:
         return None
+
+    if mask is not None:
+        mask = np.asarray(mask, dtype=bool)
+        if mask.all():
+            mask = None  # full series: take the untouched, bit-stable path
+
+    def _reduce_time(samples: np.ndarray, var_name: str) -> np.ndarray:
+        """Sum a (samples, obs) array over the window, or over everything."""
+        if samples.ndim <= 1:
+            if mask is not None:
+                raise ContributionWindowUnsupported(
+                    f"{var_name!r} is a per-draw scalar for channel "
+                    f"{channel!r}: it carries no observation axis, so it "
+                    "cannot be restricted to a time window. Use an estimand "
+                    "whose numerator is a counterfactual contrast, or drop the "
+                    "window."
+                )
+            return samples
+        if mask is not None:
+            if samples.shape[-1] != mask.size:
+                raise ContributionWindowUnsupported(
+                    f"{var_name!r} has {samples.shape[-1]} values per draw for "
+                    f"channel {channel!r} but the window mask covers "
+                    f"{mask.size} observations, so the two cannot be aligned."
+                )
+            samples = samples[..., mask]
+        return samples.sum(axis=-1)
 
     channels = _get_channel_names(model)
 
@@ -203,9 +247,7 @@ def _get_contribution_samples(
         if var_name in posterior:
             # ALWAYS get .values before any operations
             arr = posterior[var_name].values
-            samples = _flatten_samples(arr)
-            if samples.ndim > 1:
-                samples = samples.sum(axis=-1)
+            samples = _reduce_time(_flatten_samples(arr), var_name)
             return to_kpi_units(samples, model)
 
     # Fall back to channel_contributions with index
@@ -252,9 +294,7 @@ def _get_contribution_samples(
                 if arr.ndim > 1 and ch_idx < arr.shape[-1]:
                     arr = arr[..., ch_idx]
 
-            # Sum over time if still multidimensional
-            if arr.ndim > 1:
-                arr = arr.sum(axis=-1)
+            arr = _reduce_time(arr, "channel_contributions")
 
             # The scale of `channel_contributions` is a per-family convention,
             # not a constant: the core graph registers it standardized, the
@@ -265,6 +305,12 @@ def _get_contribution_samples(
             # of 88,685, i.e. nine times the whole KPI, rendered as ROI 132.9.
             return to_kpi_units(arr, model)
 
+        except ContributionWindowUnsupported:
+            # A refusal, not a failed extraction. Letting the broad handler
+            # below swallow it would fall through to the beta fallback and
+            # answer with a DIFFERENT number — which is the silent-wrong-answer
+            # behaviour this refusal exists to prevent.
+            raise
         except Exception as e:
             logger.warning(
                 f"Failed to extract channel_contributions for {channel}: {e}"
@@ -283,11 +329,25 @@ def _get_contribution_samples(
                     X_media = model.panel.X_media
                     if hasattr(X_media, "values"):
                         X_media = X_media.values
-                    media_sum = float(X_media[:, ch_idx].sum())
+                    column = np.asarray(X_media)[:, ch_idx]
+                    if mask is not None:
+                        if column.size != mask.size:
+                            raise ContributionWindowUnsupported(
+                                f"media for {channel!r} has {column.size} rows "
+                                f"but the window mask covers {mask.size}."
+                            )
+                        column = column[mask]
+                    media_sum = float(column.sum())
                     return beta_samples * media_sum * y_std
                 except Exception:
                     pass
 
+            if mask is not None:
+                raise ContributionWindowUnsupported(
+                    f"only a coefficient is available for channel {channel!r} "
+                    "and its media series could not be read, so there is no "
+                    "observation axis to restrict to a window."
+                )
             return beta_samples * y_std
 
     return None
@@ -395,4 +455,5 @@ __all__ = [
     "compute_marginal_roi",
     "_extract_spend_from_model",
     "_get_contribution_samples",
+    "ContributionWindowUnsupported",
 ]

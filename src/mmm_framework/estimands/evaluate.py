@@ -440,11 +440,18 @@ class EstimandEvaluator:
     def _observed_spend(self, q: ObservedInput, mask: np.ndarray) -> float:
         from mmm_framework.reporting.helpers.measurement import resolve_channel_divisor
 
-        # ``panel`` is the full-series dashboard spend (mask ignored, matching
-        # the legacy extractor); ``raw`` is windowed. For ordinary spend
-        # channels both reproduce the old ``X_media_raw`` sums exactly.
+        # ``panel`` is the full-series dashboard spend, ignoring the mask to
+        # reproduce the legacy extractor bit-for-bit; ``raw`` is windowed. For
+        # ordinary spend channels both reproduce the old ``X_media_raw`` sums
+        # exactly.
+        #
+        # An explicit WINDOW overrides that: the numerator is now windowed, so
+        # a full-series denominator would make the ratio a quantity of neither
+        # period. `mask.all()` is exactly "no window was set", so the unwindowed
+        # path is untouched and the bit-stability gate still holds.
+        ignore_mask = q.source == "panel" and bool(np.asarray(mask).all())
         resolved = resolve_channel_divisor(
-            self.model, q.target, mask=None if q.source == "panel" else mask
+            self.model, q.target, mask=None if ignore_mask else mask
         )
         self._last_divisor_meta = resolved.meta
         return resolved.total
@@ -465,17 +472,47 @@ class EstimandEvaluator:
 
     def _contribution_quantity(self, q: Contribution, mask: np.ndarray) -> _NodeValue:
         if q.source == "in_graph_deterministic":
-            from mmm_framework.reporting.helpers.roi import _get_contribution_samples
+            from mmm_framework.reporting.helpers.roi import (
+                ContributionWindowUnsupported,
+                _get_contribution_samples,
+            )
             from mmm_framework.reporting.helpers.utils import (
                 _get_posterior,
                 _get_scaling_params,
             )
 
+            # The in-graph Deterministic is an ADDITIVE-scale quantity, and
+            # `* y_std` is an additive-scale rescale. Under a multiplicative
+            # specification the graph is additive in LOG space, so both are
+            # wrong on the original scale — the identical premise
+            # `sample_channel_contributions` and `compute_marginal_contributions`
+            # have refused since #220/#251. This path never calls either, so it
+            # was the one remaining unguarded instance (#278).
+            #
+            # The CONTRAST-based estimands are deliberately NOT guarded: they go
+            # through `predict_under`, which returns the original scale, so
+            # differencing them is exactly the remedy those two guards prescribe.
+            if getattr(self.model, "_multiplicative", False):
+                raise _SkipChannel(
+                    "the in-graph contribution Deterministic is computed on the "
+                    "additive (log) scale and would be wrong on the original "
+                    "scale for a multiplicative model. Use an estimand whose "
+                    "numerator is a counterfactual contrast (e.g. "
+                    "counterfactual_roi, contribution), which diffs "
+                    "exp-back-transformed predictions.",
+                    skip=False,
+                )
+
             posterior = _get_posterior(self.model)
             y_mean, y_std = _get_scaling_params(self.model)
-            samples = _get_contribution_samples(
-                self.model, posterior, q.target, y_mean, y_std
-            )
+            try:
+                samples = _get_contribution_samples(
+                    self.model, posterior, q.target, y_mean, y_std, mask=mask
+                )
+            except ContributionWindowUnsupported as exc:
+                # A windowed request that cannot be windowed is a refusal, never
+                # a silent full-series answer.
+                raise _SkipChannel(str(exc), skip=False) from exc
             if samples is None or len(samples) == 0:
                 raise _SkipChannel(
                     f"no contribution samples for {q.target!r}", skip=True
