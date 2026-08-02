@@ -104,14 +104,14 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-04",
+          "dateModified": "2026-08-02",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/identification-assumptions.html#breadcrumb"
           },
           "@id": "https://redam94.github.io/mmm-framework/identification-assumptions.html#webpage",
           "@type": "TechArticle",
           "headline": "Identification Assumptions",
-          "datePublished": "2026-07-04",
+          "datePublished": "2026-08-02",
           "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
           "author": {
             "@type": "Person",
@@ -547,6 +547,16 @@
                 <li>
                     <strong>The robustness value</strong> (<code>validation/sensitivity_unobserved.py</code>)
                     quantifies how strong the un-modeled feedback would have to be to zero out each channel.
+                </li>
+                <li>
+                    <strong>A tipping point on the decision itself</strong>
+                    (<code>validation/confounding_sensitivity.py</code>) asks the same question in the
+                    currency you act in: how far would a channel's ROI have to be overstated before it
+                    stops clearing break-even? And then it prices that against the covariates you
+                    <em>did</em> measure &mdash; &ldquo;a confounder as strong as Price implies 9%, well
+                    inside the 24% it would take&rdquo; &mdash; so the answer rests on something concrete
+                    rather than on a slider you chose. Run it from the Oracle's Validation tab, or ask the
+                    assistant for a sensitivity analysis.
                 </li>
                 <li>
                     <strong>Randomized designs break the loop by construction</strong>: a budget set by a coin

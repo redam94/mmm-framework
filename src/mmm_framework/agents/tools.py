@@ -5312,6 +5312,9 @@ def record_experiment_readout(
     adstock_state: str = "steady_state",
     subchannel: str = None,
     overwrite_calibrated: bool = False,
+    bias_sigma: float = None,
+    bias_mu: float = None,
+    bias_source: str = None,
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -5349,6 +5352,16 @@ def record_experiment_readout(
     spend_per_period for the off-panel flow) is additive and never needs the
     flag.
 
+    `bias_sigma` / `bias_mu` record a RESIDUAL-BIAS prior for the readout — how
+    much the design could still be off after its own standard error, e.g. from a
+    parallel-trends violation in a matched-market test or spillover in a
+    randomized one. The sign convention is `E[value] = true_effect + bias_mu`, so
+    a POSITIVE `bias_mu` says the readout OVERSTATES the effect. These do not
+    touch `value`/`se`, which stay exactly as measured; they are staged into the
+    model only when apply_experiment_calibration is called with
+    bias_mode='stored'. `bias_source` records where the number came from so a
+    report can never present an assumed bias as a measured one.
+
     'completed' means measured but NOT yet in the model — follow with
     apply_experiment_calibration + fit_mmm_model to close the loop.
     """
@@ -5374,6 +5387,28 @@ def record_experiment_readout(
             readout["notes"] = notes
         if subchannel is not None:
             readout["subchannel"] = subchannel
+        # Residual-bias prior. Stored as PROVENANCE FOR AN ASSUMPTION beside
+        # the measurement — `value`/`se` stay exactly as measured, because the
+        # information-decay and EIG maths read `se` and a silently inflated one
+        # would double-count there, and because the same readout has to be
+        # stageable under several assumed biases.
+        if any(v is not None for v in (bias_sigma, bias_mu, bias_source)):
+            bias = dict(old_readout.get("bias") or {})
+            if bias_sigma is not None:
+                if float(bias_sigma) < 0:
+                    return _simple_msg(
+                        "bias_sigma must be >= 0 (0 disables the bias prior).",
+                        tool_call_id,
+                    )
+                bias["sigma"] = float(bias_sigma)
+            if bias_mu is not None:
+                bias["mu"] = float(bias_mu)
+            if bias_source is not None:
+                bias["source"] = str(bias_source)
+            bias.setdefault("mu", 0.0)
+            bias.setdefault("sigma", 0.0)
+            bias.setdefault("scale", "natural")
+            readout["bias"] = bias
         # Off-panel calibration inputs (used when the test window is outside the
         # dataset): the response curve is evaluated at this spend level.
         if spend_per_period is not None:
@@ -5494,6 +5529,7 @@ def apply_experiment_calibration(
     state: Annotated[dict, InjectedState],
     experiment_ids: list[str] = None,
     replace: bool = False,
+    bias_mode: str = "stored",
     config: InjectedConfig = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,
 ) -> Command:
@@ -5501,6 +5537,14 @@ def apply_experiment_calibration(
     NEXT fit: writes `experiments` (ExperimentMeasurement payloads) into the
     model spec. The next fit_mmm_model folds them into the model as in-graph
     likelihood terms and marks the registry entries 'calibrated'.
+
+    `bias_mode` controls whether a residual-bias prior recorded on a readout
+    (see record_experiment_readout) is staged with it. 'stored' (default) applies
+    any recorded prior — de-biasing the value and widening its SE in quadrature,
+    so a quasi-experimental readout anchors the model less firmly than a
+    randomized one. 'off' stages the raw measurement, which is how you A/B the
+    assumption. No pre-existing readout carries a bias, so the default is
+    behaviour-preserving.
 
     With no `experiment_ids`, stages every measured experiment in the project
     — 'completed' AND already 'calibrated' (from earlier fits) — so a refit
@@ -5539,7 +5583,7 @@ def apply_experiment_calibration(
         for e in sessions_store.list_experiments(project_id=project_id)
         if e.get("status") in ("completed", "calibrated")
     ]
-    n_new = n_kept = 0
+    n_new = n_kept = n_biased = 0
     dropped: set[str] = set()
     if experiment_ids:
         wanted = set(experiment_ids)
@@ -5594,6 +5638,7 @@ def apply_experiment_calibration(
 
         start, end = e["start_date"], e["end_date"]
         estimand = (e.get("estimand") or "roas").lower()
+        readout = e.get("readout") or {}
         m = {
             "experiment_id": e["id"],
             "channel": e["channel"],
@@ -5605,7 +5650,6 @@ def apply_experiment_calibration(
 
         if not _window_within_bounds(start, end, bounds):
             # Off-panel: needs the test's spend level (recorded on the readout).
-            readout = e.get("readout") or {}
             spend_pp = readout.get("spend_per_period")
             if spend_pp is None:
                 needs_spend.append(
@@ -5623,6 +5667,29 @@ def apply_experiment_calibration(
             m["eval_periods"] = _periods_in_window(start, end, freq_days)
             m["eval_units"] = int(readout.get("n_treated_units") or 1)
             m["adstock_state"] = readout.get("adstock_state") or "steady_state"
+
+        # Residual-bias prior, if one was recorded and the caller wants it. The
+        # registry row keeps the raw measurement; only this staged copy carries
+        # the assumption, so the same readout can be staged under different
+        # assumed biases without rewriting the measurement.
+        bias = (readout.get("bias") or {}) if bias_mode == "stored" else {}
+        if bias:
+            b_mu = float(bias.get("mu", 0.0) or 0.0)
+            b_sigma = float(bias.get("sigma", 0.0) or 0.0)
+            b_scale = str(bias.get("scale") or "natural")
+            if b_scale != "natural":
+                problems.append(
+                    f"`{e['id'][:8]}` ({e['channel']}): bias_scale='{b_scale}' "
+                    "needs a lognormal measurement, which this staging path does "
+                    "not build. Record the bias on the natural scale."
+                )
+                continue
+            if b_mu or b_sigma:
+                m["bias_mu"] = b_mu
+                m["bias_sigma"] = b_sigma
+                m["bias_scale"] = "natural"
+                m["bias_source"] = bias.get("source")
+                n_biased += 1
         measurements.append(m)
 
     if problems:
@@ -5653,6 +5720,14 @@ def apply_experiment_calibration(
     chs = ", ".join(sorted({m["channel"] for m in measurements}))
     n_off = sum(1 for m in measurements if "eval_spend" in m)
     detail = f" ({n_off} off-panel)" if n_off else ""
+    bias_note = (
+        f" {n_biased} carry a recorded residual-bias prior: the measured value is\n"
+        " de-biased and its SE widened in quadrature before it anchors the model."
+        " The registry keeps the raw readout — this is an assumption, and the\n"
+        " report states it as one."
+        if n_biased
+        else ""
+    )
     tail = ""
     if experiment_ids:
         if replace:
@@ -5684,7 +5759,7 @@ def apply_experiment_calibration(
         success_msg=(
             f"Staged {len(measurements)} experiment likelihood(s){detail} ({chs}) "
             "into the spec. Now call fit_mmm_model — the refit folds them into the "
-            "model and marks the registry entries calibrated." + tail
+            "model and marks the registry entries calibrated." + bias_note + tail
         ),
         patch_paths=["experiments", "experiment_ids"],
     )
@@ -7712,6 +7787,8 @@ TOOLS = [
     *[t for t in CAUSAL_TOOLS if t.name == "run_calibration_check"],
     # Interval-coverage check (does the 90% interval cover 90%?)
     *[t for t in CAUSAL_TOOLS if t.name == "run_coverage_check"],
+    # "What if we missed a confounder?" on the DECISION scale
+    *[t for t in CAUSAL_TOOLS if t.name == "run_sensitivity_analysis"],
     run_budget_scenario,
     run_marginal_analysis,
     # Decision layer: learnings -> budget + next experiment
@@ -7857,6 +7934,7 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         # validation tools that need media channels / the MMM forward pass
         "run_channel_diagnostics",
         "run_refutation_suite",
+        "run_sensitivity_analysis",
         "run_cross_validation",
     }
 )

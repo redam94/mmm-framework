@@ -1257,6 +1257,56 @@ def run_coverage_check(
     return _modelop_command(res, state or {}, tool_call_id, persist_check="coverage")
 
 
+# ── 6b. Sensitivity to unmeasured confounding (decision scale) ───────────────
+
+
+@tool
+def run_sensitivity_analysis(
+    threshold: float = 0.95,
+    benchmark: bool = True,
+    config: InjectedConfig = None,
+    state: Annotated[dict, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+) -> Command:
+    """Ask how much HIDDEN BIAS it would take to change the recommendation. Call
+    this when the user asks whether the results would survive an unmeasured
+    confounder, how sensitive the ROI is to unobserved demand, "what if there's
+    something we didn't measure", or wants a sensitivity analysis of the model's
+    conclusions.
+
+    For each channel it reports a **tipping point** — how far the estimate would
+    have to be overstated, as a share of its own size, before it stops clearing
+    break-even — and then prices that against the covariates that WERE measured
+    ("a confounder as strong as Price implies 9%, well inside the 24% it would
+    take"). That comparison is what turns a slider into an argument.
+
+    Cheap: it re-weights the posterior you already have, so there is no refit.
+
+    Distinct from `run_refutation_suite`, which reports the Cinelli-Hazlett
+    robustness value on the COEFFICIENT scale. This one answers on the decision
+    scale, which is where the recommendation actually lives.
+
+    Important: a tipping point is an argument that a confounder large enough to
+    matter is implausible — it is never evidence that an effect is causal. Only a
+    randomized experiment gives that.
+
+    Args:
+        threshold: posterior probability a conclusion must retain to count as
+            supported (0.95 by convention).
+        benchmark: price the bias against the model's observed covariates.
+            Turn off only if the design matrix is expensive or unavailable.
+    """
+    from mmm_framework.agents.runtime import get_current_thread, set_current_thread
+    from mmm_framework.agents.tools import _KERNELS, _modelop_command
+
+    set_current_thread(_thread_id_from(config))
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "confounding_sensitivity",
+        {"threshold": float(threshold), "benchmark": bool(benchmark)},
+    )
+    return _modelop_command(res, state or {}, tool_call_id, persist_check="sensitivity")
+
+
 # ── 7. Leave-one-out decomposition (Step 8, sensitivity) ─────────────────────
 
 
@@ -1650,6 +1700,7 @@ CAUSAL_TOOLS = [
     prior_predictive_check,
     run_calibration_check,
     run_coverage_check,
+    run_sensitivity_analysis,
     leave_one_out_decomposition,
     define_analysis_plan,
     check_spec_divergence,

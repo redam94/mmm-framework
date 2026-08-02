@@ -43,6 +43,16 @@ if TYPE_CHECKING:
     from .data_extractors import MMMDataBundle
 
 
+def _fmt_or_na(value: object, places: int = 2) -> str:
+    """A number at fixed precision, or ``"n/a"`` — never the literal ``"nan"``."""
+    return f"{float(value):.{places}f}" if _is_finite_number(value) else "n/a"
+
+
+def _fmt_pct_or_na(value: object, places: int = 0) -> str:
+    """A percentage, or ``"n/a"``."""
+    return f"{float(value):.{places}%}" if _is_finite_number(value) else "n/a"
+
+
 def _is_finite_number(value: object) -> bool:
     """True only for a real, finite number.
 
@@ -2137,7 +2147,95 @@ class CausalAssumptionsSection(Section):
         if robustness and robustness.get("channels"):
             parts.append(self._render_robustness_table(robustness))
 
+        sensitivity = ca.get("confounding_sensitivity")
+        if sensitivity and sensitivity.get("channels"):
+            parts.append(self._render_confounding_sensitivity(sensitivity))
+
         return self._render_section_wrapper("\n".join(parts))
+
+    def _render_confounding_sensitivity(self, sensitivity: dict) -> str:
+        """Decision-scale tipping points, with the observed-covariate benchmark.
+
+        The robustness table above answers on the coefficient scale; this one
+        answers in the currency of the recommendation, which is where a reader
+        actually acts. Wording is deliberately one-directional: a large tipping
+        point means the *required* confounder is implausible, never that the
+        effect has been shown causal.
+        """
+        rows: list[str] = []
+        for ch in sensitivity["channels"]:
+            sens = ch.get("sensitivity") or {}
+            tip = sens.get("tipping_mu") or {}
+            name = html.escape(str(ch.get("channel", "")))
+            verdict = str(sens.get("verdict", "not_assessable"))
+            estimate = sens.get("estimate")
+            prob = sens.get("prob_at_zero_bias")
+
+            if verdict == "not_assessable":
+                tip_s, cls, status = "n/a", "uncertain", "Not assessable"
+            elif tip.get("already_below"):
+                tip_s, cls, status = "—", "negative", "Not supported"
+            elif tip.get("crossed") and tip.get("value") is not None:
+                tip_s = f"{float(tip['value']):.0%}"
+                cls, status = (
+                    ("negative", "Fragile")
+                    if verdict == "fragile"
+                    else ("positive", "Withstands the range tested")
+                )
+            else:
+                tip_s = f"&gt;{float(tip.get('max_scanned') or 0):.0%}"
+                cls, status = "positive", "Withstands the range tested"
+
+            best = None
+            for b in ch.get("benchmarks") or []:
+                if b.get("status") != "ok":
+                    continue
+                frac = b.get("fractional_bias")
+                if frac is None or frac != frac:
+                    continue
+                if best is None or frac > best["fractional_bias"]:
+                    best = b
+            if best is None:
+                bench_s = "n/a"
+            else:
+                bench_s = (
+                    f"{float(best['fractional_bias']):.0%} "
+                    f"({best['kd']:g}&times; {html.escape(str(best['covariate']))})"
+                )
+                # The comparison that turns a slider into an argument.
+                if ch.get("benchmark_exceeds_tipping_point") is True:
+                    cls, status = "negative", "Benchmark would overturn it"
+
+            rows.append(
+                f"<tr><td>{name}</td>"
+                f"<td class='mono'>{_fmt_or_na(estimate, 2)}</td>"
+                f"<td class='mono'>{_fmt_pct_or_na(prob)}</td>"
+                f"<td class='mono'>{tip_s}</td>"
+                f"<td class='mono'>{bench_s}</td>"
+                f"<td><span class='status-badge {cls}'>{status}</span></td></tr>"
+            )
+
+        caveat = html.escape(str(sensitivity.get("caveat", "")))
+        return f"""
+            <h3>How much hidden bias would change the call?</h3>
+            <p>
+                The <strong>tipping point</strong> is how far a channel's estimate
+                would have to be overstated &mdash; as a share of its own size
+                &mdash; before it stops clearing break-even. The
+                <strong>benchmark</strong> prices a hypothetical confounder against
+                the covariates that <em>were</em> measured, so the comparison is
+                against something concrete rather than an arbitrary slider. A
+                benchmark larger than the tipping point is the case to act on.
+            </p>
+            <table class="data-table">
+                <thead><tr>
+                    <th>Channel</th><th>Estimate</th><th>P(above break-even)</th>
+                    <th>Tipping point</th><th>Strongest benchmark</th><th>Status</th>
+                </tr></thead>
+                <tbody>{"".join(rows)}</tbody>
+            </table>
+            <p class="footnote">{caveat}</p>
+        """
 
     def _render_robustness_table(self, robustness: dict) -> str:
         rows = []
@@ -2996,9 +3094,13 @@ class EstimandsSection(Section):
         # classic report also renders `contribution_roi` in ChannelROISection,
         # at a lower mass and an equal-tailed interval, and the narrower one
         # reads as more precise unless both say which they are.
-        probs = [v.get("interval_mass", v.get("hdi_prob", ESTIMAND_INTERVAL_MASS))
-                 for _, v in items]
-        modal_mass = max(set(probs), key=probs.count) if probs else ESTIMAND_INTERVAL_MASS
+        probs = [
+            v.get("interval_mass", v.get("hdi_prob", ESTIMAND_INTERVAL_MASS))
+            for _, v in items
+        ]
+        modal_mass = (
+            max(set(probs), key=probs.count) if probs else ESTIMAND_INTERVAL_MASS
+        )
         ci_pct = int(round(float(modal_mass) * 100))
 
         # The header states the MASS only, because the definitions in this table

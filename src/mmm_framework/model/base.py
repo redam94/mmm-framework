@@ -313,53 +313,6 @@ def _anchored_det(
     return expr + 0.0 * anchor
 
 
-@contextmanager
-def _map_boundary_diagnostics(model: "pm.Model"):
-    """Turn an interval-transform saturation crash into an actionable message (#203).
-
-    ``find_MAP`` optimizes in the UNCONSTRAINED space, so a parameter bounded to
-    ``[0, 1]`` — every ``Beta``-prior parameter in this model: ``adstock_alpha``,
-    ``sat_half``, ``sat_exponent`` — reaches the optimizer as a logit. In float64
-    ``sigmoid(x)`` returns *exactly* ``1.0`` once ``x`` exceeds about 37, so an
-    optimizer that walks the logit far enough makes ``1 - alpha`` exactly zero,
-    and the ``Beta`` log-density's gradient term ``-2 / (1 - alpha)`` divides by
-    zero inside the compiled graph.
-
-    The raw failure is a bare ``ZeroDivisionError`` raised from a JIT-compiled
-    function, naming a ``Composite`` op and nothing a caller could act on. This
-    re-raises it naming the mechanism and the ways out. It does not prevent the
-    crash — preventing it means changing the model's priors, which is the caller's
-    decision, not ours.
-    """
-    try:
-        yield
-    except ZeroDivisionError as exc:
-        bounded = sorted(
-            rv.name
-            for rv in model.free_RVs
-            if rv.name.startswith(("adstock_alpha_", "sat_half_", "sat_exponent_"))
-        )
-        raise ZeroDivisionError(
-            "MAP optimization drove a [0, 1]-bounded parameter onto its boundary, "
-            "where its Beta prior's gradient is undefined.\n\n"
-            "find_MAP optimizes in the unconstrained (logit) space, and float64 "
-            "sigmoid saturates to exactly 1.0 past ~37, so `1 - alpha` becomes "
-            "exactly zero. The bounded parameters in this model are: "
-            f"{', '.join(bounded) or '(none found)'}.\n\n"
-            "This is a property of gradient-based MAP on interval-constrained "
-            "parameters, not a wrong model. Ways out, cheapest first:\n"
-            "  * fit(method='advi') or NUTS — neither walks the boundary the same "
-            "way;\n"
-            "  * give the offending parameter a prior with less mass at the edge "
-            "(e.g. AdstockConfig.geometric(alpha_prior=PriorConfig(distribution="
-            "'Beta', params={'alpha': 2.0, 'beta': 5.0})));\n"
-            "  * check the channel actually has enough spend variation to inform "
-            "its carryover — a flat likelihood is what lets the optimizer wander "
-            "this far.\n\n"
-            "Tracking: https://github.com/redam94/mmm-framework/issues/203"
-        ) from exc
-
-
 def run_approximate_fit(
     model: "pm.Model",
     method: FitMethod,
@@ -375,6 +328,20 @@ def run_approximate_fit(
     them; ``point_to_idata`` keeps them), so it is a drop-in for a NUTS trace
     everywhere downstream (summaries, ArviZ, ``predict``, reporting).
 
+    The two gradient-based point methods (MAP and Laplace) are guarded against
+    #203 — a bounded parameter driven far enough out in unconstrained space that
+    its forward map lands exactly on the support boundary, where the density
+    divides by zero. On that failure only, the optimization is retried inside the
+    float64-safe box from ``diagnostics.identification.unconstrained_box``, a
+    ``UserWarning`` names the directions the fit does not identify, and the
+    report rides out in ``extra_diagnostics["identification"]``. A fit that never
+    approaches a boundary is untouched: no bounds are passed, so scipy takes the
+    same code path it takes today. Pass ``identification_check=True`` to compute
+    the report on a *successful* MAP/Laplace fit too — worth it for Laplace,
+    whose covariance is the inverse of exactly this curvature, and which
+    ``pymc_extras`` will happily project to the nearest PSD matrix and report
+    without complaint.
+
     Shared by :class:`BayesianMMM` (via ``_fit_approx``) and the extended models
     (``mmm_extensions.models.base.BaseExtendedMMM.fit``) so both approximate
     paths are byte-identical. NB Pathfinder's ``pymc_extras`` trace conversion
@@ -383,11 +350,19 @@ def run_approximate_fit(
     registers constant Deterministics may need the same treatment for Pathfinder
     (MAP/ADVI are unaffected).
     """
+    from ..diagnostics import identification as _ident
+
+    identification_check = bool(kwargs.pop("identification_check", False))
+
     if method is FitMethod.MAP:
         with model:
-            with _map_boundary_diagnostics(model):
-                point = pm.find_MAP(seed=random_seed, **kwargs)
-        return arviz_compat.point_to_idata(point), {"map": True}
+            point, found = _ident.guarded_find_MAP(
+                model, report=identification_check, seed=random_seed, **kwargs
+            )
+        extra: dict = {"map": True}
+        if found is not None:
+            extra["identification"] = found.to_dict()
+        return arviz_compat.point_to_idata(point), extra
 
     if method in (FitMethod.ADVI, FitMethod.FULLRANK_ADVI):
         advi_method = "advi" if method is FitMethod.ADVI else "fullrank_advi"
@@ -419,14 +394,72 @@ def run_approximate_fit(
                 "environment is missing it. Re-sync (`uv sync`) or `pip install "
                 "'pymc-extras>=0.12,<0.13'`. MAP and ADVI need no extra deps."
             ) from exc
+        progressbar = kwargs.pop("progressbar", False)
         with model:
-            idata = pmx.fit_laplace(
-                draws=draws,
-                random_seed=random_seed,
-                progressbar=kwargs.pop("progressbar", False),
-                **kwargs,
-            )
-        return idata, {"laplace": True}
+            try:
+                idata = pmx.fit_laplace(
+                    draws=draws,
+                    random_seed=random_seed,
+                    progressbar=progressbar,
+                    **kwargs,
+                )
+            except ZeroDivisionError as exc:
+                # Same #203 mechanism as MAP, one layer down: fit_laplace runs
+                # its own gradient-based optimize before it ever gets to the
+                # Hessian, so a bounded parameter can saturate its transform
+                # there too. The MAP branch guards this; without the same guard
+                # here the caller got a bare ZeroDivisionError naming a
+                # Composite op — unactionable, and (because agents/tools.py
+                # hands the exception text straight to the LLM) the reason the
+                # oracle could only offer "try a different method".
+                if not _ident.has_guardable_parameters(model):
+                    raise ZeroDivisionError(
+                        _ident.boundary_failure_message(model)
+                    ) from exc
+                # Anchor the report at the bounded mode. This is the same point
+                # fit_laplace expands around, so its flat directions ARE the
+                # directions whose Laplace covariance is meaningless.
+                try:
+                    _point, found = _ident.bounded_find_MAP(
+                        model, progressbar=False, seed=random_seed
+                    )
+                    bounds, _labels, _limits = _ident.unconstrained_box(model)
+                    retry = dict(kwargs)
+                    optimizer_kwargs = dict(retry.pop("optimizer_kwargs", None) or {})
+                    optimizer_kwargs["bounds"] = bounds
+                    retry.pop("optimize_method", None)
+                    idata = pmx.fit_laplace(
+                        # fit_laplace defaults to BFGS, which rejects bounds.
+                        "L-BFGS-B",
+                        draws=draws,
+                        random_seed=random_seed,
+                        progressbar=progressbar,
+                        optimizer_kwargs=optimizer_kwargs,
+                        **retry,
+                    )
+                except Exception as retry_exc:  # noqa: BLE001
+                    raise ZeroDivisionError(
+                        f"{_ident.boundary_failure_message(model)}\n\nA bounded "
+                        "retry was attempted and also failed "
+                        f"({type(retry_exc).__name__}: {retry_exc})."
+                    ) from exc
+                warnings.warn(
+                    _ident.guardrail_warning(found), UserWarning, stacklevel=2
+                )
+                return idata, {"laplace": True, "identification": found.to_dict()}
+
+        extra = {"laplace": True}
+        if identification_check:
+            try:
+                point, _ = _ident.guarded_find_MAP(
+                    model, report=False, progressbar=False, seed=random_seed
+                )
+                extra["identification"] = _ident.weak_identification_report(
+                    model, point
+                ).to_dict()
+            except Exception:  # noqa: BLE001 - a diagnostic never breaks a fit
+                pass
+        return idata, extra
 
     if method is FitMethod.PATHFINDER:
         try:
@@ -899,6 +932,11 @@ class BayesianMMM:
 
         self._price_lever = None  # (PriceConfig, raw series)
         self._promo_levers: list = []  # [(PromoConfig, raw series)]
+        # Hypothetical unobserved confounder for the sensitivity sweep: a FIXED
+        # period-axis vector, already multiplied by its assumed outcome loading.
+        # `None` keeps the term absent from the graph (see
+        # `_build_latent_confounder`).
+        self._latent_confounder: "np.ndarray | None" = None
         # The swappable lever block: a design matrix behind a `pm.Data` container
         # plus the normalization constants FROZEN at fit time (see
         # `_prepare_levers` for why recomputing them voids every counterfactual).
@@ -1461,7 +1499,8 @@ class BayesianMMM:
         """
         requested = getattr(self.seasonality_config, "period_source", None)
         if requested is not None and (
-            SeasonalityPeriodSource(requested) is SeasonalityPeriodSource.DATETIME_MEDIAN
+            SeasonalityPeriodSource(requested)
+            is SeasonalityPeriodSource.DATETIME_MEDIAN
         ):
             raise NotImplementedError(
                 "SeasonalityConfig.period_source='datetime_median' is not "
@@ -1965,6 +2004,66 @@ class BayesianMMM:
         pos = price_raw[price_raw > 0]
         base = pos if pos.size else price_raw
         return float({"mean": np.mean, "median": np.median, "max": np.max}[ref](base))
+
+    def add_latent_confounder(self, u_scaled: "np.ndarray | None") -> "BayesianMMM":
+        """Attach a hypothetical unobserved confounder and invalidate the graph.
+
+        ``u_scaled`` is a **period-axis** vector already multiplied by its assumed
+        outcome loading, so the graph adds it to ``mu`` verbatim. Passing ``None``
+        removes it and restores the byte-identical default graph.
+
+        This is the in-graph half of the confounding sensitivity analysis: the
+        confounder is *fixed data*, not a sampled latent. That distinction is the
+        whole point — sampling its loading would let the likelihood choose how
+        much confounding to admit, which is a model *of* confounding rather than a
+        sensitivity analysis, and it would let any spend-predictable structure be
+        relabelled as ``U`` and shrink the media coefficients for free. Fixing it
+        at an assumed strength and re-fitting everything else is what makes the
+        sweep answer "if the world were like this, what would I have concluded?".
+
+        See :func:`mmm_framework.validation.confounding_sensitivity.run_confounder_sweep`
+        for the construction and the sweep driver. Returns ``self`` for chaining.
+        """
+        self._latent_confounder = (
+            None if u_scaled is None else np.asarray(u_scaled, dtype=float)
+        )
+        self._model = None  # force a rebuild
+        return self
+
+    def _build_latent_confounder(self) -> "pt.TensorVariable | None":
+        """The assumed unobserved confounder's contribution to ``mu``.
+
+        Returns ``None`` when none is attached, so the default graph is
+        byte-identical — the term is absent, not zero, matching the discipline of
+        the event / interaction / lever blocks.
+
+        Deliberately kept OUT of ``channel_contributions`` and ``media_total``
+        (it is a baseline demand driver, not a media stream, and folding it in
+        would double-count it in every ROI and estimand) and out of
+        ``X_controls`` (which would change ``n_controls``, the ``control`` coord
+        and the shape of ``control_contributions``). It gets its own deterministic
+        beside ``controls_total``.
+
+        Lives behind a ``pm.Data`` container so a sweep can walk a grid of assumed
+        strengths with ``pm.set_data`` on ONE compiled graph rather than
+        recompiling per point.
+        """
+        if self._latent_confounder is None:
+            return None
+        u = np.asarray(self._latent_confounder, dtype=float).reshape(-1)
+        if u.shape[0] != self.n_periods:
+            raise ValueError(
+                f"latent confounder must be on the period axis (length "
+                f"{self.n_periods}), got {u.shape[0]}"
+            )
+        u_data = pm.Data("latent_confounder", u)
+        contribution = u_data[self.time_idx]
+        pm.Deterministic(
+            "latent_confounder_component",
+            contribution * self.y_std,
+            dims="obs",
+        )
+        return contribution
 
     def _build_price_promo_levers(self) -> "pt.TensorVariable | None":
         """Price & promotion levers (#138): a log-price elasticity term and/or a
@@ -2880,6 +2979,8 @@ class BayesianMMM:
             # promo-lift terms (own carryover). None (not added to mu) when no lever
             # is configured, so the default graph is byte-identical.
             lever_contribution = self._build_price_promo_levers()
+            # Hypothetical unobserved confounder (sensitivity sweep, default off).
+            confounder_contribution = self._build_latent_confounder()
 
             # EXPERIMENT LIKELIHOODS (incrementality / lift / ROAS calibration)
             # Fold any registered experimental results into the joint posterior
@@ -2938,6 +3039,9 @@ class BayesianMMM:
             # Price / promotion levers, same discipline (#138).
             if lever_contribution is not None:
                 mu = mu + lever_contribution
+            # Assumed unobserved confounder — fixed data, same discipline.
+            if confounder_contribution is not None:
+                mu = mu + confounder_contribution
 
             # Off path: create sigma here exactly as before (bit-identical). On
             # the selection path it was already created above for the horseshoe.
@@ -3797,9 +3901,7 @@ class BayesianMMM:
                 if consumed
                 else " This model was fit without controls."
             )
-            raise ValueError(
-                "X_controls was passed but cannot be applied." + detail
-            )
+            raise ValueError("X_controls was passed but cannot be applied." + detail)
 
         n_given = int(np.asarray(X_controls).shape[-1])
         if n_given != self.n_controls:
@@ -4453,7 +4555,10 @@ class BayesianMMM:
             # custom intervention is media-only by construction. Widening it
             # would break every registered callable; a lever scenario belongs in
             # a set/scale intervention on the lever by name.
-            return apply_custom_intervention(self, intervention, self.X_media_raw.copy()), None
+            return (
+                apply_custom_intervention(self, intervention, self.X_media_raw.copy()),
+                None,
+            )
         raise ValueError(f"Unsupported intervention: {intervention!r}")
 
     def _intervention_to_X_media(

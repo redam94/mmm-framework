@@ -18,6 +18,7 @@ const CHECKS: { id: ValidationCheck; label: string; hint: string; slow?: boolean
   { id: 'residuals', label: 'Residuals', hint: 'Autocorrelation / normality' },
   { id: 'channels', label: 'Channels', hint: 'VIF / collinearity' },
   { id: 'refutation', label: 'Refutation', hint: 'Confounding robustness' },
+  { id: 'sensitivity', label: 'Sensitivity', hint: 'How much hidden bias would flip the call' },
   { id: 'cross_validation', label: 'Cross-validation', hint: 'Out-of-time (slow, refits)', slow: true },
   { id: 'coverage', label: 'Coverage', hint: 'Do 90% intervals cover 90%? (slow, refits)', slow: true },
 ];

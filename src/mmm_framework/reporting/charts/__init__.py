@@ -53,6 +53,13 @@ from .triangulation import (
     create_triangulation_chart,
 )
 
+# Confounding-sensitivity charts — tipping points, curves and the (mu, sigma) surface
+from .sensitivity_bias import (
+    create_bias_contour_chart,
+    create_bias_curve_chart,
+    create_tipping_point_chart,
+)
+
 # Spec-curve / model-averaging robustness chart (issue #103)
 from .spec_curve import (
     create_spec_curve_plot,
@@ -129,7 +136,10 @@ __all__ = [
     # ROI charts
     "create_roi_forest_plot",
     "create_triangulation_chart",
+    "create_bias_contour_chart",
+    "create_bias_curve_chart",
     "create_spec_curve_plot",
+    "create_tipping_point_chart",
     # Diagnostic charts
     "create_saturation_curves",
     "create_adstock_chart",

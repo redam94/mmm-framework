@@ -84,6 +84,7 @@ explicit here:
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -199,6 +200,31 @@ class ExperimentMeasurement:
         on from zero at the window start and carryover builds over ``W`` (right
         for a burst/pulse launched from dark). Always validated, but only affects
         the estimand when ``eval_spend`` is set.
+    bias_mu:
+        Assumed **bias in the measurement**, under the convention
+        ``E[value] = true_estimand + bias_mu``. A positive value therefore says
+        the readout *overstates* the effect and the likelihood is shown
+        ``value - bias_mu``. Spillover from treated to control units attenuates a
+        lift test, so it argues for a *negative* ``bias_mu``; a demand-correlated
+        assignment in a matched-market design argues for a positive one. Defaults
+        to ``0.0``, which leaves the graph byte-identical.
+    bias_sigma:
+        Uncertainty about that bias, added to the measurement error **in
+        quadrature**: the likelihood widens to ``hypot(se, bias_sigma)``. This is
+        how a quasi-experimental readout stops anchoring the model as firmly as a
+        randomized one. Defaults to ``0.0``.
+    bias_scale:
+        ``"natural"`` (default) for a Normal measurement — the bias is additive
+        in the estimand's units. ``"log"`` for a lognormal one, where the bias is
+        a multiplicative *factor* and enters on the log scale; an additive shift
+        under a multiplicative error model is a category error, and can drive the
+        observed value non-positive. Only checked when a bias is actually set, so
+        existing measurements are unaffected.
+    bias_source:
+        Provenance for the assumption — e.g.
+        ``"placebo:excess-over-analytic"`` or ``"floor:randomized@0.10"``. Never
+        enters the graph; it exists so a report can never present an assumed bias
+        as a measured one.
     """
 
     channel: str
@@ -216,6 +242,15 @@ class ExperimentMeasurement:
     eval_periods: int | None = None
     eval_units: int = 1
     adstock_state: str = "steady_state"
+    bias_mu: float = 0.0
+    bias_sigma: float = 0.0
+    bias_scale: str = "natural"
+    bias_source: str | None = None
+
+    @property
+    def has_bias(self) -> bool:
+        """Whether a confounding-bias prior is attached to this measurement."""
+        return bool(self.bias_mu != 0.0 or self.bias_sigma != 0.0)
 
     def __post_init__(self) -> None:
         estimand = ExperimentEstimand(self.estimand)
@@ -305,6 +340,57 @@ class ExperimentMeasurement:
                     "spend override."
                 )
 
+        # -- confounding-bias prior (defaults leave the graph byte-identical) --
+        for name in ("bias_mu", "bias_sigma"):
+            raw = getattr(self, name)
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"{name} must be a finite number, got {raw!r}"
+                ) from None
+            if not math.isfinite(value):
+                raise ValueError(f"{name} must be a finite number, got {raw!r}")
+            object.__setattr__(self, name, value)
+        if self.bias_sigma < 0:
+            raise ValueError(
+                f"bias_sigma must be >= 0 (0 disables the bias prior), got "
+                f"{self.bias_sigma!r}"
+            )
+        if self.bias_scale not in ("natural", "log"):
+            raise ValueError(
+                f"bias_scale must be 'natural' or 'log', got {self.bias_scale!r}"
+            )
+        # Only enforced once a bias is actually set: a measurement with the
+        # defaults must keep working exactly as before, whatever its likelihood.
+        if self.has_bias:
+            if self.distribution == "lognormal" and self.bias_scale != "log":
+                raise ValueError(
+                    "distribution='lognormal' requires bias_scale='log': the "
+                    "measurement error is multiplicative, so the bias is a factor "
+                    "and must be passed as log(bias_factor). An additive shift "
+                    "here can also drive the observed value non-positive."
+                )
+            if self.distribution == "normal" and self.bias_scale != "natural":
+                raise ValueError(
+                    "distribution='normal' requires bias_scale='natural': the "
+                    "measurement error is additive, so the bias must be in the "
+                    "estimand's own units."
+                )
+            if (
+                self.bias_scale == "natural"
+                and self.bias_mu != 0.0
+                and (self.value - self.bias_mu) * self.value < 0
+            ):
+                warnings.warn(
+                    f"bias_mu={self.bias_mu!r} flips the sign of the measured "
+                    f"{estimand.value} ({self.value!r} -> "
+                    f"{self.value - self.bias_mu!r}). bias_mu is the bias IN the "
+                    "measurement (E[value] = true + bias_mu), so a positive value "
+                    "means the readout OVERSTATES the effect — check the sign.",
+                    stacklevel=3,
+                )
+
     # -- serialization ----------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
@@ -326,6 +412,10 @@ class ExperimentMeasurement:
             "eval_periods": self.eval_periods,
             "eval_units": self.eval_units,
             "adstock_state": self.adstock_state,
+            "bias_mu": self.bias_mu,
+            "bias_sigma": self.bias_sigma,
+            "bias_scale": self.bias_scale,
+            "bias_source": self.bias_source,
         }
 
     @classmethod
@@ -347,6 +437,12 @@ class ExperimentMeasurement:
             eval_periods=data.get("eval_periods"),
             eval_units=data.get("eval_units", 1),
             adstock_state=data.get("adstock_state", "steady_state"),
+            # Absent on every pre-existing payload, and the defaults reproduce
+            # the original graph exactly — so old specs round-trip unchanged.
+            bias_mu=data.get("bias_mu", 0.0) or 0.0,
+            bias_sigma=data.get("bias_sigma", 0.0) or 0.0,
+            bias_scale=data.get("bias_scale") or "natural",
+            bias_source=data.get("bias_source"),
         )
 
     @classmethod
@@ -652,8 +748,23 @@ def attach_experiment_likelihood(
     # the experiment should have measured") and used as an oracle in tests.
     pm.Deterministic(f"{name}_model_estimand", pt.as_tensor_variable(estimand_expr))
 
+    # A confounding-bias prior de-biases the observed value and widens the
+    # likelihood in quadrature, so a quasi-experimental readout anchors the model
+    # less firmly than a randomized one. The bias is NOT registered as a
+    # Deterministic: it is parameter-independent, and a constant Deterministic
+    # breaks Pathfinder's trace conversion (see `model/base.py::_anchored_det`).
+    # Provenance rides on the measurement, not in the graph.
+    has_bias = measurement.has_bias
+
     if measurement.distribution == "lognormal":
         sigma_log = lognormal_sigma_from_moments(measurement.value, measurement.se)
+        observed = float(np.log(measurement.value))
+        if has_bias:
+            # Multiplicative error model, so the bias is a factor and lives on
+            # the log scale; positivity of the de-biased value is preserved by
+            # construction rather than by a check that could fire mid-fit.
+            observed -= float(measurement.bias_mu)
+            sigma_log = float(math.hypot(sigma_log, measurement.bias_sigma))
         # log(value) ~ Normal(log(estimand), sigma_log): the estimand is the
         # median of the implied measurement distribution. Clip guards log(<=0).
         log_estimand = pt.log(pt.clip(estimand_expr, _EPS, np.inf))
@@ -661,14 +772,25 @@ def attach_experiment_likelihood(
             name,
             mu=log_estimand,
             sigma=sigma_log,
-            observed=float(np.log(measurement.value)),
+            observed=observed,
+        )
+
+    if not has_bias:
+        # Deliberately the original expressions, not `hypot(se, 0.0)` and
+        # `value - 0.0`: the un-biased path must be bit-identical, and neither
+        # rewrite is guaranteed to be.
+        return pm.Normal(
+            name,
+            mu=estimand_expr,
+            sigma=float(measurement.se),
+            observed=float(measurement.value),
         )
 
     return pm.Normal(
         name,
         mu=estimand_expr,
-        sigma=float(measurement.se),
-        observed=float(measurement.value),
+        sigma=float(math.hypot(measurement.se, measurement.bias_sigma)),
+        observed=float(measurement.value - measurement.bias_mu),
     )
 
 

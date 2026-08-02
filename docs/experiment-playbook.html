@@ -71,7 +71,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-19",
+          "dateModified": "2026-08-02",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/experiment-playbook.html#breadcrumb"
           },
@@ -125,6 +125,7 @@
 
             <h3>Back into the model</h3>
             <ul class="sidebar-nav">
+                <li><a href="#sensitivity">Residual bias in a readout</a></li>
                 <li><a href="#calibration">Calibrating the MMM</a></li>
                 <li><a href="#off-panel">Off-panel calibration</a></li>
             </ul>
@@ -417,6 +418,50 @@ board = methodology_leaderboard(
                 block-calibrated critical value restores honest size.
             </p>
 
+            <h2 id="sensitivity">How much residual bias is this readout carrying?</h2>
+            <p>
+                Before a readout anchors a model, it is worth asking what could still be wrong with it
+                &mdash; and the answer depends entirely on how units were assigned, not on which
+                estimator was run afterwards. A <strong>matched-market DiD</strong> is observational:
+                nothing was randomized, the estimate rests on parallel trends, and unmeasured
+                confounding is exactly the threat. A <strong>randomized</strong> geo split has no
+                confounding problem at all; what remains is interference &mdash; a national buy bleeding
+                across market lines, a platform reallocating budget out of the holdout &mdash; and
+                spillover <em>attenuates</em>, so the honest correction is toward a larger effect, not a
+                smaller one. Handing a randomized design a &ldquo;confounding tipping point&rdquo; would
+                dress up the one threat it does not face.
+            </p>
+            <p>
+                The width of that residual bias is <em>measured</em>, not asserted. Every geo design
+                already computes a placebo distribution: how much &ldquo;lift&rdquo; the pre-period
+                produces by chance, scored exactly as the experiment will be. That spread contains
+                sampling noise <em>and</em> whatever differential drift the pair structure carries, and
+                the analytic standard error models only the first &mdash; so the excess is the
+                defensible prior.
+            </p>
+            <pre><code class="python">from mmm_framework.planning.experiment_sensitivity import experiment_sensitivity
+
+report = experiment_sensitivity(
+    value=2.4,            # measured ROAS
+    se=0.35,
+    estimand="roas",
+    channel="TV",
+    design=design,        # what design_experiment_plan returned
+    method_key="did_mmt",
+)
+print(report.describe())
+print(report.derived.describe())</code></pre>
+            <div class="callout">
+                <p>
+                    <strong>One trap worth knowing.</strong> When a design has enough placebo windows it
+                    already inflates its own standard error to match them. If your readout's standard
+                    error came from that design, the placebo spread is <em>already inside it</em>, and
+                    adding it again as a bias would widen every calibrated interval for no reason. The
+                    framework compares the two and tells you which regime you are in rather than
+                    guessing.
+                </p>
+            </div>
+
             <h2 id="calibration">Calibrating the MMM with the readout</h2>
             <p>
                 A finished experiment is worth more than its own read — it is direct evidence about a
@@ -424,6 +469,14 @@ board = methodology_leaderboard(
                 framework folds readouts into the model as <strong>likelihood terms on the model's own
                 estimands</strong>: the measured value, with its standard error, constrains the in-graph
                 contribution / ROAS / marginal-ROAS of the tested channel over the tested window.
+            </p>
+            <p>
+                A readout carrying a residual-bias prior (above) can be staged with it:
+                <code>apply_experiment_calibration(bias_mode="stored")</code> de-biases the value and
+                widens its standard error in quadrature, so a quasi-experimental readout anchors the
+                model less firmly than a randomized one. It is off unless a bias was recorded, and the
+                registry always keeps the raw measurement &mdash; only the staged copy carries the
+                assumption, so the same readout can be staged under several of them.
             </p>
             <pre><code class="python">from mmm_framework.calibration import ExperimentMeasurement, ExperimentEstimand
 

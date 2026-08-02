@@ -2555,9 +2555,7 @@ async def start_planner_forecast(project_id: str, body: PlannerForecastRequest):
         "start_date": body.start_date,
         "max_draws": int(body.max_draws),
     }
-    return _start_planner_job(
-        project_id, "forecast_plan", op_kwargs, "forecast", run
-    )
+    return _start_planner_job(project_id, "forecast_plan", op_kwargs, "forecast", run)
 
 
 @app.get(
@@ -4171,6 +4169,10 @@ _VALIDATION_CHECKS: dict[str, tuple[str, dict]] = {
     "residuals": ("residual_diagnostics", {}),
     "channels": ("channel_diagnostics", {}),
     "refutation": ("refutation_suite", {}),
+    # Decision-scale confounding sensitivity: tipping points per channel plus
+    # the observed-covariate benchmark that says whether that much bias is
+    # plausible. Cheap — a re-weighting of the fitted posterior, no refit.
+    "sensitivity": ("confounding_sensitivity", {}),
     "cross_validation": ("cross_validation", {}),
     # Simulation-Based Calibration (Talts 2018) — expensive (one refit per sim);
     # the background-job path so the chat turn never blocks on it.
