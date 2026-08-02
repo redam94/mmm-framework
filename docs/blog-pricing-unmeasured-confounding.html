@@ -230,8 +230,30 @@ evalue(1.32, measure="roi").available        # False</code></pre>
 
             <div class="definition">
                 <h4>What a tipping point reads like</h4>
-                <p>Take a channel whose contribution ROI posterior has mean 1.32 and standard deviation 0.18 over 4,000 draws. Before any bias is assumed it clears break-even with probability 0.976. Widen an unsigned bias commitment and that probability falls: 0.930 at a spread of 10% of the estimate, 0.841 at 20%, 0.768 at 30%.</p>
-                <p style="margin-bottom:0;">The tipping point is where it crosses the decision threshold. At 90% confidence this channel tips at a bias spread of 13% of its own size; hold it to 95% and it tips at 7%. Commit to a direction instead of a width and the fall is much faster, because a signed bias moves the whole posterior rather than spreading it: a mean bias of 10% with a narrow spread already drops the probability to 0.838.</p>
+                <p>Take a channel whose contribution ROI posterior has mean 1.32 and standard deviation 0.18. Before any bias is assumed it clears break-even with probability 0.977. Widen an unsigned bias commitment and that probability falls: 0.931 at a spread of 10% of the estimate, 0.842 at 20%, 0.769 at 30%.</p>
+                <p style="margin-bottom:0;">The tipping point is where it crosses the decision threshold. At 90% confidence this channel tips at a bias spread of 14% of its own size. Hold it to 95% and it tips at 7%. Committing to a direction rather than a width brings the conclusion down far faster, because a signed bias moves the whole posterior instead of spreading it: a mean bias of 10% with a narrow spread already drops the probability to 0.839.</p>
+            </div>
+
+            <div class="interactive-box">
+                <h4>Figure 1. Two commitments, two rates of collapse</h4>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The same posterior under the two things an analyst can commit to. One curve widens an unsigned bias, saying only that confounding of some size could be present. The other commits to a direction, holding the spread narrow at 5% and moving the whole posterior down. Drag the slider to change the confidence you demand. The tipping point is where each curve crosses it.</p>
+
+                <div class="control-row">
+                    <label for="f1Thr">Decision threshold</label>
+                    <input type="range" id="f1Thr" min="0.70" max="0.99" step="0.01" value="0.90">
+                    <span class="value" id="f1ThrVal">0.90</span>
+                </div>
+
+                <div class="chart-container chart-themed" id="f1Chart" style="height:360px;"></div>
+
+                <div class="viz-readout">
+                    <div class="stat"><span class="lbl">Tips on width at</span><span class="val" id="f1TipW">&hellip;</span></div>
+                    <div class="stat"><span class="lbl">Tips on direction at</span><span class="val" id="f1TipD">&hellip;</span></div>
+                    <div class="stat"><span class="lbl">Price implies</span><span class="val" id="f1Bench">&hellip;</span></div>
+                    <div class="stat"><span class="lbl">Verdict at that benchmark</span><span class="val" id="f1Verdict">&hellip;</span></div>
+                </div>
+
+                <p class="chart-caption" style="margin-bottom:0;">Committing to a direction costs more than twice as much conclusion as committing to a width of the same size, and the gap widens as you demand more confidence. At the default 90% threshold the unsigned curve tips at 14% and the signed one at 6%, and the dashed line marks a benchmarked confounder as strong as Price at 9%. Both curves are the closed-form mixture the framework computes, over a fixed 128-point quantile grid of the posterior described above, so the numbers here are the numbers in the text.</p>
             </div>
 
             <h2 id="never-settles">The Number That Never Settles</h2>
@@ -317,6 +339,158 @@ evalue(1.32, measure="roi").available        # False</code></pre>
 
     <!-- Shared Components -->
     <script src="shared/components.js"></script>
+
+    <!-- Research figures -->
+    <script>
+    (function () {
+        'use strict';
+
+        /* ===================================================================
+         * Figure 1: how fast a conclusion falls under the two bias commitments.
+         * The posterior is a fixed 128-point midpoint-quantile grid of a
+         * LogNormal with mean 1.32 and sd 0.18, generated once in Python and
+         * embedded verbatim. No RNG anywhere: the figure and the prose quote
+         * the same numbers because they run the same arithmetic on the same
+         * numbers. Mirrors diagnostics/bias_sensitivity.py.
+         * =================================================================== */
+
+        var DRAWS = [
+            0.9115, 0.9616, 0.9884, 1.0077, 1.0230, 1.0360, 1.0473, 1.0573,
+            1.0665, 1.0749, 1.0828, 1.0901, 1.0971, 1.1036, 1.1099, 1.1159,
+            1.1217, 1.1272, 1.1326, 1.1378, 1.1428, 1.1478, 1.1525, 1.1572,
+            1.1618, 1.1663, 1.1706, 1.1749, 1.1792, 1.1833, 1.1874, 1.1915,
+            1.1955, 1.1994, 1.2033, 1.2071, 1.2109, 1.2147, 1.2184, 1.2221,
+            1.2258, 1.2294, 1.2330, 1.2366, 1.2402, 1.2437, 1.2473, 1.2508,
+            1.2543, 1.2578, 1.2613, 1.2647, 1.2682, 1.2716, 1.2751, 1.2785,
+            1.2820, 1.2854, 1.2889, 1.2923, 1.2958, 1.2992, 1.3027, 1.3062,
+            1.3096, 1.3131, 1.3166, 1.3201, 1.3237, 1.3272, 1.3308, 1.3343,
+            1.3379, 1.3415, 1.3452, 1.3488, 1.3525, 1.3563, 1.3600, 1.3638,
+            1.3676, 1.3715, 1.3754, 1.3793, 1.3833, 1.3873, 1.3914, 1.3955,
+            1.3997, 1.4040, 1.4083, 1.4126, 1.4171, 1.4216, 1.4262, 1.4309,
+            1.4357, 1.4406, 1.4456, 1.4507, 1.4559, 1.4612, 1.4667, 1.4724,
+            1.4782, 1.4842, 1.4904, 1.4968, 1.5034, 1.5103, 1.5175, 1.5250,
+            1.5329, 1.5412, 1.5500, 1.5592, 1.5692, 1.5798, 1.5913, 1.6039,
+            1.6178, 1.6334, 1.6512, 1.6721, 1.6976, 1.7307, 1.7790, 1.8766,
+        ];
+        var REFERENCE = 1.0;          // break-even for a revenue-measured ROI
+        var MEAN_ABS = DRAWS.reduce(function (a, b) { return a + b; }, 0) / DRAWS.length;
+        var SIGNED_SD = 0.05;         // the narrow spread the amber curve holds
+        var BENCHMARK = 0.09;         // a confounder as strong as Price
+
+        // P(tau > r) = mean_d Phi((x_d - mu - r) / sigma), the closed form.
+        function probAbove(mu, sigma) {
+            var s = Math.max(sigma * MEAN_ABS, 1e-12);
+            var m = mu * MEAN_ABS;
+            var total = 0;
+            for (var i = 0; i < DRAWS.length; i++) {
+                total += BV.normCdf((DRAWS[i] - m - REFERENCE) / s, 0, 1);
+            }
+            return total / DRAWS.length;
+        }
+
+        function curve(xs, kind) {
+            return xs.map(function (x) {
+                return kind === 'width' ? probAbove(0, x) : probAbove(x, SIGNED_SD);
+            });
+        }
+
+        // First crossing of the threshold, refined by bisection inside the bracket.
+        function tipping(kind, threshold) {
+            var hi = 0.6, step = 0.005, prev = null, found = null;
+            // Not supported even at zero bias is a different state from survived the whole
+            // scan, and reporting them the same way is how a scan limit reads as robustness.
+            if (probAbove(kind === 'width' ? 0 : 0, kind === 'width' ? 1e-9 : SIGNED_SD) < threshold) {
+                return 'already_below';
+            }
+            for (var x = 0; x <= hi + 1e-9; x += step) {
+                var p = kind === 'width' ? probAbove(0, x) : probAbove(x, SIGNED_SD);
+                if (prev !== null && prev >= threshold && p < threshold) { found = [x - step, x]; break; }
+                prev = p;
+            }
+            if (!found) return null;
+            var a = found[0], b = found[1];
+            for (var it = 0; it < 60; it++) {
+                var mid = 0.5 * (a + b);
+                var pm = kind === 'width' ? probAbove(0, mid) : probAbove(mid, SIGNED_SD);
+                if (pm >= threshold) { a = mid; } else { b = mid; }
+            }
+            return 0.5 * (a + b);
+        }
+
+        var XS = BV.linspace(0, 0.6, 121);
+
+        BV.register(function () {
+            var p = BV.palette();
+            var threshold = parseFloat(document.getElementById('f1Thr').value);
+
+            var traces = [
+                {
+                    x: XS, y: curve(XS, 'width'), mode: 'lines', name: 'widen an unsigned bias',
+                    line: { color: p.primary, width: 2.6 },
+                    hovertemplate: 'bias spread %{x:.0%} of the estimate<br>P(ROI > 1) = %{y:.3f}<extra></extra>'
+                },
+                {
+                    x: XS, y: curve(XS, 'signed'), mode: 'lines', name: 'commit to a direction (σ = 5%)',
+                    line: { color: p.accent, width: 2.6 },
+                    hovertemplate: 'mean bias %{x:.0%} of the estimate<br>P(ROI > 1) = %{y:.3f}<extra></extra>'
+                }
+            ];
+
+            var shapes = [
+                {
+                    type: 'line', x0: 0, x1: 0.6, y0: threshold, y1: threshold,
+                    line: { color: p.muted, width: 1.4, dash: 'dot' }
+                },
+                {
+                    type: 'line', x0: BENCHMARK, x1: BENCHMARK, y0: 0.45, y1: 1.0,
+                    line: { color: p.danger, width: 1.4, dash: 'dash' }
+                }
+            ];
+
+            var annotations = [
+                {
+                    x: 0.585, y: threshold, xanchor: 'right', yanchor: 'bottom', showarrow: false,
+                    text: 'decision threshold ' + threshold.toFixed(2),
+                    font: { size: 11, color: p.muted }
+                },
+                {
+                    x: BENCHMARK, y: 0.47, xanchor: 'left', yanchor: 'bottom', showarrow: false,
+                    text: '  a confounder as strong as Price',
+                    font: { size: 11, color: p.danger }
+                }
+            ];
+
+            Plotly.react('f1Chart', traces, BV.layout({
+                xaxis: { title: 'bias commitment, as a fraction of the estimate', tickformat: '.0%', range: [0, 0.6] },
+                yaxis: { title: 'P(ROI > 1)', range: [0.45, 1.005], tickformat: '.2f' },
+                shapes: shapes,
+                annotations: annotations,
+                legend: { orientation: 'h', y: -0.26, x: 0 },
+                margin: { l: 62, r: 24, t: 18, b: 84 }
+            }), BV.config);
+
+            var tw = tipping('width', threshold);
+            var td = tipping('signed', threshold);
+            var fmt = function (v) {
+                if (v === 'already_below') { return 'not met at zero bias'; }
+                return v === null ? 'past 60% (scan limit)' : Math.round(v * 100) + '%';
+            };
+            document.getElementById('f1TipW').textContent = fmt(tw);
+            document.getElementById('f1TipD').textContent = fmt(td);
+            document.getElementById('f1Bench').textContent = Math.round(BENCHMARK * 100) + '% bias';
+
+            // The verdict re-derives from the slider rather than being fixed prose.
+            var el = document.getElementById('f1Verdict');
+            var survives = probAbove(0, BENCHMARK) >= threshold;
+            el.textContent = survives ? 'survives' : 'overturned';
+            el.className = survives ? 'val ok' : 'val warn';
+        });
+
+        BV.sliders([
+            { id: 'f1Thr', value: 'f1ThrVal', fmt: function (v) { return parseFloat(v).toFixed(2); } }
+        ], BV.redraw);
+    })();
+    </script>
 
     <!-- Initialize KaTeX after DOM is ready -->
     <script>
