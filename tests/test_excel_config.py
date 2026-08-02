@@ -38,7 +38,6 @@ from mmm_framework.config import (
     VariableRole,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -78,16 +77,18 @@ def _create_sample_mff(
                     if var_name == "Holiday":
                         value = 1.0 if rng.random() < 0.1 else 0.0
 
-                    rows.append({
-                        "Period": date.strftime("%Y-%m-%d"),
-                        "Geography": geo,
-                        "Product": product,
-                        "Campaign": "All",
-                        "Outlet": "All",
-                        "Creative": "All",
-                        "VariableName": var_name,
-                        "VariableValue": round(value, 2),
-                    })
+                    rows.append(
+                        {
+                            "Period": date.strftime("%Y-%m-%d"),
+                            "Geography": geo,
+                            "Product": product,
+                            "Campaign": "All",
+                            "Outlet": "All",
+                            "Creative": "All",
+                            "VariableName": var_name,
+                            "VariableValue": round(value, 2),
+                        }
+                    )
 
     return pd.DataFrame(rows)
 
@@ -176,16 +177,26 @@ class TestClassifyVariable:
         """Statistical properties should help classify when keywords fail."""
         # High zero percentage + high variance → media-like
         media_stats = VariableStats(
-            mean=1000, std=2000, min_val=0, max_val=10000,
-            zero_pct=0.5, n_obs=100, coverage_pct=95.0,
+            mean=1000,
+            std=2000,
+            min_val=0,
+            max_val=10000,
+            zero_pct=0.5,
+            n_obs=100,
+            coverage_pct=95.0,
         )
         result = classify_variable("Channel_X", stats=media_stats)
         assert result == VariableRole.MEDIA
 
         # Low variance → control-like
         control_stats = VariableStats(
-            mean=100, std=2, min_val=95, max_val=105,
-            zero_pct=0.0, n_obs=100, coverage_pct=100.0,
+            mean=100,
+            std=2,
+            min_val=95,
+            max_val=105,
+            zero_pct=0.0,
+            n_obs=100,
+            coverage_pct=100.0,
         )
         result = classify_variable("Factor_Y", stats=control_stats)
         assert result == VariableRole.CONTROL
@@ -287,6 +298,7 @@ class TestTemplateGenerator:
         TemplateGenerator.from_mff(sample_mff_df, output_path=output_path)
 
         from openpyxl import load_workbook
+
         wb = load_workbook(str(output_path))
         assert "Variables" in wb.sheetnames
         assert "Media Settings" in wb.sheetnames
@@ -299,6 +311,7 @@ class TestTemplateGenerator:
         TemplateGenerator.from_mff(sample_mff_df, output_path=output_path)
 
         from openpyxl import load_workbook
+
         wb = load_workbook(str(output_path))
         ws = wb["Variables"]
 
@@ -313,6 +326,7 @@ class TestTemplateGenerator:
         TemplateGenerator.from_mff(sample_mff_df, output_path=output_path)
 
         from openpyxl import load_workbook
+
         wb = load_workbook(str(output_path))
         ws = wb["Media Settings"]
 
@@ -327,6 +341,7 @@ class TestTemplateGenerator:
         TemplateGenerator.from_mff(sample_mff_df, output_path=output_path)
 
         from openpyxl import load_workbook
+
         wb = load_workbook(str(output_path))
         ws = wb["Model Settings"]
 
@@ -352,6 +367,7 @@ class TestTemplateGenerator:
         TemplateGenerator.from_mff(national_mff_df, output_path=output_path)
 
         from openpyxl import load_workbook
+
         wb = load_workbook(str(output_path))
         ws = wb["Model Settings"]
 
@@ -445,6 +461,7 @@ class TestTemplateParser:
     def test_missing_variables_sheet(self, tmp_dir):
         """Should raise error when Variables sheet is missing."""
         from openpyxl import Workbook
+
         wb = Workbook()
         wb.active.title = "Wrong Sheet"
         path = tmp_dir / "bad_template.xlsx"
@@ -457,6 +474,7 @@ class TestTemplateParser:
     def test_no_kpi_error(self, tmp_dir):
         """Should raise validation error when no KPI is defined."""
         from openpyxl import Workbook
+
         wb = Workbook()
         ws = wb.active
         ws.title = "Variables"
@@ -480,6 +498,7 @@ class TestTemplateParser:
     def test_no_media_error(self, tmp_dir):
         """Should raise validation error when no media is defined."""
         from openpyxl import Workbook
+
         wb = Workbook()
         ws = wb.active
         ws.title = "Variables"
@@ -503,6 +522,7 @@ class TestTemplateParser:
     def test_multiple_kpi_error(self, tmp_dir):
         """Should raise validation error for multiple KPIs."""
         from openpyxl import Workbook
+
         wb = Workbook()
         ws = wb.active
         ws.title = "Variables"

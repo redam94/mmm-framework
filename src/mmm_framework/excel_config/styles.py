@@ -18,23 +18,23 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.worksheet import Worksheet
 
-
 # =============================================================================
 # Color Palette (matching MMM Framework design tokens)
 # =============================================================================
+
 
 class Colors:
     """Color constants for Excel formatting."""
 
     # Role colors (fill backgrounds)
-    KPI_FILL = "E8F5E9"        # Light green
-    MEDIA_FILL = "E3F2FD"      # Light blue
-    CONTROL_FILL = "FFF3E0"    # Light orange
-    EXCLUDE_FILL = "F5F5F5"    # Light gray
+    KPI_FILL = "E8F5E9"  # Light green
+    MEDIA_FILL = "E3F2FD"  # Light blue
+    CONTROL_FILL = "FFF3E0"  # Light orange
+    EXCLUDE_FILL = "F5F5F5"  # Light gray
 
     # Header colors
-    HEADER_FILL = "4A6D4A"     # Dark green (matches --color-primary-dark)
-    HEADER_FONT = "FFFFFF"     # White text
+    HEADER_FILL = "4A6D4A"  # Dark green (matches --color-primary-dark)
+    HEADER_FONT = "FFFFFF"  # White text
     SUBHEADER_FILL = "8FA86A"  # Green (matches --color-primary)
     SUBHEADER_FONT = "FFFFFF"
 
@@ -43,15 +43,16 @@ class Colors:
     INSTRUCTION_FONT = "5A6B5A"  # Muted green
 
     # Data validation
-    LOCKED_FILL = "ECEFF1"     # Light blue-gray (read-only cells)
+    LOCKED_FILL = "ECEFF1"  # Light blue-gray (read-only cells)
 
     # Borders
-    BORDER_COLOR = "D4DDD4"    # Matches --color-border
+    BORDER_COLOR = "D4DDD4"  # Matches --color-border
 
 
 # =============================================================================
 # Font Definitions
 # =============================================================================
+
 
 class Fonts:
     """Font presets for Excel formatting."""
@@ -95,18 +96,43 @@ class Fonts:
 # Fill Definitions
 # =============================================================================
 
+
 class Fills:
     """Fill presets for Excel formatting."""
 
-    HEADER = PatternFill(start_color=Colors.HEADER_FILL, end_color=Colors.HEADER_FILL, fill_type="solid")
-    SUBHEADER = PatternFill(start_color=Colors.SUBHEADER_FILL, end_color=Colors.SUBHEADER_FILL, fill_type="solid")
-    INSTRUCTION = PatternFill(start_color=Colors.INSTRUCTION_FILL, end_color=Colors.INSTRUCTION_FILL, fill_type="solid")
-    LOCKED = PatternFill(start_color=Colors.LOCKED_FILL, end_color=Colors.LOCKED_FILL, fill_type="solid")
+    HEADER = PatternFill(
+        start_color=Colors.HEADER_FILL, end_color=Colors.HEADER_FILL, fill_type="solid"
+    )
+    SUBHEADER = PatternFill(
+        start_color=Colors.SUBHEADER_FILL,
+        end_color=Colors.SUBHEADER_FILL,
+        fill_type="solid",
+    )
+    INSTRUCTION = PatternFill(
+        start_color=Colors.INSTRUCTION_FILL,
+        end_color=Colors.INSTRUCTION_FILL,
+        fill_type="solid",
+    )
+    LOCKED = PatternFill(
+        start_color=Colors.LOCKED_FILL, end_color=Colors.LOCKED_FILL, fill_type="solid"
+    )
 
-    KPI = PatternFill(start_color=Colors.KPI_FILL, end_color=Colors.KPI_FILL, fill_type="solid")
-    MEDIA = PatternFill(start_color=Colors.MEDIA_FILL, end_color=Colors.MEDIA_FILL, fill_type="solid")
-    CONTROL = PatternFill(start_color=Colors.CONTROL_FILL, end_color=Colors.CONTROL_FILL, fill_type="solid")
-    EXCLUDE = PatternFill(start_color=Colors.EXCLUDE_FILL, end_color=Colors.EXCLUDE_FILL, fill_type="solid")
+    KPI = PatternFill(
+        start_color=Colors.KPI_FILL, end_color=Colors.KPI_FILL, fill_type="solid"
+    )
+    MEDIA = PatternFill(
+        start_color=Colors.MEDIA_FILL, end_color=Colors.MEDIA_FILL, fill_type="solid"
+    )
+    CONTROL = PatternFill(
+        start_color=Colors.CONTROL_FILL,
+        end_color=Colors.CONTROL_FILL,
+        fill_type="solid",
+    )
+    EXCLUDE = PatternFill(
+        start_color=Colors.EXCLUDE_FILL,
+        end_color=Colors.EXCLUDE_FILL,
+        fill_type="solid",
+    )
 
 
 # =============================================================================
@@ -139,6 +165,7 @@ ROLE_FILLS = {
 # =============================================================================
 # Data Validation Helpers
 # =============================================================================
+
 
 def create_role_validation() -> DataValidation:
     """Create dropdown validation for variable roles."""
@@ -192,17 +219,23 @@ def create_effect_direction_validation() -> DataValidation:
 
 def create_model_type_validation() -> DataValidation:
     """Create dropdown for additive vs multiplicative."""
-    return DataValidation(type="list", formula1='"additive,multiplicative"', allow_blank=False)
+    return DataValidation(
+        type="list", formula1='"additive,multiplicative"', allow_blank=False
+    )
 
 
 def create_inference_validation() -> DataValidation:
     """Create dropdown for inference method."""
-    return DataValidation(type="list", formula1='"bayesian_numpyro,bayesian_pymc"', allow_blank=False)
+    return DataValidation(
+        type="list", formula1='"bayesian_numpyro,bayesian_pymc"', allow_blank=False
+    )
 
 
 def create_trend_validation() -> DataValidation:
     """Create dropdown for trend type."""
-    return DataValidation(type="list", formula1='"none,linear,piecewise,spline"', allow_blank=False)
+    return DataValidation(
+        type="list", formula1='"none,linear,piecewise,spline"', allow_blank=False
+    )
 
 
 def create_frequency_validation() -> DataValidation:
@@ -212,7 +245,9 @@ def create_frequency_validation() -> DataValidation:
 
 def create_allocation_validation() -> DataValidation:
     """Create dropdown for allocation method."""
-    return DataValidation(type="list", formula1='"equal,population,sales"', allow_blank=False)
+    return DataValidation(
+        type="list", formula1='"equal,population,sales"', allow_blank=False
+    )
 
 
 def create_product_allocation_validation() -> DataValidation:
@@ -222,7 +257,9 @@ def create_product_allocation_validation() -> DataValidation:
 
 def create_control_selection_validation() -> DataValidation:
     """Create dropdown for control variable selection method."""
-    return DataValidation(type="list", formula1='"none,horseshoe,spike_slab"', allow_blank=False)
+    return DataValidation(
+        type="list", formula1='"none,horseshoe,spike_slab"', allow_blank=False
+    )
 
 
 def create_boolean_validation() -> DataValidation:
@@ -230,7 +267,9 @@ def create_boolean_validation() -> DataValidation:
     return DataValidation(type="list", formula1='"TRUE,FALSE"', allow_blank=False)
 
 
-def create_prior_dist_validation(distributions: str = "half_normal,gamma,log_normal,normal") -> DataValidation:
+def create_prior_dist_validation(
+    distributions: str = "half_normal,gamma,log_normal,normal",
+) -> DataValidation:
     """Create dropdown for prior distribution selection."""
     return DataValidation(type="list", formula1=f'"{distributions}"', allow_blank=False)
 
@@ -238,6 +277,7 @@ def create_prior_dist_validation(distributions: str = "half_normal,gamma,log_nor
 # =============================================================================
 # Sheet formatting helpers
 # =============================================================================
+
 
 def format_header_row(ws: Worksheet, row: int, headers: list[str]) -> None:
     """Apply header formatting to a row."""
@@ -252,8 +292,10 @@ def format_header_row(ws: Worksheet, row: int, headers: list[str]) -> None:
 def format_subheader_row(ws: Worksheet, row: int, text: str, num_cols: int) -> None:
     """Apply subheader/section formatting to a merged row."""
     ws.merge_cells(
-        start_row=row, start_column=1,
-        end_row=row, end_column=num_cols,
+        start_row=row,
+        start_column=1,
+        end_row=row,
+        end_column=num_cols,
     )
     cell = ws.cell(row=row, column=1, value=text)
     cell.font = Fonts.SUBHEADER
@@ -264,8 +306,10 @@ def format_subheader_row(ws: Worksheet, row: int, text: str, num_cols: int) -> N
 def write_instruction_row(ws: Worksheet, row: int, text: str, num_cols: int) -> None:
     """Write an instruction row spanning multiple columns."""
     ws.merge_cells(
-        start_row=row, start_column=1,
-        end_row=row, end_column=num_cols,
+        start_row=row,
+        start_column=1,
+        end_row=row,
+        end_column=num_cols,
     )
     cell = ws.cell(row=row, column=1, value=text)
     cell.font = Fonts.INSTRUCTION

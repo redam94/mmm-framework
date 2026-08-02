@@ -518,8 +518,7 @@ def build_html() -> str:
     # --- data-not-clean panels --------------------------------------------
     panel_html = []
     for p in panels:
-        panel_html.append(
-            f"""
+        panel_html.append(f"""
         <div class="panel">
           <div class="panel-text">
             <h3>{esc(p['title'])}</h3>
@@ -528,8 +527,7 @@ def build_html() -> str:
             <p class="res">&rarr; {esc(p['result'])}</p>
           </div>
           <div class="panel-chart">{p['svg']}</div>
-        </div>"""
-        )
+        </div>""")
 
     # --- the matrix table --------------------------------------------------
     trows = []
@@ -542,8 +540,7 @@ def build_html() -> str:
         med_cls = "bad" if r["median_abs_rel_error"] > 0.25 else "good"
         div = r["divergences"]
         ppc = "✓" if r["ppc_pass"] else "✗"
-        trows.append(
-            f"""<tr>
+        trows.append(f"""<tr>
           <td class="mono">{esc(r['name'])}</td>
           <td class="muted small">{esc(r['violates'] or '— (positive control)')}</td>
           <td class="num {med_cls}">{med}</td><td class="num">{mx}</td>
@@ -552,8 +549,7 @@ def build_html() -> str:
           <td class="num">{div}</td>
           <td class="num">{ppc}</td>
           <td><span class="badge" style="background:{col}1a;color:{col};border-color:{col}55">{esc(label)}</span></td>
-        </tr>"""
-        )
+        </tr>""")
 
     # --- silent-failure spotlights (true vs est bars) ---------------------
     spot = []
@@ -591,14 +587,12 @@ def build_html() -> str:
             if miss
             else "All channels covered."
         )
-        spot.append(
-            f"""
+        spot.append(f"""
         <div class="card">
           <h4 class="mono">{esc(name)}</h4>
           {bars}
           <p class="small muted">{miss_txt}</p>
-        </div>"""
-        )
+        </div>""")
 
     # --- benchmark: fit time + sampler ------------------------------------
     grid = {g["label"]: g for g in bench["grid"]}
@@ -645,13 +639,11 @@ def build_html() -> str:
     conv_rows = []
     for r in rows:
         bad = r["divergences"] > 0 or r["rhat_max"] >= 1.05
-        conv_rows.append(
-            f"""<tr>
+        conv_rows.append(f"""<tr>
           <td class="mono small">{esc(r['name'])}</td>
           <td class="num">{r['rhat_max']:.3f}</td>
           <td class="num {'bad' if r['divergences'] else ''}">{r['divergences']}</td>
-          <td>{'⚠ pathological' if bad else '✓ clean'}</td></tr>"""
-        )
+          <td>{'⚠ pathological' if bad else '✓ clean'}</td></tr>""")
 
     worst = grid[order[0]]["worst_ess_bulk"][:4]
     worst_txt = ", ".join(
@@ -787,23 +779,18 @@ def build_html() -> str:
     ]
     fm_html = []
     for letter, title, col, items in fm:
-        cards = "".join(
-            f"""
+        cards = "".join(f"""
           <div class="fm">
             <div class="fm-head"><span class="sev sev-{it[1].split()[0]}">{esc(it[1])}</span>
               <span class="status">{esc(it[2])}</span></div>
             <div class="fm-title">{esc(it[0])}</div>
             <div class="fm-body small muted">{esc(it[3])}</div>
-          </div>"""
-            for it in items
-        )
-        fm_html.append(
-            f"""
+          </div>""" for it in items)
+        fm_html.append(f"""
         <div class="fm-group">
           <h3 style="color:{col}">{letter}. {title}</h3>
           <div class="fm-grid">{cards}</div>
-        </div>"""
-        )
+        </div>""")
 
     # ---------------------------------------------------------------- HTML
     return f"""<!doctype html>

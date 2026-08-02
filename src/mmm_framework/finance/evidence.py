@@ -224,9 +224,7 @@ def verdict_label(verdict: str, direction: str = HIGHER_IS_BETTER) -> str:
     opposite of what the interval says.
     """
     if verdict == "below":
-        return (
-            "Above reference" if direction == LOWER_IS_BETTER else "Below reference"
-        )
+        return "Above reference" if direction == LOWER_IS_BETTER else "Below reference"
     return {
         "strong": "Strong",
         "uncertain": "Uncertain",

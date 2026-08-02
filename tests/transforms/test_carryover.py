@@ -23,7 +23,6 @@ from mmm_framework.transforms.carryover import (
     posterior_carryover_kernels,
 )
 
-
 # ---------------------------------------------------------------------------
 # a minimal fake model carrying a real trace-shaped posterior
 # ---------------------------------------------------------------------------
@@ -49,9 +48,7 @@ def _model(channels: dict[str, tuple], *, n_draws: int = 64, legacy: bool = Fals
         for p, v in params.items():
             arr = np.broadcast_to(np.asarray(v, dtype=float), (n_draws,)).copy()
             name = p if p.startswith("adstock_") else f"adstock_{p}_{ch}"
-            data[name] = xr.DataArray(
-                arr.reshape(1, n_draws), dims=("chain", "draw")
-            )
+            data[name] = xr.DataArray(arr.reshape(1, n_draws), dims=("chain", "draw"))
 
     class _Trace:
         posterior = xr.Dataset(data)

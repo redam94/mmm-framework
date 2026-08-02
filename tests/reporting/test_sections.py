@@ -875,12 +875,12 @@ class TestEstimandsSection:
         # "Above reference" — NOT "Below reference": the cost is above the bar,
         # and the literal token would read backwards for a lower-is-better metric.
         assert self._cpa_html(sample_config, reference=20.0)[1] == ["Above reference"]
-        assert self._cpa_html(
-            sample_config, reference=20.0, lower=1.0, upper=3.0
-        )[1] == ["Strong"]
+        assert self._cpa_html(sample_config, reference=20.0, lower=1.0, upper=3.0)[
+            1
+        ] == ["Strong"]
 
     def test_cost_per_outcome_renders_as_money(self, sample_config):
-        """"46.000" is not how a cost per conversion reads."""
+        """ "46.000" is not how a cost per conversion reads."""
         assert "$46" in self._cpa_html(sample_config, reference=20.0)[0]
 
     def test_skips_unsupported_none_mean(self, sample_config):
@@ -1070,30 +1070,40 @@ class TestDegenerateIntervals:
     def test_latent_table_marks_collapsed_hdi_and_explains(self):
         from mmm_framework.reporting.sections import FactorAnalysisSection
 
-        bundle = type("B", (), {
-            "factor_loadings": [
-                {"indicator": "x1", "loading": 0.66, "hdi_low": 0.66, "hdi_high": 0.66},
-            ],
-            "cfa_fit_indices": {},
-            "estimands": {},
-            "latent_section_title": None,
-            "latent_table_title": None,
-            "latent_estimands_title": None,
-        })()
+        bundle = type(
+            "B",
+            (),
+            {
+                "factor_loadings": [
+                    {
+                        "indicator": "x1",
+                        "loading": 0.66,
+                        "hdi_low": 0.66,
+                        "hdi_high": 0.66,
+                    },
+                ],
+                "cfa_fit_indices": {},
+                "estimands": {},
+                "latent_section_title": None,
+                "latent_table_title": None,
+                "latent_estimands_title": None,
+            },
+        )()
         section = FactorAnalysisSection(data=bundle, config=ReportConfig())
         html = section._render_table(bundle.factor_loadings)
         # both bound CELLS (the third ">n/a<" is inside the explanatory note)
         assert html.count('<td class="mono">n/a</td>') == 2
-        assert "0.660" in html                    # the point estimate stands
+        assert "0.660" in html  # the point estimate stands
         assert "collapsed onto the point estimate" in html
 
     def test_latent_table_leaves_a_real_interval_alone(self):
         from mmm_framework.reporting.sections import FactorAnalysisSection
 
         bundle = type("B", (), {})()
-        rows = [{"indicator": "x1", "loading": 0.66,
-                 "hdi_low": 0.51, "hdi_high": 0.79}]
-        html = FactorAnalysisSection(data=bundle, config=ReportConfig())._render_table(rows)
+        rows = [{"indicator": "x1", "loading": 0.66, "hdi_low": 0.51, "hdi_high": 0.79}]
+        html = FactorAnalysisSection(data=bundle, config=ReportConfig())._render_table(
+            rows
+        )
         assert "0.510" in html and "0.790" in html
         assert "n/a" not in html
         assert "collapsed onto the point estimate" not in html

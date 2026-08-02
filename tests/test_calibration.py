@@ -37,7 +37,6 @@ from mmm_framework.config import (
 from mmm_framework.data_loader import PanelCoordinates, PanelDataset
 from mmm_framework.model import BayesianMMM, TrendConfig, TrendType
 
-
 # =============================================================================
 # Pure math
 # =============================================================================

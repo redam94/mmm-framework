@@ -644,9 +644,7 @@ class _Solve:
         from .ridge import _effective_dof
         from .constrained import fit_constrained
 
-        fit = fit_constrained(
-            design, y=y, penalty=pen, constraints=self.constraints
-        )
+        fit = fit_constrained(design, y=y, penalty=pen, constraints=self.constraints)
         y_vec = np.asarray(design.y if y is None else y, dtype=float)
         resid = y_vec - design.X @ fit.theta
         edof = _effective_dof(

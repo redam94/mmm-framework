@@ -216,9 +216,7 @@ class TestRecoveryOnPlantedTruth:
             "than passing quietly"
         )
 
-    def test_ridge_does_not_beat_the_bayesian_path_under_confounding(
-        self, confounded
-    ):
+    def test_ridge_does_not_beat_the_bayesian_path_under_confounding(self, confounded):
         """Recorded as a test because it is the finding a reader most needs.
 
         Ridge over-credits media far more than MAP does here, and the mechanism
@@ -245,9 +243,7 @@ class TestRecoveryOnPlantedTruth:
                 "confounding — check the scenario, not the estimator"
             )
 
-    def test_saturation_misspecification_inflates_every_estimator(
-        self, sat_misspec
-    ):
+    def test_saturation_misspecification_inflates_every_estimator(self, sat_misspec):
         for label, row in sat_misspec.items():
             assert row["bias_pct"] > 0, label
 

@@ -208,6 +208,10 @@ def test_an_invalid_lever_spec_raises_at_build_rather_than_dropping():
     from mmm_framework.agents.fitting import _model_config_from_spec
 
     with pytest.raises(ValueError, match="not a valid price lever"):
-        _model_config_from_spec({"price": {"variable": "P", "elasticity_prior_sigma": -1}})
+        _model_config_from_spec(
+            {"price": {"variable": "P", "elasticity_prior_sigma": -1}}
+        )
     with pytest.raises(ValueError, match="not a valid promo list"):
-        _model_config_from_spec({"promotions": [{"variable": "P", "adstock_lmax": 999}]})
+        _model_config_from_spec(
+            {"promotions": [{"variable": "P", "adstock_lmax": 999}]}
+        )

@@ -57,9 +57,9 @@ class TestTheDefaultsAreStatedTogether:
         src = inspect.getsource(spec)
         i = src.index("ESTIMAND_INTERVAL_MASS: float")
         preamble = src[max(0, i - 1200) : i]
-        assert "DASHBOARD_INTERVAL_MASS" in preamble, (
-            "the two defaults must be documented together, not cross-referenced"
-        )
+        assert (
+            "DASHBOARD_INTERVAL_MASS" in preamble
+        ), "the two defaults must be documented together, not cross-referenced"
 
 
 class TestIntervalLabel:
@@ -238,14 +238,24 @@ class TestMixedDefinitionsAreNotCollapsed:
         b.estimands = {}
         for ch in ("TV", "Search"):
             b.estimands[f"contribution_roi:{ch}"] = {
-                "mean": 1.9, "lower": 1.6, "upper": 2.2, "kind": "roi", "units": "",
-                "hdi_prob": 0.94, "interval_mass": 0.94,
+                "mean": 1.9,
+                "lower": 1.6,
+                "upper": 2.2,
+                "kind": "roi",
+                "units": "",
+                "hdi_prob": 0.94,
+                "interval_mass": 0.94,
                 "interval_definition": INTERVAL_KIND_HDI,
             }
             for name in ("marginal_roas", "contribution"):
                 b.estimands[f"{name}:{ch}"] = {
-                    "mean": 1.2, "lower": 0.9, "upper": 1.5, "kind": name,
-                    "units": "", "hdi_prob": 0.94, "interval_mass": 0.94,
+                    "mean": 1.2,
+                    "lower": 0.9,
+                    "upper": 1.5,
+                    "kind": name,
+                    "units": "",
+                    "hdi_prob": 0.94,
+                    "interval_mass": 0.94,
                     "interval_definition": INTERVAL_KIND_ETI,
                 }
         return b
@@ -298,8 +308,7 @@ class TestMixedDefinitionsAreNotCollapsed:
         import sys
         import textwrap
 
-        script = textwrap.dedent(
-            """
+        script = textwrap.dedent("""
             from mmm_framework.reporting.config import ReportConfig, SectionConfig
             from mmm_framework.reporting.extractors.bundle import MMMDataBundle
             from mmm_framework.reporting.sections import EstimandsSection
@@ -316,13 +325,13 @@ class TestMixedDefinitionsAreNotCollapsed:
             h = EstimandsSection(data=b, config=ReportConfig(),
                                  section_config=SectionConfig(enabled=True)).render()
             print([x[4:-5] for x in re.findall(r"<th>[^<]*</th>", h)])
-            """
-        )
+            """)
         outs = set()
         for seed in ("0", "5", "17"):
             r = subprocess.run(
                 [sys.executable, "-c", script],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
                 env={"PYTHONHASHSEED": seed, "PATH": __import__("os").environ["PATH"]},
             )
             assert r.returncode == 0, r.stderr[-500:]
@@ -331,7 +340,7 @@ class TestMixedDefinitionsAreNotCollapsed:
 
 
 class TestFrequentistFitsKeepTheirVocabulary:
-    """"HDI" is posterior vocabulary; a bootstrap interval is not a posterior."""
+    """ "HDI" is posterior vocabulary; a bootstrap interval is not a posterior."""
 
     @staticmethod
     def _freq_bundle():
@@ -340,16 +349,26 @@ class TestFrequentistFitsKeepTheirVocabulary:
         b.inference_family = "frequentist"
         b.estimands = {
             "contribution_roi:TV": {
-                "mean": 1.9, "lower": 1.6, "upper": 2.2, "kind": "roi", "units": "",
-                "hdi_prob": 0.94, "interval_mass": 0.94,
+                "mean": 1.9,
+                "lower": 1.6,
+                "upper": 2.2,
+                "kind": "roi",
+                "units": "",
+                "hdi_prob": 0.94,
+                "interval_mass": 0.94,
                 "interval_definition": INTERVAL_KIND_HDI,
             }
         }
         b.channel_roi = {
             "TV": {
-                "mean": 1.93, "lower": 1.71, "upper": 2.14, "reference": 1.0,
-                "is_monetary": True, "value_units": "ROI",
-                "interval_mass": 0.8, "interval_definition": INTERVAL_KIND_ETI,
+                "mean": 1.93,
+                "lower": 1.71,
+                "upper": 2.14,
+                "reference": 1.0,
+                "is_monetary": True,
+                "value_units": "ROI",
+                "interval_mass": 0.8,
+                "interval_definition": INTERVAL_KIND_ETI,
             }
         }
         return b
@@ -374,7 +393,8 @@ class TestFrequentistFitsKeepTheirVocabulary:
         b = self._freq_bundle()
         b.inference_family = "bayesian"
         html = EstimandsSection(
-            data=b, config=ReportConfig(),
+            data=b,
+            config=ReportConfig(),
             section_config=SectionConfig(enabled=True),
         ).render()
         assert "94% HDI" in html

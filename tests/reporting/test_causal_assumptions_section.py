@@ -78,7 +78,7 @@ class TestCausalAssumptionsSection:
         )
         html = _render(bundle)
         assert "Robustness to Unobserved Confounding" in html
-        assert ">nan<" not in html.lower()          # no literal NaN in a cell
+        assert ">nan<" not in html.lower()  # no literal NaN in a cell
         assert "Not assessable" in html
         # the row must not be labelled Robust
         assert ">Robust<" not in html

@@ -27,9 +27,7 @@ def test_samples_are_masked():
 
 
 def test_dataframe_scan_targets_string_columns():
-    df = pd.DataFrame(
-        {"email": ["x@y.com", "z@w.com"], "spend": [100.0, 200.0]}
-    )
+    df = pd.DataFrame({"email": ["x@y.com", "z@w.com"], "spend": [100.0, 200.0]})
     findings = scan_dataframe_for_pii(df)
     assert any(f.location == "email" and f.kind == "email" for f in findings)
     assert not any(f.location == "spend" for f in findings)

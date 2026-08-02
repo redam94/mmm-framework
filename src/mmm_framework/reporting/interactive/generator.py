@@ -929,7 +929,11 @@ class InteractiveReportGenerator:
                 (
                     "bootstrap confidence intervals — not a posterior"
                     if self._is_frequentist
-                    else ("uncertainty not calibrated" if approx else "full MCMC posterior")
+                    else (
+                        "uncertainty not calibrated"
+                        if approx
+                        else "full MCMC posterior"
+                    )
                 ),
             )
             + _dcell(

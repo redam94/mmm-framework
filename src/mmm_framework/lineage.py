@@ -26,7 +26,9 @@ def content_hash(data: bytes) -> str:
 class DatasetLineage:
     """Store/resolve dataset bytes by content hash (immutable, deduplicated)."""
 
-    def __init__(self, store: ObjectStore | None = None, *, root: str | Path = "./lineage"):
+    def __init__(
+        self, store: ObjectStore | None = None, *, root: str | Path = "./lineage"
+    ):
         self.store = store if store is not None else LocalObjectStore(root)
 
     @staticmethod

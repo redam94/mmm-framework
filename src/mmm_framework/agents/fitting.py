@@ -1337,9 +1337,7 @@ def _model_config_from_spec(spec: dict):
             from mmm_framework.transforms.seasonality import SeasonalityPeriodSource
 
             try:
-                sb.with_period_source(
-                    SeasonalityPeriodSource(season["period_source"])
-                )
+                sb.with_period_source(SeasonalityPeriodSource(season["period_source"]))
             except ValueError as e:
                 raise ValueError(
                     f"Invalid spec.seasonality.period_source "

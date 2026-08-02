@@ -73,9 +73,11 @@ class TestMu:
 
     def test_mu_is_noiseless(self, world):
         """Grading against y conflates model error with irreducible noise."""
-        assert np.std(world.y.to_numpy()) > np.std(
-            world.y.to_numpy() - world.mu.to_numpy()
-        ) or True  # the point is only that the two series differ
+        assert (
+            np.std(world.y.to_numpy())
+            > np.std(world.y.to_numpy() - world.mu.to_numpy())
+            or True
+        )  # the point is only that the two series differ
         assert not np.array_equal(world.mu.to_numpy(), world.y.to_numpy())
 
 
@@ -110,7 +112,9 @@ class TestSlice:
         gaps = []
         for c in world.channels:
             naive = world.true_contribution[c] * 156 / 182
-            gaps.append(abs(w.true_contribution[c] - naive) / abs(w.true_contribution[c]))
+            gaps.append(
+                abs(w.true_contribution[c] - naive) / abs(w.true_contribution[c])
+            )
         assert max(gaps) > 0.01, (
             "pro-rata truncation happens to agree on this world, so this test "
             "cannot detect the mistake it exists to prevent"

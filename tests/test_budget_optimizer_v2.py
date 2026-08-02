@@ -314,6 +314,8 @@ def test_objective_key_separates_plans_that_measure_different_things():
     c = _curves()
     fixed = optimize_budget(curves=c, total_budget=250.0)
     downside = optimize_budget(curves=c, total_budget=250.0, objective="p10")
-    free = optimize_budget(curves=c, mode="free", value_per_kpi=1.0, value_source="param")
+    free = optimize_budget(
+        curves=c, mode="free", value_per_kpi=1.0, value_source="param"
+    )
     keys = {fixed.objective_key(), downside.objective_key(), free.objective_key()}
     assert len(keys) == 3

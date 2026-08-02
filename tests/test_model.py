@@ -1705,8 +1705,11 @@ class TestMultiplicativeContributionGuard:
             X_media=pd.DataFrame({"TV": tv}),
             X_controls=None,
             coords=PanelCoordinates(
-                periods=periods, geographies=None, products=None,
-                channels=["TV"], controls=None,
+                periods=periods,
+                geographies=None,
+                products=None,
+                channels=["TV"],
+                controls=None,
             ),
             index=periods,
             config=MFFConfig(
@@ -1758,8 +1761,11 @@ class TestPredictControlsGuard:
         import pandas as pd
 
         from mmm_framework.config import (
-            ControlVariableConfig, DimensionType, KPIConfig,
-            MediaChannelConfig, MFFConfig,
+            ControlVariableConfig,
+            DimensionType,
+            KPIConfig,
+            MediaChannelConfig,
+            MFFConfig,
         )
         from mmm_framework.data_loader import PanelCoordinates, PanelDataset
 
@@ -1775,8 +1781,11 @@ class TestPredictControlsGuard:
             X_media=pd.DataFrame({"TV": tv}),
             X_controls=pd.DataFrame({"price": price, "promo": promo}),
             coords=PanelCoordinates(
-                periods=periods, geographies=None, products=None,
-                channels=["TV"], controls=["price", "promo"],
+                periods=periods,
+                geographies=None,
+                products=None,
+                channels=["TV"],
+                controls=["price", "promo"],
             ),
             index=periods,
             config=MFFConfig(
@@ -1796,9 +1805,7 @@ class TestPredictControlsGuard:
         from mmm_framework.model import BayesianMMM, TrendConfig, TrendType
 
         panel = self._panel()
-        rf = [
-            ReachFrequencyConfig(channel="TV", frequency_column=c) for c in freq_cols
-        ]
+        rf = [ReachFrequencyConfig(channel="TV", frequency_column=c) for c in freq_cols]
         m = BayesianMMM(
             panel, ModelConfig(reach_frequency=rf), TrendConfig(type=TrendType.LINEAR)
         )
@@ -1827,8 +1834,8 @@ class TestPredictControlsGuard:
         with pytest.raises(ValueError) as exc:
             m.predict(X_controls=np.zeros((len(panel.y), 2)), random_seed=0)
         msg = str(exc.value)
-        assert "2 column(s)" in msg and "promo" in msg   # names what it wants
-        assert "price" in msg                            # and what was consumed
+        assert "2 column(s)" in msg and "promo" in msg  # names what it wants
+        assert "price" in msg  # and what was consumed
 
     @pytest.mark.slow
     def test_the_legitimate_partial_swap_still_works(self):

@@ -190,10 +190,11 @@ def generate_synthetic_data(
 
     media_effect = sum(channel_contributions)
     import matplotlib.pyplot as plt
-    plt.plot(channel_contributions[0], label='TV Contribution')
-    plt.show();
+
+    plt.plot(channel_contributions[0], label="TV Contribution")
+    plt.show()
     plt.scatter(tv_spend, channel_contributions[0])
-    plt.show();
+    plt.show()
     # === Generate baseline components ===
     # Intercept (will be around 0 after standardization)
     intercept = 0.0  # On standardized scale

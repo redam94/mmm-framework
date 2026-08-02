@@ -15,10 +15,10 @@ from mmm_framework.validation import (
 )
 
 # --- conjugate Normal model for SBC ----------------------------------------
-SIGMA = 1.0        # known likelihood noise
-PRIOR_SD = 2.0     # prior sd on mu
+SIGMA = 1.0  # known likelihood noise
+PRIOR_SD = 2.0  # prior sd on mu
 N_OBS = 20
-L = 500            # posterior draws per fit
+L = 500  # posterior draws per fit
 
 
 def _sample_prior(rng):

@@ -14,12 +14,16 @@ import pytest
 from mmm_framework.diagnostics import convergence as conv
 from mmm_framework.diagnostics.convergence import ConvergenceWarning
 
-
 # ---------------------------------------------------------------------------
 # Verdict logic
 # ---------------------------------------------------------------------------
 GOOD = {"divergences": 0, "rhat_max": 1.005, "ess_bulk_min": 800, "approximate": False}
-BAD_RHAT = {"divergences": 0, "rhat_max": 1.2, "ess_bulk_min": 800, "approximate": False}
+BAD_RHAT = {
+    "divergences": 0,
+    "rhat_max": 1.2,
+    "ess_bulk_min": 800,
+    "approximate": False,
+}
 BAD_DIV = {"divergences": 7, "rhat_max": 1.0, "ess_bulk_min": 800, "approximate": False}
 BAD_ESS = {"divergences": 0, "rhat_max": 1.0, "ess_bulk_min": 50, "approximate": False}
 APPROX = {"approximate": True, "rhat_max": None, "ess_bulk_min": None}

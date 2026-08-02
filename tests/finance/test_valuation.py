@@ -32,7 +32,9 @@ class TestKpiValuation:
             KpiValuation(kind=KpiKind.UNITS, gross_margin=0.6)
 
     def test_other_kind_is_never_convertible(self):
-        assert KpiValuation(kind=KpiKind.OTHER, gross_margin=0.4).value_per_kpi() is None
+        assert (
+            KpiValuation(kind=KpiKind.OTHER, gross_margin=0.4).value_per_kpi() is None
+        )
 
     @pytest.mark.parametrize("bad", [0.0, -0.1, 1.5, 40.0])
     def test_margin_is_a_fraction_not_a_percentage(self, bad):

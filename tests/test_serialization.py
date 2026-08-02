@@ -567,8 +567,11 @@ class TestConsumedControlColumnsRoundTrip:
         import pandas as pd
 
         from mmm_framework.config import (
-            ControlVariableConfig, DimensionType, KPIConfig,
-            MediaChannelConfig, MFFConfig,
+            ControlVariableConfig,
+            DimensionType,
+            KPIConfig,
+            MediaChannelConfig,
+            MFFConfig,
         )
         from mmm_framework.data_loader import PanelCoordinates, PanelDataset
 
@@ -584,8 +587,11 @@ class TestConsumedControlColumnsRoundTrip:
             X_media=pd.DataFrame({"TV": tv}),
             X_controls=pd.DataFrame({"price": price, "promo": promo}),
             coords=PanelCoordinates(
-                periods=periods, geographies=None, products=None,
-                channels=["TV"], controls=["price", "promo"],
+                periods=periods,
+                geographies=None,
+                products=None,
+                channels=["TV"],
+                controls=["price", "promo"],
             ),
             index=periods,
             config=MFFConfig(
@@ -617,11 +623,11 @@ class TestConsumedControlColumnsRoundTrip:
             TrendConfig(type=TrendType.LINEAR),
         )
         m.fit(method="map", random_seed=0)
-        assert list(m.control_names) == ["promo"]      # 'price' was consumed
+        assert list(m.control_names) == ["promo"]  # 'price' was consumed
 
         path = str(tmp_path / "rf")
         MMMSerializer.save(m, path)
-        reloaded = MMMSerializer.load(path, panel)     # used to raise ValueError
+        reloaded = MMMSerializer.load(path, panel)  # used to raise ValueError
         assert list(reloaded.control_names) == ["promo"]
         # and it must actually be usable, not merely constructible
         assert reloaded.predict(random_seed=0).y_pred_mean is not None

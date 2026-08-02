@@ -1,16 +1,19 @@
-.PHONY: tests fast_tests slow_tests format lint hooks run-api run-ui run-app \
+.PHONY: tests fast_tests slow_tests format format_check lint hooks run-api run-ui run-app \
         kernel-lock kernel-image kernel-verify kernel-push
 
-format:
-	uvx black src server/src tests examples
+format:                          ## black, via the LOCKED dev dependency
+	uv run black src server/src tests examples
+
+format_check:                    ## the black gate CI runs (no writes)
+	uv run black --check --diff src server/src tests examples
 
 lint:                            ## the same ruff gate CI runs
 	uv run ruff check src server/src
 
-hooks:                           ## install the git pre-commit hook (runs `make lint`)
+hooks:                           ## install the git pre-commit hook (ruff + black)
 	git config core.hooksPath .githooks
 	chmod +x .githooks/pre-commit
-	@echo "✓ pre-commit hook installed (ruff check src)"
+	@echo "✓ pre-commit hook installed (ruff check + black --check)"
 
 tests:
 	uv run pytest tests/ --cov=mmm_framework -n logical

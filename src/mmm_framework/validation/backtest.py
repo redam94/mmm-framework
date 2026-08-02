@@ -167,6 +167,7 @@ class TrendExtrapolation:
             "understates long-horizon uncertainty."
         )
 
+
 # THE component-period table, not a copy of it: the forecaster must evaluate the
 # Fourier features at exactly the training phase, and a copy-pasted literal is
 # how two implementations of "the same" period drift apart (#275).
@@ -528,8 +529,10 @@ class PosteriorForecaster:
         # hold-last-flat clamp unreachable, since positions never reach n_obs - 1.
         tc = get("trend_component")
         n_cells_ = max(int(getattr(model, "n_cells", 1) or 1), 1)
-        if tc is not None and n_cells_ > 1 and tc.shape[-1] == n_cells_ * int(
-            getattr(model, "n_periods", 0) or 0
+        if (
+            tc is not None
+            and n_cells_ > 1
+            and tc.shape[-1] == n_cells_ * int(getattr(model, "n_periods", 0) or 0)
         ):
             tc = tc[:, ::n_cells_]
         self._trend_component = tc
@@ -904,7 +907,9 @@ class PosteriorForecaster:
         y = mu * model.y_std + model.y_mean
         return y.T  # (n_samples, n_pos)
 
-    def _draw_noise(self, shape: tuple[int, ...], random_seed: int | None) -> np.ndarray:
+    def _draw_noise(
+        self, shape: tuple[int, ...], random_seed: int | None
+    ) -> np.ndarray:
         """Standardized observation noise matching the fitted likelihood family.
 
         ``include_noise=True`` exists so ``BacktestResult.coverage()`` grades the

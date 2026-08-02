@@ -74,7 +74,9 @@ class TestVersioning:
     def test_versions_increment_per_family(self, store):
         a = store.commit_plan_version(plan_family="f1", org_id="o", payload={"n": 1})
         b = store.commit_plan_version(plan_family="f1", org_id="o", payload={"n": 2})
-        other = store.commit_plan_version(plan_family="f2", org_id="o", payload={"n": 1})
+        other = store.commit_plan_version(
+            plan_family="f2", org_id="o", payload={"n": 1}
+        )
         assert (a["version"], b["version"]) == (1, 2)
         assert other["version"] == 1, "a different family counts from 1"
 
@@ -109,7 +111,9 @@ class TestVersioning:
 
     def test_mutating_a_committed_version_raises(self, store):
         v = store.commit_plan_version(plan_family="f", org_id="o", payload={"n": 1})
-        with pytest.raises(S.ImmutablePlanVersionError, match="committed and immutable"):
+        with pytest.raises(
+            S.ImmutablePlanVersionError, match="committed and immutable"
+        ):
             store.update_plan_version(v["id"], name="edited")
 
 
@@ -193,9 +197,7 @@ class TestCommitmentGate:
     def test_spend_beyond_observed_support_is_refused(self):
         r = assess_committability(
             _forecast(
-                fields={
-                    "extrapolated_channels": [{"channel": "TV", "multiple": 1.6}]
-                }
+                fields={"extrapolated_channels": [{"channel": "TV", "multiple": 1.6}]}
             ),
             provenance=PROVENANCE,
         )
@@ -553,7 +555,6 @@ class TestReproductionEndToEnd:
                 model, plan, future_controls=controls, random_seed=42
             )
 
-
         payload = {
             "forecast": {
                 "mean": [float(x) for x in fc.mean],
@@ -633,7 +634,9 @@ class TestReproductionEndToEnd:
             plan_family="fam2", org_id="o", project_id="p", payload=payload
         )
         r = reproduce_committed_plan(store.get_plan_version(v["id"]))
-        assert not r.refused, "the inputs are intact — this is a mismatch, not a refusal"
+        assert (
+            not r.refused
+        ), "the inputs are intact — this is a mismatch, not a refusal"
         assert not r.reproduced
         assert r.max_abs_diff > 1e-9
 
@@ -740,9 +743,7 @@ class TestFrequentistCommitment:
         """Being frequentist is not an exemption — the refusals are about the
         plan and the residuals, not about the paradigm."""
         r = assess_committability(
-            self._payload(
-                extrapolated_channels=[{"channel": "TV", "multiple": 1.6}]
-            ),
+            self._payload(extrapolated_channels=[{"channel": "TV", "multiple": 1.6}]),
             provenance=PROVENANCE,
         )
         assert "spend_support" in r.blocking_gates()

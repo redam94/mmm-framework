@@ -279,7 +279,6 @@ def compute_pacing(
         actual_total=a_total,
         divergence_pct=port_div,
         flagged=flagged,
-    
         join=join,
     )
 

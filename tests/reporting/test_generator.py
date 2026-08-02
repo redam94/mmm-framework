@@ -742,8 +742,12 @@ class TestLongNameLayoutOverflow:
             causal_assumptions={
                 "robustness": {
                     "channels": [
-                        {"channel": self.LONG, "robustness_value": 0.4,
-                         "partial_r2": 0.2, "is_fragile": False},
+                        {
+                            "channel": self.LONG,
+                            "robustness_value": 0.4,
+                            "partial_r2": 0.2,
+                            "is_fragile": False,
+                        },
                     ],
                     "caveat": "c",
                 },

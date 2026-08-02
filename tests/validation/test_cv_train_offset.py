@@ -461,7 +461,10 @@ class TestCVSplitsCoverWholePeriods:
         assert int(idx.min()) % mmm.n_cells == 0
         # Whole periods: every retained period contributes all of its cells.
         cells = idx % mmm.n_cells
-        assert sorted(np.bincount(cells).tolist()) == [len(idx) // mmm.n_cells] * mmm.n_cells
+        assert (
+            sorted(np.bincount(cells).tolist())
+            == [len(idx) // mmm.n_cells] * mmm.n_cells
+        )
 
     def test_national_refutation_subset_is_byte_identical(self):
         """The national rng draw must not move."""

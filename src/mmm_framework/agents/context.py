@@ -165,7 +165,9 @@ def _summarize(llm: Any, prior_summary: str, chunk: Sequence[BaseMessage]) -> st
     )
     parts: list[str] = []
     if prior_summary:
-        parts.append("EXISTING SUMMARY (extend it; do not repeat verbatim):\n" + prior_summary)
+        parts.append(
+            "EXISTING SUMMARY (extend it; do not repeat verbatim):\n" + prior_summary
+        )
     parts.append("OLDER MESSAGES TO FOLD IN:\n" + _render_transcript(chunk))
     prompt = instruction + "\n\n".join(parts)
     result = llm.invoke(

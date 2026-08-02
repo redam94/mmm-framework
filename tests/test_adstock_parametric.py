@@ -25,7 +25,6 @@ from mmm_framework.data_loader import PanelCoordinates, PanelDataset
 from mmm_framework.model.base import BayesianMMM
 from mmm_framework.transforms import adstock_weights, apply_adstock, parametric_adstock
 
-
 # =============================================================================
 # NumPy reference kernels
 # =============================================================================

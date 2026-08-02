@@ -869,7 +869,9 @@ class TestLeverPriorGroup:
 
         # the branch that used to catch it still catches genuine media betas
         assert _classify_param("beta_TV", ["TV"], []) == "Media effects"
-        assert _classify_param("beta_promo_TV", ["TV"], []) == "Price & promotion levers"
+        assert (
+            _classify_param("beta_promo_TV", ["TV"], []) == "Price & promotion levers"
+        )
 
     def test_media_and_control_params_are_unaffected(self):
         from mmm_framework.reporting.helpers.prefit import _classify_param

@@ -179,9 +179,7 @@ def information_half_life(
     return DEFAULT_HALF_LIVES_WEEKS["default"]
 
 
-def channel_half_life(
-    channel: str, overrides: dict[str, float] | None = None
-) -> float:
+def channel_half_life(channel: str, overrides: dict[str, float] | None = None) -> float:
     """Deprecated alias for :func:`information_half_life`.
 
     The old name did not say *which* half-life it meant, and `planning` sat one

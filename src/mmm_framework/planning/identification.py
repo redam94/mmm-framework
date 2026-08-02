@@ -206,7 +206,9 @@ def _forward_contribution(
     x_norm = (np.asarray(mults, dtype=float) * float(op_spend)) / max(
         float(raw_max), _EPS
     )
-    w = adstock_weights("geometric", int(l_max), alpha=float(alpha), normalize=normalize)
+    w = adstock_weights(
+        "geometric", int(l_max), alpha=float(alpha), normalize=normalize
+    )
     a = apply_adstock(x_norm, w)
     z = np.clip(float(lam) * a, 0.0, _SAT_CLAMP)
     s = 1.0 - np.exp(-z)
@@ -308,7 +310,15 @@ def structural_jacobian(
     bau = np.ones_like(mults)
     # Clamp mask at the scheduled point (saturated rows carry no marginal info).
     _, z_sched = _forward_contribution(
-        mults, op_spend, raw_max, y_std, beta, alpha, lam, l_max=l_max, normalize=normalize
+        mults,
+        op_spend,
+        raw_max,
+        y_std,
+        beta,
+        alpha,
+        lam,
+        l_max=l_max,
+        normalize=normalize,
     )
     clamp_mask = z_sched >= _SAT_CLAMP - _EPS
 
@@ -499,7 +509,9 @@ def structural_identification(
         # flat / near-flat / nuisance-collinear schedule that contributes no
         # information claims nothing and can't drive a falsely-confident headline.
         claimed[n] = bool(
-            eligible[n] and math.isfinite(post_sd) and contraction >= _MIN_CLAIM_CONTRACTION
+            eligible[n]
+            and math.isfinite(post_sd)
+            and contraction >= _MIN_CLAIM_CONTRACTION
         )
         # power to resolve the parameter from 0 (UI-consistent with ROAS power);
         # reported alongside contraction, which is the honest identification axis.
@@ -534,10 +546,13 @@ def structural_identification(
     # when a claimed parameter has a non-finite power.
     binding_power = (
         float(min(powers_claimed))
-        if powers_claimed and all(p is not None and math.isfinite(p) for p in powers_claimed)
+        if powers_claimed
+        and all(p is not None and math.isfinite(p) for p in powers_claimed)
         else None
     )
-    binding_contraction = float(min(contractions_claimed)) if contractions_claimed else None
+    binding_contraction = (
+        float(min(contractions_claimed)) if contractions_claimed else None
+    )
     return {
         "params": params,
         "names": names,

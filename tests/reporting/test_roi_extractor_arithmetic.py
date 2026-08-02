@@ -170,9 +170,9 @@ class TestBetaOnlyFallback:
             )
             for ch in m.channel_names
         }
-        assert len({round(v, 6) for v in totals.values()}) == len(totals), (
-            "channels must differ once spend is in the numerator"
-        )
+        assert len({round(v, 6) for v in totals.values()}) == len(
+            totals
+        ), "channels must differ once spend is in the numerator"
         ratios = sorted(v / old for v in totals.values())
         assert ratios[0] > 40 and ratios[-1] > 100
 
@@ -364,9 +364,9 @@ class TestChannelIndexingIsConsistent:
 
         from mmm_framework.reporting.helpers.utils import _get_channel_names
 
-        assert names == _get_channel_names(m), (
-            "extractor and canonical reader disagree on the channel index"
-        )
+        assert names == _get_channel_names(
+            m
+        ), "extractor and canonical reader disagree on the channel index"
 
     def test_a_time_only_contribution_is_summed_not_indexed(self):
         """A (chain, draw, obs) `channel_contributions` has no channel axis.

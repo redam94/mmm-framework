@@ -705,7 +705,7 @@ class TestSignedShareDenominator:
     def test_signed_total_is_used_when_stable(self):
         denom, ok = self._fn()([100.0, -20.0, 30.0])
         assert ok is True
-        assert denom == pytest.approx(110.0)          # signed, not 150
+        assert denom == pytest.approx(110.0)  # signed, not 150
 
     def test_shares_sum_to_one_with_a_negative_component(self):
         vals = [100.0, -20.0, 30.0]
@@ -721,7 +721,7 @@ class TestSignedShareDenominator:
         vals = [1000.0, -999.0]
         denom, ok = self._fn()(vals)
         assert ok is False
-        assert denom == pytest.approx(1999.0)         # magnitude fallback
+        assert denom == pytest.approx(1999.0)  # magnitude fallback
         assert all(abs(v / denom) <= 1.0 for v in vals)
 
     def test_all_zero_components_do_not_divide_by_zero(self):
