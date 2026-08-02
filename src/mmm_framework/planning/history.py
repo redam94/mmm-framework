@@ -162,9 +162,7 @@ def compute_run_metrics(
         "inference_family": "frequentist" if _freq else "bayesian",
         "estimator": _fit_diag.get("estimator") if _freq else None,
         "interval_kind": _fit_diag.get("interval_kind") if _freq else None,
-        "interval_semantics": (
-            _fit_diag.get("interval_semantics") if _freq else None
-        ),
+        "interval_semantics": (_fit_diag.get("interval_semantics") if _freq else None),
         "response_curves": response_curves,
         "channels": channels,
         "portfolio": {

@@ -147,7 +147,7 @@ class TestNonFiniteRobustnessValue:
             _channel(rv=float("nan"), contraction=0.9, name="TV"),
             _channel(rv=0.42, contraction=0.9, name="Search"),
         )
-        assert sens.fragile_channels == []          # neither is fragile...
+        assert sens.fragile_channels == []  # neither is fragile...
         assert sens.unassessable_channels == ["TV"]  # ...but TV was never assessed
         assert sens.to_dict()["unassessable_channels"] == ["TV"]
 

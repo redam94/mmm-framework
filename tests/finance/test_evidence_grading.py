@@ -23,7 +23,6 @@ from mmm_framework.finance.evidence import (
     verdict_label,
 )
 
-
 # --------------------------------------------------------------------------
 # metric classification
 # --------------------------------------------------------------------------
@@ -91,9 +90,7 @@ def test_unresolved_reference_grades_na_not_strong():
     # The pre-fix rule, pinned: this is what "graded against 0" produced, and
     # it produced it for EVERY cost, however ruinous.
     assert (
-        classify_evidence(
-            status="ok", mean=46.0, lower=30.0, upper=62.0, reference=0.0
-        )
+        classify_evidence(status="ok", mean=46.0, lower=30.0, upper=62.0, reference=0.0)
         == "strong"
     )
 
@@ -111,7 +108,11 @@ def test_cost_graded_against_the_value_of_one_outcome(lower, upper, expected):
     assert ref.direction == LOWER_IS_BETTER
     assert (
         classify_evidence(
-            status="ok", mean=(lower + upper) / 2, lower=lower, upper=upper, reference=ref
+            status="ok",
+            mean=(lower + upper) / 2,
+            lower=lower,
+            upper=upper,
+            reference=ref,
         )
         == expected
     )
@@ -125,7 +126,7 @@ def test_the_same_interval_grades_opposite_ways_by_direction():
 
 
 def test_verdict_label_follows_the_direction():
-    """"Below reference" on a cost that is ABOVE its bar reads backwards."""
+    """ "Below reference" on a cost that is ABOVE its bar reads backwards."""
     assert verdict_label("below", HIGHER_IS_BETTER) == "Below reference"
     assert verdict_label("below", LOWER_IS_BETTER) == "Above reference"
     assert verdict_label("strong", LOWER_IS_BETTER) == "Strong"

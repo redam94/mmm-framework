@@ -25,7 +25,6 @@ from .decomposition import decompose_series
 from .loading import EDAPanel, seasonal_period_for_freq
 from .results import OutlierFlag, OutlierReport
 
-
 # ---------------------------------------------------------------------------
 # per-series detectors (each returns a boolean mask aligned to the input)
 # ---------------------------------------------------------------------------

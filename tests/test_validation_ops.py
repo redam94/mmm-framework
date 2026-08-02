@@ -72,7 +72,12 @@ def test_ppc_checks_pass_when_observed_is_central():
     y_rep = rng.normal(814.0, 136.0, size=(1000, 156))
     y_obs = rng.normal(814.0, 136.0, size=156)
 
-    for check in (MeanCheck(), VarianceCheck(), SkewnessCheck(), AutocorrelationCheck()):
+    for check in (
+        MeanCheck(),
+        VarianceCheck(),
+        SkewnessCheck(),
+        AutocorrelationCheck(),
+    ):
         res = check.compute(y_obs, y_rep, significance_level=0.05)
         assert res.passed, f"{res.check_name} failed with p={res.p_value}"
         # one-sided convention: central observed statistic → p near 0.5

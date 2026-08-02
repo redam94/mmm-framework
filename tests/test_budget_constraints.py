@@ -40,7 +40,9 @@ def fitted_model():
     )
     tv = np.abs(rng.standard_normal(n) * 40 + 120)
     digital = np.abs(rng.standard_normal(n) * 25 + 90)
-    y = pd.Series(800 + 2.0 * tv + 1.5 * digital + rng.standard_normal(n) * 50, name="Sales")
+    y = pd.Series(
+        800 + 2.0 * tv + 1.5 * digital + rng.standard_normal(n) * 50, name="Sales"
+    )
     X_media = pd.DataFrame({"TV": tv, "Digital": digital})
     cfg = MFFConfig(
         kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
@@ -53,7 +55,10 @@ def fitted_model():
         y=y, X_media=X_media, X_controls=None, coords=coords, index=periods, config=cfg
     )
     mc = ModelConfig(
-        inference_method=InferenceMethod.BAYESIAN_PYMC, n_chains=1, n_draws=50, n_tune=50
+        inference_method=InferenceMethod.BAYESIAN_PYMC,
+        n_chains=1,
+        n_draws=50,
+        n_tune=50,
     )
     mmm = BayesianMMM(panel, mc, TrendConfig(type=TrendType.LINEAR))
     mmm.fit(method="map", random_seed=42)

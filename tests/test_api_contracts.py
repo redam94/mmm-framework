@@ -146,7 +146,9 @@ def test_package_version_matches_pyproject():
     import mmm_framework
 
     root = Path(__file__).resolve().parents[1]
-    declared = tomllib.loads((root / "pyproject.toml").read_text())["project"]["version"]
+    declared = tomllib.loads((root / "pyproject.toml").read_text())["project"][
+        "version"
+    ]
     assert mmm_framework.__version__ == declared, (
         f"mmm_framework.__version__ is {mmm_framework.__version__!r} but "
         f"pyproject.toml declares {declared!r}. Bump both — see the release "

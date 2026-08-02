@@ -12,7 +12,6 @@ from dataclasses import dataclass
 
 from ..config import VariableRole
 
-
 # =============================================================================
 # Keyword patterns for role classification
 # =============================================================================
@@ -232,7 +231,19 @@ def generate_display_name(variable_name: str) -> str:
     name = re.sub(r"([a-z])([A-Z])", r"\1 \2", name)
 
     # Capitalize each word, but keep common acronyms uppercase
-    acronyms = {"tv", "gdp", "cpi", "sms", "ooh", "cpm", "cpc", "ctr", "grp", "trp", "roi"}
+    acronyms = {
+        "tv",
+        "gdp",
+        "cpi",
+        "sms",
+        "ooh",
+        "cpm",
+        "cpc",
+        "ctr",
+        "grp",
+        "trp",
+        "roi",
+    }
     words = name.split()
     result = []
     for word in words:

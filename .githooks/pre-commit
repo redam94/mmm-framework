@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-commit hook: run the same ruff gate as CI (.github/workflows/ci.yml).
+# Pre-commit hook: run the same ruff + black gates as CI (.github/workflows/ci.yml).
 # Install once per clone with `make hooks` (sets core.hooksPath to .githooks).
 # Bypass in an emergency with `git commit --no-verify`.
 
@@ -8,8 +8,10 @@ cd "$repo_root" || exit 1
 
 if command -v uv >/dev/null 2>&1; then
     ruff_cmd="uv run ruff"
+    black_cmd="uv run black"
 elif command -v ruff >/dev/null 2>&1; then
     ruff_cmd="ruff"
+    black_cmd="black"
 else
     echo "pre-commit: neither uv nor ruff found on PATH — skipping lint (CI will still enforce it)" >&2
     exit 0
@@ -20,5 +22,13 @@ if ! $ruff_cmd check src server/src; then
     echo "pre-commit: ruff check failed (this is what breaks CI)." >&2
     echo "  Auto-fix what it can:  $ruff_cmd check --fix src" >&2
     echo "  Bypass this hook:      git commit --no-verify" >&2
+    exit 1
+fi
+
+if ! $black_cmd --check --quiet src server/src tests examples; then
+    echo "" >&2
+    echo "pre-commit: black --check failed (this is what breaks CI)." >&2
+    echo "  Fix it:            make format" >&2
+    echo "  Bypass this hook:  git commit --no-verify" >&2
     exit 1
 fi

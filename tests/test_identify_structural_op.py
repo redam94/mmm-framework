@@ -74,7 +74,9 @@ def test_self_check_fails_closed_on_mismatch():
     }
 
     class _BadMMM:
-        def sample_channel_contributions(self, X_media=None, max_draws=None, random_seed=None):
+        def sample_channel_contributions(
+            self, X_media=None, max_draws=None, random_seed=None
+        ):
             # deliberately unrelated noise → must not byte-mirror the forward op
             n = int(max_draws or 20)
             return rng.normal(0.0, 1e6, (n, T, C))

@@ -131,7 +131,9 @@ def estimated_long_term_split(model: Any) -> dict[str, Any] | None:
         brand_s = brand.reshape(-1, *brand.shape[2:]).sum(axis=1)
         act_s = act.reshape(-1, *act.shape[2:]).sum(axis=1)
         try:
-            chans = [str(c) for c in post["brand_contributions"].coords["channel"].values]
+            chans = [
+                str(c) for c in post["brand_contributions"].coords["channel"].values
+            ]
         except Exception:  # noqa: BLE001
             chans = [str(i) for i in range(brand_s.shape[1])]
         for i, ch in enumerate(chans):

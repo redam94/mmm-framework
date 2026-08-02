@@ -37,8 +37,11 @@ def _model(roles: dict, method: str) -> BayesianMMM:
     n = len(periods)
     controls = list(roles)
     coords = PanelCoordinates(
-        periods=periods, geographies=None, products=None,
-        channels=["TV", "Digital"], controls=controls,
+        periods=periods,
+        geographies=None,
+        products=None,
+        channels=["TV", "Digital"],
+        controls=controls,
     )
     config = MFFConfig(
         kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
@@ -55,12 +58,16 @@ def _model(roles: dict, method: str) -> BayesianMMM:
     )
     panel = PanelDataset(
         y=pd.Series(1000 + rng.normal(0, 40, n), name="Sales"),
-        X_media=pd.DataFrame({
-            "TV": np.abs(rng.normal(100, 30, n)),
-            "Digital": np.abs(rng.normal(80, 20, n)),
-        }),
+        X_media=pd.DataFrame(
+            {
+                "TV": np.abs(rng.normal(100, 30, n)),
+                "Digital": np.abs(rng.normal(80, 20, n)),
+            }
+        ),
         X_controls=pd.DataFrame({c: rng.normal(0, 1, n) for c in controls}),
-        coords=coords, index=periods, config=config,
+        coords=coords,
+        index=periods,
+        config=config,
     )
     cfg = ModelConfig(
         inference_method=InferenceMethod.BAYESIAN_PYMC,

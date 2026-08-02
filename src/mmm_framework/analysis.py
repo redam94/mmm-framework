@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-
 if TYPE_CHECKING:
     from numpy.typing import NDArray
     from .model import BayesianMMM, ContributionResults

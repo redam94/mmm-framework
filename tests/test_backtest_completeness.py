@@ -30,7 +30,6 @@ from mmm_framework.validation.backtest import (
     audit_refit,
 )
 
-
 # ---------------------------------------------------------------------------
 # helpers — models are built but NOT fitted; the audit reads configuration
 # ---------------------------------------------------------------------------

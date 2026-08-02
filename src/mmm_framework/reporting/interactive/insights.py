@@ -90,9 +90,7 @@ def _fallback_insights(f: dict[str, Any]) -> dict[str, str]:
         if _freq
         else "a Bayesian marketing mix model"
     )
-    _draws = (
-        "the same bootstrap replicates" if _freq else "the same posterior draws"
-    )
+    _draws = "the same bootstrap replicates" if _freq else "the same posterior draws"
     out["standfirst"] = (
         f"This is the fitted readout of {_model_desc} of {kpi} "
         f"across {n_ch} media channel{'s' if n_ch != 1 else ''}{window}. Every "

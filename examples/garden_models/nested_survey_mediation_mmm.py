@@ -107,12 +107,16 @@ class NestedSurveyMediationMMM(CustomMMM):
             raise ValueError("mediator survey has too few observed points (<5)")
         s_mean = np.nanmean(survey)
         s_std = np.nanstd(survey) + 1e-8
-        self.survey_z = (survey - s_mean) / s_std  # standardized (NaN kept, masked below)
+        self.survey_z = (
+            survey - s_mean
+        ) / s_std  # standardized (NaN kept, masked below)
 
         # Which channel indices are mediated ("brand") vs direct.
         med_ch = set(self.model_params.mediator_channels)
         self.brand_idx = [i for i, c in enumerate(self.channel_names) if c in med_ch]
-        self.direct_idx = [i for i, c in enumerate(self.channel_names) if c not in med_ch]
+        self.direct_idx = [
+            i for i, c in enumerate(self.channel_names) if c not in med_ch
+        ]
         if not self.brand_idx:
             raise ValueError(
                 f"none of mediator_channels {sorted(med_ch)} match the media channels "
@@ -126,7 +130,9 @@ class NestedSurveyMediationMMM(CustomMMM):
     # -- model ---------------------------------------------------------------
 
     def _build_model(self) -> pm.Model:
-        from mmm_framework.model.base import _apply_saturation_pt  # noqa: F401 (parity import)
+        from mmm_framework.model.base import (
+            _apply_saturation_pt,
+        )  # noqa: F401 (parity import)
 
         p = self.model_params
         n_obs = self.n_obs
@@ -139,7 +145,9 @@ class NestedSurveyMediationMMM(CustomMMM):
             # DGP's raw-spend hill sits on this scale (~K/max ≈ 0.75).
             x_media = pm.Data("X_media_raw", x_media_norm, dims=("obs", "channel"))
             if self.X_controls is not None:
-                x_controls = pm.Data("X_controls", self.X_controls, dims=("obs", "control"))
+                x_controls = pm.Data(
+                    "X_controls", self.X_controls, dims=("obs", "control")
+                )
             time_idx = pm.Data("time_idx", self.time_idx)
 
             # ---- saturated media per channel: inline in-graph geometric adstock
@@ -148,16 +156,21 @@ class NestedSurveyMediationMMM(CustomMMM):
             lag_k = pt.arange(lmax)
             sat = []
             for c, channel in enumerate(self.channel_names):
-                alpha = pm.Beta(f"adstock_alpha_{channel}", alpha=2.0, beta=2.0)  # contract RV
+                alpha = pm.Beta(
+                    f"adstock_alpha_{channel}", alpha=2.0, beta=2.0
+                )  # contract RV
                 x = x_media[:, c]
                 xpad = pt.concatenate([pt.zeros(lmax - 1), x])
                 lags = pt.stack(
-                    [xpad[lmax - 1 - k : lmax - 1 - k + n_obs] for k in range(lmax)], axis=1
+                    [xpad[lmax - 1 - k : lmax - 1 - k + n_obs] for k in range(lmax)],
+                    axis=1,
                 )  # (n_obs, lmax): lags[:, k] = x[t-k]
                 w = alpha**lag_k
                 w = w / w.sum()
                 x_ad = lags @ w
-                half = pm.Gamma(f"sat_half_{channel}", alpha=2.0, beta=4.0)  # mean 0.5 (norm scale)
+                half = pm.Gamma(
+                    f"sat_half_{channel}", alpha=2.0, beta=4.0
+                )  # mean 0.5 (norm scale)
                 sat.append(x_ad / (x_ad + half + 1e-6))
             sat = pt.stack(sat, axis=1)  # (n_obs, channel)
             # Save the saturated tensor sum per channel for coefficient-based ROAS.
@@ -193,24 +206,36 @@ class NestedSurveyMediationMMM(CustomMMM):
             #           + flexible baseline + controls.  Registers the contract.
             # =================================================================
             intercept = pm.Normal("intercept", 0.0, 0.5)
-            pm.Deterministic("intercept_component", intercept + pt.zeros(n_obs), dims="obs")
-            gamma = pm.HalfNormal("gamma_awareness", 2.0)  # awareness -> sales (positive)
+            pm.Deterministic(
+                "intercept_component", intercept + pt.zeros(n_obs), dims="obs"
+            )
+            gamma = pm.HalfNormal(
+                "gamma_awareness", 2.0
+            )  # awareness -> sales (positive)
 
             # Per-channel total contribution + effective beta_<ch> (contract).
             channel_contribs = []
             self._med_coef, self._dir_coef = {}, {}  # for get_mediation_effects()
             for c, channel in enumerate(self.channel_names):
                 if c in self.brand_idx:
-                    delta = pm.Normal(f"delta_direct_{channel}", 0.0, p.direct_prior_sigma)
+                    delta = pm.Normal(
+                        f"delta_direct_{channel}", 0.0, p.direct_prior_sigma
+                    )
                     med_coef = gamma * b_aw[c]  # mediated effect per unit sat
                     beta_eff = pm.Deterministic(f"beta_{channel}", med_coef + delta)
-                    pm.Deterministic(f"proportion_mediated_{channel}", med_coef / (med_coef + delta))
+                    pm.Deterministic(
+                        f"proportion_mediated_{channel}", med_coef / (med_coef + delta)
+                    )
                 else:
-                    beta_eff = pm.Normal(f"beta_{channel}", 0.0, 1.0)  # direct-response channel
+                    beta_eff = pm.Normal(
+                        f"beta_{channel}", 0.0, 1.0
+                    )  # direct-response channel
                 channel_contribs.append(beta_eff * sat[:, c])
 
             media_matrix = pt.stack(channel_contribs, axis=1)
-            pm.Deterministic("channel_contributions", media_matrix, dims=("obs", "channel"))
+            pm.Deterministic(
+                "channel_contributions", media_matrix, dims=("obs", "channel")
+            )
             media_total = media_matrix.sum(axis=1)
             pm.Deterministic("media_total", media_total)
 
@@ -234,10 +259,14 @@ class NestedSurveyMediationMMM(CustomMMM):
             # Controls (INLINE Normal(0,1) on the standardized controls — the base
             # confounder-aware widths over-absorb the mediated signal here).
             if self.n_controls > 0:
-                beta_controls = pm.Normal("beta_controls", 0.0, 1.0, shape=self.n_controls)
+                beta_controls = pm.Normal(
+                    "beta_controls", 0.0, 1.0, shape=self.n_controls
+                )
                 control_contribution = pt.dot(x_controls, beta_controls)
                 pm.Deterministic(
-                    "control_contributions", x_controls * beta_controls, dims=("obs", "control")
+                    "control_contributions",
+                    x_controls * beta_controls,
+                    dims=("obs", "control"),
                 )
             else:
                 control_contribution = pt.zeros(n_obs)
@@ -246,7 +275,9 @@ class NestedSurveyMediationMMM(CustomMMM):
             mu = intercept + media_total + trend + seasonality + control_contribution
             sigma = pm.HalfNormal("sigma", sigma=1.0)
             y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=self.y, dims="obs")
-            pm.Deterministic("y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs")
+            pm.Deterministic(
+                "y_obs_scaled", y_obs * self.y_std + self.y_mean, dims="obs"
+            )
 
         return model
 
@@ -260,9 +291,14 @@ class NestedSurveyMediationMMM(CustomMMM):
         for i in self.brand_idx:
             ch = self.channel_names[i]
             pm_c = post[f"proportion_mediated_{ch}"].values.ravel()
-            rows.append({"channel": ch, "proportion_mediated": float(np.mean(pm_c)),
-                         "proportion_mediated_lo": float(np.percentile(pm_c, 5)),
-                         "proportion_mediated_hi": float(np.percentile(pm_c, 95))})
+            rows.append(
+                {
+                    "channel": ch,
+                    "proportion_mediated": float(np.mean(pm_c)),
+                    "proportion_mediated_lo": float(np.percentile(pm_c, 5)),
+                    "proportion_mediated_hi": float(np.percentile(pm_c, 95)),
+                }
+            )
         return pd.DataFrame(rows).set_index("channel")
 
     def get_channel_roas(self) -> pd.DataFrame:
@@ -277,9 +313,14 @@ class NestedSurveyMediationMMM(CustomMMM):
             beta = post[f"beta_{ch}"].values.ravel()
             satsum = post[f"satsum_{ch}"].values.ravel()
             roas = beta * satsum * self.y_std / self._spend_sum[i]
-            rows.append({"channel": ch, "roas": float(np.mean(roas)),
-                         "roas_lo": float(np.percentile(roas, 5)),
-                         "roas_hi": float(np.percentile(roas, 95))})
+            rows.append(
+                {
+                    "channel": ch,
+                    "roas": float(np.mean(roas)),
+                    "roas_lo": float(np.percentile(roas, 5)),
+                    "roas_hi": float(np.percentile(roas, 95)),
+                }
+            )
         return pd.DataFrame(rows).set_index("channel")
 
 
@@ -309,8 +350,10 @@ def aurora_mediation_dataset():
 
     bindings = [RoleBinding(name="Sales", role=DatasetRole.TARGET)]
     bindings += [RoleBinding(name=c, role=DatasetRole.PREDICTOR) for c in CHANNELS]
-    bindings += [RoleBinding(name="Price", role=DatasetRole.CONTROL),
-                 RoleBinding(name="CategoryDemand", role=DatasetRole.CONTROL)]
+    bindings += [
+        RoleBinding(name="Price", role=DatasetRole.CONTROL),
+        RoleBinding(name="CategoryDemand", role=DatasetRole.CONTROL),
+    ]
     bindings.append(RoleBinding(name="awareness", role=DatasetRole.INDICATOR))
     schema = DatasetSchema(bindings=bindings, time_col="Period", frequency="W")
     return Dataset.from_wide(table, schema), A
@@ -325,10 +368,17 @@ if __name__ == "__main__":
     from mmm_framework.model import TrendConfig, TrendType
 
     ds, A = aurora_mediation_dataset()
-    mmm = NestedSurveyMediationMMM(ds, ModelConfig(), TrendConfig(type=TrendType.SPLINE))
-    mmm.fit(draws=1500, tune=2000, chains=4, target_accept=0.95, random_seed=0)  # ModelConfig() defaults to NumPyro
+    mmm = NestedSurveyMediationMMM(
+        ds, ModelConfig(), TrendConfig(type=TrendType.SPLINE)
+    )
+    mmm.fit(
+        draws=1500, tune=2000, chains=4, target_accept=0.95, random_seed=0
+    )  # ModelConfig() defaults to NumPyro
     med = mmm.get_mediation_effects()
-    print("\nTRUE proportion_mediated:", A.true_mediated_share[["TV", "Display"]].round(3).to_dict())
+    print(
+        "\nTRUE proportion_mediated:",
+        A.true_mediated_share[["TV", "Display"]].round(3).to_dict(),
+    )
     print(med.round(3).to_string())
     print("\nTRUE ROAS:", A.true_roas[["TV", "Display"]].round(2).to_dict())
     print("coefficient-based total-effect ROAS (model's own attribution):")
@@ -336,4 +386,6 @@ if __name__ == "__main__":
     contrib = mmm.compute_counterfactual_contributions(compute_uncertainty=False)
     print("framework counterfactual ROAS:")
     for ch in ["TV", "Display"]:
-        print(f"  {ch}: {float(contrib.total_contributions[ch] / A.spend[ch].sum()):.2f}")
+        print(
+            f"  {ch}: {float(contrib.total_contributions[ch] / A.spend[ch].sum()):.2f}"
+        )

@@ -221,7 +221,9 @@ class ForecastResult:
         raw = base64.b64decode(self.draws_b64)
         return np.frombuffer(raw, dtype="<f4").reshape(self.n_draws, len(self.periods))
 
-    def window_total_interval(self, interval: float | None = None) -> tuple[float, float]:
+    def window_total_interval(
+        self, interval: float | None = None
+    ) -> tuple[float, float]:
         """Interval on the WINDOW TOTAL — the reason draws are stored.
 
         Summing the per-period bounds would give a wider, wrong interval: the
@@ -384,7 +386,9 @@ def _residual_autocorrelation(model: Any) -> dict[str, Any]:
         obs = np.asarray(model.y_raw, dtype=float)
         if fitted.shape != obs.shape:
             fitted = np.asarray(fitted).reshape(-1)[: obs.size]
-        resid = obs - (fitted * model.y_std + model.y_mean if fitted.max() < 50 else fitted)
+        resid = obs - (
+            fitted * model.y_std + model.y_mean if fitted.max() < 50 else fitted
+        )
         p, lag = _ljung_box(resid)
         out.update(
             ljung_box_p=p,
@@ -530,7 +534,9 @@ def forecast_under_plan(
         # same plan a national one would.
         share = hist_periods.sum(axis=0)  # (n_cells, n_channels)
         tot = share.sum(axis=0, keepdims=True)
-        weights = np.divide(share, tot, out=np.full_like(share, 1.0 / n_cells), where=tot > 0)
+        weights = np.divide(
+            share, tot, out=np.full_like(share, 1.0 / n_cells), where=tot > 0
+        )
         future_cells = plan[:, None, :] * weights[None, :, :]
         full = np.concatenate([hist_periods, future_cells], axis=0)
         X_media_full = full.reshape((n_train + n_future) * n_cells, -1)
@@ -623,9 +629,7 @@ def forecast_under_plan(
         by_channel = {ch: v[:, keep].mean(axis=1) * y_std for ch, v in contrib.items()}
 
     media_total = (
-        np.sum(list(by_channel.values()), axis=0)
-        if by_channel
-        else np.zeros(n_future)
+        np.sum(list(by_channel.values()), axis=0) if by_channel else np.zeros(n_future)
     )
     baseline = mean - media_total
 

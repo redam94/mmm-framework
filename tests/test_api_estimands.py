@@ -265,7 +265,9 @@ def test_cost_with_no_declared_value_is_ungraded_not_strong():
     assert g["reference_note"], "an ungraded cell must say why"
     # What the old rule did with the same numbers, kept as the regression pin.
     assert (
-        E.classify_evidence(status="ok", mean=46.0, lower=30.0, upper=62.0, reference=0.0)
+        E.classify_evidence(
+            status="ok", mean=46.0, lower=30.0, upper=62.0, reference=0.0
+        )
         == "strong"
     )
 
@@ -296,7 +298,15 @@ def test_reference_hint_is_server_minted_and_matches_the_bar_used():
     assert g["models"][0]["rows"][0]["evidence"] == "below"
 
     plain = E.group_estimands(
-        [_run("b", "revenue", ["TV"], [_row("contribution_roi", "TV", "roi", "ROI", 2.0, 1.5, 2.6)], 100.0)]
+        [
+            _run(
+                "b",
+                "revenue",
+                ["TV"],
+                [_row("contribution_roi", "TV", "roi", "ROI", 2.0, 1.5, 2.6)],
+                100.0,
+            )
+        ]
     )["groups"][0]
     assert plain["reference_hint"] == "vs 1.0 (break-even)"
     assert plain["reference_note"] is None

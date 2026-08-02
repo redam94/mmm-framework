@@ -46,7 +46,9 @@ def test_normal_roi_prior_admits_negative_beta():
     from mmm_framework.config.enums import PriorType
     import pymc as pm
 
-    normal_prior = PriorConfig(distribution=PriorType.NORMAL, params={"mu": 0.0, "sigma": 1.0})
+    normal_prior = PriorConfig(
+        distribution=PriorType.NORMAL, params={"mu": 0.0, "sigma": 1.0}
+    )
     with pm.Model():
         rv = _sample_from_prior_config(
             "beta_test", normal_prior, lambda: pm.Gamma("beta_test", mu=1.5, sigma=1.0)

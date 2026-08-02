@@ -52,9 +52,11 @@ jobs:
       - name: Ruff (lint)
         run: uv run ruff check src server/src
 
-      # NOTE: `black --check` is intentionally not gated yet — the tree predates
-      # the current black version and needs a one-time reformat first. Run
-      # `make format` and enable this once clean.
+      # Gated as of the one-time reformat. `uv run` (not `uvx`) so the version
+      # comes from the lockfile — an unpinned formatter would fail this job on
+      # any upstream black release, which is a flaky gate rather than a gate.
+      - name: Black (format check)
+        run: uv run black --check src server/src tests examples
 
       - name: Mypy (type-check, non-blocking)
         # Informational on a mostly-untyped tree; ratchet toward a required check.

@@ -166,9 +166,7 @@ class TestCaveatsAreComputed:
         media = {c: np.asarray(v) * 3.0 for c, v in media.items()}
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            fc = forecast_under_plan(
-                m, media, future_controls=controls, random_seed=1
-            )
+            fc = forecast_under_plan(m, media, future_controls=controls, random_seed=1)
         flagged = {c["channel"] for c in fc.caveats.extrapolated_channels}
         assert flagged == set(world.channels), (
             "every channel was planned at 3x its history; the saturation curve "
@@ -255,9 +253,7 @@ class TestPlanNormalization:
         _, controls = _plan(world)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            fc = forecast_under_plan(
-                m, sched, future_controls=controls, random_seed=1
-            )
+            fc = forecast_under_plan(m, sched, future_controls=controls, random_seed=1)
         assert len(fc.periods) == 26
 
     def test_an_unknown_channel_is_refused_by_name(self):

@@ -106,10 +106,14 @@ def _metrics_with_objective(uplift, **objective):
 
 def test_uplift_deltas_when_the_objective_matches(store):
     store.record_run_metrics(
-        "runA", _metrics_with_objective(500.0, objective="mean", mode="fixed"), project_id="p1"
+        "runA",
+        _metrics_with_objective(500.0, objective="mean", mode="fixed"),
+        project_id="p1",
     )
     store.record_run_metrics(
-        "runB", _metrics_with_objective(300.0, objective="mean", mode="fixed"), project_id="p1"
+        "runB",
+        _metrics_with_objective(300.0, objective="mean", mode="fixed"),
+        project_id="p1",
     )
     cmp = runs_mod.compare_runs("runA", "runB")
     assert cmp["portfolio"]["expected_uplift"]["delta"] == pytest.approx(-200.0)
@@ -119,7 +123,9 @@ def test_uplift_deltas_when_the_objective_matches(store):
 
 def test_uplift_delta_is_refused_across_objectives(store):
     store.record_run_metrics(
-        "runA", _metrics_with_objective(500.0, objective="mean", mode="fixed"), project_id="p1"
+        "runA",
+        _metrics_with_objective(500.0, objective="mean", mode="fixed"),
+        project_id="p1",
     )
     store.record_run_metrics(
         "runB",
@@ -150,14 +156,21 @@ def test_a_mode_change_alone_refuses(store):
     """Fixed-budget reallocation and fund-to-breakeven leave different amounts
     on the table by construction, even under the same risk objective."""
     store.record_run_metrics(
-        "runA", _metrics_with_objective(500.0, objective="mean", mode="fixed"), project_id="p1"
+        "runA",
+        _metrics_with_objective(500.0, objective="mean", mode="fixed"),
+        project_id="p1",
     )
     store.record_run_metrics(
         "runB",
-        _metrics_with_objective(300.0, objective="mean", mode="free", value_source="param"),
+        _metrics_with_objective(
+            300.0, objective="mean", mode="free", value_source="param"
+        ),
         project_id="p1",
     )
-    assert runs_mod.compare_runs("runA", "runB")["portfolio"]["expected_uplift"]["delta"] is None
+    assert (
+        runs_mod.compare_runs("runA", "runB")["portfolio"]["expected_uplift"]["delta"]
+        is None
+    )
 
 
 def test_absence_reads_as_the_historical_default(store):
@@ -166,7 +179,9 @@ def test_absence_reads_as_the_historical_default(store):
     mean/fixed — absence must not be read as "unknown" and refuse everything."""
     store.record_run_metrics("runA", _metrics_with_objective(500.0), project_id="p1")
     store.record_run_metrics(
-        "runB", _metrics_with_objective(300.0, objective="mean", mode="fixed"), project_id="p1"
+        "runB",
+        _metrics_with_objective(300.0, objective="mean", mode="fixed"),
+        project_id="p1",
     )
     cmp = runs_mod.compare_runs("runA", "runB")
     assert cmp["objective"]["comparable"] is True

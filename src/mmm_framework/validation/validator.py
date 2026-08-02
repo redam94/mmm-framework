@@ -584,9 +584,7 @@ class ModelValidator:
         # `summary.warnings`, i.e. a report with no CV section and no reason.
         if min_train >= n_periods:
             extra = (
-                f" ({n_obs} observations across {n_cells} cells)"
-                if n_cells > 1
-                else ""
+                f" ({n_obs} observations across {n_cells} cells)" if n_cells > 1 else ""
             )
             raise ValueError(
                 f"Cross-validation needs a training window shorter than the "

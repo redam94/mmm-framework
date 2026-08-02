@@ -192,9 +192,7 @@ def build_trend_contribution(
     return slope * t_t
 
 
-def _component_periods(
-    median_days: float, period_source: Any
-) -> dict[str, float]:
+def _component_periods(median_days: float, period_source: Any) -> dict[str, float]:
     """Observations per natural period, from the requested source.
 
     ``None`` keeps this site's historical rule (the median spacing), so an
@@ -279,9 +277,11 @@ def build_seasonality_contribution(
 
     component_periods = _component_periods(
         median_days,
-        period_source
-        if period_source is not None
-        else getattr(seasonality_config, "period_source", None),
+        (
+            period_source
+            if period_source is not None
+            else getattr(seasonality_config, "period_source", None)
+        ),
     )
 
     import pytensor.tensor as pt

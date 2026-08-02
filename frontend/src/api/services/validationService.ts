@@ -14,6 +14,7 @@ export type ValidationCheck =
   | 'residuals'
   | 'channels'
   | 'refutation'
+  | 'sensitivity'
   | 'cross_validation'
   | 'coverage';
 

@@ -51,6 +51,7 @@ def test_ops_registry_complete():
         "residual_diagnostics",
         "channel_diagnostics",
         "refutation_suite",
+        "confounding_sensitivity",
         "cross_validation",
         "validate_model",
         # Slide-deck ops

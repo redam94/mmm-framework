@@ -49,14 +49,28 @@ def test_load_mff_with_eu_decimal():
     for i, p in enumerate(periods):
         base = {c: "-" for c in DIMS}
         iso = p.strftime("%Y-%m-%d")
-        rows.append({**base, "Period": iso, "VariableName": "Sales",
-                     "VariableValue": f"{1000 + i}.{i:02d}".replace(".", ",")})
-        rows.append({**base, "Period": iso, "VariableName": "TV",
-                     "VariableValue": f"{10 + i},5"})
+        rows.append(
+            {
+                **base,
+                "Period": iso,
+                "VariableName": "Sales",
+                "VariableValue": f"{1000 + i}.{i:02d}".replace(".", ","),
+            }
+        )
+        rows.append(
+            {
+                **base,
+                "Period": iso,
+                "VariableName": "TV",
+                "VariableValue": f"{10 + i},5",
+            }
+        )
     df = pd.DataFrame(rows)
     cfg = MFFConfig(
         kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
-        media_channels=[MediaChannelConfig(name="TV", dimensions=[DimensionType.PERIOD])],
+        media_channels=[
+            MediaChannelConfig(name="TV", dimensions=[DimensionType.PERIOD])
+        ],
         decimal_separator=",",
     )
     panel = load_mff(df, cfg)

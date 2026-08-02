@@ -23,7 +23,7 @@ class TestResolveBreakEven:
         be = resolve_break_even(None)
         assert (be.value, be.basis) == (1.0, "revenue")
         assert not be.is_profit_basis
-        assert be.disclosure() == ""      # nothing to disclose
+        assert be.disclosure() == ""  # nothing to disclose
 
     def test_margin_moves_the_reference_not_the_number(self):
         be = resolve_break_even(0.4)
@@ -35,7 +35,7 @@ class TestResolveBreakEven:
         d = resolve_break_even(0.4, value_source="project economics").disclosure()
         assert "2.50" in d and "40%" in d
         assert "project economics" in d
-        assert "constant gross margin" in d      # the assumption, stated
+        assert "constant gross margin" in d  # the assumption, stated
 
     def test_a_percentage_is_refused_not_silently_used(self):
         """margin=40 would give a break-even of 0.025 and tier everything
@@ -107,9 +107,14 @@ class TestMetricMetaBasis:
         from mmm_framework.config.enums import MeasurementUnit
 
         m = MetricMeta(
-            unit=MeasurementUnit.SPEND, is_monetary=True, cost_basis=None,
-            roi_label="ROI", marginal_label="Marginal ROAS",
-            value_units="ROI", divisor_units="$", reference=1.0,
+            unit=MeasurementUnit.SPEND,
+            is_monetary=True,
+            cost_basis=None,
+            roi_label="ROI",
+            marginal_label="Marginal ROAS",
+            value_units="ROI",
+            divisor_units="$",
+            reference=1.0,
         )
         assert m.basis == "revenue"
         assert m.value_per_kpi is None and m.value_source is None
@@ -157,8 +162,7 @@ class TestMaskedSumRefusesInsteadOfWideningTheWindow:
         import numpy as np
 
         with pytest.raises(ValueError) as exc:
-            self._fn()(np.array([1.0, 2.0, 3.0]), np.array([True, False]),
-                       channel="TV")
+            self._fn()(np.array([1.0, 2.0, 3.0]), np.array([True, False]), channel="TV")
         msg = str(exc.value)
         assert "2" in msg and "3" in msg and "TV" in msg
 
@@ -193,15 +197,24 @@ class TestClassicReportDisclosesItsMargin:
 
         cfo = {
             "kpi_total": 5000.0,
-            "marketing_contribution": {"mean": 1200.0, "lower": 1000.0, "upper": 1400.0},
+            "marketing_contribution": {
+                "mean": 1200.0,
+                "lower": 1000.0,
+                "upper": 1400.0,
+            },
             "base_contribution": 3800.0,
             "marketing_pct": 0.24,
             "margin": margin,
             "hdi_prob": 0.9,
             "spend_cuts": [
-                {"cut_pct": 0.1, "revenue_at_risk": 100.0, "revenue_lower": 80.0,
-                 "revenue_upper": 120.0, "pct_of_kpi": 0.02,
-                 **({"profit_at_risk": 40.0} if margin else {})},
+                {
+                    "cut_pct": 0.1,
+                    "revenue_at_risk": 100.0,
+                    "revenue_lower": 80.0,
+                    "revenue_upper": 120.0,
+                    "pct_of_kpi": 0.02,
+                    **({"profit_at_risk": 40.0} if margin else {}),
+                },
             ],
         }
         bundle = type("B", (), {"cfo": cfo})()
@@ -209,9 +222,9 @@ class TestClassicReportDisclosesItsMargin:
 
     def test_names_the_margin_and_the_assumption(self):
         html = self._html(0.4)
-        assert "Profit at risk" in html          # the profit number is rendered
-        assert "40%" in html                     # ...and its margin is named
-        assert "constant gross margin" in html   # ...and the assumption stated
+        assert "Profit at risk" in html  # the profit number is rendered
+        assert "40%" in html  # ...and its margin is named
+        assert "constant gross margin" in html  # ...and the assumption stated
 
     def test_without_a_margin_it_asks_for_one(self):
         html = self._html(None)

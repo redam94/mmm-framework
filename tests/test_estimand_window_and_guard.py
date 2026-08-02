@@ -76,9 +76,9 @@ class TestWindowIsHonoured:
         win = _one(m, base.model_copy(update={"target": ch, "window": WINDOW}))
 
         assert full.status == "ok" and win.status == "ok"
-        assert win.mean != full.mean, (
-            "the windowed request returned the full-series number"
-        )
+        assert (
+            win.mean != full.mean
+        ), "the windowed request returned the full-series number"
 
     def test_windowed_roi_equals_the_hand_computed_window(self, additive_model):
         """Graded against the arithmetic, not against another estimand."""
@@ -86,9 +86,7 @@ class TestWindowIsHonoured:
         ch = m.channel_names[0]
         c_idx = list(m.channel_names).index(ch)
 
-        cc = np.asarray(
-            m._trace.posterior["channel_contributions"].values, dtype=float
-        )
+        cc = np.asarray(m._trace.posterior["channel_contributions"].values, dtype=float)
         cc = cc.reshape(-1, *cc.shape[-2:])
         mask = m._get_time_mask(WINDOW.as_tuple())
         contrib = float(np.mean(cc[:, mask, c_idx].sum(axis=-1) * m.y_std))
@@ -155,7 +153,11 @@ class TestUnwindowableShapesRefuse:
         )
         with pytest.raises(ContributionWindowUnsupported, match="per-draw scalar"):
             _get_contribution_samples(
-                m, post.posterior, ch, m.y_mean, m.y_std,
+                m,
+                post.posterior,
+                ch,
+                m.y_mean,
+                m.y_std,
                 mask=m._get_time_mask(WINDOW.as_tuple()),
             )
 
@@ -191,7 +193,11 @@ class TestUnwindowableShapesRefuse:
         )
         with pytest.raises(ContributionWindowUnsupported):
             _get_contribution_samples(
-                m, post.posterior, ch, m.y_mean, m.y_std,
+                m,
+                post.posterior,
+                ch,
+                m.y_mean,
+                m.y_std,
                 mask=m._get_time_mask(WINDOW.as_tuple()),
             )
 

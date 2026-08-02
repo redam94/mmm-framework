@@ -82,7 +82,9 @@ class TestComponentPeriods:
         assert got["monthly"] == want_yearly / 12.0
         assert got["weekly"] == want_yearly / 52.0
 
-    @pytest.mark.parametrize("freq,days", [("W", 7.0), ("D", 1.0), ("M", 365.25 / 12.0)])
+    @pytest.mark.parametrize(
+        "freq,days", [("W", 7.0), ("D", 1.0), ("M", 365.25 / 12.0)]
+    )
     def test_frequency_table_matches_the_core_exactly(self, freq, days):
         """The gate that did not exist: the two sites agree when asked to."""
         got = _component_periods(days, SeasonalityPeriodSource.FREQUENCY_TABLE)
@@ -102,9 +104,7 @@ class TestComponentPeriods:
     def test_an_untabulated_spacing_warns_and_falls_back(self):
         """Silence here would be the original defect in a new place."""
         with pytest.warns(UserWarning, match="matches no tabulated frequency"):
-            got = _component_periods(
-                3.0, SeasonalityPeriodSource.FREQUENCY_TABLE
-            )
+            got = _component_periods(3.0, SeasonalityPeriodSource.FREQUENCY_TABLE)
         assert got["yearly"] == 365.25 / 3.0
 
     def test_string_values_are_accepted(self):
@@ -139,9 +139,7 @@ class TestItReachesTheGraph:
             assert term is not None
             # term = design @ coefs; evaluating at the unit basis recovers design.
             coefs = pm.Model.get_context()["seasonality_coefs"]
-            cols = [
-                term.eval({coefs: np.eye(4)[j]}) for j in range(4)
-            ]
+            cols = [term.eval({coefs: np.eye(4)[j]}) for j in range(4)]
         return np.column_stack(cols)
 
     def test_default_graph_is_the_median_basis(self):
@@ -255,7 +253,9 @@ class TestReachableFromASpec:
         from mmm_framework.agents.fitting import unconsumed_spec_path
 
         assert (
-            unconsumed_spec_path(["seasonality", "period_source"], "frequency_table", {})
+            unconsumed_spec_path(
+                ["seasonality", "period_source"], "frequency_table", {}
+            )
             is None
         )
 

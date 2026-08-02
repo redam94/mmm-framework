@@ -283,7 +283,9 @@ class TestSwappableLevers:
         (media_before,) = _draw(m.model, ["channel_contributions"])
         with m.model:
             pm.set_data({"X_levers_raw": X0 * np.array([1.0, 0.0])})
-        promo, media_after = _draw(m.model, ["promo_component", "channel_contributions"])
+        promo, media_after = _draw(
+            m.model, ["promo_component", "channel_contributions"]
+        )
         assert np.allclose(promo, 0.0, atol=1e-12)
         assert np.array_equal(media_before, media_after)
 
@@ -302,7 +304,9 @@ class TestSwappableLevers:
         plain = BayesianMMM(_panel(), ModelConfig(), TrendConfig(type=TrendType.LINEAR))
         _ = plain.model
         with pytest.raises(ValueError, match="no price or promotion lever"):
-            with plain._swapped_media_data(None, None, X_levers=np.zeros((plain.n_obs, 1))):
+            with plain._swapped_media_data(
+                None, None, X_levers=np.zeros((plain.n_obs, 1))
+            ):
                 pass
 
 
@@ -384,7 +388,9 @@ class TestLeverInterventions:
         media, levers = m._intervention_to_inputs(ZeroInput(target="TV"))
         assert levers is None and np.all(media[:, m.channel_names.index("TV")] == 0)
 
-        media, levers = m._intervention_to_inputs(ScaleInput(target="Price", factor=0.9))
+        media, levers = m._intervention_to_inputs(
+            ScaleInput(target="Price", factor=0.9)
+        )
         assert media is None
         assert np.allclose(levers[:, 0], m.X_levers_raw[:, 0] * 0.9)
         assert np.allclose(levers[:, 1], m.X_levers_raw[:, 1])  # promo untouched
@@ -414,7 +420,9 @@ class TestLeverInterventions:
         with pytest.raises(ValueError, match="can only swap media"):
             m._intervention_to_X_media(ScaleInput(target="Price", factor=0.9))
         # a channel target still passes through unchanged
-        assert m._intervention_to_X_media(ScaleInput(target="TV", factor=0.5)) is not None
+        assert (
+            m._intervention_to_X_media(ScaleInput(target="TV", factor=0.5)) is not None
+        )
 
 
 @pytest.mark.slow

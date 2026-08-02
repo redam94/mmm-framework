@@ -30,21 +30,36 @@ def _rows(periods, *, kpi=True, tv_skip=(), price=False):
         base = {c: "-" for c in DIMS}
         iso = p.strftime("%Y-%m-%d")
         if kpi:
-            rows.append({**base, "Period": iso, "VariableName": "Sales",
-                         "VariableValue": 100 + i})
+            rows.append(
+                {
+                    **base,
+                    "Period": iso,
+                    "VariableName": "Sales",
+                    "VariableValue": 100 + i,
+                }
+            )
         if i not in tv_skip:
-            rows.append({**base, "Period": iso, "VariableName": "TV",
-                         "VariableValue": 10 + i})
+            rows.append(
+                {**base, "Period": iso, "VariableName": "TV", "VariableValue": 10 + i}
+            )
         if price:
-            rows.append({**base, "Period": iso, "VariableName": "Price",
-                         "VariableValue": 5.0 + i})
+            rows.append(
+                {
+                    **base,
+                    "Period": iso,
+                    "VariableName": "Price",
+                    "VariableValue": 5.0 + i,
+                }
+            )
     return pd.DataFrame(rows)
 
 
 def _cfg(controls=False):
     return MFFConfig(
         kpi=KPIConfig(name="Sales", dimensions=[DimensionType.PERIOD]),
-        media_channels=[MediaChannelConfig(name="TV", dimensions=[DimensionType.PERIOD])],
+        media_channels=[
+            MediaChannelConfig(name="TV", dimensions=[DimensionType.PERIOD])
+        ],
         controls=(
             [ControlVariableConfig(name="Price", dimensions=[DimensionType.PERIOD])]
             if controls

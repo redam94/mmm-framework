@@ -280,7 +280,7 @@ class TestCarryoverHalfLifeWiring:
         from mmm_framework.reporting.extractors import mixins as mod
 
         class _Bad:
-            status = "unsupported"          # e.g. a legacy blended-adstock fit
+            status = "unsupported"  # e.g. a legacy blended-adstock fit
             kernel = np.zeros((2, 4))
 
         monkeypatch.setattr(

@@ -26,7 +26,6 @@ from mmm_framework.planning.calendar import (
 )
 from mmm_framework.planning.pacing import compute_pacing
 
-
 # ---------------------------------------------------------------------------
 # the shipped misalignment
 # ---------------------------------------------------------------------------
@@ -233,9 +232,9 @@ def test_seasonality_period_constant_matches():
     )
 
     src = inspect.getsource(base.BayesianMMM._prepare_seasonality)
-    assert "periods_for_frequency" in src, (
-        "model/base.py no longer resolves periods through the shared table"
-    )
+    assert (
+        "periods_for_frequency" in src
+    ), "model/base.py no longer resolves periods through the shared table"
     assert '"yearly":' not in src, (
         "model/base.py has re-inlined a seasonality period literal:\n" + src
     )
@@ -314,7 +313,9 @@ def test_calendar_from_model_uses_the_panels_own_cadence():
     # starts the period AFTER the model's last
     assert cal.start == pd.Timestamp("2021-01-04") + pd.Timedelta(weeks=10)
     assert len(set(cal.periods())) == 13
-    assert np.all(np.diff(cal.starts().values).astype("timedelta64[D]").astype(int) == 7)
+    assert np.all(
+        np.diff(cal.starts().values).astype("timedelta64[D]").astype(int) == 7
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -23,7 +23,6 @@ from mmm_framework.validation.backtest import (
     rolling_origins,
 )
 
-
 # ---------------------------------------------------------------------------
 # rolling_origins
 # ---------------------------------------------------------------------------
@@ -373,9 +372,7 @@ class TestValidatorCVUsesForecaster:
             .without_ppc()
             .without_residuals()
             .without_channel_diagnostics()
-            .with_cross_validation(
-                n_folds=2, strategy="expanding", min_train_size=96
-            )
+            .with_cross_validation(n_folds=2, strategy="expanding", min_train_size=96)
             .build()
         )
         config.run_model_comparison = False

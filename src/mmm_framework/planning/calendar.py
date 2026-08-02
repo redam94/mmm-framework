@@ -122,7 +122,9 @@ class PlanningCalendar:
                 f"labels has {len(self.labels)} entries for {self.n_periods} periods"
             )
         elif len(set(self.labels)) != len(self.labels):
-            raise ValueError("labels must be unique — a duplicate label is a double count")
+            raise ValueError(
+                "labels must be unique — a duplicate label is a double count"
+            )
 
     # -- construction ------------------------------------------------------
 
@@ -147,9 +149,7 @@ class PlanningCalendar:
         cadence = (
             "weekly"
             if pd.Timedelta("6D") <= step <= pd.Timedelta("8D")
-            else "daily"
-            if step <= pd.Timedelta("1D")
-            else "monthly"
+            else "daily" if step <= pd.Timedelta("1D") else "monthly"
         )
         return cls(
             start=periods[-1] + step,
@@ -181,7 +181,8 @@ class PlanningCalendar:
         end = (
             starts[i + 1]
             if i + 1 < self.n_periods
-            else starts[i] + (starts[1] - starts[0] if self.n_periods > 1 else pd.Timedelta("7D"))
+            else starts[i]
+            + (starts[1] - starts[0] if self.n_periods > 1 else pd.Timedelta("7D"))
         )
         return starts[i], end
 

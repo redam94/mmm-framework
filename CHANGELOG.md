@@ -14,6 +14,74 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ## [Unreleased]
 
+### Added
+
+- **Sensitivity to unmeasured confounding, on the decision scale and for experiments too.**
+  Spec: `technical-docs/confounding-sensitivity.md`.
+
+  The framework already reported a Cinelli–Hazlett robustness value per channel, but on the
+  *coefficient* scale and with no way to say whether the confounder strength it demands is
+  plausible; experiments had nothing at all, so a matched-market DiD readout anchored the model
+  exactly as firmly as a randomized one. Following [the PyMC Labs treatment][pymc-sens], the
+  observed effect is now decomposed into a causal part and a bias part with a **prior on the
+  bias**, and the report says which conclusions survive which priors.
+
+  - **Engine** `diagnostics/bias_sensitivity.py` — a **tipping point** ("TV's ROI would have to
+    be overstated by more than 24% of its own size to stop clearing break-even"), a
+    `(mu, sigma)` **sensitivity surface**, and a VanderWeele–Ding **E-value** restricted to
+    ratio measures (an ROI is not a risk ratio, and the function refuses rather than returning
+    an uninterpretable number). Everything is closed-form — the de-biased posterior is a
+    Gaussian mixture over existing draws, so it is deterministic, exact at small draw counts,
+    and the identical arithmetic runs in a browser.
+  - **MMM** `validation/confounding_sensitivity.py` — per-channel tipping points against the
+    measurement-aware break-even reference, plus **Cinelli–Hazlett benchmarking** against the
+    covariates that *were* measured, which is what turns a slider into an argument: "a
+    confounder as strong as Price implies 9%, well inside the 24% it would take".
+  - **Experiments** `planning/experiment_sensitivity.py` — the bias prior is *measured* from
+    the design's own placebo distribution rather than asserted, and the threat model follows
+    **assignment, not the estimator**: a randomized geo split faces interference and concurrent
+    shocks, not confounding, and is told so instead of being handed a confounding tipping point.
+  - **Propagation** — `ExperimentMeasurement` gains `bias_mu` / `bias_sigma` / `bias_scale` /
+    `bias_source`, consumed by `attach_experiment_likelihood`, so a fragile readout stops
+    anchoring the MMM as if it were clean. Opt-in via
+    `apply_experiment_calibration(bias_mode="stored")`; the registry keeps the raw measurement
+    and only the staged spec entry carries the assumption.
+  - **In-graph sweep** (opt-in, exact) `run_confounder_sweep` — the post-hoc layers re-weight a
+    posterior and so move every channel the same way; this puts a *fixed* hypothetical confounder
+    into the graph and re-fits, so coefficients move relative to one another. On
+    `unobserved_confounding` at assumed partial R² 0.25, TV falls 2.83 → 2.18 while Display rises
+    1.95 → 2.19. `BayesianMMM.add_latent_confounder` keeps the default graph byte-identical (the
+    term is absent, not zero). Refuses by name for extension models, the frequentist paradigm,
+    multiplicative specs and GP trends.
+  - **Surfaces** — agent op `confounding_sensitivity`, tool `run_sensitivity_analysis`,
+    `POST /projects/{id}/validate` with `check="sensitivity"`, an Oracle Validation-tab button,
+    a tipping-point table in `CausalAssumptionsSection`, and three charts in
+    `reporting/charts/sensitivity_bias.py`.
+
+  Three decisions worth recording because they are the ones that would have produced confident
+  wrong numbers:
+
+  1. **No per-draw multiplicative bias.** `tau_d = x_d * (1 - b_d)` is the obvious way to say
+     "relative" and is a trap: an efficiency channel's break-even reference is 0 and every media
+     coefficient here has positive support, so `P(tau > 0) = P(b < 1)` **exactly** — the same
+     number for every channel, with no data in it. The shipped `fraction_of_mean` scale
+     (`tau_d = x_d - b*|mean(x)|`) has none of that, and a regression gate pins it.
+  2. **The sensemakr validity condition is `r2dxj_x < 1/(1+kd)`**, not the `kd*r2dxj_x < 1` one
+     might reach for — at `kd=1` that is 0.5, not 1.0. Past it the published formula returns
+     `NaN`, and a `NaN` compares `False` against every fragility test, i.e. it would read as
+     "not fragile". Breaches are now explicit refusals naming the largest admissible `kd`.
+  3. **The benchmark uses an OLS standard error from the design matrix, never the posterior sd.**
+     The bias identity is calibrated on `se*sqrt(df) = ||y_res||/||d_res||`; an informative
+     positive-support media prior shrinks the posterior sd, which would shrink the implied bias
+     and manufacture robustness. Validated against the exact Cinelli–Hazlett identity — fitting
+     with and without a known confounder reproduces the predicted bias to ~1e-15.
+
+  Tests: `tests/test_bias_sensitivity.py`, `tests/test_confounding_sensitivity.py`,
+  `tests/test_experiment_sensitivity.py` (planted-truth gates on the
+  `unobserved_confounding` / `confounding_controlled` synth pair).
+
+[pymc-sens]: https://www.pymc.io/projects/examples/en/latest/causal_inference/sensitivity_unmeasured_confounding.html
+
 ### Fixed
 
 - **A windowed `contribution_roi` silently returned the full-series value, and the estimand engine

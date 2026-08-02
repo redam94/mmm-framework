@@ -540,13 +540,13 @@ class TestFactsHelpers:
         actual = np.full(P, 100.0)
         actual[52:] = 110.0
         fitted = np.full(P, 100.0)
-        fitted[52:] = 105.0          # model explains only half the rise
+        fitted[52:] = 105.0  # model explains only half the rise
         contrib = np.full((D, P), 10.0)
         contrib[:, 52:] = 12.0
         latest = _yoy_facts(actual, fitted, {"TV": contrib}, periods, ["TV"], 0.9)[
             "latest"
         ]
-        absorbed = (52 * 10.0) - (52 * 2.0)          # old baseline = 416
+        absorbed = (52 * 10.0) - (52 * 2.0)  # old baseline = 416
         assert latest["baseline"]["mean"] != pytest.approx(absorbed)
         assert latest["baseline"]["mean"] == pytest.approx(52 * 3.0)  # fitted - media
 
@@ -1048,7 +1048,9 @@ class TestEndToEnd:
         media = sum(d["mean"] for d in yoy["drivers"])
         # media + modelled baseline closes to the FITTED delta; the gap to the
         # observed delta is disclosed as unexplained rather than absorbed.
-        closing = media + yoy["baseline"]["mean"] + (yoy.get("unexplained_delta") or 0.0)
+        closing = (
+            media + yoy["baseline"]["mean"] + (yoy.get("unexplained_delta") or 0.0)
+        )
         assert yoy["delta"] == pytest.approx(closing, rel=1e-6)
         # headline rows carry CIs
         rows = f["headline"]["channels"]
@@ -1115,8 +1117,8 @@ class TestNonMMMFamiliesAreRefused:
             InteractiveReportGenerator(self._NonMMM())
         msg = str(exc.value)
         assert "MMM-specific" in msg
-        assert "'cfa'" in msg                      # names the declared kind
-        assert "MMMReportGenerator" in msg         # names the alternative
+        assert "'cfa'" in msg  # names the declared kind
+        assert "MMMReportGenerator" in msg  # names the alternative
         # NOT an AttributeError leaking from extraction
         assert "y_raw" not in msg
 
@@ -1132,8 +1134,8 @@ class TestNonMMMFamiliesAreRefused:
         """Duck-typed / historical models must not start refusing."""
         from mmm_framework.reporting.interactive.facts import _require_mmm
 
-        _require_mmm(self._PlainModel())   # must not raise
-        _require_mmm(None)                 # facts-only path
+        _require_mmm(self._PlainModel())  # must not raise
+        _require_mmm(None)  # facts-only path
 
     def test_canned_facts_still_render_without_a_model(self):
         html = InteractiveReportGenerator(facts=_canned_facts()).generate_report()

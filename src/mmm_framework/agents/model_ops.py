@@ -1445,9 +1445,7 @@ def _forward_calendar(mmm: Any, n_periods: int, flighting: dict) -> Any:
                 # delivery feed will carry. Detect the convention and follow it.
                 is_month_end = last.is_month_end
                 nxt = last + _pd.DateOffset(months=1)
-                start = (
-                    nxt + _pd.offsets.MonthEnd(0) if is_month_end else nxt
-                )
+                start = nxt + _pd.offsets.MonthEnd(0) if is_month_end else nxt
             else:
                 start = idx[-1] + step
     except Exception:  # noqa: BLE001 — an undated panel simply has no calendar
@@ -1614,8 +1612,7 @@ def forecast_plan(
     if fc.caveats.statements():
         lines.append("")
     lines.append(
-        f"- Horizon: {len(fc.periods)} periods "
-        f"({fc.periods[0]} → {fc.periods[-1]})"
+        f"- Horizon: {len(fc.periods)} periods " f"({fc.periods[0]} → {fc.periods[-1]})"
     )
     if head["total_lower"] is None:
         lines.append(
@@ -4131,6 +4128,114 @@ def refutation_suite(mmm: Any, results: Any = None, *, q: float = 1.0) -> dict:
         return _err(f"Refutation suite failed: {e}")
 
 
+def confounding_sensitivity(
+    mmm: Any,
+    results: Any = None,
+    *,
+    threshold: float = 0.95,
+    benchmark: bool = True,
+    max_draws: int = 400,
+) -> dict:
+    """Decision-scale sensitivity to unmeasured confounding: how much hidden bias
+    would have to be present to change each channel's recommendation, and whether
+    that much is plausible given the covariates that WERE measured."""
+    try:
+        from mmm_framework.reporting.charts import (
+            create_bias_curve_chart,
+            create_tipping_point_chart,
+        )
+        from mmm_framework.reporting.config import ReportConfig
+        from mmm_framework.validation.confounding_sensitivity import (
+            run_confounding_sensitivity,
+        )
+
+        report = run_confounding_sensitivity(
+            mmm, threshold=threshold, benchmark=benchmark, max_draws=max_draws
+        )
+        payload = report.to_dict()
+
+        overturned = report.overturned_channels
+        fragile = report.fragile_channels
+        unassessable = report.unassessable_channels
+        exceeded = [
+            c.channel
+            for c in report.channels
+            if c.benchmark_exceeds_tipping_point is True
+        ]
+        if exceeded:
+            verdict = (
+                "⚠️ a confounder no stronger than one you already measure would "
+                "overturn: " + ", ".join(exceeded)
+            )
+        elif overturned:
+            verdict = (
+                "⚠️ not supported before any confounding is assumed: "
+                + ", ".join(overturned)
+            )
+        elif fragile:
+            verdict = "⚠️ fragile to a modest hidden bias: " + ", ".join(fragile)
+        elif unassessable and len(unassessable) == len(report.channels):
+            verdict = (
+                "⚠️ not assessable — no channel produced a usable tipping point "
+                "(an approximate fit is the usual cause; re-fit with NUTS)"
+            )
+        else:
+            verdict = (
+                "✅ every assessable channel survives the range of hidden bias "
+                "that was scanned"
+            )
+        if unassessable and len(unassessable) != len(report.channels):
+            verdict += f" — but {', '.join(unassessable)} could not be assessed"
+
+        bench = report.benchmark
+        bench_line = (
+            "Benchmarked against: " + ", ".join(bench.covariates)
+            if bench.status == "ok" and bench.covariates
+            else f"No observed-covariate benchmark ({bench.reason})"
+        )
+        content = (
+            "### Sensitivity to unmeasured confounding\n\n"
+            f"**Overall:** {verdict}\n\n"
+            "The tipping point is how far a channel's estimate would have to be "
+            "overstated — as a share of its own size — before it stops clearing "
+            "break-even. The benchmark prices a hypothetical confounder against "
+            "the covariates you did measure, so the comparison is between a "
+            "number and something concrete rather than a slider.\n\n"
+            f"{bench_line}\n\n"
+            f"*{report.caveat}*"
+        )
+
+        cfg = ReportConfig()
+        plots = []
+        for key, fn in (
+            ("confounding_tipping", create_tipping_point_chart),
+            ("confounding_curve", create_bias_curve_chart),
+        ):
+            try:
+                html_div = fn(payload, cfg, div_id=key)
+                if html_div:
+                    plots.append({"key": key, "html": html_div})
+            except Exception:  # noqa: BLE001 — a chart must never sink the check
+                pass
+
+        return {
+            "content": content,
+            "dashboard": {"validation_confounding": payload},
+            "tables": [
+                df_to_table_json(
+                    report.summary(),
+                    title="Sensitivity to unmeasured confounding",
+                    source="confounding_sensitivity",
+                    group="validation",
+                )
+            ],
+            "plots": plots,
+            "error": None,
+        }
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Confounding sensitivity failed: {e}")
+
+
 def cross_validation(
     mmm: Any,
     results: Any = None,
@@ -4535,6 +4640,7 @@ OPS = {
     "residual_diagnostics": residual_diagnostics,
     "channel_diagnostics": channel_diagnostics,
     "refutation_suite": refutation_suite,
+    "confounding_sensitivity": confounding_sensitivity,
     "cross_validation": cross_validation,
     "validate_model": validate_model,
     "compute_estimands": compute_estimands,

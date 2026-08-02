@@ -246,36 +246,49 @@ class TestPostFitLearning:
         assert "verdict" in frame.columns
 
 
+def _boundary_repro() -> BayesianMMM:
+    """The #203 configuration: a bounded parameter that runs to its boundary."""
+    built = _model(SaturationConfig.logistic(lam_prior=LEGACY_LAM_PRIOR))
+    return BayesianMMM(
+        built.panel,
+        ModelConfig(media_prior_mode="roi"),
+        TrendConfig(type=TrendType.NONE),
+    )
+
+
 @pytest.mark.slow
 class TestMapBoundaryDiagnostic:
     """#203 — an interval transform saturating under find_MAP.
 
     `find_MAP` optimizes in the unconstrained space; float64 `sigmoid` returns
-    exactly 1.0 past ~37, so a [0,1]-bounded parameter can land exactly on its
-    boundary where the Beta gradient `-2/(1-a)` divides by zero. The raw failure
-    is a bare ZeroDivisionError from a JIT-compiled Composite op.
+    exactly 1.0 past ~37 and `exp` underflows to exactly 0.0 past -746, so a
+    bounded parameter can land exactly on its support boundary where the Beta
+    gradient divides by zero. The raw failure is a bare ZeroDivisionError from a
+    JIT-compiled Composite op.
+
+    This USED to be a hard raise. It is now a guarded retry inside the
+    float64-safe box (`diagnostics.identification`), because the crash was
+    hiding the finding rather than being it: the fit completes, and the warning
+    plus `diagnostics["identification"]` name the parameters the data never
+    informed. `TestGuardedMapRecovery` below pins the new contract.
 
     The #207 prior change incidentally stopped this particular configuration from
-    crashing — the optimizer takes a different path — but the failure MODE is
-    unchanged, which is why the diagnostic is tested against the old prior rather
-    than deleted along with the repro.
+    crashing under the DEFAULT prior — the optimizer takes a different path — but
+    the failure MODE is unchanged, which is why this is tested against the old
+    prior rather than deleted along with the repro.
     """
 
     def test_the_message_names_the_mechanism_and_the_ways_out(self):
-        built = _model(SaturationConfig.logistic(lam_prior=LEGACY_LAM_PRIOR))
-        model = BayesianMMM(
-            built.panel,
-            ModelConfig(media_prior_mode="roi"),
-            TrendConfig(type=TrendType.NONE),
-        )
+        """The raise text still exists, for the paths that cannot be guarded."""
+        from mmm_framework.diagnostics.identification import boundary_failure_message
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            with pytest.raises(ZeroDivisionError) as exc:
-                model.fit(method="map", random_seed=0, progressbar=False)
-        message = str(exc.value)
+            message = boundary_failure_message(_boundary_repro().model)
         assert "boundary" in message
         assert "adstock_alpha_TV" in message
         assert "advi" in message
+        assert "NUTS" in message
         assert "issues/203" in message
 
     def test_the_anchored_default_no_longer_hits_it_on_this_configuration(self):
@@ -289,3 +302,58 @@ class TestMapBoundaryDiagnostic:
             warnings.simplefilter("ignore")
             model.fit(method="map", random_seed=0, progressbar=False)
         assert model._trace is not None
+
+
+@pytest.mark.slow
+class TestGuardedMapRecovery:
+    """The #203 repro now COMPLETES, warns, and says which directions are flat."""
+
+    def test_the_fit_completes_instead_of_raising(self):
+        model = _boundary_repro()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            results = model.fit(method="map", random_seed=0, progressbar=False)
+        assert results.approximate is True
+        assert model._trace is not None
+
+    def test_it_warns_that_the_estimate_is_not_trustworthy(self):
+        model = _boundary_repro()
+        with pytest.warns(UserWarning, match="guardrail") as caught:
+            with warnings.catch_warnings():
+                warnings.simplefilter("always")
+                model.fit(method="map", random_seed=0, progressbar=False)
+        text = "\n".join(str(w.message) for w in caught)
+        assert "NUTS" in text
+        assert "adstock_alpha" in text
+
+    def test_the_report_names_the_parameters_the_data_never_informed(self):
+        model = _boundary_repro()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            results = model.fit(method="map", random_seed=0, progressbar=False)
+
+        report = results.diagnostics["identification"]
+        assert report["verdict"] == "non-identified"
+        assert report["guardrail_engaged"] is True
+        assert report["laplace_usable"] is False
+
+        # Both channels' carryover is unidentified: the KPI in this panel is
+        # pure noise, so nothing pulls adstock back off its boundary.
+        uninformed = {u["parameter"] for u in report["uninformed"]}
+        assert {"adstock_alpha_TV", "adstock_alpha_Digital"} <= uninformed
+        hits = {h["parameter"] for h in report["boundary_hits"]}
+        assert {"adstock_alpha_TV", "adstock_alpha_Digital"} <= hits
+
+    def test_a_model_that_never_approaches_a_boundary_is_untouched(self):
+        """No warning, and no report unless it is asked for."""
+        built = _model(SaturationConfig.logistic())
+        model = BayesianMMM(
+            built.panel,
+            ModelConfig(media_prior_mode="roi"),
+            TrendConfig(type=TrendType.NONE),
+        )
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            results = model.fit(method="map", random_seed=0, progressbar=False)
+        assert not [w for w in caught if "guardrail" in str(w.message)]
+        assert "identification" not in results.diagnostics

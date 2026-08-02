@@ -63,7 +63,9 @@ class SeasonalityPeriodSource(str, Enum):
     DATETIME_MEDIAN = "datetime_median"
 
 
-def frequency_from_median_days(median_days: float, tolerance: float = 0.05) -> str | None:
+def frequency_from_median_days(
+    median_days: float, tolerance: float = 0.05
+) -> str | None:
     """The :data:`PERIODS_BY_FREQ` key matching an observed spacing, or None.
 
     ``tolerance`` is a relative band around each tabulated spacing, sized to

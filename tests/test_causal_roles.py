@@ -42,7 +42,6 @@ from mmm_framework.model.base import (
     _PRECISION_CONTROL_PRIOR_SIGMA,
 )
 
-
 # =============================================================================
 # Config layer (P1-2)
 # =============================================================================
@@ -537,9 +536,7 @@ class TestProposeDagConfounderAlsoControl:
             kpi="Sales",
             media_channels=["Digital", "Paid_Social", "Radio", "TV"],
             controls=["Price_Index", "Distribution"],
-            confounders=[
-                {"name": "Distribution", "affects": ["TV", "Radio", "Sales"]}
-            ],
+            confounders=[{"name": "Distribution", "affects": ["TV", "Radio", "Sales"]}],
         )
         # The confounder fan-out survives even though Distribution is a control.
         assert ("distribution", "tv") in edges

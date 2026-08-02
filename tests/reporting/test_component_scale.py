@@ -39,9 +39,7 @@ class TestConventionDeclaration:
     def test_core_declares_standardized(self):
         from mmm_framework.model.base import BayesianMMM
 
-        assert (
-            BayesianMMM.COMPONENT_DETERMINISTIC_SCALE is ComponentScale.STANDARDIZED
-        )
+        assert BayesianMMM.COMPONENT_DETERMINISTIC_SCALE is ComponentScale.STANDARDIZED
 
     def test_extensions_declare_original(self):
         from mmm_framework.mmm_extensions.models.base import BaseExtendedMMM
@@ -189,9 +187,7 @@ class TestChannelContributionsConsumers:
         facts = prior_estimand_facts(m, idata)
         assert facts.get("channels"), "no prior estimand rows"
 
-        raw = np.asarray(
-            idata.prior["channel_contributions"].values, dtype=float
-        )
+        raw = np.asarray(idata.prior["channel_contributions"].values, dtype=float)
         raw = raw.reshape(-1, *raw.shape[-2:]).sum(axis=1)  # (S, channel)
 
         from mmm_framework.reporting.helpers.measurement import (

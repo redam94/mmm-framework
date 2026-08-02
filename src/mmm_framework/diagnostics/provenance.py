@@ -136,7 +136,8 @@ def not_applicable_reason(slug: str) -> str:
     because there is no chain" reads as a property of the method.
     """
     return _NOT_APPLICABLE.get(
-        slug, "This view requires a posterior, which a frequentist fit does not produce."
+        slug,
+        "This view requires a posterior, which a frequentist fit does not produce.",
     )
 
 

@@ -59,9 +59,7 @@ FORBIDDEN = {
 def _freq_model(method=InferenceMethod.FREQUENTIST_RIDGE, n_periods=104):
     panel = _panel(n_periods=n_periods)
     _configure(panel, "geometric", SaturationType.LOGISTIC)
-    config = ModelConfig(
-        inference_method=method, bootstrap_samples=30, optim_maxiter=6
-    )
+    config = ModelConfig(inference_method=method, bootstrap_samples=30, optim_maxiter=6)
     return BayesianMMM(panel, config, TC)
 
 
@@ -172,8 +170,12 @@ class TestConvergenceGate:
 
     def test_annotate_nulls_the_sampler_metrics(self):
         diag = annotate(
-            {"inference_family": prov.FREQUENTIST, "ess_bulk_min": 966.5,
-             "rhat_max": 1.0, "divergences": 0}
+            {
+                "inference_family": prov.FREQUENTIST,
+                "ess_bulk_min": 966.5,
+                "rhat_max": 1.0,
+                "divergences": 0,
+            }
         )
         assert diag["converged"] is None
         assert diag["ess_bulk_min"] is None

@@ -265,6 +265,24 @@ class BayesianMMMExtractor(
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.debug("Robustness extraction skipped: %s", exc)
 
+                # Decision-scale sensitivity: how much hidden bias would flip each
+                # channel's recommendation, and whether the covariates that WERE
+                # measured make that much plausible. Complements the robustness
+                # value above rather than replacing it — that one is on the
+                # coefficient scale, this one on the scale of the decision.
+                try:
+                    from ...validation.confounding_sensitivity import (
+                        run_confounding_sensitivity,
+                    )
+
+                    sens = run_confounding_sensitivity(
+                        self.mmm, include_surface=False, max_draws=200
+                    )
+                    if sens.channels:
+                        assumptions["confounding_sensitivity"] = sens.to_dict()
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.debug("Confounding sensitivity skipped: %s", exc)
+
             bundle.causal_assumptions = assumptions or None
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("Causal-assumptions extraction failed: %s", exc)

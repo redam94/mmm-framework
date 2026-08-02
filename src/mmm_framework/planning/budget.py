@@ -323,6 +323,7 @@ def _solve_allocation(
         # intervals. Refuse instead. `fixed` needs no valuation and is unchanged.
         if value_per_kpi is None:
             raise UnresolvedValueError("Fund-to-breakeven allocation (mode='free')")
+
         # Maximize profit value_per_kpi·KPI(s) − Σs → minimize the negative.
         def neg(s):
             return -(value_per_kpi * value(s) - float(s.sum()))

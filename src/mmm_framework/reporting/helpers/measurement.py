@@ -77,16 +77,19 @@ def resolve_break_even(
     bar leaves the number itself unchanged and self-describing.
     """
     if margin is None:
-        return BreakEven(value=float(default), basis="revenue", margin=None,
-                         value_source=value_source)
+        return BreakEven(
+            value=float(default),
+            basis="revenue",
+            margin=None,
+            value_source=value_source,
+        )
     m = float(margin)
     if not (0.0 < m <= 1.0):
         raise ValueError(
             f"margin must be a fraction in (0, 1]; got {margin!r}. "
             "A percentage (e.g. 40) is not accepted — pass 0.40."
         )
-    return BreakEven(value=1.0 / m, basis="profit", margin=m,
-                     value_source=value_source)
+    return BreakEven(value=1.0 / m, basis="profit", margin=m, value_source=value_source)
 
 
 @dataclass(frozen=True)
@@ -99,7 +102,7 @@ class BreakEven:
     """
 
     value: float
-    basis: str            # "revenue" | "profit"
+    basis: str  # "revenue" | "profit"
     margin: float | None
     value_source: str | None = None
 
