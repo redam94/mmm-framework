@@ -42,176 +42,176 @@
       "modified": "2026-07-12"
     },
     "blog-activity-bias.html": {
-      "hash": "668671bfa78335a7",
-      "modified": "2026-07-10"
+      "hash": "ccdbb91788991c14",
+      "modified": "2026-08-02"
     },
     "blog-advertising-is-a-stock.html": {
-      "hash": "fe5416dcfd6b4d37",
-      "modified": "2026-07-24"
+      "hash": "eaf9b8bcbd3c5ab9",
+      "modified": "2026-08-02"
     },
     "blog-aggregation-bends-the-curve.html": {
-      "hash": "8d86151754451442",
-      "modified": "2026-07-26"
+      "hash": "43ca5cdb932965b4",
+      "modified": "2026-08-02"
     },
     "blog-attribution-incrementality.html": {
-      "hash": "2cd78a34daf43efc",
-      "modified": "2026-07-24"
+      "hash": "5b4ad93eca9660ba",
+      "modified": "2026-08-02"
     },
     "blog-auction-throttling-frontdoor.html": {
-      "hash": "230f475d0da51749",
-      "modified": "2026-07-24"
+      "hash": "b6116652994aeb3b",
+      "modified": "2026-08-02"
     },
     "blog-baseline-regularization-confounding.html": {
-      "hash": "e183b5664abe17c4",
-      "modified": "2026-07-24"
+      "hash": "fcece0bb296ff6fc",
+      "modified": "2026-08-02"
     },
     "blog-bayesian-mmm-carryover-shape.html": {
-      "hash": "4c9aeb5fbdf02b9c",
-      "modified": "2026-07-10"
+      "hash": "6e14b91cae96b9da",
+      "modified": "2026-08-02"
     },
     "blog-bed-bo-bandits.html": {
-      "hash": "9109e114a80bf763",
-      "modified": "2026-07-10"
+      "hash": "1c0c320da990592d",
+      "modified": "2026-08-02"
     },
     "blog-calibrate-validate-same-experiment.html": {
-      "hash": "f8e0f8b0df32e572",
-      "modified": "2026-07-26"
+      "hash": "1041e570e896a55f",
+      "modified": "2026-08-02"
     },
     "blog-calibrating-mmm-experiments.html": {
-      "hash": "274b751096fa50b0",
-      "modified": "2026-07-14"
+      "hash": "38a3f828dff7a66e",
+      "modified": "2026-08-02"
     },
     "blog-carryover-experiment-timing.html": {
-      "hash": "d33a2a304adf5f26",
-      "modified": "2026-07-24"
+      "hash": "1b446dbb39a756cd",
+      "modified": "2026-08-02"
     },
     "blog-causal-estimates-observational.html": {
-      "hash": "5463a2876017a89d",
-      "modified": "2026-07-10"
+      "hash": "fd88b66ca7cf41da",
+      "modified": "2026-08-02"
     },
     "blog-causalimpact-bsts.html": {
-      "hash": "0d08a269e706fcee",
-      "modified": "2026-07-10"
+      "hash": "924958ca2f957b3d",
+      "modified": "2026-08-02"
     },
     "blog-continuous-learning-interactions.html": {
-      "hash": "3db5103a96eb1b63",
-      "modified": "2026-07-10"
+      "hash": "13fc41023546de36",
+      "modified": "2026-08-02"
     },
     "blog-curve-assumed-you-wouldnt-act.html": {
-      "hash": "59fbfca3f52788a4",
-      "modified": "2026-07-26"
+      "hash": "294f1789caf99df0",
+      "modified": "2026-08-02"
     },
     "blog-demand-proxy-proximal.html": {
-      "hash": "642486618f536a16",
-      "modified": "2026-07-24"
+      "hash": "5f029cb5f2b4c993",
+      "modified": "2026-08-02"
     },
     "blog-geo-experiments-tbr.html": {
-      "hash": "42c2960865a30397",
-      "modified": "2026-07-19"
+      "hash": "4f367eeda64c5269",
+      "modified": "2026-08-02"
     },
     "blog-geo-holdout-eig.html": {
-      "hash": "8ed58f265bf67182",
-      "modified": "2026-07-10"
+      "hash": "91c6883fc73c6bc6",
+      "modified": "2026-08-02"
     },
     "blog-holdout-error-mmm.html": {
-      "hash": "525cf81eecd527dd",
-      "modified": "2026-07-24"
+      "hash": "aea43555c51da461",
+      "modified": "2026-08-02"
     },
     "blog-lindley-to-dad.html": {
-      "hash": "c030a263884e1b48",
-      "modified": "2026-07-10"
+      "hash": "8730b8cff269e34b",
+      "modified": "2026-08-02"
     },
     "blog-mediation-funnel-identification.html": {
-      "hash": "8f08b7b1a3ec7c19",
-      "modified": "2026-07-24"
+      "hash": "856e89ba0ccb6fd2",
+      "modified": "2026-08-02"
     },
     "blog-modeling-pitfalls.html": {
-      "hash": "a897f84969243c48",
-      "modified": "2026-07-10"
+      "hash": "747587eec1461643",
+      "modified": "2026-08-02"
     },
     "blog-modelled-one-p.html": {
-      "hash": "f785fa311ea13c38",
-      "modified": "2026-07-26"
+      "hash": "96fc0e8ffb550b8e",
+      "modified": "2026-08-02"
     },
     "blog-multiple-comparisons.html": {
-      "hash": "5fe87fd4b8d0524c",
-      "modified": "2026-07-10"
+      "hash": "c7ea68374d1f0911",
+      "modified": "2026-08-02"
     },
     "blog-optimizers-curse.html": {
-      "hash": "f9c516ad0fe63263",
-      "modified": "2026-07-26"
+      "hash": "6da702815573b98c",
+      "modified": "2026-08-02"
     },
     "blog-p-hacking-evidence.html": {
-      "hash": "52fa9fdea8082181",
-      "modified": "2026-07-14"
+      "hash": "ed225833310dff0b",
+      "modified": "2026-08-02"
     },
     "blog-p-values-across-models.html": {
-      "hash": "a03589e4f76b29d3",
-      "modified": "2026-07-23"
+      "hash": "1f0621ecdd797c32",
+      "modified": "2026-08-02"
     },
     "blog-platform-divergent-delivery.html": {
-      "hash": "1fe65ae03817e0dc",
-      "modified": "2026-07-24"
+      "hash": "a4e08c6d1a8ad254",
+      "modified": "2026-08-02"
     },
     "blog-pretrends-testing.html": {
-      "hash": "481ecfe1481b70a8",
-      "modified": "2026-07-18"
+      "hash": "4e232afb50b56815",
+      "modified": "2026-08-02"
     },
     "blog-prior-predictive-sbc.html": {
-      "hash": "45feaf9a06d8fdac",
-      "modified": "2026-07-14"
+      "hash": "483b40a40ce66722",
+      "modified": "2026-08-02"
     },
     "blog-prior-was-doing-more.html": {
-      "hash": "9d9b9778fcf980f7",
-      "modified": "2026-07-26"
+      "hash": "a1dc04f2d1d0ae93",
+      "modified": "2026-08-02"
     },
     "blog-saturation-or-fatigue.html": {
-      "hash": "de2e869df6da245e",
-      "modified": "2026-07-24"
+      "hash": "7dd232b6543bb1ef",
+      "modified": "2026-08-02"
     },
     "blog-staggered-did.html": {
-      "hash": "11517fa09b515492",
-      "modified": "2026-07-19"
+      "hash": "e97236abfe78137b",
+      "modified": "2026-08-02"
     },
     "blog-surrogate-outcomes.html": {
-      "hash": "ac9267cc3caf08ae",
-      "modified": "2026-07-18"
+      "hash": "b29ee83daa6ddc45",
+      "modified": "2026-08-02"
     },
     "blog-switchback-experiments.html": {
-      "hash": "c3b873f86bfafb8c",
-      "modified": "2026-07-19"
+      "hash": "480972fd48a64679",
+      "modified": "2026-08-02"
     },
     "blog-synthetic-control.html": {
-      "hash": "248285443d5d4180",
-      "modified": "2026-07-19"
+      "hash": "d5739f10be31adc3",
+      "modified": "2026-08-02"
     },
     "blog-table-2-fallacy-mmm.html": {
-      "hash": "f16fcede0f4fcab2",
-      "modified": "2026-07-18"
+      "hash": "13b20f358dc9adcc",
+      "modified": "2026-08-02"
     },
     "blog-table-2-fallacy.html": {
-      "hash": "648da106e6a7be8f",
-      "modified": "2026-07-18"
+      "hash": "4c3751fc54314779",
+      "modified": "2026-08-02"
     },
     "blog-testing-no-difference.html": {
-      "hash": "99c5a8206deea380",
-      "modified": "2026-07-23"
+      "hash": "2c3c8310b32c554a",
+      "modified": "2026-08-02"
     },
     "blog-thompson-sampling.html": {
-      "hash": "f9b38ba0da43fdae",
-      "modified": "2026-07-10"
+      "hash": "a3c91f2a412fbaf0",
+      "modified": "2026-08-02"
     },
     "blog-vendor-graded-homework.html": {
-      "hash": "0f0c9bb5035fbbb1",
-      "modified": "2026-07-26"
+      "hash": "6f2777b4b513cdca",
+      "modified": "2026-08-02"
     },
     "blog-when-sampling-fails.html": {
-      "hash": "f75a16ee281f0125",
-      "modified": "2026-07-17"
+      "hash": "05ec9ac2271dfe8c",
+      "modified": "2026-08-02"
     },
     "blog.html": {
-      "hash": "a208baa4e0e56b42",
-      "modified": "2026-07-26"
+      "hash": "1731cf107738703a",
+      "modified": "2026-08-02"
     },
     "business-readiness-report.html": {
       "hash": "4f24d06496fc708f",
