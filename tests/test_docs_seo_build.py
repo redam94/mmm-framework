@@ -191,3 +191,58 @@ class TestManifestIsTracked:
             "pages absent from the SEO manifest (they will be re-dated on the "
             "next build): " + ", ".join(missing)
         )
+
+
+class TestLlmsTxtCoversTheBlog:
+    """`build_seo.py` builds llms.txt from a hand-maintained list.
+
+    Nothing regenerates it, and before this test it had drifted 15 posts behind: those
+    essays existed, were linked from the index, had prev/next cards, and simply never
+    appeared in the LLM-discovery index the file exists to be. The failure is silent in
+    every other check, which is exactly the profile of the SERIES drift that
+    test_docs_nav_registration.py was written for.
+    """
+
+    @staticmethod
+    def _blog_group(seo) -> list[str]:
+        for name, pages in seo.SERIES:
+            if name.startswith("Modern measurement research"):
+                return list(pages)
+        raise AssertionError("the blog group is missing from build_seo.py::SERIES")
+
+    def test_every_blog_page_is_listed(self, seo):
+        docs = BUILD_SEO.parents[1]
+        on_disk = {p.name for p in docs.glob("blog*.html")}
+        listed = set(self._blog_group(seo))
+        missing = sorted(on_disk - listed)
+        assert not missing, (
+            "blog pages absent from build_seo.py's llms.txt list (they will never "
+            "appear in llms.txt): " + ", ".join(missing)
+        )
+
+    def test_no_stale_entries(self, seo):
+        docs = BUILD_SEO.parents[1]
+        on_disk = {p.name for p in docs.glob("blog*.html")}
+        stale = sorted(set(self._blog_group(seo)) - on_disk)
+        assert not stale, "llms.txt lists blog pages that do not exist: " + ", ".join(
+            stale
+        )
+
+    def test_order_matches_the_blog_index(self, seo):
+        """Same invariant the SERIES nav test enforces: the list is the index's order.
+
+        Keeping one order means a reader of either file sees the same sequence, and it
+        removes the judgement call about where a new post goes.
+        """
+        import re
+
+        docs = BUILD_SEO.parents[1]
+        cards = re.findall(
+            r'<a class="post-card" href="(blog-[^"]+)"',
+            (docs / "blog.html").read_text(encoding="utf-8"),
+        )
+        listed = [p for p in self._blog_group(seo) if p != "blog.html"]
+        assert listed == cards, (
+            "build_seo.py's blog list is not in docs/blog.html card order.\n"
+            f"  list:  {listed}\n  index: {cards}"
+        )
