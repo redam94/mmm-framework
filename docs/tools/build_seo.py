@@ -107,7 +107,7 @@ ORG_NODE = {
 WEBSITE_NODE = {
     "@type": "WebSite", "@id": SITE_ID, "name": "MMM Framework",
     "url": f"{SITE}/",
-    "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+    "description": "Documentation for the MMM Framework: a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
     "inLanguage": "en-US", "publisher": {"@id": ORG_ID},
 }
 
