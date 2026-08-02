@@ -447,6 +447,7 @@ SERIES = [
     ("Causal inference series", ["causal-00-the-ladder.html", "causal-01-confounding-adjustment.html", "causal-02-mmm-as-causal-model.html", "causal-03-structural-mediation.html", "causal-04-latent-confounders.html", "causal-05-measuring-one-experiment.html", "causal-06-calibrating-the-model.html", "causal-07-many-experiments.html", "causal-08-designing-next-experiment.html", "causal-09-measurement-program.html", "causal-10-closed-loop.html"]),
     ("Modern measurement research (blog)", ["blog.html",
         "blog-activity-bias.html", "blog-causal-estimates-observational.html",
+        "blog-pricing-unmeasured-confounding.html",
         "blog-table-2-fallacy.html", "blog-table-2-fallacy-mmm.html",
         "blog-attribution-incrementality.html",
         "blog-geo-experiments-tbr.html", "blog-switchback-experiments.html",
