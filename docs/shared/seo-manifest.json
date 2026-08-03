@@ -121,6 +121,14 @@
       "hash": "8730b8cff269e34b",
       "modified": "2026-08-02"
     },
+    "blog-loo-is-the-wrong-cv.html": {
+      "hash": "ad702744fe615f46",
+      "modified": "2026-08-02"
+    },
+    "blog-many-models-not-p-hacking.html": {
+      "hash": "69a2ced179ffd6ec",
+      "modified": "2026-08-02"
+    },
     "blog-mediation-funnel-identification.html": {
       "hash": "856e89ba0ccb6fd2",
       "modified": "2026-08-02"
@@ -153,6 +161,10 @@
       "hash": "a4e08c6d1a8ad254",
       "modified": "2026-08-02"
     },
+    "blog-posterior-predictive-severity.html": {
+      "hash": "0e1f06a6fcb6bbd0",
+      "modified": "2026-08-02"
+    },
     "blog-pretrends-testing.html": {
       "hash": "4e232afb50b56815",
       "modified": "2026-08-02"
@@ -165,12 +177,20 @@
       "hash": "483b40a40ce66722",
       "modified": "2026-08-02"
     },
+    "blog-prior-sensitivity-no-refit.html": {
+      "hash": "ee4bbd8e6f17e125",
+      "modified": "2026-08-02"
+    },
     "blog-prior-was-doing-more.html": {
       "hash": "a1dc04f2d1d0ae93",
       "modified": "2026-08-02"
     },
     "blog-saturation-or-fatigue.html": {
       "hash": "7dd232b6543bb1ef",
+      "modified": "2026-08-02"
+    },
+    "blog-sbc-part-two.html": {
+      "hash": "824749815afd3ba8",
       "modified": "2026-08-02"
     },
     "blog-staggered-did.html": {
@@ -209,12 +229,16 @@
       "hash": "6f2777b4b513cdca",
       "modified": "2026-08-02"
     },
+    "blog-what-the-data-paid-for.html": {
+      "hash": "7a60aefd99116067",
+      "modified": "2026-08-02"
+    },
     "blog-when-sampling-fails.html": {
       "hash": "05ec9ac2271dfe8c",
       "modified": "2026-08-02"
     },
     "blog.html": {
-      "hash": "78190e3d0cf6e266",
+      "hash": "277b951683762a91",
       "modified": "2026-08-02"
     },
     "business-readiness-report.html": {

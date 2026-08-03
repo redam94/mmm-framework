@@ -34,6 +34,94 @@
 
     <!-- Shared Styles -->
     <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Your MMM Is Reporting the Wrong Cross-Validation">
+    <meta name="twitter:description" content="Row-wise LOO on a weekly panel scores a prediction nobody makes. Two weeks out of 155 decide the model comparison, and the diagnostics thrown away with the scalar are worth more than the scalar.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework: a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html",
+          "name": "Your MMM Is Reporting the Wrong Cross-Validation | MMM Framework",
+          "description": "Row-wise leave-one-out on a weekly series trains on the future. On a 156-week simulation, deleting the two weeks either side of the held-out one reverses which of two models wins, and the honest forward fold agrees with the reversal.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-08-02",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Your MMM Is Reporting the Wrong Cross-Validation",
+          "datePublished": "2026-08-02",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Your MMM Is Reporting the Wrong Cross-Validation",
+              "item": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
 </head>
 <body>
     <!-- Navigation injected by components.js -->
