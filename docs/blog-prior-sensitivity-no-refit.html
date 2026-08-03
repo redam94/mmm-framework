@@ -154,7 +154,7 @@
                 <time datetime="2026-08-02">August 2, 2026</time><span aria-hidden="true">&middot;</span>
                 <span class="post-tag">Bayesian workflow</span>
             </p>
-            <p class="lead">Every MMM deliverable carries a paragraph about priors, and it says the team tried a tighter media prior and a looser one and that nothing moved much. Writing it takes ninety seconds. The draws from the fit you already ran contain a far more demanding version of that check, and extracting it costs about three milliseconds.</p>
+            <p class="lead">Every MMM deliverable carries a paragraph about priors. It says the team tried a tighter media prior and a looser one, and nothing moved much. Writing it takes ninety seconds. The draws from the fit you already ran contain a far more demanding version of that check, and extracting it costs about three milliseconds.</p>
 
             <h2 id="already-there">What One Fit Already Contains</h2>
 
@@ -181,9 +181,11 @@
                 </tbody>
             </table>
 
-            <p>Across all thirty-two comparisons (eight values of \( \alpha \), four channels) the worst disagreement between the reweighted estimate and its refit was 1.39% of the refit's value, or 0.071 posterior standard deviations. Monte Carlo error on the reference fit's own channel means runs from 0.20% to 0.39%, so most of that gap is two chains landing in slightly different places rather than the method going wrong. The eight refits cost 44.9 seconds of sampling. The eight reweights cost 2.59 milliseconds, on top of a 0.65-second pass to evaluate the log prior and log likelihood at the existing draws.</p>
+            <p>Across all thirty-two comparisons (eight values of \( \alpha \), four channels) the worst disagreement between the reweighted estimate and its refit was 1.39% of the refit's value, or 0.071 posterior standard deviations. Monte Carlo error on the reference fit's own channel means runs from 0.20% to 0.39%, so most of that gap is two chains landing in slightly different places rather than the method going wrong.</p>
 
-            <p>Read the direction, not only the size. Strengthening the prior pulls TV's credited contribution down by roughly a thousand units of KPI across that range, which is the same mechanism the confounding post described from the other side: on this world the media prior is quietly pushing media estimates down, and the back-door path is pushing them up. Here the pull is a number rather than an argument.</p>
+            <p>The eight refits cost 44.9 seconds of sampling. The eight reweights cost 2.59 milliseconds, on top of a 0.65-second pass to evaluate the log prior and log likelihood at the existing draws.</p>
+
+            <p>Beyond the size, the direction carries its own reading. Strengthening the prior pulls TV's credited contribution down by roughly a thousand units of KPI across that range, which is the same mechanism the confounding post described from the other side: on this world the media prior is quietly pushing media estimates down, and the back-door path is pushing them up. Here the pull is a number rather than an argument.</p>
 
             <div class="warning">
                 <h4>&#9888;&#65039; The reweighting tells you when it has failed, and you have to look</h4>
@@ -304,7 +306,7 @@ def power_scale(alpha, quantity):
 
             <p>Per channel it gets worse. Search moves 5.1 units across the five axis points and 50.1 across the rectangle, so the conventional sweep reported a tenth of the sensitivity that a joint search over the same hyperparameters exposes. I refit at both corners to confirm the reweighting was not inventing it. At \( (\mu = 1.0,\, \sigma = 1.5) \) the largest per-channel disagreement was 0.58%, and at \( (\mu = 2.0,\, \sigma = 0.6) \) it was 1.15%.</p>
 
-            <p>Honesty about the size of this: these are small moves. Search's fifty units sit against a 90% credible interval 2,192 units wide. I chose a defensible neighbourhood and the answer inside it is genuinely stable, which is a real finding about this fit and worth reporting as one. My claim is about the procedure. A five-point axis-wise sweep understated the movement inside its own neighbourhood by a factor of ten on one channel, and the only reason I know that is that scanning fifteen hundred alternatives cost a quarter of one refit.</p>
+            <p>These are small moves. Search's fifty units sit against a 90% credible interval 2,192 units wide. I chose a defensible neighbourhood and the answer inside it is stable, which is a real finding about this fit and worth reporting as one. My claim is about the procedure. A five-point axis-wise sweep understated the movement inside its own neighbourhood by a factor of ten on one channel, and the only reason I know that is that scanning fifteen hundred alternatives cost a quarter of one refit.</p>
 
             <h2 id="limits">What This Does Not Establish</h2>
 
@@ -312,7 +314,7 @@ def power_scale(alpha, quantity):
 
             <p>Somebody still has to pick the neighbourhood. My rectangle was mine, and a different analyst's rectangle would produce a different worst case. The global method removes the search but not the specification.</p>
 
-            <p>None of this touches confounding. The back-door path on this world is open and the fit is badly wrong because of it, crediting Search with 5,126 against a planted truth of 3,654, and a prior sensitivity analysis reports how much of a wrong answer came from the prior rather than making it right. <a href="blog-prior-was-doing-more.html">The prior post</a> made the stronger version of that argument: a prior tight enough to offset a back-door path is also tight enough to override real evidence, and the route to closing the path is an experiment.</p>
+            <p>None of this touches confounding. The back-door path on this world is open, and the fit is badly wrong because of it: it credits Search with 5,126 against a planted truth of 3,654. A prior sensitivity analysis reports how much of that wrong answer came from the prior. It does not make the answer right. <a href="blog-prior-was-doing-more.html">The prior post</a> made the stronger version of that argument: a prior tight enough to offset a back-door path is also tight enough to override real evidence, and the route to closing the path is an experiment.</p>
 
             <p>And a low \( \hat{k} \) is necessary rather than sufficient. It certifies that the weights have a finite-variance tail, not that the perturbed posterior is unimodal or that the sampler explored it in the first place. If the reference fit had the pathologies in <a href="blog-when-sampling-fails.html">the sampling diagnostics post</a>, reweighting inherits every one of them and reports a clean \( \hat{k} \) while doing it.</p>
 
@@ -322,7 +324,7 @@ def power_scale(alpha, quantity):
 
             <p>Nothing in this framework computes any of it. The closest thing is <code>tests/test_continuous_learning.py:978</code>, a <code>@pytest.mark.slow</code> audit that fits the bandit model twice at two values of one prior scale and asserts the posterior spread grows. That test is correct and it costs two fits to interrogate one hyperparameter. The 1,517-cell sweep above cost 1.42 seconds and no fits at all.</p>
 
-            <p>A <code>diagnostics/prior_sensitivity.py</code> sitting beside <code>learning.py</code> starts with one table: per-parameter elasticity on both axes, prior and likelihood, with \( \hat{k} \) and weight ESS beside every row so a reader can see which cells to distrust. Then the block decomposition, keyed to a named quantity rather than to a raw coefficient, because what anyone asks an MMM about is a channel's contribution or its ROI. Last, a neighbourhood scan that takes hyperparameter ranges, evaluates the grid, and refuses to report any cell where \( \hat{k} \) exceeds 0.7, printing the refit command instead.</p>
+            <p>A <code>diagnostics/prior_sensitivity.py</code> sitting beside <code>learning.py</code> starts with one table: per-parameter elasticity on both axes, prior and likelihood, with \( \hat{k} \) and weight ESS beside every row so a reader can see which cells to distrust. The block decomposition comes next, keyed to a named quantity rather than to a raw coefficient, because what anyone asks an MMM about is a channel's contribution or its ROI. Then the neighbourhood scan, which takes hyperparameter ranges and evaluates the grid. Where \( \hat{k} \) exceeds 0.7 it refuses to report the cell and prints the refit command for it instead.</p>
 
             <p>Reporting is the part that changes what a client sees. <a href="blog-holdout-error-mmm.html">The acceptance gate</a> demands an evidence tier on every headline number, and prior-dominated is one of the tiers it can assign. Contraction cannot assign it, for the reason the middle of this post measures. Prior elasticity against a stated threshold can, and it comes with a sentence a client can act on: strengthening or flattening your assumptions by a factor of two moves this channel's credited contribution by a third of its reported interval, and here is which assumption did it.</p>
 

@@ -155,7 +155,7 @@
                 <time datetime="2026-08-02">August 2, 2026</time><span aria-hidden="true">&middot;</span>
                 <span class="post-tag">Bayesian workflow</span>
             </p>
-            <p class="lead">A fitted model tells you how many parameters it has. A second number, available from the same fit for the price of one extra compiled Hessian, tells you how many of them the data determines. Put two coefficients on the same regressor and the first number stays at two while the second comes back 1.000.</p>
+            <p class="lead">A fitted model tells you how many parameters it has. A second number tells you how many of them the data determines, and it comes from the same fit for the price of one extra compiled Hessian. Put two coefficients on the same regressor and the first number stays at two while the second comes back 1.000.</p>
 
             <h2 id="split">Curvature Has Two Owners</h2>
 
@@ -197,7 +197,7 @@
 
             <h2 id="units">Eigenvalues in Whatever Units You Happened to Pick</h2>
 
-            <p>Before any of that means anything, the curvature has to be put on a scale that does not depend on your data dictionary. Raw Hessian eigenvalues are not invariant to rescaling a parameter, so on a real MMM they largely rank parameters by whether spend was recorded in dollars or thousands of dollars.</p>
+            <p>Before any of that means anything, the curvature has to be put on a scale that does not depend on your data dictionary. Raw Hessian eigenvalues are not invariant to rescaling a parameter, so on a real MMM they rank parameters by whether spend was recorded in dollars or in thousands of dollars.</p>
 
             <p>The demonstration takes four lines. Take the two-coefficient model above, multiply the regressor by 1000, and widen that coefficient's prior by the same factor so the model is the same model in different units. The raw spectrum at the mode moves from \( \{18{,}423,\ 20{,}059\} \), a ratio of 1.089, to \( \{2.0 \times 10^{4},\ 1.8 \times 10^{10}\} \), a ratio of 924,000. Read raw eigenvalues and you have just discovered a catastrophic flat direction in a model that did not change.</p>
 
@@ -208,15 +208,15 @@
                 <p>\( D \) is a positive diagonal matrix, so \( D^{-1/2} H D^{-1/2} \) is a congruence transformation of \( H \). By Sylvester's law of inertia, congruence preserves the number of positive, negative and zero eigenvalues. A negative eigenvalue after scaling is therefore still an unambiguous negative eigenvalue before it, which is what lets the same decomposition carry both the ridge test (small positive eigenvalue) and the saddle test (any negative one) without a second matrix.</p>
             </div>
 
-            <p>Belsley's conventional threshold on the condition index \( \sqrt{\lambda_{\max} / \lambda_i} \) is 30. The shared-regressor model scores 18,548, which is not a borderline call. Its smallest scaled eigenvalue is 5.8e-9, and the direction carrying it loads on the two coefficients at \( (-0.707, +0.707) \): the difference of the two coefficients, exactly as constructed.</p>
+            <p>Belsley's conventional threshold on the condition index \( \sqrt{\lambda_{\max} / \lambda_i} \) is 30. The shared-regressor model scores 18,548. Nothing about that is a borderline call. Its smallest scaled eigenvalue is 5.8e-9, and the direction carrying it loads on the two coefficients at \( (-0.707, +0.707) \): the difference of the two coefficients, exactly as constructed.</p>
 
             <h2 id="third-case">A Parameter Determined by Nothing in the Data</h2>
 
-            <p>Two of the four things this decomposition separates are already familiar. A ridge is a parameter combination that trades off, and it shows up as a small scaled eigenvalue with named loadings telling you which combination. An uninformed parameter has near-zero curvature of its own, nothing trades off against it, and it is what sends an optimizer walking out to the edge of a bounded parameter's support until a compiled Beta density divides by exactly zero.</p>
+            <p>Two of the four things this decomposition separates are already familiar. A ridge is a parameter combination that trades off. It shows up as a small scaled eigenvalue, and the loadings on that eigenvector name which parameters are trading. An uninformed parameter has near-zero curvature of its own, nothing trades off against it, and it is what sends an optimizer walking out to the edge of a bounded parameter's support until a compiled Beta density divides by exactly zero.</p>
 
             <p>The third case is the one that gets published.</p>
 
-            <p>Row three of the table is a two-parameter model where a <code>Beta(1, 1)</code> parameter called <code>alpha</code> enters the mean multiplied by zero. The likelihood is completely silent about it. Its posterior is not flat, because the Beta prior curves it perfectly well. It is nowhere near a boundary, because the prior holds it in the middle. The ridge test finds nothing, the uninformed test finds nothing, and the report still comes back <code>weak</code>, because the attribution sees that the likelihood contributes 0% of <code>alpha</code>'s curvature.</p>
+            <p>Row three of the table is a two-parameter model where a <code>Beta(1, 1)</code> parameter called <code>alpha</code> enters the mean multiplied by zero. The likelihood is completely silent about it. Its posterior is not flat, because the Beta prior curves it. It is nowhere near a boundary, because the prior holds it in the middle. The ridge test finds nothing, the uninformed test finds nothing, and the report still comes back <code>weak</code>, because the attribution sees that the likelihood contributes 0% of <code>alpha</code>'s curvature.</p>
 
             <div class="warning">
                 <h4>&#9888;&#65039; The Laplace covariance is fine, and one of its intervals is the prior</h4>
@@ -229,7 +229,7 @@
 
             <p>There is an obvious way to make this per-parameter instead of per-direction: take the ratio of diagonal entries, \( H_{\text{lik}}[i,i] / H_{\text{post}}[i,i] \), and call it the share of parameter \( i \)'s curvature the data supplied. That ratio is real and the module reports it. It can only be read in one direction.</p>
 
-            <p>On the shared-regressor model, both coefficients score 0.99999999 on the diagonal. The likelihood does curve in each coordinate individually, so each parameter looks like a triumph of measurement. Computed along the flat direction instead, the eigenvector version returns an informed fraction of 0.0000. Only the sum is measured, and the diagonal has no way to see that, because seeing it requires looking at a combination of two coordinates at once.</p>
+            <p>On the shared-regressor model, both coefficients score 0.99999999 on the diagonal. The likelihood does curve in each coordinate individually, so each parameter looks like a triumph of measurement. Compute it along the flat direction instead and the eigenvector version returns an informed fraction of 0.0000. Only the sum is measured, and the diagonal has no way to see that, because seeing it requires looking at a combination of two coordinates at once.</p>
 
             <p>So a small diagonal fraction is trustworthy and a large one is worthless. The asymmetry has a reason. Likelihood curvature is positive semi-definite, and a zero on the diagonal of a PSD matrix forces its entire row to zero, so a near-zero share really does mean the likelihood is flat in that coordinate. A near-one share means only that it curves there, which is compatible with the parameter being unidentified in company. <code>tests/test_identification_diagnostics.py</code> pins both halves, and the name of the test that pins the second is <code>test_the_per_parameter_fraction_is_not_used_to_claim_identification</code>.</p>
 
@@ -258,7 +258,7 @@
                 </tbody>
             </table>
 
-            <p>The verdict rule checks <code>shift_z</code> before it checks width, and that ordering carries the module's sharpest idea. A parameter whose posterior moved at least one prior standard deviation without narrowing is labelled <code>relocated</code> rather than <code>weak</code>, because the evidence dominated the location: the prior was tight in the wrong place.</p>
+            <p>The verdict rule checks <code>shift_z</code> before it checks width, and that ordering carries the module's sharpest idea. A parameter whose posterior moved at least one prior standard deviation without narrowing is labelled <code>relocated</code> rather than <code>weak</code>, because the evidence dominated the location. Its prior was tight in the wrong place.</p>
 
             <p>The two verdicts are easy to confuse and easy to separate. Both of these use the same <code>Normal(0, 0.10)</code> prior on a standardized coefficient, and differ only in what the data says.</p>
 
@@ -276,10 +276,10 @@
 
             <div class="note">
                 <h4>Informativeness, not importance</h4>
-                <p>A high contraction means the data was informative about the parameter, which includes confidently pinning it near zero. It says nothing about effect size or sign. Contraction tells you the data spoke; the posterior location tells you what it said. Both belong in the same sentence of a readout, and <code>reporting/evidence.py</code> puts them there, labelling anything under a contraction of 0.10 as <code>prior-dominated</code> on the client-facing chip.</p>
+                <p>A high contraction means the data was informative about the parameter, which includes confidently pinning it near zero. It says nothing about effect size or sign. Contraction tells you the data spoke; the posterior location tells you what it said. Both belong in the same sentence of a readout. <code>reporting/evidence.py</code> puts them there, and anything under a contraction of 0.10 gets the <code>prior-dominated</code> chip on the client-facing report.</p>
             </div>
 
-            <p>This is also the check that closes a hole left by simulation-based calibration. As <a href="blog-prior-predictive-sbc.html">the SBC post</a> covers, a broken computation whose posterior simply stays at the prior sails through parameter-by-parameter rank uniformity, because prior draws ranked against prior draws are uniform by construction. Contraction near zero is precisely that pathology viewed from the other side. The two checks are complementary, and running SBC without one leaves a known blind spot open. Neither is a conclusion. Both are workflow instruments in the sense Gelman, Vehtari, McElreath and their co-authors give the term, things you run around a fit rather than results you read out of one.</p>
+            <p>This is also the check that closes a hole left by simulation-based calibration. As <a href="blog-prior-predictive-sbc.html">the SBC post</a> covers, a broken computation whose posterior simply stays at the prior sails through parameter-by-parameter rank uniformity, because prior draws ranked against prior draws are uniform by construction. Contraction near zero is precisely that pathology viewed from the other side. The two checks are complementary, and running SBC without one leaves a known blind spot open. Both are workflow instruments in the sense Gelman, Vehtari, McElreath and their co-authors give the term, things you run around a fit rather than results you read out of one.</p>
 
             <h2 id="before">Before Any Fitting, Where Does the Prior Put the Elbow?</h2>
 
@@ -319,7 +319,7 @@ report = results.diagnostics["identification"]   # how many parameters did the d
 
             <h2 id="limits">What the Number Cannot See</h2>
 
-            <p>All of the curvature work is local. It is the shape of the log density at one point, and it answers what this fit resolves here. It cannot see a second mode across the parameter space, a better one further out, or a likelihood that is flat somewhere you did not land. For global questions the module points at NUTS, SBC and coverage, which is the right referral.</p>
+            <p>All of the curvature work is local. It is the shape of the log density at one point, and it answers what this fit resolves here. It cannot see a second mode across the parameter space, a better one further out, or a likelihood that is flat somewhere you did not land. For global questions the module points at NUTS, SBC and coverage. That is the right referral.</p>
 
             <p>Three narrower caveats matter in practice, and the code states all of them.</p>
 
@@ -337,17 +337,15 @@ report = results.diagnostics["identification"]   # how many parameters did the d
 
             <p>One module in the repo does not yet hold that line. <code>validation/channel_diagnostics.py</code> wraps its ArviZ summary call in a bare <code>except</code>, and on any failure returns every channel as <code>rhat=1.0, ess_bulk=1000.0, converged=True</code>. A check that reports a pass when it could not run is worse than one that raises, because the pass is indistinguishable from a real one downstream. The same class matches parameters to channels by substring, so a channel named <code>tv</code> claims the R-hat of <code>tv_brand</code>, and a channel matching no parameters at all inherits the optimistic seeds and reports as converged.</p>
 
-            <p>The fix is a small one and the pattern already exists twice in the same repo: a three-valued verdict, with <code>None</code> surfaced as &ldquo;could not assess&rdquo; rather than folded into &ldquo;fine.&rdquo; Everything else in that file is the useful part and deserves the upgrade. Its <code>detect_collinear_clusters</code> runs union-find over the channel correlation graph and returns connected components, which is the right unit of identification in a collinear MMM: the honest statement about two channels that always move together is a statement about the pair.</p>
+            <p>The fix is a small one and the pattern already exists twice in the same repo: a three-valued verdict, with <code>None</code> surfaced as &ldquo;could not assess&rdquo; rather than folded into &ldquo;fine.&rdquo; Everything else in that file is the useful part and deserves the upgrade. Its <code>detect_collinear_clusters</code> runs union-find over the channel correlation graph and returns connected components, the right unit of identification in a collinear MMM. The honest statement about two channels that always move together is a statement about the pair.</p>
+
+            <p>Give that pair one row. The clustering works on the design matrix and <code>weak_identification_report</code> works on the posterior curvature, and both use the Belsley threshold of 30 on their respective condition numbers. A channel group that trips the first and a flat direction that trips the second are one finding arriving twice whenever the collinearity in the design is what flattened the posterior. One row naming the group and reporting its combined effect beats two warnings and a table of individual numbers nobody should read separately.</p>
 
             <h2 id="next">Where This Goes Next</h2>
-
-            <p>Three things are close enough to build.</p>
 
             <p>Report \( p_{\text{eff}} \) beside the parameter count in every readout that already carries a convergence chip. The number exists on any MAP or Laplace fit run with <code>identification_check=True</code> and it costs one compiled Hessian. Two counts side by side, with a plain sentence saying the second is what the data determines, is something a marketing director can act on in a way that a condition index is not.</p>
 
             <p>Close the loop with the prior-widening refit that <a href="blog-prior-was-doing-more.html">the confounding post</a> asked for. That post wanted a measure of the prior's effect on the point estimate rather than on the width, and noted that contraction only covers the width. Half of it is already here: <code>shift_z</code> measures location movement from the draws, and <code>relocated</code> is the verdict when location moved and width did not. The other half is the sensitivity curve, refitting with the prior progressively loosened and watching where the coefficient walks.</p>
-
-            <p>Give the cluster its own row. <code>detect_collinear_clusters</code> works on the design matrix and <code>weak_identification_report</code> works on the posterior curvature, and both use the Belsley threshold of 30 on their respective condition numbers. A channel group that trips the first and a flat direction that trips the second are frequently the same finding arriving twice. One row naming the group and reporting its combined effect beats two warnings and a table of individual numbers nobody should read separately.</p>
 
             <div class="takeaway-box">
                 <h4>Takeaways</h4>

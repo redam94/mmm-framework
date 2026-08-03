@@ -302,3 +302,30 @@ def test_index_card_count_matches_essay_count() -> None:
     cards = set(re.findall(r'<a class="post-card" href="(blog-[^"]+)"', body))
     essays = {p.name for p in BLOG_PAGES if p.name != "blog.html"}
     assert cards == essays, f"index missing {essays - cards}, stale {cards - essays}"
+
+
+def test_announced_triple_is_advisory_not_gated(tmp_path: Path) -> None:
+    """ "Three things follow" then three parallel items is the banned construction, explicitly.
+
+    It was 11 of 72 findings in the 2026-08-02 conformance audit, the single most common drift.
+    The general case needs a human, so this is advisory: a true count stated plainly is fine, and
+    only the author knows whether the shape or the subject chose the number.
+    """
+    doc = MINIMAL.replace(
+        "</main>",
+        "<p>Three things follow from that. The first one. The second one. And the third.</p>\n</main>",
+    )
+    page = _page(tmp_path, doc)
+    errors, _ = cbs.check_invariants(page)
+    assert not errors, "an announced triple must not fail the build"
+    _, warnings = cbs.check_invariants(page, advisory=True)
+    assert any("announced triple" in w for w in warnings), warnings
+
+
+def test_announced_triple_does_not_fire_on_ordinary_prose(tmp_path: Path) -> None:
+    doc = MINIMAL.replace(
+        "</main>",
+        "<p>Two mechanisms point the same way, and the second is the one people miss.</p>\n</main>",
+    )
+    _, warnings = cbs.check_invariants(_page(tmp_path, doc), advisory=True)
+    assert not any("announced triple" in w for w in warnings), warnings

@@ -159,9 +159,9 @@
 
             <h2 id="no-test">The Assumption With No Test</h2>
 
-            <p>Identification in an observational MMM rests on there being no unmeasured common cause of spend and the KPI. For media the candidate is always the same, and it has a name in this framework's own documentation: unobserved demand. A planner who raises budget into an expected upswing has made spend a function of something that also drives sales. Adjusting for what you measured does not remove what you did not.</p>
+            <p>Identification in an observational MMM rests on there being no unmeasured common cause of spend and the KPI, and for media it is always the same candidate, the one this framework's documentation calls unobserved demand. A planner who raises budget into an expected upswing has made spend a function of something that also drives sales. Adjusting for what you measured does not remove what you did not.</p>
 
-            <p>Goodness of fit cannot see this. A confounded model and an unconfounded one can produce the same residuals, the same posterior width, and posterior predictive checks that both pass. The <a href="blog-holdout-error-mmm.html">holdout post</a> makes the sharper version of that argument: predictive score has near-zero resolving power over the causal specifications you actually want to choose between. So the question has to change. Rather than asking whether the assumption holds, ask what it would take to break the decision that rests on it.</p>
+            <p>Goodness of fit cannot see this. A confounded model and an unconfounded one can produce the same residuals and the same posterior width, and both pass a posterior predictive check. The <a href="blog-holdout-error-mmm.html">holdout post</a> makes the sharper version of that argument: predictive score has near-zero resolving power over the causal specifications you actually want to choose between. So the question has to change. Rather than asking whether the assumption holds, ask what it would take to break the decision that rests on it.</p>
 
             <div class="note">
                 <h4>Where this sits next to the other posts in the series</h4>
@@ -214,13 +214,13 @@ evalue(1.32, measure="roi").available        # False</code></pre>
 
             <h2 id="make-it-a-parameter">Make It a Parameter</h2>
 
-            <p>The Bayesian tradition asks a different question. Rather than solving for the confounder strength that would overturn the result, it makes the bias itself a parameter, puts a prior on it, and reports what happens to the conclusion. Greenland (2005) named the object: a bias parameter measures the discrepancy between the target and the quantity the data actually identify. His multiple-bias modelling paper is blunt about the consequence, writing that such parameters are typically not identified by the analysis data and that results then depend completely on the priors placed on them.</p>
+            <p>The Bayesian tradition asks a different question. Rather than solving for the confounder strength that would overturn the result, it makes the bias itself a parameter and puts a prior on it, then reports what that does to the conclusion. Greenland (2005) named the object: a bias parameter measures the discrepancy between the target and the quantity the data actually identify. His multiple-bias modelling paper is blunt about the consequence, writing that such parameters are typically not identified by the analysis data and that results then depend completely on the priors placed on them.</p>
 
             <p>The PyMC Labs treatment that this framework follows is the current, readable version of the idea. Nathaniel Forde's notebook takes a checkout experiment whose randomization leaked, writes the observed effect as a causal part plus a bias part, and sweeps the prior on the bias:</p>
 
             $$ \hat{d} \;=\; \tau + \beta, \qquad \beta \sim \mathcal{N}(\mu, \sigma^2). $$
 
-            <p>Three commitments follow from that one line. A direction, \( \mu \), which for demand-chasing media is positive because the observed effect is the overstated one. A width, \( \sigma \), for how uncertain you are about the size. And a decision reference, the value the estimate has to clear to matter.</p>
+            <p>That one line asks you for two numbers the data cannot supply. A direction, \( \mu \), which for demand-chasing media is positive because the observed effect is the overstated one. A width, \( \sigma \), for how uncertain you are about the size. The value the estimate has to clear to matter is the third input, and the decision that prompted the model already supplies it.</p>
 
             <p>In this framework the arithmetic is closed form, which matters more than it sounds. The de-biased posterior is a Gaussian mixture over draws that already exist, so</p>
 
@@ -236,7 +236,7 @@ evalue(1.32, measure="roi").available        # False</code></pre>
 
             <div class="interactive-box">
                 <h4>Figure 1. Two commitments, two rates of collapse</h4>
-                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The same posterior under the two things an analyst can commit to. One curve widens an unsigned bias, saying only that confounding of some size could be present. The other commits to a direction, holding the spread narrow at 5% and moving the whole posterior down. Drag the slider to change the confidence you demand. The tipping point is where each curve crosses it.</p>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">The same posterior under the two things an analyst can commit to. One curve widens an unsigned bias. It says only that confounding of some size could be present, without committing to which way it runs. The other commits to a direction and holds the spread narrow at 5%. Drag the slider to change the confidence you demand. The tipping point for each commitment is the bias where its curve crosses that line.</p>
 
                 <div class="control-row">
                     <label for="f1Thr">Decision threshold</label>
@@ -253,7 +253,7 @@ evalue(1.32, measure="roi").available        # False</code></pre>
                     <div class="stat"><span class="lbl">Verdict at that benchmark</span><span class="val" id="f1Verdict">&hellip;</span></div>
                 </div>
 
-                <p class="chart-caption" style="margin-bottom:0;">Committing to a direction costs more than twice as much conclusion as committing to a width of the same size, and the gap widens as you demand more confidence. At the default 90% threshold the unsigned curve tips at 14% and the signed one at 6%, and the dashed line marks a benchmarked confounder as strong as Price at 9%. Both curves are the closed-form mixture the framework computes, over a fixed 128-point quantile grid of the posterior described above, so the numbers here are the numbers in the text.</p>
+                <p class="chart-caption" style="margin-bottom:0;">Committing to a direction costs more than twice as much conclusion as committing to a width of the same size, and the gap widens as you demand more confidence. At the default 90% threshold the unsigned curve tips at 14%, the signed one at 6%. The dashed line marks a benchmarked confounder as strong as Price at 9%. Both curves are the closed-form mixture the framework computes, over a fixed 128-point quantile grid of the posterior described above, so the numbers here are the numbers in the text.</p>
             </div>
 
             <h2 id="never-settles">The Number That Never Settles</h2>
@@ -271,7 +271,7 @@ evalue(1.32, measure="roi").available        # False</code></pre>
                 <p style="margin-bottom:0;">"For a non-identified parameter the posterior is just the prior" is the version people repeat, and Gustafson rebuts it in the same paragraph that establishes the result. The equality above is <em>conditional</em> on \( \phi_I \). Marginally there is still indirect learning whenever the prior makes the two parts dependent, so the marginal posterior for the bias generally does move. What does not happen is concentration: it never sharpens toward a point the way an identified parameter does.</p>
             </div>
 
-            <p>This is the honest reason a sensitivity analysis is a reporting device rather than an estimator. It converts an unfalsifiable assumption into a statement about which conclusions survive which commitments, and it leaves the commitments visible.</p>
+            <p>This is the honest reason a sensitivity analysis is a reporting device. It estimates nothing. An unfalsifiable assumption becomes a statement about which conclusions survive which commitments, and the commitments stay visible.</p>
 
             <h2 id="benchmark">A Tipping Point Needs a Benchmark</h2>
 
@@ -287,7 +287,7 @@ evalue(1.32, measure="roi").available        # False</code></pre>
 
             <h2 id="mirror">Two Caveats That Point the Same Way</h2>
 
-            <p>Now the part that surprised me when the two devices were put in the same codebase.</p>
+            <p>Both devices went into the same codebase, and they turned out to fail in the same direction for opposite reasons.</p>
 
             <p>The robustness value is computed from \( |t| = |\text{mean}| / \text{sd} \). A tighter prior shrinks the posterior standard deviation, which raises \( t \), which raises the robustness value. Tightening a prior therefore makes a channel look more robust to confounding, on a scale where nothing about confounding has changed.</p>
 
@@ -301,7 +301,9 @@ evalue(1.32, measure="roi").available        # False</code></pre>
 
             <p>Sensitivity analysis never detects confounding. It reports the exposure and leaves the judgement where it belongs.</p>
 
-            <p>Three limits are worth stating before anyone quotes a tipping point in a deck. The verdict vocabulary here tops out at <em>resilient</em> rather than <em>robust</em>, and the difference is deliberate: the claim is only that a conclusion survived the range that was actually scanned, and every result carries the widest bias it was tested against. A benchmark is an argument about plausibility, not a bound on the truth, since the real confounder is under no obligation to resemble the covariates you happened to collect. And the closed form assumes the bias is independent of the causal part, which is exactly right when the input draws come from a flat-prior posterior of \( \tau + \beta \), and only approximately right for an MMM posterior carrying an informative ROI prior. The effective prior on \( \tau \) is then the media prior convolved with the bias prior, which is coherent and undeclared. To handle it, the report asks what the same commitment implied before any data arrived, and a conclusion whose prior already cleared the threshold gets said out loud.</p>
+            <p>Two of the limits are about what the words mean, and they matter most when a tipping point gets quoted in a deck. The verdict vocabulary here tops out at <em>resilient</em> rather than <em>robust</em>, and the difference is deliberate: the claim is only that a conclusion survived the range that was actually scanned, and every result carries the widest bias it was tested against. A benchmark is an argument about plausibility, not a bound on the truth, since the real confounder is under no obligation to resemble the covariates you happened to collect.</p>
+
+            <p>The last limit is arithmetic. Independence between the bias and the causal part is an assumption baked into the closed form. That is exactly right when the input draws come from a flat-prior posterior of \( \tau + \beta \), and only approximately right for an MMM posterior carrying an informative ROI prior, where the effective prior on \( \tau \) becomes the media prior convolved with the bias prior. Coherent, and undeclared. So the report asks what the same commitment implied before any data arrived, and says so out loud when a conclusion's prior had already cleared the threshold.</p>
 
             <p>What would improve this most is a bias prior that comes from a measurement rather than a ladder of named guesses. Placebo spreads from matched-market designs already give one for experiments, where the excess of realized over analytic variance is a defensible width. Doing the same for observational media would mean finding a period where spend moved for a reason unrelated to demand, and treating the gap as the measurement. That is a harder search than it sounds, and it is the right next problem.</p>
 

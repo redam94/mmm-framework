@@ -164,7 +164,7 @@
                 <p><code>MeanCheck.compute</code> (<code>validation/posterior_predictive.py:71-76</code>): &ldquo;One-sided Bayesian p-value: P(T(y_rep) &gt;= T(y_obs)). Values near 0.5 indicate the observed statistic is central; either tail is a misfit.&rdquo; The pass rule on the next line is <code>significance_level &lt; p_value &lt; (1 - significance_level)</code>, so a check fails only when the p-value falls at or outside 0.05 and 0.95. Every number in this post uses that rule, which puts the nominal rejection rate at 10%.</p>
             </div>
 
-            <p>Now consider what the mean check is asking. Fit a linear model with an intercept, and the fitted values average to the observed average by construction. The replicated series differ from that fitted mean only by simulated noise, centered on zero with a standard error of \( \sigma/\sqrt{n} \). So the observed mean sits in the dead center of the replicated distribution, every time, on any dataset, under any specification carrying a constant. The p-value does not merely tend toward 0.5. It concentrates there, with a spread far tighter than the check's own rejection thresholds can reach.</p>
+            <p>Fit a linear model with an intercept, and the fitted values average to the observed average by construction. The replicated series differ from that fitted mean only by simulated noise, centered on zero with a standard error of \( \sigma/\sqrt{n} \). So the observed mean sits in the dead center of the replicated distribution, every time, on any dataset, under any specification carrying a constant. The p-value concentrates at 0.5. Its spread is far tighter than the check's own rejection thresholds can reach.</p>
 
             <p>The same holds for the variance, since a model with a free residual scale sets that scale to whatever variation is left over. Two of the five checks in the default suite are structurally incapable of returning a failure, and they are the two an analyst reads first.</p>
 
@@ -210,7 +210,7 @@
 
             <p>Four of the ten cannot reject a correctly specified model, which is the good news, and the same four cannot reject anything else either. Three of them are the absorbable quantities the orthogonality argument predicts: the mean, the residual correlation with search adstock, which is a column of the design, and the mean residual in dark weeks, which the intercept and the brand coefficient jointly match. The fourth is the demand index, in the fitted design here and absorbed for the same reason. Six survivors run between 3.2% and 7.0% against a nominal 10%, so every one of them is conservative.</p>
 
-            <h2 id="severity">Ten Checks, Four Faults, One Planted Truth</h2>
+            <h2 id="severity">Ten Checks, Four Faults</h2>
             <p>Calibration tells you the false-alarm rate. Severity is the other half, and Gelman and colleagues are blunt about how little general guidance exists for it. The workflow paper behind their 2026 book says outright that &ldquo;there is no general way to choose which checks one should perform on a model,&rdquo; and points at Mayo&rsquo;s severe-test criterion for the shape of an answer: what you want are &ldquo;checks that are likely to fail if the model would give misleading answers to the questions we care most about&rdquo; (&sect;6.1). Likely to fail is a probability. Estimate it against a given fault and you have a number to put beside a check instead of a hope.</p>
 
             <p>The world is a three-year weekly panel. A brand channel runs in flights and is dark in 56 of the 156 weeks. A search channel has its budget set against a category demand index, which also raises sales directly, at a correlation of 0.944 between spend and demand. Media contributes 9.5% of the KPI in truth. Everything is linear in fixed transforms, so the estimating model is a Bayesian linear regression under a reference prior with an exact posterior, no sampler and no prior doing hidden work. Four faults, each one a competent analyst could ship: drop the demand index, assume no carryover on brand when the truth carries at 0.5, add a placebo channel correlated with brand at 0.8 and no true effect, or replace the two-harmonic seasonal basis with eight harmonics and a cubic trend.</p>
@@ -229,7 +229,7 @@
                 </tbody>
             </table>
 
-            <p>Median over 400 panels. Two of the four faults are expensive. Dropping the demand index triples the search contribution and doubles working media, taking it from 9.5% of the KPI to 18.6%, while costing 2.7 points of in-sample R&sup2;. Assuming away carryover halves the brand estimate. The other two barely move the answer in this world, which matters for reading the next table: an invisible fault that costs nothing is not a scandal.</p>
+            <p>Median over 400 panels. Two of the four faults are expensive. Dropping the demand index costs 2.7 points of in-sample R&sup2;. It triples the search contribution and doubles working media, from 9.5% of the KPI to 18.6%. Assuming away carryover halves the brand estimate. The other two barely move the answer in this world. That matters at the next table, where an invisible fault that costs nothing is not a scandal.</p>
 
             <table>
                 <thead>
@@ -291,7 +291,7 @@
 
             <p>There is a practical rule buried in that table, and it is uncomfortable. Adjusting for a variable and testing against it are competing uses of the same column. Put the demand index in the design and the residual is orthogonal to it, so no residual check can ask whether it belonged there. Leave it out while the other columns explain little of it, and the check fires on every panel. The fault it flags costs 6%. Leave it out while a channel explains 93% of it, and the estimate moves by a factor of three with the check silent. Same variable in all three, and only the modeling decision changed.</p>
 
-            <p>That points at something a check suite could offer. The information a posterior predictive check needs has to come from outside the fitted columns, so name the outside explicitly.</p>
+            <p>A check suite could hand that trade back to the analyst. The information a posterior predictive check needs has to come from outside the fitted columns, so name the outside explicitly.</p>
 
             <div class="note">
                 <h4>A held-out covariate check, as it would look</h4>
@@ -329,7 +329,7 @@ result = check.compute(y_obs=y, y_rep=y_rep, residuals=r, frame=panel_extras)
 
             <p>A third repair stays out of reach. A discrepancy computed on the decomposition rather than on the KPI would need a replicated quantity to compare the split against, and the only sources of one are a planted truth or an experiment. Both sit outside the posterior predictive machinery.</p>
 
-            <p>The <a href="blog-prior-predictive-sbc.html">prior predictive and calibration post</a> closes by handing the question of whether the model resembles reality to posterior predictive checks on real data. No simulation-based check can do that job, so the handoff is right. It is worth knowing how much of the job the receiving check can do.</p>
+            <p>The <a href="blog-prior-predictive-sbc.html">prior predictive and calibration post</a> closes by handing the question of whether the model resembles reality to posterior predictive checks on real data. No simulation-based check can do that job, so the handoff is right. The receiving check can audit the temporal shape, and nothing about the split.</p>
 
             <div class="takeaway-box">
                 <h4>Takeaways</h4>

@@ -80,6 +80,15 @@ ADVISORY = {
     "throat clearing": r"In today's world|More than ever",
     "rhetorical transition": r"Why does this matter|What does this mean|So what does",
     "participial tail": r", (allowing|making|ensuring|highlighting) [a-z]",
+    # The general default triple needs a human, but the *announced* one does not: a post that
+    # says "Three things follow" and then delivers three parallel items is the banned
+    # construction in its most explicit form, and it was the single most common drift (11 of 72
+    # findings) in the 2026-08-02 conformance audit. A true count stated plainly is fine, so this
+    # is advisory: the author confirms whether the shape or the subject chose the number.
+    "announced triple": (
+        r"\b[Tt]hree (things|reasons|commitments|limits|checks|moves|steps|ways|questions|"
+        r"failures|properties|options|candidates|answers|rules|kinds|sources|separate)\b"
+    ),
     "banned vocab": (
         r"\b(delve|tapestry|realm|underscores?|testament to|pivotal|crucial|seamless|"
         r"leverages?|leveraging|foster|myriad|plethora|holistic|multifaceted|nuanced)\b"
