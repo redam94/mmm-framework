@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Posterior Predictive Check Cannot See What You Adjusted For | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Across 400 planted panels, the mean and variance posterior predictive checks reject zero times, in every world, including one whose search contribution is wrong by a factor of three. A measured account of which test quantities can fail an MMM and which cannot.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-posterior-predictive-severity.html">
+    <meta property="og:title" content="A Posterior Predictive Check Cannot See What You Adjusted For">
+    <meta property="og:description" content="A model cannot fail a check on a quantity its own parameters reproduce. Four hundred planted panels, ten test quantities and four faults, with the rejection rate of each check measured rather than assumed.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-posterior-predictive-severity.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="A Posterior Predictive Check Cannot See What You Adjusted For">
+    <meta name="twitter:description" content="A model cannot fail a check on a quantity its own parameters reproduce. Four hundred planted panels, ten test quantities and four faults, with the rejection rate of each check measured rather than assumed.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework: a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-posterior-predictive-severity.html",
+          "name": "A Posterior Predictive Check Cannot See What You Adjusted For | MMM Framework",
+          "description": "Across 400 planted panels, the mean and variance posterior predictive checks reject zero times, in every world, including one whose search contribution is wrong by a factor of three. A measured account of which test quantities can fail an MMM and which cannot.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-08-03",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-posterior-predictive-severity.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-posterior-predictive-severity.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "A Posterior Predictive Check Cannot See What You Adjusted For",
+          "datePublished": "2026-08-02",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-posterior-predictive-severity.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-posterior-predictive-severity.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "A Posterior Predictive Check Cannot See What You Adjusted For",
+              "item": "https://redam94.github.io/mmm-framework/blog-posterior-predictive-severity.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#absorbed">What a Model Absorbs</a></li>
+                <li><a href="#discrepancy">The Quantity Under Test</a></li>
+                <li><a href="#severity">Ten Checks, Four Faults</a></li>
+                <li><a href="#adjusted">Controls Cost You Checks</a></li>
+                <li><a href="#cross-validated">Leaving a Week Out</a></li>
+                <li><a href="#limits">What This Does Not Establish</a></li>
+                <li><a href="#next">Where This Goes Next</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">A Posterior Predictive Check Cannot See What You Adjusted For</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-08-02">August 2, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Bayesian workflow</span>
+            </p>
+            <p class="lead">The posterior predictive suite that ships in this framework opens with the mean. It draws replicated KPI series from the fitted posterior, compares their means to the observed mean, and returns a Bayesian p-value. Across 400 simulated weekly panels and five model specifications, one of which gets its search contribution wrong by a factor of three, that check rejected zero times. Not rarely. Zero. The variance check did the same. Both results follow from arithmetic. A linear model with an intercept reproduces the sample mean of its own training data, and a model with a free residual scale reproduces the sample variance. A check aimed at a quantity the fit reproduces has already passed before you run it. The principle generalizes past the mean. Residuals are orthogonal to every column of the design, so a check built from the correlation between residuals and a variable you adjusted for is dead on arrival too. What survives is a thin band of test quantities that can see the shape of the fitted mean over time. They see the shape. They never see the split.</p>
+
+            <h2 id="absorbed">What a Model Absorbs, It Cannot Fail</h2>
+            <p>The default check list lives in <code>PPCConfig</code> (<code>validation/config.py:26-38</code>) and reads <code>("mean", "variance", "autocorrelation", "skewness", "extremes")</code>, run at a significance level of 0.05 over 500 replicated datasets. Each entry resolves to a class in <code>validation/posterior_predictive.py:37-263</code>, and every class does the same thing: compute a statistic on the observed series and on each replicated series, then count how often the replicated value lands at or above the observed one. The comment above the first p-value in the file states the convention plainly.</p>
+
+            <div class="note">
+                <h4>Where this lives in the code</h4>
+                <p><code>MeanCheck.compute</code> (<code>validation/posterior_predictive.py:71-76</code>): &ldquo;One-sided Bayesian p-value: P(T(y_rep) &gt;= T(y_obs)). Values near 0.5 indicate the observed statistic is central; either tail is a misfit.&rdquo; The pass rule on the next line is <code>significance_level &lt; p_value &lt; (1 - significance_level)</code>, so a check fails only when the p-value falls at or outside 0.05 and 0.95. Every number in this post uses that rule, which puts the nominal rejection rate at 10%.</p>
+            </div>
+
+            <p>Fit a linear model with an intercept, and the fitted values average to the observed average by construction. The replicated series differ from that fitted mean only by simulated noise, centered on zero with a standard error of \( \sigma/\sqrt{n} \). So the observed mean sits in the dead center of the replicated distribution, every time, on any dataset, under any specification carrying a constant. The p-value concentrates at 0.5. Its spread is far tighter than the check's own rejection thresholds can reach.</p>
+
+            <p>The same holds for the variance, since a model with a free residual scale sets that scale to whatever variation is left over. Two of the five checks in the default suite are structurally incapable of returning a failure, and they are the two an analyst reads first.</p>
+
+            <div class="warning">
+                <h4>&#9888;&#65039; A green mean check is not evidence</h4>
+                <p>Under the correct specification the mean check produced p-values with a standard deviation of 0.025 and the variance check 0.026, against 0.289 for a uniform distribution on the unit interval. Neither rejected on a single one of the 2,000 fits in this post, spanning 400 planted panels and five specifications, one of which doubles working media. A suite that reports these two first teaches the reader that passing means something.</p>
+            </div>
+
+            <p>Absorption is the general rule, and it extends well past the intercept. Write the fitted design as \( X \) and its hat matrix as \( H = X(X'X)^{-1}X' \). The least-squares residual is \( (I - H)y \), which is orthogonal to every column of \( X \) by definition. Any test quantity that reduces to a linear function of the residuals inside the span of \( X \) evaluates to approximately zero on the observed data, no matter how badly the model is misspecified, while the replicated version fluctuates around zero at random. The observed value sits at the center of the replicated distribution and the check passes. That covers the correlation between residuals and any control you included. It comes close on the average residual in weeks a channel went dark, where the fitted columns explain about half of the dark-week indicator and leave the check with almost nothing to read.</p>
+
+            <h2 id="discrepancy">The Quantity Under Test</h2>
+            <p>Gelman, Meng and Stern (1996) drew the distinction that makes the rest of this tractable. A test statistic \( T(y) \) is a function of the data alone. A discrepancy \( T(y, \theta) \) may use the parameters as well, which lets it measure something like a standardized residual that has no meaning until you fix a value of \( \theta \). The Bayesian version compares the realized discrepancy to the replicated one draw by draw, holding \( \theta \) fixed within each comparison.</p>
+
+            <div class="definition">
+                <h4>Definition: the posterior predictive p-value</h4>
+                <p>For a chosen test quantity \( T \), the posterior predictive p-value is</p>
+                $$ p_B \;=\; \Pr\!\left( T(y^{\mathrm{rep}}, \theta) \ge T(y, \theta) \,\middle|\, y \right), $$
+                <p>where the probability runs over the joint posterior of \( \theta \) and the replicated data it generates. Draw \( \theta^{(s)} \) from the posterior, draw \( y^{\mathrm{rep},(s)} \sim p(y \mid \theta^{(s)}) \), and count the share of draws where the replicated quantity is at least the realized one. When \( T \) ignores \( \theta \), this reduces to the test-statistic version the shipped classes implement.</p>
+            </div>
+
+            <p>\( p_B \) is not a frequentist p-value. The data enter twice, once to form the posterior and again to form the observed side of the comparison, so its null distribution is not uniform and its concentration around 0.5 varies by test quantity. That concentration is the property you have to measure before you can read a single value. A check whose p-value only ever occupies the interval from 0.45 to 0.55 will never fire the rule in the file. Modr&aacute;k and colleagues (2023) make the equivalent point for simulation-based calibration: the choice of test quantity determines sensitivity, and a suite of them can be blind to a fault that one well-chosen quantity exposes.</p>
+
+            <p>So I measured it. Below is the null calibration of ten test quantities, computed on 400 panels drawn from a planted world and fitted with the correct specification. The first five mirror the checks that ship. Realized discrepancies built from standardized residuals make up the other five, and they include the three that the earlier post on <a href="blog-holdout-error-mmm.html">holdout error</a> named as the ones worth building.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Test quantity</th><th>mean \( p_B \)</th><th>sd of \( p_B \)</th><th>rejects (nominal 10%)</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>mean of the KPI</td><td>0.500</td><td>0.025</td><td>0.0%</td></tr>
+                    <tr><td>variance of the KPI</td><td>0.551</td><td>0.026</td><td>0.0%</td></tr>
+                    <tr><td>skewness of the KPI</td><td>0.499</td><td>0.263</td><td>6.2%</td></tr>
+                    <tr><td>lag-1 autocorrelation of the KPI</td><td>0.491</td><td>0.237</td><td>3.2%</td></tr>
+                    <tr><td>range of the KPI</td><td>0.510</td><td>0.261</td><td>3.8%</td></tr>
+                    <tr><td>residual skewness</td><td>0.498</td><td>0.268</td><td>6.2%</td></tr>
+                    <tr><td>lag-1 residual autocorrelation</td><td>0.484</td><td>0.272</td><td>7.0%</td></tr>
+                    <tr><td>mean residual in dark weeks</td><td>0.483</td><td>0.159</td><td>0.0%</td></tr>
+                    <tr><td>residual against search adstock</td><td>0.500</td><td>0.025</td><td>0.0%</td></tr>
+                    <tr><td>residual against the demand index</td><td>0.500</td><td>0.023</td><td>0.0%</td></tr>
+                    <tr><td><em>uniform reference</em></td><td><em>0.500</em></td><td><em>0.289</em></td><td><em>10.0%</em></td></tr>
+                </tbody>
+            </table>
+
+            <p>Five of the ten cannot reject a correctly specified model, which is the good news. Four are the absorbable quantities the orthogonality argument predicts: the mean, the variance, the residual correlation with search adstock, which is a column of the design, and the demand index, in the fitted design here and absorbed for the same reason. The fifth is the mean residual in dark weeks, which the design comes close to spanning without containing. Five survivors run between 3.2% and 7.0% against a nominal 10%, so every one of them is conservative.</p>
+
+            <h2 id="severity">Ten Checks, Four Faults</h2>
+            <p>Calibration tells you the false-alarm rate. Severity is the other half, and Gelman and colleagues are blunt about how little general guidance exists for it. The workflow paper behind their 2026 book says outright that &ldquo;there is no general way to choose which checks one should perform on a model,&rdquo; and points at Mayo&rsquo;s severe-test criterion for the shape of an answer: what you want are &ldquo;checks that are likely to fail if the model would give misleading answers to the questions we care most about&rdquo; (&sect;6.1). Likely to fail is a probability. Estimate it against a given fault and you have a number to put beside a check instead of a hope.</p>
+
+            <p>The world is a three-year weekly panel. A brand channel runs in flights and is dark in about 62 of the 156 weeks. A search channel has its budget set against a category demand index, which also raises sales directly, at a correlation of about 0.95 between spend and demand. Media contributes 9.1% of the KPI in truth. Everything is linear in fixed transforms, so the estimating model is a Bayesian linear regression under a reference prior with an exact posterior, no sampler and no prior doing hidden work. Four faults, each one a competent analyst could ship: drop the demand index, assume no carryover on brand when the truth carries at 0.5, add a placebo channel correlated with brand at 0.8 and no true effect, or replace the two-harmonic seasonal basis with eight harmonics and a cubic trend.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Specification</th><th>in-sample R&sup2;</th><th>brand error</th><th>search error</th><th>total media error</th><th>media share of KPI</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>correct</td><td>0.917</td><td>+0.2%</td><td>&minus;2.7%</td><td>&minus;0.6%</td><td>9.1%</td></tr>
+                    <tr><td>omit the demand index</td><td>0.890</td><td>&minus;0.6%</td><td>+207.2%</td><td>+104.5%</td><td>18.6%</td></tr>
+                    <tr><td>no carryover on brand</td><td>0.897</td><td>&minus;51.3%</td><td>+2.0%</td><td>&minus;24.4%</td><td>6.9%</td></tr>
+                    <tr><td>placebo channel</td><td>0.918</td><td>+1.6%</td><td>&minus;2.6%</td><td>&minus;0.7%</td><td>9.0%</td></tr>
+                    <tr><td>flexible baseline</td><td>0.925</td><td>+0.8%</td><td>&minus;1.1%</td><td>&minus;0.2%</td><td>9.0%</td></tr>
+                    <tr><td><em>planted truth</em></td><td></td><td><em>0.0%</em></td><td><em>0.0%</em></td><td><em>0.0%</em></td><td><em>9.1%</em></td></tr>
+                </tbody>
+            </table>
+
+            <p>Median over 400 panels. Two of the four faults are expensive. Dropping the demand index costs 2.7 points of in-sample R&sup2;. It triples the search contribution and doubles working media, from 9.1% of the KPI to 18.6%. Assuming away carryover halves the brand estimate. The other two barely move the answer in this world. That matters at the next table, where an invisible fault that costs nothing is not a scandal.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Test quantity</th><th>correct</th><th>omit demand</th><th>no carryover</th><th>placebo</th><th>flexible base</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>mean of the KPI</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td></tr>
+                    <tr><td>variance of the KPI</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td></tr>
+                    <tr><td>skewness of the KPI</td><td>6.2%</td><td>13.0%</td><td>8.8%</td><td>6.5%</td><td>4.0%</td></tr>
+                    <tr><td>lag-1 autocorrelation of the KPI</td><td>3.2%</td><td>33.5%</td><td>37.2%</td><td>3.0%</td><td>2.2%</td></tr>
+                    <tr><td>range of the KPI</td><td>3.8%</td><td>5.5%</td><td>5.0%</td><td>3.5%</td><td>5.0%</td></tr>
+                    <tr><td>residual skewness</td><td>6.2%</td><td>6.8%</td><td>7.2%</td><td>5.5%</td><td>1.5%</td></tr>
+                    <tr><td>lag-1 residual autocorrelation</td><td>7.0%</td><td>16.0%</td><td>28.7%</td><td>7.8%</td><td>3.8%</td></tr>
+                    <tr><td>mean residual in dark weeks</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td></tr>
+                    <tr><td>residual against search adstock</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td></tr>
+                    <tr><td>residual against the demand index</td><td>0.0%</td><td>4.2%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td></tr>
+                    <tr><td><strong>any of the ten</strong></td><td>21.8%</td><td>52.5%</td><td>57.2%</td><td>21.8%</td><td>15.2%</td></tr>
+                </tbody>
+            </table>
+
+            <p>Read the rows first. Four rows sit at 0.0% across every column, including the column where the model triples a channel, and the residual against the demand index joins them everywhere the demand index is in the design. Nothing about the size of the fault rescues them, because the fit reproduces the quantity being tested and the fault has no way to enter. Widening the rejection thresholds would not move them either. The best-performing check in the whole set is the lag-1 autocorrelation of the KPI, at 33.5% and 37.2% against the two expensive faults, which means it misses each of them about two panels in three. Its residual counterpart, the statistic I would have picked on theory, does worse on both.</p>
+
+            <p>Then read the bottom row. Ten checks at a nominal 10% each flag a correctly specified model on 21.8% of panels, well under the 65.1% that ten independent uniform p-values would produce, because the conservatism runs deep and the checks are dependent. Against the confounded model the family rate is 52.5%. A team running the full suite, in a world where their media number is triple the truth, sees nothing unusual on about half of all panels, and an autocorrelation flag on four panels in ten. That flag says the temporal structure is off. It says nothing about the search coefficient absorbing a demand index.</p>
+
+            <p>That is the honest summary of what these checks buy. They have real power against faults that misstate the shape of the fitted mean over time, which is worth having, and the previous post on holdout error ranked them fourth of five checks by the failure space each one covers. They have no power at all against a fault that lives entirely inside the column space.</p>
+
+            <h2 id="adjusted">Every Control You Add Is a Check You Give Up</h2>
+            <p>The one row with any signal against confounding is the residual correlated against the demand index, and it manages 4.2%. Figure 14D of the workflow paper illustrates the same instinct with a predictive check grouped by a covariate left out of the model, and the reason this one barely works here is worth the algebra.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Bias and detectability are orthogonal pieces of the same vector</summary>
+                <div class="deep-dive-body">
+                    <p>Let the true mean be \( X\beta + \gamma z \) and fit only \( X \). Write \( H \) for the hat matrix of \( X \). The estimate moves by</p>
+                    $$ \mathbb{E}[\hat\beta] - \beta \;=\; \gamma\,(X'X)^{-1}X'z, $$
+                    <p>which depends on \( z \) only through its projection \( Hz \). The residual is</p>
+                    $$ (I-H)y \;=\; \gamma\,(I-H)z \;+\; (I-H)\varepsilon, $$
+                    <p>so the only trace the omission leaves in the residual is \( \gamma(I-H)z \). Bias comes from the part of \( z \) inside the span; detectability comes from the part outside it. The two parts are orthogonal, which means nothing ties their magnitudes together. Writing \( R^2_{z \cdot X} \) for the share of \( z \) the fitted columns explain, the residual correlation the check is looking for is approximately</p>
+                    $$ \mathrm{corr}(r, z) \;\approx\; \frac{\gamma\,(1 - R^2_{z\cdot X})\,\sigma_z}{\sqrt{\gamma^2 (1 - R^2_{z\cdot X})\,\sigma_z^2 + \sigma^2}}, $$
+                    <p>and the check's z-score is that times \( \sqrt{n} \). In the panel above, \( \gamma = 6 \), \( \sigma = 3 \), \( \sigma_z = 1 \) and \( n = 156 \). At \( R^2_{z \cdot X} = 0.801 \) the formula gives a correlation of 0.297 and a z-score of 3.71; the median correlation measured across 100 simulated panels is 0.301. At \( R^2_{z \cdot X} = 0.927 \) it gives 0.128 and 1.60, against a measured 0.133. Detectability collapses across that interval while the omitted coefficient never changes.</p>
+                </div>
+            </details>
+
+            <p>Turn the demand-chasing dial on the search budget and both quantities move, in ways that have nothing to do with each other. The parameter \( \kappa \) below is how strongly weekly search spend tracks the demand index. Raising it makes the confounder easier for the fitted columns to explain, which is what \( R^2 \) measures here, and the check goes blind somewhere between 0.80 and 0.93.</p>
+
+            <table>
+                <thead>
+                    <tr><th>demand-chasing \( \kappa \)</th><th>\( R^2 \) of the demand index on the fitted columns</th><th>search contribution error</th><th>rejection rate of the check</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>0.0</td><td>0.271</td><td>+6.3%</td><td>100.0%</td></tr>
+                    <tr><td>0.4</td><td>0.569</td><td>+356.1%</td><td>100.0%</td></tr>
+                    <tr><td>0.8</td><td>0.801</td><td>+320.1%</td><td>100.0%</td></tr>
+                    <tr><td>1.6</td><td>0.927</td><td>+206.9%</td><td>5.2%</td></tr>
+                    <tr><td>3.2</td><td>0.932</td><td>+122.2%</td><td>6.4%</td></tr>
+                </tbody>
+            </table>
+
+            <p>Median over 250 panels per row. The first row is the honest case: no confounding, an error of 6.3% that is mostly the noise floor of a weakly identified coefficient, and a check that fires on every single panel because the omitted variable is real and independent. It is working perfectly and reporting a fault that costs nothing. Three rows down the estimate is wrong by a factor of three and the check fires 5.2% of the time, which is its false-alarm rate. It has stopped being a test.</p>
+
+            <p>There is a practical rule buried in that table, and it is uncomfortable. Adjusting for a variable and testing against it are competing uses of the same column. Put the demand index in the design and the residual is orthogonal to it, so no residual check can ask whether it belonged there. Leave it out while the other columns explain little of it, and the check fires on every panel. The fault it flags costs 6%. Leave it out while a channel explains 93% of it, and the estimate moves by a factor of three with the check silent. Same variable in all three, and only the modeling decision changed.</p>
+
+            <p>A check suite could hand that trade back to the analyst. The information a posterior predictive check needs has to come from outside the fitted columns, so name the outside explicitly.</p>
+
+            <div class="note">
+                <h4>A held-out covariate check, as it would look</h4>
+                <pre><code class="language-python"># illustrative
+# Declare, before the fit, covariates you will NOT adjust for, and check
+# the residuals against them. The test is bought with an adjustment, so
+# the declaration belongs in the pre-registered spec.
+check = HeldOutCovariateCheck(
+    columns=["category_demand_index", "competitor_price"],
+    statistic="residual_correlation",
+)
+result = check.compute(y_obs=y, y_rep=y_rep, residuals=r, frame=panel_extras)
+# result.p_value only reads next to result.power_against: the rejection
+# rate this statistic reaches on a planted fault of the size you care about.</code></pre>
+            </div>
+
+            <p>That second comment is where the field stops reading. A p-value from a check whose power against the fault of interest is 5% carries no information, and that power is computable whenever you will plant the fault in a simulation, which the framework's synthetic worlds already do for other purposes.</p>
+
+            <h2 id="cross-validated">Leaving a Week Out Does Not Help</h2>
+            <p>One repair for a p-value that uses the data twice is to stop using it twice. The leave-one-out predictive interval transform, LOO-PIT, evaluates each observation against a posterior predictive distribution fitted without that observation, and under a well-specified model the resulting values are uniform on the unit interval by construction. Vehtari, Gelman and Gabry (2017) give the importance-sampling machinery that makes this affordable for a single fit, along with the Pareto-k diagnostic that says when the approximation itself is straining.</p>
+
+            <p>For the Gaussian linear model above, LOO-PIT is available in closed form from the externally studentized residuals, so I computed it exactly on the same 400 panels and tested each panel's PIT values against uniformity with a Kolmogorov-Smirnov statistic. Calibrating the critical value on the correct specification puts it at KS = 0.0706 for a 5% false-alarm rate. Against the four faults the rejection rates are 4.8% for the omitted demand index, 6.5% for the missing carryover, 4.8% for the placebo channel and 5.5% for the flexible baseline. The double use of the data is gone and the blindness is untouched, because LOO-PIT is still a statement about how well the model predicts the KPI. It is a sharper instrument aimed at the same quantity.</p>
+
+            <p>One caveat on the method. Leave-one-out assumes exchangeable observations, and weekly MMM data with adstocked regressors is not exchangeable, so dropping a single week leaves most of its information sitting in its neighbours. B&uuml;rkner, Gabry and Vehtari (2020) give the leave-future-out construction that respects the time ordering, and it is the right tool on real panels. Ordinary LOO is exact in my planted world, whose errors are independent by construction. The blindness above does not come from the cross-validation scheme.</p>
+
+            <h2 id="limits">What This Does Not Establish</h2>
+            <p>Absorption is exact in a linear-Gaussian model fitted under a flat prior, which is what I simulated. A real MMM has informative priors, and a coefficient held down by a tight prior cannot absorb as freely, so a strongly regularized model leaves more of a fault in its residuals than the tables above suggest. Saturation curves have a similar effect, since the residual is then only approximately orthogonal to the transformed columns. Both push toward more detectability, and I have not measured how far.</p>
+
+            <p>The rejection rates are power against four faults I chose, on one data-generating process, at one signal-to-noise ratio. A different catalogue reorders the table, and the two faults that came out invisible here were also nearly harmless here, so this says nothing about whether placebo channels and over-flexible baselines are generally safe. The <a href="blog-holdout-error-mmm.html">holdout-error post</a> planted a world where an over-flexible baseline moved the estimand by 20%.</p>
+
+            <p>Nothing here says posterior predictive checking is worthless. It caught the carryover misspecification more often than anything else in the suite, and a model that reproduces the KPI's mean and variance while failing on autocorrelation is telling you something true about its temporal structure. The claim is narrower, and it is about coverage of the failure space: this family cannot audit the decomposition, and a suite whose output is a row of green ticks invites the reader to believe it did.</p>
+
+            <h2 id="next">Where This Goes Next</h2>
+            <p>Two repairs are buildable now. One is the held-out covariate check sketched above, with the held-out set pinned in the pre-registered spec so that the choice is made before anyone has seen a residual. The other is a power column beside every check in the validation report. Plant a fault of a declared size in a synthetic world matched to the panel, count rejections, print the rate next to the p-value. That turns each check from a claim into a measurement.</p>
+
+            <p>A third repair stays out of reach. A discrepancy computed on the decomposition rather than on the KPI would need a replicated quantity to compare the split against, and the only sources of one are a planted truth or an experiment. Both sit outside the posterior predictive machinery.</p>
+
+            <p>The <a href="blog-prior-predictive-sbc.html">prior predictive and calibration post</a> closes by handing the question of whether the model resembles reality to posterior predictive checks on real data. No simulation-based check can do that job, so the handoff is right. The receiving check can audit the temporal shape, and nothing about the split.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>A posterior predictive check on a quantity the fit reproduces cannot fail. The mean and variance checks in the default suite rejected 0.0% of the time across 400 panels and five specifications, with a p-value spread of 0.025 against 0.289 for a uniform.</li>
+                    <li>Residuals are orthogonal to the design, so a check reading the residual correlation with an included control, or the mean residual in a subgroup the design can span, has zero power by construction. Two of the decomposition-aimed discrepancies tested here are in that class.</li>
+                    <li>Omitting a confounder that triples a channel's contribution drew a flag from at least one of ten checks on 52.5% of panels, against 21.8% for the correctly specified model, and the flag that fires reports autocorrelation rather than attribution.</li>
+                    <li>Bias comes from the projection of an omitted variable onto the fitted columns and detectability comes from what is left over. Those pieces are orthogonal, so a confounder correlated at 0.95 with the channel it confounds produced a 207% error and a 4.2% rejection rate.</li>
+                    <li>Adjusting for a variable and testing against it are competing uses of the same column. A held-out covariate buys a check with real power at the price of an adjustment, and that trade belongs in the spec.</li>
+                    <li>LOO-PIT restores the calibration and leaves the blindness in place, with rejection rates of 4.8% to 6.5% against all four faults at a 5% calibrated false-alarm rate.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Gelman, A., Meng, X.-L., &amp; Stern, H. (1996). <em>Posterior Predictive Assessment of Model Fitness via Realized Discrepancies</em>. Statistica Sinica, 6(4), 733&ndash;807.</li>
+                <li>Gelman, A., Vehtari, A., Simpson, D., Margossian, C. C., Carpenter, B., Yao, Y., Kennedy, L., Gabry, J., B&uuml;rkner, P.-C., &amp; Modr&aacute;k, M. (2020). <em>Bayesian Workflow</em>. arXiv:2011.01808. Section 6.1 on posterior predictive checking and severe tests.</li>
+                <li>Gelman, A., Vehtari, A., McElreath, R., and colleagues (2026). <em>Bayesian Workflow</em>. CRC Press, 538 pp. ISBN 978-0-367-49014-0.</li>
+                <li>Mayo, D. G. (2018). <em>Statistical Inference as Severe Testing: How to Get Beyond the Statistics Wars</em>. Cambridge University Press.</li>
+                <li>Gabry, J., Simpson, D., Vehtari, A., Betancourt, M., &amp; Gelman, A. (2019). <em>Visualization in Bayesian Workflow</em>. Journal of the Royal Statistical Society, Series A, 182(2), 389&ndash;402.</li>
+                <li>Vehtari, A., Gelman, A., &amp; Gabry, J. (2017). <em>Practical Bayesian Model Evaluation Using Leave-One-Out Cross-Validation and WAIC</em>. Statistics and Computing, 27(5), 1413&ndash;1432.</li>
+                <li>B&uuml;rkner, P.-C., Gabry, J., &amp; Vehtari, A. (2020). <em>Approximate Leave-Future-Out Cross-Validation for Bayesian Time Series Models</em>. Journal of Statistical Computation and Simulation, 90(14), 2499&ndash;2523.</li>
+                <li>Modr&aacute;k, M., Moon, A. H., Kim, S., B&uuml;rkner, P.-C., Huurre, N., Faltejskov&aacute;, K., Gelman, A., &amp; Vehtari, A. (2023). <em>Simulation-Based Calibration Checking for Bayesian Computation: The Choice of Test Quantities Shapes Sensitivity</em>. Bayesian Analysis.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+        // KaTeX: three delimiter pairs only. Single-$ is deliberately absent so that
+        // dollar amounts render as money instead of being parsed as math.
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: "$$", right: "$$", display: true },
+                    { left: "\\[", right: "\\]", display: true },
+                    { left: "\\(", right: "\\)", display: false }
+                ],
+                throwOnError: false
+            });
+        });
+    </script>
+</body>
+</html>

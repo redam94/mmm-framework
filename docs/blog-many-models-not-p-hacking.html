@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fitting Many Models Is Not P-Hacking | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="The Bayesian workflow tells you to fit many models. Pre-specification tells you to fix one. What reconciles them is that the estimand is declared first and no selection step is allowed to read it, and the failure that survives all of it is reporting the spread across your specs as if it were your uncertainty.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-many-models-not-p-hacking.html">
+    <meta property="og:title" content="Fitting Many Models Is Not P-Hacking">
+    <meta property="og:description" content="Across 8 synthetic worlds with a known answer key, the range spanned by 16 defensible MMM specifications contained the true ROAS in 24 of 32 channel-world pairs, and how wide that range was told you nothing about how far its centre sat from the truth.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-many-models-not-p-hacking.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Fitting Many Models Is Not P-Hacking">
+    <meta name="twitter:description" content="Across 8 synthetic worlds with a known answer key, the range spanned by 16 defensible MMM specifications contained the true ROAS in 24 of 32 channel-world pairs, and how wide that range was told you nothing about how far its centre sat from the truth.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework: a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-many-models-not-p-hacking.html",
+          "name": "Fitting Many Models Is Not P-Hacking | MMM Framework",
+          "description": "The Bayesian workflow tells you to fit many models. Pre-specification tells you to fix one. What reconciles them is that the estimand is declared first and no selection step is allowed to read it, and the failure that survives all of it is reporting the spread across your specs as if it were your uncertainty.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-08-03",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-many-models-not-p-hacking.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-many-models-not-p-hacking.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Fitting Many Models Is Not P-Hacking",
+          "datePublished": "2026-08-02",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-many-models-not-p-hacking.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-many-models-not-p-hacking.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Fitting Many Models Is Not P-Hacking",
+              "item": "https://redam94.github.io/mmm-framework/blog-many-models-not-p-hacking.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#two-rules">Two Rules That Look Opposite</a></li>
+                <li><a href="#what-is-fixed">What Has to Be Fixed</a></li>
+                <li><a href="#the-bracket">The Bracket That Is Not a Bracket</a></li>
+                <li><a href="#trajectory">A Trajectory, Not a Leaderboard</a></li>
+                <li><a href="#answer-key">Why I Can Say It Missed</a></li>
+                <li><a href="#version-control">The Section Nobody Quotes</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Fitting Many Models Is Not P-Hacking</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-08-02">August 2, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Bayesian workflow</span>
+            </p>
+            <p class="lead">This blog has argued for pre-specification and it has argued for the Bayesian workflow, and it has never put the two in the same room. The workflow says you will fit many models to one problem and that this is the point of it. Pre-specification says you commit to the analysis before you see the answer. What makes them compatible is narrower than it first looks: the estimand is fixed before any fit, the model space is declared before any fit, and no step that moves you between models is allowed to read the estimand. Gelman and his co-authors are unusually blunt about the exposure that still leaves. The one they name is subtler than picking a winner: fit a dozen defensible specifications, report the range they span, and treat that range as your uncertainty. On eight synthetic worlds where the causal answer is known by construction, the range spanned by sixteen defensible specifications contained the true ROAS in 24 of 32 channel-world pairs, and the width of the range carried no usable information about how far its centre sat from the truth.</p>
+
+            <p>None of that is an argument against iterating. Iteration needs a shape, and the shape has a name in the canon that this framework's own machinery already half implements without labelling it.</p>
+
+            <h2 id="two-rules">Two Rules That Look Opposite</h2>
+            <p>The stated purpose of this framework, written at the top of its own developer guide, is &ldquo;pre-specified analyses to reduce researcher degrees of freedom.&rdquo; That sentence is doing real work. It explains the estimand registry, the <code>registered_at</code> timestamp on <code>SpecSet</code>, and the field-level lock list that records which parts of a spec a human touched. Read literally, it is also a promise to do the opposite of what the Bayesian workflow prescribes.</p>
+
+            <p>Section 8.1 of <em>Bayesian Workflow</em> opens by saying so out loud. &ldquo;The key aspect of Bayesian workflow, which takes it beyond Bayesian data analysis, is that we are fitting many models while working on a single problem.&rdquo; Many models, deliberately, as the method rather than as a confession. The same section then concedes what that costs: &ldquo;we also have to be concerned with researcher degrees of freedom (Simmons et al., 2011), most directly from overfitting if a single best model is picked, or more subtly that if we are not careful, we can consider our inferences from a set of fitted models to bracket some total uncertainty, without recognizing that there are other models we could have fit.&rdquo;</p>
+
+            <p>Read that second clause slowly. Most readers arrive expecting a different warning. The obvious sin is the one <a href="blog-p-hacking-evidence.html">The Evidence a P-Value Actually Carries</a> and <a href="blog-modeling-pitfalls.html">Common Pitfalls in Statistical Modeling</a> already cover from the frequentist side: you fit twenty things, you keep the one that flatters the channel your client cares about, and the reported uncertainty is a fiction. That failure is real and it is well policed. The subtler one is what happens after you have stopped cheating. You declare your spec set honestly, you fit every member of it, you refuse to pick a winner, you report the full spread, and what you have reported is how far apart the models you happened to think of turned out to be. Four sections later the book gives the tension its own headings, &ldquo;Justification of iterative model building&rdquo; (&sect;12.2) and &ldquo;Model selection and overfitting&rdquo; (&sect;12.3), which is a fair signal that the authors did not consider the matter settled by assertion.</p>
+
+            <h2 id="what-is-fixed">What Has to Be Fixed</h2>
+            <p>The reconciliation is a matter of ordering. Pre-specification does not require that you know which model you will end up believing. It requires that the things a motivated analyst could bend are decided before the data can bend them, and there are exactly two of those, plus one prohibition that ties them together.</p>
+
+            <div class="definition">
+                <h4>The condition under which iteration is honest</h4>
+                <p><strong>Declared first:</strong> the estimand. &ldquo;We will measure TV&rdquo; does not qualify. What qualifies is the specific functional of the posterior, on a named scale, over a named window, with a named denominator. In this framework that is a registry entry rather than a paragraph: <code>all_builtins()</code> returns six of them (<code>estimands/registry.py</code>), of which three are on by default, and each carries its own <code>numerator</code>, <code>denominator</code>, <code>window</code> and <code>causal_assumptions</code> fields.</p>
+                <p><strong>Declared first:</strong> the model space, which is a larger object than the model. <code>SpecVariant</code> (<code>validation/spec_curve.py:88</code>) is a serializable declaration over seven named axes: adstock form, saturation form, control set, pooling level, media-prior parameterization, trend family and seasonality, with an <code>overrides</code> escape hatch for anything else. <code>SpecSet</code> wraps a list of them with a <code>rationale</code> and a <code>registered_at</code> stamp.</p>
+                <p><strong>Never allowed:</strong> a step that moves you between models by looking at the estimand. Predictive criteria may look at held-out \( y \). Convergence diagnostics may look at the sampler. Nothing in the loop may look at TV's ROI and use it to choose.</p>
+            </div>
+
+            <p>The prohibition does most of the work, and it rules out the most tempting shortcut. Stacking weights are chosen to maximize expected predictive utility, and this framework declines to apply them to a spec curve for exactly that reason. Two specifications can forecast the KPI equally well and still split the same fitted mean between media and baseline in ways that do not resemble each other, because the decomposition is the free parameter that prediction does not price. The module's own docstring puts it in one line: &ldquo;Equal weights encode what pre-registration already asserted.&rdquo; <a href="blog-holdout-error-mmm.html">Stop Validating Your MMM With Holdout Error</a> tells the story of that retraction in detail, and it stands.</p>
+
+            <p>Under those conditions, fitting a hundred models is a way of understanding one estimand, and it carries no more researcher freedom than fitting one. You may explore the whole space. You may not let the answer tell you where to stand in it. The ordering does not fix everything, though, because the space you declared has an edge.</p>
+
+            <h2 id="the-bracket">The Bracket That Is Not a Bracket</h2>
+            <p>A spec curve produces a range, and a range looks like an interval, and an interval looks like uncertainty. The three are different objects, and the gap between them is measurable if you have a world whose answer you already know.</p>
+
+            <p>So I built one. Eight worlds from <code>synth/dgp.py</code>, each a weekly panel of four media channels over three years, each sharing one clean core and breaking at most one modelling assumption: the clean positive control, unobserved confounding, reverse causality, multicollinearity, carryover misspecification, saturation misspecification, drifting effectiveness, and cross-channel synergy. Ground truth in these worlds is defined the way the model itself would report an effect, as the counterfactual of zeroing a channel's spend on the noiseless structural mean, so the true ROAS and the estimated ROAS are the same functional of the same quantity.</p>
+
+            <p>Against each world I ran sixteen specifications: four carryover forms (geometric with retention 0.2, 0.4 and 0.6, plus a Weibull) crossed with four saturation forms (exponential at three saturation rates, plus a Hill curve), every one of them carrying a linear trend and yearly Fourier seasonality. That is a generous declared set. The framework's own <code>default_spec_variants</code> returns four. Every member is a specification a competent analyst would sign off on before seeing results, and none of them is the true data-generating process for any world except by accident.</p>
+
+            <div class="note">
+                <h4>How the 128 fits were done</h4>
+                <p>Each spec is fit by partialling the control block out of both the KPI and the transformed media block (Frisch-Waugh), then non-negative least squares on the media block, which is the least-squares analogue of this framework's positive-only media priors. ROAS for channel \( c \) is \( \hat\beta_c \sum_t f_c(x_{ct}) / \sum_t x_{ct} \), and every transform used satisfies \( f_c(0) = 0 \), so the estimate is the same zero-out contrast the truth is defined by. Price is excluded from every design. In the confounding and reverse-causality worlds it is exactly \( 12 + 0.5\cos(2\pi t/52) \), a perfect linear combination of the intercept and the yearly cosine, and dropping it in the other six keeps the design identical across worlds. Eight worlds by sixteen specs is 128 fits, summarised into 32 channel-world pairs. The whole thing runs in under two seconds and uses no MCMC, which is the point. This is a claim about specification sets.</p>
+            </div>
+
+            <p>Three results, in order of how uncomfortable they are.</p>
+
+            <p>Mild first. The truth fell inside the sixteen-spec range in 24 of the 32 pairs, which is a respectable-sounding number until you ask what generated it. Nothing did. The range has no coverage property, and a differently-sized declared set on the same worlds would have produced a different figure with equal authority.</p>
+
+            <p>Second, and this is the one worth carrying: the width of a channel's spec-curve range tells you nothing about how far the centre of that range sits from the truth. Across the 32 pairs the Spearman correlation between range width and absolute error of the centre is \( \rho = -0.268 \) (\( p = 0.138 \)), and on relative error it is \( \rho = -0.369 \) (\( p = 0.038 \)). Both are the wrong sign for the reading everyone applies. Three pairs are degenerate, with all sixteen specs pinned at zero, and dropping them collapses the association to \( \rho = -0.068 \) (\( p = 0.726 \)) and \( \rho = -0.152 \) (\( p = 0.431 \)). Take the conservative reading and the width is simply uninformative. Median range width was 0.527 in ROAS units, median absolute error of the centre was 0.159, and in 6 of the 32 pairs the error of the centre exceeded the entire width of the range.</p>
+
+            <p>Third is the one I would put on the first slide.</p>
+
+            <div class="warning">
+                <h4>&#9888;&#65039; Sixteen specifications agreed exactly, and were exactly wrong</h4>
+                <p>In the carryover-misspecification world, where true carryover is a delayed Weibull peaking six to eight weeks out with mass past 26 weeks and every declared spec truncates at eight, all sixteen specifications returned a TV ROAS of 0.000. Not close to each other. Identical, to four decimal places. The true causal ROAS was 0.713. Social behaved the same way: sixteen specs at 0.000 against a truth of 0.846. Display spanned 0.000 to 0.052 against 0.649, and Search spanned 0.031 to 0.252 against 0.917. A zero-width spec curve is what unanimity looks like, and unanimity among models that share a wrong assumption is the least informative thing a spec curve can produce.</p>
+            </div>
+
+            <p>Nothing exotic drives that. An eight-week geometric window cannot represent the channel's response, the non-negativity constraint pins the coefficient at its boundary, and every member of the set hits the same boundary for the same reason. A real MMM with a positive media prior should land in the same place, with posterior mass piled near zero rather than a point at it. The specs had nothing to disagree about, because they were wrong in the identical direction, and spread measures disagreement.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Why 24 of 32 is not a coverage number</summary>
+                <div class="deep-dive-body">
+                    <p>A credible interval has a construction that makes its stated mass mean something: it is a set of parameter values carrying a declared share of posterior probability under a declared model. A confidence interval has a different construction with a different guarantee, over repeated sampling. The range spanned by a spec set has neither. It is the extreme order statistics of a finite collection of point estimates from models chosen by a human, and its width is a function of how spread out that human's imagination was.</p>
+                    <p>Widen the declared set with two more exotic saturation forms and the range grows, with no corresponding change in what the data can support. Narrow it to the two forms your team actually uses and the range shrinks, again with no change in the evidence. Nothing in the construction ties the width to the sampling distribution of anything, which is why the correlation with error measured above has no reason to be positive and, in this sample, was not.</p>
+                    <p>What the range does measure is worth reporting under its own name: how sensitive your number is to the modelling choices you were prepared to enumerate. <code>_robustness</code> (<code>validation/spec_curve.py:529</code>) already reports it as <code>range</code>, <code>spread_pct</code> and <code>sign_stable</code>, alongside the fraction of the declared weight clearing the ROI reference. Sign stability across a declared set makes a useful headline. Labelling that field &ldquo;total uncertainty&rdquo; does not.</p>
+                </div>
+            </details>
+
+            <h2 id="trajectory">A Trajectory, Not a Leaderboard</h2>
+            <p>If the range is the wrong summary, something has to replace it, and the canon has a proposal that this framework's machinery already computes and does not display. Section 7.4 argues that a model class is a partial ordering rather than a list. &ldquo;AR(1) is simpler than AR(2) which is simpler than ARMA(2,1), and MA(1) is also simpler than ARMA(2,1), but AR(1) and MA(1) are not themselves ordered.&rdquo; Some pairs of models are comparable and some are siblings, and the useful structure is the ordering itself. The purpose of that structure is stated in one sentence: &ldquo;Our interest here is not in averaging over models but in navigating among them.&rdquo;</p>
+
+            <p>What makes the move from one model to the next meaningful is that parameters in neighbouring models, in the authors' phrase, &ldquo;can &lsquo;talk with each other&rsquo; in the sense of having a shared, observable meaning outside the confines of the model itself.&rdquo; Causal effect estimation is one of the two examples they name. A channel's ROAS means the same thing in the model with a linear trend and in the model with a spline, which is exactly what licenses you to plot the two on the same axis. It is also the condition <a href="blog-table-2-fallacy.html">The Table 2 Fallacy in Media Mix Models</a> shows can silently fail: change the conditioning set and you may have changed the question, in which case the trajectory is comparing answers to different questions and the line through them means nothing.</p>
+
+            <p>Section 8.1's own figure is the display that follows. One quantity of interest, plotted across the ladder from the simplest comparison to the final model. Here is that ladder on the unobserved-confounding world, where latent demand pushes both the Search and Social budgets and the sales baseline, using geometric carryover at 0.4 and exponential saturation as the primary forms.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Model</th><th>TV</th><th>Search</th><th>Social</th><th>Display</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Spend only</td><td>0.265</td><td>0.796</td><td>0.844</td><td>0.570</td></tr>
+                    <tr><td>&#43; linear trend</td><td>0.264</td><td>0.737</td><td>0.789</td><td>0.508</td></tr>
+                    <tr><td>&#43; yearly seasonality</td><td>0.259</td><td>0.607</td><td>0.612</td><td>0.378</td></tr>
+                    <tr><td>&#43; carryover</td><td>0.427</td><td>0.872</td><td>0.676</td><td>0.435</td></tr>
+                    <tr><td>&#43; saturation</td><td>0.496</td><td>1.007</td><td>0.765</td><td>0.535</td></tr>
+                    <tr><td>&#43; demand control</td><td>0.455</td><td>0.891</td><td>0.642</td><td>0.626</td></tr>
+                    <tr><td><strong>True causal ROAS</strong></td><td><strong>0.682</strong></td><td><strong>0.630</strong></td><td><strong>0.469</strong></td><td><strong>0.668</strong></td></tr>
+                </tbody>
+            </table>
+
+            <p>Read Search down the column. Seasonality is the story: adding two Fourier terms drops Search's ROAS from 0.737 to 0.607, a fall of 18%, because latent demand in this world is partly seasonal and the Fourier basis absorbs the seasonal share of the back door for free. Carryover then pushes it back up to 0.872 and saturation to 1.007, because both transforms concentrate the same spend into fewer effective exposures and the coefficient rises to compensate. Nearest the truth, at 0.607 against 0.630, sits the seasonality rung. It gets there by carrying two errors of opposite sign that have not finished cancelling. A leaderboard would have crowned it. The trajectory shows why that would be a coincidence.</p>
+
+            <p>Now look at the last row before the truth. Adding one control the declared sixteen never varied, a noisy proxy for latent demand, moves the whole spec curve rather than one member of it. Averaged across all sixteen specs, Social's centre moves from 0.620 to 0.508 against a truth of 0.469, closing three quarters of its bias, and Search's moves from 0.913 to 0.776 against 0.630. TV moves the wrong way, from 24.0% low to 29.1% low. That is the texture of a real adjustment rather than a magic fix. The shift is 0.19 of the declared range's own width for Social and 0.14 for Search, and no diagnostic computed inside the declared set could have pointed at it, because every member shared the omission.</p>
+
+            <p>Vary the conditioning set, then. <code>SpecVariant</code> already exposes <code>controls</code> as one of its seven axes and <code>run_spec_curve</code> will happily fit it. The default grid, and most spec curves I have seen in practice, move the transforms and hold the causal structure fixed, which is backwards: transforms are where models disagree loudly and the answer moves little, and the conditioning set is where they agree quietly and the answer moves a lot.</p>
+
+            <h2 id="answer-key">Why I Can Say It Missed</h2>
+            <p>Everything above rests on knowing the true ROAS, which in a real engagement you do not. The stage of the workflow that supplies it is &sect;4.3, experimentation using constructed data, and it is a different stage from the two this blog has already covered. Prior predictive checks and simulation-based calibration both draw parameters from the prior, simulate data from the model being graded, and ask whether the machinery recovers what it planted. That is a correctness check on the code and the geometry. <a href="blog-prior-predictive-sbc.html">Does Your Model Work Before You Fit It?</a> is the reference for it. By construction it cannot tell you what happens when the world is not the model, because in that exercise the world is always the model.</p>
+
+            <p>Section 4.3 simulates a world your model cannot represent, then prices the failure. Its worked example plants a treatment effect of &#43;10 in a 500-student midterm-and-final simulation and then breaks the design on purpose. Make the assignment mechanism unbalanced, with treatment probability falling in the pre-test score so the weaker students are the ones treated, and the raw comparison returns &minus;13.8 &plusmn; 1.5. Linear adjustment for the pre-test rescues it to 9.7 &plusmn; 0.8. Then make the true conditional expectation nonlinear and re-run the same linear adjustment under the same unbalanced design, and it degrades to 7.3 &plusmn; 0.9 while the balanced design still recovers 10.5 &plusmn; 0.8. Nothing there is a coding error. The estimator is fine, the sampler is fine, and the answer is 27% low because the design and the functional form conspired. Media spend that responds to demand is the same shape of problem, drawn from marketing instead of a gradebook.</p>
+
+            <p>The authors are explicit that this stage is where you go when calibration is guaranteed to fail. Fitting a normal likelihood to \( t_4 \) data will fail SBC by construction, and their comment on it is the sentence that best describes what &sect;4.3 is for: &ldquo;the interesting question here is, how bad will these inferences be?&rdquo;</p>
+
+            <p>This repository has been set up for that question for a while without quite claiming it. Every factory in <code>synth/dgp.py</code> is labelled with the assumption it breaks, and the module carries a flag for the case that matters most here: a scenario &ldquo;sets <code>representable=False</code> when the truth lies outside the model's hypothesis space,&rdquo; so a large error is expected by construction and reported as such rather than counted as a failure. Missing is the stage itself, as a named thing a user runs: pick the assumption you are least sure of, generate the world where it is false, run your declared spec set against it, and report the size of the error rather than its presence. What comes back is a scale, and having a scale is what separates &ldquo;this could be biased&rdquo; from &ldquo;this is biased by about a third, upward, on the demand-chasing channels.&rdquo;</p>
+
+            <h2 id="version-control">The Section Nobody Quotes</h2>
+            <p>Section 9 of the book is titled &ldquo;Modeling as software development,&rdquo; runs four subsections, and has zero coverage on this blog. The phrase &ldquo;version control&rdquo; appears in no post in the series. That absence is what happens when a field treats its statistical content as the interesting part and its engineering as plumbing.</p>
+
+            <p>Version control comes before the first prior, per &sect;9.1. Section 9.2 makes the case for testing as you go, bottom-up, and its example is deliberately unglamorous: a one-line standard-deviation helper that divides by \( n \) instead of \( n-1 \), which the authors note &ldquo;can produce mysterious biases during inference.&rdquo; The bug is invisible, the fit converges, every diagnostic is green, and the posterior is quietly wrong. Nothing in a Bayesian workflow catches that. A unit test does.</p>
+
+            <p>Section 9.3 has the teeth, because it separates two words the replication-crisis literature has fused. Reproducibility is one analysis, consistently done, by anyone with the code and the data. Replicability is a new study reaching the same conclusion. The book's argument about the first is the sharpest sentence in the section: if re-running the analysis changes the paper's outcome, then &ldquo;the original results were not particularly robust.&rdquo; That is a claim about the model rather than about the plumbing. It is also why the vendor-MMM reproducibility problem carries a statistical consequence, even though its cause is that the model, the preprocessing and the deck live in three places and only one of them is versioned. Fragility under re-execution and fragility under respecification are the same fragility wearing different clothes.</p>
+
+            <div class="note">
+                <h4>What this repository already does, and what it does not</h4>
+                <p>Present: a formatting gate and a lint gate in CI, contract tests that pin the public API and assert the package version matches <code>pyproject.toml</code> (<code>tests/test_api_contracts.py</code>), a lean-import test that fails if a web or LLM dependency reaches a core module, and a fit-time health snapshot stamped into every agent-driven run. Field-level spec locking is there too, so a user's manual edit survives the agent: &ldquo;Anything they touch becomes <em>locked</em>: the LLM may no longer silently overwrite it&rdquo; (<code>agents/spec_locks.py</code>).</p>
+                <p>Missing: a single artifact that pins the git commit, the data checksum, the resolved spec after locks and overrides, the estimand registry state and the random seed, such that one command reproduces a published number. Every ingredient exists. Nothing assembles them, and the &ldquo;can you re-run last quarter's model?&rdquo; question is currently answered by a person rather than a hash.</p>
+            </div>
+
+            <p>Version control before the first prior means the first thing you can answer about any number is which code produced it, which is also the only thing that makes a spec curve auditable. A declared spec set that nobody can re-fit is a paragraph, and a paragraph is exactly the thing pre-specification was invented to replace.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Iterating over many models is honest when two things are declared before any fit (the estimand, on a named scale over a named window, and the space of specifications) and one thing is forbidden (any step that moves between models by reading the estimand). Predictive criteria may look at held-out \( y \); nothing may look at TV's ROI and choose.</li>
+                    <li>The range spanned by a declared spec set is not an uncertainty interval and has no coverage property. Across 32 channel-world pairs on eight synthetic worlds with known causal truth, it contained the truth in 24, and the correlation between its width and the absolute error of its centre was \( \rho = -0.268 \) overall and \( \rho = -0.068 \) after dropping three degenerate pairs. In 6 of 32 pairs the error of the centre exceeded the whole width.</li>
+                    <li>Unanimity across a spec set is the failure mode with no warning light. In the carryover-misspecification world all sixteen specifications returned a TV ROAS of 0.000 against a true 0.713, and 0.000 for Social against 0.846, because every member shared the wrong eight-week window and the positive-only constraint pinned them all at the same boundary.</li>
+                    <li>The display that replaces the range is the &sect;8.1 trajectory: one estimand plotted across a declared complexity ladder, with unordered variants drawn as siblings rather than as further rungs (&sect;7.4's partial ordering). On the confounding world, Search's ROAS falls 18% when yearly seasonality enters, which names seasonality as the story in a way no summary interval can.</li>
+                    <li>Vary the conditioning set, which is where the answer moves most. Adding one demand proxy moved Social's spec-curve centre from 0.620 to 0.508 against a truth of 0.469, a shift of 0.19 of the declared set's own width, and no diagnostic inside the declared set could have found it. <code>SpecVariant</code> already exposes <code>controls</code> as one of its seven axes; the default grid does not use it.</li>
+                    <li>Two buildable next things follow directly. A named bias-pricing stage (&sect;4.3) that runs a declared spec set against a world where a chosen assumption is false and reports the size of the error, using the <code>representable</code> flag <code>synth/dgp.py</code> already carries. And a single provenance artifact binding commit, data checksum, resolved spec, estimand state and seed, so that a published number can be re-derived by a command instead of by a person.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Gelman, A., Vehtari, A., McElreath, R., et al. (2026). <em>Bayesian Workflow</em>. CRC Press. ISBN 978-0-367-49014-0. The canonical reference for every section cited here.</li>
+                <li>Gelman, A., Vehtari, A., Simpson, D., Margossian, C. C., Carpenter, B., Yao, Y., Kennedy, L., Gabry, J., B&uuml;rkner, P.-C., &amp; Modr&aacute;k, M. (2020). <em>Bayesian Workflow</em>. arXiv:2011.01808. Cited for section numbering: &sect;4.3 (experimentation using constructed data), &sect;7.4 (a topology of models), &sect;8.1 (why we fit many models), &sect;8.3 (projection predictive selection), &sect;9 (modeling as software development), &sect;12.2 (justification of iterative model building), &sect;12.3 (model selection and overfitting).</li>
+                <li>Simmons, J. P., Nelson, L. D., &amp; Simonsohn, U. (2011). <em>False-Positive Psychology</em>. Psychological Science. Cited at &sect;8.1 as the researcher-degrees-of-freedom reference.</li>
+                <li>Steegen, S., Tuerlinckx, F., Gelman, A., &amp; Vanpaemel, W. (2016). <em>Increasing Transparency Through a Multiverse Analysis</em>. Perspectives on Psychological Science. Cited at &sect;8.1 for the multiverse display.</li>
+                <li>Piironen, J., &amp; Vehtari, A. (2017). <em>Comparison of Bayesian Predictive Methods for Model Selection</em>. Statistics and Computing. Cited at &sect;8.3 as the alternative when the candidate set is large.</li>
+                <li>Repository: <code>validation/spec_curve.py</code> (<code>SpecVariant</code> line&nbsp;88, <code>SpecSet</code> line&nbsp;118, <code>apply_variant</code> line&nbsp;157, <code>default_spec_variants</code> line&nbsp;206, <code>_robustness</code> line&nbsp;529, <code>run_spec_curve</code> line&nbsp;573), <code>estimands/registry.py</code>, <code>synth/dgp.py</code>, <code>agents/spec_locks.py</code>, <code>tests/test_api_contracts.py</code>.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+        // KaTeX: three delimiter pairs only. Single-$ is deliberately absent so that
+        // dollar amounts render as money instead of being parsed as math.
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: "$$", right: "$$", display: true },
+                    { left: "\\[", right: "\\]", display: true },
+                    { left: "\\(", right: "\\)", display: false }
+                ],
+                throwOnError: false
+            });
+        });
+    </script>
+</body>
+</html>

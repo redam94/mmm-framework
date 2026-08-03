@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prior Sensitivity Without Refitting Anything | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Reweighting the draws you already have reproduces a refit under a different prior to within 1.4%, in milliseconds. What that buys an MMM, and where the Pareto k stops you.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-prior-sensitivity-no-refit.html">
+    <meta property="og:title" content="Prior Sensitivity Without Refitting Anything">
+    <meta property="og:description" content="One MMM fit already contains every prior in a neighbourhood of the one you used. Power-scaling recovers them by reweighting, and it says which block of the prior your headline number is leaning on.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-prior-sensitivity-no-refit.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Prior Sensitivity Without Refitting Anything">
+    <meta name="twitter:description" content="One MMM fit already contains every prior in a neighbourhood of the one you used. Power-scaling recovers them by reweighting, and it says which block of the prior your headline number is leaning on.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework: a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-prior-sensitivity-no-refit.html",
+          "name": "Prior Sensitivity Without Refitting Anything | MMM Framework",
+          "description": "Reweighting the draws you already have reproduces a refit under a different prior to within 1.4%, in milliseconds. What that buys an MMM, and where the Pareto k stops you.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-08-03",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-prior-sensitivity-no-refit.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-prior-sensitivity-no-refit.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Prior Sensitivity Without Refitting Anything",
+          "datePublished": "2026-08-02",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-prior-sensitivity-no-refit.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-prior-sensitivity-no-refit.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Prior Sensitivity Without Refitting Anything",
+              "item": "https://redam94.github.io/mmm-framework/blog-prior-sensitivity-no-refit.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#already-there">What One Fit Contains</a></li>
+                <li><a href="#location">Width Against Location</a></li>
+                <li><a href="#two-axes">Scale the Likelihood Too</a></li>
+                <li><a href="#which-block">The Wrong Block</a></li>
+                <li><a href="#one-at-a-time">Four Points, One Surface</a></li>
+                <li><a href="#limits">What This Does Not Establish</a></li>
+                <li><a href="#next">What to Build</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Prior Sensitivity Without Refitting Anything</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-08-02">August 2, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Bayesian workflow</span>
+            </p>
+            <p class="lead">Every MMM deliverable carries a paragraph about priors. It says the team tried a tighter media prior and a looser one, and nothing moved much. Writing it takes ninety seconds. The draws from the fit you already ran contain a far more demanding version of that check, and extracting it costs about three milliseconds.</p>
+
+            <h2 id="already-there">What One Fit Already Contains</h2>
+
+            <p>The posterior is proportional to prior times likelihood. Raise the prior to a power \( \alpha \) and the perturbed posterior factors into something you already have:</p>
+
+            $$ p_\alpha(\theta \mid y) \;\propto\; p(\theta)^\alpha\, L(\theta) \;=\; p(\theta \mid y)\, \cdot\, p(\theta)^{\alpha - 1} $$
+
+            <p>Which means the posterior under a prior raised to the power \( \alpha \) is the posterior you sampled, reweighted by \( p(\theta)^{\alpha-1} \). No new chains. The weight for draw \( s \) is \( w_s \propto \exp\!\big((\alpha-1)\log p(\theta_s)\big) \), and every term in that expression is a number you can compute from the draws in the trace object on your disk.</p>
+
+            <p>Kallioinen, Paananen, B&uuml;rkner and Vehtari (2024) turned that identity into a diagnostic by adding the two things it needs to be trustworthy. Pareto-smoothed importance sampling replaces the extreme tail of the weight distribution with fitted quantiles from a generalized Pareto fit, which stops a handful of draws from carrying the whole estimate. The shape parameter \( \hat{k} \) of that fit reports when the reweighting has stopped working. They also power-scale the likelihood on its own, which turns out to matter for an MMM in a way I will come back to.</p>
+
+            <p>I wanted to know how much of that promise survives contact with a real media model, so I measured it. The world is <code>synth/dgp.py:438</code> (<code>make_unobserved_confounding</code>), the same generator behind <a href="blog-prior-was-doing-more.html">the ridge-versus-Bayes comparison</a>: 156 weeks, four channels, latent demand pushing both spend and baseline sales. One <code>BayesianMMM</code> with a linear trend, NUTS through NumPyro, four chains of a thousand draws. The fit took 10.8 seconds. Then I power-scaled the joint prior at eight values of \( \alpha \) from 0.5 to 2.0, once by reweighting and once by actually refitting, and compared the per-channel incremental contribution the two paths report.</p>
+
+            <table>
+                <thead>
+                    <tr><th>\( \alpha \)</th><th>TV, reweighted</th><th>TV, refit</th><th>Largest gap, 4 channels</th><th>\( \hat{k} \)</th><th>Weight ESS</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>0.5</td><td>5,588</td><td>5,550</td><td>1.39%</td><td>0.39</td><td>700</td></tr>
+                    <tr><td>0.8</td><td>5,336</td><td>5,295</td><td>0.78%</td><td>0.10</td><td>3,132</td></tr>
+                    <tr><td>1.1</td><td>5,102</td><td>5,107</td><td>1.01%</td><td>&minus;0.04</td><td>3,832</td></tr>
+                    <tr><td>1.5</td><td>4,840</td><td>4,835</td><td>0.58%</td><td>0.17</td><td>1,855</td></tr>
+                    <tr><td>2.0</td><td>4,561</td><td>4,543</td><td>1.11%</td><td>0.43</td><td>401</td></tr>
+                </tbody>
+            </table>
+
+            <p>Across all thirty-two comparisons (eight values of \( \alpha \), four channels) the worst disagreement between the reweighted estimate and its refit was 1.39% of the refit's value, and no comparison moved more than 0.071 posterior standard deviations. The typical disagreement is 0.28%, against Monte Carlo error of 0.20% to 0.39% on the reference fit's own channel means. That 1.39% sits at \( \alpha = 0.5 \), where the reweighted estimate runs on a weight ESS of 700 and carries roughly 1.1% of Monte Carlo error on its own, so these gaps are draws landing in slightly different places rather than the method going wrong.</p>
+
+            <p>The eight refits cost 44.9 seconds of sampling. The eight reweights cost 2.59 milliseconds, on top of a 0.65-second pass to evaluate the log prior and log likelihood at the existing draws.</p>
+
+            <p>Beyond the size, the direction carries its own reading. Strengthening the prior pulls TV's credited contribution down by roughly a thousand units of KPI across that range, which is the same mechanism the confounding post described from the other side: on this world the media prior is quietly pushing media estimates down, and the back-door path is pushing them up. Here the pull is a number rather than an argument.</p>
+
+            <div class="warning">
+                <h4>&#9888;&#65039; The reweighting tells you when it has failed, and you have to look</h4>
+                <p>At \( \alpha = 2 \) the effective sample size of the weights had fallen from 4,000 to 401. Push further and the estimate becomes four draws in a trench coat. The cutoff documented by this framework's own PSIS helper is 0.7, and <code>utils/arviz_compat.py:255</code> says plainly that weights above it are unreliable. My sweep peaked at 0.43. Gelman et al. make the same point about importance sampling between two posteriors in &sect;6.3, and add the part people skip: the bridge works &ldquo;provided the two posteriors are similar enough for importance sampling to bridge,&rdquo; and when they are not, &ldquo;this is also valuable information in itself.&rdquo; A prior you cannot reach by reweighting is a prior far enough from yours to deserve its own fit.</p>
+            </div>
+
+            <p>The whole recipe is about fifteen lines against PyMC and ArviZ.</p>
+
+            <pre><code class="language-python"># illustrative
+import numpy as np
+import pymc as pm
+from arviz_stats.base import array_stats
+
+pm.stats.compute_log_prior(idata, model=mmm.model)
+n_draws = idata.posterior.sizes["chain"] * idata.posterior.sizes["draw"]
+log_prior = sum(
+    idata["log_prior"][v].values.reshape(n_draws, -1).sum(axis=-1)
+    for v in idata["log_prior"].data_vars
+)
+
+def power_scale(alpha, quantity):
+    """Posterior mean of `quantity` under a prior raised to `alpha`."""
+    # array_stats.psislw negates its argument, so pass the ratio negated.
+    log_w, khat = array_stats.psislw(-(alpha - 1.0) * log_prior, r_eff=1.0, axis=-1)
+    w = np.exp(np.asarray(log_w) - np.max(log_w))
+    w /= w.sum()
+    return float(w @ quantity), float(khat)
+</code></pre>
+
+            <p><code>compute_log_prior</code> evaluates the prior with the value transforms removed, so the density is the one on the constrained scale and no Jacobian sneaks into the power. That detail is load-bearing. Scale the transformed-space density instead and you are power-scaling a change of variables along with the prior, which is a different and less meaningful perturbation.</p>
+
+            <h2 id="location">Width Against Location</h2>
+
+            <p>This framework already ships a prior-versus-posterior diagnostic. <code>diagnostics/learning.py:288</code> (<code>parameter_learning</code>) reports contraction \( c = 1 - \mathrm{Var}_{\text{post}} / \mathrm{Var}_{\text{prior}} \), a prior-posterior overlap coefficient, and a location shift in prior standard deviations, then grades each parameter as strong, moderate, weak, relocated or prior-dominated. It is good, and honest about being heuristic. Its own docstring names the boundary of what it measures: &ldquo;contraction tells you <em>the data spoke</em>; the posterior location tells you <em>what it said</em>.&rdquo;</p>
+
+            <p>The confounding post put the complaint more bluntly. Contraction measures how much the data moved your uncertainty, not how much the prior moved your point estimate, and that post proposed the missing sibling in two sentences: refit with the prior progressively widened and watch the coefficient walk. Power-scaling is that instrument, without the refits, and with a summary statistic instead of an eyeball.</p>
+
+            <div class="definition">
+                <h4>Prior elasticity</h4>
+                <p>For a scalar quantity \( q \) (a coefficient, a channel's contribution, a ROI), define</p>
+                $$ e_{\text{prior}}(q) \;=\; \frac{1}{\mathrm{sd}[q]} \cdot \frac{\partial\, \mathbb{E}_\alpha[q]}{\partial \log \alpha}\bigg|_{\alpha = 1} $$
+                <p>estimated by a central difference between \( \alpha = 0.8 \) and \( \alpha = 1.25 \). Units are posterior standard deviations of \( q \) per unit of log prior sharpness. This is my summary, not the one <code>priorsense</code> publishes; power-scaling is the shared machinery underneath.</p>
+            </div>
+
+            <p>Run both diagnostics over the nineteen scalar parameters of that fit and they disagree almost completely. Rank-correlate contraction against the magnitude of prior elasticity and you get &minus;0.121. Pearson gives &minus;0.007. Two parameters both graded <code>strong</code> by contraction sit thirteenfold apart on how much their location leans on the prior.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Parameter</th><th>Contraction</th><th>Verdict</th><th>Prior elasticity</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>sat_lam_Display</code></td><td>0.080</td><td>prior-dominated</td><td>&minus;0.613</td></tr>
+                    <tr><td><code>adstock_alpha_Display</code></td><td>0.115</td><td>moderate</td><td>&minus;0.618</td></tr>
+                    <tr><td><code>beta_TV</code></td><td>0.719</td><td>strong</td><td>&minus;0.486</td></tr>
+                    <tr><td><code>adstock_alpha_TV</code></td><td>0.846</td><td>strong</td><td>&minus;0.652</td></tr>
+                    <tr><td><code>beta_Display</code></td><td>0.934</td><td>strong</td><td>&minus;0.049</td></tr>
+                    <tr><td><code>trend_slope</code></td><td>0.952</td><td>strong</td><td>&minus;0.629</td></tr>
+                </tbody>
+            </table>
+
+            <p>Look at the last two rows against each other. <code>beta_Display</code> contracted 0.934 and barely notices the prior being sharpened or flattened. <code>trend_slope</code> contracted 0.952, an even tighter posterior by the width reading, and its location moves 0.63 posterior standard deviations per unit of log prior sharpness. Both are <code>strong</code>. Only one of them is a number the data placed.</p>
+
+            <p>None of that makes contraction wrong. It answers the question it was built to answer, which is whether the data narrowed the parameter, and the docstring is explicit that this is informativeness rather than importance. The two diagnostics are close to orthogonal on this fit, which is the useful discovery: a delivery gate that wants to stamp a headline number as prior-dominated needs both, because a parameter can be pinned tight and still be sitting exactly where its prior put it.</p>
+
+            <h2 id="two-axes">Scale the Likelihood Too</h2>
+
+            <p>Power-scaling the likelihood by the same trick costs nothing extra once you have the pointwise log likelihood, and it turns one reading into two. Kallioinen et al. describe the joint pattern. A parameter sensitive to both prior and likelihood scaling is showing prior-data conflict, two sources of information pulling against each other. A parameter sensitive to prior scaling and insensitive to likelihood scaling is showing something else entirely: the likelihood had little to say, so the posterior tracks the prior because there is nothing else for it to track.</p>
+
+            <p>That second pattern is the MMM's native failure mode, and it sorts this fit's parameters cleanly.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Parameter</th><th>Prior elasticity</th><th>Likelihood elasticity</th><th>Ratio</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>sat_lam_Social</code></td><td>&minus;0.388</td><td>0.078</td><td>5.0</td></tr>
+                    <tr><td><code>sat_lam_Display</code></td><td>&minus;0.613</td><td>0.205</td><td>3.0</td></tr>
+                    <tr><td><code>sat_lam_TV</code></td><td>&minus;0.238</td><td>&minus;0.086</td><td>2.8</td></tr>
+                    <tr><td><code>sat_lam_Search</code></td><td>&minus;0.149</td><td>&minus;0.066</td><td>2.2</td></tr>
+                    <tr><td><code>beta_TV</code></td><td>&minus;0.486</td><td>0.468</td><td>1.0</td></tr>
+                    <tr><td><code>adstock_alpha_TV</code></td><td>&minus;0.652</td><td>0.894</td><td>0.7</td></tr>
+                </tbody>
+            </table>
+
+            <p>All four saturation parameters land above 2. Every adstock rate and every media coefficient with an elasticity worth reading lands below 2. <code>beta_Display</code> posts 11.1 on this scale by dividing a prior elasticity of &minus;0.049 by a likelihood elasticity of 0.004, which is a ratio of two quantities near zero rather than a coefficient the prior is placing. On this world the saturation block is being placed by its prior because the likelihood is close to flat along it, and the diagnostic says so from one fit, per parameter, with a number attached. That these transform parameters are weakly identified in an MMM is <a href="blog-bayesian-mmm-carryover-shape.html">the carryover and shape post's</a> result, established on a simulation with a planted truth to check against. The two-axis reading is how you detect the same thing on a client's data, where there is none.</p>
+
+            <h2 id="which-block">The Robustness Paragraph Checks the Wrong Block</h2>
+
+            <p>Nothing forces you to scale the whole prior at once. Split the log prior into blocks, scale each block on its own, and you get a decomposition of where the headline number's dependence on assumption actually lives. For TV's incremental contribution on this fit, the joint prior elasticity is &minus;0.835 and it splits like this.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Prior block</th><th>Elasticity of TV contribution</th><th>Share</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>baseline (intercept, trend, seasonality)</td><td>&minus;0.415</td><td>49%</td></tr>
+                    <tr><td>adstock rates</td><td>&minus;0.214</td><td>25%</td></tr>
+                    <tr><td>saturation</td><td>&minus;0.137</td><td>16%</td></tr>
+                    <tr><td>media coefficients</td><td>&minus;0.073</td><td>9%</td></tr>
+                    <tr><td>control coefficients</td><td>&minus;0.007</td><td>1%</td></tr>
+                    <tr><td>observation noise</td><td>0.004</td><td>0%</td></tr>
+                </tbody>
+            </table>
+
+            <p>The six blocks sum to &minus;0.842 against the joint &minus;0.835, which is what local additivity is supposed to look like and a decent check that the arithmetic is sound. I verified two of the rows the slow way: power-scaling only the media coefficient priors at \( \alpha = 2 \) and refitting gives 5,090.7 for TV against the reweighted 5,119.8, and doing the same to the baseline block gives 4,844.4 against 4,856.0. Both inside 0.6%.</p>
+
+            <p>Now read the table as an audit of standard practice. The robustness paragraph in the deliverable varies the media ROI prior, because that is the prior anyone argues about in a kickoff meeting. On this fit that block accounts for 9% of the sensitivity of the number being defended. Half of it sits in the baseline block, which is the trend and seasonality prior nobody discusses, and a further quarter sits in the adstock rates. An analyst who ran the conventional check and reported stability would have been telling the truth about the axis they varied.</p>
+
+            <h2 id="one-at-a-time">Four Points Are Not a Neighbourhood</h2>
+
+            <p>There is a second problem with the robustness paragraph, and it is geometric. The check varies one prior hyperparameter at a time, holding the others at their defaults, then reports the range of the answer over those points. That procedure has no claim on the worst case, because the worst case does not have to lie on an axis.</p>
+
+            <p>Odnoblyudova, Dellaporta and Briol (2026) show how little a finite sweep guarantees even along one axis. On a telecom model the sensitivity is non-convex in a prior correlation parameter, so evaluating four candidate values and taking the worst selects a local maximum at 0.05 while the true supremum sits at 0.2 and is never visited. Their contribution is the machinery that makes the global question tractable. A Fisher divergence between the reference posterior's score and a candidate's never requires sampling from the candidate, only evaluating that candidate's score at the reference draws, and it costs \( O(md) \) in draws and dimension. For exponential-family priors with a loss linear in the hyperparameters it reduces further to a convex quadratic, so the supremum over a hypercube neighbourhood can be read off a handful of vertices.</p>
+
+            <p>Reweighting gets at a smaller version of the same point without the machinery, provided the neighbourhood stays close enough for \( \hat{k} \) to allow it. The media coefficient prior in this framework is \( \mathrm{Gamma}(\mu = 1.5, \sigma = 1) \) on the standardized coefficient. I swept a rectangle around it, \( \mu \) from 1.0 to 2.0 and \( \sigma \) from 0.6 to 1.5, at 41 by 37 resolution. That is 1,517 candidate priors, evaluated in 1.42 seconds, with a maximum \( \hat{k} \) of 0.547 across the whole grid. Reweighting back to the reference prior reproduced the fit's own channel means to within \( 3 \times 10^{-13} \) of a KPI unit, which is the check that the weights do nothing when they should do nothing.</p>
+
+            <p>The conventional sweep of five points (the default, a tighter \( \sigma \), a looser \( \sigma \), a lower \( \mu \), a higher \( \mu \)) moves total media contribution over a range of 207 units. Over the full rectangle it moves 361, with both extremes at corners the axis-wise sweep never visits: 15,275.6 at \( (\mu = 1.0,\, \sigma = 1.5) \) and 15,636.6 at \( (\mu = 2.0,\, \sigma = 0.6) \). So the informal check found 57% of the movement available inside the same neighbourhood it thought it was searching.</p>
+
+            <p>For one channel it gets much worse. Search moves 5.1 units across the five axis points and 50.1 across the rectangle, so the conventional sweep reported a tenth of the sensitivity that a joint search over the same hyperparameters exposes. I refit at both corners to confirm the reweighting was not inventing it. At \( (\mu = 1.0,\, \sigma = 1.5) \) the largest per-channel disagreement was 0.58%, and at \( (\mu = 2.0,\, \sigma = 0.6) \) it was 1.15%.</p>
+
+            <p>These are small moves. Search's fifty units sit against a 90% credible interval 2,192 units wide. I chose a defensible neighbourhood and the answer inside it is stable, which is a real finding about this fit and worth reporting as one. My claim is about the procedure. A five-point axis-wise sweep understated the movement inside its own neighbourhood by a factor of ten on one channel, and the only reason I know that is that scanning fifteen hundred alternatives cost a quarter of one refit.</p>
+
+            <h2 id="limits">What This Does Not Establish</h2>
+
+            <p>Power-scaling is a local sensitivity analysis. It perturbs infinitesimally around the prior you actually used and reports the gradient, so it answers whether the posterior is leaning on that prior. It does not answer how bad a defensible alternative prior could make things, and Odnoblyudova et al. classify it that way explicitly when they motivate the global version. A parameter with zero prior elasticity at \( \alpha = 1 \) can still move a long way under a prior centred somewhere else entirely.</p>
+
+            <p>Somebody still has to pick the neighbourhood. My rectangle was mine, and a different analyst's rectangle would produce a different worst case. The global method removes the search but not the specification.</p>
+
+            <p>None of this touches confounding. The back-door path on this world is open, and the fit is badly wrong because of it: it credits Search with 5,126 against a planted truth of 3,654. A prior sensitivity analysis reports how much of that wrong answer came from the prior. It does not make the answer right. <a href="blog-prior-was-doing-more.html">The prior post</a> made the stronger version of that argument: a prior tight enough to offset a back-door path is also tight enough to override real evidence, and the route to closing the path is an experiment.</p>
+
+            <p>And a low \( \hat{k} \) is necessary rather than sufficient. It certifies that the weights have a finite-variance tail, not that the perturbed posterior is unimodal or that the sampler explored it in the first place. If the reference fit had the pathologies in <a href="blog-when-sampling-fails.html">the sampling diagnostics post</a>, reweighting inherits every one of them and reports a clean \( \hat{k} \) while doing it.</p>
+
+            <p>This is one fit on one synthetic world, with one seed. The mechanism generalizes because it is an identity about densities. The particular numbers do not.</p>
+
+            <h2 id="next">What to Build</h2>
+
+            <p>Nothing in this framework computes any of it. The closest thing is <code>tests/test_continuous_learning.py:978</code>, a <code>@pytest.mark.slow</code> audit that fits the bandit model twice at two values of one prior scale and asserts the posterior spread grows. That test is correct and it costs two fits to interrogate one hyperparameter. The 1,517-cell sweep above cost 1.42 seconds and no fits at all.</p>
+
+            <p>A <code>diagnostics/prior_sensitivity.py</code> sitting beside <code>learning.py</code> starts with one table: per-parameter elasticity on both axes, prior and likelihood, with \( \hat{k} \) and weight ESS beside every row so a reader can see which cells to distrust. The block decomposition comes next, keyed to a named quantity rather than to a raw coefficient, because what anyone asks an MMM about is a channel's contribution or its ROI. Then the neighbourhood scan, which takes hyperparameter ranges and evaluates the grid. Where \( \hat{k} \) exceeds 0.7 it refuses to report the cell and prints the refit command for it instead.</p>
+
+            <p>Reporting is the part that changes what a client sees. <a href="blog-holdout-error-mmm.html">The acceptance gate</a> demands an evidence tier on every headline number, and prior-dominated is one of the tiers it can assign. Contraction cannot assign it, for the reason the middle of this post measures. Prior elasticity against a stated threshold can, and it comes with a sentence a client can act on: strengthening or flattening your assumptions by a factor of two moves this channel's credited contribution by a third of its reported interval, and here is which assumption did it.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>The posterior under a power-scaled prior is the posterior you already sampled, reweighted by \( p(\theta)^{\alpha-1} \). On a 156-week four-channel MMM it reproduced eight refits to within 1.39% on per-channel contribution, at 2.59 milliseconds against 44.9 seconds.</li>
+                    <li>The Pareto \( \hat{k} \) of the weights is the part that makes it safe to publish. It reached 0.43 at \( \alpha = 2 \) here, and a value past 0.7 is an instruction to refit rather than a number to interpret.</li>
+                    <li>Contraction and prior elasticity measure different things and barely correlate (Spearman &minus;0.121 over nineteen parameters). Two parameters graded <code>strong</code> by contraction differed thirteenfold in how much their location leaned on the prior.</li>
+                <li>Scaling the likelihood on its own tells prior-data conflict apart from a likelihood that had nothing to say. All four saturation parameters on this fit were more than twice as prior-sensitive as likelihood-sensitive, and no adstock rate or media coefficient with an elasticity worth reading was.</li>
+                    <li>Blocking the prior showed the baseline block carrying 49% of TV's sensitivity against the media coefficient block's 9%, which inverts the priority of the robustness paragraph everyone writes.</li>
+                    <li>A five-point axis-wise sweep of the media prior captured 57% of the movement available in its own rectangle, and 10% of it for one channel. Scanning 1,517 alternatives instead cost 1.42 seconds.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Kallioinen, N., Paananen, T., B&uuml;rkner, P.-C., &amp; Vehtari, A. (2024). <em>Detecting and Diagnosing Prior and Likelihood Sensitivity with Power-Scaling</em>. Statistics and Computing, 34. arXiv:2107.14054. Reference implementation: the <code>priorsense</code> R package.</li>
+                <li>Odnoblyudova, A., Dellaporta, C., &amp; Briol, F.-X. (2026). arXiv:2605.28099. Global prior sensitivity from one set of posterior draws via a Fisher divergence; Proposition 2 gives the convex-quadratic reduction for natural exponential families, Theorem 1 the dimension-free bound, and &sect;5 the telecom counterexample where a four-point sweep selects a local maximum at 0.05 while the supremum sits at 0.2.</li>
+                <li>Gelman, A., Vehtari, A., McElreath, R., Simpson, D., Margossian, C. C., Yao, Y., Kennedy, L., Gabry, J., B&uuml;rkner, P.-C., Modr&aacute;k, M., &amp; Leos Barajas, V. (2026). <em>Bayesian Workflow</em>. CRC Press. ISBN 978-0-367-49014-0. Quotations here are from &sect;6.3 of the 2020 preprint (Gelman, Vehtari, Simpson, Margossian, Carpenter, Yao, Kennedy, Gabry, B&uuml;rkner &amp; Modr&aacute;k), arXiv:2011.01808, which also gives the shrinkage and static-sensitivity alternatives and credits the latter to Gelman, Bois &amp; Jiang (1996).</li>
+                <li>Repo grounding: <code>diagnostics/learning.py:288</code> (<code>parameter_learning</code>), <code>model/base.py:4856</code> (<code>BayesianMMM.compute_parameter_learning</code>), <code>synth/dgp.py:438</code> (<code>make_unobserved_confounding</code>), <code>utils/arviz_compat.py:255</code> (<code>psis_log_weights</code>), <code>tests/test_continuous_learning.py:978</code>.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+        // KaTeX: three delimiter pairs only. Single-$ is deliberately absent so that
+        // dollar amounts render as money instead of being parsed as math.
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: "$$", right: "$$", display: true },
+                    { left: "\\[", right: "\\]", display: true },
+                    { left: "\\(", right: "\\)", display: false }
+                ],
+                throwOnError: false
+            });
+        });
+    </script>
+</body>
+</html>

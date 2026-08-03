@@ -10,7 +10,7 @@
     <meta name="author" content="Matthew Reda">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-prior-predictive-sbc.html">
     <meta property="og:title" content="Does Your Model Work Before It Sees Data? Prior Predictive Checks and SBC">
-    <meta property="og:description" content="Prior predictive checks catch priors that imply impossible data; simulation-based calibration verifies the posterior computation. Both run before the model sees a single real observation.">
+    <meta property="og:description" content="Prior predictive checks catch priors that imply impossible data. Simulation-based calibration verifies the posterior computation. Both run before the model sees a single real observation.">
     <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-prior-predictive-sbc.html">
     <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <meta property="og:type" content="article">
@@ -37,7 +37,7 @@
     <!-- seo:augmented (structured data + social cards) -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Does Your Model Work Before It Sees Data? Prior Predictive Checks and SBC">
-    <meta name="twitter:description" content="Prior predictive checks catch priors that imply impossible data; simulation-based calibration verifies the posterior computation. Both run before the model sees a single real observation.">
+    <meta name="twitter:description" content="Prior predictive checks catch priors that imply impossible data. Simulation-based calibration verifies the posterior computation. Both run before the model sees a single real observation.">
     <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
     <script type="application/ld+json">
     {
@@ -62,7 +62,7 @@
           "@id": "https://redam94.github.io/mmm-framework/#website",
           "name": "MMM Framework",
           "url": "https://redam94.github.io/mmm-framework/",
-          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "description": "Documentation for the MMM Framework: a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
           "inLanguage": "en-US",
           "publisher": {
             "@id": "https://redam94.github.io/mmm-framework/#organization"
@@ -77,7 +77,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-14",
+          "dateModified": "2026-08-02",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/blog-prior-predictive-sbc.html#breadcrumb"
           },
@@ -156,11 +156,11 @@
                 <time datetime="2026-07-14">July 14, 2026</time><span aria-hidden="true">&middot;</span>
                 <span class="post-tag">Bayesian workflow</span>
             </p>
-            <p class="lead">Most model validation waits for the data: fit, then check residuals, coverage, out-of-sample error. But two of the most powerful checks in the Bayesian toolkit run <em>before</em> a single real observation is used. A prior predictive check asks whether your priors imply data that could plausibly exist. Simulation-based calibration asks whether your inference software recovers the parameters it claims to. Both catch failures that a post-fit diagnostic quietly passes — and both matter most for exactly the weakly-identified models, like an MMM, where the prior does the heavy lifting.</p>
+            <p class="lead">Most model validation waits for the data. Fit, then check residuals, coverage, out-of-sample error. But two of the sharpest checks in the Bayesian toolkit run <em>before</em> a single real observation is used. A prior predictive check asks whether your priors imply data that could plausibly exist at all. Simulation-based calibration asks whether your inference software actually recovers the parameters it claims to, on data where you already know the answer. Both catch failures that a post-fit diagnostic quietly passes. And both matter most for exactly the weakly-identified models, like an MMM, where the prior does the heavy lifting.</p>
 
             <h2 id="before-the-data">The Checks Before the Data</h2>
-            <p>A Bayesian model is a joint distribution, \( p(y, \theta) = p(y \mid \theta)\,p(\theta) \). That factorization contains a fact that is easy to forget: the model can generate data. Fix nothing, observe nothing — just draw parameters from the prior and push them through the likelihood, and out comes a synthetic dataset. This generative property is what makes pre-data checking possible, and it splits into two distinct questions.</p>
-            <p>The first is about the <em>model</em>: do the priors, once combined with the likelihood, describe a world that could exist? That is the prior predictive check. The second is about the <em>computation</em>: given data the model itself generated, does your sampler return a posterior that actually contains the parameters that produced it? That is simulation-based calibration. Neither question needs your real data, and neither can be answered by staring at the priors one coefficient at a time. Both are cheap relative to the cost of trusting a broken model — and both are standard steps in what Gelman and colleagues (2020) codified as the <em>Bayesian workflow</em>.</p>
+            <p>A Bayesian model is a joint distribution, \( p(y, \theta) = p(y \mid \theta)\,p(\theta) \). That factorization contains a fact that is easy to forget: the model can generate data. Fix nothing, observe nothing. Draw parameters from the prior, push them through the likelihood, and out comes a synthetic dataset. Pre-data checking rests entirely on this generative property, and the checking splits into two distinct questions.</p>
+            <p>The first is about the <em>model</em>: do the priors, once combined with the likelihood, describe a world that could exist? That is the prior predictive check. The second is about the <em>computation</em>: given data the model itself generated, does your sampler return a posterior that actually contains the parameters that produced it? That is simulation-based calibration. Neither question needs your real data, and neither can be answered by staring at the priors one coefficient at a time. Set against the cost of trusting a broken model, both are cheap, and both are standard steps in the <em>Bayesian workflow</em> that Gelman and colleagues (2020) codified.</p>
 
             <h2 id="prior-predictive">Prior Predictive Checks</h2>
             <p>The mechanics are almost trivially simple, which is part of why the check is so underused.</p>
@@ -169,10 +169,10 @@
                 <h4>Definition: Prior predictive distribution</h4>
                 <p>With a proper prior, the model implies a marginal distribution over datasets before any data are seen,</p>
                 $$ p(y) \;=\; \int p(y \mid \theta)\, p(\theta)\, d\theta. $$
-                <p>A prior predictive check samples from it — draw \( \theta \sim p(\theta) \), then \( y \sim p(y \mid \theta) \) — and inspects the simulated datasets against domain knowledge. If the priors are sensible, the fake datasets should look like data that could plausibly arise in your application; if they don't, the priors need work.</p>
+                <p>A prior predictive check samples from it (draw \( \theta \sim p(\theta) \), then \( y \sim p(y \mid \theta) \)) and inspects the simulated datasets against domain knowledge. If the priors are sensible, the fake datasets should look like data that could plausibly arise in your application. When they don't, the priors need work.</p>
             </div>
 
-            <p>The contrast with the more familiar <em>posterior</em> predictive check is exactly one word in the sampling step. A posterior predictive check draws parameters from \( p(\theta \mid y) \) — the data-informed posterior — and simulates replicated datasets to compare against the observed one. As Gabry and colleagues (2019) put it, because the posterior version conditions on real data, "we can be much more stringent in our comparisons." The prior version is looser by design: it is not asking whether the model fits, but whether the model, as specified, is even in the right universe. You run the prior predictive check <em>first</em>, precisely because it can veto a specification before you spend a night of sampling on it.</p>
+            <p>The contrast with the more familiar <em>posterior</em> predictive check is exactly one word in the sampling step. A posterior predictive check draws its parameters from the data-informed posterior \( p(\theta \mid y) \) and simulates replicated datasets to compare against the observed one. As Gabry and colleagues (2019) put it, because the posterior version conditions on real data, "we can be much more stringent in our comparisons." The prior version is looser by design. It sets fit aside and asks whether the model, as specified, is even in the right universe. You run it <em>first</em>, because it can veto a specification before you spend a night of sampling on it.</p>
 
             <pre><code># illustrative
 # Prior predictive check: does the model imply plausible data?
@@ -184,11 +184,11 @@ for s in range(n_sims):
 #   negative sales? a channel explaining 500% of revenue? inspect and reject.</code></pre>
 
             <h2 id="innocuous-absurd">Innocuous Priors, Absurd Data</h2>
-            <p>The payoff is that a prior which looks harmless on the parameter scale can be deranged on the outcome scale — and you cannot see this by looking at the priors individually. The canonical demonstration is Gabry and colleagues' (2019) air-pollution model, where the outcome is on a log scale. A vague prior, coefficients \( \sim \mathcal{N}(0, 100) \), generates prior predictive datasets they describe as "completely impossible for this application." Tightening to a <em>weakly informative</em> prior helps but is not automatically safe: even priors that look reasonable per parameter, when simulated jointly, still produced pollution concentrations above 22,000 &mu;g/m&sup3; — a physically absurd number. The workflow paper (Gelman et al., 2020) paraphrases the failure memorably as fake datasets "where the pollution is denser than a black hole."</p>
+            <p>The payoff is that a prior which looks harmless on the parameter scale can be deranged on the outcome scale. Reading the priors one at a time will never show you that. The canonical demonstration is Gabry and colleagues' (2019) air-pollution model, where the outcome is on a log scale. A vague prior, coefficients \( \sim \mathcal{N}(0, 100) \), generates prior predictive datasets they describe as "completely impossible for this application." Tightening to a <em>weakly informative</em> prior helps but is not automatically safe: even priors that look reasonable per parameter, when simulated jointly, still produced pollution concentrations above 22,000 &mu;g/m&sup3;, a physically absurd number. The workflow paper (Gelman et al., 2020) paraphrases the failure memorably as fake datasets "where the pollution is denser than a black hole."</p>
 
             <div class="interactive-box">
                 <h4>An innocuous coefficient prior, simulated forward</h4>
-                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A one-channel model on an index where baseline sales sit at 100. The channel enters as \(y_t = 100 + \beta\,z_t\), with a standardized spend series \(z_t\) and a coefficient prior \(\beta \sim \mathcal{N}(0,\,\sigma)\). Widen the prior and watch the simulated sales fan (median, 50% and 90% bands over 240 prior draws) balloon past every sane bound — negative sales, a single channel swinging revenue by multiples of the base. No one prior looks guilty on the \(\beta\) scale; the crime shows up only on the outcome scale.</p>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">A one-channel model on an index where baseline sales sit at 100. The channel enters as \(y_t = 100 + \beta\,z_t\), with a standardized spend series \(z_t\) and a coefficient prior \(\beta \sim \mathcal{N}(0,\,\sigma)\). Widen the prior and watch the simulated sales fan (median, 50% and 90% bands over 240 prior draws) balloon past every sane bound: negative sales, a single channel swinging revenue by multiples of the base. No one prior looks guilty on the \(\beta\) scale. The crime shows up only on the outcome scale.</p>
                 <div class="control-row">
                     <label>Coefficient prior width &nbsp;(σ)</label>
                     <input type="range" id="ppSigma" min="2" max="100" step="2" value="8">
@@ -196,25 +196,25 @@ for s in range(n_sims):
                 </div>
                 <div class="chart-container chart-themed" id="ppFan" style="height:340px;"></div>
                 <div class="viz-readout">
-                    <div class="stat"><span class="lbl">Implied sales (90% band)</span><span class="val" id="ppRange">&mdash;</span></div>
-                    <div class="stat"><span class="lbl">Peak channel share of base</span><span class="val" id="ppShare">&mdash;</span></div>
-                    <div class="stat"><span class="lbl">Draws implying impossible data</span><span class="val" id="ppBad">&mdash;</span></div>
-                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="ppVerdict">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Implied sales (90% band)</span><span class="val" id="ppRange">&hellip;</span></div>
+                    <div class="stat"><span class="lbl">Peak channel share of base</span><span class="val" id="ppShare">&hellip;</span></div>
+                    <div class="stat"><span class="lbl">Draws implying impossible data</span><span class="val" id="ppBad">&hellip;</span></div>
+                    <div class="stat"><span class="lbl">Verdict</span><span class="val" id="ppVerdict">&hellip;</span></div>
                 </div>
-                <p class="chart-caption" style="margin-bottom:0;">&ldquo;Impossible&rdquo; here means a draw whose synthetic series goes negative somewhere, or whose channel contribution exceeds the entire baseline &mdash; more than 100% of revenue from one channel. A weakly-informative σ keeps the fan physically plausible; a vague one does not.</p>
+                <p class="chart-caption" style="margin-bottom:0;">&ldquo;Impossible&rdquo; here means a draw whose synthetic series goes negative somewhere, or whose channel contribution exceeds the entire baseline (more than 100% of revenue from one channel). A weakly-informative σ keeps the fan physically plausible. A vague one does not.</p>
             </div>
 
-            <p>The lesson is structural, not anecdotal. The prior predictive distribution reflects the <em>interplay</em> between the prior and the likelihood, so you cannot understand it by fixing all but one parameter and varying that one — you have to assess the prior as a joint, multivariate object. A related trap that only appears in aggregate: many independently "weak" priors can be jointly <em>strong</em>. Gelman and colleagues (2020) note that independent priors on a few dozen regression weights can imply a prior that strongly favors high \( R^2 \) — the model is quietly convinced, before seeing anything, that its predictors explain almost all the variance. No single prior looks guilty; the crime is in the sum.</p>
+            <p>The lesson here is structural. Because the prior predictive distribution reflects the <em>interplay</em> between the prior and the likelihood, you cannot understand it by fixing all but one parameter and varying that one. You have to assess the prior as a joint, multivariate object. A second trap shows up only in aggregate: many independently "weak" priors can be jointly <em>strong</em>. Gelman and colleagues (2020) note that independent priors on a few dozen regression weights can imply a prior that strongly favors high \( R^2 \). The model is quietly convinced, before it has seen anything at all, that its predictors explain almost all the variance. No single prior looks guilty. The crime is in the sum.</p>
 
             <div class="note">
                 <h4>💡 Elicit priors on things you can actually picture</h4>
-                <p>The deeper reason prior predictive checks work is that humans have good intuition about <em>outcomes</em> — plausible sales, plausible lift, plausible ROI — and terrible intuition about the scale of a standardized regression coefficient after it passes through an adstock transform and a saturation curve. Simulating forward converts an un-pictureable parameter prior into a pictureable data distribution you can accept or reject. This is also why putting priors directly on interpretable quantities (an ROI, a half-life) beats putting them on opaque internal coefficients.</p>
+                <p>Prior predictive checks work for a deeper reason: humans have good intuition about <em>outcomes</em> (a plausible sales level, a plausible lift) and terrible intuition about the scale of a standardized regression coefficient after it passes through an adstock transform and a saturation curve. Simulating forward converts an un-pictureable parameter prior into a pictureable data distribution you can accept or reject. That is also why putting priors directly on interpretable quantities, an ROI or a half-life, beats putting them on opaque internal coefficients.</p>
             </div>
 
             <h2 id="self-consistency">The Self-Consistency Identity</h2>
             <p>Prior predictive checks interrogate the model. The second check interrogates the <em>inference machinery</em>, and it rests on an identity that is worth stating carefully, because the whole method falls out of it. Draw a ground-truth parameter from the prior, \( \tilde\theta \sim p(\theta) \), simulate data from it, \( \tilde y \sim p(y \mid \tilde\theta) \), and compute the posterior \( p(\theta \mid \tilde y) \). Now average that posterior over all the ways the data could have come out. Talts and colleagues (2018) show you get the prior back exactly:</p>
             $$ p(\theta) \;=\; \iint p(\theta \mid \tilde y)\, p(\tilde y \mid \tilde\theta)\, p(\tilde\theta)\; d\tilde y\, d\tilde\theta. $$
-            <p>In words: the data-averaged posterior equals the prior. This holds for <em>any</em> model, with no assumptions beyond a proper prior and a correct posterior. It is a statement of pure consistency — if you generate parameters from the prior and infer them back correctly, you cannot, on average, end up anywhere other than the prior. The identity traces back to Geweke (2004) and Cook, Gelman, and Rubin (2006); its power is the contrapositive. <strong>Any</strong> discrepancy between the data-averaged posterior and the prior signals an error — either the posterior is being computed inaccurately, or the model as coded is not the model you think you wrote.</p>
+            <p>In words: the data-averaged posterior equals the prior. This holds for <em>any</em> model, with no assumptions beyond a proper prior and a correct posterior. It is a statement of pure consistency. Generate parameters from the prior, infer them back correctly, and you cannot, on average, land anywhere other than the prior. The identity traces back to Geweke (2004) and Cook, Gelman, and Rubin (2006). Its power is the contrapositive. <em>Any</em> discrepancy between the data-averaged posterior and the prior signals an error: either the posterior is being computed inaccurately, or the model as coded is not the model you think you wrote.</p>
 
             <h2 id="sbc-rank">SBC and the Rank Statistic</h2>
             <p>You could check the identity directly by comparing two densities, but Talts and colleagues (2018) found a sharper instrument. Instead of averaging distributions, look at where each ground-truth value falls among its own posterior draws.</p>
@@ -226,7 +226,7 @@ for s in range(n_sims):
                 <p><strong>Theorem (Talts et al., 2018):</strong> if the \( \theta_l \) are independent draws from the exact posterior, this rank is <em>uniformly</em> distributed over the \( L+1 \) integers \( \{0, \dots, L\} \), for any joint distribution \( p(y, \theta) \).</p>
             </div>
 
-            <p>The intuition is that the true value should be a "typical" member of its own posterior — no more likely to sit at the bottom of the cloud of draws than in the middle or at the top. Repeat the whole process over many simulated datasets, bin the ranks into a histogram, and calibrated inference produces a <em>flat</em> histogram. Every departure from flatness has a named meaning. The procedure generalizes the older idea of benchmarking against a single simulated truth: one truth-point tells you almost nothing, but thousands of ranks, aggregated, expose the systematic tendencies of the sampler.</p>
+            <p>The intuition is that the true value should be a "typical" member of its own posterior, no more likely to sit at the bottom of the cloud of draws than in the middle or at the top. Repeat the whole process over many simulated datasets, bin the ranks into a histogram, and calibrated inference produces a <em>flat</em> histogram. Every departure from flatness has a named meaning. The procedure generalizes the older idea of benchmarking against a single simulated truth: one truth-point tells you almost nothing, but thousands of ranks, aggregated, expose the systematic tendencies of the sampler.</p>
 
             <pre><code># illustrative
 # Simulation-based calibration: one rank per simulated dataset
@@ -239,24 +239,24 @@ for s in range(n_sims):
 histogram(ranks)   # flat = calibrated; shape = a specific, diagnosable failure</code></pre>
 
             <h2 id="reading-histogram">Reading the Rank Histogram</h2>
-            <p>The diagnostic value of SBC is that the <em>shape</em> of the deviation tells you what went wrong, not merely that something did. Talts and colleagues (2018) catalogue the vocabulary, borrowed from the ensemble-forecast rank-histogram literature.</p>
+            <p>SBC does more than register that something failed. The <em>shape</em> of the deviation tells you what went wrong. Talts and colleagues (2018) catalogue the vocabulary, borrowed from the ensemble-forecast rank-histogram literature.</p>
 
             <table>
                 <thead>
                     <tr><th>Histogram shape</th><th>What the posterior is doing</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>Flat (uniform)</td><td>Calibrated — ranks consistent with correct computation</td></tr>
+                    <tr><td>Flat (uniform)</td><td>Calibrated: ranks consistent with correct computation</td></tr>
                     <tr><td>\( \cap \)-shape (dome)</td><td>Over-dispersed: the posterior is on average <em>too wide</em> (under-confident)</td></tr>
                     <tr><td>\( \cup \)-shape (bathtub)</td><td>Under-dispersed: the posterior is on average <em>too narrow</em> (overconfident)</td></tr>
-                    <tr><td>Sloped / tilted (ramp)</td><td>Bias — the posterior is systematically shifted; ranks pile up on the opposite side</td></tr>
-                    <tr><td>Spikes at ranks 0 and \( L \)</td><td>Autocorrelation — the MCMC draws are not thinned to near-independence</td></tr>
+                    <tr><td>Sloped / tilted (ramp)</td><td>Bias: the posterior is systematically shifted, so ranks pile up on the opposite side</td></tr>
+                    <tr><td>Spikes at ranks 0 and \( L \)</td><td>Autocorrelation: the MCMC draws are not thinned to near-independence</td></tr>
                 </tbody>
             </table>
 
             <div class="interactive-box">
                 <h4>Reading the rank histogram, by miscalibration type</h4>
-                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">1,200 simulated fits of a one-parameter model, each ranking the true value among 59 posterior draws. When the posterior is exactly right the ranks are <strong>uniform</strong> &mdash; every bar inside the shaded binomial band. Distort the posterior and each pathology draws its signature shape: too <em>narrow</em> a posterior pushes the truth into the tails (∪); too <em>wide</em> traps it in the middle (∩); a shifted posterior tilts the histogram into a ramp.</p>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">1,200 simulated fits of a one-parameter model, each ranking the true value among 59 posterior draws. When the posterior is exactly right the ranks are uniform, every bar inside the shaded binomial band. Distort the posterior and each pathology draws its signature shape. Too <em>narrow</em> a posterior pushes the truth into the tails (∪), too <em>wide</em> traps it in the middle (∩), and a shifted posterior tilts the histogram into a ramp.</p>
                 <div class="control-row">
                     <label>Posterior width &nbsp;(× exact)</label>
                     <input type="range" id="sbcRatio" min="0.4" max="2" step="0.05" value="1">
@@ -269,57 +269,57 @@ histogram(ranks)   # flat = calibrated; shape = a specific, diagnosable failure<
                 </div>
                 <div class="chart-container chart-themed" id="sbcHist" style="height:340px;"></div>
                 <div class="viz-readout">
-                    <div class="stat"><span class="lbl">Histogram shape</span><span class="val" id="sbcShape">&mdash;</span></div>
-                    <div class="stat"><span class="lbl">Bins outside the band</span><span class="val" id="sbcOut">&mdash;</span></div>
-                    <div class="stat"><span class="lbl">Diagnosis</span><span class="val" id="sbcDiag">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Histogram shape</span><span class="val" id="sbcShape">&hellip;</span></div>
+                    <div class="stat"><span class="lbl">Bins outside the band</span><span class="val" id="sbcOut">&hellip;</span></div>
+                    <div class="stat"><span class="lbl">Diagnosis</span><span class="val" id="sbcDiag">&hellip;</span></div>
                 </div>
-                <p class="chart-caption" style="margin-bottom:0;">A flat histogram is the only pass. Set the width to 1.0 and the bias to 0 for the calibrated case; every other setting is a computation whose posterior is systematically wrong in a way SBC names precisely.</p>
+                <p class="chart-caption" style="margin-bottom:0;">A flat histogram is the only pass. Set the width to 1.0 and the bias to 0 for the calibrated case. Every other setting is a computation whose posterior is systematically wrong in a way SBC names precisely.</p>
             </div>
 
-            <p>Two of Talts and colleagues' worked examples are worth internalizing because they recur constantly in practice. First, a deliberately misspecified prior — generate with a wide prior, fit with a narrow one — produces a textbook \( \cup \)-shape, the posterior too confident because the fitting prior refuses to let it spread. Second, and more consequentially, the classic "eight schools" hierarchical model fit in its <em>centered</em> parameterization produces a biased, asymmetric histogram: the sampler cannot navigate the funnel-shaped geometry near the group-variance parameter, so it systematically mis-estimates it. Switch to the <em>non-centered</em> parameterization and the histogram flattens. Same model, same data-generating process, different code — and only SBC catches that the first version was silently wrong. This is the single most important thing SBC buys you: hierarchical funnels are exactly the geometry a geo-hierarchical MMM lives in.</p>
+            <p>Two of Talts and colleagues' worked examples are worth internalizing because they recur constantly in practice. First, a deliberately misspecified prior (generate with a wide prior, fit with a narrow one) produces a textbook \( \cup \)-shape, the posterior too confident because the fitting prior refuses to let it spread. Second, and more consequentially, the classic "eight schools" hierarchical model fit in its <em>centered</em> parameterization produces a biased, asymmetric histogram: the sampler cannot explore the funnel-shaped geometry near the group-variance parameter, so it systematically mis-estimates it. Switch to the <em>non-centered</em> parameterization and the histogram flattens. Same model, same data-generating process, different code. Only SBC catches that the first version was silently wrong, and that is the single most valuable thing it buys you, because hierarchical funnels are exactly the geometry a geo-hierarchical MMM lives in.</p>
 
             <details class="deep-dive">
                 <summary><span class="deep-dive-tag">Deep dive</span>From histograms to ECDF bands</summary>
                 <div class="deep-dive-body">
-                    <p>Binned histograms have a real weakness: the conclusion can depend on the bin width. Säilynoja, Bürkner, and Vehtari (2022) show a striking case where the same 250-value sample sits comfortably inside a 95% band with 20 bins but breaches it with 50 bins — the binning choice flips the verdict, and re-binning until you like the answer is just multiple testing in disguise.</p>
-                    <p>Their fix drops binning entirely. Apply the probability integral transform to the ranks and plot the <em>empirical CDF</em> of the resulting values against the uniform CDF, wrapped in <em>simultaneous</em> confidence bands that jointly hold at the stated coverage across every evaluation point at once. Subtracting the diagonal gives an ECDF-<em>difference</em> plot, which stretches the vertical scale so that small deviations at the extreme ranks — the ones a coarse histogram smears away — become visible. The bands come from the binomial distribution of the scaled ECDF with a one-time coverage adjustment, so there is no bin-width knob to fiddle and no post-hoc re-binning temptation. Talts and colleagues had already recommended pairing the histogram with an ECDF view; Säilynoja and colleagues supplied the rigorous band that makes it a formal test.</p>
+                    <p>Binned histograms have a real weakness: the conclusion can depend on the bin width. Säilynoja, Bürkner, and Vehtari (2022) show a striking case where the same 250-value sample sits comfortably inside a 95% band with 20 bins but breaches it with 50 bins. The binning choice flips the verdict, and re-binning until you like the answer is multiple testing in disguise.</p>
+                    <p>Their fix drops binning entirely. Apply the probability integral transform to the ranks and plot the <em>empirical CDF</em> of the resulting values against the uniform CDF, wrapped in <em>simultaneous</em> confidence bands that jointly hold at the stated coverage across every evaluation point at once. Subtracting the diagonal gives an ECDF-<em>difference</em> plot, which stretches the vertical scale so that small deviations at the extreme ranks, the ones a coarse histogram smears away, become visible. The bands come from the binomial distribution of the scaled ECDF with a one-time coverage adjustment, so there is no bin-width knob to fiddle and no post-hoc re-binning temptation. Talts and colleagues had already recommended pairing the histogram with an ECDF view. Säilynoja and colleagues supplied the rigorous band that turns it into a formal test.</p>
                 </div>
             </details>
 
-            <p>A few numbers from the original experiments calibrate expectations. Talts and colleagues used \( L = 100 \) posterior draws per fit over as many as 10,000 replications, with a rule of thumb of roughly 20 counts per bin to tame Monte-Carlo noise, and a variability band drawn from the binomial distribution of the bin counts. Because MCMC draws are autocorrelated — and autocorrelation shows up as those boundary spikes — you thin each fit down to near-independent draws before ranking. A convenient trick is to sample a number of draws one short of a power of two, say 1023, so that \( L + 1 = 1024 \) divides evenly when you re-bin.</p>
+            <p>A few numbers from the original experiments calibrate expectations. Talts and colleagues used \( L = 100 \) posterior draws per fit over as many as 10,000 replications, with a rule of thumb of roughly 20 counts per bin to tame Monte-Carlo noise, and a variability band drawn from the binomial distribution of the bin counts. MCMC draws are autocorrelated, and that autocorrelation is what produces the boundary spikes. So you thin each fit down to near-independent draws before ranking. A convenient trick is to sample a number of draws one short of a power of two, say 1023, so that \( L + 1 = 1024 \) divides evenly when you re-bin.</p>
 
             <h2 id="what-sbc-misses">What SBC Cannot See</h2>
-            <p>SBC is a computational check, and it is disciplined about its own limits. In Talts and colleagues' words, it "offers no guarantee that the posterior will cover the ground truth for any single observation or that the model will be rich enough to capture the truth at all." It certifies that your sampler correctly infers <em>the model you actually coded</em> under data <em>that model</em> generates. Whether that model resembles reality is the job of posterior predictive checks on real data; whether a single fit is robust is the job of a sensitivity analysis. SBC and the real world never meet.</p>
+            <p>SBC is a computational check, and it is disciplined about its own limits. In Talts and colleagues' words, it "offers no guarantee that the posterior will cover the ground truth for any single observation or that the model will be rich enough to capture the truth at all." It certifies that your sampler correctly infers <em>the model you actually coded</em> under data <em>that model</em> generates. Whether that model resembles reality is the job of posterior predictive checks on real data. Whether a single fit is stable is the job of a sensitivity analysis. SBC and the real world never meet.</p>
 
             <div class="warning">
                 <h4>⚠️ Parameter-only SBC has a blind spot: the posterior that equals the prior</h4>
-                <p>Almost all SBC in practice ranks individual parameters. Modrák and colleagues (2023) prove this misses an entire class of failures — most alarmingly, a broken computation whose posterior simply <em>stays at the prior</em> passes parameter-by-parameter SBC cleanly, because a posterior that never updates is trivially consistent with the prior on every marginal. The fix is to allow the ranked quantity \( f(\theta, y) \) to depend on the <em>data</em>, not just the parameters. Their headline recommendation: include the <strong>joint likelihood of the data</strong> as a default test quantity alongside the parameters. In their case studies, when the posterior wrongly equals the prior, every parameter passes but the likelihood-based quantity flags the problem "after just a handful of simulations"; when mean-field variational inference drops posterior correlations, the individual parameters look fine and the joint likelihood is the first to scream.</p>
+                <p>Almost all SBC in practice ranks individual parameters. Modrák and colleagues (2023) prove this misses an entire class of failures. Most alarming among them: a broken computation whose posterior simply <em>stays at the prior</em> passes parameter-by-parameter SBC cleanly, because a posterior that never updates is trivially consistent with the prior on every marginal. The fix is to let the ranked quantity \( f(\theta, y) \) depend on the <em>data</em> as well as the parameters. Their headline recommendation is to include the joint likelihood of the data as a default test quantity alongside the parameters. In their case studies, when the posterior wrongly equals the prior, every parameter passes but the likelihood-based quantity flags the problem "after just a handful of simulations." And when mean-field variational inference drops posterior correlations, the individual parameters look fine while the joint likelihood is the first to scream.</p>
             </div>
 
-            <p>Modrák and colleagues also clear up a confusion the literature repeatedly makes: SBC (which constrains the <em>quantile</em> function of a test quantity) is not the same check as "the data-averaged posterior equals the prior" (which constrains its <em>density</em>). They are formally different, and conflating them is how the posterior-equals-prior blind spot went unnoticed for so long. The practical takeaway is a short recipe: rank the parameters <em>and</em> the joint log-likelihood, read the histograms or ECDF-difference plots, and spend your simulation budget on roughly as many datasets as posterior draws per dataset — with at least about a hundred effectively-independent draws per fit so that convergence is real and not an artifact of a stuck chain.</p>
+            <p>Modrák and colleagues also clear up a confusion the literature repeatedly makes: SBC (which constrains the <em>quantile</em> function of a test quantity) is not the same check as "the data-averaged posterior equals the prior" (which constrains its <em>density</em>). They are formally different, and conflating them is how the posterior-equals-prior blind spot went unnoticed for so long. The practical takeaway is a short recipe: rank the parameters <em>and</em> the joint log-likelihood, read the histograms or ECDF-difference plots, and spend your simulation budget on roughly as many datasets as posterior draws per dataset. Keep at least about a hundred effectively-independent draws per fit, so that the convergence you see is real rather than an artifact of a stuck chain.</p>
 
             <h2 id="mmm">The Checks on a Media Mix Model</h2>
             <p>An MMM is almost a worst case for trusting a fit blindly, which makes it close to a best case for these two checks. Three features conspire.</p>
 
-            <p><strong>The priors live far from the outcome scale.</strong> A coefficient prior in an MMM does not act on sales directly — it acts through a geometric adstock decay and a saturation curve, at the specific spend levels in your data. A prior that looks modest on the raw coefficient can, once pushed through those transforms, imply that a channel drives a wild share of revenue, or none. This is the Gabry air-pollution lesson transplanted to marketing: the only reliable way to see it is to simulate forward. A prior predictive check draws priors, builds a synthetic sales series, and lets you reject specifications that over- or under-credit media before fitting. It is also the natural home for ROI-scale priors — because an ROI prior is defined on the decision-relevant, pictureable scale, the prior predictive <em>is</em> the check that the implied prior ROI distribution is sensible: roughly break-even-centered, with a spread you would actually defend. The mechanics of carryover and shape, and why their parameters are hard to pin down, are the subject of a <a href="blog-bayesian-mmm-carryover-shape.html">companion post</a>.</p>
+            <p><strong>The priors live far from the outcome scale.</strong> A coefficient prior in an MMM never acts on sales directly. It acts through a geometric adstock decay and a saturation curve, at the specific spend levels in your data. A prior that looks modest on the raw coefficient can, once pushed through those transforms, imply that a channel drives a wild share of revenue, or none. This is the Gabry air-pollution lesson transplanted to marketing: the only reliable way to see it is to simulate forward. A prior predictive check draws priors, builds a synthetic sales series, and lets you reject specifications that over- or under-credit media before fitting. It is also the natural home for ROI-scale priors. Because an ROI prior is defined on the decision-relevant, pictureable scale, the prior predictive <em>is</em> the check that the implied prior ROI distribution is sensible: roughly break-even-centered, with a spread you would actually defend. The mechanics of carryover and shape, and why their parameters are hard to pin down, are the subject of a <a href="blog-bayesian-mmm-carryover-shape.html">companion post</a>.</p>
 
-            <p><strong>Key parameters are weakly identified.</strong> The adstock decay rate and the saturation half-point are notoriously hard to recover from observational spend, which slides in lockstep with seasonality and demand. When the data are that uninformative, the prior does most of the work — so a bad prior is not a minor perturbation, it is the answer. Fake-data recovery is the honest upper bound here: if a model cannot recover a planted adstock rate from data <em>it generated itself</em>, it has no hope of recovering it from real, confounded data. That is a reason to be humble about point estimates, and a reason to check.</p>
+            <p><strong>Key parameters are weakly identified.</strong> The adstock decay rate and the saturation half-point are notoriously hard to recover from observational spend, which slides in lockstep with seasonality and demand. When the data are that uninformative, the prior does most of the work. Get the prior wrong and you have written down your answer in advance. Fake-data recovery is the honest upper bound here: if a model cannot recover a planted adstock rate from data <em>it generated itself</em>, it has no hope of recovering it from real, confounded data. That is a reason to be humble about point estimates, and a reason to check.</p>
 
-            <p><strong>The geometry is a hierarchical funnel.</strong> A geo-level or nested MMM partially pools effects across regions, and partial pooling means the eight-schools funnel — the exact pathology where SBC earns its keep. R-hat and effective sample size can look pristine while a centered parameterization quietly mis-estimates the pooling variance; only calibration against known truth exposes it. And per Modrák and colleagues, rank the joint likelihood too — a parameter-only SBC on a geo model could pass while the sampler mis-handles cross-geo correlations or effectively ignores part of the panel. None of this is exotic; it is why the framework ships prior-predictive and SBC tooling as first-class steps rather than afterthoughts.</p>
+            <p><strong>The geometry is a hierarchical funnel.</strong> A geo-level or nested MMM partially pools effects across regions, and partial pooling means the eight-schools funnel, the exact pathology where SBC earns its keep. R-hat and effective sample size can look pristine while a centered parameterization quietly mis-estimates the pooling variance. Only calibration against known truth exposes it. And per Modrák and colleagues, rank the joint likelihood too. A parameter-only SBC on a geo model could pass while the sampler mis-handles cross-geo correlations or effectively ignores part of the panel. None of this is exotic. It is why the framework ships prior-predictive and SBC tooling as first-class steps rather than afterthoughts.</p>
 
             <h2 id="workflow">Where They Sit in the Workflow</h2>
-            <p>These two checks are not standalone tricks; they are stations on a loop. The <a href="bayesian-workflow.html">Bayesian workflow</a> as Gelman and colleagues (2020) lay it out runs roughly: specify a model, <em>prior predictive check</em>, fit (cheaply first — "fit fast, fail fast"), <em>simulation-based calibration</em> and fake-data recovery, then posterior predictive checks and cross-validation on real data, then model expansion and comparison — and back around.</p>
+            <p>These two checks are stations on a loop. The <a href="bayesian-workflow.html">Bayesian workflow</a> as Gelman and colleagues (2020) lay it out runs roughly: specify a model, <em>prior predictive check</em>, fit (cheaply first, on the principle of "fit fast, fail fast"), <em>simulation-based calibration</em> and fake-data recovery, then posterior predictive checks and cross-validation on real data, then model expansion and comparison, and back around to the top.</p>
 
-            <p>The connective tissue is what Gelman and colleagues call the <em>folk theorem of statistical computing</em>: when you have computational problems, often there is a problem with your model, not just your sampler. A chain that will not mix is frequently a chain trying to explore a pathological or nonsensical region — the correct response is often to fix the model or the prior, not to crank up the iteration count. SBC operationalizes this. A failing rank histogram does not just say "sample more"; its shape points at whether you have an over-confident prior, a biased parameterization, or an autocorrelation problem. Prior predictive checks close the loop from the other end, catching the pathological region before you ever try to sample it.</p>
+            <p>Holding the loop together is what Gelman and colleagues call the <em>folk theorem of statistical computing</em>: when you have computational problems, often there is a problem with your model. A chain that will not mix is frequently a chain trying to explore a pathological or nonsensical region, and the remedy often lives in the model or the prior rather than in the iteration count. SBC operationalizes this. A failing rank histogram says more than "sample more." Its shape points at whether you have an over-confident prior, a biased parameterization, or an autocorrelation problem. Prior predictive checks close the loop from the other end. They catch the pathological region before you ever try to sample it.</p>
 
             <div class="takeaway-box">
                 <h4>Takeaways</h4>
                 <ul>
-                    <li>A Bayesian model is generative, so you can validate it before it sees real data. Prior predictive checks test the model; simulation-based calibration tests the computation.</li>
-                    <li>Priors that look innocuous per parameter can imply impossible data jointly — simulate forward and inspect on the outcome scale, because that is the scale you have intuition for.</li>
+                    <li>A Bayesian model is generative, so you can validate it before it sees real data. Prior predictive checks test the model. Simulation-based calibration tests the computation.</li>
+                    <li>Priors that look innocuous per parameter can imply impossible data jointly. Simulate forward and inspect on the outcome scale, because that is the scale you have intuition for.</li>
                     <li>SBC rests on one identity: the data-averaged posterior equals the prior. The rank of each simulated truth among its posterior draws is uniform if and only if the computation is calibrated.</li>
                     <li>Read the histogram shape: \( \cup \) means overconfident, \( \cap \) means under-confident, a slope means bias, boundary spikes mean autocorrelation. ECDF-difference plots with simultaneous bands avoid the bin-width trap.</li>
-                    <li>Rank the joint likelihood, not just parameters — parameter-only SBC cannot detect a posterior that wrongly stays at the prior (Modrák et al., 2023).</li>
+                    <li>Rank the joint likelihood alongside the parameters. Parameter-only SBC cannot detect a posterior that wrongly stays at the prior (Modrák et al., 2023).</li>
                     <li>MMMs are the ideal customer: priors far from the outcome scale, weakly identified adstock and saturation, and hierarchical geo funnels where a clean R-hat can still hide a mis-computed posterior.</li>
                 </ul>
             </div>
@@ -349,7 +349,7 @@ histogram(ranks)   # flat = calibrated; shape = a specific, diagnosable failure<
     (function () {
         'use strict';
 
-        // Fixed standardized weekly spend series (mean 0, sd 1) — same for every draw.
+        // Fixed standardized weekly spend series (mean 0, sd 1), same for every draw.
         var WEEKS = 24, DRAWS = 240, BASE = 100;
         var rawSpend = [];
         for (var t = 0; t < WEEKS; t++) {
@@ -495,11 +495,11 @@ histogram(ranks)   # flat = calibrated; shape = a specific, diagnosable failure<
             Plotly.react('sbcHist', traces, layout, BV.config);
 
             var shape, cls;
-            if (Math.abs(bias) >= 0.4 && ratio >= 0.82 && ratio <= 1.25) { shape = 'ramp — biased'; cls = 'val warn'; }
+            if (Math.abs(bias) >= 0.4 && ratio >= 0.82 && ratio <= 1.25) { shape = 'ramp, biased'; cls = 'val warn'; }
             else if (ratio < 0.82) { shape = '∪ under-dispersed'; cls = 'val warn'; }
             else if (ratio > 1.25) { shape = '∩ over-dispersed'; cls = 'val warn'; }
-            else if (Math.abs(bias) >= 0.4) { shape = 'ramp — biased'; cls = 'val warn'; }
-            else { shape = 'flat — uniform'; cls = 'val ok'; }
+            else if (Math.abs(bias) >= 0.4) { shape = 'ramp, biased'; cls = 'val warn'; }
+            else { shape = 'flat, uniform'; cls = 'val ok'; }
             var se = document.getElementById('sbcShape'); se.textContent = shape; se.className = cls;
             var oe = document.getElementById('sbcOut'); oe.textContent = outside + ' of ' + NBINS;
             oe.className = 'val' + (outside > 3 ? ' warn' : (outside === 0 ? ' ok' : ''));

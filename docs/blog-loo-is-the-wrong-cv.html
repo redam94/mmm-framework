@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your MMM Is Reporting the Wrong Cross-Validation | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Row-wise leave-one-out on a weekly series trains on the future. On a 156-week simulation, deleting the two weeks either side of the held-out one reverses which of two models wins, and the honest forward fold agrees with the reversal.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html">
+    <meta property="og:title" content="Your MMM Is Reporting the Wrong Cross-Validation">
+    <meta property="og:description" content="Row-wise LOO on a weekly panel scores a prediction nobody makes. Two weeks out of 155 decide the model comparison, and the diagnostics thrown away with the scalar are worth more than the scalar.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Your MMM Is Reporting the Wrong Cross-Validation">
+    <meta name="twitter:description" content="Row-wise LOO on a weekly panel scores a prediction nobody makes. Two weeks out of 155 decide the model comparison, and the diagnostics thrown away with the scalar are worth more than the scalar.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework: a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html",
+          "name": "Your MMM Is Reporting the Wrong Cross-Validation | MMM Framework",
+          "description": "Row-wise leave-one-out on a weekly series trains on the future. On a 156-week simulation, deleting the two weeks either side of the held-out one reverses which of two models wins, and the honest forward fold agrees with the reversal.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-08-03",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "Your MMM Is Reporting the Wrong Cross-Validation",
+          "datePublished": "2026-08-02",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Your MMM Is Reporting the Wrong Cross-Validation",
+              "item": "https://redam94.github.io/mmm-framework/blog-loo-is-the-wrong-cv.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#wrong-fold">The Fold You Ran</a></li>
+                <li><a href="#two-directions">Time and Geography</a></li>
+                <li><a href="#diagnostics">What the Scalar Throws Away</a></li>
+                <li><a href="#threshold">The 0.7 Threshold</a></li>
+                <li><a href="#shortcut">Where the Shortcut Breaks</a></li>
+                <li><a href="#one-week">How Much Is One Week</a></li>
+                <li><a href="#next">What It Would Take Here</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">Your MMM Is Reporting the Wrong Cross-Validation</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-08-02">August 2, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Bayesian workflow</span>
+            </p>
+            <p class="lead">Leave-one-out on a weekly series holds out one week and trains on every week that came after it. That is a prediction nobody in marketing ever makes. On the 156-week simulation below, deleting the two weeks either side of the held-out one reverses which of two models wins, and the forward fold agrees with the reversal.</p>
+
+            <h2 id="wrong-fold">The Fold You Ran and the Fold You Meant</h2>
+
+            <p>An MMM validation run in this framework calls <code>az.loo</code> and stores four scalars: <code>elpd_loo</code>, its standard error, <code>p_loo</code>, and a count of observations whose Pareto k&#770; exceeds 0.7, plus the pointwise Pareto-k and pointwise elpd arrays (<code>validation/validator.py:367-385</code>). Every one of those is computed correctly. The question is what they are computed <em>about</em>.</p>
+
+            <p>Leave-one-out estimates the expected log predictive density for a new observation given every other observation in the dataset, and on a weekly panel indexed by time that phrase quietly includes the weeks after the one you dropped. Hold out week 78 of a three-year series and the model still sees weeks 79 through 156. It knows where the baseline went. A media planner asking what happens next quarter has no such thing, and neither does the backtest that grades a plan.</p>
+
+            <p>How much this matters depends on how local the model's time basis is. A parametric baseline of intercept, linear trend and two annual harmonics is estimated from all 156 weeks at once, so removing one of them barely moves it. Contrast a local-level or random-walk baseline, which is what most MMM trend components are: at week 78 it is pinned almost entirely by weeks 77 and 79, and dropping week 78 from the likelihood leaves those two neighbours to rebuild it out of information a forecaster would never hold. The flexible model is being scored on a task its flexibility cannot fail.</p>
+
+            <p>I ran that comparison exactly, with no sampler and no importance sampling anywhere. The world is 156 weekly observations: three channels put through geometric adstock and a Hill curve at fixed transform parameters, an AR(1) residual with autocorrelation 0.6, and fifteen promotional weeks whose noise standard deviation is four times the rest. Both candidates are linear in their parameters with Gaussian priors and a fixed observation standard deviation of 0.391, so every posterior and every refit is a closed form. The local-level candidate carries 159 parameters (three media coefficients plus a weekly random walk), against nine for the parametric one. Both are scored on the same 52 weeks, numbers 52 through 103, so the only thing that changes across the rows below is which weeks were available for training.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Fold</th><th>Training weeks</th><th>Local-level elpd</th><th>Parametric elpd</th><th>&Delta;elpd</th><th>SE</th><th>z</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Leave-one-out (row-wise)</td><td>155</td><td>&minus;49.9</td><td>&minus;58.6</td><td>+8.8</td><td>5.1</td><td>+1.73</td></tr>
+                    <tr><td>Leave-3-out block</td><td>153</td><td>&minus;65.8</td><td>&minus;64.1</td><td>&minus;1.7</td><td>4.1</td><td>&minus;0.41</td></tr>
+                    <tr><td>Leave-5-out block</td><td>151</td><td>&minus;73.1</td><td>&minus;66.4</td><td>&minus;6.7</td><td>3.8</td><td>&minus;1.74</td></tr>
+                    <tr><td>Leave-13-out block</td><td>143</td><td>&minus;68.5</td><td>&minus;65.0</td><td>&minus;3.5</td><td>7.0</td><td>&minus;0.50</td></tr>
+                    <tr><td>Leave-53-out block</td><td>103</td><td>&minus;110.9</td><td>&minus;57.5</td><td>&minus;53.4</td><td>13.2</td><td>&minus;4.05</td></tr>
+                    <tr><td>Leave-future-out (1 step)</td><td>52 to 103</td><td>&minus;58.2</td><td>&minus;57.7</td><td>&minus;0.5</td><td>7.9</td><td>&minus;0.06</td></tr>
+                </tbody>
+            </table>
+
+            <p>&Delta;elpd is local-level minus parametric, so a positive number favours the flexible baseline. Read the first row and the last. Row-wise LOO puts the local-level model ahead by 8.8 nats with a standard error of 5.1, the kind of gap that gets written into a deck as "the state-space specification fits materially better." An honest one-step-ahead forward fold puts them 0.5 nats apart with a standard error of 7.9, which is nothing at all.</p>
+
+            <p>The second row is the one I would put on a slide. A leave-3-out block deletes the held-out week <em>and its two immediate neighbours</em>, so the training set shrinks from 155 weeks to 153. Two observations out of 155. The verdict goes from +8.8 to &minus;1.7 and changes sign. Nothing else about the model, the data or the scored weeks moved.</p>
+
+            <div class="warning">
+                <h4>⚠️ The wide blocks confound two things</h4>
+                <p>Leave-53-out trains on 103 weeks against row-wise LOO's 155, so its &minus;53.4 mixes the fold direction with a third less training data. The same caveat applies to the leave-future-out row, whose early origins train on 52 weeks. Cleanest is the leave-3-out row, where the training set is smaller by two.</p>
+            </div>
+
+            <p>One simulated world proves nothing, so I repeated it across 20 seeds. Row-wise LOO favoured the local-level model in 12 of the 20 worlds and leave-future-out favoured it in 4; the two schemes disagreed about the winner in 10 of 20. Between LOO and leave-3-out the direction of the shift was the same every time: LOO scored the local-level model higher relative to the parametric one in 20 of 20 worlds, by a median of 2.2 nats and never by less than 0.4. Broken out per model, the amount that row-wise LOO adds over leave-3-out has median 3.8 nats for the local-level candidate and 1.6 for the parametric one, and the flexible model got the larger boost in all 20.</p>
+
+            <p>A shift that keeps its sign across 20 worlds is a bias, and it points at the flexible model.</p>
+
+            <h2 id="two-directions">Time Is One Direction. Geography Is the Other.</h2>
+
+            <p>Gelman and co-authors are explicit about this in the cross-validation section of <em>Bayesian Workflow</em>. Writing about hierarchical structure, they say that "cross validation for multilevel (hierarchical) models requires more thought. Leave-one-out is still possible, but it does not always match our inferential goals," and point at leave-one-unit-out and leave-one-group-out as the alternatives whose folds match the question. They add that importance sampling for those folds "tends to be much harder than in the leave-one-out case," which is a polite way of saying you will be doing refits.</p>
+
+            <p>A geo MMM has both structures at once. Along time, the fold that matches the question is leave-future-out: train to a cutoff, predict past it, roll the cutoff forward (Bürkner, Gabry and Vehtari, 2020). Along geography, the fold that matches the question is leave-one-group-out: hold out a DMA entirely and ask whether the model would have got that market right from the others. Those answer different business questions. One is whether a plan built today survives contact with next quarter. The other is whether the partial pooling across markets is real, which is exactly the claim a per-geo media coefficient makes when <code>vary_media_by_geo</code> is on.</p>
+
+            <p>Row-wise LOO on a geo panel answers neither. Its fold drops one geo-week cell and keeps the same week in every other market and the same market in 155 other weeks, so both hierarchies leak into the prediction at once. The elpd it returns is a real quantity about a real predictive task. That task is interpolating a hole in a panel you already have.</p>
+
+            <div class="note">
+                <h4>Where this stands in the code</h4>
+                <p><code>validation/backtest.py:237</code> (<code>rolling_origins</code>) and <code>:1276</code> (<code>run_backtest</code>) already do the temporal refits: train on periods <code>[0, T)</code>, forecast <code>[T, T + horizon)</code>, roll. That is exact leave-future-out under another name. Nothing in the module drops a geo instead of a suffix, and <code>_slice_panel_prefix</code> has no cell-subsetting sibling.</p>
+            </div>
+
+            <h2 id="diagnostics">What the Scalar Throws Away</h2>
+
+            <p>The same section of <em>Bayesian Workflow</em> lists three uses for cross-validation, and the headline number is the least of them. One is calibration of the cross-validated predictive distribution, read off the uniformity of the LOO-PIT values. The other two are identifications: which observations the model finds hardest to predict, and which ones are most influential, the second of those read off the importance weights themselves. A report that quotes <code>elpd_loo</code> and stops has paid for all three and kept the thinnest.</p>
+
+            <p>Take calibration. In the simulation above, the noise is heteroskedastic by construction and both candidates assume it is constant, so their predictive distributions are the wrong width in a specific pattern. The exact LOO-PIT values over all 156 weeks make that visible. For the local-level model the Kolmogorov-Smirnov statistic against uniform is 0.126 with p = 0.013; its central 50% predictive band holds 71% of the weeks rather than 50%, and its outer 10% band holds 6% rather than 10%. Both readings say the intervals are too wide for a typical week. Then look at which weeks did land outside: all 9 of them are promotional weeks. The intervals are simultaneously too wide for the ordinary weeks and too narrow for the ten percent of weeks that matter to a promotional plan. A single elpd number cannot express that, and neither can a MAPE.</p>
+
+            <p>This framework already computes the diagnostic. <code>validation/calibration.py:48</code> (<code>loo_pit_check</code>) returns the PIT values, a KS uniformity test and a <code>calibrated</code> flag, and <code>reporting/interactive/facts.py:424</code> feeds it real PSIS log-weights plus simultaneous ECDF-difference bands for the interactive results report. What it computes them on is the row-wise fold. LOO-PIT built on a fold that trains on the future inherits the same complaint as the elpd built on it: the calibration it certifies is the calibration of an interpolation.</p>
+
+            <h2 id="threshold">The 0.7 Threshold Is a Function of Your Draw Count</h2>
+
+            <p>Everyone quotes k&#770; &le; 0.7. That number is a large-sample rule. The JMLR treatment of Pareto smoothed importance sampling (Vehtari, Simpson, Gelman, Yao and Gabry, 2024) makes the threshold depend on how many draws you have:</p>
+
+            $$k_{\text{thresh}}(S) \;=\; \min\!\left(1 - \frac{1}{\log_{10} S},\; 0.7\right)$$
+
+            <table>
+                <thead>
+                    <tr><th>Posterior draws S</th><th>200</th><th>400</th><th>500</th><th>1000</th><th>2000</th><th>4000</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>k&#770; threshold</td><td>0.565</td><td>0.616</td><td>0.629</td><td>0.667</td><td>0.697</td><td>0.700</td></tr>
+                </tbody>
+            </table>
+
+            <p>What makes a k&#770; above threshold fatal has nothing to do with a known amount of bias. The number of draws needed for a reliable Monte Carlo estimate grows infeasibly fast past that point, which is why the <code>posterior</code> package now ships <code>pareto_min_ss()</code> and <code>pareto_khat_threshold()</code> alongside <code>pareto_khat()</code>. Read honestly, the diagnostic reports a required sample size rather than a pass or a fail.</p>
+
+            <p>In the simulation, the local-level model at S = 500 draws has three weeks above the 0.629 threshold for that budget and only one above 0.7. At S = 2000 it has two above 0.697, with a maximum k&#770; of 0.90. The parametric model never exceeds 0.52. So the flexible baseline is the one straining the approximation, and at a modest draw budget the folklore threshold clears two of its worst observations.</p>
+
+            <p>Five places in this codebase hard-code 0.7: <code>validation/validator.py:378</code>, the influential-observation flag at <code>validation/validator.py:1254</code>, the <code>pareto_k_threshold</code> default at <code>validation/config.py:95</code>, <code>validation/spec_curve.py:441</code>, and <code>reporting/interactive/facts.py:466</code>. For a default NUTS fit of 4 chains by 1000 draws that is correct, and for a backtest refit at 4 chains by 500 (<code>BacktestConfig.draws</code>) it is correct to within 0.003. Below 2000 it is not. Trim the draws for a reconnaissance fit, for a reduced-budget spec-curve sweep, or on a 40-minute-per-fit production model to get it through the night, and the threshold the code checks against has quietly become too permissive. Quoting 0.7 without stating S is quoting a rule you have not checked applies.</p>
+
+            <h2 id="shortcut">Where the Shortcut Breaks, and What Does Not Repair It</h2>
+
+            <p>PSIS-LOO worked fine in my simulation. At S = 2000 it estimated the local-level model's elpd within 0.53 nats of the exact leave-one-out answer, and the parametric model within 0.10. Two linear models with Gaussian posteriors are an easy case, and I want that on the record before the next paragraph, because the failure mode is structural rather than universal.</p>
+
+            <p>Bindoff (2026) studies where it fails and finds the failures are predictable in advance. The Gelman-Pardoe pooling factor for group \(j\),</p>
+
+            $$\pi_j \;=\; \frac{1/\sigma_u^2}{I_j + 1/\sigma_u^2},$$
+
+            <p>together with each observation's pull on its own group's random effect, predicts which folds will come back with k&#770; &gt; 0.7 at an AUC of 0.96 in Gaussian linear mixed models and 0.81 in replicated logistic GLMMs. In the Gaussian case the per-observation Fisher information is constant, so the map reduces to group size and you can draw it before fitting anything. Groups observed once or twice are where the leave-one-out posterior stops resembling the full posterior, and no amount of smoothing on the weights bridges a gap that large.</p>
+
+            <p>On the <code>brms::epilepsy</code> model with an observation-level overdispersion effect, PSIS-LOO fails on 97 of 236 folds. Moment matching, the standard repair, leaves 37 of them uncorrected and scores an elpd RMSE of 0.658 against exact refits, against raw PSIS-LOO's 0.638. The repair bought nothing. Marginalising the random-effect block and importance-sampling only the base parameters scored 0.041 and reproduced an 82-minute exact refit at no optimisation cost. The block here is Poisson, so that marginalisation is a one-dimensional quadrature rather than the closed-form downdate a Gaussian block would get.</p>
+
+            <p>Then the part that reaches a decision. Comparing that model against a negative-binomial alternative, default PSIS-LOO reports &Delta;elpd = +39.3 &plusmn; 8.0, a z of 4.9 and a verdict anyone would call settled. Running <code>reloo</code> at the recommended k&#770; &gt; 0.7 cutoff brings it to +11.0 &plusmn; 3.2. The exact fold-wise answer is +3.1 &plusmn; 3.1, a z of 1.0 and no verdict at all. <code>reloo</code> lands optimistic because PSIS is already biased on the folds between 0.55 and 0.7 that it declines to refit.</p>
+
+            <p>Read the caveats before you act on it. That paper is a July 2026 single-author preprint, its package is R-only, and the author is explicit that the marginalisation itself is prior art (Vehtari 2016, Merkle 2019, Bürkner 2021) rather than a new idea. What the preprint contributes is the diagnostic map and the head-to-head evidence, and both are worth knowing whatever happens to the package.</p>
+
+            <p>A geo MMM with per-geo channel coefficients and a modest number of weeks per market is the singleton-heavy regime this describes. "LOO prefers the hierarchical specification" is a sentence MMM reports produce routinely. The sharp part is the asymmetry: the bias does not cancel when you difference two models that differ in latent structure, and pooled against hierarchical, or with against without a latent mediator, is precisely the comparison an MMM makes.</p>
+
+            <h2 id="one-week">How Much of the Gap Is One Week</h2>
+
+            <p>Back to the +8.8 nat row-wise gap in the table, and where it came from. Its largest single week contributes +2.74, which is 31% of the total, and the three largest contribute 81% between them. Delete only the largest and the gap falls to +6.0 &plusmn; 4.3, moving z from +1.73 to +1.39, while thirty of the 52 scored weeks were already pointing the opposite way from the total they sum to.</p>
+
+            <p>A handful of weeks are choosing the model.</p>
+
+            <p>Two recent results say to take that seriously. Sivula, Magnusson, Alonzo Matamoros and Vehtari (2025) study when the normal approximation behind <code>loo_compare</code>'s standard error is well calibrated, and offer a probability-that-one-model-is-better framing in place of a bare z. Bindoff, whose own decision flip is above, describes the same standard error as "itself uncertain and mildly anti-conservative" and reads his z-values as descriptive only. Small n with near-identical candidates is the awkward case. An MMM comparison is 104 or 156 observations between two specifications that differ by one channel's transform, which is that case exactly.</p>
+
+            <p>The other result attacks the score itself. Choi, Spencer and Dey (2026) point out that ELPD is a log score, so an observation the model assigns near-zero predictive density to contributes an unbounded amount. Their fix is to use the same &beta;-divergence Bregman score \(S_\varphi\) in all three places at once: for the generalized-Bayes posterior update, for forming the posterior predictive, and for the leave-one-out evaluation. That gives a generalized ELPD, with &beta; = 1 recovering the ordinary one and &beta; &gt; 1 bounding what any single observation can contribute. They prove the matching is load-bearing: a procedure that evaluates with a Bregman score on top of an ordinary Bayesian update is consistent for a target that is neither the model closest under the evaluation divergence nor the one closest under the updating divergence. In their forensic footwear application the models without a contact-surface component win under the log score, driven almost entirely by one observation the contact models assign essentially zero probability, and for every &beta; &gt; 1 the ranking reverses.</p>
+
+            <div class="definition">
+                <h4>Why this is cheap to try</h4>
+                <p>The PSIS machinery carries over. Raw case-deletion ratios become \(\exp(-S_\varphi(f(\cdot\,;\theta), x_i))\) in place of \(1/f(x_i;\theta)\), and everything downstream of them is unchanged, so the same draws you already have will produce a generalized ELPD at a range of &beta;. The authors' own recommendation is to report it across that range and treat a ranking change as a sensitivity finding, which makes &beta; a knob you turn to learn something rather than a parameter you fit. Used that way it stress-tests a comparison you have already run.</p>
+            </div>
+
+            <h2 id="next">What It Would Take Here</h2>
+
+            <p>Refitting is the expensive half, and it is already built. <code>run_backtest</code> refits the full specification at every rolling origin and records one row per origin and horizon: <code>y_true</code>, the posterior-mean <code>y_pred</code>, interval bounds and coverage flags at 50/80/95, plus a naive and seasonal-naive baseline. It grades those with MAPE and MASE, which is a point-forecast question. The posterior predictive draws that produced <code>y_pred</code> also give the log predictive density of <code>y_true</code>, and summing that column over the records is an exact leave-future-out elpd with no importance sampling anywhere, because the refits already happened.</p>
+
+            <pre><code class="language-python"># illustrative
+from mmm_framework.validation.backtest import BacktestConfig, run_backtest
+
+result = run_backtest(model, BacktestConfig(min_train_size=104, horizon=1, step=1))
+# result.records already carries y_true and y_pred per (origin, horizon).
+# One more column, log p(y_true | data before the origin), turns the same
+# refits into elpd_lfo, and its per-record values into a forward LOO-PIT.
+</code></pre>
+
+            <p>The geo direction needs more: a cell-subsetting counterpart to <code>_slice_panel_prefix</code> so a fold can hold out a market rather than a suffix, and a decision about whether the held-out market's own intercept is drawn from the population or held fixed, which is the difference between asking about a new market and asking about a market you stopped measuring. That choice changes the estimand, so it belongs in the pre-registered spec rather than in the diagnostic.</p>
+
+            <p>Cost is the old objection to all of this. Cooper, Vehtari, Forbes, Simpson and Kennedy (2024) weaken it: running every cross-validation fold as a parallel chain reaches roughly the wall-clock of a single full-data fit on accelerator hardware, with partitioning schemes for non-exchangeable data and support for a range of scoring rules. The approximation inside leave-future-out exists because exact refits were unaffordable. On a GPU with 52 folds running as 52 chains, that premise is weaker than it was in 2020.</p>
+
+            <p>Fixing the fold makes a predictive score honest about prediction. Ranking causal estimands is beyond any predictive score, and <a href="blog-holdout-error-mmm.html">Stop Validating Your MMM With Holdout Error</a> is the argument for why. The simulation here is a small illustration of that too: the model row-wise LOO preferred reads total media effect 16.3% above the planted truth, and the one it rejected reads 6.9% below. Which specification to bill a channel against is still decided by recovery, refutation, coverage and a held-out experiment.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Row-wise LOO on a weekly series trains on the future. In the 156-week simulation here, deleting the held-out week's two immediate neighbours (2 observations out of 155) reversed which of two models won, and across 20 seeds the row-wise fold favoured the flexible baseline over the leave-3-out fold in 20 of 20 worlds.</li>
+                    <li>A geo panel has two mismatched directions at once. Leave-future-out answers whether a plan survives next quarter; leave-one-group-out answers whether the pooling across markets is real. Row-wise LOO answers neither, and both usually need refits because the importance-sampling shortcut stops bridging.</li>
+                    <li>The three diagnostics are worth more than the scalar. LOO-PIT non-uniformity said the simulated predictive intervals were too wide for ordinary weeks and too narrow for promotional ones (KS D = 0.126, p = 0.013; all 9 outer-band misses were promo weeks), which no elpd or MAPE can express.</li>
+                    <li>k&#770; &le; 0.7 holds at S &ge; 2000. Below that the threshold is min(1 &minus; 1/log&#8321;&#8320;S, 0.7), which is 0.629 at S = 500. Five places in this codebase hard-code 0.7, and a report quoting it without stating S has not checked that the rule applies.</li>
+                    <li>An elpd difference is a sum with cancelling signs, and one week supplied 31% of the gap in the run above. Treat <code>loo_compare</code>'s standard error as anti-conservative for small n and similar models (Sivula et al., 2025), and treat a ranking that a bounded score reverses as a sensitivity finding (Choi et al., 2026).</li>
+                    <li><code>run_backtest</code> already performs the rolling-origin refits and grades them with MAPE. Recording the log predictive density per record turns the same refits into an exact leave-future-out elpd and a forward LOO-PIT.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Gelman, A., Vehtari, A., &amp; McElreath, R., with Simpson, D., Margossian, C. C., Yao, Y., Kennedy, L., Gabry, J., B&uuml;rkner, P.-C., Modr&aacute;k, M., &amp; Leos Barajas, V. (2026). <em>Bayesian Workflow</em>. CRC Press. ISBN 978-0-367-49014-0.</li>
+                <li>Gelman, A., Vehtari, A., Simpson, D., Margossian, C. C., Carpenter, B., Yao, Y., Kennedy, L., Gabry, J., B&uuml;rkner, P.-C., &amp; Modr&aacute;k, M. (2020). <em>Bayesian Workflow</em>. arXiv:2011.01808. Quotations here are from &sect;6.2 of this preprint.</li>
+                <li>Vehtari, A., Gelman, A., &amp; Gabry, J. (2017). <em>Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC</em>. Statistics and Computing, 27(5), 1413&ndash;1432.</li>
+                <li>Vehtari, A., Simpson, D., Gelman, A., Yao, Y., &amp; Gabry, J. (2024). <em>Pareto Smoothed Importance Sampling</em>. Journal of Machine Learning Research, 25(72), 1&ndash;58.</li>
+                <li>B&uuml;rkner, P.-C., Gabry, J., &amp; Vehtari, A. (2020). <em>Approximate leave-future-out cross-validation for Bayesian time series models</em>. Journal of Statistical Computation and Simulation, 90(14), 2499&ndash;2523.</li>
+                <li>Bindoff, A. D. (2026). <em>Partial pooling predicts cross-validation reliability: a closed-form triage and Rao&ndash;Blackwellised cure for hierarchical LOO</em>. arXiv:2607.18836.</li>
+                <li>Sivula, T., Magnusson, M., Alonzo Matamoros, A., &amp; Vehtari, A. (2025). <em>Uncertainty in Bayesian leave-one-out cross-validation based model comparison</em>. Bayesian Analysis. arXiv:2008.10296.</li>
+                <li>Choi, J., Spencer, N. A., &amp; Dey, D. K. (2026). <em>Robust Bayesian Predictive Model Selection using Bregman Divergence</em>. arXiv:2606.10409.</li>
+                <li>Cooper, A., Vehtari, A., Forbes, C., Simpson, D., &amp; Kennedy, L. (2024). <em>Bayesian cross-validation by parallel Markov chain Monte Carlo</em>. Statistics and Computing, 34. arXiv:2310.07002.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+        // KaTeX: three delimiter pairs only. Single-$ is deliberately absent so that
+        // dollar amounts render as money instead of being parsed as math.
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: "$$", right: "$$", display: true },
+                    { left: "\\[", right: "\\]", display: true },
+                    { left: "\\(", right: "\\)", display: false }
+                ],
+                throwOnError: false
+            });
+        });
+    </script>
+</body>
+</html>

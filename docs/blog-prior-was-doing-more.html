@@ -6,7 +6,7 @@
     <title>The Prior Was Doing More Than You Thought | MMM Framework</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 
-    <meta name="description" content="Building a second estimation path made something visible that one path alone could hide: a Bayesian MMM's media priors were quietly offsetting confounding bias. Swap them for a penalty chosen by prediction and the bias comes back — because prediction wants the confounded coefficient.">
+    <meta name="description" content="Building a second estimation path made something visible that one path alone could hide: a Bayesian MMM's media priors were quietly offsetting confounding bias. Swap them for a penalty chosen by prediction and the bias comes back, because prediction wants the confounded coefficient.">
     <meta name="author" content="Matthew Reda">
     <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-prior-was-doing-more.html">
     <meta property="og:title" content="The Prior Was Doing More Than You Thought">
@@ -62,7 +62,7 @@
           "@id": "https://redam94.github.io/mmm-framework/#website",
           "name": "MMM Framework",
           "url": "https://redam94.github.io/mmm-framework/",
-          "description": "Documentation for the MMM Framework — a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "description": "Documentation for the MMM Framework: a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
           "inLanguage": "en-US",
           "publisher": {
             "@id": "https://redam94.github.io/mmm-framework/#organization"
@@ -71,13 +71,13 @@
         {
           "url": "https://redam94.github.io/mmm-framework/blog-prior-was-doing-more.html",
           "name": "The Prior Was Doing More Than You Thought | MMM Framework",
-          "description": "Building a second estimation path made something visible that one path alone could hide: a Bayesian MMM's media priors were quietly offsetting confounding bias. Swap them for a penalty chosen by prediction and the bias comes back — because prediction wants the confounded coefficient.",
+          "description": "Building a second estimation path made something visible that one path alone could hide: a Bayesian MMM's media priors were quietly offsetting confounding bias. Swap them for a penalty chosen by prediction and the bias comes back, because prediction wants the confounded coefficient.",
           "inLanguage": "en-US",
           "isPartOf": {
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-26",
+          "dateModified": "2026-08-02",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/blog-prior-was-doing-more.html#breadcrumb"
           },
@@ -154,12 +154,12 @@
                 <time datetime="2026-07-26">July 26, 2026</time><span aria-hidden="true">&middot;</span>
                 <span class="post-tag">Causal inference</span>
             </p>
-            <p class="lead">This framework recently grew a second way to estimate the same model &mdash; a fast frequentist path that fixes the carryover and saturation curves by search and solves the rest in closed form, instead of estimating everything at once under priors. The point was speed and hard constraints. What it produced instead, on the way, was a genuinely useful piece of self-knowledge. Graded against a synthetic world with an open back-door path &mdash; latent demand driving both spend and sales &mdash; the new path over-credited media by <strong>+41.6%</strong> where the existing Bayesian point estimate over-credited by <strong>+5.9%</strong>. Same model, same data, same target; a sevenfold difference in bias. The explanation turns out to be simple and, once seen, hard to unsee: the media priors had been quietly pulling the estimate down, and a penalty whose strength gets chosen by out-of-sample prediction cannot do that &mdash; because under confounding, the coefficient that predicts best <em>is</em> the confounded one.</p>
+            <p class="lead">This framework recently grew a second way to estimate the same model. It is a fast frequentist path that fixes the carryover and saturation curves by search and solves the rest in closed form, instead of estimating everything at once under priors. The point was speed and hard constraints. What it produced on the way was a useful piece of self-knowledge. Graded against a synthetic world with an open back-door path (latent demand driving both spend and sales), the new path over-credited media by +41.6% where the existing Bayesian point estimate over-credited by +5.9%. Same model, same data, same target. A sevenfold difference in bias. The explanation is simple, and once you have seen it you start seeing it everywhere: the media priors had been quietly pulling the estimate down, and a penalty whose strength gets chosen by out-of-sample prediction cannot do that. Under confounding, the coefficient that predicts best <em>is</em> the confounded one.</p>
 
-            <p>None of that means the new path is broken or the old one is secretly correct. It means a regularizer is an assumption about the answer rather than a neutral numerical convenience, and that until you have two of them you have no easy way to notice how much work yours was doing. This post is about that mechanism &mdash; why it happens, why it is not a fix for confounding even when it helps, and what it suggests building next.</p>
+            <p>None of that means the new path is broken or the old one is secretly correct. It means a regularizer is an assumption about the answer rather than a neutral numerical convenience, and that until you have two of them you have no easy way to notice how much work yours was doing. The rest of this post is about that mechanism: why it happens, and why a cancellation that helps is still not a fix. The last section is what I think it suggests building.</p>
 
             <h2 id="surprise">The Result That Prompted This</h2>
-            <p>The comparison was run on five simulated worlds where the true per-channel contribution is known by construction, so "how wrong is it" is a subtraction rather than a judgement call. Three estimators saw identical data: the new ridge path, the existing fast point estimate (<code>fit(method="map")</code>), and full MCMC. On the world built to look like a well-behaved MMM, all three agreed and the new path was marginally the most accurate &mdash; and, on the other four worlds, comfortably the fastest (1.7&ndash;2.9&nbsp;s against MAP's 2.6&ndash;5.6 and full MCMC's 8.9&ndash;19.6; on this one world it and MAP are near-tied). On the world with an unobserved confounder, they came apart.</p>
+            <p>The comparison was run on five simulated worlds where the true per-channel contribution is known by construction, so "how wrong is it" is a subtraction rather than a judgement call. Three estimators saw identical data: the new ridge path, the existing fast point estimate (<code>fit(method="map")</code>), and full MCMC. On the world built to look like a well-behaved MMM, all three agreed and the new path was marginally the most accurate. Speed is where it pulls ahead: on the other four worlds it was comfortably the fastest (1.7&ndash;2.9&nbsp;s against MAP's 2.6&ndash;5.6 and full MCMC's 8.9&ndash;19.6), while here it and MAP are near-tied. On the world with an unobserved confounder, they came apart.</p>
 
             <div class="note">
                 <h4>Signed bias in total media contribution, five worlds</h4>
@@ -175,34 +175,34 @@
                 <p style="margin-bottom:0;">Full table, including the two worlds omitted here and the absolute errors, in <code>tests/frequentist/test_recovery_comparison.py</code>.</p>
             </div>
 
-            <p>Read the control row first, because it rules out the boring explanations. All three land within half a percentage point of each other and all three are slightly <em>under</em> &mdash; that is ordinary shrinkage on a world where nothing is wrong, and it says the three estimators are solving the same problem competently. Whatever happens in the confounding row is not a bug in the new solver, a scaling mistake, or one estimator quietly fitting a different model.</p>
+            <p>Read the control row first, because it rules out the boring explanations. All three land within half a percentage point of each other, and all three are slightly <em>under</em>. That is ordinary shrinkage on a world where nothing is wrong, and it says the three estimators are solving the same problem competently. Whatever happens in the confounding row is not a solver bug or a scaling mistake, and it is not one estimator quietly fitting a different model.</p>
 
-            <p>Now the confounding row. Every estimator over-credits, which is exactly right: an open back-door path inflates the apparent effect of spend, and no fitting procedure closes a back-door path. That part is a property of the data. What is not a property of the data is the <em>size</em> &mdash; +41.6% against +5.9% is not the same answer with noise on it.</p>
+            <p>Now the confounding row. Every estimator over-credits, which is exactly right: an open back-door path inflates the apparent effect of spend, and no fitting procedure closes a back-door path. That part is a property of the data. The <em>size</em> is not. Nobody should read +41.6% against +5.9% as the same answer with noise on it.</p>
 
             <h2 id="who-picks">Who Picks the Shrinkage</h2>
-            <p>Both paths shrink. Ridge adds a penalty that pulls coefficients toward zero; a Bayesian prior pulls them toward wherever the prior's mass sits. The difference is not the shrinking. It is <strong>who decides how hard to shrink</strong>.</p>
+            <p>Both paths shrink. Ridge adds a penalty that pulls coefficients toward zero, and a Bayesian prior pulls them toward wherever the prior's mass sits. What separates the two is who decides how hard to shrink.</p>
 
-            <p>On the frequentist path, the penalty strength is chosen the way a careful modeller would choose it: by rolling-origin out-of-sample error, refitting on a prefix of history and scoring on the periods it has not seen. That is the right way to select a penalty for a forecasting problem, and it is the same criterion the transform search uses. On the Bayesian path, nothing chooses the penalty strength &mdash; the prior <em>is</em> the penalty strength, fixed in advance by a statement about what media coefficients plausibly look like.</p>
+            <p>On the frequentist path, the penalty strength is chosen the way a careful modeller would choose it: by rolling-origin out-of-sample error, refitting on a prefix of history and scoring on the periods it has not seen. That is the right way to select a penalty for a forecasting problem, and it is the same criterion the transform search uses. On the Bayesian path, nothing chooses the penalty strength at all. The prior <em>is</em> the penalty strength, fixed in advance by a statement about what media coefficients plausibly look like.</p>
 
             <p>That distinction is invisible when the model is correctly specified, because then the coefficient that predicts best and the coefficient that is true are the same coefficient. Under confounding they are not, and the gap between them is precisely the bias.</p>
 
             <div class="definition">
                 <h4>Why prediction prefers the confounded coefficient</h4>
-                <p>Take one channel. Latent demand \( u \) drives both spend and sales; \( x \) is spend, \( b \) the true causal effect, \( t \) demand's direct effect on sales, and \( \kappa \) how strongly demand moves spend:</p>
+                <p>Take one channel. Latent demand \( u \) drives both spend and sales. Here \( x \) is spend, \( b \) the true causal effect, \( t \) demand's direct effect on sales, and \( \kappa \) how strongly demand moves spend:</p>
                 $$ x = \kappa u + \sqrt{1-\kappa^2}\,v, \qquad y = b\,x + t\,u + \varepsilon. $$
-                <p>Regressing \( y \) on \( x \) alone converges not to \( b \) but to \( b + t\kappa \) &mdash; the causal effect plus the back-door path. Now ask which coefficient minimises out-of-sample squared error on fresh data from the same world. Differentiating \( E[(y - \beta x)^2] \) gives</p>
+                <p>Regressing \( y \) on \( x \) alone does not converge to \( b \). It converges to \( b + t\kappa \), the causal effect plus the back-door path. Now ask what a forecaster would want instead: the coefficient that minimises out-of-sample squared error on fresh data from the same world. Differentiating \( E[(y - \beta x)^2] \) gives</p>
                 $$ \beta^{\star} \;=\; b + t\kappa, $$
-                <p>the confounded value exactly. Prediction is not indifferent between the causal coefficient and the confounded one &mdash; it actively prefers the confounded one, because the confounder keeps predicting in the test data too. So a penalty tuned by cross-validation is being asked to find the number this argument says it should find, and it finds it: it selects almost no shrinkage, and the full back-door bias survives.</p>
+                <p>the confounded value exactly. Prediction actively prefers the confounded coefficient over the causal one, because the confounder keeps on predicting in the test data too. So a penalty tuned by cross-validation is being asked to find the number this argument says it should find, and it duly finds it. It selects almost no shrinkage, and the full back-door bias survives.</p>
             </div>
 
-            <p>A prior is under no such obligation. If it says media coefficients are typically modest, it pulls a confounding-inflated estimate down regardless of how well the inflated value predicts. In this framework's default configuration that prior is a <code>Gamma</code> with mean 1.5 on the standardized coefficient (or a <code>LogNormal</code> centred on break-even ROI, on the agent's path) &mdash; informative enough to matter, and pointed downward relative to an estimate that confounding has pushed up.</p>
+            <p>A prior is under no such obligation. If it says media coefficients are typically modest, it pulls a confounding-inflated estimate down regardless of how well the inflated value predicts. In this framework's default configuration that prior is a <code>Gamma</code> with mean 1.5 on the standardized coefficient (or a <code>LogNormal</code> centred on break-even ROI, on the agent's path). That is informative enough to matter, and it points downward relative to an estimate that confounding has pushed up.</p>
 
             <h2 id="figure">Two Objectives That Disagree</h2>
-            <p>The figure makes the disagreement concrete. One channel, one confounder, and a slider for how strongly demand drives spend. The horizontal axis is how hard the estimate is shrunk &mdash; from no shrinkage on the right to heavy shrinkage on the left. Two curves: how far the estimate lands from the truth, and how well it predicts on held-out data. Two markers: where cross-validation puts the penalty, and where a fixed, moderately informative prior puts it.</p>
+            <p>The figure makes the disagreement concrete. One channel, one confounder, and a slider for how strongly demand drives spend. The horizontal axis is how hard the estimate is shrunk, running from no shrinkage on the right to heavy shrinkage on the left. Two curves: how far the estimate lands from the truth, and how well it predicts on held-out data. Two markers: where cross-validation puts the penalty, and where a fixed, moderately informative prior puts it.</p>
 
             <div class="interactive-box">
                 <h4>Where the two criteria part company</h4>
-                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">Analytic large-sample values for a single confounded regressor, so nothing here is sampling noise. <strong>Distance from the truth</strong> is the absolute bias in the estimated media effect; <strong>out-of-sample error</strong> is prediction error on held-out data, plotted against its own scale on the right. The <strong>dashed</strong> vertical marks the shrinkage cross-validation selects &mdash; the minimum of the prediction-error curve; the <strong>dotted</strong> vertical is a fixed prior's shrinkage, which does not move with the data. Drag the slider to open and close the back-door path.</p>
+                <p style="margin-top:0;font-size:0.92rem;color:var(--color-text-muted);">These are analytic large-sample values for a single confounded regressor. Nothing here is sampling noise. <strong>Distance from the truth</strong> is the absolute bias in the estimated media effect. <strong>Out-of-sample error</strong> is prediction error on held-out data, plotted against its own scale on the right. The dashed vertical marks where cross-validation lands, which is the minimum of the prediction-error curve. A fixed prior's shrinkage is the dotted vertical, and it stays where it is no matter what the data does. Drag the slider to open and close the back-door path.</p>
                 <div class="control-row">
                     <label>Confounding strength (how much demand drives spend)</label>
                     <input type="range" id="cfKappa" min="0" max="0.85" step="0.05" value="0.55">
@@ -210,36 +210,36 @@
                 </div>
                 <div class="chart-container chart-themed" id="cfChart" style="height:330px;"></div>
                 <div class="viz-readout">
-                    <div class="stat"><span class="lbl">Bias at CV's penalty</span><span class="val" id="cfBiasCV">&mdash;</span></div>
-                    <div class="stat"><span class="lbl">Bias at the prior's</span><span class="val" id="cfBiasPrior">&mdash;</span></div>
-                    <div class="stat"><span class="lbl">Best achievable bias</span><span class="val" id="cfBiasBest">&mdash;</span></div>
+                    <div class="stat"><span class="lbl">Bias at CV's penalty</span><span class="val" id="cfBiasCV">&hellip;</span></div>
+                    <div class="stat"><span class="lbl">Bias at the prior's</span><span class="val" id="cfBiasPrior">&hellip;</span></div>
+                    <div class="stat"><span class="lbl">Best achievable bias</span><span class="val" id="cfBiasBest">&hellip;</span></div>
                 </div>
             </div>
 
-            <p>Slide the confounding to zero and cross-validation is exactly right &mdash; no shrinkage, no bias &mdash; while the prior is <em>clearly worse</em>, pulling a perfectly good estimate down by 28%. That is the ordinary, well-understood cost of an informative prior, and it is worth seeing before the rest of the argument, because it establishes that the prior is not a smarter criterion. It is a fixed one.</p>
+            <p>Slide the confounding to zero and cross-validation is exactly right (no shrinkage, no bias), while the prior is <em>clearly worse</em> and pulls a perfectly good estimate down by 28%. That is the ordinary, well-understood cost of an informative prior, and it is the right thing to see before the rest of the argument. The prior is fixed. Being fixed is a different thing from being smart.</p>
 
-            <p>Now open the back-door path. Cross-validation's marker does not move: it stays at no shrinkage, because that is still what predicts best, so its bias climbs with the confounding &mdash; 20%, 44%, 68% as the slider advances. The prior's marker does not move either, but for the opposite reason: nothing in the data is talking to it. Between them, the shrinkage that would actually minimise the bias slides steadily leftward, crossing the prior's fixed position at moderate confounding and continuing past it. Neither criterion is tracking that point, and neither is trying to.</p>
+            <p>Now open the back-door path. Cross-validation's marker does not move. It stays at no shrinkage, because that is still what predicts best, so its bias climbs with the confounding: 20%, 44%, 68% as the slider advances. The prior's marker does not move either, but the reason is the opposite one, since nothing in the data is talking to it. Between them, the shrinkage that would actually minimise the bias slides steadily leftward, crossing the prior's fixed position at moderate confounding and continuing past it. Neither criterion is tracking that point, and neither is trying to.</p>
 
-            <p>That crossing is the whole story. At the slider's default the prior lands at +3.7% bias against cross-validation's +44% &mdash; close to the +5.9% and +41.6% the two real estimators produced on the simulated world. The toy model's parameters were chosen to be plausible rather than fitted to that result, so the correspondence is not a prediction; it is a check that the mechanism being described is big enough to explain what was measured. And the mechanism is not that the Bayesian path knows about the confounder. It has no idea the confounder exists. It is that a fixed downward pull happened to point the opposite way from an upward bias, at roughly the right magnitude.</p>
+            <p>That crossing is the whole story. At the slider's default the prior lands at +3.7% bias against cross-validation's +44%, close to the +5.9% and +41.6% the two real estimators produced on the simulated world. The toy model's parameters were chosen to be plausible rather than fitted to that result, so treat the correspondence as a check rather than a forecast, one that tests whether the mechanism being described is big enough to explain what was measured. The Bayesian path has no idea the confounder exists. What it did was cruder: a fixed downward pull happened to point the opposite way from an upward bias, at roughly the right magnitude.</p>
 
             <h2 id="not-a-fix">A Second Bias Is Not a Fix</h2>
-            <p>This is the part worth being careful about, because the comfortable reading of the table &mdash; "the Bayesian path is more robust to confounding" &mdash; is wrong in a way that would cost someone money.</p>
+            <p>This is the part worth being careful about. The comfortable reading of the table, "the Bayesian path handles confounding better," is wrong in a way that would cost someone money.</p>
 
-            <p>The prior did not detect anything, correct anything, or adjust for anything. It applied the same downward pull it always applies, and on this world that pull happened to point against the bias and happened to be roughly the right size. Three things had to line up for that: the prior's centre had to sit below the confounded estimate, its strength had to be neither too weak to matter nor strong enough to overshoot, and the confounding had to be upward. Flip any one of them &mdash; a genuinely high-performing channel whose true effect sits above the prior's centre, or a confounder that suppresses rather than inflates &mdash; and the same prior makes the same fit worse rather than better.</p>
+            <p>The prior detected nothing and corrected nothing. It applied the same downward pull it always applies, and on this world that pull happened to point against the bias and happened to be roughly the right size. Three things had to line up for that: the prior's centre had to sit below the confounded estimate, its strength had to be neither too weak to matter nor strong enough to overshoot, and the confounding had to be upward. Flip any one of them and the same prior makes the same fit worse rather than better. Picture a high-performing channel whose true effect sits above the prior's centre, or a confounder that suppresses the apparent effect instead of inflating it.</p>
 
-            <p>You also cannot tell from the fit which case you are in. Both look like a converged model with reasonable intervals. The cancellation leaves no residue in the diagnostics, because there is nothing wrong with the sampler; the model is answering the question it was asked, and the question omitted a variable.</p>
+            <p>You also cannot tell from the fit which case you are in. Both look like a converged model with reasonable intervals. The cancellation leaves no residue in the diagnostics, because there is nothing wrong with the sampler. Your model answered the question it was asked, and that question omitted a variable.</p>
 
             <div class="callout warning">
                 <h4>The honest summary</h4>
-                <p>Two biases partially cancelling is not the same as either bias being absent. The frequentist path shows more of the confounding because it is doing less of the offsetting &mdash; which arguably makes it the more <em>candid</em> of the two on this world, even though its number is further from the truth. The route to actually closing a back-door path is a randomised experiment (<code>mmm_framework.calibration</code>), and no choice of penalty or prior substitutes for one.</p>
+                <p>Two biases partially cancelling is not the same as either bias being absent. The frequentist path shows more of the confounding because it is doing less of the offsetting, which arguably makes it the more <em>candid</em> of the two on this world even though its number is further from the truth. The route to actually closing a back-door path is a randomised experiment (<code>mmm_framework.calibration</code>). No choice of penalty or prior substitutes for one.</p>
             </div>
 
             <h2 id="visible">Why One Path Could Hide This</h2>
-            <p>It is worth asking why this needed a second estimator to notice, because the answer generalises past this framework.</p>
+            <p>This needed a second estimator to notice, and the reason generalises past this framework.</p>
 
-            <p>With a single estimation path, the prior's contribution to the answer is not separately visible. You can measure how much the posterior narrowed relative to the prior &mdash; this framework does, and flags coefficients whose posterior is mostly their prior. What that tells you is how much the data moved your <em>uncertainty</em>. It does not tell you how much the prior moved your <em>point estimate</em> relative to a world without it, because there is no such world to compare against. Prior-predictive checks have the same limitation: they ask whether the prior implies sensible data before fitting, not whether it is silently offsetting a bias afterwards.</p>
+            <p>With a single estimation path, the prior's contribution to the answer is not separately visible. You can measure how much the posterior narrowed relative to the prior, and this framework does, with a flag on any coefficient whose posterior is mostly its prior. What that tells you is how much the data moved your <em>uncertainty</em>. It does not tell you how much the prior moved your <em>point estimate</em> relative to a world without it, because there is no such world to compare against. Prior-predictive checks have the same limitation: they ask whether the prior implies sensible data before fitting, not whether it is silently offsetting a bias afterwards.</p>
 
-            <p>A second estimator that shrinks differently supplies the missing comparison. The two paths differ in exactly one interesting respect &mdash; who chooses the shrinkage &mdash; so their disagreement is a readout on that choice. On four of the five worlds the two broadly agreed, which is the boring and reassuring case. On the confounded one they did not, and the size of the gap was the size of the prior's contribution.</p>
+            <p>A second estimator that shrinks differently supplies the missing comparison. The two paths differ in exactly one interesting respect (who chooses the shrinkage), so their disagreement is a readout on that choice. Four of the five worlds produced broad agreement, which is the boring and reassuring case. On the confounded one they did not, and the size of the gap was the size of the prior's contribution.</p>
 
             <p>That is a decent argument for keeping a mechanically different second opinion around even when it is the less accurate of the two. Its disagreement carries information that neither path's own diagnostics report.</p>
 
@@ -248,47 +248,47 @@
                 <p>The two paths are the same model with a different estimator, so the comparison is a config change rather than a rewrite:</p>
                 <pre><code class="language-python">from mmm_framework import BayesianMMM, ModelConfigBuilder, TrendConfig, TrendType
 
-# The Bayesian point estimate — priors choose the shrinkage.
+# The Bayesian point estimate: priors choose the shrinkage.
 bayes_config = ModelConfigBuilder().bayesian_numpyro().build()
 model = BayesianMMM(panel, bayes_config, TrendConfig(type=TrendType.LINEAR))
 bayes_results = model.fit(method="map", random_seed=42)
 
-# The frequentist path — out-of-sample error chooses the shrinkage.
+# The frequentist path: out-of-sample error chooses the shrinkage.
 ridge_config = ModelConfigBuilder().frequentist_ridge().build()
 ridge_model = BayesianMMM(panel, ridge_config, TrendConfig(type=TrendType.LINEAR))
 ridge_results = ridge_model.fit(random_seed=42)</code></pre>
-                <p style="margin-bottom:0;">The frequentist fit reports <code>converged</code> as <code>None</code> rather than <code>True</code> &mdash; there is no chain to assess &mdash; and every interval it produces is labelled a confidence interval rather than a credible one, because a bootstrap sampling distribution does not license the probability statement a posterior does.</p>
+                <p style="margin-bottom:0;">The frequentist fit reports <code>converged</code> as <code>None</code> rather than <code>True</code>, because there is no chain to assess. Every interval it produces is labelled a confidence interval rather than a credible one, since a bootstrap sampling distribution does not license the probability statement a posterior does.</p>
             </div>
 
             <h2 id="limits">What This Doesn't Claim</h2>
             <p>Four honest limits, since the result is easy to over-read in either direction.</p>
 
-            <p><strong>It is one confounded world, not a survey.</strong> The +41.6% versus +5.9% gap is a measurement on a specific simulated world with a specific confounding strength and a specific prior. The mechanism generalises; that particular ratio does not, and a different prior centre or a weaker back-door path moves it substantially.</p>
+            <p><strong>It is one confounded world, not a survey.</strong> The +41.6% versus +5.9% gap is a measurement on a specific simulated world with a specific confounding strength and a specific prior. The mechanism generalises. That particular ratio does not, and a different prior centre or a weaker back-door path moves it substantially.</p>
 
-            <p><strong>Neither number is usable.</strong> Both estimators are badly wrong on this world &mdash; one is 42% off and the other 6%, and a 6% error on a number driving budget is not a success story either. The comparison is about the <em>mechanism</em> behind the difference, not a recommendation to accept the smaller error.</p>
+            <p><strong>Neither number is usable.</strong> Both estimators are badly wrong on this world. One is 42% off and the other 6%, and a 6% error on a number driving budget is no success story either. The comparison is about the <em>mechanism</em> behind the difference, and it carries no recommendation to accept the smaller error.</p>
 
-            <p><strong>Cross-validation is not being criticised.</strong> Selecting a penalty by out-of-sample error is the correct thing to do when the goal is prediction, and it is what the frequentist path is for. The point is narrower: predictive skill and causal accuracy are different targets, and a procedure optimising one has no reason to land on the other. That objection is not new &mdash; it is the same reason this framework's model-averaging work does not select specifications by predictive fit, and the same reason the transform search carries a caveat about it.</p>
+            <p><strong>Cross-validation is not being criticised.</strong> Selecting a penalty by out-of-sample error is the correct thing to do when the goal is prediction, and it is what the frequentist path is for. The point is narrower: predictive skill and causal accuracy are different targets, and a procedure optimising one has no reason to land on the other. That objection is not new. It is the same reason this framework's model-averaging work does not select specifications by predictive fit, and the same reason the transform search carries a caveat about it.</p>
 
-            <p><strong>Informative priors are not being recommended as a confounding remedy.</strong> They are not one. A prior tight enough to offset a back-door path is also tight enough to override genuine evidence about a channel that really does work, and you cannot tune it for the first job without accepting the second.</p>
+            <p><strong>Informative priors are not being recommended as a confounding remedy.</strong> They are not one. A prior tight enough to offset a back-door path is also tight enough to override real evidence about a channel that works, and you cannot tune it for the first job without accepting the second.</p>
 
             <h2 id="next">Where This Goes Next</h2>
             <p>The useful thing about a finding like this is that it suggests specific instruments rather than general caution.</p>
 
-            <p><strong>Report the two estimates side by side, and treat the gap as a diagnostic.</strong> The pieces are all in place &mdash; both paths run on the same model object, and the frequentist one takes a couple of seconds. What is missing is a surface that runs both and shows the disagreement per channel, so a large gap prompts the right question ("what is my prior doing here?") instead of going unnoticed. This is close to what the framework's triangulation panel already does for MMM against experiments and platform data, applied inward to two estimators of the same model.</p>
+            <p><strong>Report the two estimates side by side, and treat the gap as a diagnostic.</strong> The pieces are all in place. Both paths run on the same model object, and the frequentist one takes a couple of seconds. What is missing is a surface that runs both and shows the disagreement per channel, so a large gap prompts the right question ("what is my prior doing here?") instead of going unnoticed. This is close to what the framework's triangulation panel already does for MMM against experiments and platform data, applied inward to two estimators of the same model.</p>
 
-            <p><strong>Quantify the prior's contribution to the point estimate directly.</strong> The existing prior-to-posterior contraction check measures the prior's effect on uncertainty. Its natural sibling measures the effect on location: refit with the prior progressively widened and watch the coefficient move. A coefficient that walks a long way as its prior loosens is one whose value is substantially an assumption &mdash; which is worth knowing whether or not a confounder is involved.</p>
+            <p><strong>Quantify the prior's contribution to the point estimate directly.</strong> The existing prior-to-posterior contraction check measures the prior's effect on uncertainty. Its natural sibling measures the effect on location: refit with the prior progressively widened and watch the coefficient move. A coefficient that walks a long way as its prior loosens is one whose value is substantially an assumption. That is worth knowing whether or not a confounder is involved.</p>
 
-            <p><strong>Point the experiment planner at the disagreement.</strong> A channel where the two paths disagree sharply is a channel where an assumption is doing unusual amounts of work, which makes it a good candidate for the next lift test. The framework already ranks channels by expected information gain and expected value of information; estimator disagreement is a cheap signal that could feed into that ranking.</p>
+            <p><strong>Point the experiment planner at the disagreement.</strong> A channel where the two paths disagree sharply is a channel where an assumption is doing unusual amounts of work, which makes it a good candidate for the next lift test. The framework already ranks channels by expected information gain and expected value of information. Estimator disagreement is a cheap signal that could feed into that ranking.</p>
 
-            <p>The broader habit this points at is simple enough to state: when a model gives an answer, it is worth knowing how much of that answer came from the data and how much came from the way you asked. A second estimator that shrinks differently is one of the cheaper ways to find out.</p>
+            <p>The habit underneath all three is the same. When a model hands you an answer, ask how much of that answer came from the data and how much came from the way you asked. A second estimator that shrinks differently is one of the cheaper ways to find out.</p>
 
             <h2 id="references">References</h2>
             <ul class="reference-list">
-                <li>Chernozhukov, V., Chetverikov, D., Demirer, M., Duflo, E., Hansen, C., Newey, W., &amp; Robins, J. (2018). Double/debiased machine learning for treatment and structural parameters. <em>The Econometrics Journal</em>, 21(1), C1&ndash;C68. <span class="ref-note">The canonical statement that regularising a nuisance component contaminates the target parameter &mdash; the same collision between prediction-optimal and causally-honest estimation, treated formally.</span></li>
+                <li>Chernozhukov, V., Chetverikov, D., Demirer, M., Duflo, E., Hansen, C., Newey, W., &amp; Robins, J. (2018). Double/debiased machine learning for treatment and structural parameters. <em>The Econometrics Journal</em>, 21(1), C1&ndash;C68. <span class="ref-note">The canonical statement that regularising a nuisance component contaminates the target parameter. The same collision between prediction-optimal and causally-honest estimation, treated formally.</span></li>
                 <li>Hahn, P. R., Carvalho, C. M., Puelz, D., &amp; He, J. (2018). Regularization and confounding in linear regression for treatment effect estimation. <em>Bayesian Analysis</em>, 13(1), 163&ndash;182. <span class="ref-note">Shows directly that shrinkage priors placed on a regression coefficient interact with confounding rather than acting on it neutrally.</span></li>
                 <li>Smith, J. E., &amp; Winkler, R. L. (2006). The optimizer's curse: skepticism and postdecision surprise in decision analysis. <em>Management Science</em>, 52(3), 311&ndash;322. <span class="ref-note">The companion failure mode on the decision side, covered in <a href="blog-optimizers-curse.html">The Optimizer's Curse</a>.</span></li>
                 <li>Jin, Y., Wang, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). Bayesian methods for media mix modeling with carryover and shape effects. <em>Google Inc.</em> <span class="ref-note">The source for saturation being unidentified from the sales likelihood, which is why the transform search has to bound the curve rather than estimate it freely.</span></li>
-                <li>Dew, R., Padilla, N., &amp; Shchetkina, A. (2024). Your MMM is broken: identification of nonlinear and time-varying effects in marketing mix models. <em>arXiv:2408.07678</em>. <span class="ref-note">Predictive fit, cross-validation included, cannot arbitrate between observationally equivalent response specifications &mdash; the general form of the argument in this post's derivation.</span></li>
+                <li>Dew, R., Padilla, N., &amp; Shchetkina, A. (2024). Your MMM is broken: identification of nonlinear and time-varying effects in marketing mix models. <em>arXiv:2408.07678</em>. <span class="ref-note">Predictive fit, cross-validation included, cannot arbitrate between observationally equivalent response specifications. The general form of the argument in this post's derivation.</span></li>
             </ul>
         </main>
     </div>

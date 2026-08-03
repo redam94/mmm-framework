@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Simulation Loop Does More Than SBC | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="Prior SBC grades your sampler on media worlds drawn from the prior. Posterior SBC, SBC-derived interval widening, and Betancourt's inferential-adequacy check reuse the same expensive simulation loop and answer questions closer to the budget.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-sbc-part-two.html">
+    <meta property="og:title" content="The Simulation Loop Does More Than SBC">
+    <meta property="og:description" content="Under the framework's ROI-mode prior, 69% of the worlds prior SBC grades contain a channel returning more than three dollars per dollar. Three better uses for the same simulation budget.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-sbc-part-two.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Simulation Loop Does More Than SBC">
+    <meta name="twitter:description" content="Under the framework's ROI-mode prior, 69% of the worlds prior SBC grades contain a channel returning more than three dollars per dollar. Three better uses for the same simulation budget.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework: a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-sbc-part-two.html",
+          "name": "The Simulation Loop Does More Than SBC | MMM Framework",
+          "description": "Prior SBC grades your sampler on media worlds drawn from the prior. Posterior SBC, SBC-derived interval widening, and Betancourt's inferential-adequacy check reuse the same expensive simulation loop and answer questions closer to the budget.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-08-03",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-sbc-part-two.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-sbc-part-two.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "The Simulation Loop Does More Than SBC",
+          "datePublished": "2026-08-02",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-sbc-part-two.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-sbc-part-two.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "The Simulation Loop Does More Than SBC",
+              "item": "https://redam94.github.io/mmm-framework/blog-sbc-part-two.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#wrong-worlds">The Ensemble You Are Grading</a></li>
+                <li><a href="#posterior-sbc">Conditioning on Your Data</a></li>
+                <li><a href="#correction">From Check to Correction</a></li>
+                <li><a href="#question-three">The Question Before the Data</a></li>
+                <li><a href="#wrong-world">Worlds the Model Cannot Represent</a></li>
+                <li><a href="#order">Where the Budget Goes</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">The Simulation Loop Does More Than SBC</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-08-02">August 2, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Bayesian workflow</span>
+            </p>
+            <p class="lead">Simulation-based calibration costs one full refit per simulated dataset. This framework&rsquo;s <code>run_mmm_sbc</code> defaults to 64 of them, and on a national media mix model those refits run for hours. What comes back is a single verdict: the sampler is calibrated, or it is not, averaged over datasets drawn from the model&rsquo;s own prior. Three other jobs run on that same loop. Two of them come after the fit: one conditions the calibration on the dataset you actually have, and one turns the ranks into a correction you apply to a cheap posterior instead of a verdict you can only obey. The third runs before any data exist at all, and asks whether the model could ever answer the budget question.</p>
+
+            <h2 id="wrong-worlds">The Ensemble You Are Grading</h2>
+            <p>Start with what a prior-SBC ensemble is made of. In the framework&rsquo;s ROI parameterization, which the agent&rsquo;s spec-built models select, each channel carries <code>roi_&lt;ch&gt; ~ LogNormal(0, 1)</code> (<code>config/model.py:191, 194-195</code>), a defensible weakly-informative choice on the decision scale. Draw 20,000 worlds from it: eight channels, 104 weeks, media spend at 35% of a revenue index whose baseline sits at 100, a normal baseline prior centered there with a standard deviation of 30, and half-normal observation noise. The implied R&sup2; runs from 0.18 at the fifth percentile to 1.00 at the ninety-fifth, with a median of 0.80, so these are recognizably weekly sales series.</p>
+
+            <p>Then look at the businesses they describe. In 69% of the worlds at least one channel returns more than three dollars per dollar. Better than five dollars per dollar in 36% of them. The median world&rsquo;s best channel sits at 4.0x, and the ninety-ninth percentile at 20.6x. Those are not media plans anyone has run.</p>
+
+            <p>The other half of the ensemble is worse, because it is unanswerable rather than implausible. In 74% of the worlds some channel&rsquo;s weekly contribution has a standard deviation smaller than a tenth of the observation noise, which is to say the channel is invisible in its own simulated data. Ask for both conditions at once, no channel above 3x and every channel at least a tenth of the noise floor, and 7.4% of the ensemble survives. Of the 64 refits <code>run_mmm_sbc</code> pays for, roughly five land on a world an analyst would recognize as their client&rsquo;s.</p>
+
+            <div class="note">
+                <h4>Where this lives in the code</h4>
+                <p><code>diagnostics/sbc.py</code> implements Talts-style prior SBC and nothing else: <code>run_mmm_sbc</code> takes a built, unfitted <code>BayesianMMM</code>, calls <code>sample_prior_predictive</code> once for all simulations, then swaps the observed series with <code>pm.observe</code> on the same graph and refits (defaults <code>n_sims=64</code>, <code>L=100</code>). Everything below is about what else that loop could be doing.</p>
+            </div>
+
+            <p>SBC is doing exactly what it was built to do, and the priors are fine. Talts and colleagues designed the method for people writing samplers, and for them averaging over the prior is the right thing: an algorithm that only works on the plausible corner of parameter space is an algorithm with a hole in it. S&auml;ilynoja, Schmitt, B&uuml;rkner and Vehtari (2025) draw the line where it belongs. Prior SBC is a tool for algorithm developers, posterior SBC is a tool for modelers, and there are orders of magnitude more modelers than there are people writing NUTS implementations. The rank statistic and the histogram shapes belong to <a href="blog-prior-predictive-sbc.html">the companion post</a>. Take them as given here.</p>
+
+            <p>The implausible worlds are also, and not coincidentally, the slow ones. On a Lotka-Volterra model S&auml;ilynoja and colleagues report 250 prior-SBC iterations taking 6.5 hours against 500 posterior-SBC iterations taking 2.5 hours. The weakly-informative prior puts real mass on parameter values whose posteriors are pathological to sample, so the sampler grinds. Conditioning on data removes that mass, and their runtime per iteration came out more than five times faster.</p>
+
+            <h2 id="posterior-sbc">Conditioning on the Data You Have</h2>
+            <p>The reformulation is short enough to state in four lines, and the reason it works is sequential updating: yesterday&rsquo;s posterior is today&rsquo;s prior, so the uniformity argument that underwrites SBC applies with \( \pi(\theta \mid y_{\text{obs}}) \) standing in for the prior.</p>
+
+            <div class="definition">
+                <h4>Definition: Posterior SBC</h4>
+                <p>Given an observed dataset \( y_{\text{obs}} \) and a fitted posterior \( \pi(\theta \mid y_{\text{obs}}) \), repeat:</p>
+                $$ \theta' \sim \pi(\theta \mid y_{\text{obs}}), \qquad y_i \sim \pi(y \mid \theta'), \qquad \theta \mid (y_i, y_{\text{obs}}) \;\text{refit}, \qquad r_i = \operatorname{rank}\big(f(\theta');\, f(\theta_1), \dots, f(\theta_L)\big). $$
+                <p>The rank of the drawn \( \theta' \) among draws from the augmented posterior is uniform when the computation is correct, for the same reason the prior-SBC rank is. Conditioning changes what gets graded. The sampler now sees datasets that resemble the one you have, because \( \theta' \) came from a posterior that has already seen it.</p>
+            </div>
+
+            <p>What that buys is sensitivity. Take two regions of the prior whose posteriors are biased in opposite directions. Prior SBC averages over both, the errors cancel in the rank histogram, and the histogram stays flat however far you push the iteration count, because more iterations estimate the average more precisely, and the average they are estimating is zero. Posterior SBC visits one region, so nothing cancels. A rank histogram is an average, and averages hide sign changes.</p>
+
+            <p>Their hierarchical case study shows the same blindness arriving by dilution rather than cancellation, and it is the one to show a geo modeler. After 500 iterations of prior SBC, S&auml;ilynoja and colleagues report no noticeable calibration issue with either the centered or the non-centered parameterization, every PIT-ECDF difference line inside the simultaneous band, which would tell the modeler both implementations are fine. Posterior SBC conditional on a dataset with a weak population prior and a strong likelihood then finds the centered version calibrated and the <em>non-centered</em> one failing on the population-level parameters. Conditional on the other dataset, strong prior and weak likelihood, the verdict reverses.</p>
+
+            <p>Which parameterization is right is therefore a fact about the data, settled after the fit rather than before it. A geo MMM with per-geo channel effects is this model, and the information per geo is a property of the panel you were handed. <a href="blog-when-sampling-fails.html">The sampling-failure post</a> treats non-centering as a repair you reach for when the diagnostics complain. Posterior SBC lets you pick the parameterization your panel supports before they have to, and it is the only check in the toolkit that can, because it is the only one that conditions on the panel.</p>
+
+            <pre><code># illustrative
+# Posterior SBC on top of an already-fitted model.
+post = fit(y_obs)                                   # the fit you were going to ship
+ranks = []
+for i in range(n_sims):
+    theta_prime = post.draw()                       # NOT a prior draw
+    y_i         = simulate_likelihood(theta_prime)  # a dataset like the one you have
+    aug         = fit(concat(y_obs, y_i))           # refit on the augmented data
+    draws       = aug.draws(quantity=joint_loglik)  # test quantity, not just params
+    ranks.append(sum(d &lt; joint_loglik(theta_prime) for d in draws))</code></pre>
+
+            <p>Note the test quantity in that last line. The 2025 paper uses the joint log-likelihood throughout as its default, which is the recommendation Modr&aacute;k and colleagues arrived at from the other direction, and which <a href="blog-prior-predictive-sbc.html#what-sbc-misses">the companion post</a> covers. Those two results compose cleanly. Rank a data-dependent quantity, and rank it on data that resembles yours.</p>
+
+            <div class="note">
+                <h4>The framework already has the single-point version</h4>
+                <p><code>run_recovery_coverage(model, truth="posterior_mean")</code> in <code>diagnostics/coverage.py</code> fixes every free parameter at the fitted posterior mean with <code>pm.do</code>, simulates datasets there, refits each, and measures interval coverage. That is posterior SBC collapsed to one point of the posterior instead of draws from it, which makes it cheaper and blind to anything that varies across the posterior. Moving from a point to draws is the change, and the loop is otherwise the same code.</p>
+            </div>
+
+            <h2 id="correction">From Check to Correction</h2>
+            <p>Every diagnostic above returns a verdict. Cai, Greengard, Goodrich and Gelman (2026) turn the same ranks into a repair for the posterior.</p>
+
+            <p>The move is a single scalar. Take an approximate posterior, rescale its draws around their own mean by a factor \( k \), and choose \( k \) so that the SBC quantiles come out nominal. Two selection rules work. Grid search directly on the coverage objective is the obvious one. The cheaper one needs no search at all: compute the SBC z-scores \( (\theta_{\text{true}} - \mu_{\text{post}}) / \sigma_{\text{post}} \) across replications and take their standard deviation, which is the factor by which the intervals are too narrow. On eight schools, with Stan&rsquo;s ADVI on a centered parameterization and HMC on the non-centered version as ground truth, the two rules agree: grid search lands between 2.41 and 2.56, the z-score rule at 2.48. Under that rule, adjusted coverage comes out at 0.958, 0.909, 0.788 and 0.505 against nominal levels of 0.95, 0.90, 0.80 and 0.50.</p>
+
+            <p>What makes 2.4 interesting is that ADVI&rsquo;s posteriors on that problem are about half as wide as HMC&rsquo;s in their Figure 3a, and half as wide should want a factor of 2. The extra comes from location. ADVI&rsquo;s posterior mean is shifted, and the shift is different in every replication, so a correction that can only change the width has to over-widen to swallow the wandering center. I wanted to see that mechanism on its own, so I planted both errors deliberately in a conjugate normal-normal model and ran the framework&rsquo;s own <code>run_sbc</code> over 20,000 replications: an approximate posterior half as wide as the exact one, with a mean displaced each time by a normal draw of half the exact posterior&rsquo;s standard deviation.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Nominal level</th><th>Empirical coverage, broken posterior</th><th>After widening by 2.31</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>50%</td><td>24.0% [23.4, 24.6]</td><td>50.9%</td></tr>
+                    <tr><td>80%</td><td>44.0% [43.3, 44.7]</td><td>80.0%</td></tr>
+                    <tr><td>90%</td><td>54.7% [54.0, 55.4]</td><td>89.6%</td></tr>
+                    <tr><td>95%</td><td>63.9% [63.2, 64.5]</td><td>94.2%</td></tr>
+                </tbody>
+            </table>
+
+            <p>Brackets are Jeffreys binomial intervals from <code>coverage_from_ranks</code>. The 90% interval covering 54.7% is the exact symptom <code>technical-docs/coverage-diagnostics.md</code> is written to diagnose, and the diagnosis it gives, an approximate fit, is correct here by construction.</p>
+
+            <p>Three ways of picking \( k \) agree with each other and disagree with 2. Grid search on the coverage objective gives 2.31, the z-score rule gives 2.22, and the closed form for this planted setup, \( \sqrt{1 + 0.5^2} / 0.5 \), gives 2.236. Now rerun the identical loop with the location error switched off and the width error untouched. The z-score rule returns 1.99. Between that and 2.22 sits the price of the wandering center, stated in the units of the correction you have to apply. That is a more honest account of what a variational fit costs than &ldquo;uncertainty is not calibrated,&rdquo; which is what the framework&rsquo;s own troubleshooting table currently says.</p>
+
+            <details class="deep-dive">
+                <summary><span class="deep-dive-tag">Deep dive</span>Why mean-field intervals are narrow by theorem</summary>
+                <div class="deep-dive-body">
+                    <p>Margossian, Pillaud-Vivien and Saul (2025) prove an impossibility result for factorized approximations. If the target posterior does not factorize, no factorized \( q \) can match more than one of three uncertainty measures at a time: the marginal variances, the marginal precisions, or the generalized variance. Minimizing \( \mathrm{KL}(p \,\|\, q) \) matches the marginal variances. Minimizing \( \mathrm{KL}(q \,\|\, p) \), which is the standard variational objective and the one ADVI optimizes, matches the marginal precisions instead. A marginal precision is a conditional variance in disguise, so matching it and reporting it as a marginal is how the intervals come out too tight.</p>
+                    <p>An MMM posterior is the textbook non-factorizing case. Channel spend series move together, adstock decay trades off against saturation, saturation trades off against the coefficient, and the joint sits on a ridge rather than a peak. The theorem therefore says the narrow ADVI credible intervals you get from an MMM are structural, and no amount of tuning the step size or the iteration count will widen them. The best response is to stop using mean-field variational inference wherever you intend to report uncertainty. Failing that, use full rank and pay for it. Failing that, use mean field and apply the correction above. The factor absorbs a location error as well as a width error, and only the width part is honestly a scale.</p>
+                </div>
+            </details>
+
+            <div class="warning">
+                <h4>⚠️ The obvious extension of this is invalid</h4>
+                <p>If SBC ranks averaged over the prior can calibrate a correction, the natural next thought is to average over the posterior instead and get a correction tuned to your own data. Cai and colleagues prove it fails. In a plain normal-normal model, swapping the prior for the posterior in the averaging step produces z-scores that are not standard normal for <em>any</em> value of \( y \), and recalibrating against them yields intervals that come out both shifted and overconfident. Worse, that same model quietly pools only half as far toward the prior as the exact posterior, its mean moving from \( y/2 \) to \( 3y/4 \). The recalibration has edited the inference rather than the interval drawn around it. Hierarchical models are the one case they think could survive. Posterior SBC is the move that validly conditions on your data, because it changes what gets simulated. This changes what the ranks mean.</p>
+            </div>
+
+            <h2 id="question-three">The Question Before the Data</h2>
+            <p>Betancourt&rsquo;s principled workflow opens by asking four questions of a model, and this blog has answered two of them. Question One asks whether the model is consistent with domain expertise, and prior predictive checks answer it. Question Two asks whether the computational tools will be sufficient to fit the posterior accurately, and SBC answers it. Question Four asks whether the model is rich enough to capture the true data generating process, and posterior retrodictive checks answer that one later, on real data. Question Three has no coverage anywhere in this series: <em>will our inferences provide enough information to answer our questions?</em></p>
+
+            <p>Betancourt answers it in Step Eleven of the workflow, inferential calibration, run over the simulated ensemble that Step Six already built for algorithmic calibration in Step Ten. The loop is the same loop. Simulate from the prior, fit each replicate, and instead of ranking the truth, measure how wide the posterior came out and whether that width is small enough to move a decision.</p>
+
+            <p>For a media mix model the decision is a budget shift, and a budget shift has a threshold. Distinguishing a channel that returns 1.2x from one that returns 3x is 1.8 ROI points. If the posterior interval on that channel&rsquo;s ROI is wider than 1.8 no matter what the data say, the model has failed before anyone has collected anything, and it has failed in a way that no amount of sampler correctness will repair.</p>
+
+            <p>This one is computable in closed form for a linear-Gaussian model, which is the useful special case, because with a Gaussian prior and known noise the posterior covariance does not depend on \( y \) at all. The design: 104 weeks, eight channels at spend shares from 32% down to 3%, geometric adstock and a Hill curve, columns rescaled so the coefficient is the channel&rsquo;s ROI in revenue per media dollar, media at 12% of revenue, spend partly chasing a shared demand driver, an intercept, a linear trend, two Fourier seasonality pairs, and noise set to R&sup2; = 0.85. Prior on each ROI: normal, centered at 1.5, standard deviation 1.0, whose central 80% interval is 2.56 points wide.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Design</th><th>Median pairwise correlation among media columns</th><th>Channels whose 80% ROI interval clears the 1.8-point gap</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Base: 2 years, media at 12% of revenue</td><td>0.90</td><td>1 of 8 (TV alone)</td></tr>
+                    <tr><td>Double the history to 4 years</td><td>0.89</td><td>1 of 8</td></tr>
+                    <tr><td>Raise media to 25% of revenue</td><td>0.90</td><td>1 of 8</td></tr>
+                    <tr><td>Halve the noise (R&sup2; = 0.95)</td><td>0.90</td><td>2 of 8</td></tr>
+                    <tr><td>Double the flighting variation</td><td>0.66</td><td>2 of 8</td></tr>
+                    <tr><td>Decouple spend from demand entirely</td><td>0.14</td><td>2 of 8</td></tr>
+                    <tr><td>Four of those changes at once</td><td>0.67</td><td>7 of 8</td></tr>
+                </tbody>
+            </table>
+
+            <p>Read the middle rows first. Every single intervention buys at most one additional channel, and doubling the length of the history buys nothing at all, which is the opposite of what a client asks for when the intervals come back too wide. The eighth channel, at 3% of spend, has a posterior standard deviation of 1.00 in the base design against a prior standard deviation of 1.00. Data move it by nothing measurable, so its interval is the prior&rsquo;s interval and every ROI number reported for it restates an assumption. <a href="blog-bayesian-mmm-carryover-shape.html">The carryover-and-shape post</a> makes the same point about the transform parameters, from the identification side.</p>
+
+            <p>Now read the last row. Four years of history, media at a quarter of revenue, twice the flighting variation, and a cleaner series together resolve seven channels of the eight. The effects compound. Ask &ldquo;how do we get tighter ROI intervals&rdquo; and the honest answer is never one thing. That is a conversation worth having before the modeling contract is signed rather than after the readout, and Question Three is where it belongs.</p>
+
+            <p>The framework computes the adjacent quantity already. <code>planning/</code> holds the EIG and EVOI machinery that prices what an <em>experiment</em> would teach you. Pointing the same arithmetic at the observational design, and running it over the ensemble the SBC loop already generates, is the missing piece.</p>
+
+            <h2 id="wrong-world">Worlds the Model Cannot Represent</h2>
+            <p>Everything above simulates from the model being graded. That is the source of its power and the boundary of its reach, and it is why a clean SBC run certifies machinery rather than judgment. Gelman, Vehtari, McElreath and colleagues give the complementary stage its own place in the workflow, and in the 2020 preprint it is &sect;4.3, separate from fake-data simulation in &sect;4.1 and SBC in &sect;4.2. That stage is about design and bias rather than code correctness.</p>
+
+            <p>Their worked example is 500 students with a midterm and a final. Plant a treatment effect of exactly 10, then break the design: let assignment depend on the pre-test through \( \Pr(z=1) = \mathrm{logit}^{-1}((x-50)/10) \), and the raw comparison of treated against control returns &minus;13.8 with a standard error of 1.5. Linear adjustment for the pre-test rescues it to 9.7 with a standard error of 0.8. Then make the true \( E(y \mid x, z) \) nonlinear and change nothing else: the same linear adjustment under the same unbalanced design degrades to 7.3 with a standard error of 0.9, while under a balanced design it still recovers 10.5 with a standard error of 0.8. Same estimator, same planted truth, 27% low because the assignment mechanism and the functional form conspired.</p>
+
+            <p>The analogue is exact and uncomfortable. Media spend responds to expected demand, which is the unbalanced assignment mechanism, and adstock composed with saturation is a functional form nobody gets exactly right. The simulation returns a number rather than a verdict: how wrong does this estimator get when this specific assumption is wrong by this much. Gelman and colleagues frame it as the interesting question in the case where the check is guaranteed to fail by construction, a \( t_4 \) truth fit with a normal likelihood, and their phrasing is the whole argument for the stage: how bad will these inferences be?</p>
+
+            <div class="note">
+                <h4>The violation worlds ship with the framework</h4>
+                <p><code>synth/dgp.py</code> and <code>synth/dgp_geo.py</code> generate scenarios labeled by which assumption they break and whether the planted truth is representable by the model at all. <a href="blog-holdout-error-mmm.html">The holdout post</a> uses them as an acceptance gate, a pass-or-fail check against an external answer key before a model ships. Used the &sect;4.3 way they answer a different question: run the world your model provably cannot represent, and record the size of the error rather than its existence. A bias you have measured is a bias you can carry into the recommendation as a stated haircut. A bias you have only detected is a bias you argue about.</p>
+            </div>
+
+            <h2 id="order">Where the Budget Goes</h2>
+            <p>Given one overnight window of compute and a fitted model, spend it on posterior SBC with the joint log-likelihood as the test quantity. It is cheaper per iteration than the prior version, and it grades the fit you are about to ship. On a geo model it also tells you which parameterization your panel supports. Where the fit is approximate because the full one will not finish, run the loop anyway and keep the z-scores. Their standard deviation is the widening factor, and it costs one line. The alternative is publishing a 90% interval that covers half the time. Read that factor as diagnosis as well as repair, because the excess over the ratio of the widths, the 0.23 that separated 2.22 from 1.99 here, is location error, and location error is not something a wider interval makes correct.</p>
+
+            <p>Before the data exist, ask Question Three. The linear-Gaussian version is closed form and runs in seconds, and it names the channels the proposed design can never resolve. That answer is worth more than any diagnostic available afterwards, because afterwards the only remaining move is to widen the interval and apologize.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li>Under the framework&rsquo;s ROI-mode <code>LogNormal(0, 1)</code> prior, 69% of prior-SBC worlds contain a channel returning more than 3x and 74% contain a channel invisible in its own data. About five of the default 64 refits land on a business anyone runs.</li>
+                    <li>Posterior SBC draws \( \theta' \) from the fitted posterior, simulates, refits on the augmented data, and ranks. It catches biases that cancel in a prior-SBC histogram, and on Lotka-Volterra it ran 500 iterations in 2.5 hours against 6.5 hours for 250 prior-SBC iterations.</li>
+                    <li>Whether a hierarchical model wants the centered or the non-centered parameterization is a function of the observed data, so a geo MMM cannot settle it before the fit. Posterior SBC is the check that conditions on the panel.</li>
+                    <li>SBC ranks yield a scalar interval-widening factor. In a planted normal-normal test the broken 90% interval covered 54.7% and widening by 2.31 restored it to 89.6%; the factor exceeds the width ratio of 2 because the approximate posterior&rsquo;s center wanders, and with the wander switched off the same rule returns 1.99.</li>
+                    <li>Betancourt&rsquo;s Question Three is answerable before data collection. In a realistic eight-channel design, only one channel&rsquo;s 80% ROI interval is narrow enough to separate 1.2x from 3x, doubling the history changes nothing, and four changes applied together resolve seven.</li>
+                    <li>The stage that prices a bias simulates from a world the model cannot represent. Gelman and colleagues&rsquo; own example moves an adjustment estimator from unbiased to 27% low by changing only the assignment mechanism and the functional form.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Gelman, A., Vehtari, A., McElreath, R., et&nbsp;al. (2026). <em>Bayesian Workflow</em>. CRC Press. ISBN 978-0-367-49014-0.</li>
+                <li>Gelman, A., Vehtari, A., Simpson, D., Margossian, C. C., Carpenter, B., Yao, Y., Kennedy, L., Gabry, J., B&uuml;rkner, P.-C., &amp; Modr&aacute;k, M. (2020). <em>Bayesian Workflow</em>. arXiv:2011.01808. &sect;4.3, &ldquo;Experimentation using constructed data&rdquo;, pp.&nbsp;20&ndash;22.</li>
+                <li>S&auml;ilynoja, T., Schmitt, M., B&uuml;rkner, P.-C., &amp; Vehtari, A. (2025). <em>Posterior SBC: Simulation-Based Calibration Checking Conditional on Data</em>. arXiv:2502.03279.</li>
+                <li>Cai, T., Greengard, P., Goodrich, B., &amp; Gelman, A. (2026). <em>Approximate Posterior Recalibration</em>. arXiv:2603.20068.</li>
+                <li>Modr&aacute;k, M., Moon, A. H., Kim, S., B&uuml;rkner, P.-C., Huurre, N., Faltejskov&aacute;, K., Gelman, A., &amp; Vehtari, A. (2025). <em>Simulation-Based Calibration Checking for Bayesian Computation: The Choice of Test Quantities Shapes Sensitivity</em>. Bayesian Analysis, 20(2), 461&ndash;488.</li>
+                <li>Margossian, C. C., Pillaud-Vivien, L., &amp; Saul, L. K. (2025). <em>Variational Inference for Uncertainty Quantification: an Analysis of Trade-offs</em>. Journal of Machine Learning Research, 26, 1&ndash;41. arXiv:2403.13748.</li>
+                <li>Betancourt, M. (2020). <em>Towards A Principled Bayesian Workflow</em>. betanalpha.github.io case study. &sect;1 Questioning Authority, &sect;1.3 Inferential Calibration, and workflow Steps Six, Ten and Eleven.</li>
+                <li>Betancourt, M. (2018). <em>Calibrating Model-Based Inferences and Decisions</em>. arXiv:1803.08393.</li>
+                <li>Talts, S., Betancourt, M., Simpson, D., Vehtari, A., &amp; Gelman, A. (2018). <em>Validating Bayesian Inference Algorithms with Simulation-Based Calibration</em>. arXiv:1804.06788.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+
+    <!-- Shared Components -->
+    <script src="shared/components.js"></script>
+
+    <script>
+        // KaTeX: three delimiter pairs only. Single-$ is deliberately absent so that
+        // dollar amounts render as money instead of being parsed as math.
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: "$$", right: "$$", display: true },
+                    { left: "\\[", right: "\\]", display: true },
+                    { left: "\\(", right: "\\)", display: false }
+                ],
+                throwOnError: false
+            });
+        });
+    </script>
+</body>
+</html>

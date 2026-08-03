@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Many Parameters Did Your Data Pay For? | MMM Framework</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+    <meta name="description" content="A fitted MMM reports a parameter count. One extra compiled Hessian splits the posterior curvature into the part the likelihood paid for and the part the prior did, and the answer is often a fraction of the count.">
+    <meta name="author" content="Matthew Reda">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/blog-what-the-data-paid-for.html">
+    <meta property="og:title" content="How Many Parameters Did Your Data Pay For?">
+    <meta property="og:description" content="Posterior curvature has two owners. Splitting it tells you how many of a model's parameters the data determines, and it catches a parameter that looks perfectly well estimated because the prior estimated it.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/blog-what-the-data-paid-for.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <!-- Twitter Card + JSON-LD structured data are injected by tools/build_seo.py -->
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Plotly + theme-aware figure toolkit -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="shared/blogviz.js"></script>
+
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="How Many Parameters Did Your Data Pay For?">
+    <meta name="twitter:description" content="Posterior curvature has two owners. Splitting it tells you how many of a model's parameters the data determines, and it catches a parameter that looks perfectly well estimated because the prior estimated it.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework: a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/blog-what-the-data-paid-for.html",
+          "name": "How Many Parameters Did Your Data Pay For? | MMM Framework",
+          "description": "A fitted MMM reports a parameter count. One extra compiled Hessian splits the posterior curvature into the part the likelihood paid for and the part the prior did, and the answer is often a fraction of the count.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-08-03",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/blog-what-the-data-paid-for.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/blog-what-the-data-paid-for.html#webpage",
+          "@type": "BlogPosting",
+          "headline": "How Many Parameters Did Your Data Pay For?",
+          "datePublished": "2026-08-02",
+          "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "author": {
+            "@type": "Person",
+            "name": "Matthew Reda"
+          },
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          },
+          "mainEntityOfPage": "https://redam94.github.io/mmm-framework/blog-what-the-data-paid-for.html"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/blog-what-the-data-paid-for.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Research",
+              "item": "https://redam94.github.io/mmm-framework/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "How Many Parameters Did Your Data Pay For?",
+              "item": "https://redam94.github.io/mmm-framework/blog-what-the-data-paid-for.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>This Post</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#split">Curvature Has Two Owners</a></li>
+                <li><a href="#units">Eigenvalues in Whatever Units</a></li>
+                <li><a href="#third-case">Determined by Nothing</a></li>
+                <li><a href="#draws">The Same Question From the Draws</a></li>
+                <li><a href="#before">Before Any Fitting</a></li>
+                <li><a href="#limits">What the Number Cannot See</a></li>
+                <li><a href="#green">When a Check Cannot Run</a></li>
+                <li><a href="#next">Where This Goes Next</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+
+            <h3>Research</h3>
+            <ul class="sidebar-nav">
+                <li><a href="blog.html">&larr; All research posts</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 id="overview">How Many Parameters Did Your Data Pay For?</h1>
+            <p class="post-meta">
+                <span>Matthew Reda</span><span aria-hidden="true">&middot;</span>
+                <time datetime="2026-08-02">August 2, 2026</time><span aria-hidden="true">&middot;</span>
+                <span class="post-tag">Bayesian workflow</span>
+            </p>
+            <p class="lead">A fitted model tells you how many parameters it has. A second number tells you how many of them the data determines, and it comes from the same fit for the price of one extra compiled Hessian. Put two coefficients on the same regressor and the first number stays at two while the second comes back 1.000.</p>
+
+            <h2 id="split">Curvature Has Two Owners</h2>
+
+            <p>Everything a point fit knows about its own precision lives in the curvature of the log posterior at the mode. Steep along a direction means a narrow posterior. Flat along one, and the fit reports wherever the optimizer happened to stop. A Laplace approximation makes this literal by inverting that curvature and calling the result a covariance matrix, which is why <a href="blog-when-sampling-fails.html">a failing Hessian is a weak-identification flag</a> delivered in seconds.</p>
+
+            <p>The question underneath that one is who paid for the curvature.</p>
+
+            <p>PyMC answers it almost for free. The log density decomposes as <code>model.logp() == model.varlogp + model.datalogp</code>, prior plus data, and second derivatives are linear, so the posterior curvature is exactly the sum of a prior part and a likelihood part:</p>
+
+            <div class="definition">
+                <h4>The split</h4>
+                $$ H_{\text{post}} \;=\; H_{\text{prior}} \;+\; H_{\text{lik}} $$
+                <p>Each is the Hessian of the negative log density in PyMC's unconstrained space. One extra compiled Hessian of <code>datalogp</code> gives the second term, and the first follows by subtraction.</p>
+            </div>
+
+            <p>That identity is not an approximation, and the repo gates it. I ran four analytic models, three of them from <code>tests/test_identification_diagnostics.py</code> and a fourth with the prior narrowed to <code>Normal(0, 1e-3)</code>, and took all three Hessians by hand: the largest absolute discrepancy between \( H_{\text{post}} \) and \( H_{\text{prior}} + H_{\text{lik}} \) was exactly 0.0 on every one of them. The test allows 1e-8 relative, which is the right thing to allow for a quantity that goes through two separate PyTensor compilations.</p>
+
+            <p>With the split in hand, the effective number of parameters is a trace:</p>
+
+            $$ p_{\text{eff}} \;=\; \operatorname{tr}\!\left( H_{\text{post}}^{-1} H_{\text{lik}} \right) \;=\; \sum_j \frac{v_j^{\top} H_{\text{lik}} \, v_j}{\lambda_j} $$
+
+            <p>where \( (\lambda_j, v_j) \) are the eigenpairs of \( H_{\text{post}} \). The right-hand form is how <code>diagnostics/identification.py</code> computes it, and the reason is worth a sentence: summing per-direction shares needs no matrix inverse, and \( H_{\text{post}} \) is singular in exactly the cases you built the diagnostic for.</p>
+
+            <p>Here is what it returns on four models small enough to reason about completely. Each row is a real run of <code>weak_identification_report(model, point)</code> at the MAP point.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Model</th><th>Parameters</th><th>Data paid for</th><th>Verdict</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Two coefficients, two regressors, tight noise</td><td>2</td><td>2.000</td><td><code>ok</code></td></tr>
+                    <tr><td>Two coefficients on the <em>same</em> regressor</td><td>2</td><td>1.000</td><td><code>weak</code></td></tr>
+                    <tr><td>A \( [0,1] \) parameter entering the mean multiplied by zero</td><td>2</td><td>0.9996</td><td><code>weak</code></td></tr>
+                    <tr><td>One coefficient under a <code>Normal(0, 1e-3)</code> prior</td><td>1</td><td>0.00021</td><td><code>weak</code></td></tr>
+                </tbody>
+            </table>
+
+            <p>The second row is the one to sit with. Two coefficients, one regressor, and only their sum appears in the likelihood. Both parameters have perfectly good marginal posteriors. The model will print two numbers with two intervals, and a reader who takes them at face value will attribute revenue to each of them. The data bought one.</p>
+
+            <h2 id="units">Eigenvalues in Whatever Units You Happened to Pick</h2>
+
+            <p>Before any of that means anything, the curvature has to be put on a scale that does not depend on your data dictionary. Raw Hessian eigenvalues are not invariant to rescaling a parameter, so on a real MMM they rank parameters by whether spend was recorded in dollars or in thousands of dollars.</p>
+
+            <p>The demonstration takes four lines. Take the two-coefficient model above, multiply the regressor by 1000, and tighten that coefficient's prior by the same factor so the model is the same model in different units. The raw spectrum at the mode moves from \( \{18{,}423,\ 20{,}059\} \), a ratio of 1.089, to \( \{2.0 \times 10^{4},\ 1.8 \times 10^{10}\} \), a ratio of 924,000. Read raw eigenvalues and you have just discovered a catastrophic flat direction in a model that did not change.</p>
+
+            <p>Scale by the diagonal first and the problem disappears. The correlation-scaled curvature \( D^{-1/2} H D^{-1/2} \) with \( D = |\operatorname{diag}(H)| \) has eigenvalues \( \{0.9841,\ 1.0159\} \) in both parameterizations, a Belsley condition index of 1.0160 in both, and an effective parameter count of 1.999996 in both.</p>
+
+            <div class="note">
+                <h4>Why the saddle test survives the scaling</h4>
+                <p>\( D \) is a positive diagonal matrix, so \( D^{-1/2} H D^{-1/2} \) is a congruence transformation of \( H \). By Sylvester's law of inertia, congruence preserves the number of positive, negative and zero eigenvalues. A negative eigenvalue after scaling is therefore still an unambiguous negative eigenvalue before it, which is what lets the same decomposition carry both the ridge test (small positive eigenvalue) and the saddle test (any negative one) without a second matrix.</p>
+            </div>
+
+            <p>Belsley's conventional threshold on the condition index \( \sqrt{\lambda_{\max} / \lambda_i} \) is 30. The shared-regressor model scores 18,548. Nothing about that is a borderline call. Its smallest scaled eigenvalue is 5.8e-9, and the direction carrying it loads on the two coefficients at \( (-0.707, +0.707) \): the difference of the two coefficients, exactly as constructed.</p>
+
+            <h2 id="third-case">A Parameter Determined by Nothing in the Data</h2>
+
+            <p>Two of the four things this decomposition separates are already familiar. A ridge is a parameter combination that trades off. It shows up as a small scaled eigenvalue, and the loadings on that eigenvector name which parameters are trading. An uninformed parameter has near-zero curvature of its own, nothing trades off against it, and it is what sends an optimizer walking out to the edge of a bounded parameter's support until a compiled Beta density divides by exactly zero.</p>
+
+            <p>The third case is the one that gets published.</p>
+
+            <p>Row three of the table is a two-parameter model where a <code>Beta(1, 1)</code> parameter called <code>alpha</code> enters the mean multiplied by zero. The likelihood is completely silent about it. Its posterior is not flat, because the Beta prior curves it. It is nowhere near a boundary, because the prior holds it in the middle. The ridge test finds nothing, the uninformed test finds nothing, and the report still comes back <code>weak</code>, because the attribution sees that the likelihood contributes 0% of <code>alpha</code>'s curvature.</p>
+
+            <div class="warning">
+                <h4>&#9888;&#65039; The Laplace covariance is fine, and one of its intervals is the prior</h4>
+                <p>On that model <code>report.laplace_usable</code> comes back <code>True</code>, and correctly: the smallest scaled eigenvalue is 1.0, there is no ridge, no uninformed parameter and no boundary hit. Laplace will invert a well-conditioned matrix and return two tidy intervals. One of them is the <code>Beta(1, 1)</code> prior, rendered as a finding. <code>laplace_usable</code> answers whether the covariance means anything as a covariance, which is a narrower question than whether every number in it came from the data.</p>
+            </div>
+
+            <p>The docstring for <code>PriorDetermined</code> puts the stakes plainly: the parameter is well determined, the optimizer is nowhere near trouble, &ldquo;but every bit of that determination came from the prior. Reporting it as &lsquo;fine&rsquo; would be reporting the prior back to the user as a finding.&rdquo;</p>
+
+            <h3 id="diagonal">The trap in the per-parameter version</h3>
+
+            <p>There is an obvious way to make this per-parameter instead of per-direction: take the ratio of diagonal entries, \( H_{\text{lik}}[i,i] / H_{\text{post}}[i,i] \), and call it the share of parameter \( i \)'s curvature the data supplied. That ratio is real and the module reports it. It can only be read in one direction.</p>
+
+            <p>On the shared-regressor model, both coefficients score 0.99999999 on the diagonal. The likelihood does curve in each coordinate individually, so each parameter looks like a triumph of measurement. Compute it along the flat direction instead and the eigenvector version returns an informed fraction of 0.0000. Only the sum is measured, and the diagonal has no way to see that, because seeing it requires looking at a combination of two coordinates at once.</p>
+
+            <p>So a small diagonal fraction is trustworthy and a large one is worthless. The asymmetry has a reason. Likelihood curvature is positive semi-definite, and a zero on the diagonal of a PSD matrix forces its entire row to zero, so a near-zero share really does mean the likelihood is flat in that coordinate. A near-one share means only that it curves there, which is compatible with the parameter being unidentified in company. <code>tests/test_identification_diagnostics.py</code> pins both halves, and the name of the test that pins the second is <code>test_the_per_parameter_fraction_is_not_used_to_claim_identification</code>.</p>
+
+            <h2 id="draws">The Same Question, Asked From the Draws</h2>
+
+            <p>Curvature at a point is one view. The complementary one works from samples and asks how far the posterior moved from the prior it started at. <code>diagnostics/learning.py</code> computes it as a variance ratio:</p>
+
+            $$ c \;=\; 1 - \frac{\operatorname{Var}_{\text{post}}}{\operatorname{Var}_{\text{prior}}} $$
+
+            <p>One case in this framework makes the point concretely, and it ships. <code>MultivariateMMM</code> gives its cannibalization cross-effect the prior \( \psi = -\mathrm{HalfNormal}(\sigma) \), structurally non-positive, because a channel cannibalizing a sibling category cannot help it. With \( \sigma = 0.3 \) the prior puts 100.00% of its mass below zero and its own central 95% interval runs \( [-0.671,\ -0.010] \). That interval excludes zero, and the model has not seen any data yet.</p>
+
+            <p>Hand that prior a likelihood so weak it barely tilts anything, and the posterior comes back at \( [-0.659,\ -0.009] \) with 100.00% of its mass below zero. A report that says &ldquo;the cannibalization effect is negative with 95% credibility&rdquo; is repeating the prior. Contraction says so: 0.038, with a prior-posterior overlap coefficient of 0.992, and the verdict is <code>prior-dominated</code>.</p>
+
+            <p>What makes the module worth reading is that it refuses to hand you one number. Five come back per parameter, and the argument in the docstring is that any one of them alone will mislead you.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Column</th><th>What it measures</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>contraction</code></td><td>\( 1 - \operatorname{Var}_{\text{post}} / \operatorname{Var}_{\text{prior}} \), deliberately unclipped so a widening posterior stays visible</td></tr>
+                    <tr><td><code>overlap</code></td><td>\( \sum_i \min(p_i, q_i) \) over shared histogram bins, so a hard prior edge at zero is not smeared the way a Gaussian kernel would smear it</td></tr>
+                    <tr><td><code>shift_z</code></td><td>\( (\bar\theta_{\text{post}} - \bar\theta_{\text{prior}}) / \mathrm{sd}_{\text{prior}} \), location learning that a width-only reading misses</td></tr>
+                    <tr><td><code>contraction_robust</code></td><td>the same ratio on interquartile ranges, so heavy posterior tails cannot drag the headline number negative on their own</td></tr>
+                    <tr><td><code>post_ess_bulk</code></td><td>whether the width estimate is itself a sampling artifact</td></tr>
+                </tbody>
+            </table>
+
+            <p>The verdict rule checks <code>shift_z</code> before it checks width, and that ordering carries the module's sharpest idea. A parameter whose posterior moved at least one prior standard deviation without narrowing is labelled <code>relocated</code> rather than <code>weak</code>, because the evidence dominated the location. Its prior was tight in the wrong place.</p>
+
+            <p>The two verdicts are easy to confuse and easy to separate. Both of these use the same <code>Normal(0, 0.10)</code> prior on a standardized coefficient, and differ only in what the data says.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Likelihood</th><th>Posterior</th><th><code>contraction</code></th><th><code>shift_z</code></th><th><code>overlap</code></th><th>Verdict</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>centre 0.05, standard error 1.00</td><td>0.000 &plusmn; 0.100</td><td>0.007</td><td>0.002</td><td>0.995</td><td><code>prior-dominated</code></td></tr>
+                    <tr><td>centre 1.50, standard error 0.35</td><td>0.113 &plusmn; 0.096</td><td>0.079</td><td>1.132</td><td>0.564</td><td><code>relocated</code></td></tr>
+                </tbody>
+            </table>
+
+            <p>Both rows have a contraction under 0.1, and a width-only reading calls both of them &ldquo;the data taught us nothing.&rdquo; The second row is a prior and a likelihood in open disagreement. Its posterior sits at 0.113 while the data points at 1.50, the prior is winning by a wide margin, and the reported number is a compromise that neither party would have written down. Overlap tells the same story from another angle, 0.995 against 0.564.</p>
+
+            <div class="note">
+                <h4>Informativeness, not importance</h4>
+                <p>A high contraction means the data was informative about the parameter, which includes confidently pinning it near zero. It says nothing about effect size or sign. Contraction tells you the data spoke; the posterior location tells you what it said. Both belong in the same sentence of a readout. <code>reporting/evidence.py</code> puts them there, and anything under a contraction of 0.10 gets the <code>prior-dominated</code> chip on the client-facing report.</p>
+            </div>
+
+            <p>This is also the check that closes a hole left by simulation-based calibration. As <a href="blog-prior-predictive-sbc.html">the SBC post</a> covers, a broken computation whose posterior simply stays at the prior sails through parameter-by-parameter rank uniformity, because prior draws ranked against prior draws are uniform by construction. Contraction near zero is precisely that pathology viewed from the other side. The two checks are complementary, and running SBC without one leaves a known blind spot open. Both are workflow instruments in the sense Gelman, Vehtari, McElreath and their co-authors give the term, things you run around a fit rather than results you read out of one.</p>
+
+            <h2 id="before">Before Any Fitting, Where Does the Prior Put the Elbow?</h2>
+
+            <p><a href="blog-bayesian-mmm-carryover-shape.html">Saturation is not identified from the sales likelihood</a>, which this blog has argued at length and which Jin et al. established for the Hill parameters a decade ago. When a parameter is unidentified, the prior is the answer, and the useful follow-up question is whether that prior is defensible.</p>
+
+            <p>It is answerable before a single draw. Media reaches the saturation transform already normalized by the channel's training maximum, so the elbow of the curve is directly a fraction of the largest spend you have ever recorded. Prior mass beyond 1.0 is mass on a region no observational data can reach, and it comes back as posterior essentially unchanged. <code>saturation_prior_report</code> draws the saturation parameter from its prior, converts it to an elbow, and reports <code>mean(elbow &gt; 1.0)</code> per channel.</p>
+
+            <p>The conversion is closed form per family. Logistic saturation gives \( \ln 2 / \lambda \); Hill and Michaelis-Menten read the half-saturation parameter directly; tanh gives \( \operatorname{arctanh}(0.5) \cdot \kappa \). The <code>root</code> family has no asymptote and therefore no elbow, so it is absent from the table by design rather than by oversight.</p>
+
+            <p>What the number is for shows up most clearly in this framework's own history. Before 1.3 the default put <code>sat_lam</code> on an <code>Exponential(0.5)</code>, which had never been reparameterized after the normalization landed.</p>
+
+            <table>
+                <thead>
+                    <tr><th>Elbow prior on <code>sat_lam</code></th><th>90% interval (fraction of max spend)</th><th>Mass beyond max spend</th><th>Verdict</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>Exponential(0.5)</code> (pre-1.3)</td><td>0.116 to 6.757</td><td>29.3%</td><td><code>unanchored</code></td></tr>
+                    <tr><td><code>LogNormal(log(ln2 / 0.5), 0.4)</code> (current)</td><td>0.259 to 0.965</td><td>4.2%</td><td><code>anchored</code></td></tr>
+                </tbody>
+            </table>
+
+            <p>Nearly a third of the old prior's mass sat past the last dollar anyone had spent, on a parameter the likelihood cannot move. The thresholds the module warns at are 5% for <code>diffuse</code> and 20% for <code>unanchored</code>, and the current default lands at 4.2% with a median elbow at half of maximum spend. Run the same report over the bundled seven-channel example, where every channel uses Hill saturation, and all seven come back <code>anchored</code> with a 90% elbow interval of 0.138 to 0.866 of maximum spend and no mass at all beyond it.</p>
+
+            <p>The check is honest about what it is worth. Its docstring says it reports whether the prior is &ldquo;<em>defensible</em>&rdquo; and warns in the same sentence that a prior can be perfectly anchored while the parameter stays unidentified. What makes a saturation parameter identifiable is dose spread, a rank condition on the spend design rather than a property of any estimator, and <code>planning/identification</code> refuses to claim identification below three in-support spend levels.</p>
+
+            <div class="note">
+                <h4>Running both</h4>
+<pre><code class="language-python"># illustrative
+from mmm_framework.diagnostics.saturation import saturation_prior_report
+
+before = saturation_prior_report(model)          # pre-fit: is the prior defensible?
+results = model.fit(method="map", identification_check=True)
+report = results.diagnostics["identification"]   # how many parameters did the data pay for?
+</code></pre>
+                <p>The report also rides out automatically whenever a guarded MAP or Laplace fit has to retry inside its float64-safe box.</p>
+            </div>
+
+            <h2 id="limits">What the Number Cannot See</h2>
+
+            <p>All of the curvature work is local. It is the shape of the log density at one point, and it answers what this fit resolves here. It cannot see a second mode across the parameter space, a better one further out, or a likelihood that is flat somewhere you did not land. For global questions the module points at NUTS, SBC and coverage. That is the right referral.</p>
+
+            <p>Three narrower caveats matter in practice, and the code states all of them.</p>
+
+            <p><code>datalogp</code> is <code>observedlogp + potentiallogp</code>, so every <code>pm.Potential</code> in the graph lands on the likelihood side of the split. For a potential that carries an observation, such as the log-sum-exp mixture likelihood in the garden's latent-class model, that is exactly right. For a potential encoding a soft prior constraint it is exactly wrong, and such a model will read as better-informed than it is. If you write potentials, know which kind you wrote.</p>
+
+            <p><code>find_MAP</code> locates its mode with <code>jacobian=False</code> while the Hessian is taken with <code>jacobian=True</code>, so the point being differentiated is not the exact mode of the density being differentiated. Flatness survives the distinction. The condition index does not survive it as a precise quantity, and should be read as an order of magnitude.</p>
+
+            <p>And the verdict thresholds are conventions. Belsley's 30, a contraction of 0.5 for &ldquo;strong&rdquo; and 0.1 for &ldquo;weak,&rdquo; an overlap of 0.85, a shift of one prior standard deviation: each is a defensible line drawn through a continuum, and the underlying numbers are in the frame for anyone who wants to draw a different one.</p>
+
+            <p>One framing worth borrowing comes from outside this repo. Kitagawa and Kuang open their 2025 paper on identification-aware MCMC by putting non-identifiability on the computation side of the ledger: so long as the posterior is proper, the inference is well posed, and the difficulty is in sampling the thing. MMM discourse usually runs those two together. Keeping them apart is what tells you that an effective parameter count of 1.0 out of 2 will survive any amount of <code>target_accept</code>, because there is nothing there for the sampler to fix. Their own remedy needs the observationally equivalent set written down in closed form, which an approximate trade-off between adstock and saturation does not have, so the method stays where it is. The distinction travels.</p>
+
+            <h2 id="green">What a Check Owes You When It Cannot Run</h2>
+
+            <p>Every diagnostic in this post is built on machinery that can fail. A Hessian may not compile. A graph may have no second derivative. What the module does then is return <code>verdict='unknown'</code> with a note naming the exception, on the stated principle that a diagnostic must never be the reason a fit fails. Knock out the likelihood split specifically and the report keeps the ridge it already found and sets <code>effective_parameters</code> to <code>None</code>, which is a test in its own right. Elsewhere, <code>diagnostics/convergence.py</code> returns <code>None</code> rather than <code>True</code> for a fit with no chains, on the same reasoning.</p>
+
+            <p>One module in the repo does not yet hold that line. <code>validation/channel_diagnostics.py</code> wraps its ArviZ summary call in a bare <code>except</code>, and on any failure returns every channel as <code>rhat=1.0, ess_bulk=1000.0, converged=True</code>. A check that reports a pass when it could not run is worse than one that raises, because the pass is indistinguishable from a real one downstream. The same class matches parameters to channels by substring, so a channel named <code>tv</code> claims the R-hat of <code>tv_brand</code>, and a channel matching no parameters at all inherits the optimistic seeds and reports as converged.</p>
+
+            <p>The fix is a small one and the pattern already exists twice in the same repo: a three-valued verdict, with <code>None</code> surfaced as &ldquo;could not assess&rdquo; rather than folded into &ldquo;fine.&rdquo; Everything else in that file is the useful part and deserves the upgrade. Its <code>detect_collinear_clusters</code> runs union-find over the channel correlation graph and returns connected components, the right unit of identification in a collinear MMM. The honest statement about two channels that always move together is a statement about the pair.</p>
+
+            <p>Give that pair one row. The clustering works on the design matrix and <code>weak_identification_report</code> works on the posterior curvature. The design side records <code>np.linalg.cond</code> of the correlation matrix and names 30 only in a docstring as a rule of thumb. Belsley's 30, the threshold <code>identification.py</code> actually applies, sits on \( \sqrt{\lambda_{\max} / \lambda_i} \), the square root of that quantity, so the two thirties are a square apart. A channel group the clustering flags and a flat direction that trips the report are one finding arriving twice whenever the collinearity in the design is what flattened the posterior. One row naming the group and reporting its combined effect beats two warnings and a table of individual numbers nobody should read separately.</p>
+
+            <h2 id="next">Where This Goes Next</h2>
+
+            <p>Report \( p_{\text{eff}} \) beside the parameter count in every readout that already carries a convergence chip. The number exists on any MAP or Laplace fit run with <code>identification_check=True</code> and it costs one compiled Hessian. Two counts side by side, with a plain sentence saying the second is what the data determines, is something a marketing director can act on in a way that a condition index is not.</p>
+
+            <p>Close the loop with the prior-widening refit that <a href="blog-prior-was-doing-more.html">the confounding post</a> asked for. That post wanted a measure of the prior's effect on the point estimate rather than on the width, and noted that contraction only covers the width. Half of it is already here: <code>shift_z</code> measures location movement from the draws, and <code>relocated</code> is the verdict when location moved and width did not. The other half is the sensitivity curve, refitting with the prior progressively loosened and watching where the coefficient walks.</p>
+
+            <div class="takeaway-box">
+                <h4>Takeaways</h4>
+                <ul>
+                    <li><code>model.logp() == model.varlogp + model.datalogp</code> and Hessians add, so one extra compiled Hessian splits posterior curvature into the part the likelihood paid for and the part the prior did. \( \operatorname{tr}(H_{\text{post}}^{-1} H_{\text{lik}}) \) is 2.000 for two well-measured coefficients, 1.000 when two share one regressor, and 0.00021 under a prior tight enough to swamp the likelihood.</li>
+                    <li>Correlation-scale the Hessian before you eigendecompose it. Rescaling one regressor by 1000 moved the raw eigenvalue ratio from 1.089 to 924,000 and left the scaled spectrum and the condition index unchanged to four decimals.</li>
+                    <li>A parameter can have ample posterior curvature, none of it the data's. That case leaves no ridge, no flat coordinate and no boundary hit, and a Laplace fit will report its prior as an interval.</li>
+                    <li>Read the per-parameter data share downward only. Two coefficients on one regressor both score 0.99999999 on the diagonal while the data determines one parameter between them.</li>
+                    <li>A posterior interval excluding zero is uninformative when the prior's interval also excludes zero. Under \( \psi = -\mathrm{HalfNormal}(0.3) \) that is true by construction, and contraction of 0.038 with overlap of 0.992 is what says so.</li>
+                    <li>29.3% of the pre-1.3 saturation prior's elbow mass sat beyond maximum observed spend, against 4.2% for the current default. That is measurable before fitting, and the warning threshold is 20%.</li>
+                </ul>
+            </div>
+
+            <h2 id="references">References</h2>
+            <ul>
+                <li>Gelman, A., Vehtari, A., McElreath, R., et&nbsp;al. (2026). <em>Bayesian Workflow</em>. CRC Press. ISBN 978-0-367-49014-0.</li>
+                <li>Schad, D. J., Betancourt, M., &amp; Vasishth, S. (2021). <em>Toward a Principled Bayesian Workflow in Cognitive Science</em>. Psychological Methods, 26(1).</li>
+                <li>Jin, Y., Wang, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). <em>Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects</em>. Google Research.</li>
+                <li>Dew, R., Padilla, N., &amp; Shchetkina, A. (2024). <em>Your MMM is Broken: Identification of Nonlinear and Time-varying Effects in Marketing Mix Models</em>. arXiv:2408.07678 [econ.EM].</li>
+                <li>Kitagawa, T., &amp; Kuang, Y. (2025). <em>Identification-aware Markov chain Monte Carlo</em>. arXiv:2511.12847.</li>
+                <li>Source: <code>src/mmm_framework/diagnostics/identification.py</code>, <code>diagnostics/learning.py</code>, <code>diagnostics/saturation.py</code>, <code>validation/channel_diagnostics.py</code>, <code>tests/test_identification_diagnostics.py</code>.</li>
+            </ul>
+        </main>
+    </div>
+
+    <!-- Footer injected by components.js -->
+    <script src="shared/components.js"></script>
+
+    <script>
+        // KaTeX: three delimiter pairs only. Single-$ is deliberately absent so that
+        // dollar amounts render as money instead of being parsed as math.
+        document.addEventListener("DOMContentLoaded", function () {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    { left: "$$", right: "$$", display: true },
+                    { left: "\\[", right: "\\]", display: true },
+                    { left: "\\(", right: "\\)", display: false }
+                ],
+                throwOnError: false
+            });
+        });
+    </script>
+</body>
+</html>
