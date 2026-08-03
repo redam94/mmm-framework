@@ -171,7 +171,7 @@
                 <p>Each is the Hessian of the negative log density in PyMC's unconstrained space. One extra compiled Hessian of <code>datalogp</code> gives the second term, and the first follows by subtraction.</p>
             </div>
 
-            <p>That identity is not an approximation, and the repo gates it. I ran the four analytic models in <code>tests/test_identification_diagnostics.py</code> and took all three Hessians by hand: the largest absolute discrepancy between \( H_{\text{post}} \) and \( H_{\text{prior}} + H_{\text{lik}} \) was exactly 0.0 on every one of them. The test allows 1e-8 relative, which is the right thing to allow for a quantity that goes through two separate PyTensor compilations.</p>
+            <p>That identity is not an approximation, and the repo gates it. I ran four analytic models, three of them from <code>tests/test_identification_diagnostics.py</code> and a fourth with the prior narrowed to <code>Normal(0, 1e-3)</code>, and took all three Hessians by hand: the largest absolute discrepancy between \( H_{\text{post}} \) and \( H_{\text{prior}} + H_{\text{lik}} \) was exactly 0.0 on every one of them. The test allows 1e-8 relative, which is the right thing to allow for a quantity that goes through two separate PyTensor compilations.</p>
 
             <p>With the split in hand, the effective number of parameters is a trace:</p>
 
@@ -199,7 +199,7 @@
 
             <p>Before any of that means anything, the curvature has to be put on a scale that does not depend on your data dictionary. Raw Hessian eigenvalues are not invariant to rescaling a parameter, so on a real MMM they rank parameters by whether spend was recorded in dollars or in thousands of dollars.</p>
 
-            <p>The demonstration takes four lines. Take the two-coefficient model above, multiply the regressor by 1000, and widen that coefficient's prior by the same factor so the model is the same model in different units. The raw spectrum at the mode moves from \( \{18{,}423,\ 20{,}059\} \), a ratio of 1.089, to \( \{2.0 \times 10^{4},\ 1.8 \times 10^{10}\} \), a ratio of 924,000. Read raw eigenvalues and you have just discovered a catastrophic flat direction in a model that did not change.</p>
+            <p>The demonstration takes four lines. Take the two-coefficient model above, multiply the regressor by 1000, and tighten that coefficient's prior by the same factor so the model is the same model in different units. The raw spectrum at the mode moves from \( \{18{,}423,\ 20{,}059\} \), a ratio of 1.089, to \( \{2.0 \times 10^{4},\ 1.8 \times 10^{10}\} \), a ratio of 924,000. Read raw eigenvalues and you have just discovered a catastrophic flat direction in a model that did not change.</p>
 
             <p>Scale by the diagonal first and the problem disappears. The correlation-scaled curvature \( D^{-1/2} H D^{-1/2} \) with \( D = |\operatorname{diag}(H)| \) has eigenvalues \( \{0.9841,\ 1.0159\} \) in both parameterizations, a Belsley condition index of 1.0160 in both, and an effective parameter count of 1.999996 in both.</p>
 
@@ -339,7 +339,7 @@ report = results.diagnostics["identification"]   # how many parameters did the d
 
             <p>The fix is a small one and the pattern already exists twice in the same repo: a three-valued verdict, with <code>None</code> surfaced as &ldquo;could not assess&rdquo; rather than folded into &ldquo;fine.&rdquo; Everything else in that file is the useful part and deserves the upgrade. Its <code>detect_collinear_clusters</code> runs union-find over the channel correlation graph and returns connected components, the right unit of identification in a collinear MMM. The honest statement about two channels that always move together is a statement about the pair.</p>
 
-            <p>Give that pair one row. The clustering works on the design matrix and <code>weak_identification_report</code> works on the posterior curvature, and both use the Belsley threshold of 30 on their respective condition numbers. A channel group that trips the first and a flat direction that trips the second are one finding arriving twice whenever the collinearity in the design is what flattened the posterior. One row naming the group and reporting its combined effect beats two warnings and a table of individual numbers nobody should read separately.</p>
+            <p>Give that pair one row. The clustering works on the design matrix and <code>weak_identification_report</code> works on the posterior curvature. The design side records <code>np.linalg.cond</code> of the correlation matrix and names 30 only in a docstring as a rule of thumb. Belsley's 30, the threshold <code>identification.py</code> actually applies, sits on \( \sqrt{\lambda_{\max} / \lambda_i} \), the square root of that quantity, so the two thirties are a square apart. A channel group the clustering flags and a flat direction that trips the report are one finding arriving twice whenever the collinearity in the design is what flattened the posterior. One row naming the group and reporting its combined effect beats two warnings and a table of individual numbers nobody should read separately.</p>
 
             <h2 id="next">Where This Goes Next</h2>
 
@@ -365,7 +365,7 @@ report = results.diagnostics["identification"]   # how many parameters did the d
                 <li>Schad, D. J., Betancourt, M., &amp; Vasishth, S. (2021). <em>Toward a Principled Bayesian Workflow in Cognitive Science</em>. Psychological Methods, 26(1).</li>
                 <li>Jin, Y., Wang, Y., Sun, Y., Chan, D., &amp; Koehler, J. (2017). <em>Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects</em>. Google Research.</li>
                 <li>Dew, R., Padilla, N., &amp; Shchetkina, A. (2024). <em>Your MMM is Broken: Identification of Nonlinear and Time-varying Effects in Marketing Mix Models</em>. arXiv:2408.07678 [econ.EM].</li>
-                <li>Kitagawa, T., &amp; Kuang, C. (2025). <em>Identification-aware MCMC</em>. arXiv:2511.12847.</li>
+                <li>Kitagawa, T., &amp; Kuang, Y. (2025). <em>Identification-aware Markov chain Monte Carlo</em>. arXiv:2511.12847.</li>
                 <li>Source: <code>src/mmm_framework/diagnostics/identification.py</code>, <code>diagnostics/learning.py</code>, <code>diagnostics/saturation.py</code>, <code>validation/channel_diagnostics.py</code>, <code>tests/test_identification_diagnostics.py</code>.</li>
             </ul>
         </main>

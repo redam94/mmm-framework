@@ -207,14 +207,14 @@ evalue(1.32, measure="roi").available        # False</code></pre>
 
             <div class="warning">
                 <h4>&#9888;&#65039; The refusal carries the reason, not just a failure</h4>
-                <p style="margin-bottom:0;">The returned object explains itself: the E-value "is defined for ratio measures on a rate or binary outcome (prevalence_ratio, rate_ratio, risk_ratio), not for 'roi'. An ROI or ROAS is a ratio of continuous quantities, not a risk ratio", and it points the caller at the tipping point instead. Odds ratios and hazard ratios are refused too, for a different reason: the E-value formula applies to them only under approximations that a rare-outcome assumption has to earn.</p>
+                <p style="margin-bottom:0;">The returned object explains itself: the E-value "is defined for ratio measures on a rate or binary outcome (prevalence_ratio, rate_ratio, risk_ratio), not for 'roi'. An ROI or ROAS is a ratio of continuous quantities, not a risk ratio", and it points the caller at the tipping point instead. Odds ratios and hazard ratios are refused too, by that same generic message. Why they sit outside the whitelist is documented in the source comment above it, that converting them to the risk-ratio scale depends on how rare the outcome is.</p>
             </div>
 
             <p>A vendor scorecard quoting an E-value for a channel ROI is quoting a quantity with no derivation behind it. That is worth checking, because the number is cheap to compute and looks authoritative.</p>
 
             <h2 id="make-it-a-parameter">Make It a Parameter</h2>
 
-            <p>The Bayesian tradition asks a different question. Rather than solving for the confounder strength that would overturn the result, it makes the bias itself a parameter and puts a prior on it, then reports what that does to the conclusion. Greenland (2005) named the object: a bias parameter measures the discrepancy between the target and the quantity the data actually identify. His multiple-bias modelling paper is blunt about the consequence, writing that such parameters are typically not identified by the analysis data and that results then depend completely on the priors placed on them.</p>
+            <p>The Bayesian tradition asks a different question. Rather than solving for the confounder strength that would overturn the result, it makes the bias itself a parameter and puts a prior on it, then reports what that does to the conclusion. Greenland (2009) states what the object is, that a bias is the discrepancy between the target parameter and the analogous one the data actually identify. His earlier multiple-bias modelling paper (2005) is blunt about the consequence, writing that such parameters are typically not identified by the analysis data and that results then depend completely on the priors placed on them.</p>
 
             <p>The PyMC Labs treatment that this framework follows is the current, readable version of the idea. Nathaniel Forde's notebook takes a checkout experiment whose randomization leaked, writes the observed effect as a causal part plus a bias part, and sweeps the prior on the bias:</p>
 
@@ -226,7 +226,7 @@ evalue(1.32, measure="roi").available        # False</code></pre>
 
             $$ P(\tau \gt r) \;=\; \frac{1}{D}\sum_{d} \Phi\!\left( \frac{x_d - \mu - r}{\sigma} \right) $$
 
-            <p>evaluates exactly, with no sampling and no seed to reproduce. A tipping point bisected inside that mixture is trustworthy at small draw counts, and the identical arithmetic runs in JavaScript, so a published report can recompute the answer in a reader's browser without a second posterior pass.</p>
+            <p>evaluates exactly, with no sampling and no seed to reproduce. A tipping point bisected inside that mixture is trustworthy at small draw counts, and the identical arithmetic runs in JavaScript, which is how the figure below recomputes it in your browser. The framework's own report transports the curve the scan already produced, so the line it draws can never disagree with the tipping point it reports.</p>
 
             <div class="definition">
                 <h4>What a tipping point reads like</h4>
@@ -249,11 +249,11 @@ evalue(1.32, measure="roi").available        # False</code></pre>
                 <div class="viz-readout">
                     <div class="stat"><span class="lbl">Tips on width at</span><span class="val" id="f1TipW">&hellip;</span></div>
                     <div class="stat"><span class="lbl">Tips on direction at</span><span class="val" id="f1TipD">&hellip;</span></div>
-                    <div class="stat"><span class="lbl">Price implies</span><span class="val" id="f1Bench">&hellip;</span></div>
+                    <div class="stat"><span class="lbl">Illustrative Price benchmark</span><span class="val" id="f1Bench">&hellip;</span></div>
                     <div class="stat"><span class="lbl">Verdict at that benchmark</span><span class="val" id="f1Verdict">&hellip;</span></div>
                 </div>
 
-                <p class="chart-caption" style="margin-bottom:0;">Committing to a direction costs more than twice as much conclusion as committing to a width of the same size, and the gap widens as you demand more confidence. At the default 90% threshold the unsigned curve tips at 14%, the signed one at 6%. The dashed line marks a benchmarked confounder as strong as Price at 9%. Both curves are the closed-form mixture the framework computes, over a fixed 128-point quantile grid of the posterior described above, so the numbers here are the numbers in the text.</p>
+                <p class="chart-caption" style="margin-bottom:0;">Committing to a direction costs more than twice as much conclusion as committing to a width of the same size. At the default 90% threshold the unsigned curve tips at 14%, the signed one at 6%. The dashed line marks an illustrative benchmark, a confounder as strong as Price implying a 9% bias. Both curves are the closed-form mixture the framework computes, over a fixed 128-point quantile grid of the posterior described above, so the numbers here are the numbers in the text.</p>
             </div>
 
             <h2 id="never-settles">The Number That Never Settles</h2>
@@ -275,13 +275,13 @@ evalue(1.32, measure="roi").available        # False</code></pre>
 
             <h2 id="benchmark">A Tipping Point Needs a Benchmark</h2>
 
-            <p>On its own a tipping point is a slider. Saying that a channel tips at 13% invites the obvious question: is 13% a lot? Without an answer the analyst supplies one from intuition, which is where sensitivity analysis earns its reputation as a rhetorical exercise.</p>
+            <p>On its own a tipping point is a slider. Saying that a channel tips at 14% invites the obvious question: is 14% a lot? Without an answer the analyst supplies one from intuition, which is where sensitivity analysis earns its reputation as a rhetorical exercise.</p>
 
-            <p>Cinelli and Hazlett's second contribution closes that gap. Price a hypothetical confounder against a covariate you did measure. If a confounder as strong as Price implies a bias of 9%, and the conclusion tolerates 13%, the argument now has a referent that a reader can dispute on its merits. This framework implements the bound as a port of <code>sensemakr</code>, in <code>validation/confounding_sensitivity.py</code>:</p>
+            <p>Cinelli and Hazlett's second contribution closes that gap. Price a hypothetical confounder against a covariate you did measure. If a confounder as strong as Price implies a bias of 9%, and the conclusion tolerates 14%, the argument now has a referent that a reader can dispute on its merits. This framework implements the bound as a port of <code>sensemakr</code>, in <code>validation/confounding_sensitivity.py</code>:</p>
 
             $$ |\text{bias}| \;=\; \mathrm{se} \times \sqrt{\mathrm{df}} \times \sqrt{ \frac{R^2_{Y \sim Z \mid D,X} \; R^2_{D \sim Z \mid X}}{1 - R^2_{D \sim Z \mid X}} }. $$
 
-            <p>What makes this checkable rather than merely cited: when \( Z \) really is the omitted confounder, the identity holds with equality. Fit the same data with and without \( Z \), and the predicted bias equals the realized one, which the test suite pins to roughly 1e-15. That is a stronger guarantee than any reference number remembered from a paper.</p>
+            <p>What makes this checkable rather than merely cited: when \( Z \) really is the omitted confounder, the identity holds with equality. Fit the same data with and without \( Z \), and the predicted bias equals the realized one. The test suite asserts that to a relative tolerance of 1e-9, and the parametrized cases meet it at machine precision, between 1e-16 and 1e-13. That is a stronger guarantee than any reference number remembered from a paper.</p>
 
             <p>Two implementation details are load-bearing and neither is obvious. The validity condition on the bound is \( R^2_{D \sim X_j \mid X} \lt 1 / (1 + k_d) \), so at \( k_d = 1 \) the real limit is 0.5 rather than the 1 a casual reading suggests. Past it the formula square-roots a negative number and returns NaN, and NaN compares false against every fragility threshold, which would read as "not fragile". The framework refuses and names the largest admissible \( k_d \) instead of clipping. Separately, benchmark covariates default to controls the DAG has labelled as confounders, because benchmarking against a mediator or a collider produces a bound with no causal meaning.</p>
 
