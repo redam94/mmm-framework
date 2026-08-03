@@ -44,8 +44,13 @@ def paragraphs(doc: str) -> list[str]:
         main = re.search(r"(?s)<body.*</body>", doc)
     if not main:
         return []
+    # Strip code and math before extracting paragraphs. A <pre> block scored as prose
+    # reports a single 100-word "sentence" and drags every length statistic with it.
+    body_html = re.sub(r"(?s)<pre.*?</pre>", " ", main.group(0))
+    for pat in (r"(?s)\$\$.*?\$\$", r"(?s)\\\[.*?\\\]"):
+        body_html = re.sub(pat, " ", body_html)
     out = []
-    for tag, body in re.findall(r"(?s)<p([^>]*)>(.*?)</p>", main.group(0)):
+    for tag, body in re.findall(r"(?s)<p([^>]*)>(.*?)</p>", body_html):
         if any(c in tag for c in ("post-meta", "chart-caption", "arc-kicker")):
             continue
         text = re.sub(r"(?s)<[^>]+>", "", body)

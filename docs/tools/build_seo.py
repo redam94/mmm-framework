@@ -448,6 +448,9 @@ SERIES = [
     # Kept in docs/blog.html card order, one entry per line. Nothing regenerates this,
     # so a new post must be added by hand or it never reaches llms.txt. Gated by
     # tests/test_docs_seo_build.py::TestLlmsTxtCoversTheBlog.
+    # Kept in docs/blog.html card order, one entry per line. Nothing regenerates this,
+    # so a new post must be added by hand or it never reaches llms.txt. Gated by
+    # tests/test_docs_seo_build.py::TestLlmsTxtCoversTheBlog.
     ("Modern measurement research (blog)", [
         "blog.html",
         "blog-activity-bias.html",
@@ -457,6 +460,12 @@ SERIES = [
         "blog-mediation-funnel-identification.html",
         "blog-demand-proxy-proximal.html",
         "blog-pricing-unmeasured-confounding.html",
+        "blog-loo-is-the-wrong-cv.html",
+        "blog-what-the-data-paid-for.html",
+        "blog-posterior-predictive-severity.html",
+        "blog-many-models-not-p-hacking.html",
+        "blog-prior-sensitivity-no-refit.html",
+        "blog-sbc-part-two.html",
         "blog-auction-throttling-frontdoor.html",
         "blog-geo-experiments-tbr.html",
         "blog-switchback-experiments.html",

@@ -267,6 +267,66 @@
                     <h3>Two Ways to Price a Confounder You Cannot See</h3>
                     <p>You cannot test the no-confounding assumption, so price it instead. Frequentist bounds ask how strong a confounder would have to be; the Bayesian route makes it a parameter. The E-value does not apply to an ROI.</p>
                 </a>
+
+                <a class="post-card" href="blog-loo-is-the-wrong-cv.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-08-02">Aug 2, 2026</time>
+                        <span class="post-tag">Bayesian workflow</span>
+                        <span>&approx; 16 min read</span>
+                    </div>
+                    <h3>Your MMM Is Reporting the Wrong Cross-Validation</h3>
+                    <p>Row-wise LOO on a weekly panel trains on the weeks after the one it held out, so it scores an interpolation nobody performs. The fold is wrong, not the estimator, and the diagnostics thrown away with the scalar are worth more than it.</p>
+                </a>
+
+                <a class="post-card" href="blog-what-the-data-paid-for.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-08-02">Aug 2, 2026</time>
+                        <span class="post-tag">Bayesian workflow</span>
+                        <span>&approx; 17 min read</span>
+                    </div>
+                    <h3>How Many Parameters Did Your Data Pay For?</h3>
+                    <p>Posterior curvature has two owners. Splitting it gives a number that is not the parameter count: how many parameters the likelihood actually determines, and which ones are the prior wearing a posterior.</p>
+                </a>
+
+                <a class="post-card" href="blog-posterior-predictive-severity.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-08-02">Aug 2, 2026</time>
+                        <span class="post-tag">Bayesian workflow</span>
+                        <span>&approx; 17 min read</span>
+                    </div>
+                    <h3>A Posterior Predictive Check Cannot See What You Adjusted For</h3>
+                    <p>A model cannot fail a check on a quantity its own parameters reproduce. The check becomes evidence only against a statistic the fit was never asked to match.</p>
+                </a>
+
+                <a class="post-card" href="blog-many-models-not-p-hacking.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-08-02">Aug 2, 2026</time>
+                        <span class="post-tag">Bayesian workflow</span>
+                        <span>&approx; 19 min read</span>
+                    </div>
+                    <h3>Fitting Many Models Is Not P-Hacking</h3>
+                    <p>The Bayesian workflow fits many models; pre-specification commits before looking. They reconcile under one condition, and the spread across the specs you happened to fit is not a bracket on the truth.</p>
+                </a>
+
+                <a class="post-card" href="blog-prior-sensitivity-no-refit.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-08-02">Aug 2, 2026</time>
+                        <span class="post-tag">Bayesian workflow</span>
+                        <span>&approx; 15 min read</span>
+                    </div>
+                    <h3>Prior Sensitivity Without Refitting Anything</h3>
+                    <p>One fit already contains every prior in a neighbourhood of the one you used. Power-scaling recovers them from draws you have, which retires the paragraph that says three priors were tried and results were stable.</p>
+                </a>
+
+                <a class="post-card" href="blog-sbc-part-two.html">
+                    <div class="post-card-meta">
+                        <time datetime="2026-08-02">Aug 2, 2026</time>
+                        <span class="post-tag">Bayesian workflow</span>
+                        <span>&approx; 17 min read</span>
+                    </div>
+                    <h3>The Simulation Loop Does More Than SBC</h3>
+                    <p>Rank calibration certifies the sampler and says nothing about whether the model was worth fitting. The same simulation loop answers the second question, and marginal ranks cannot see the failure an MMM has most often.</p>
+                </a>
                 <a class="post-card" href="blog-auction-throttling-frontdoor.html">
                     <div class="post-card-meta">
                         <time datetime="2026-07-24">Jul 24, 2026</time>
