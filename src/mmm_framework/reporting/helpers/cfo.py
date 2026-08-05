@@ -33,54 +33,22 @@ def _eti(draws: np.ndarray, hdi_prob: float) -> tuple[float, float]:
     return lo, hi
 
 
-#: Component totals that sum to the model's fitted outcome. Kept explicit (not
-#: a wildcard over the dataclass) so a new component added upstream shows up as
-#: a widening residual rather than silently changing what "fitted" means.
-_FITTED_COMPONENT_FIELDS = (
-    "total_intercept",
-    "total_trend",
-    "total_seasonality",
-    "total_media",
-    "total_controls",
-    "total_geo",
-    "total_product",
-    "total_events",
-    "total_interactions",
-    "total_levers",
-)
-
-
 def _fitted_total(model: Any) -> float | None:
     """The model's own fitted total, or ``None`` if it cannot be established.
 
     The baseline must be the MODELLED non-media outcome. Deriving it as
     ``observed − modelled media`` instead folds the model's residual into a
     number labelled "base demand", which is the defect this exists to avoid.
+
+    Delegates to :func:`mmm_framework.finance.closure.fitted_total` so this
+    rollup and the closure bridge cannot disagree about what "fitted" means.
+    Calling it directly rather than :func:`decomposition_closure` avoids a
+    second round of contribution sampling — the draws are already in hand here.
     """
-    try:
-        decomp = model.compute_component_decomposition()
-    except Exception:  # noqa: BLE001 — fall through to the predictive mean
-        decomp = None
-    if decomp is not None:
-        total = 0.0
-        seen = False
-        for field in _FITTED_COMPONENT_FIELDS:
-            v = getattr(decomp, field, None)
-            if v is None:
-                continue
-            fv = float(np.sum(np.asarray(v, dtype=float)))
-            if np.isfinite(fv):
-                total += fv
-                seen = True
-        if seen and np.isfinite(total):
-            return float(total)
-    try:
-        pred = model.predict(return_original_scale=True, random_seed=0)
-        mean = np.asarray(pred.y_pred_mean, dtype=float)
-        tot = float(np.nansum(mean))
-        return tot if np.isfinite(tot) else None
-    except Exception:  # noqa: BLE001
-        return None
+    from ...finance.closure import fitted_total as _shared_fitted_total
+
+    total, _basis, _media = _shared_fitted_total(model)
+    return total
 
 
 def cfo_facts(
