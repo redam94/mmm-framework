@@ -278,3 +278,81 @@ def psis_log_weights(log_lik: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
         lw, khat = az.psislw(-ll.T)
         return np.asarray(lw).T, np.asarray(khat)
+
+
+#: Fields an ``ELPDData`` carries, mapped from the modern generic name to the
+#: pre-1.x metric-specific spellings. arviz 1.x made ``ELPDData`` one container
+#: for every information criterion, so ``elpd_loo``/``p_loo``/``loo_i`` became
+#: ``elpd``/``p``/``elpd_i``. Reading the old names off a new object raises
+#: ``AttributeError``, which a broad ``except`` around a comparison block turns
+#: into a silently-missing metric rather than a crash.
+_ELPD_ALIASES: dict[str, tuple[str, ...]] = {
+    "elpd": ("elpd", "elpd_loo", "elpd_waic", "loo", "waic"),
+    "p": ("p", "p_loo", "p_waic"),
+    "se": ("se", "se_elpd_loo", "se_waic"),
+    "pointwise": ("elpd_i", "loo_i", "waic_i"),
+    "pareto_k": ("pareto_k",),
+}
+
+
+def elpd_field(elpd_data, field: str, default=None):
+    """One field of an ``ELPDData``, across the arviz 1.x generic rename.
+
+    ``field`` is the modern generic name (``"elpd"``, ``"p"``, ``"se"``,
+    ``"pointwise"``, ``"pareto_k"``); the pre-1.x metric-specific spellings are
+    tried in turn. Returns ``default`` when no spelling is present, so a caller
+    can distinguish "this arviz does not expose it" from "it is zero".
+    """
+    names = _ELPD_ALIASES.get(field)
+    if names is None:
+        raise KeyError(
+            f"Unknown ELPD field {field!r}; expected one of {sorted(_ELPD_ALIASES)}."
+        )
+    for name in names:
+        value = getattr(elpd_data, name, None)
+        if value is not None:
+            return value
+    return default
+
+
+def elpd_scalar(elpd_data, field: str) -> float | None:
+    """:func:`elpd_field` as a plain float, or ``None`` when absent.
+
+    ArviZ returns several of these as 0-d ``DataArray``s rather than floats, so
+    ``float()`` is applied through numpy to accept either.
+    """
+    value = elpd_field(elpd_data, field)
+    if value is None:
+        return None
+    try:
+        return float(np.asarray(value, dtype=float).item())
+    except (TypeError, ValueError):  # pragma: no cover - unexpected container
+        return None
+
+
+def elpd_pareto_k_threshold(elpd_data, fallback: float = 0.7) -> float:
+    """The k above which PSIS weights are unreliable, for THIS fit.
+
+    arviz 1.x computes a sample-size-dependent ``good_k`` — ``min(1 - 1/log10(S),
+    0.7)`` — rather than always 0.7, and at small draw counts the honest
+    threshold is lower. Falls back to the historical constant when absent.
+    """
+    good_k = getattr(elpd_data, "good_k", None)
+    if good_k is None:
+        return float(fallback)
+    try:
+        return float(np.asarray(good_k, dtype=float).item())
+    except (TypeError, ValueError):  # pragma: no cover
+        return float(fallback)
+
+
+def has_waic() -> bool:
+    """Whether this arviz still exposes ``az.waic``.
+
+    arviz 1.x removed WAIC outright in favour of PSIS-LOO. There is no shim for
+    a metric that no longer exists, so callers must say the metric is
+    unavailable rather than report a blank or fall back to a different one.
+    """
+    import arviz as az
+
+    return hasattr(az, "waic")
