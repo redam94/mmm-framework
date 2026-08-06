@@ -514,6 +514,29 @@ def init_db() -> None:
             " ON platform_figures(project_id, updated_at)"
         )
 
+        # Realized-KPI actuals (issue #227). An INDEPENDENT, as-of-dated record
+        # of what actually happened — never a derivative of the fitted panel.
+        # UNIQUE(project_id, period, as_of): re-stating a period gets a NEW row
+        # under a new as_of, and the old statement stays readable, so a
+        # restatement is visible rather than silent.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS actuals (
+                id          TEXT PRIMARY KEY,
+                project_id  TEXT NOT NULL,
+                period      TEXT NOT NULL,
+                kpi_value   REAL NOT NULL,
+                kpi_name    TEXT NOT NULL DEFAULT '',
+                source      TEXT NOT NULL DEFAULT '',
+                as_of       TEXT NOT NULL,
+                created_at  REAL NOT NULL,
+                UNIQUE(project_id, period, as_of)
+            )
+            """)
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_actuals_project"
+            " ON actuals(project_id, period, as_of)"
+        )
+
         # Plan of record (issue #225): APPEND-ONLY committed plan versions.
         #
         # Distinct from `budget_plans`, which stays the mutable working draft —
@@ -2222,6 +2245,92 @@ def delete_budget_plan(plan_id: str) -> bool:
     with _conn() as c:
         cur = c.execute("DELETE FROM budget_plans WHERE id = ?", (plan_id,))
         return cur.rowcount > 0
+
+
+def record_actuals(
+    project_id: str,
+    records: list[dict[str, Any]],
+    *,
+    kpi_name: str = "",
+    source: str = "",
+    as_of: str | None = None,
+) -> list[dict[str, Any]]:
+    """Record realized-KPI rows (issue #227), as-of-dated.
+
+    ``records`` are ``{period, kpi_value}`` dicts (``kpi_name``/``source`` may
+    ride per row and default to the call-level values). Re-recording a period
+    under the SAME ``as_of`` replaces that statement; a different ``as_of``
+    keeps both — a restatement is a visible event, not an overwrite. Rows with
+    a non-finite ``kpi_value`` or a blank period are dropped.
+    """
+    import math
+
+    now = _now()
+    stamp = as_of or time.strftime("%Y-%m-%d", time.localtime(now))
+    out: list[dict[str, Any]] = []
+    with _conn() as c:
+        for r in records:
+            period = str(r.get("period") or "").strip()
+            try:
+                val = float(r.get("kpi_value"))
+            except (TypeError, ValueError):
+                continue
+            if not period or not math.isfinite(val):
+                continue
+            row_id = uuid.uuid4().hex
+            c.execute(
+                "INSERT INTO actuals (id, project_id, period, kpi_value,"
+                " kpi_name, source, as_of, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                " ON CONFLICT(project_id, period, as_of) DO UPDATE SET"
+                " kpi_value = excluded.kpi_value, kpi_name = excluded.kpi_name,"
+                " source = excluded.source, created_at = excluded.created_at",
+                (
+                    row_id,
+                    project_id,
+                    period,
+                    val,
+                    str(r.get("kpi_name") or kpi_name),
+                    str(r.get("source") or source),
+                    stamp,
+                    now,
+                ),
+            )
+            stored = c.execute(
+                "SELECT * FROM actuals WHERE project_id = ? AND period = ?"
+                " AND as_of = ?",
+                (project_id, period, stamp),
+            ).fetchone()
+            out.append(dict(stored))
+    return out
+
+
+def list_actuals(project_id: str, *, as_of: str | None = None) -> list[dict[str, Any]]:
+    """Every recorded actuals row (optionally one as-of vintage), period-major
+    then as_of ascending — the full restatement history, nothing hidden."""
+    q = "SELECT * FROM actuals WHERE project_id = ?"
+    params: list[Any] = [project_id]
+    if as_of is not None:
+        q += " AND as_of = ?"
+        params.append(as_of)
+    q += " ORDER BY period, as_of"
+    with _conn() as c:
+        return [dict(r) for r in c.execute(q, params).fetchall()]
+
+
+def latest_actuals_for_project(project_id: str) -> list[dict[str, Any]]:
+    """One row per period: the NEWEST as-of statement. Older statements stay in
+    :func:`list_actuals`; this is the reading a variance bridge grades against."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT a.* FROM actuals a JOIN ("
+            "  SELECT period, MAX(as_of) AS mx FROM actuals"
+            "  WHERE project_id = ? GROUP BY period"
+            ") m ON a.period = m.period AND a.as_of = m.mx"
+            " WHERE a.project_id = ? ORDER BY a.period",
+            (project_id, project_id),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def latest_budget_plan_for_project(project_id: str) -> dict[str, Any] | None:
