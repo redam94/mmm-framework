@@ -223,6 +223,22 @@ frozen public contract breaks, and the contract itself is pinned by
   Tests: `tests/test_decision_arms.py` (31). Notebook:
   `nbs/demos/promo_depth_optimization.ipynb` (baked, 19 cells, 0 errors).
 
+- **A realized-KPI actuals store — the hard blocker for variance-to-plan** ([#227], first
+  deliverable; the bridge itself follows). There was no realized-KPI record anywhere — `delivery`
+  holds spend only — so a "variance to plan" could only ever restate a forecast under actual
+  spend.
+
+  The `actuals` table is **as-of-dated and append-preserving**: `UNIQUE(project_id, period,
+  as_of)`, so re-stating a period is a new row under a new `as_of` and the old statement stays
+  readable — a restatement is a visible event, never an overwrite (acceptance criterion pinned by
+  test). `record_actuals` / `list_actuals` / `latest_actuals_for_project` in the sessions store;
+  `platform/actuals.py` (lean-core, AST-checked) adds the CSV/TSV/JSON parser and
+  `reconcile_against_panel` — when the fitted panel and the uploaded actuals disagree for the same
+  period it REPORTS the signed per-period gap with both numbers in hand, never silently preferring
+  one source, and an out-of-vocabulary period is reported as unmatched and shifts nothing.
+  REST: `GET/POST /projects/{id}/actuals` (upload mirrors the delivery ingest; `as_of` and
+  `kpi_name` as query params). 15 tests in `tests/test_actuals_store.py`.
+
 - **The plan of record is reachable: REST, agent tool, Planner commit action — and pacing now
   grades against what was promised** ([#225] remainder; the append-only store, gates and
   reproducibility landed in #267–#269).

@@ -834,5 +834,13 @@
   {
     "method": "GET",
     "path": "/projects/{project_id}/plan-of-record/history"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/actuals"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/actuals"
   }
 ]

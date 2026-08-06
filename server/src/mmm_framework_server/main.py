@@ -3518,6 +3518,59 @@ async def upload_delivery_endpoint(project_id: str, file: UploadFile = File(...)
     )
 
 
+@app.get("/projects/{project_id}/actuals", dependencies=[_proj_read])
+async def list_actuals_endpoint(project_id: str, as_of: str | None = None):
+    """Recorded realized-KPI rows (#227): full restatement history, plus the
+    latest per-period reading a variance bridge grades against."""
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            {
+                "actuals": sessions_store.list_actuals(project_id, as_of=as_of),
+                "latest": sessions_store.latest_actuals_for_project(project_id),
+            }
+        )
+    )
+
+
+@app.post("/projects/{project_id}/actuals", dependencies=[_proj_write, _rl_heavy])
+async def upload_actuals_endpoint(
+    project_id: str,
+    file: UploadFile = File(...),
+    kpi_name: str = "",
+    as_of: str | None = None,
+):
+    """Ingest realized-KPI actuals (CSV/TSV or JSON: period + kpi_value) into
+    the as-of-dated actuals store (#227). Re-uploading a period under a NEW
+    as_of keeps both statements — a restatement is visible, never silent."""
+    from mmm_framework.platform.actuals import parse_actuals_records
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    raw = await file.read()
+    try:
+        records = parse_actuals_records(raw, file.filename or "")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=400, detail=f"Could not parse actuals file: {exc}"
+        )
+    if not records:
+        raise HTTPException(
+            status_code=400, detail="No actuals rows parsed from the upload."
+        )
+    rows = sessions_store.record_actuals(
+        project_id,
+        records,
+        kpi_name=kpi_name,
+        source=(file.filename or "upload"),
+        as_of=as_of,
+    )
+    return JSONResponse(
+        content=safe_json_dumps_load({"actuals": rows, "ingested": len(rows)})
+    )
+
+
 @app.delete("/projects/{project_id}/delivery", dependencies=[_proj_write])
 async def delete_delivery_endpoint(project_id: str, channel: str | None = None):
     """Clear stored delivery for the project (optionally one channel)."""
