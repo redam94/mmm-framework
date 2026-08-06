@@ -67,12 +67,21 @@ def endogeneity_diagnostic(
     max_lag: int = DEFAULT_MAX_LAG,
     corr_threshold: float = DEFAULT_CORR_THRESHOLD,
 ) -> dict[str, Any]:
-    """Per-channel spend-endogeneity flags from the (pre-fit) model's raw arrays.
+    """Per-column endogeneity flags from the (pre-fit) model's raw arrays.
 
     Uses ``model.X_media_raw`` ``(T, C)``, ``model.y_raw`` ``(T,)`` and
-    ``model.channel_names``. For a geo panel the arrays are pooled across geos (a
-    conservative approximation — flagged in ``notes``). Returns per-channel rows +
-    an overall verdict and the plain-language confounding statement.
+    ``model.channel_names`` — plus, when the model carries price/promo LEVERS
+    (#226), ``model.X_levers_raw`` / ``model.lever_names``. Each row carries a
+    ``kind`` ("media" / "price" / "promo"); a flagged lever means the lever's
+    setting responds to demand (clearance pricing, promos timed into soft
+    weeks), which attenuates or sign-flips its naive coefficient.
+
+    A NOT-flagged lever is weak evidence of exogeneity: this is a Granger-style
+    lead/lag screen with a hand-set threshold, and treating "not flagged" as a
+    licence to recommend a price move recreates the overconfidence the price
+    what-if refuses by default. For a geo panel the arrays are pooled across
+    geos (a conservative approximation — flagged in ``notes``). Returns
+    per-column rows + an overall verdict and the plain-language statement.
     """
     X = np.asarray(model.X_media_raw, dtype=float)
     y = np.asarray(model.y_raw, dtype=float)
@@ -95,27 +104,65 @@ def endogeneity_diagnostic(
             "notes": notes,
         }
 
+    # Columns under test: media channels, then any price/promo levers (#226).
+    # Levers live on their own matrix once promoted (`_prepare_levers` strips
+    # them from the control block), so `X_levers_raw`/`lever_names` is the only
+    # handle; both are absent (None/[]) on a lever-free model.
+    columns: list[tuple[str, str, np.ndarray]] = [
+        (ch, "media", X[:, c]) for c, ch in enumerate(channels)
+    ]
+    lever_names = list(getattr(model, "lever_names", []) or [])
+    X_levers = getattr(model, "X_levers_raw", None)
+    if lever_names and X_levers is not None:
+        XL = np.asarray(X_levers, dtype=float)
+        if (
+            XL.ndim == 2
+            and XL.shape[0] == y.shape[0]
+            and XL.shape[1] == len(lever_names)
+        ):
+            price_var = None
+            price_lever = getattr(model, "_price_lever", None)
+            if price_lever is not None:
+                price_var = getattr(price_lever[0], "variable", None)
+            for i, name in enumerate(lever_names):
+                kind = "price" if name == price_var else "promo"
+                columns.append((name, kind, XL[:, i]))
+        else:
+            notes.append(
+                "Lever columns present but shape-mismatched against the KPI; "
+                "the lever screen was skipped."
+            )
+
     dy = np.diff(y)  # KPI change (demand movement)
     rows: list[dict[str, Any]] = []
     flagged: list[str] = []
-    for c, ch in enumerate(channels):
-        ds = np.diff(X[:, c])  # spend change
-        demand_leads, dl_lag = _max_lead_corr(dy, ds, max_lag)  # demand → spend
-        spend_leads, sl_lag = _max_lead_corr(ds, dy, max_lag)  # spend → demand
+    flagged_levers: list[str] = []
+    for ch, kind, series in columns:
+        ds = np.diff(series)  # setting change (spend / depth / price)
+        demand_leads, dl_lag = _max_lead_corr(dy, ds, max_lag)  # demand → setting
+        setting_leads, sl_lag = _max_lead_corr(ds, dy, max_lag)  # setting → demand
         endogenous = abs(demand_leads) >= corr_threshold and abs(demand_leads) > abs(
-            spend_leads
+            setting_leads
         )
         if endogenous:
-            flagged.append(ch)
+            (flagged if kind == "media" else flagged_levers).append(ch)
         rows.append(
             {
                 "channel": ch,
+                "kind": kind,
                 "demand_leads_spend": demand_leads,
                 "demand_lead_lag": dl_lag,
-                "spend_leads_demand": spend_leads,
+                "spend_leads_demand": setting_leads,
                 "spend_lead_lag": sl_lag,
                 "endogenous": endogenous,
             }
+        )
+
+    if flagged_levers:
+        notes.append(
+            f"Lever timing responds to demand for {', '.join(flagged_levers)} "
+            "(clearance behaviour): the fitted elasticity/lift is attenuated "
+            "or wrong-signed by construction, not merely uncertain."
         )
 
     if flagged:
@@ -138,6 +185,7 @@ def endogeneity_diagnostic(
         "available": True,
         "channels": rows,
         "flagged": flagged,
+        "flagged_levers": flagged_levers,
         "max_lag": max_lag,
         "corr_threshold": corr_threshold,
         "assumption": assumption,

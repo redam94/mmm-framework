@@ -149,3 +149,37 @@ describe('AllocationResult valuation disclosure', () => {
     expect(screen.queryByText(/1 KPI unit =/)).not.toBeInTheDocument();
   });
 });
+
+it('labels mixed decision arms with kind and level columns (#226)', () => {
+  render(
+    <AllocationResult
+      plan={{
+        ...PLAN,
+        allocation: [
+          { channel: 'TV', current_spend: 100, optimal_spend: 90, change_pct: -10 },
+          {
+            channel: 'Promo depth (Promo)',
+            current_spend: 20,
+            optimal_spend: 30,
+            change_pct: 50,
+            arm_kind: 'promo',
+            level_units: 'avg weekly depth (fraction)',
+            optimal_level: 0.041,
+          },
+        ],
+      }}
+    />
+  );
+  expect(screen.getByText('Kind')).toBeInTheDocument();
+  expect(screen.getByText('promo')).toBeInTheDocument();
+  expect(screen.getByText('Level')).toBeInTheDocument();
+  expect(
+    screen.getByText('0.041 avg weekly depth (fraction)')
+  ).toBeInTheDocument();
+});
+
+it('hides the arm columns on a media-only plan (#226)', () => {
+  render(<AllocationResult plan={PLAN} />);
+  expect(screen.queryByText('Kind')).not.toBeInTheDocument();
+  expect(screen.queryByText('Level')).not.toBeInTheDocument();
+});

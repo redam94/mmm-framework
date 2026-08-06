@@ -107,6 +107,35 @@ def compute_response_curves(
     if 1.0 not in mults:
         mults = np.sort(np.append(mults, 1.0))
 
+    # Refuse a non-monetary channel, by name (#226). `base_spend` below is
+    # `X_media_raw.sum(axis=0)` — for an impressions/clicks channel that is a
+    # VOLUME wearing a dollar label: it gets summed into `total_budget`, scaled
+    # by `budget_change_pct`, bounded in "dollars", and traded against genuine
+    # spend at one shadow price. A refusal here (not a warning: the number is
+    # wrong, not questionable) names the channel, its units and the fix.
+    try:
+        from ..reporting.helpers.measurement import resolve_channel_divisor
+
+        _non_monetary = []
+        for _ch in getattr(mmm, "channel_names", []) or []:
+            try:
+                _resolved = resolve_channel_divisor(mmm, _ch)
+            except Exception:  # noqa: BLE001 — duck-typed fakes stay allocatable
+                continue
+            if not _resolved.meta.is_monetary:
+                _non_monetary.append((_ch, _resolved.meta.divisor_units))
+        if _non_monetary:
+            _names = ", ".join(f"'{c}' (measured in {u})" for c, u in _non_monetary)
+            raise ValueError(
+                f"Cannot build spend-response curves: {_names} are not "
+                "measured in dollars, and summing a volume column into a "
+                "dollar budget allocates impressions as if they were money. "
+                "Declare a spend_column or a CPM/CPC cost basis on the "
+                "channel's measurement config to convert them."
+            )
+    except ImportError:  # pragma: no cover - lean import edge
+        pass
+
     X = np.asarray(mmm.X_media_raw, dtype=float)
     base_spend = X.sum(axis=0)
     obs_max_spend = X.max(axis=0) if X.ndim == 2 and X.shape[0] else None
@@ -131,6 +160,24 @@ def compute_response_curves(
         obs_max_spend=obs_max_spend,
         n_obs=n_obs,
     )
+
+
+def check_concavity(curve: np.ndarray, grid: np.ndarray, *, tol: float = 1e-9) -> bool:
+    """Whether a sampled response curve is concave on its grid (#226).
+
+    The greedy allocator is exact ONLY for concave curves, and nothing checked:
+    a promo response over a realistic depth range need not be concave, and
+    greedy then returns a confident local answer. Second differences of the
+    piecewise-linear interpolant must be non-positive (with a relative
+    tolerance so posterior noise on a genuinely concave curve does not flag).
+    """
+    c = np.asarray(curve, dtype=float)
+    g = np.asarray(grid, dtype=float)
+    if c.size < 3:
+        return True
+    slopes = np.diff(c) / np.maximum(np.diff(g), 1e-12)
+    scale = max(float(np.abs(slopes).max()), 1e-12)
+    return bool(np.all(np.diff(slopes) <= tol * scale + 1e-12))
 
 
 def _greedy_allocate(
@@ -697,6 +744,29 @@ def optimize_budget(
     )
     obj_curve = objective_curves(curves, objective)  # (C, G)
     obj_label = objective_label(objective)
+
+    # Concavity gate (#226). The greedy water-fill is exact ONLY for concave
+    # curves — its own docstring has said so since it shipped, and nothing
+    # checked. A non-concave arm (a promo response over a realistic depth
+    # range, an S-curve saturation) makes greedy return a confident local
+    # answer: it strands the arm below the inflection because the FORWARD
+    # marginal there is small. Route such portfolios through the multi-start
+    # SLSQP path (whose #290 machinery seeds from greedy AND scores every
+    # candidate, so it can only match or beat it) and say so.
+    _non_concave = [
+        str(names[c])
+        for c in range(obj_curve.shape[0])
+        if not check_concavity(obj_curve[c], spend_grid[c])
+    ]
+    if _non_concave:
+        advanced = True
+        notes.append(
+            "Non-concave response curve(s) detected for "
+            + ", ".join(_non_concave)
+            + ": the greedy allocator's exactness precondition fails, so this "
+            "run used the multi-start constrained solver instead. Treat the "
+            "optimum as the best point found, not a proven global one."
+        )
 
     # Per-solve diagnostics from the constrained path (issue #290): how many
     # SLSQP solves failed, and whether the answer beat the warm start. Collected

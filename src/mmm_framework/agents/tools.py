@@ -4698,7 +4698,12 @@ def run_budget_optimizer(
     min_channel_spend: float = None,
     objective: str = "mean",
     mode: str = "fixed",
-    value_per_kpi: float = 1.0,
+    # None, NOT 1.0 (#226): a silent default of 1.0 asserts one KPI unit is
+    # worth one dollar, which is the exact defect `finance/` exists to
+    # prevent. `mode='fixed'` runs fine without a valuation (scale-free
+    # argmax); `mode='free'` now refuses downstream instead of funding
+    # every channel to a fabricated breakeven line.
+    value_per_kpi: float | None = None,
     frontier: bool = False,
     target_kpi: float = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = None,

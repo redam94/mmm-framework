@@ -151,6 +151,78 @@ frozen public contract breaks, and the contract itself is pinned by
   on `realistic` 6/7 with the miss on the deliberately near-collinear Print. Tests:
   `tests/test_planning_payback.py` (34).
 
+- **Promo-depth optimization: per-arm cost bases, a profit objective, and the world that grades
+  it** ([#226]). The optimizer's decision vector was dollars of media spend — no slot for a
+  decision whose cost is margin given away rather than a spend line. The epic's original headline,
+  "trade a price cut against media", is deliberately NOT shipped as a recommendation: the repo's
+  own published measurement (`docs/blog-modelled-one-p.html`) recovers **39%** of a planted price
+  elasticity confidently. **Promo depth is the shipping headline; price is a labelled what-if
+  evaluator that refuses to recommend.**
+
+  The governing reduction (`planning/decision_arms.py`): every arm re-parameterized by its
+  **realized cost** — media at its spend (identity; the media-only path is bit-identical, pinned
+  by test), a promo arm at `depth × unit_cost`. The existing allocator then runs untouched: the
+  budget constraint is already `Σcost = B`, `mode='free'` already maximizes `value·KPI − Σcost`,
+  and the KKT water level is again a single number because the decision space is homogeneous
+  dollars — the per-group shadow-price correction the issue anticipated for a level-space vector
+  is made unnecessary by construction. `DecisionArm` / `ArmCurves` / `build_arm_curves` /
+  `optimize_arms` (result rows gain `arm_kind` / `level_units` / `optimal_level`), plus
+  `promo_roi` and `price_whatif`. `BayesianMMM.sample_lever_contributions` is the new
+  per-draw reader for `price_component` / `promo_component` (original KPI units — the graph
+  registers them standardized, and the `× y_std` is load-bearing).
+
+  The analytic gate: a two-arm fixture with per-arm margins (0.6, 0.2) whose closed-form
+  equal-marginal-PROFIT optimum (750, 250) lands exactly on grid knots — the allocator hits it to
+  1e-6 on both the greedy and constrained paths, and the margin-blind equal-marginal-KPI optimum
+  is (250, 750), flipped, proving the objective changed.
+
+  **What refuses, and why:**
+
+  - `promo_roi` on a **0/1 event flag** (no depth ⇒ no ΔP×Q cost; a ratio with no units) and on a
+    column **outside [0, 1]** (unknown units; the model's internal max-normalization must not be
+    priced).
+  - `promo_roi` / fund-to-breakeven **without a valuation** — and the agent layer's
+    `value_per_kpi` default changed from a silent `1.0` to `None`: the chat tool could previously
+    reach `optimize_budget(mode='free')` only with a fabricated $1/KPI, making the planning
+    layer's own refusal unreachable.
+  - `compute_response_curves` on a **non-monetary channel**: `base_spend` is
+    `X_media_raw.sum(axis=0)`, so an impressions channel was summed into a dollar budget, bounded
+    in "dollars", and traded at one shadow price. Now a named refusal pointing at the CPM/CPC fix.
+  - `goal_seek` on a **mixed-arm portfolio**: its monotone-frontier bisection is proven for
+    concave spend curves; a promo arm's depth response need not be concave.
+  - `price_whatif` **always** refuses to emit a recommendation, with the 39% measurement in the
+    message — evaluation of a stated hypothetical only.
+
+  **Concavity is finally checked** — the greedy allocator's own docstring said "exact for concave
+  curves" since it shipped, and nothing verified it. `check_concavity` (second differences of the
+  interpolant) runs on every `optimize_budget` call; a failing arm forces the #290 multi-start
+  constrained solver with a note.
+
+  **The worlds** (`synth/dgp.py`): `make_promo_and_media` — planted `elasticity·log(price/ref)` +
+  `amp·geom_adstock(depth, α)` exactly in the model's lever family, media near-saturated at
+  current spend, and the **answer key frozen before any optimizer runs** (`gross_margin`,
+  `promo_unit_cost`, `true_optimal_split` computed from DGP parameters alone). Measured planted
+  optimum: promo share 55% of outlay against an observed 19%. `make_promo_endogenous` — LAST
+  week's soft demand triggers this week's deeper promo and price cut, so the naive lift attenuates
+  (measured 89% → 70% recovery) and `diagnostics/endogeneity.py` — extended to walk lever columns
+  with a `kind` field — flags the lever with the clearance mechanism named. Both registered in
+  `SCENARIOS` and `PRIORITY`.
+
+  **The milestone criterion, measured**: the joint solve beats the media-only solve on TRUE
+  planted profit (noiseless structural mean, frozen economics) for **10 of 10 seeds**; the
+  recommended promo share moves toward the planted split (measured 19% → 28% toward 55%); and a
+  model without the promo lever misses the split by >15pp — the discrimination that keeps the
+  world from being decoration. Two findings the tests preserve: on MAP point fits the milestone
+  scored 8/10 (two seeds under-fit media saturation, saw phantom headroom, and the joint solve CUT
+  profitable promo — a point estimate of a saturation curve is exactly the input this allocator
+  should not be trusted with), and the profit claims are labelled conditional on the stated
+  economics throughout.
+
+  Frontend: Planner allocation tables gain **Kind** and **Level** columns whenever a non-media arm
+  is present, so a promo row's dollars (margin given away) cannot be misread as a media buy.
+  Tests: `tests/test_decision_arms.py` (31). Notebook:
+  `nbs/demos/promo_depth_optimization.ipynb` (baked, 19 cells, 0 errors).
+
 ### Fixed
 
 - **The residual-autocorrelation caveat never fired for core models** (found while wiring #224's
@@ -560,6 +632,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#237]: https://github.com/redam94/mmm-framework/issues/237
 [#249]: https://github.com/redam94/mmm-framework/issues/249
 [#224]: https://github.com/redam94/mmm-framework/issues/224
+[#226]: https://github.com/redam94/mmm-framework/issues/226
 [#273]: https://github.com/redam94/mmm-framework/issues/273
 [#274]: https://github.com/redam94/mmm-framework/issues/274
 [#275]: https://github.com/redam94/mmm-framework/issues/275
