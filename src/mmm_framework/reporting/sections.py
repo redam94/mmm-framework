@@ -1301,6 +1301,153 @@ class PacingSection(Section):
         """
 
 
+class VarianceSection(Section):
+    """Variance to plan — committed forecast vs realized KPI (issue #227).
+
+    The interval verdict LEADS: a realized total inside the committed band is
+    within the committed uncertainty, not a gap owed a story. Below it, the
+    bridge — per-channel delivery variance on the committed posterior, any
+    supplied adjustments, and a LABELLED unexplained remainder — sums exactly
+    to actual − committed. Data-gated on ``bundle.variance``.
+    """
+
+    section_id: str = "variance"
+    default_title: str = "Variance to plan"
+
+    _PROV_META = {
+        "modelled": ("positive", "Modelled"),
+        "supplied": ("uncertain", "Supplied"),
+        "residual": ("uncertain", "Residual"),
+    }
+
+    def render(self) -> str:
+        if not self.is_enabled or not self.data.variance:
+            return ""
+        var = self.data.variance
+        rows = list(var.get("rows") or [])
+        if not rows:
+            return ""
+        parts = [
+            self._render_verdict(var),
+            self._render_bridge_table(var, rows),
+            self._render_notes(var),
+        ]
+        return self._render_section_wrapper("\n".join(p for p in parts if p))
+
+    def _render_verdict(self, var: dict) -> str:
+        actual = float(var.get("actual_kpi", 0.0))
+        committed = float(var.get("committed_kpi", 0.0))
+        gap = float(var.get("gap", actual - committed))
+        within = var.get("within_committed_interval")
+        mass = var.get("interval_mass")
+        pct = f"{float(mass):.0%}" if mass is not None else "committed"
+        if within is True:
+            verdict = (
+                f'<div class="callout positive"><h4>Within the committed '
+                f"interval</h4><p>The realized total sits inside the {pct} "
+                "band that was committed to — this bridge explains "
+                "composition, not a surprise.</p></div>"
+            )
+        elif within is False:
+            verdict = (
+                f'<div class="callout negative"><h4>Outside the committed '
+                f"interval</h4><p>The miss exceeds the {pct} uncertainty that "
+                "was committed to.</p></div>"
+            )
+        else:
+            verdict = (
+                '<div class="callout uncertain"><p>The within-interval '
+                "verdict is unavailable for this commitment (see notes) — "
+                "unavailable, not passed.</p></div>"
+            )
+        band = ""
+        if var.get("committed_lower") is not None:
+            band = (
+                f'<div class="ci">{pct} band '
+                f'{self._format_currency(float(var["committed_lower"]))} – '
+                f'{self._format_currency(float(var["committed_upper"]))}</div>'
+            )
+        n_periods = len(var.get("period_set") or [])
+        return f"""
+            {verdict}
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="value">{self._format_currency(actual)}</div>
+                    <div class="label">Realized KPI ({n_periods} periods)</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">{self._format_currency(committed)}</div>
+                    <div class="label">Committed forecast</div>
+                    {band}
+                </div>
+                <div class="metric-card">
+                    <div class="value">{gap:+,.0f}</div>
+                    <div class="label">Gap the bridge closes exactly</div>
+                </div>
+            </div>
+        """
+
+    def _render_bridge_table(self, var: dict, rows: list[dict]) -> str:
+        value_per_kpi = var.get("value_per_kpi")
+        show_dollars = value_per_kpi is not None and not var.get(
+            "dollar_headline_suppressed"
+        )
+        cells = []
+        for r in rows:
+            name = html.escape(str(r.get("name", "")))
+            v = float(r.get("value", 0.0))
+            prov = str(r.get("provenance", ""))
+            cls, label = self._PROV_META.get(prov, ("uncertain", prov or "—"))
+            note = html.escape(str(r.get("source_note") or r.get("note") or ""))
+            dollar_cell = (
+                f'<td class="mono">{v * float(value_per_kpi):+,.0f}</td>'
+                if show_dollars
+                else ""
+            )
+            cells.append(
+                f"<tr><td>{name}</td>"
+                f'<td class="mono">{v:+,.0f}</td>'
+                f"{dollar_cell}"
+                f'<td class="{cls}">{label}</td>'
+                f'<td class="small">{note}</td></tr>'
+            )
+        total = sum(float(r.get("value", 0.0)) for r in rows)
+        total_dollar = (
+            f'<td class="mono"><strong>{total * float(value_per_kpi):+,.0f}</strong></td>'
+            if show_dollars
+            else ""
+        )
+        cells.append(
+            f"<tr><td><strong>Total (= gap)</strong></td>"
+            f'<td class="mono"><strong>{total:+,.0f}</strong></td>'
+            f"{total_dollar}<td></td><td>sums exactly</td></tr>"
+        )
+        dollar_head = "<th>Dollars</th>" if show_dollars else ""
+        return f"""
+            <h3>The bridge</h3>
+            <table class="data-table">
+                <thead><tr><th>Line</th><th>KPI units</th>{dollar_head}
+                    <th>Provenance</th><th>Note</th></tr></thead>
+                <tbody>{"".join(cells)}</tbody>
+            </table>
+        """
+
+    def _render_notes(self, var: dict) -> str:
+        out = []
+        for r in var.get("refusals") or []:
+            out.append(
+                f'<div class="callout negative"><p>{html.escape(str(r))}</p></div>'
+            )
+        caveats = [html.escape(str(c)) for c in (var.get("caveats") or [])]
+        if caveats:
+            out.append(
+                '<div class="callout uncertain"><ul>'
+                + "".join(f"<li>{c}</li>" for c in caveats)
+                + "</ul></div>"
+            )
+        return "\n".join(out)
+
+
 class LongTermSection(Section):
     """Short-term vs long-term / brand effect (issue #106).
 
@@ -3742,6 +3889,7 @@ SECTION_REGISTRY: dict[str, type[Section]] = {
     "saturation": SaturationSection,
     "sensitivity": SensitivitySection,
     "pacing": PacingSection,
+    "variance": VarianceSection,
     "long_term": LongTermSection,
     "triangulation": TriangulationSection,
     "spec_curve": SpecCurveSection,

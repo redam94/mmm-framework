@@ -240,6 +240,9 @@ class ReportConfig:
     # In-flight pacing — planned vs actual delivery (issue #107). Data-gated on
     # the bundle's pacing payload.
     pacing: SectionConfig = field(default_factory=SectionConfig)
+    # Variance to plan — committed forecast vs realized KPI (issue #227).
+    # Data-gated on the bundle's variance payload.
+    variance: SectionConfig = field(default_factory=SectionConfig)
     # Short-term vs long-term / brand effect (issue #106). Data-gated on the
     # bundle's adstock split; ``long_term_multiplier`` (below) opts into the
     # assumption-driven long-term scenario.

@@ -195,6 +195,13 @@ class MMMDataBundle:
     # the divergence. Data-gated: the PacingSection renders only when attached
     # (the generator's ``pacing=`` param sets it).
     pacing: dict[str, Any] | None = None
+    # Variance to plan — committed forecast vs realized KPI (issue #227). A
+    # ``VarianceBridge.to_dict()`` payload: the within-committed-interval
+    # verdict (which LEADS the section), per-channel delivery-variance rows +
+    # supplied lines + the labelled unexplained remainder, summing exactly to
+    # actual − committed. Data-gated: the VarianceSection renders only when
+    # attached (the generator's ``variance=`` param sets it).
+    variance: dict[str, Any] | None = None
     # Short-term vs long-term / brand effect (issue #106). A
     # ``build_long_term_facts`` payload: per-channel immediate-vs-carryover split
     # (what the weekly model measures), whether a structural brand funnel exists,

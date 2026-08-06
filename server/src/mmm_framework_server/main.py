@@ -2775,6 +2775,90 @@ async def get_planner_payback(project_id: str, job_id: str):
     return _poll_planner_job(project_id, job_id)
 
 
+class SuppliedLineRequest(BaseModel):
+    """A human-supplied adjustment line (gross-to-net, returns, trade spend).
+
+    ``source_note`` is required — an unattributed manual adjustment is exactly
+    what the SUPPLIED provenance exists to prevent. Supplied lines map the
+    TOTAL only; per-channel restatement is refused downstream.
+    """
+
+    name: str
+    value: float
+    source_note: str
+
+
+class VarianceRequest(BaseModel):
+    """Variance to plan (#227): committed forecast vs realized KPI.
+
+    The bridge is delivery-driven vs unexplained — two buckets on the
+    COMMITTED posterior — and it closes exactly. The refit split is refused
+    with the reason stated; the run diff is attached in its place.
+    """
+
+    supplied: list[SuppliedLineRequest] = []
+
+
+@app.post(
+    "/projects/{project_id}/variance",
+    dependencies=[_proj_write, _rl_heavy],
+)
+async def start_variance_to_plan(project_id: str, body: VarianceRequest):
+    """Start a NON-BLOCKING variance-to-plan bridge. Poll the job_id.
+
+    Assembles the inputs from the stores up front so a bridge that cannot be
+    built refuses at POST time with the reason (409), instead of a job that
+    errors later: no committed plan, no realized KPI, delivery gaps over the
+    committed window, or a dataset changed since the commit. The job then
+    loads the COMMITTED run — not the latest — because the delivery bucket is
+    the committed posterior's statement.
+    """
+    from mmm_framework.platform.variance import (
+        VarianceInputError,
+        collect_variance_inputs,
+    )
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    try:
+        inputs = collect_variance_inputs(
+            project_id,
+            supplied=[line.model_dump() for line in body.supplied],
+        )
+    except VarianceInputError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+
+    run = {
+        "run_name": inputs["committed_run_name"],
+        "spec": None,
+        "dataset_path": inputs["dataset_path"],
+    }
+    op_kwargs = {
+        k: inputs[k]
+        for k in (
+            "committed_version",
+            "actual_media",
+            "actuals",
+            "valuation",
+            "supplied",
+            "refit_run_id",
+            "run_diff",
+        )
+    }
+    return _start_planner_job(
+        project_id, "variance_to_plan", op_kwargs, "variance", run
+    )
+
+
+@app.get(
+    "/projects/{project_id}/variance/{job_id}",
+    dependencies=[_proj_read],
+)
+async def get_variance_to_plan(project_id: str, job_id: str):
+    """Poll a variance-to-plan job: {status, result|null, error|null}."""
+    return _poll_planner_job(project_id, job_id)
+
+
 def _start_planner_job(
     project_id: str, op_name: str, op_kwargs: dict, result_key: str, run: dict | None
 ):

@@ -43,6 +43,30 @@ Pacing
    :undoc-members:
    :show-inheritance:
 
+Plan of Record
+--------------
+
+.. automodule:: mmm_framework.platform.plan_of_record
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Actuals
+-------
+
+.. automodule:: mmm_framework.platform.actuals
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Variance
+--------
+
+.. automodule:: mmm_framework.platform.variance
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Scorecard
 ---------
 

@@ -5285,6 +5285,93 @@ def get_payback_horizon(
 
 
 @tool
+def get_variance_to_plan(
+    state: Annotated[dict, InjectedState],
+    supplied_json: str = "",
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Variance to plan: the committed forecast vs realized KPI, and it closes.
+
+    Builds the two-bucket bridge on the COMMITTED plan of record: per-channel
+    delivery variance (what the spend divergence was worth, a paired
+    counterfactual on the committed posterior) plus a LABELLED unexplained
+    remainder to the realized KPI — the rows sum to actual − committed
+    exactly. The verdict against the committed interval leads: a miss inside
+    the committed band is within the committed uncertainty, not a story owed.
+    A refit-based split is refused with the reason stated; what changed
+    between the runs is attached instead. Needs a committed plan of record,
+    uploaded delivery covering its window, and uploaded realized-KPI actuals;
+    the session's loaded model must be the committed run (the bridge refuses
+    any model that does not reproduce the committed forecast).
+    `supplied_json`: optional JSON list of manual adjustment lines, each
+    `{"name", "value", "source_note"}` — they map the TOTAL only and need a
+    dollar-denominated KPI valuation.
+    """
+    _activate_thread(config)
+    tid = get_current_thread()
+
+    from mmm_framework.platform import sessions as sessions_store
+    from mmm_framework.platform.variance import (
+        VarianceInputError,
+        collect_variance_inputs,
+    )
+
+    supplied = []
+    if supplied_json:
+        try:
+            supplied = json.loads(supplied_json)
+            assert isinstance(supplied, list)
+        except Exception:
+            return _modelop_command(
+                {
+                    "content": None,
+                    "dashboard": {},
+                    "error": "supplied_json is not a JSON list.",
+                },
+                state,
+                tool_call_id,
+            )
+
+    project_id = sessions_store.resolve_project_id(tid)
+    if not project_id:
+        return _modelop_command(
+            {
+                "content": None,
+                "dashboard": {},
+                "error": "This session is not attached to a project.",
+            },
+            state,
+            tool_call_id,
+        )
+    try:
+        inputs = collect_variance_inputs(project_id, supplied=supplied)
+    except VarianceInputError as e:
+        return _modelop_command(
+            {"content": None, "dashboard": {}, "error": str(e)},
+            state,
+            tool_call_id,
+        )
+
+    res = _KERNELS.get_or_spawn(tid).run_model_op(
+        "variance_to_plan",
+        {
+            k: inputs[k]
+            for k in (
+                "committed_version",
+                "actual_media",
+                "actuals",
+                "valuation",
+                "supplied",
+                "refit_run_id",
+                "run_diff",
+            )
+        },
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
 def check_endogeneity(
     state: Annotated[dict, InjectedState],
     max_lag: int = 8,
@@ -8004,6 +8091,7 @@ TOOLS = [
     generate_cfo_onepager,
     commit_plan_of_record,
     get_payback_horizon,
+    get_variance_to_plan,
     check_endogeneity,
     sign_off_model,
     get_run_history,
@@ -8124,6 +8212,7 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "generate_cfo_onepager",
         "commit_plan_of_record",
         "get_payback_horizon",
+        "get_variance_to_plan",
         "check_endogeneity",
         # validation tools that need media channels / the MMM forward pass
         "run_channel_diagnostics",

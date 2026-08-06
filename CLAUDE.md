@@ -297,6 +297,7 @@ Experiments & planning
 - Model-anchored economics, opportunity cost, A/A·A/B sim — *Model-anchored experiment economics* · `technical-docs/experiment-economics.md`
 - Off-panel calibration — *Off-panel calibration*
 - Pareto-front experiment optimizer — *Experiment optimizer*
+- Variance to plan (two-bucket bridge, committed-interval verdict, SUPPLIED lines) — *Variance to plan*
 - Continuous sequential learning (model-free bandit) — *Continuous sequential learning* · `technical-docs/continuous-learning.md`
 
 Reporting

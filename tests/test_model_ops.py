@@ -30,6 +30,7 @@ def test_ops_registry_complete():
         "budget_scenario",
         "plan_budget",
         "forecast_plan",
+        "variance_to_plan",
         "plan_scenario",
         "marginal_analysis",
         "prior_predictive_check",

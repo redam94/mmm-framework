@@ -145,6 +145,10 @@ class PacingResult:
     #: 'positional' when either side had none. Recorded rather than assumed:
     #: a positional join on labelled data was the pre-v1.4 defect.
     join: str = "positional"
+    #: Fraction of the PLAN's periods the actuals cover (elapsed / total).
+    #: ``None`` when the plan has no period series. What lets the outcome-delta
+    #: read the response curves on their own full-window axis.
+    elapsed_fraction: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -157,6 +161,7 @@ class PacingResult:
             "divergence_pct": self.divergence_pct,
             "flagged": list(self.flagged),
             "outcome_delta": self.outcome_delta,
+            "elapsed_fraction": self.elapsed_fraction,
         }
 
 
@@ -230,6 +235,11 @@ def compute_pacing(
     # is why it survived. Positional alignment remains the fallback for inputs
     # with no labels (scalars, bare arrays), byte-identically.
     join, plan_take, act_take, periods = _join_periods(plan_periods, act_periods)
+    # The plan's FULL length, captured before any truncation: the elapsed
+    # fraction is what lets the outcome-delta read the response curves on
+    # their full-window axis instead of feeding part-window totals into a
+    # full-window curve.
+    n_plan_total = max((v.size for v in plan_series.values()), default=0)
     if join == "label":
         plan_series = {c: v[plan_take] for c, v in plan_series.items() if v.size}
         act_series = {c: v[act_take] for c, v in act_series.items() if v.size}
@@ -271,6 +281,9 @@ def compute_pacing(
         a_total += actual_c
 
     port_div = (a_total - p_total) / p_total if p_total > 1e-9 else 0.0
+    elapsed_fraction = (
+        min(1.0, n_elapsed / n_plan_total) if n_plan_total and n_elapsed else None
+    )
     return PacingResult(
         channels=rows,
         periods=periods,
@@ -280,6 +293,7 @@ def compute_pacing(
         divergence_pct=port_div,
         flagged=flagged,
         join=join,
+        elapsed_fraction=elapsed_fraction,
     )
 
 
@@ -289,7 +303,8 @@ def expected_outcome_delta(
     actual_totals: Mapping[str, float],
     *,
     hdi_prob: float = 0.9,
-) -> dict[str, float] | None:
+    elapsed_fraction: float | None = None,
+) -> dict[str, Any] | None:
     """Expected KPI delta from the divergence, off the fitted response curves.
 
     ``curves`` is a :class:`~mmm_framework.planning.budget.ResponseCurves` (or any
@@ -297,7 +312,18 @@ def expected_outcome_delta(
     ``contributions`` ``(D,C,G)``). For each posterior draw we read the channel's
     contribution at the ACTUAL total vs the PLANNED total and sum the difference —
     turning parameter uncertainty into a credible interval on the outcome impact.
-    Returns ``{"mean","lower","upper","planned_kpi","actual_kpi"}`` or ``None``.
+    Returns ``{"mean","lower","upper","planned_kpi","actual_kpi",
+    "window_basis"}`` or ``None``.
+
+    ``elapsed_fraction`` is the share of the plan's window the totals cover.
+    The response curves are computed over the model's FULL fitted window, so a
+    mid-flight elapsed total read directly against them lands on the wrong part
+    of the curve (typically the steep left, overstating the KPI at stake — and
+    ``np.interp`` clamps, so a total past the grid saturates silently). When
+    the fraction is given, totals are projected to the curve's full-window
+    axis (``x / f`` — a proportional-flighting assumption, stated in
+    ``window_basis``) and the delta is scaled back by ``f`` for the elapsed
+    window. ``None`` preserves the legacy full-window read.
     """
     names = list(getattr(curves, "channel_names", []) or [])
     grid = getattr(curves, "spend_grid", None)
@@ -306,25 +332,57 @@ def expected_outcome_delta(
         return None
     grid = np.asarray(grid, dtype=float)
     contrib = np.asarray(contrib, dtype=float)
+    f = None
+    if elapsed_fraction is not None and 0.0 < float(elapsed_fraction) < 1.0:
+        f = float(elapsed_fraction)
     D = contrib.shape[0]
     planned_kpi = np.zeros(D)
     actual_kpi = np.zeros(D)
+    clamped: list[str] = []
     for c, ch in enumerate(names):
         p = float(planned_totals.get(ch, 0.0) or 0.0)
         a = float(actual_totals.get(ch, 0.0) or 0.0)
+        if f is not None:
+            p, a = p / f, a / f
         gc = grid[c]
+        if max(p, a) > float(gc[-1]) * (1 + 1e-9):
+            clamped.append(ch)
         for d in range(D):
             planned_kpi[d] += float(np.interp(p, gc, contrib[d, c]))
             actual_kpi[d] += float(np.interp(a, gc, contrib[d, c]))
+    if f is not None:
+        # The read happened at full-window pace; the KPI at stake is the
+        # elapsed window's share of it.
+        planned_kpi *= f
+        actual_kpi *= f
     delta = actual_kpi - planned_kpi
     lo_q = (1 - hdi_prob) / 2 * 100
-    return {
+    out: dict[str, Any] = {
         "mean": float(delta.mean()),
         "lower": float(np.percentile(delta, lo_q)),
         "upper": float(np.percentile(delta, 100 - lo_q)),
         "planned_kpi": float(planned_kpi.mean()),
         "actual_kpi": float(actual_kpi.mean()),
+        "window_basis": (
+            "full-window (legacy read: totals taken as full-window pace)"
+            if f is None
+            else (
+                f"elapsed-scaled (f={f:.3f}): totals projected to the curve's "
+                "full-window axis assuming proportional flighting, delta "
+                "scaled back to the elapsed window"
+            )
+        ),
     }
+    if clamped:
+        out["clamped_channels"] = clamped
+        out["clamp_note"] = (
+            "Projected pace exceeds the response-curve grid for "
+            + ", ".join(clamped)
+            + "; np.interp clamps at the grid edge, so the KPI delta for "
+            "these channels is read at the grid boundary rather than "
+            "extrapolated."
+        )
+    return out
 
 
 def pacing_report(
@@ -342,6 +400,10 @@ def pacing_report(
         planned_totals = {c.channel: c.planned for c in result.channels}
         actual_totals = {c.channel: c.actual for c in result.channels}
         result.outcome_delta = expected_outcome_delta(
-            curves, planned_totals, actual_totals, hdi_prob=hdi_prob
+            curves,
+            planned_totals,
+            actual_totals,
+            hdi_prob=hdi_prob,
+            elapsed_fraction=result.elapsed_fraction,
         )
     return result
