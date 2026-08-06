@@ -72,6 +72,19 @@ from .experiments import recommend_experiments
 from .priority import ChannelPriority, compute_experiment_priorities
 from .opportunity_cost import OpportunityCostResult, compute_opportunity_cost
 from .experiment_value import ExperimentNetValue, compute_experiment_net_value
+from .discount import (
+    DEFAULT_DISCOUNT_RATE_ANNUAL,
+    discount_weights,
+    mid_horizon_discount_factor,
+)
+from .payback import (
+    DEFAULT_THRESHOLDS,
+    BreakevenResult,
+    ChannelPayback,
+    PaybackResult,
+    channel_payback,
+    payback_breakeven,
+)
 from .design_anchor import (
     model_anchored_effect,
     powered_to_detect,
@@ -157,6 +170,15 @@ __all__ = [
     "compute_opportunity_cost",
     "ExperimentNetValue",
     "compute_experiment_net_value",
+    "DEFAULT_DISCOUNT_RATE_ANNUAL",
+    "discount_weights",
+    "mid_horizon_discount_factor",
+    "DEFAULT_THRESHOLDS",
+    "BreakevenResult",
+    "ChannelPayback",
+    "PaybackResult",
+    "channel_payback",
+    "payback_breakeven",
     "model_anchored_effect",
     "powered_to_detect",
     "realized_sigma_exp_for_anchor",

@@ -625,6 +625,14 @@
   },
   {
     "method": "POST",
+    "path": "/projects/{project_id}/planner/payback"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/planner/payback/{job_id}"
+  },
+  {
+    "method": "POST",
     "path": "/projects/{project_id}/planner/optimize"
   },
   {

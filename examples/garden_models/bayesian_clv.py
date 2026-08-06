@@ -228,8 +228,12 @@ class BayesianCLV(CustomMMM):
                 expected_value = pt.ones_like(expected_purchases)
 
             # CLV with a mid-horizon discount (MVP; per-period refinement later).
-            weekly = (1.0 + cfg.discount_rate_annual) ** (1.0 / 52.0) - 1.0
-            disc = (1.0 + weekly) ** (-horizon / 2.0)
+            # The factor is a plain float (config x config), so it can use the
+            # shared discount arithmetic rather than a private re-derivation —
+            # this was one of two disagreeing discount sites (issue #224).
+            from mmm_framework.planning.discount import mid_horizon_discount_factor
+
+            disc = mid_horizon_discount_factor(horizon, cfg.discount_rate_annual)
             clv = pm.Deterministic(
                 "clv", expected_purchases * expected_value * disc, dims="customer"
             )

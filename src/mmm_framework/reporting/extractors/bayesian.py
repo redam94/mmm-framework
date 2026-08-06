@@ -143,6 +143,10 @@ class BayesianMMMExtractor(
             # CFO one-pager: P&L rollup + spend-cut revenue-at-risk (issue #108).
             bundle = self._extract_cfo(bundle)
 
+            # Payback horizon (issue #224) — a refused family lands in the
+            # payload as a named refusal, which the sections render.
+            bundle = self._extract_payback(bundle)
+
             # Evidence tier + identifiability gate on every channel number
             # (issue #102) — runs after channel_roi + estimands are populated so
             # it can stamp them.

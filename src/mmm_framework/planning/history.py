@@ -19,7 +19,7 @@ import numpy as np
 from .budget import compute_response_curves, optimize_budget
 from .priority import compute_experiment_priorities
 
-RUN_METRICS_SCHEMA_VERSION = 3
+RUN_METRICS_SCHEMA_VERSION = 4
 
 
 def compute_run_metrics(
@@ -29,7 +29,7 @@ def compute_run_metrics(
     n_outcomes: int = 48,
     random_seed: int | None = 42,
 ) -> dict[str, Any]:
-    """JSON-safe per-run metrics snapshot (schema v2).
+    """JSON-safe per-run metrics snapshot (schema v4).
 
     Per channel: spend & share, ROI posterior (mean/sd/5–95% interval/width),
     marginal ROI at current spend, optimal-vs-current share gap, allocation
@@ -67,6 +67,23 @@ def compute_run_metrics(
     d_mult = float(mults[hi_idx] - mults[lo_idx])
 
     opt = optimization.table.set_index("channel")
+
+    # Payback horizons (schema v4, issue #224) — best-effort like everything
+    # here: a metrics snapshot must never fail a fit. The gates the full
+    # surface runs (learning, autocorrelation) are skipped for speed; the
+    # snapshot records the timing and its basis, the report carries the gates.
+    payback: dict[str, Any] = {}
+    try:
+        from .payback import channel_payback
+
+        payback = {
+            ch: p.to_dict()
+            for ch, p in channel_payback(
+                mmm, max_draws=200, learning=False, autocorrelation={}
+            ).channels.items()
+        }
+    except Exception:  # noqa: BLE001 — payback is optional in the snapshot
+        payback = {}
 
     channels: dict[str, Any] = {}
     marginal_total_num = 0.0
@@ -109,6 +126,24 @@ def compute_run_metrics(
             "priority": g.priority,
             "quadrant": g.quadrant,
         }
+        # Payback horizon (schema v4, issue #224): the response-timing t50 with
+        # its basis and disclosures, so a trajectory can say whether "TV got
+        # faster" or the basis changed under it. Absence (older rows, refused
+        # families) reads as "not computed", never as zero.
+        pb = payback.get(name) if payback else None
+        if pb is not None and pb.get("status") != "refused":
+            h = (pb.get("horizons") or {}).get("t50") or {}
+            channels[name]["payback"] = {
+                "basis": pb.get("basis"),
+                "family": pb.get("family"),
+                "l_max": pb.get("l_max"),
+                "t50_mean": h.get("mean"),
+                "t50_lower": h.get("lower"),
+                "t50_upper": h.get("upper"),
+                "truncated_tail_mass": pb.get("truncated_tail_mass"),
+                "learning_verdict": pb.get("learning_verdict"),
+                "status": pb.get("status"),
+            }
 
     # Compact saturation curves: small (C × ~10 grid points), but enough for
     # the UI to draw each channel's response curve with its 5–95% band and

@@ -380,15 +380,49 @@ def _residual_autocorrelation(model: Any) -> dict[str, Any]:
         post = trace.posterior
         if "mu" in post:
             fitted = np.asarray(post["mu"].mean(dim=["chain", "draw"]).values)
+            # Extension models register `mu` in original units; a hand-rolled
+            # trace may carry it standardized. Heuristic scale-restore below.
+            original_scale = False
         else:
+            # Core BayesianMMM registers no `mu` Deterministic. This branch
+            # used to call `comp.fitted_mean()`, a method that DOES NOT EXIST
+            # on ComponentDecomposition — the AttributeError was swallowed by
+            # the blanket except, so for every core model this returned
+            # all-None: the "interval TOO NARROW" forecast caveat and the
+            # plan-of-record residual-autocorrelation commit gate silently
+            # never fired (found while building issue #224's payback gate).
+            # The fitted mean is the sum of the decomposition's per-obs
+            # components, already in ORIGINAL scale.
             comp = model.compute_component_decomposition()
-            fitted = np.asarray(comp.fitted_mean())
+            parts = [
+                comp.intercept,
+                comp.trend,
+                comp.seasonality,
+                comp.media_total,
+                comp.controls_total,
+            ]
+            for opt in (
+                comp.geo_effects,
+                comp.product_effects,
+                comp.events,
+                comp.interactions,
+                comp.levers,
+            ):
+                if opt is not None:
+                    parts.append(opt)
+            fitted = np.sum(
+                [np.asarray(p, dtype=float).reshape(-1) for p in parts], axis=0
+            )
+            original_scale = True
         obs = np.asarray(model.y_raw, dtype=float)
         if fitted.shape != obs.shape:
             fitted = np.asarray(fitted).reshape(-1)[: obs.size]
-        resid = obs - (
-            fitted * model.y_std + model.y_mean if fitted.max() < 50 else fitted
-        )
+        if original_scale:
+            resid = obs - fitted
+        else:
+            resid = obs - (
+                fitted * model.y_std + model.y_mean if fitted.max() < 50 else fitted
+            )
         p, lag = _ljung_box(resid)
         out.update(
             ljung_box_p=p,

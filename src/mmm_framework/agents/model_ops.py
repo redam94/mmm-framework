@@ -774,6 +774,125 @@ def cfo_summary(
         return _err(f"Error building the CFO one-pager: {e}")
 
 
+def payback_horizon(
+    mmm: Any,
+    results: Any = None,
+    *,
+    thresholds: list | None = None,
+    hdi_prob: float = 0.90,
+    basis: str = "kernel",
+    max_draws: int = 400,
+) -> dict:
+    """Per-channel payback horizon (issue #224): the per-draw lag at which the
+    fitted carryover crosses 50%/90% of its total, with intervals, the
+    truncated-tail disclosure, the carryover-learning verdict and the
+    autocorrelation gate. Refused families (extension / structural-AR(1) /
+    dual-stock brand models) come back as named refusals, not blanks. Emits
+    ``dashboard['payback']`` + a per-channel table."""
+    try:
+        from ..planning.payback import DEFAULT_THRESHOLDS, channel_payback
+
+        ts = tuple(float(t) for t in thresholds) if thresholds else DEFAULT_THRESHOLDS
+        res_pb = channel_payback(
+            mmm,
+            thresholds=ts,
+            hdi_prob=float(hdi_prob),
+            basis=basis,
+            max_draws=int(max_draws),
+        )
+        facts = res_pb.to_dict()
+        ci = int(float(facts["interval_mass"]) * 100)
+        noun = (
+            "confidence" if facts.get("interval_kind") == "confidence" else "credible"
+        )
+
+        def _lag(h):
+            if not h or h.get("mean") is None:
+                return "—"
+            lo, hi = h.get("lower"), h.get("upper")
+            if lo is None or hi is None:
+                return f"{h['mean']:.1f} wk (interval collapsed — approximate fit)"
+            return f"{h['mean']:.1f} wk [{lo:.1f}, {hi:.1f}]"
+
+        lines = [
+            "### Payback horizon — when each channel's effect lands\n",
+            f"Per-draw kernel-crossing lags with {ci}% {noun} intervals. "
+            "A response-timing statement resting on the model's LEAST "
+            "identified parameter — read the status column before quoting.\n",
+            "| Channel | t50 | t90 | Tail beyond l_max | Carryover learning | Status |",
+            "|---|---|---|---|---|---|",
+        ]
+        rows = []
+        for ch, pch in facts["channels"].items():
+            if pch["status"] == "refused":
+                lines.append(f"| {ch} | — | — | — | — | refused |")
+                rows.append(
+                    {"channel": ch, "status": "refused", "reason": pch["reason"]}
+                )
+                continue
+            h = pch.get("horizons") or {}
+            tail = float(pch.get("truncated_tail_mass") or 0.0)
+            lines.append(
+                f"| {ch} | {_lag(h.get('t50'))} | {_lag(h.get('t90'))} | "
+                f"{tail:.0%} | {pch.get('learning_verdict') or 'n/a'} | "
+                f"{pch['status']} |"
+            )
+            t50, t90 = h.get("t50") or {}, h.get("t90") or {}
+            rows.append(
+                {
+                    "channel": ch,
+                    "family": pch.get("family"),
+                    "t50_mean": t50.get("mean"),
+                    "t50_lower": t50.get("lower"),
+                    "t50_upper": t50.get("upper"),
+                    "t90_mean": t90.get("mean"),
+                    "tail_mass": tail,
+                    "learning_verdict": pch.get("learning_verdict"),
+                    "status": pch["status"],
+                }
+            )
+        refused = [
+            (ch, pch["reason"])
+            for ch, pch in facts["channels"].items()
+            if pch["status"] == "refused"
+        ]
+        if refused:
+            lines.append("\n**Not computable:** " + refused[0][1])
+        for cv in facts.get("caveats") or []:
+            lines.append(f"\n> {cv}")
+        content = "\n".join(lines)
+        res = _ok(content, {"payback": facts})
+        res["tables"] = [
+            records_to_table_json(
+                rows,
+                title="Payback horizon (response timing)",
+                source="payback_horizon",
+                group="results",
+                columns=[
+                    {"key": "channel", "label": "Channel", "type": "string"},
+                    {"key": "t50_mean", "label": "t50 (wk)", "type": "number"},
+                    {"key": "t50_lower", "label": "t50 low", "type": "number"},
+                    {"key": "t50_upper", "label": "t50 high", "type": "number"},
+                    {"key": "t90_mean", "label": "t90 (wk)", "type": "number"},
+                    {
+                        "key": "tail_mass",
+                        "label": "Tail beyond l_max",
+                        "type": "percent",
+                    },
+                    {
+                        "key": "learning_verdict",
+                        "label": "Carryover learning",
+                        "type": "string",
+                    },
+                    {"key": "status", "label": "Status", "type": "string"},
+                ],
+            )
+        ]
+        return res
+    except Exception as e:  # noqa: BLE001
+        return _err(f"Error computing the payback horizon: {e}")
+
+
 def endogeneity(
     mmm: Any,
     results: Any = None,
@@ -4647,6 +4766,7 @@ OPS = {
     "triangulation": triangulation,
     "spec_curve": spec_curve,
     "cfo_summary": cfo_summary,
+    "payback_horizon": payback_horizon,
     "endogeneity": endogeneity,
     "garden_compat": garden_compat,
     "garden_tune_suggestions": garden_tune_suggestions,

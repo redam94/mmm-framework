@@ -253,6 +253,9 @@ class ReportConfig:
     # CFO one-pager — P&L rollup + spend-cut revenue/profit-at-risk (issue #108).
     # Data-gated: renders only when a cfo payload is attached to the bundle.
     cfo: SectionConfig = field(default_factory=SectionConfig)
+    # Payback horizon — per-channel t50/t90 response timing with truncation and
+    # learning disclosure (issue #224). Data-gated on ``bundle.payback``.
+    payback: SectionConfig = field(default_factory=SectionConfig)
     causal_assumptions: SectionConfig = field(default_factory=SectionConfig)
     methodology: SectionConfig = field(default_factory=SectionConfig)
     diagnostics: SectionConfig = field(default_factory=SectionConfig)
