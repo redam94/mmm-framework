@@ -2225,9 +2225,35 @@ def delete_budget_plan(plan_id: str) -> bool:
 
 
 def latest_budget_plan_for_project(project_id: str) -> dict[str, Any] | None:
-    """The most recently updated saved budget plan for a project (project-scoped,
-    org-agnostic) — the pacing loop auto-sources its planned series from this
-    (issue #123). ``None`` when the project has no saved plan."""
+    """The plan a project is currently operating against.
+
+    **A committed plan of record wins over the working draft** (#225): when the
+    project has a committed version, pacing and variance must compare delivery
+    against the number that was PROMISED, not against whatever the draft was
+    last edited to — in-place draft edits silently retargeting history is the
+    defect the plan-of-record store exists to close. Falls back to the most
+    recently updated saved budget plan (issue #123) when nothing is committed.
+    The returned dict keeps the budget-plan row shape either way
+    (``plan_id`` / ``name`` / ``plan_payload``), with ``committed``/``version``
+    added on the committed branch so a caller can say which it got.
+    """
+    committed = latest_committed_plan(project_id)
+    if committed is not None:
+        payload = committed.get("payload") or {}
+        plan_payload = payload.get("plan_payload") or {}
+        if plan_payload:
+            return {
+                "plan_id": committed.get("id"),
+                "name": committed.get("name")
+                or f"{committed.get('plan_family')} v{committed.get('version')}",
+                "plan_payload": plan_payload,
+                "committed": True,
+                "version": committed.get("version"),
+                "plan_family": committed.get("plan_family"),
+            }
+        # A committed version without a plan_payload (pre-#225-remainder rows)
+        # cannot feed pacing; fall through to the draft rather than hand
+        # pacing an unreadable payload.
     with _conn() as c:
         r = c.execute(
             "SELECT * FROM budget_plans WHERE project_id = ?"

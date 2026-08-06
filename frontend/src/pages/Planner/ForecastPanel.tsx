@@ -4,7 +4,7 @@ import Plot from 'react-plotly.js';
 import { AlertTriangle } from 'lucide-react';
 import { COLORS } from '../../theme/colors';
 import { mmmPlotlyLayout, PLOTLY_CONFIG } from '../../theme/plotlyTheme';
-import { usePlannerForecast } from '../../api/hooks/usePlanner';
+import { usePlannerForecast, useCommitPlanOfRecord } from '../../api/hooks/usePlanner';
 import type { ForecastResultPayload } from '../../api/services/plannerService';
 import { fmtInt } from './format';
 
@@ -219,7 +219,86 @@ export function ForecastPanel({
           </div>
 
           <ForecastChart fc={fc} />
+
+          {/* Commit as plan of record (#225): assess first, commit second.
+              A refused gate renders as the disabled button's reason — the
+              refusal is the feature, not an error state. */}
+          <CommitPlanOfRecord projectId={projectId} fc={fc} />
         </div>
+      )}
+    </div>
+  );
+}
+
+function CommitPlanOfRecord({
+  projectId,
+  fc,
+}: {
+  projectId: string | null;
+  fc: ForecastResultPayload;
+}) {
+  const commit = useCommitPlanOfRecord(projectId);
+  const assessment = commit.assess.data?.assessment;
+  const committable = commit.assess.data?.committable;
+  const committed = commit.commit.data?.id;
+
+  return (
+    <div className="rounded-lg border border-line-200 bg-white px-3 py-2.5 space-y-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-400">
+        Plan of record
+      </div>
+      {!assessment && (
+        <button
+          onClick={() => commit.assess.mutate(fc)}
+          disabled={commit.assess.isPending || !projectId}
+          className="rounded-md border border-line-300 px-3 py-1.5 text-sm disabled:opacity-50"
+        >
+          {commit.assess.isPending ? 'Checking gates…' : 'Check committability'}
+        </button>
+      )}
+      {assessment && !committed && (
+        <div className="space-y-2">
+          {assessment.refusals.length > 0 && (
+            <ul className="space-y-1 text-xs text-rust-700">
+              {assessment.refusals.map((r) => (
+                <li key={r.gate}>
+                  <span className="font-mono">{r.gate}</span>: {r.reason}{' '}
+                  {r.overridable ? '(overridable)' : '(not overridable)'}
+                </li>
+              ))}
+            </ul>
+          )}
+          {(assessment.missing_provenance?.length ?? 0) > 0 && (
+            <p className="text-xs text-rust-700">
+              Missing provenance: {assessment.missing_provenance!.join(', ')} —
+              not overridable.
+            </p>
+          )}
+          <button
+            onClick={() => commit.commit.mutate(fc)}
+            disabled={!committable || commit.commit.isPending}
+            title={
+              committable
+                ? 'Freeze this forecast + plan as an immutable, hash-chained version'
+                : 'Not committable — resolve or override the gates above'
+            }
+            className="rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {commit.commit.isPending ? 'Committing…' : 'Commit as plan of record'}
+          </button>
+        </div>
+      )}
+      {committed && (
+        <p className="text-xs text-sage-800">
+          Committed as {commit.commit.data?.plan_family} v
+          {commit.commit.data?.version}. Pacing and variance now grade against
+          this version.
+        </p>
+      )}
+      {commit.commit.isError && (
+        <p className="text-xs text-rust-600">
+          Commit refused — re-check the gates and try again.
+        </p>
       )}
     </div>
   );

@@ -232,3 +232,164 @@ def test_planner_payback_job_without_model(client, project):
             break
         time.sleep(0.05)
     assert status in ("done", "error")
+
+
+# ── plan-of-record routes (issue #225 remainder) ─────────────────────────────
+
+
+def _committable_forecast():
+    return {
+        "periods": ["2025-01-06"] * 8,
+        "mean": [100.0] * 8,
+        "draws_b64": "AAAA",
+        "n_draws": 200,
+        "random_seed": 42,
+        "caveat_fields": {
+            "interval_widens_with_horizon": True,
+            "trend_extrapolation": {"policy": "linear", "trend_type": "linear"},
+            "residual_autocorrelation": {
+                "autocorrelated": False,
+                "ljung_box_p": 0.42,
+            },
+            "extrapolated_channels": [],
+            "interval_available": True,
+        },
+    }
+
+
+def _seed_provenance_and_valuation(client, project):
+    """A model run with resolvable provenance + a resolved valuation, so the
+    only gates under test are the ones each case manipulates."""
+    from mmm_framework.platform import sessions as S
+
+    S.set_preference(project, "economics", {"kind": "revenue", "gross_margin": 0.4})
+    tid = S.create_session(name="test", project_id=project)["thread_id"]
+    S.add_artifact(
+        tid,
+        "model_run",
+        {
+            "run_id": "run-1",
+            "spec_hash": "abc123",
+            "data_fingerprint": "deadbeef0123",
+            "model_path": "/tmp/model",
+        },
+    )
+
+
+def test_plan_of_record_unknown_project_is_404(client):
+    r = client.post(
+        "/projects/nope/plan-of-record",
+        json={"forecast": _committable_forecast()},
+    )
+    assert r.status_code == 404
+
+
+def test_assess_only_reports_gates_without_writing(client, project):
+    _seed_provenance_and_valuation(client, project)
+    fc = _committable_forecast()
+    fc["caveat_fields"]["residual_autocorrelation"] = {
+        "autocorrelated": True,
+        "ljung_box_p": 0.001,
+    }
+    r = client.post(
+        f"/projects/{project}/plan-of-record",
+        json={"forecast": fc, "assess_only": True},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["committable"] is False
+    gates = [x["gate"] for x in body["assessment"]["refusals"]]
+    assert "residual_autocorrelation" in gates
+    # Nothing was written.
+    h = client.get(f"/projects/{project}/plan-of-record/history").json()
+    assert h["total"] == 0
+
+
+def test_refused_commit_is_422_with_the_gate_named(client, project):
+    _seed_provenance_and_valuation(client, project)
+    fc = _committable_forecast()
+    fc["caveat_fields"]["extrapolated_channels"] = [{"channel": "TV", "multiple": 1.6}]
+    r = client.post(f"/projects/{project}/plan-of-record", json={"forecast": fc})
+    assert r.status_code == 422, r.text
+    gates = [x["gate"] for x in r.json()["detail"]["assessment"]["refusals"]]
+    assert "spend_support" in gates
+
+
+def test_commit_then_latest_then_history(client, project):
+    _seed_provenance_and_valuation(client, project)
+    r = client.post(
+        f"/projects/{project}/plan-of-record",
+        json={"forecast": _committable_forecast(), "name": "FY25 H1"},
+    )
+    assert r.status_code == 201, r.text
+    v = r.json()
+    assert v["version"] == 1
+    assert "payload" not in v  # listings/creation responses stay slim
+
+    latest = client.get(f"/projects/{project}/plan-of-record").json()["version"]
+    assert latest["id"] == v["id"]
+    assert latest["payload"]["forecast"]["n_draws"] == 200
+
+    r2 = client.post(
+        f"/projects/{project}/plan-of-record",
+        json={"forecast": _committable_forecast()},
+    )
+    assert r2.json()["version"] == 2
+
+    h = client.get(f"/projects/{project}/plan-of-record/history").json()
+    assert h["total"] == 2
+    fam = v["plan_family"]
+    assert h["chains"][fam]["intact"] is True
+
+
+def test_override_is_recorded_in_the_committed_payload(client, project):
+    _seed_provenance_and_valuation(client, project)
+    fc = _committable_forecast()
+    fc["caveat_fields"]["extrapolated_channels"] = [{"channel": "TV", "multiple": 1.6}]
+    r = client.post(
+        f"/projects/{project}/plan-of-record",
+        json={
+            "forecast": fc,
+            "overrides": {"spend_support": "CMO accepted the extrapolation"},
+        },
+    )
+    assert r.status_code == 201, r.text
+    latest = client.get(f"/projects/{project}/plan-of-record").json()["version"]
+    committability = latest["payload"]["committability"]
+    assert "spend_support" in committability["overrides"]
+
+
+def test_pacing_retargets_to_the_committed_plan(client, project):
+    """`latest_budget_plan_for_project` prefers the committed version: pacing
+    must grade delivery against what was PROMISED, not the editable draft."""
+    from mmm_framework.platform import sessions as S
+
+    _seed_provenance_and_valuation(client, project)
+    # A working draft...
+    client.post(
+        "/budget-plans",
+        json={"project_id": project, "name": "draft", "plan_payload": _PAYLOAD},
+    )
+    before = S.latest_budget_plan_for_project(project)
+    assert not before.get("committed")
+    # ...then a commit (the committed payload freezes the draft's plan_payload).
+    r = client.post(
+        f"/projects/{project}/plan-of-record",
+        json={"forecast": _committable_forecast(), "name": "committed"},
+    )
+    assert r.status_code == 201, r.text
+    after = S.latest_budget_plan_for_project(project)
+    assert after["committed"] is True
+    assert after["plan_payload"]["total_budget"] == _PAYLOAD["total_budget"]
+    # The draft keeps editing freely; the committed pointer does not move.
+    client.post(
+        "/budget-plans",
+        json={
+            "project_id": project,
+            "name": "draft2",
+            "plan_payload": {**_PAYLOAD, "total_budget": 9999.0},
+        },
+    )
+    still = S.latest_budget_plan_for_project(project)
+    assert still["committed"] is True
+    assert still["plan_payload"]["total_budget"] == _PAYLOAD["total_budget"]

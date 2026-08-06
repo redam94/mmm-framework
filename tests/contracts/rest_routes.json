@@ -822,5 +822,17 @@
   {
     "method": "GET",
     "path": "/workspace/{thread_id}/files"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/plan-of-record"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/plan-of-record"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/plan-of-record/history"
   }
 ]

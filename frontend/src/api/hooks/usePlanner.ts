@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { plannerService } from '../services/plannerService';
 import type {
+  ForecastResultPayload,
   PlannerForecastRequest,
   PlannerOptimizeRequest,
   PlannerScenarioRequest,
@@ -79,6 +80,24 @@ export function usePlannerScenario(projectId: string | null) {
  * the optimization above — the forward pass rebuilds adstock kernels per
  * (channel, draw), so it is a background job rather than a held connection.
  */
+export function useCommitPlanOfRecord(projectId: string | null) {
+  // #225: assess runs the commitment gates without writing; commit appends an
+  // immutable version. Two mutations so the UI can show refusals BEFORE the
+  // user thinks anything happened.
+  const assess = useMutation({
+    mutationFn: (forecast: ForecastResultPayload) =>
+      plannerService.commitPlanOfRecord(projectId!, {
+        forecast,
+        assess_only: true,
+      }),
+  });
+  const commit = useMutation({
+    mutationFn: (forecast: ForecastResultPayload) =>
+      plannerService.commitPlanOfRecord(projectId!, { forecast }),
+  });
+  return { assess, commit };
+}
+
 export function usePlannerForecast(projectId: string | null) {
   const [jobId, setJobId] = useState<string | null>(null);
 
