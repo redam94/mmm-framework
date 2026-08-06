@@ -1919,6 +1919,299 @@ def make_breakout_collinear(seed: int = 32, *, n_weeks: int | None = None) -> Sc
     )
 
 
+# ---------------------------------------------------------------------------
+# promo & media worlds (#226) — a promo as a DECISION with a cost
+# ---------------------------------------------------------------------------
+
+#: The promo-and-media worlds' planted economics + effect sizes, frozen here so
+#: the answer key and the DGP cannot drift apart. Depth is a FRACTION (0.30 =
+#: 30% off); the model sees the same column max-normalized, so the planted form
+#: `_PROMO_LIFT * geom_adstock(depth / max_depth, _PROMO_ALPHA)` is exactly the
+#: model's promo-lever family (representable).
+_PROMO_ALPHA = 0.45
+_PROMO_LIFT = 400.0  # KPI amplitude at max observed depth, before carryover
+_PROMO_MAX_DEPTH = 0.40
+_PRICE_ELASTICITY = -55.0  # KPI units per unit of log(price/ref) — model's form
+_PROMO_GROSS_MARGIN = 0.40
+#: Toy-currency margin dollars given away per unit of average-year promo depth
+#: (depth x price x units, aggregated over the window and FROZEN as a number so
+#: the answer key and the optimizer are handed identical economics). At these
+#: values promo is genuinely profitable per dollar (value slope ~1.9x cost)
+#: while the hot-lambda media below is near-saturated — the joint optimum
+#: really does move money from media into promo depth.
+_PROMO_UNIT_COST = 120_000.0
+
+
+def _promo_depth_series(rng: np.random.Generator, n: int) -> np.ndarray:
+    """Pulsed promo depth: mostly 0, event windows of 1-3 weeks at 5%-40%."""
+    depth = np.zeros(n)
+    t = 0
+    while t < n:
+        if rng.random() < 0.18:
+            # Multi-week events (2-5 wk). Deliberately not 1-week spikes: a
+            # high-impact one-week pulse plants a mechanical dy->d(depth)
+            # lead-1 correlation FROM ITS OWN EFFECT (y jumps at the start,
+            # depth drops at the end one week later), which reads as
+            # endogeneity to a lead/lag screen on a world whose timing is
+            # exogenous by construction.
+            width = int(rng.integers(2, 6))
+            d = float(rng.uniform(0.05, _PROMO_MAX_DEPTH))
+            depth[t : t + width] = d
+            t += width + int(rng.integers(3, 8))
+        else:
+            t += 1
+    return depth
+
+
+def _promo_world_parts(seed: int, n_weeks: int | None, *, endogenous: bool):
+    """Shared construction for the promo worlds; see :func:`make_promo_and_media`."""
+    rng, weeks, n, spend, baseline, controls, maxes = _base_world(seed, n_weeks)
+    # Rebuild price WITHOUT the random promo dips of _base_world: in these
+    # worlds price is a lever with its own planted elasticity, and the depth
+    # series below is the promo. A latent demand shock drives the endogenous
+    # variant's lever timing.
+    t = np.arange(n)
+    demand = np.zeros(n)
+    for i in range(1, n):
+        demand[i] = 0.8 * demand[i - 1] + rng.normal(0, 1.0)
+    demand = demand / max(demand.std(), 1e-9)
+
+    price = 12.0 + 0.5 * np.cos(2 * np.pi * t / 52.0) + rng.normal(0, 0.15, n)
+    depth = _promo_depth_series(rng, n)
+    if endogenous:
+        # Clearance behaviour: LAST week's soft demand triggers this week's
+        # deeper promo and price cut (decisions react to observed sales, with
+        # a one-period reporting lag) — the lever correlates with the error
+        # term, so the naive elasticity/lift is attenuated by construction,
+        # and the demand->lever LEAD is exactly what the endogeneity screen's
+        # lead/lag scan is built to catch.
+        demand_lag = np.concatenate([[0.0], demand[:-1]])
+        soft = demand_lag < 0.0
+        depth = np.where(
+            soft,
+            np.minimum(
+                depth + 0.10 + 0.12 * np.clip(-demand_lag, 0.0, None),
+                _PROMO_MAX_DEPTH,
+            ),
+            depth,
+        )
+        price = price - 1.0 * np.clip(-demand_lag, 0.0, None)
+
+    price_ref = float(np.median(price))
+    max_depth = float(np.max(depth)) or _PROMO_MAX_DEPTH
+
+    # Media amplitudes tuned so media is NEAR-SATURATED at current spend while
+    # promo is far from saturation (its planted form is linear in adstocked
+    # depth): the joint optimum genuinely wants promo money, which is what the
+    # milestone criterion grades.
+    lam_hot = {c: _LAM[c] * 5.0 for c in CHANNELS}
+
+    def full_fn(s: np.ndarray, d: np.ndarray, pr: np.ndarray) -> np.ndarray:
+        mu = baseline.copy()
+        mu = mu + 90.0 * demand  # the (latent) demand shock
+        for i, c in enumerate(CHANNELS):
+            xn = s[:, i] / maxes[c]
+            ad = _geom_adstock(xn, _ALPHA[c])
+            mu = mu + _AMP[c] * _logistic_sat(ad, lam_hot[c])
+        mu = mu + _PRICE_ELASTICITY * np.log(np.maximum(pr, 1e-9) / price_ref)
+        mu = mu + _PROMO_LIFT * _geom_adstock(d / max_depth, _PROMO_ALPHA)
+        return mu
+
+    return (
+        rng,
+        weeks,
+        n,
+        spend,
+        controls,
+        demand,
+        price,
+        depth,
+        price_ref,
+        max_depth,
+        full_fn,
+    )
+
+
+def _promo_truths(full_fn, spend_arr, depth, price, price_ref):
+    """Planted lever truths + economics, frozen for the answer key."""
+    mu_full = full_fn(spend_arr, depth, price)
+    no_promo = full_fn(spend_arr, np.zeros_like(depth), price)
+    at_ref = full_fn(spend_arr, depth, np.full_like(price, price_ref))
+    promo_unit_cost = float(_PROMO_UNIT_COST)
+    return {
+        "true_promo_lift": float((mu_full - no_promo).sum()),
+        "true_price_effect": float((mu_full - at_ref).sum()),
+        "true_price_elasticity": float(_PRICE_ELASTICITY),
+        "true_promo_alpha": float(_PROMO_ALPHA),
+        "true_promo_amp": float(_PROMO_LIFT),
+        "price_reference": float(price_ref),
+        "gross_margin": float(_PROMO_GROSS_MARGIN),
+        "promo_unit_cost": promo_unit_cost,
+    }
+
+
+def make_promo_and_media(seed: int = 24, *, n_weeks: int | None = None) -> Scenario:
+    """Promo depth is a DECISION with a cost, competing with media for money.
+
+    Planted exactly in the model's lever family: a price term
+    ``elasticity * log(price/ref)`` and a promo lift
+    ``amp * geom_adstock(depth/max_depth, alpha)`` — representable, exogenous
+    timing. Media amplitudes are tuned so media is near-saturated at current
+    spend while promo is far from saturation, so the JOINT optimum wants promo
+    money and a media-only optimizer leaves planted profit on the table.
+
+    ``notes`` freezes the economics the answer key used (``gross_margin``,
+    ``promo_unit_cost``, ``true_optimal_split``) — computed from DGP parameters
+    FIRST, then handed to the optimizer, per the trustworthiness note on #226:
+    a world tuned until the optimizer looks good is not evidence.
+    """
+    (
+        rng,
+        weeks,
+        n,
+        spend,
+        controls,
+        demand,
+        price,
+        depth,
+        price_ref,
+        max_depth,
+        full_fn,
+    ) = _promo_world_parts(seed, n_weeks, endogenous=False)
+
+    spend_arr = spend.to_numpy(float)
+    mu = full_fn(spend_arr, depth, price)
+    noise = rng.normal(0, 18.0, n)
+    controls = controls.copy()
+    controls["Price"] = price
+    controls["Promo"] = depth
+    # An observable demand proxy so the exogenous world's back door is closable.
+    controls["Demand_Proxy"] = 10.0 * demand + rng.normal(0, 1.5, n)
+
+    truths = _promo_truths(full_fn, spend_arr, depth, price, price_ref)
+
+    # The planted optimal media/promo split of the CURRENT total outlay, on the
+    # frozen economics: numerically maximize margin*value(mu) - cost over a
+    # grid of (uniform media scale, average promo depth). Computed from the DGP
+    # alone -- the optimizer never sees this construction.
+    value_per_kpi = truths["gross_margin"] * price_ref
+    media_total = float(spend_arr.sum())
+    avg_depth_obs = float(depth.mean())
+    promo_cost_obs = avg_depth_obs * truths["promo_unit_cost"]
+    budget = media_total + promo_cost_obs
+
+    def outlay_profit(media_scale: float, avg_d: float) -> float:
+        d_series = np.full(n, avg_d)
+        mu_s = full_fn(spend_arr * media_scale, d_series, price)
+        cost = media_total * media_scale + avg_d * truths["promo_unit_cost"]
+        return value_per_kpi * float(mu_s.sum()) - cost
+
+    best = (-np.inf, 1.0, avg_depth_obs)
+    for ms in np.linspace(0.3, 1.2, 19):
+        # Promo capped at the observed max depth: past it is extrapolation and
+        # the optimizer is (correctly) barred from recommending it.
+        for ad in np.linspace(0.0, max_depth, 21):
+            cost = media_total * ms + ad * truths["promo_unit_cost"]
+            if cost > budget * 1.001:
+                continue
+            v = outlay_profit(ms, ad)
+            if v > best[0]:
+                best = (v, float(ms), float(ad))
+    truths["true_optimal_split"] = {
+        "media_scale": best[1],
+        "avg_promo_depth": best[2],
+        "media_cost": media_total * best[1],
+        "promo_cost": best[2] * truths["promo_unit_cost"],
+        "promo_share": (best[2] * truths["promo_unit_cost"])
+        / max(media_total * best[1] + best[2] * truths["promo_unit_cost"], 1e-9),
+        "profit": best[0],
+        "budget": budget,
+    }
+    truths["current_split"] = {
+        "media_cost": media_total,
+        "promo_cost": promo_cost_obs,
+        "avg_promo_depth": avg_depth_obs,
+        "profit": outlay_profit(1.0, avg_depth_obs),
+    }
+
+    return _finish(
+        "promo_and_media",
+        "",
+        "Promo depth and price are decisions with a planted cost basis; media "
+        "near-saturated, promo far from saturation, exogenous lever timing. "
+        "Grades whether the optimizer can trade promo depth against media.",
+        weeks,
+        spend,
+        mu,
+        noise,
+        controls,
+        lambda s: full_fn(s, depth, price),
+        control_roles={
+            "Demand_Proxy": "confounder",
+        },
+        notes={
+            "role": "promo/media decision world (#226)",
+            "lever_response_fn": full_fn,
+            "depth": depth,
+            "price": price,
+            **truths,
+        },
+    )
+
+
+def make_promo_endogenous(seed: int = 25, *, n_weeks: int | None = None) -> Scenario:
+    """The same world with CLEARANCE lever timing: promos deepen and price
+    falls when latent demand is soft, so the naive elasticity/lift is
+    attenuated by construction. The world exists to pin the attenuation — a
+    change that accidentally "fixes" recovery here has broken something.
+    """
+    (
+        rng,
+        weeks,
+        n,
+        spend,
+        controls,
+        demand,
+        price,
+        depth,
+        price_ref,
+        max_depth,
+        full_fn,
+    ) = _promo_world_parts(seed, n_weeks, endogenous=True)
+
+    spend_arr = spend.to_numpy(float)
+    mu = full_fn(spend_arr, depth, price)
+    noise = rng.normal(0, 18.0, n)
+    controls = controls.copy()
+    controls["Price"] = price
+    controls["Promo"] = depth
+    # Deliberately NO usable demand proxy: the shock that moves the levers is
+    # unobserved, which is the whole point.
+
+    truths = _promo_truths(full_fn, spend_arr, depth, price, price_ref)
+
+    return _finish(
+        "promo_endogenous",
+        "lever exogeneity (promo/price respond to the demand shock)",
+        "Promos deepen and price falls when latent demand is soft (clearance), "
+        "so lever variation is confounded with the error term and the naive "
+        "elasticity/lift is attenuated.",
+        weeks,
+        spend,
+        mu,
+        noise,
+        controls,
+        lambda s: full_fn(s, depth, price),
+        notes={
+            "role": "promo/media endogeneity negative control (#226)",
+            "lever_response_fn": full_fn,
+            "depth": depth,
+            "price": price,
+            **truths,
+        },
+    )
+
+
 SCENARIOS: dict[str, Callable[..., Scenario]] = {
     "realistic": make_realistic,
     "clean": make_clean,
@@ -1941,6 +2234,8 @@ SCENARIOS: dict[str, Callable[..., Scenario]] = {
     "dense_controls": make_dense_controls,
     "economic_health": make_economic_health,
     "reach_frequency": make_reach_frequency,
+    "promo_and_media": make_promo_and_media,
+    "promo_endogenous": make_promo_endogenous,
     "breakout_heterogeneous": make_breakout_heterogeneous,
     "breakout_homogeneous": make_breakout_homogeneous,
     "breakout_collinear": make_breakout_collinear,
@@ -1969,6 +2264,8 @@ PRIORITY = [
     "breakout_homogeneous",
     "breakout_collinear",
     "confounding_controlled",
+    "promo_and_media",
+    "promo_endogenous",
     "aurora_kitchen_sink",
 ]
 

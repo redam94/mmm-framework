@@ -4814,6 +4814,78 @@ class BayesianMMM:
         contrib = contrib.reshape(-1, *contrib.shape[2:])  # (draws, obs, channel)
         return contrib * self.y_std  # contributions scale by y_std (no mean shift)
 
+    def sample_lever_contributions(
+        self,
+        X_levers: np.ndarray | None = None,
+        max_draws: int | None = None,
+        random_seed: int | None = None,
+        components: tuple[str, ...] = ("price_component", "promo_component"),
+    ) -> dict[str, np.ndarray]:
+        """Posterior draws of the lever components under a lever scenario (#226).
+
+        The lever sibling of :meth:`sample_channel_contributions`: evaluates the
+        requested lever Deterministics (``price_component`` /
+        ``promo_component``) with ``X_levers`` (RAW original units, ``(n_obs,
+        n_levers)`` in ``lever_names`` order) swapped in — training levers when
+        ``None`` — returning ``{name: (n_draws, n_obs)}`` in **ORIGINAL KPI
+        units**. The graph registers these components on the standardized scale
+        (no ``dims``, no ``y_std``), so the ``* y_std`` here is load-bearing:
+        reading the Deterministic raw double-under-states every promo ROI by
+        the KPI's scale.
+
+        Components not present on this model are simply absent from the result
+        (a model with only a promo lever has no ``price_component``) — absent,
+        not zero-filled, so a caller cannot mistake "not configured" for
+        "no effect".
+
+        Raises on a multiplicative specification for the same reason the
+        channel sibling does: the components are additive on the LOG scale
+        there, and ``* y_std`` is not the original-scale conversion.
+        """
+        if self._trace is None:
+            raise ValueError("Model not fitted. Call fit() first.")
+        if self.n_levers == 0:
+            raise ValueError(
+                "This model has no price or promotion lever. Configure one "
+                "with ModelConfigBuilder().with_price(...) / .with_promotions(...)."
+            )
+        if self._multiplicative:
+            raise NotImplementedError(
+                "Lever contribution draws are computed on the additive (log) "
+                "scale and would be wrong on the original scale for the "
+                "multiplicative model. Use compute_component_decomposition(), "
+                "which is an exact LMDI attribution on the original scale."
+            )
+
+        present = [c for c in components if c in self.model.named_vars]
+        if not present:
+            raise ValueError(
+                f"None of {list(components)} is registered on this model's "
+                f"graph (levers: {self._lever_names})."
+            )
+
+        trace = self._trace
+        if max_draws is not None:
+            n_chains = trace.posterior.sizes["chain"]
+            per_chain = max(1, int(np.ceil(max_draws / n_chains)))
+            step = max(1, trace.posterior.sizes["draw"] // per_chain)
+            trace = trace.sel(draw=slice(None, None, step))
+
+        with self._swapped_media_data(None, X_levers=X_levers):
+            pp = pm.sample_posterior_predictive(
+                trace,
+                var_names=present,
+                random_seed=random_seed,
+                progressbar=False,
+            )
+
+        out: dict[str, np.ndarray] = {}
+        for name in present:
+            arr = pp.posterior_predictive[name].values
+            arr = arr.reshape(-1, *arr.shape[2:])  # (draws, obs)
+            out[name] = arr * self.y_std  # standardized -> original KPI units
+        return out
+
     def sample_latent_under(
         self,
         var_name: str,

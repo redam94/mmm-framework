@@ -50,6 +50,14 @@ Design Anchor
    :undoc-members:
    :show-inheritance:
 
+Decision Arms
+-------------
+
+.. automodule:: mmm_framework.planning.decision_arms
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Payback
 -------
 

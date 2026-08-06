@@ -12,6 +12,12 @@ export interface AllocationRow {
   optimal_share_p5?: number;
   optimal_share_p95?: number;
   allocation_instability?: number;
+  /** Decision-arm kind (#226): "media" | "promo". Absent = media. */
+  arm_kind?: string;
+  /** The arm's own units for optimal_level (e.g. "avg weekly depth (fraction)"). */
+  level_units?: string;
+  /** Recommended level in the arm's own units (a depth, not dollars, for promo). */
+  optimal_level?: number;
 }
 
 // Budget optimizer v2 (#139).

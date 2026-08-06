@@ -77,6 +77,16 @@ from .discount import (
     discount_weights,
     mid_horizon_discount_factor,
 )
+from .decision_arms import (
+    ArmCurves,
+    DecisionArm,
+    PromoArmResult,
+    build_arm_curves,
+    check_concavity,
+    optimize_arms,
+    price_whatif,
+    promo_roi,
+)
 from .payback import (
     DEFAULT_THRESHOLDS,
     BreakevenResult,
@@ -173,6 +183,14 @@ __all__ = [
     "DEFAULT_DISCOUNT_RATE_ANNUAL",
     "discount_weights",
     "mid_horizon_discount_factor",
+    "ArmCurves",
+    "DecisionArm",
+    "PromoArmResult",
+    "build_arm_curves",
+    "check_concavity",
+    "optimize_arms",
+    "price_whatif",
+    "promo_roi",
     "DEFAULT_THRESHOLDS",
     "BreakevenResult",
     "ChannelPayback",

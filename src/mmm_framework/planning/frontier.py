@@ -310,8 +310,25 @@ def goal_seek(
     plan and ``prob_hit_target`` — the posterior probability that the plan's
     contribution actually clears the target (the honest answer to "will this
     budget hit my number?").
+
+    **Refuses a mixed-arm portfolio** (#226): the monotone-concave frontier
+    argument above is proven for concave SPEND-response curves. A promo arm's
+    depth-response need not be concave over its support, and one non-concave
+    arm voids the bisection's premise — the "minimum budget reaching the
+    target" it returns can be a local artifact presented as an inverse solve.
+    Re-argue the proof per arm family before lifting this.
     """
     curves = _prep(mmm, curves, max_draws, random_seed)
+    _kinds = set(getattr(curves, "arm_kinds", []) or [])
+    if len(_kinds) > 1:
+        raise NotImplementedError(
+            "goal_seek is proven for concave spend-response portfolios; this "
+            f"one mixes arm kinds {sorted(_kinds)}. A promo arm's "
+            "depth-response need not be concave, which voids the "
+            "monotone-frontier bisection premise. Optimize the mixed "
+            "portfolio at candidate budgets with optimize_arms() and read "
+            "the frontier directly instead."
+        )
     names, base = curves.channel_names, curves.base_spend
     spend_grid = curves.spend_grid
     current_total = float(base.sum())

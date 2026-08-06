@@ -140,9 +140,37 @@ export function AllocationResult({ plan }: { plan: BudgetPlanResult }) {
   // Budget optimizer v2 (#139): append a Marginal ROAS column when available
   // (the funding line — fund a channel while its marginal return exceeds 1).
   const marg = plan.marginal_roas;
+  // Decision arms (#226): when the portfolio mixes cost bases (a promo-depth
+  // arm next to media spend), say what each row IS. The kind column sits right
+  // after the name; the level column carries the recommendation in the arm's
+  // OWN units (a depth, not dollars) so a promo row's "Recommended" dollars —
+  // margin given away — cannot be misread as a media buy.
+  const mixedArms = (plan.allocation ?? []).some(
+    (r) => r.arm_kind && r.arm_kind !== 'media'
+  );
+  const baseCols: Column<AllocationRow>[] = mixedArms
+    ? [
+        ALLOC_COLS[0],
+        {
+          key: 'arm_kind',
+          header: 'Kind',
+          render: (r) => r.arm_kind ?? 'media',
+        },
+        ...ALLOC_COLS.slice(1),
+        {
+          key: 'optimal_level',
+          header: 'Level',
+          numeric: true,
+          render: (r) =>
+            r.optimal_level != null && r.arm_kind && r.arm_kind !== 'media'
+              ? `${r.optimal_level.toFixed(3)} ${r.level_units ?? ''}`.trim()
+              : '—',
+        },
+      ]
+    : ALLOC_COLS;
   const allocCols: Column<AllocationRow>[] = marg
     ? [
-        ...ALLOC_COLS,
+        ...baseCols,
         {
           key: 'marginal_roas',
           header: 'Marg. ROAS',
@@ -154,7 +182,7 @@ export function AllocationResult({ plan }: { plan: BudgetPlanResult }) {
           ),
         },
       ]
-    : ALLOC_COLS;
+    : baseCols;
   const advanced =
     (plan.objective && plan.objective !== 'mean') ||
     (plan.mode && plan.mode !== 'fixed') ||
