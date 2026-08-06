@@ -770,3 +770,102 @@ class TestFallbackBaselineIncludesYMean:
         assert base.total_contribution == pytest.approx((2.0 * y_std + y_mean) * n_obs)
         # the old, y_mean-less value would have been 400 -- short by y_mean*n_obs
         assert base.total_contribution != pytest.approx(2.0 * y_std * n_obs)
+
+
+class TestOptionalDecompositionRowsAreNotDropped:
+    """`_convert_model_decomposition` dropped five component blocks (issue #220).
+
+    Events, Synergy, Price & Promotion, Geo and Product were missing from the
+    rows AND from the share denominator, while `extractors/bayesian.py` emits
+    all five under those exact labels. So a model that fit any of them got a
+    decomposition that did not describe it, and the two paths could not agree —
+    the remaining rows' shares were too large by exactly the omitted blocks'
+    share.
+    """
+
+    @staticmethod
+    def _decomp(**extra):
+        import numpy as np
+
+        # Media is carried per channel: `total_media` feeds the denominator and
+        # `media_by_channel` feeds the rows, so both are needed for the shares
+        # to be a fair test of anything.
+        base = dict(
+            total_intercept=600.0,
+            total_trend=100.0,
+            total_seasonality=50.0,
+            total_media=200.0,
+            media_by_channel=pd.DataFrame({"TV": [30.0] * 4, "Search": [20.0] * 4}),
+            total_controls=50.0,
+            total_geo=None,
+            total_product=None,
+            total_events=None,
+            total_interactions=None,
+            total_levers=None,
+            intercept=np.zeros(4),
+            trend=np.zeros(4),
+            seasonality=np.zeros(4),
+            controls_total=np.zeros(4),
+            events=np.zeros(4),
+            interactions=np.zeros(4),
+            levers=np.zeros(4),
+            geo_effects=np.zeros(4),
+            product_effects=np.zeros(4),
+        )
+        base.update(extra)
+        return type("D", (), base)()
+
+    def _rows(self, **extra):
+        from mmm_framework.reporting.helpers.decomposition import (
+            _convert_model_decomposition,
+        )
+
+        return _convert_model_decomposition(self._decomp(**extra), hdi_prob=0.9)
+
+    def test_absent_blocks_emit_no_rows(self):
+        names = {r.component for r in self._rows()}
+        assert names == {"Baseline", "Trend", "Seasonality", "Controls", "TV", "Search"}
+        assert not names & {"Events", "Synergy", "Price & Promotion", "Geo", "Product"}
+
+    def test_each_fitted_block_gets_its_row(self):
+        rows = self._rows(
+            total_events=30.0,
+            total_interactions=-10.0,
+            total_levers=20.0,
+            total_geo=15.0,
+            total_product=5.0,
+        )
+        names = [r.component for r in rows]
+        for label in ("Events", "Synergy", "Price & Promotion", "Geo", "Product"):
+            assert label in names, f"{label} was dropped"
+
+    def test_labels_match_the_other_extraction_path(self):
+        """Both paths describe the same decomposition, so the labels are the
+        contract. These are the strings `extractors/bayesian.py` emits."""
+        rows = self._rows(
+            total_events=30.0,
+            total_interactions=-10.0,
+            total_levers=20.0,
+            total_geo=15.0,
+            total_product=5.0,
+        )
+        emitted = {r.component for r in rows}
+        assert {"Events", "Synergy", "Price & Promotion", "Geo", "Product"} <= emitted
+
+    def test_shares_sum_to_one_with_the_optional_blocks_present(self):
+        rows = self._rows(
+            total_events=30.0,
+            total_interactions=-10.0,
+            total_levers=20.0,
+            total_geo=15.0,
+            total_product=5.0,
+        )
+        assert sum(r.pct_of_total for r in rows) == pytest.approx(1.0)
+
+    def test_a_fitted_block_totalling_zero_still_counts(self):
+        """`is not None`, not `!= 0`. A block that was fit is part of the
+        identity even when it nets to zero, and dropping it moves the
+        denominator for every other row."""
+        rows = self._rows(total_events=0.0)
+        assert "Events" in {r.component for r in rows}
+        assert sum(r.pct_of_total for r in rows) == pytest.approx(1.0)

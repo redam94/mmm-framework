@@ -102,6 +102,39 @@ def _share_denominator(values: "list[float]") -> tuple[float, bool]:
     return signed, True
 
 
+#: Optional component blocks, as ``(row label, total field, series field)``.
+#: Present on ``ComponentDecomposition`` only when the corresponding block was
+#: fit, so each is emitted on a ``is not None`` test rather than a ``!= 0`` one:
+#: a fitted block whose total happens to net to zero is still part of the
+#: identity, and dropping it would move the share denominator.
+#:
+#: The labels match ``extractors/bayesian.py`` exactly. They have to: both paths
+#: describe the same decomposition, and this one used to omit all five, so a
+#: model with events or levers had shares that did not add to 1 and rows that
+#: appeared or vanished depending on which path ran.
+_OPTIONAL_COMPONENTS: tuple[tuple[str, str, str], ...] = (
+    ("Events", "total_events", "events"),
+    ("Synergy", "total_interactions", "interactions"),
+    ("Price & Promotion", "total_levers", "levers"),
+    ("Geo", "total_geo", "geo_effects"),
+    ("Product", "total_product", "product_effects"),
+)
+
+
+def _optional_totals(decomp: Any) -> list[tuple[str, float, Any]]:
+    """``(label, total, series)`` for each optional block actually fit."""
+    out: list[tuple[str, float, Any]] = []
+    for label, total_field, series_field in _OPTIONAL_COMPONENTS:
+        total = getattr(decomp, total_field, None)
+        if total is None:
+            continue
+        value = float(total)
+        if not np.isfinite(value):
+            continue
+        out.append((label, value, getattr(decomp, series_field, None)))
+    return out
+
+
 def _convert_model_decomposition(
     decomp: Any,
     hdi_prob: float,
@@ -109,9 +142,15 @@ def _convert_model_decomposition(
     """Convert model's ComponentDecomposition to DecompositionResult list."""
     results = []
 
+    optional = _optional_totals(decomp)
+
     # Calculate total for percentages. SIGNED, not a sum of magnitudes: the
     # components sum to the fitted outcome, so a magnitude denominator makes
     # shares fail to add to 1 the moment any component is negative.
+    #
+    # Every fitted block belongs in this denominator, including the optional
+    # ones. Omitting them made the shares of the remaining rows too large by
+    # exactly the omitted blocks' share.
     total, _shares_ok = _share_denominator(
         [
             decomp.total_intercept,
@@ -120,6 +159,7 @@ def _convert_model_decomposition(
             decomp.total_media,
             decomp.total_controls,
         ]
+        + [value for _label, value, _series in optional]
     )
 
     # Baseline
@@ -185,6 +225,21 @@ def _convert_model_decomposition(
                 contribution_upper=decomp.total_controls,
                 pct_of_total=decomp.total_controls / total,
                 time_series=decomp.controls_total,
+            )
+        )
+
+    # Events, synergy, levers, geo, product. These were previously dropped from
+    # both the rows and the denominator, so a model that fit any of them
+    # reported a decomposition that did not describe it.
+    for label, value, series in optional:
+        results.append(
+            DecompositionResult(
+                component=label,
+                total_contribution=value,
+                contribution_lower=value,
+                contribution_upper=value,
+                pct_of_total=value / total,
+                time_series=series,
             )
         )
 

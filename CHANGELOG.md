@@ -84,6 +84,49 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Fixed
 
+- **The decomposition residual is now disclosed, and a bridge says whether it closed honestly**
+  ([#220]). Completes the issue: the absorption sites were fixed earlier, and this adds the shared
+  module they were each reimplementing, plus the two defects that survived.
+
+  `finance/lines.py` gives a bridge line a **provenance** — `modelled`, `observed`, `residual`, or
+  `absorbing` for the leftover kind computed as `observed − modelled media`. **Absence reads as
+  `absorbing`**, matching `diagnostics/provenance.py`'s discipline: every line written before this
+  existed was a leftover, and defaulting the other way would launder exactly the numbers this
+  issue is about. `bridge_gap()` reports closure, and when a leftover line is present it says the
+  bridge closed *by construction* rather than returning a satisfied zero.
+
+  `finance/closure.py::decomposition_closure()` reconciles a fit's components against the observed
+  KPI. `fitted_total` resolves through `compute_component_decomposition()` (core `BayesianMMM`),
+  then the `mu` Deterministic (the extension families register one; core does not), then the
+  predictive mean, and labels which it used. Measured on a `make_clean` MAP fit: observed
+  46801.1, components 46868.4, residual **−67.3 (−0.144%)**, and the bridge closes to 1e-6 on
+  additive **and** multiplicative specs. Under a multiplicative spec the total is the exact LMDI
+  reconstruction and the **Jensen gap** against `predict()` (measured −281.7) is carried as its
+  own field instead of being folded into a component.
+
+  Two things it deliberately refuses to imply. A near-zero residual is an accounting property of
+  a fit with a free intercept, not a validated baseline — measured, the residual understates the
+  baseline's true error against planted truth by ~14x — so `ClosureFacts` pairs it with an
+  interval on the modelled baseline and `residual_reading()` writes the caveat. And on a MAP/ADVI
+  fit that interval **collapses**, so it is reported absent with the reason rather than rendered
+  as `[x, x]`, following [#249].
+
+  `MediaReconciliation` is the guard that matters most: a bridge can close perfectly around a
+  media number that is badly wrong. Measured on a `NestedMMM`, the reporting extractor's media
+  total is **2108.8** against `sample_channel_contributions`' **22634.2** and a planted truth of
+  **19591.7** — the closure closes to −0.005% either way. The disagreement is now flagged, and
+  the nearer-truth reading is the one published; the suspect total is never silently substituted.
+
+  Two remaining defects: `reporting/helpers/decomposition.py::_convert_model_decomposition`
+  dropped **Events, Synergy, Price & Promotion, Geo and Product** from both the rows and the share
+  denominator, while `extractors/bayesian.py` emits all five under those labels — so a model that
+  fit any of them got a decomposition that did not describe it, and the surviving rows' shares
+  were too large by exactly the omitted blocks' share. Each is now emitted on `is not None` rather
+  than `!= 0`: a fitted block that nets to zero is still part of the identity, and dropping it
+  moves the denominator for every other row. And `reporting/helpers/cfo.py::_fitted_total` now
+  delegates to `finance.closure.fitted_total` rather than keeping a second copy, so the rollup and
+  the bridge cannot disagree about what "fitted" means.
+
 - **A windowed `contribution_roi` silently returned the full-series value, and the estimand engine
   had no multiplicative guard** ([#278]). Two gaps in `estimands/evaluate.py`, both of which
   returned a plausible number rather than an error.
@@ -395,6 +438,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#221]: https://github.com/redam94/mmm-framework/issues/221
 [#222]: https://github.com/redam94/mmm-framework/issues/222
 [#237]: https://github.com/redam94/mmm-framework/issues/237
+[#249]: https://github.com/redam94/mmm-framework/issues/249
 [#273]: https://github.com/redam94/mmm-framework/issues/273
 [#274]: https://github.com/redam94/mmm-framework/issues/274
 [#275]: https://github.com/redam94/mmm-framework/issues/275
