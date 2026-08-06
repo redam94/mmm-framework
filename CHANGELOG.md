@@ -14,6 +14,28 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [1.4.0] — 2026-08-06
+
+**Finance-grade planning** (epic [#195]): the measurement loop now closes at the CFO's desk. A KPI
+valuation that is never silently one dollar; a forward forecast whose caveats lead its headline; an
+append-only, hash-chained plan of record that reproduces from provenance to 1e-9; payback horizons
+that ship with their truncation and prior-domination disclosures; promo-depth optimization with
+per-arm cost bases; and a variance-to-plan bridge that sums to actual − committed exactly and
+refuses the refit "effectiveness" split. Throughout, the design language is the refusal: fund-to-
+breakeven without a valuation, promo ROI on a flag promo, a price recommendation, a bridge over a
+partially-realized window — each is a stated refusal, not a silent default.
+
+**Behaviour changes to read before upgrading:** free-mode budget allocation raises
+`UnresolvedValueError` without a valuation; forecasts refuse when a model has controls and no
+future values were supplied; decomposition shares are computed against the signed total (previously
+rendered "% of total" figures meant something else); the CFO baseline is the model's fitted
+non-marketing outcome with the residual named; multiplicative models refuse
+`sample_channel_contributions()` instead of returning log-scale numbers; the report and the slide
+deck resolve one shared break-even, which changes tier recommendations for projects with a saved
+margin.
+
 ### Added
 
 - **Enablement: the gates that make silent unreachability and artifact drift fail CI** ([#228]).
@@ -776,6 +798,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#224]: https://github.com/redam94/mmm-framework/issues/224
 [#226]: https://github.com/redam94/mmm-framework/issues/226
 [#225]: https://github.com/redam94/mmm-framework/issues/225
+[#195]: https://github.com/redam94/mmm-framework/issues/195
 [#227]: https://github.com/redam94/mmm-framework/issues/227
 [#228]: https://github.com/redam94/mmm-framework/issues/228
 [#273]: https://github.com/redam94/mmm-framework/issues/273
