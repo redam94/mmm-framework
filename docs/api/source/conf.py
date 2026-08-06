@@ -93,6 +93,9 @@ autodoc_mock_imports = [
     "nutpie",
     # Heavy numerical packages
     "numba",
+    # cvxpy is a lazy import inside frequentist.constrained; mock it so the
+    # frequentist API page builds on the lean install (#228).
+    "cvxpy",
     # Optional-stack packages (server package / [agents] extra)
     "redis",
     "fastapi",

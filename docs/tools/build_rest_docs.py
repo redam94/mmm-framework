@@ -34,7 +34,7 @@ DOCS = Path(__file__).resolve().parent.parent
 SPEC_PATH = DOCS / "shared" / "openapi.json"
 PAGE_PATH = DOCS / "rest-api.html"
 
-EXPECTED_OPS = 202  # update when openapi.json is re-exported
+EXPECTED_OPS = 213  # update when openapi.json is re-exported
 MAX_PAGE_BYTES = 2_500_000
 
 HTTP_METHODS = ("get", "post", "put", "patch", "delete")

@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "MMM Agent API",
-  "version": "1.0.0",
+  "version": "1.3.3",
   "description": "MMM Framework agent API (mmm-framework-server). Generated from the live FastAPI app."
  },
  "paths": {
@@ -4073,6 +4073,557 @@
     }
    }
   },
+  "/projects/{project_id}/planner/forecast": {
+   "post": {
+    "summary": "Start Planner Forecast",
+    "description": "Start a NON-BLOCKING KPI forecast under a plan. Poll the returned job_id.\n\nBackground from day one: the forward pass rebuilds adstock kernels per\n(channel, draw) and a long geo forecast is a large intermediate, so this is\nnot a request to hold a connection open on.",
+    "operationId": "start_planner_forecast_projects__project_id__planner_forecast_post",
+    "parameters": [
+     {
+      "name": "project_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Project Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PlannerForecastRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/projects/{project_id}/planner/forecast/{job_id}": {
+   "get": {
+    "summary": "Get Planner Forecast",
+    "description": "Poll a planner forecast job: {status, result|null, error|null}.",
+    "operationId": "get_planner_forecast_projects__project_id__planner_forecast__job_id__get",
+    "parameters": [
+     {
+      "name": "project_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Project Id"
+      }
+     },
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Job Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/projects/{project_id}/plan-of-record": {
+   "post": {
+    "summary": "Commit Plan Of Record Endpoint",
+    "description": "Assess and (unless ``assess_only``) commit the plan of record.\n\nRefusals come back as 422 with the gate list \u2014 a refusal is an answer, not\nan error in the transport sense, but 2xx would let a client treat \"not\ncommittable\" as committed. Writes to committed versions 409 elsewhere\n(``update_plan_version`` always raises); this endpoint only ever appends.",
+    "operationId": "commit_plan_of_record_endpoint_projects__project_id__plan_of_record_post",
+    "parameters": [
+     {
+      "name": "project_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Project Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PlanOfRecordCommitRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "get": {
+    "summary": "Get Plan Of Record",
+    "description": "The latest committed plan of record, or ``{\"version\": null}``.",
+    "operationId": "get_plan_of_record_projects__project_id__plan_of_record_get",
+    "parameters": [
+     {
+      "name": "project_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Project Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/projects/{project_id}/plan-of-record/history": {
+   "get": {
+    "summary": "Plan Of Record History",
+    "description": "Every version, every family, newest first \u2014 payloads elided, chain\nverdict included so tampering surfaces in the listing, not in an audit\nsomeone has to remember to run.",
+    "operationId": "plan_of_record_history_projects__project_id__plan_of_record_history_get",
+    "parameters": [
+     {
+      "name": "project_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Project Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/projects/{project_id}/planner/payback": {
+   "post": {
+    "summary": "Start Planner Payback",
+    "description": "Start a NON-BLOCKING payback-horizon computation. Poll the job_id.\n\nBackground like the forecast: kernel construction loops over posterior\ndraws and the autocorrelation gate pays one predict() pass.",
+    "operationId": "start_planner_payback_projects__project_id__planner_payback_post",
+    "parameters": [
+     {
+      "name": "project_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Project Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PaybackRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/projects/{project_id}/planner/payback/{job_id}": {
+   "get": {
+    "summary": "Get Planner Payback",
+    "description": "Poll a planner payback job: {status, result|null, error|null}.",
+    "operationId": "get_planner_payback_projects__project_id__planner_payback__job_id__get",
+    "parameters": [
+     {
+      "name": "project_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Project Id"
+      }
+     },
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Job Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/projects/{project_id}/variance": {
+   "post": {
+    "summary": "Start Variance To Plan",
+    "description": "Start a NON-BLOCKING variance-to-plan bridge. Poll the job_id.\n\nAssembles the inputs from the stores up front so a bridge that cannot be\nbuilt refuses at POST time with the reason (409), instead of a job that\nerrors later: no committed plan, no realized KPI, delivery gaps over the\ncommitted window, or a dataset changed since the commit. The job then\nloads the COMMITTED run \u2014 not the latest \u2014 because the delivery bucket is\nthe committed posterior's statement.",
+    "operationId": "start_variance_to_plan_projects__project_id__variance_post",
+    "parameters": [
+     {
+      "name": "project_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Project Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VarianceRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/projects/{project_id}/variance/{job_id}": {
+   "get": {
+    "summary": "Get Variance To Plan",
+    "description": "Poll a variance-to-plan job: {status, result|null, error|null}.",
+    "operationId": "get_variance_to_plan_projects__project_id__variance__job_id__get",
+    "parameters": [
+     {
+      "name": "project_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Project Id"
+      }
+     },
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Job Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/experiments": {
    "get": {
     "summary": "List Experiments Endpoint",
@@ -5434,6 +5985,164 @@
       }
      }
     ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/projects/{project_id}/actuals": {
+   "get": {
+    "summary": "List Actuals Endpoint",
+    "description": "Recorded realized-KPI rows (#227): full restatement history, plus the\nlatest per-period reading a variance bridge grades against.",
+    "operationId": "list_actuals_endpoint_projects__project_id__actuals_get",
+    "parameters": [
+     {
+      "name": "project_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Project Id"
+      }
+     },
+     {
+      "name": "as_of",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "summary": "Upload Actuals Endpoint",
+    "description": "Ingest realized-KPI actuals (CSV/TSV or JSON: period + kpi_value) into\nthe as-of-dated actuals store (#227). Re-uploading a period under a NEW\nas_of keeps both statements \u2014 a restatement is visible, never silent.",
+    "operationId": "upload_actuals_endpoint_projects__project_id__actuals_post",
+    "parameters": [
+     {
+      "name": "project_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Project Id"
+      }
+     },
+     {
+      "name": "kpi_name",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "",
+       "title": "Kpi Name"
+      }
+     },
+     {
+      "name": "as_of",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_upload_actuals_endpoint_projects__project_id__actuals_post"
+       }
+      }
+     }
+    },
     "responses": {
      "200": {
       "description": "Successful Response",
@@ -12328,6 +13037,20 @@
     ],
     "title": "Body_notebook_upload_dataset_model_garden_notebook_dataset_post"
    },
+   "Body_upload_actuals_endpoint_projects__project_id__actuals_post": {
+    "properties": {
+     "file": {
+      "type": "string",
+      "format": "binary",
+      "title": "File"
+     }
+    },
+    "type": "object",
+    "required": [
+     "file"
+    ],
+    "title": "Body_upload_actuals_endpoint_projects__project_id__actuals_post"
+   },
    "Body_upload_delivery_endpoint_projects__project_id__delivery_post": {
     "properties": {
      "file": {
@@ -14474,6 +15197,202 @@
     ],
     "title": "PasswordResetRequest"
    },
+   "PaybackRequest": {
+    "properties": {
+     "basis": {
+      "type": "string",
+      "title": "Basis",
+      "default": "kernel"
+     },
+     "hdi_prob": {
+      "type": "number",
+      "title": "Hdi Prob",
+      "default": 0.9
+     },
+     "max_draws": {
+      "type": "integer",
+      "title": "Max Draws",
+      "default": 400
+     }
+    },
+    "type": "object",
+    "title": "PaybackRequest",
+    "description": "Per-channel payback horizon (#224).\n\nResponse-timing t50/t90 with intervals, truncation disclosure, the\ncarryover-learning verdict and the autocorrelation gate. ``basis``\n\"counterfactual\" measures timing with a posterior-predictive pulse instead\nof the kernel (slower; the disagreement is reported)."
+   },
+   "PlanOfRecordCommitRequest": {
+    "properties": {
+     "forecast": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Forecast"
+     },
+     "plan_family": {
+      "type": "string",
+      "title": "Plan Family",
+      "default": "default"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "overrides": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Overrides"
+     },
+     "assess_only": {
+      "type": "boolean",
+      "title": "Assess Only",
+      "default": false
+     },
+     "committed_by": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Committed By"
+     },
+     "window_start": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Window Start"
+     },
+     "window_end": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Window End"
+     }
+    },
+    "type": "object",
+    "required": [
+     "forecast"
+    ],
+    "title": "PlanOfRecordCommitRequest",
+    "description": "Commit (or assess) the project's working plan as the plan of record (#225).\n\nThe forecast snapshot is REQUIRED \u2014 a plan of record without a forecast is\na screenshot wearing a commitment's clothes. Pass the ``forecast_plan`` job\nresult payload the Planner already holds. ``assess_only`` runs the\ncommitment gates and returns the verdict without writing anything.\n``overrides`` maps a gate id (``trend_horizon`` / ``residual_autocorrelation``\n/ ``spend_support`` / ``interval_available``) to an acknowledgement string,\nrecorded IN the committed payload; unresolvable provenance is never\noverridable."
+   },
+   "PlannerForecastRequest": {
+    "properties": {
+     "future_media": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "items": {
+          "type": "number"
+         },
+         "type": "array"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Future Media"
+     },
+     "future_controls": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "items": {
+          "type": "number"
+         },
+         "type": "array"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Future Controls"
+     },
+     "channel_budgets": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "number"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Channel Budgets"
+     },
+     "n_periods": {
+      "type": "integer",
+      "title": "N Periods",
+      "default": 13
+     },
+     "pattern": {
+      "type": "string",
+      "title": "Pattern",
+      "default": "even"
+     },
+     "interval": {
+      "type": "number",
+      "title": "Interval",
+      "default": 0.9
+     },
+     "include_noise": {
+      "type": "boolean",
+      "title": "Include Noise",
+      "default": true
+     },
+     "start_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Start Date"
+     },
+     "max_draws": {
+      "type": "integer",
+      "title": "Max Draws",
+      "default": 200
+     }
+    },
+    "type": "object",
+    "title": "PlannerForecastRequest",
+    "description": "A forward forecast under a spend plan (#223).\n\nEither ``future_media`` (per-period spend per channel) or ``channel_budgets``\n(a total per channel, spread over ``n_periods`` by ``pattern``). Controls are\nrequired when the model has them: their future values are a planning\nassumption with no defensible default, so the op refuses rather than guesses."
+   },
    "PlannerOptimizeRequest": {
     "properties": {
      "total_budget": {
@@ -14607,9 +15526,15 @@
       "default": "fixed"
      },
      "value_per_kpi": {
-      "type": "number",
-      "title": "Value Per Kpi",
-      "default": 1.0
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value Per Kpi"
      },
      "frontier": {
       "anyOf": [
@@ -15119,6 +16044,30 @@
     "type": "object",
     "title": "StudioPipelineRequest"
    },
+   "SuppliedLineRequest": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "value": {
+      "type": "number",
+      "title": "Value"
+     },
+     "source_note": {
+      "type": "string",
+      "title": "Source Note"
+     }
+    },
+    "type": "object",
+    "required": [
+     "name",
+     "value",
+     "source_note"
+    ],
+    "title": "SuppliedLineRequest",
+    "description": "A human-supplied adjustment line (gross-to-net, returns, trade spend).\n\n``source_note`` is required \u2014 an unattributed manual adjustment is exactly\nwhat the SUPPLIED provenance exists to prevent. Supplied lines map the\nTOTAL only; per-channel restatement is refused downstream."
+   },
    "TokenResponse": {
     "properties": {
      "access_token": {
@@ -15336,6 +16285,21 @@
     },
     "type": "object",
     "title": "ValidationRunRequest"
+   },
+   "VarianceRequest": {
+    "properties": {
+     "supplied": {
+      "items": {
+       "$ref": "#/components/schemas/SuppliedLineRequest"
+      },
+      "type": "array",
+      "title": "Supplied",
+      "default": []
+     }
+    },
+    "type": "object",
+    "title": "VarianceRequest",
+    "description": "Variance to plan (#227): committed forecast vs realized KPI.\n\nThe bridge is delivery-driven vs unexplained \u2014 two buckets on the\nCOMMITTED posterior \u2014 and it closes exactly. The refit split is refused\nwith the reason stated; the run diff is attached in its place."
    },
    "WorkflowStepBody": {
     "properties": {

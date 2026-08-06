@@ -235,8 +235,40 @@ FROZEN_ENUM_VALUES = {
         "laplace",
         "smc",
     },
-    "SaturationType": {"logistic", "hill", "michaelis_menten", "tanh", "none"},
+    "SaturationType": {
+        "logistic",
+        "hill",
+        "michaelis_menten",
+        "tanh",
+        "root",
+        "none",
+    },
     "AdstockType": {"geometric", "delayed", "weibull", "none"},
+    # InferenceMethod carries the PARADIGM (bayesian backend vs frequentist
+    # estimator) and is serialized into specs, configs.json and run metrics —
+    # losing a value strands stored runs. Note frequentist_ridge/cvxpy are
+    # InferenceMethod values, NOT FitMethod (#228: the obvious edit was a
+    # no-op).
+    "InferenceMethod": {
+        "bayesian_pymc",
+        "bayesian_numpyro",
+        "bayesian_nutpie",
+        "frequentist_ridge",
+        "frequentist_cvxpy",
+    },
+    "LikelihoodFamily": {
+        "normal",
+        "student_t",
+        "lognormal",
+        "binomial",
+        "beta_binomial",
+        "poisson",
+        "negative_binomial",
+        "beta",
+    },
+    "LinkFunction": {"identity", "logit", "log"},
+    # Serialized into report/estimand payloads (measurement descriptors).
+    "MeasurementUnit": {"spend", "impressions", "clicks", "other"},
 }
 
 

@@ -61,6 +61,11 @@ CORE_IMPORTS = [
     "mmm_framework.planning.history",
     "mmm_framework.estimands",
     "mmm_framework.finance",
+    # The frequentist package's own invariant: cvxpy is a function-local
+    # import (constrained.py), so this import must survive the cvxpy blocker.
+    # Absent from this list, the BLOCKED_PACKAGES cvxpy entry guarded nothing
+    # (#228).
+    "mmm_framework.frequentist",
     "mmm_framework.diagnostics",
     "mmm_framework.calibration",
     "mmm_framework.mmm_extensions",

@@ -16,6 +16,59 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ### Added
 
+- **Enablement: the gates that make silent unreachability and artifact drift fail CI** ([#228]).
+
+  Three failure modes kept recurring, all invisible to CI: a shipped capability nobody can invoke
+  (price levers spent a release as config + builder + spec + passing tests while no agent spec
+  path read them), three hand-maintained API artifacts that each new endpoint silently staled
+  (the checked-in `openapi.json` was 11 operations behind the live app), and docs registration
+  that fails by rendering nothing (a nav page without an audience tier, a changelog page
+  announcing a version two releases old).
+
+  - **`tests/test_capability_reachability.py`** — every `ModelConfig` field is either wired to a
+    spec path `unconsumed_spec_path` accepts or allowlisted with a substantive reason; every
+    model op is either mapped in `session_export._OP_TOOLS` or allowlisted with the reason replay
+    cannot be deterministic; the tool registration sets (TOOLS / HEAVY / MMM-only / causal /
+    milestone / export map) must agree. The allowlists are the trap the issue named: empty
+    reasons and non-reasons ("TODO", "later", "n/a") fail, and — the self-cleaning half — an
+    allowlisted capability that BECOMES reachable fails until its row is deleted. Planted-omission
+    tests prove the gate detects a dummy field and a dummy op by name.
+  - **`scripts/sync_api_surface.py` + `make api-sync`** — regenerates
+    `tests/contracts/rest_routes.json` (canonical order), `docs/shared/openapi.json` (info block
+    overridden: version from `mmm_framework.__version__`, provenance description re-injected — a
+    naive re-export downgrades both), `EXPECTED_OPS`, and `docs/rest-api.html`, idempotently;
+    prints ADDED/REMOVED routes; **refuses to write while any `/projects/{project_id}` route
+    lacks a `_proj_*` tenant guard**. Its first run caught a real one:
+    `POST /projects/{id}/plan-of-record` shipped with only a rate limit — any authenticated
+    principal could commit a plan of record into another org's project. Fixed
+    (`_proj_write` added) and now impossible to reintroduce silently
+    (`tests/test_api_surface_sync.py`).
+  - **Contract fixes** — `FROZEN_ENUM_VALUES` now freezes `InferenceMethod` (which carries the
+    paradigm and is serialized into specs and run metrics; note `frequentist_ridge`/`cvxpy` are
+    InferenceMethod values, NOT FitMethod — the obvious edit was a no-op), `LikelihoodFamily`,
+    `LinkFunction`, `MeasurementUnit`, and the previously-missing `root` saturation value.
+  - **Docs gates extended** — every `NAV_GROUPS` page must exist on disk and carry a
+    `PAGE_TIERS` audience tier (`tests/test_docs_nav_registration.py`); a new
+    `tests/test_docs_versions.py` fails when `docs/changelog.html` announces a version other
+    than `pyproject.toml`, when the `Current` chip count is not exactly one, or when any
+    `mmm-framework==X.Y.Z` pin across the site is stale.
+  - **Read the Docs** — `frequentist` and `finance` API pages existed nowhere (v1.3.0's headline
+    subpackage was absent from the reference); both now have `.rst` pages + toctree entries,
+    `cvxpy` joined `autodoc_mock_imports`, and `mmm_framework.frequentist` joined the
+    lean-import gate — before which the cvxpy entry in `BLOCKED_PACKAGES` guarded nothing.
+  - **v1.4 documentation** — seven `technical-docs/` specs that did not exist:
+    `kpi-valuation.md`, `planning-calendar.md`, `forward-forecast.md`, `plan-of-record.md`,
+    `payback-and-carryover.md`, `lever-optimization.md`, `variance-to-plan.md` (all
+    snippet-gated), plus `docs/finance-planning.html` (the planning loop with its refusal
+    index, registered in nav/tiers/SEO), a valuation-refusal correction to
+    `docs/workflow-budget-optimization.html` (its uplift example read in dollars
+    unconditionally; the shipped optimizer refuses `mode="free"` without a valuation and the
+    uplift is KPI-units otherwise), and the `docs/modeling-guide.html` promo passage now points
+    at the decision-arm layer that actually computes a promo ROI — and says what it refuses.
+  - **`technical-docs/integration-checklist.md`** — the full touch-point list (core → spec
+    registry → op → tool sets → export map → REST + guards → FE → reporting → persistence →
+    docs → verification), so "register an agent tool" stops being seven undiscoverable edits.
+
 - **Sensitivity to unmeasured confounding, on the decision scale and for experiments too.**
   Spec: `technical-docs/confounding-sensitivity.md`.
 
@@ -723,6 +776,8 @@ frozen public contract breaks, and the contract itself is pinned by
 [#224]: https://github.com/redam94/mmm-framework/issues/224
 [#226]: https://github.com/redam94/mmm-framework/issues/226
 [#225]: https://github.com/redam94/mmm-framework/issues/225
+[#227]: https://github.com/redam94/mmm-framework/issues/227
+[#228]: https://github.com/redam94/mmm-framework/issues/228
 [#273]: https://github.com/redam94/mmm-framework/issues/273
 [#274]: https://github.com/redam94/mmm-framework/issues/274
 [#275]: https://github.com/redam94/mmm-framework/issues/275

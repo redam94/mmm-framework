@@ -341,6 +341,10 @@
       "hash": "616e2503e2b33a10",
       "modified": "2026-07-27"
     },
+    "finance-planning.html": {
+      "hash": "408652c7baff1b68",
+      "modified": "2026-08-06"
+    },
     "getting-started.html": {
       "hash": "bceb5793f200f4b1",
       "modified": "2026-07-27"
@@ -414,8 +418,8 @@
       "modified": "2026-07-04"
     },
     "modeling-guide.html": {
-      "hash": "12f6ba518ce74e0e",
-      "modified": "2026-07-13"
+      "hash": "b148a1c2c5eae17b",
+      "modified": "2026-08-06"
     },
     "platform-overview.html": {
       "hash": "de55f0880b19e935",
@@ -442,8 +446,8 @@
       "modified": "2026-07-04"
     },
     "rest-api.html": {
-      "hash": "b71555c7bf9ffd9c",
-      "modified": "2026-07-23"
+      "hash": "a6bf18fb4e26e00a",
+      "modified": "2026-08-06"
     },
     "scientific-modeling.html": {
       "hash": "b7ca8c1e948f8402",
@@ -506,8 +510,8 @@
       "modified": "2026-07-04"
     },
     "workflow-budget-optimization.html": {
-      "hash": "41d1c72a66abed0a",
-      "modified": "2026-07-04"
+      "hash": "de37fd873423f4c6",
+      "modified": "2026-08-06"
     },
     "workflow-calibration-decisions.html": {
       "hash": "3ba0091b9c261b5f",

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance-Grade Planning | MMM Framework</title>
+    <meta name="description" content="The v1.4 finance-grade planning loop: KPI valuation that refuses to guess, forecasts that carry their caveats, an immutable plan of record, payback horizons with honest truncation disclosure, promo-depth optimization, and a variance bridge that closes exactly.">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="canonical" href="https://redam94.github.io/mmm-framework/finance-planning.html">
+    <meta property="og:title" content="Finance-Grade Planning | MMM Framework">
+    <meta property="og:description" content="A number the CFO can commit to: valuation, committed forecasts, payback, lever optimization, and a variance bridge that closes exactly — with every refusal stated.">
+    <meta property="og:url" content="https://redam94.github.io/mmm-framework/finance-planning.html">
+    <meta property="og:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <link rel="stylesheet" href="shared/styles.css">
+    <!-- seo:augmented (structured data + social cards) -->
+    <meta property="og:site_name" content="MMM Framework">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Finance-Grade Planning | MMM Framework">
+    <meta name="twitter:description" content="A number the CFO can commit to: valuation, committed forecasts, payback, lever optimization, and a variance bridge that closes exactly — with every refusal stated.">
+    <meta name="twitter:image" content="https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png">
+    <meta name="author" content="Matthew Reda">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://redam94.github.io/mmm-framework/#organization",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Open-source Bayesian Marketing Mix Modeling framework and the Augur measurement platform.",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://redam94.github.io/mmm-framework/assets/augur-mark.svg"
+          },
+          "sameAs": [
+            "https://github.com/redam94/mmm-framework"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://redam94.github.io/mmm-framework/#website",
+          "name": "MMM Framework",
+          "url": "https://redam94.github.io/mmm-framework/",
+          "description": "Documentation for the MMM Framework: a Bayesian Marketing Mix Modeling library and the Augur causal-measurement platform.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "url": "https://redam94.github.io/mmm-framework/finance-planning.html",
+          "name": "Finance-Grade Planning | MMM Framework",
+          "description": "The v1.4 finance-grade planning loop: KPI valuation that refuses to guess, forecasts that carry their caveats, an immutable plan of record, payback horizons with honest truncation disclosure, promo-depth optimization, and a variance bridge that closes exactly.",
+          "inLanguage": "en-US",
+          "isPartOf": {
+            "@id": "https://redam94.github.io/mmm-framework/#website"
+          },
+          "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
+          "dateModified": "2026-08-06",
+          "breadcrumb": {
+            "@id": "https://redam94.github.io/mmm-framework/finance-planning.html#breadcrumb"
+          },
+          "@id": "https://redam94.github.io/mmm-framework/finance-planning.html#webpage",
+          "@type": "WebPage",
+          "publisher": {
+            "@id": "https://redam94.github.io/mmm-framework/#organization"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://redam94.github.io/mmm-framework/finance-planning.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://redam94.github.io/mmm-framework/index.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Finance-Grade Planning",
+              "item": "https://redam94.github.io/mmm-framework/finance-planning.html"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+</head>
+<body>
+    <!-- Navigation injected by components.js -->
+
+    <section class="hero-gradient">
+        <div class="container">
+            <span class="tag tag-primary" style="margin-bottom: 1rem; display: inline-block;">Platform</span>
+            <h1>Finance-Grade Planning</h1>
+            <p class="lead">
+                A marketing plan becomes a financial commitment the moment someone puts a dollar
+                figure next to it. The v1.4 planning loop is built around one discipline:
+                <strong>every dollar number states where it came from, and every number nobody can
+                defend is a refusal, not a default</strong>. This page walks the loop&mdash;valuation,
+                forecast, commitment, payback, lever optimization, variance&mdash;and states each
+                refusal on the surface where you will meet it.
+            </p>
+        </div>
+    </section>
+
+    <div class="page-layout">
+        <aside class="sidebar">
+            <h3>The Planning Loop</h3>
+            <ul class="sidebar-nav">
+                <li><a href="#valuation">1 &middot; What is a KPI unit worth?</a></li>
+                <li><a href="#forecast">2 &middot; Forecast under a plan</a></li>
+                <li><a href="#commit">3 &middot; The plan of record</a></li>
+                <li><a href="#payback">4 &middot; Payback horizons</a></li>
+                <li><a href="#levers">5 &middot; Price &amp; promo levers</a></li>
+                <li><a href="#variance">6 &middot; Variance to plan</a></li>
+                <li><a href="#refusals">The refusal index</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div class="content-section" id="valuation">
+                <h2>1 &middot; What is a KPI unit worth?</h2>
+                <p>
+                    Every dollar recommendation in the framework flows through one resolver,
+                    <code>kpi_to_dollars</code>, and its rule is absolute: <strong>a KPI unit is never
+                    silently worth one dollar</strong>. The valuation is a declared statement
+                    (revenue kind with a gross margin, or unit kind with margin &times; price),
+                    resolved with provenance from an explicit override, the model spec, or the
+                    project's economics preference&mdash;in that order. When nothing resolves, the
+                    result says <code>is_dollar=False</code> and every downstream dollar figure is
+                    suppressed rather than invented.
+                </p>
+                <div class="code-example">
+<pre><code class="language-python">from mmm_framework.finance.valuation import kpi_to_dollars
+
+resolved = kpi_to_dollars(
+    override={"kind": "units", "gross_margin": 0.6, "price": 10.0}
+)
+resolved.value_per_kpi   # 6.0 — margin x price, with provenance recorded
+kpi_to_dollars().is_dollar   # False — nothing resolved, nothing invented
+</code></pre>
+                </div>
+                <p>
+                    Two guardrails exist because each absorbed a real failure. The gross margin is
+                    bounded to (0,&nbsp;1]: an earlier resolver accepted <code>gross_margin=40</code>
+                    (a user meaning 40%) and multiplied every profit figure by forty. And a KPI
+                    declared <code>kind="other"</code> (sessions, awareness points) is a resolved
+                    <em>answer</em>&mdash;genuinely not convertible&mdash;so the resolver stops there
+                    instead of falling through to a lower-precedence setting that would contradict
+                    the explicit choice. Both rules are pinned in
+                    <code>tests/finance/test_valuation.py</code>.
+                </p>
+            </div>
+
+            <div class="content-section" id="forecast">
+                <h2>2 &middot; Forecast under a plan</h2>
+                <p>
+                    <code>forecast_under_plan</code> produces the KPI forecast a plan is judged
+                    against. Its interval is <em>predictive</em> (observation noise included),
+                    because that is the interval a realized season can land inside or outside of.
+                    Two design rules matter more than the point estimate:
+                </p>
+                <ul>
+                    <li>
+                        <strong>Caveats lead.</strong> A forecast result that lost its caveats
+                        refuses to render its headline. The caveats are not boilerplate: the model
+                        states when the plan pushes channels <em>beyond the spend range it was
+                        fitted on</em> (saturation extrapolation), when the trend is being
+                        extrapolated forward, and when the fit was approximate&mdash;in which case
+                        the interval is disclosed as uncalibrated rather than dressed up.
+                    </li>
+                    <li>
+                        <strong>Controls are a planning assumption.</strong> When the model has
+                        control variables, their future values are required. There is no
+                        defensible default for next quarter's price or distribution, so the
+                        forecast refuses rather than assuming one.
+                    </li>
+                </ul>
+                <p>
+                    The per-period posterior draws ride along with every forecast, because a
+                    window-total interval cannot be recovered from per-period bounds&mdash;summing
+                    them assumes perfect correlation and overstates the band. The draws are what
+                    the plan of record grades itself against later.
+                    (<code>tests/test_forecast.py</code>,
+                    <code>technical-docs/forward-forecast.md</code>.)
+                </p>
+            </div>
+
+            <div class="content-section" id="commit">
+                <h2>3 &middot; The plan of record</h2>
+                <p>
+                    Committing a plan writes an <strong>append-only, hash-chained version</strong>.
+                    A committed version is immutable&mdash;editing it would make every variance
+                    already computed against it retroactively wrong while the audit trail still
+                    looked intact, so the store's update path raises instead of updating. The
+                    commitment gates check that the version carries everything needed to
+                    <em>regenerate</em> its number: the run, the spec hash, the dataset
+                    fingerprint, the saved model, the normalized per-period plan and the seed.
+                </p>
+                <p>
+                    That reproducibility is the point: a stored forecast nobody can reproduce is a
+                    screenshot wearing a commitment's clothes. <code>reproduce_committed_plan</code>
+                    reloads the model from the recorded provenance, rebuilds the panel from the
+                    <em>saved</em> spec, re-runs the forecast with the recorded plan and seed, and
+                    requires agreement to 1e-9. A changed dataset is a <em>refusal</em>, not a
+                    mismatch report&mdash;"the data moved" and "the model drifted" are different
+                    statements, and conflating them blames the model for a moved file.
+                    (<code>tests/test_plan_of_record.py</code>; the end-to-end roundtrip is pinned
+                    in <code>tests/test_variance_bridge.py</code>.)
+                </p>
+            </div>
+
+            <div class="content-section" id="payback">
+                <h2>4 &middot; Payback horizons</h2>
+                <p>
+                    <code>channel_payback</code> reports when each channel's effect lands: the
+                    per-draw lag at which the fitted carryover crosses 50% (t50) and 90% (t90) of
+                    its total effect, with credible intervals. It is a <strong>response-timing
+                    statement, not a cash break-even</strong>&mdash;and it rests on the model's
+                    least-identified parameter, so every number travels with its disclosures:
+                </p>
+                <ul>
+                    <li>the kernel mass beyond the configured window (truncation makes horizons
+                        read <em>short</em>, and the bias is quantified per channel);</li>
+                    <li>whether the carryover parameters actually learned from the data or still
+                        sit on their prior (a prior-dominated horizon is a restatement of the
+                        prior, and it is labelled as one);</li>
+                    <li>an autocorrelation gate that flags a misspecified carryover window.</li>
+                </ul>
+                <p>
+                    Model families with no single kernel to read a horizon from&mdash;extension
+                    models, structural models with AR(1) mediators, dual-stock brand
+                    models&mdash;are refused <em>by name</em>. The cash-flavored break-even wrapper
+                    needs a valuation and refuses without one.
+                    (<code>tests/test_planning_payback.py</code>; walkthrough in
+                    <code>nbs/demos/payback_horizon.ipynb</code>.)
+                </p>
+            </div>
+
+            <div class="content-section" id="levers">
+                <h2>5 &middot; Price &amp; promo levers</h2>
+                <p>
+                    Media dollars and promo depth are different cost spaces. The decision-arm layer
+                    unifies them with <strong>per-arm cost bases</strong>, so a joint optimization
+                    can trade a media dollar against a point of discount depth on a real profit
+                    objective. Its refusals are the product:
+                </p>
+                <ul>
+                    <li>
+                        <strong>Promo ROI refuses flag promos and unknown units.</strong> A 0/1
+                        promo flag has no dollar cost basis, so "promo ROI" per flag-week would be
+                        a fabricated per-dollar number. The arm builder refuses and says what a
+                        computable basis would need.
+                    </li>
+                    <li>
+                        <strong>The price what-if refuses to recommend a price.</strong> Price is
+                        usually endogenous&mdash;cut <em>because</em> demand is soft&mdash;so the
+                        surface answers "what does the model expect at price X" and declines to
+                        rank prices. An endogeneity screen (using <em>lagged</em> demand, because
+                        contemporaneous response is not endogeneity evidence) flags the channels
+                        where the concern is live.
+                    </li>
+                </ul>
+                <p>
+                    The joint solve is graded against planted truth: on the
+                    <code>promo_and_media</code> synthetic world, the optimizer's recommended depth
+                    lands within the planted profit optimum on 10 of 10 seeds
+                    (<code>tests/test_decision_arms.py</code>; walkthrough in
+                    <code>nbs/demos/promo_depth_optimization.ipynb</code>). Model-side lever
+                    mechanics live in <a href="modeling-guide.html">the Modeling Guide</a> and
+                    <code>technical-docs/price-promotion-levers.md</code>.
+                </p>
+            </div>
+
+            <div class="content-section" id="variance">
+                <h2>6 &middot; Variance to plan</h2>
+                <p>
+                    A season later, the CFO asks why the miss. Without refitting the model, exactly
+                    <strong>two buckets are identifiable</strong>, and the bridge ships exactly
+                    those: <em>delivery variance</em>&mdash;the committed posterior's own pricing of
+                    the spend divergence, computed as a paired counterfactual with the recorded
+                    seed&mdash;and an <em>unexplained</em> remainder, labelled for what it mixes
+                    (baseline movement, competitor action, data error, model error, noise) and
+                    never attributed.
+                </p>
+                <p>
+                    The tempting third bucket&mdash;refit on the realized season and call the
+                    difference "effectiveness variance"&mdash;is <strong>refused with the reason
+                    stated</strong>: that subtraction mixes more data, a different training window,
+                    any spec changes and Monte Carlo noise, and labelling it manufactures a causal
+                    claim nobody measured. What <em>can</em> be said (what changed between the
+                    runs) is attached in the refusal's place.
+                </p>
+                <ul>
+                    <li>The bridge <strong>closes exactly</strong>: rows sum to actual &minus;
+                        committed to 1e-9 by construction, and a model that cannot reproduce the
+                        committed snapshot is refused outright.</li>
+                    <li>The <strong>committed-interval verdict leads</strong>: a miss inside the
+                        band that was committed to is the uncertainty that was signed, not a story
+                        owed.</li>
+                    <li>Human adjustments (gross-to-net, returns) enter as <code>SUPPLIED</code>
+                        lines: a required source note, no invented interval, total-only&mdash;a
+                        supplied line rescaling a channel would produce a net-scaled ROI the model
+                        never estimated.</li>
+                </ul>
+                <p>
+                    In the clean synthetic world where the plan is the true future spend rescaled
+                    (TV at 1.3&times;, Search at 0.7&times;), the bridge's delivery rows carry the
+                    right signs and the paired-draw interval covers the world's own
+                    <code>response_fn</code> truth (<code>tests/test_variance_bridge.py</code>;
+                    walkthrough in <code>nbs/demos/variance_to_plan.ipynb</code>).
+                </p>
+            </div>
+
+            <div class="content-section" id="refusals">
+                <h2>The refusal index</h2>
+                <p>
+                    Collected in one place, because they are the design. Each is a hard error or a
+                    stated refusal on the surface, never a silent default.
+                </p>
+                <table>
+                    <thead>
+                        <tr><th>Surface</th><th>Refuses when</th><th>Instead of</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>kpi_to_dollars</code> consumers</td>
+                            <td>no valuation resolves, or the KPI kind is not convertible</td>
+                            <td>assuming 1 KPI unit = $1</td>
+                        </tr>
+                        <tr>
+                            <td>Fund-to-breakeven allocation (<code>mode="free"</code>)</td>
+                            <td><code>value_per_kpi</code> is unresolved</td>
+                            <td>funding every channel to a fabricated breakeven line</td>
+                        </tr>
+                        <tr>
+                            <td>Budget curves</td>
+                            <td>a channel is efficiency-measured (impressions/clicks, no cost basis)</td>
+                            <td>optimizing dollars against a non-dollar axis</td>
+                        </tr>
+                        <tr>
+                            <td><code>forecast_under_plan</code></td>
+                            <td>the model has controls and no future values were supplied</td>
+                            <td>assuming next quarter's price</td>
+                        </tr>
+                        <tr>
+                            <td>Plan-of-record commit</td>
+                            <td>provenance is incomplete (no run, spec hash, fingerprint, or model)</td>
+                            <td>committing a number nobody can regenerate</td>
+                        </tr>
+                        <tr>
+                            <td>Reproduction</td>
+                            <td>the dataset fingerprint changed since the commit</td>
+                            <td>"verifying" against different data</td>
+                        </tr>
+                        <tr>
+                            <td>Payback</td>
+                            <td>the model family has no single carryover kernel</td>
+                            <td>reading a horizon that does not exist</td>
+                        </tr>
+                        <tr>
+                            <td>Promo ROI</td>
+                            <td>the promo is a flag or its units carry no cost basis</td>
+                            <td>a fabricated per-dollar number</td>
+                        </tr>
+                        <tr>
+                            <td>Price what-if</td>
+                            <td>asked to recommend a price</td>
+                            <td>ranking prices on an endogenous coefficient</td>
+                        </tr>
+                        <tr>
+                            <td>Variance bridge</td>
+                            <td>a refit split is requested; actuals or delivery do not cover the
+                                committed window; the model cannot reproduce the snapshot</td>
+                            <td>an "effectiveness" bucket, or a bridge over fabricated inputs</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p>
+                    The engineering rationale behind each lives in the
+                    <code>technical-docs/</code> specs: <code>kpi-valuation.md</code>,
+                    <code>forward-forecast.md</code>, <code>plan-of-record.md</code>,
+                    <code>payback-and-carryover.md</code>, <code>lever-optimization.md</code>,
+                    <code>variance-to-plan.md</code>.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>See the loop end to end</h2>
+            <p>The budget-optimization workflow shows the planning surface on a fitted model; the REST reference lists every planner endpoint.</p>
+            <div class="cta-buttons">
+                <a href="workflow-budget-optimization.html" class="btn btn-white">Budget Optimization Workflow</a>
+                <a href="rest-api.html" class="btn btn-outline-white">REST API Reference</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer injected by shared/components.js -->
+    <script src="shared/components.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            hljs.highlightAll();
+        });
+    </script>
+</body>
+</html>

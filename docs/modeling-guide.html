@@ -119,14 +119,14 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-13",
+          "dateModified": "2026-08-06",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/modeling-guide.html#breadcrumb"
           },
           "@id": "https://redam94.github.io/mmm-framework/modeling-guide.html#webpage",
           "@type": "TechArticle",
           "headline": "Modeling Guide",
-          "datePublished": "2026-07-13",
+          "datePublished": "2026-08-06",
           "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
           "author": {
             "@type": "Person",
@@ -717,10 +717,18 @@ tv_channel = (
                     those control columns to levers: a sign-guarded
                     <strong>log-price elasticity</strong> (responding to <em>discount depth</em> vs a
                     reference price) and a <strong>promo lift with its own carryover</strong>, reported
-                    as a separate "Price &amp; Promotion" contribution. <strong>Caveat:</strong> price
+                    as a separate "Price &amp; Promotion" contribution. The promo <em>ROI</em> itself
+                    is computed one layer up, in <code>mmm_framework.planning</code>'s decision arms
+                    (<code>build_arm_curves</code> / <code>promo_roi</code>): each lever carries its own
+                    <strong>cost basis</strong>, so a point of discount depth and a media dollar are
+                    priced in the same currency — and a 0/1 promo flag, which has no dollar cost basis,
+                    is <em>refused</em> rather than dressed up as a per-dollar number. The price
+                    what-if answers "what does the model expect at price X" and declines to recommend
+                    a price. <strong>Caveat:</strong> price
                     is usually endogenous (cut <em>because</em> demand is soft) — treat the elasticity
                     as conditional, cross-check the <a href="identification-assumptions.html">identification
-                    assumptions</a>, and confirm with an experiment.
+                    assumptions</a>, and confirm with an experiment. The planning layer's full refusal
+                    index is on <a href="finance-planning.html">Finance-Grade Planning</a>.
                 </p>
             </div>
 

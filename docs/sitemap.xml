@@ -434,6 +434,11 @@
         <priority>0.8</priority>
     </url>
     <url>
+        <loc>https://redam94.github.io/mmm-framework/finance-planning.html</loc>
+        <lastmod>2026-08-06</lastmod>
+        <changefreq>monthly</changefreq>
+    </url>
+    <url>
         <loc>https://redam94.github.io/mmm-framework/getting-started.html</loc>
         <lastmod>2026-07-27</lastmod>
         <changefreq>monthly</changefreq>
@@ -522,7 +527,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/modeling-guide.html</loc>
-        <lastmod>2026-07-13</lastmod>
+        <lastmod>2026-08-06</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -559,7 +564,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/rest-api.html</loc>
-        <lastmod>2026-07-23</lastmod>
+        <lastmod>2026-08-06</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
@@ -639,7 +644,7 @@
     </url>
     <url>
         <loc>https://redam94.github.io/mmm-framework/workflow-budget-optimization.html</loc>
-        <lastmod>2026-07-04</lastmod>
+        <lastmod>2026-08-06</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
