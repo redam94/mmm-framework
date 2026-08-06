@@ -223,6 +223,28 @@ frozen public contract breaks, and the contract itself is pinned by
   Tests: `tests/test_decision_arms.py` (31). Notebook:
   `nbs/demos/promo_depth_optimization.ipynb` (baked, 19 cells, 0 errors).
 
+- **The plan of record is reachable: REST, agent tool, Planner commit action — and pacing now
+  grades against what was promised** ([#225] remainder; the append-only store, gates and
+  reproducibility landed in #267–#269).
+
+  - **REST** — `POST /projects/{id}/plan-of-record` (assess with `assess_only`, commit otherwise;
+    a refusal is a **422 naming each gate** and whether it is overridable — 2xx would let a client
+    treat "not committable" as committed), `GET .../plan-of-record` (latest committed version),
+    `GET .../plan-of-record/history` (all versions, payloads elided, **chain verdict included in
+    the listing** so tampering surfaces without an audit someone must remember to run). Contract
+    snapshot updated.
+  - **Agent tool** `commit_plan_of_record` — assesses, reports refusals as data, records gate
+    overrides in the committed payload; provenance gaps are never overridable.
+  - **Planner UI** — a "Commit as plan of record" flow on the forecast panel: check
+    committability first (refusals render as the disabled button's reason — the refusal is the
+    feature, not an error state), commit second, versions confirmed inline.
+  - **The retarget** — `latest_budget_plan_for_project` now prefers the latest COMMITTED version:
+    pacing and variance compare delivery against the number that was promised, not against
+    whatever the draft was last edited to. The committed payload freezes the working plan's
+    `plan_payload` verbatim (new `build_commit_payload(plan_payload=...)`) so the pacing join
+    reads the same shape either way; drafts stay editable without moving the committed pointer —
+    pinned by test.
+
 ### Fixed
 
 - **The residual-autocorrelation caveat never fired for core models** (found while wiring #224's
@@ -633,6 +655,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#249]: https://github.com/redam94/mmm-framework/issues/249
 [#224]: https://github.com/redam94/mmm-framework/issues/224
 [#226]: https://github.com/redam94/mmm-framework/issues/226
+[#225]: https://github.com/redam94/mmm-framework/issues/225
 [#273]: https://github.com/redam94/mmm-framework/issues/273
 [#274]: https://github.com/redam94/mmm-framework/issues/274
 [#275]: https://github.com/redam94/mmm-framework/issues/275

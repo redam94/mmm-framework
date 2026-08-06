@@ -2567,6 +2567,163 @@ async def get_planner_forecast(project_id: str, job_id: str):
     return _poll_planner_job(project_id, job_id)
 
 
+class PlanOfRecordCommitRequest(BaseModel):
+    """Commit (or assess) the project's working plan as the plan of record (#225).
+
+    The forecast snapshot is REQUIRED — a plan of record without a forecast is
+    a screenshot wearing a commitment's clothes. Pass the ``forecast_plan`` job
+    result payload the Planner already holds. ``assess_only`` runs the
+    commitment gates and returns the verdict without writing anything.
+    ``overrides`` maps a gate id (``trend_horizon`` / ``residual_autocorrelation``
+    / ``spend_support`` / ``interval_available``) to an acknowledgement string,
+    recorded IN the committed payload; unresolvable provenance is never
+    overridable.
+    """
+
+    forecast: dict
+    plan_family: str = "default"
+    name: str | None = None
+    overrides: dict[str, str] | None = None
+    assess_only: bool = False
+    committed_by: str | None = None
+    window_start: str | None = None
+    window_end: str | None = None
+
+
+@app.post(
+    "/projects/{project_id}/plan-of-record",
+    dependencies=[_rl_heavy],
+)
+async def commit_plan_of_record_endpoint(
+    project_id: str,
+    body: PlanOfRecordCommitRequest,
+    principal: PrincipalDep = _DEV_PRINCIPAL,
+):
+    """Assess and (unless ``assess_only``) commit the plan of record.
+
+    Refusals come back as 422 with the gate list — a refusal is an answer, not
+    an error in the transport sense, but 2xx would let a client treat "not
+    committable" as committed. Writes to committed versions 409 elsewhere
+    (``update_plan_version`` always raises); this endpoint only ever appends.
+    """
+    from mmm_framework.platform.history import latest_model_run_payload
+    from mmm_framework.platform.plan_of_record import (
+        assess_committability,
+        build_commit_payload,
+    )
+
+    if not principal.is_dev:
+        ensure_project_access(principal, project_id, Role.ANALYST)
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    run = latest_model_run_payload(project_id) or {}
+    provenance = {
+        "run_id": run.get("run_id"),
+        "spec_hash": run.get("spec_hash"),
+        "data_fingerprint": run.get("data_fingerprint"),
+        "model_path": run.get("model_path"),
+        "random_seed": (body.forecast or {}).get("random_seed"),
+    }
+    resolved = _project_valuation(project_id)
+    plan = sessions_store.latest_budget_plan_for_project(project_id) or {}
+    plan_payload = plan.get("plan_payload") or {}
+
+    verdict = assess_committability(
+        body.forecast,
+        provenance=provenance,
+        valuation=resolved.to_dict(),
+        overrides=body.overrides,
+    )
+    verdict_payload = verdict.to_dict()
+    if body.assess_only:
+        return JSONResponse(
+            content=safe_json_dumps_load(
+                {"committable": verdict.committable, "assessment": verdict_payload}
+            )
+        )
+    if not verdict.committable:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "The plan is not committable; each refusal names "
+                "its gate and whether it is overridable.",
+                "assessment": verdict_payload,
+            },
+        )
+
+    payload = build_commit_payload(
+        forecast=body.forecast,
+        allocation=list(plan_payload.get("allocation") or []),
+        flighting=plan_payload.get("flighting"),
+        calendar=plan_payload.get("calendar"),
+        provenance=provenance,
+        valuation=resolved.to_dict(),
+        objective={
+            "objective": plan_payload.get("objective"),
+            "objective_label": plan_payload.get("objective_label"),
+            "mode": plan_payload.get("mode"),
+            "value_source": resolved.source,
+        },
+        committability=verdict,
+        plan_payload=plan_payload,
+    )
+    version = sessions_store.commit_plan_version(
+        plan_family=body.plan_family,
+        org_id=principal.org_id,
+        payload=payload,
+        project_id=project_id,
+        name=body.name,
+        window_start=body.window_start or (body.forecast or {}).get("start_date"),
+        window_end=body.window_end,
+        run_id=provenance.get("run_id"),
+        spec_hash=provenance.get("spec_hash"),
+        data_fingerprint=provenance.get("data_fingerprint"),
+        committed_by=body.committed_by or getattr(principal, "user_id", None),
+    )
+    slim = {k: v for k, v in version.items() if k != "payload"}
+    return JSONResponse(status_code=201, content=safe_json_dumps_load(slim))
+
+
+@app.get(
+    "/projects/{project_id}/plan-of-record",
+    dependencies=[_proj_read],
+)
+async def get_plan_of_record(project_id: str):
+    """The latest committed plan of record, or ``{"version": null}``."""
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    v = sessions_store.latest_committed_plan(project_id)
+    return JSONResponse(content=safe_json_dumps_load({"version": v}))
+
+
+@app.get(
+    "/projects/{project_id}/plan-of-record/history",
+    dependencies=[_proj_read],
+)
+async def plan_of_record_history(
+    project_id: str, principal: PrincipalDep = _DEV_PRINCIPAL
+):
+    """Every version, every family, newest first — payloads elided, chain
+    verdict included so tampering surfaces in the listing, not in an audit
+    someone has to remember to run."""
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    versions = sessions_store.list_plan_versions(
+        project_id=project_id, org_id=principal.org_id
+    )
+    families = sorted({v.get("plan_family") for v in versions if v.get("plan_family")})
+    chains = {
+        fam: sessions_store.verify_plan_chain(fam, principal.org_id) for fam in families
+    }
+    slim = [{k: v for k, v in row.items() if k != "payload"} for row in versions]
+    return JSONResponse(
+        content=safe_json_dumps_load(
+            {"versions": slim, "total": len(slim), "chains": chains}
+        )
+    )
+
+
 class PaybackRequest(BaseModel):
     """Per-channel payback horizon (#224).
 

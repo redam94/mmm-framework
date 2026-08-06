@@ -223,6 +223,31 @@ export interface PlannerJob<T> {
 
 // ── Service (non-blocking jobs: start → poll, mirrors measurementService) ───────
 
+
+/** A committed plan-of-record version (payload elided in listings) (#225). */
+export interface PlanVersionSummary {
+  id: string;
+  plan_family: string;
+  version: number;
+  status: string;
+  name?: string | null;
+  committed_at?: string | null;
+  committed_by?: string | null;
+  run_id?: string | null;
+}
+
+export interface PlanOfRecordCommitResponse {
+  committable?: boolean;
+  assessment?: {
+    committable: boolean;
+    refusals: { gate: string; reason: string; overridable: boolean }[];
+    missing_provenance?: string[];
+  };
+  id?: string;
+  version?: number;
+  plan_family?: string;
+}
+
 export const plannerService = {
   async startOptimize(
     projectId: string,
@@ -260,6 +285,31 @@ export const plannerService = {
     const { data } = await apiClient.get<PlannerJob<PlannerScenarioResult>>(
       `/projects/${projectId}/planner/scenario/${jobId}`,
     );
+    return data;
+  },
+  async commitPlanOfRecord(
+    projectId: string,
+    body: {
+      forecast: ForecastResultPayload;
+      plan_family?: string;
+      name?: string | null;
+      overrides?: Record<string, string> | null;
+      assess_only?: boolean;
+    },
+  ): Promise<PlanOfRecordCommitResponse> {
+    const { data } = await apiClient.post<PlanOfRecordCommitResponse>(
+      `/projects/${projectId}/plan-of-record`,
+      body,
+    );
+    return data;
+  },
+  async planOfRecordHistory(
+    projectId: string,
+  ): Promise<{ versions: PlanVersionSummary[]; total: number }> {
+    const { data } = await apiClient.get<{
+      versions: PlanVersionSummary[];
+      total: number;
+    }>(`/projects/${projectId}/plan-of-record/history`);
     return data;
   },
   async startForecast(

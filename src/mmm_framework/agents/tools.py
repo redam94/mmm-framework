@@ -4193,6 +4193,160 @@ def get_preferences(
 
 
 @tool
+def commit_plan_of_record(
+    forecast_json: str,
+    plan_family: str = "default",
+    name: str = None,
+    overrides_json: str = None,
+    assess_only: bool = False,
+    state: Annotated[dict, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Commit the project's working plan as the immutable plan of record (#225).
+
+    `forecast_json` is the forecast payload from `forecast_under_plan` (the
+    dashboard's forecast result), REQUIRED — a plan of record without a
+    reproducible forecast is a screenshot wearing a commitment's clothes. The
+    commitment gates run first (flexible-trend horizon cap, residual
+    autocorrelation, out-of-support spend, interval availability, resolvable
+    provenance, a resolved valuation); refusals name their gate.
+    `overrides_json` maps a gate id to an acknowledgement string, recorded in
+    the committed payload; unresolvable provenance is never overridable. Set
+    `assess_only=true` to run the gates without committing. Committed versions
+    are append-only and hash-chained; the working draft stays editable.
+    """
+    from mmm_framework.finance import kpi_to_dollars
+    from mmm_framework.platform import sessions as sessions_store
+    from mmm_framework.platform.history import latest_model_run_payload
+    from mmm_framework.platform.plan_of_record import (
+        assess_committability,
+        build_commit_payload,
+    )
+
+    tid = _activate_thread(config)
+    try:
+        forecast = json.loads(forecast_json) if forecast_json else None
+    except Exception:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="forecast_json is not valid JSON.",
+                        tool_call_id=tool_call_id,
+                    )
+                ]
+            }
+        )
+    overrides = None
+    if overrides_json:
+        try:
+            overrides = json.loads(overrides_json)
+        except Exception:
+            overrides = None
+
+    project_id = sessions_store.resolve_project_id(tid)
+    org_id = sessions_store.resolve_org_id(project_id)
+    run = (latest_model_run_payload(project_id) or {}) if project_id else {}
+    provenance = {
+        "run_id": run.get("run_id"),
+        "spec_hash": run.get("spec_hash"),
+        "data_fingerprint": run.get("data_fingerprint"),
+        "model_path": run.get("model_path"),
+        "random_seed": (forecast or {}).get("random_seed"),
+    }
+    prefs = branding = None
+    try:
+        prefs = {"economics": sessions_store.get_preference(project_id, "economics")}
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        branding = {"economics": sessions_store.get_preference(project_id, "branding")}
+    except Exception:  # noqa: BLE001
+        pass
+    resolved = kpi_to_dollars(preferences=prefs, branding=branding)
+    plan = (
+        sessions_store.latest_budget_plan_for_project(project_id)
+        if project_id
+        else None
+    ) or {}
+    plan_payload = plan.get("plan_payload") or {}
+
+    verdict = assess_committability(
+        forecast,
+        provenance=provenance,
+        valuation=resolved.to_dict(),
+        overrides=overrides,
+    )
+    if assess_only or not verdict.committable:
+        lines = [
+            "### Plan-of-record assessment",
+            f"Committable: **{verdict.committable}**",
+        ]
+        for r in verdict.refusals:
+            lines.append(
+                f"- `{r.gate}`: {r.reason} "
+                + ("(overridable)" if r.overridable else "(NOT overridable)")
+            )
+        if verdict.missing_provenance:
+            lines.append(
+                "- missing provenance: " + ", ".join(verdict.missing_provenance)
+            )
+        if not assess_only and not verdict.committable:
+            lines.append(
+                "\nNothing was committed. Override an overridable gate with "
+                'overrides_json (e.g. {"spend_support": "CMO accepted the '
+                'extrapolation risk"}) or fix the input.'
+            )
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(content="\n".join(lines), tool_call_id=tool_call_id)
+                ]
+            }
+        )
+
+    payload = build_commit_payload(
+        forecast=forecast,
+        allocation=list(plan_payload.get("allocation") or []),
+        flighting=plan_payload.get("flighting"),
+        calendar=plan_payload.get("calendar"),
+        provenance=provenance,
+        valuation=resolved.to_dict(),
+        objective={
+            "objective": plan_payload.get("objective"),
+            "objective_label": plan_payload.get("objective_label"),
+            "mode": plan_payload.get("mode"),
+            "value_source": resolved.source,
+        },
+        committability=verdict,
+        plan_payload=plan_payload,
+    )
+    version = sessions_store.commit_plan_version(
+        plan_family=plan_family,
+        org_id=org_id,
+        payload=payload,
+        project_id=project_id,
+        name=name,
+        window_start=(forecast or {}).get("start_date"),
+        run_id=provenance.get("run_id"),
+        spec_hash=provenance.get("spec_hash"),
+        data_fingerprint=provenance.get("data_fingerprint"),
+    )
+    msg = (
+        f"Committed **{plan_family} v{version['version']}** as the plan of "
+        f"record (version id `{version['id']}`). The version is "
+        "append-only and hash-chained; pacing and variance now grade against "
+        "it rather than the editable draft."
+    )
+    if verdict.overrides:
+        msg += "\nRecorded gate overrides: " + ", ".join(verdict.overrides)
+    return Command(
+        update={"messages": [ToolMessage(content=msg, tool_call_id=tool_call_id)]}
+    )
+
+
+@tool
 def save_preference(
     key: str,
     value: str,
@@ -7848,6 +8002,7 @@ TOOLS = [
     record_platform_figure,
     run_spec_curve,
     generate_cfo_onepager,
+    commit_plan_of_record,
     get_payback_horizon,
     check_endogeneity,
     sign_off_model,
@@ -7967,6 +8122,7 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "record_platform_figure",
         "run_spec_curve",
         "generate_cfo_onepager",
+        "commit_plan_of_record",
         "get_payback_horizon",
         "check_endogeneity",
         # validation tools that need media channels / the MMM forward pass

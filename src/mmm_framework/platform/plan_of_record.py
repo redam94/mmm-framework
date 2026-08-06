@@ -299,6 +299,7 @@ def build_commit_payload(
     valuation: dict[str, Any] | None = None,
     objective: dict[str, Any] | None = None,
     committability: Committability | None = None,
+    plan_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The frozen payload of a committed version.
 
@@ -309,6 +310,12 @@ def build_commit_payload(
     """
     return {
         "schema_version": 1,
+        # The working plan's own payload, frozen verbatim (#225 remainder):
+        # pacing joins delivery against `plan_payload`, so a committed version
+        # must carry the same shape the draft did or the retarget in
+        # `latest_budget_plan_for_project` would hand pacing a payload it
+        # cannot read.
+        "plan_payload": dict(plan_payload or {}),
         "forecast": forecast,
         "allocation": list(allocation or []),
         "flighting": flighting,
