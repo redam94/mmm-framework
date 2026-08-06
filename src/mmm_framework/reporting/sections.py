@@ -2081,6 +2081,113 @@ class CFOSection(Section):
         return self._render_section_wrapper(intro + rollup + table)
 
 
+class PaybackSection(Section):
+    """Per-channel payback horizon — response timing with its epistemics
+    (issue #224).
+
+    "When does a dollar pay back" rests on the model's least identified
+    parameter, read off a kernel truncated at ``l_max`` and renormalized, so
+    nothing here renders without the per-draw interval, the carryover-learning
+    verdict, the truncated tail mass and the stated basis. Refused families
+    render the refusal by name. Data-gated on ``bundle.payback``.
+    """
+
+    section_id: str = "payback"
+    default_title: str = "Payback horizon — when the effect lands"
+
+    def render(self) -> str:
+        pb = getattr(self.data, "payback", None)
+        if not self.is_enabled or not pb:
+            return ""
+        channels = pb.get("channels") or {}
+        if not channels:
+            return ""
+        ci = int(float(pb.get("interval_mass", 0.9)) * 100)
+        noun = "confidence" if pb.get("interval_kind") == "confidence" else "credible"
+
+        def _lag(h: dict | None) -> str:
+            if not h or h.get("mean") is None:
+                return "—"
+            mean = f"{float(h['mean']):.1f}"
+            span = _interval_span(
+                h.get("lower"), h.get("upper"), fmt=lambda v: f"{v:.1f}"
+            )
+            return f"{mean} wk <span class='ci'>{span}</span>"
+
+        rows: list[str] = []
+        refusals: list[str] = []
+        any_downgraded = False
+        for ch, p in channels.items():
+            if p.get("status") == "refused":
+                refusals.append(
+                    f"<li><strong>{html.escape(str(ch))}</strong>: {html.escape(str(p.get('reason', '')))}</li>"
+                )
+                continue
+            h = p.get("horizons") or {}
+            tail = float(p.get("truncated_tail_mass") or 0.0)
+            verdict = p.get("learning_verdict") or "n/a"
+            status = p.get("status", "ok")
+            any_downgraded = any_downgraded or status == "downgraded"
+            cls = "mono muted" if status == "downgraded" else "mono"
+            rows.append(
+                f"<tr><td>{html.escape(str(ch))}</td>"
+                f"<td>{html.escape(str(p.get('family', '')))} (l_max={int(p.get('l_max') or 0)})</td>"
+                f"<td class='{cls}'>{_lag(h.get('t50'))}</td>"
+                f"<td class='{cls}'>{_lag(h.get('t90'))}</td>"
+                f"<td class='mono'>{tail:.1%}</td>"
+                f"<td>{html.escape(str(verdict))}</td>"
+                f"<td>{html.escape(status)}</td></tr>"
+            )
+
+        table = ""
+        if rows:
+            table = f"""
+            <table class="data-table">
+                <thead><tr><th>Channel</th><th>Kernel</th>
+                    <th>t50 — half the effect landed ({ci}% {noun})</th>
+                    <th>t90 — most of it landed</th>
+                    <th>Tail beyond l_max</th>
+                    <th>Carryover learning</th><th>Status</th></tr></thead>
+                <tbody>{"".join(rows)}</tbody>
+            </table>
+            """
+        refusal_html = (
+            "<h3>Not computable for</h3><ul>" + "".join(refusals) + "</ul>"
+            if refusals
+            else ""
+        )
+        caveat_items = [
+            f"<li>{html.escape(str(c))}</li>" for c in (pb.get("caveats") or [])
+        ]
+        for ch, p in channels.items():
+            for c in p.get("caveats") or []:
+                caveat_items.append(
+                    f"<li><strong>{html.escape(str(ch))}</strong>: {html.escape(str(c))}</li>"
+                )
+        caveats_html = (
+            "<h3>Read this before quoting a horizon</h3><ul>"
+            + "".join(caveat_items)
+            + "</ul>"
+            if caveat_items
+            else ""
+        )
+        intro = (
+            "<p>The lag at which a channel's cumulative effect crosses 50% and "
+            "90% — the interpolated crossing of the fitted carryover kernel, "
+            "per posterior draw, so the interval reflects what the model "
+            "actually knows about timing. This is a <em>response-timing</em> "
+            "statement, not a cash break-even; it is read off the model's "
+            "least identified parameter, and the columns to its right say how "
+            "much to trust it.</p>"
+            f"<p class='chart-caption'>Basis: {html.escape(str(pb.get('basis', 'kernel')))} "
+            "— the fitted kernel; exact under a linear response. A kernel "
+            "truncated at l_max cannot express mass beyond it, so every "
+            "horizon here is a lower bound by construction; the tail column "
+            "is the size of that bias.</p>"
+        )
+        return self._render_section_wrapper(intro + table + refusal_html + caveats_html)
+
+
 class CausalAssumptionsSection(Section):
     """Causal assumptions, identification strategy and sensitivity to unobserved
     confounding.
@@ -3639,6 +3746,7 @@ SECTION_REGISTRY: dict[str, type[Section]] = {
     "triangulation": TriangulationSection,
     "spec_curve": SpecCurveSection,
     "cfo": CFOSection,
+    "payback": PaybackSection,
     "causal_assumptions": CausalAssumptionsSection,
     "methodology": MethodologySection,
     "diagnostics": DiagnosticsSection,

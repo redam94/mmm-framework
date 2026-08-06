@@ -198,3 +198,37 @@ def test_planner_forecast_job_without_model(client, project):
             break
         time.sleep(0.05)
     assert status in ("done", "error")
+
+
+# ── payback horizon route (issue #224) ────────────────────────────────────────
+
+
+def test_planner_payback_bad_basis_is_400(client, project):
+    """An invalid basis fails up front, not as a background job 20s later."""
+    r = client.post(f"/projects/{project}/planner/payback", json={"basis": "vibes"})
+    assert r.status_code == 400, r.text
+    assert "basis" in r.json()["detail"]
+
+
+def test_planner_payback_unknown_project_is_404(client):
+    r = client.post("/projects/does-not-exist/planner/payback", json={})
+    assert r.status_code == 404
+
+
+def test_planner_payback_job_without_model(client, project):
+    """No fitted model → the async job resolves to an error, not a 500."""
+    import time
+
+    start = client.post(f"/projects/{project}/planner/payback", json={})
+    assert start.status_code == 202, start.text
+    job_id = start.json()["job_id"]
+    status = None
+    for _ in range(40):
+        poll = client.get(f"/projects/{project}/planner/payback/{job_id}").json()
+        status = poll["status"]
+        if status in ("done", "error"):
+            assert status == "error"
+            assert "model" in (poll.get("error") or "").lower()
+            break
+        time.sleep(0.05)
+    assert status in ("done", "error")

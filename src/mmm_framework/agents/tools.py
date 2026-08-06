@@ -5095,6 +5095,37 @@ def generate_cfo_onepager(
 
 
 @tool
+def get_payback_horizon(
+    state: Annotated[dict, InjectedState],
+    basis: str = "kernel",
+    hdi_prob: float = 0.90,
+    tool_call_id: Annotated[str, InjectedToolCallId] = None,
+    config: InjectedConfig = None,
+) -> Command:
+    """Per-channel payback horizon: when each channel's effect actually lands.
+
+    Reports the per-draw lag at which the fitted carryover kernel crosses 50%
+    (t50) and 90% (t90) of its total effect, with credible intervals — a
+    RESPONSE-TIMING statement ("how fast does TV work"), not a cash break-even.
+    Every number carries the disclosures it cannot travel without: the mass of
+    the kernel beyond the configured window (truncation makes horizons read
+    SHORT), whether the carryover parameters actually learned from the data or
+    still sit on their prior, and an autocorrelation gate that flags a
+    misspecified carryover window. Extension models, structural models with
+    AR(1) mediators, and dual-stock brand models are refused by name — they
+    have no single kernel to read a horizon from. `basis="counterfactual"`
+    measures timing with a posterior-predictive pulse instead of the kernel
+    (slower; reports the disagreement). Requires a fitted model.
+    """
+    _activate_thread(config)
+    res = _KERNELS.get_or_spawn(get_current_thread()).run_model_op(
+        "payback_horizon",
+        {"basis": basis, "hdi_prob": hdi_prob},
+    )
+    return _modelop_command(res, state, tool_call_id)
+
+
+@tool
 def check_endogeneity(
     state: Annotated[dict, InjectedState],
     max_lag: int = 8,
@@ -7812,6 +7843,7 @@ TOOLS = [
     record_platform_figure,
     run_spec_curve,
     generate_cfo_onepager,
+    get_payback_horizon,
     check_endogeneity,
     sign_off_model,
     get_run_history,
@@ -7930,6 +7962,7 @@ _MMM_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "record_platform_figure",
         "run_spec_curve",
         "generate_cfo_onepager",
+        "get_payback_horizon",
         "check_endogeneity",
         # validation tools that need media channels / the MMM forward pass
         "run_channel_diagnostics",

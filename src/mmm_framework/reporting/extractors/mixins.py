@@ -742,6 +742,31 @@ class EstimandPPCMixin:
             logger.debug("cfo extraction skipped", exc_info=True)
         return bundle
 
+    # -- payback horizon (response timing, issue #224) ------------------------
+
+    #: Posterior draws for the payback kernels. Kernel construction is a
+    #: Python loop over draws, so this bounds the cost.
+    _PAYBACK_MAX_DRAWS = 400
+
+    def _extract_payback(self, bundle: "MMMDataBundle") -> "MMMDataBundle":
+        """Best-effort per-channel payback horizon (issue #224): per-draw
+        t50/t90 kernel-crossing lags with intervals, truncation disclosure,
+        the carryover-learning verdict and the autocorrelation gate. Refused
+        families land in the payload as named refusals, which the sections
+        render — a refusal is a result, not an absence."""
+        try:
+            model = self._estimand_model()
+            if model is None or getattr(model, "_trace", None) is None:
+                return bundle
+            from ...planning.payback import channel_payback
+
+            bundle.payback = channel_payback(
+                model, max_draws=self._PAYBACK_MAX_DRAWS
+            ).to_dict()
+        except Exception:  # noqa: BLE001 — reporting must never hard-fail
+            logger.debug("payback extraction skipped", exc_info=True)
+        return bundle
+
     # -- posterior-predictive goodness-of-fit ---------------------------------
 
     def _extract_posterior_predictive(self, bundle: "MMMDataBundle") -> "MMMDataBundle":

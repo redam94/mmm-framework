@@ -224,6 +224,14 @@ class MMMDataBundle:
     # sensitivity. Computed best-effort by the extractor for MMM models.
     cfo: dict[str, Any] | None = None
 
+    # Per-channel payback horizon (issue #224). A
+    # ``planning.payback.PaybackResult.to_dict()`` payload: per-draw t50/t90
+    # crossing lags with ETIs, the truncated tail mass, the carryover-learning
+    # verdict, the autocorrelation gate, and refusals by name. Computed
+    # best-effort by the extractor for MMM models; sections are data-gated on
+    # it so a refused family renders the refusal, not a blank.
+    payback: dict[str, Any] | None = None
+
     # Causal assumptions / identification + unobserved-confounding robustness.
     # Keys (all optional): "identification_strategy" (str), "assumed_confounders"
     # (list[str]), "robustness" (UnobservedConfoundingSensitivity.to_dict()).

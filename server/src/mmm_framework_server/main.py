@@ -2567,6 +2567,57 @@ async def get_planner_forecast(project_id: str, job_id: str):
     return _poll_planner_job(project_id, job_id)
 
 
+class PaybackRequest(BaseModel):
+    """Per-channel payback horizon (#224).
+
+    Response-timing t50/t90 with intervals, truncation disclosure, the
+    carryover-learning verdict and the autocorrelation gate. ``basis``
+    "counterfactual" measures timing with a posterior-predictive pulse instead
+    of the kernel (slower; the disagreement is reported).
+    """
+
+    basis: str = "kernel"
+    hdi_prob: float = 0.90
+    max_draws: int = 400
+
+
+@app.post(
+    "/projects/{project_id}/planner/payback",
+    dependencies=[_proj_write, _rl_heavy],
+)
+async def start_planner_payback(project_id: str, body: PaybackRequest):
+    """Start a NON-BLOCKING payback-horizon computation. Poll the job_id.
+
+    Background like the forecast: kernel construction loops over posterior
+    draws and the autocorrelation gate pays one predict() pass.
+    """
+    from mmm_framework.platform.history import latest_model_run_payload
+
+    if sessions_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    if body.basis not in ("kernel", "counterfactual"):
+        raise HTTPException(
+            status_code=400,
+            detail="basis must be 'kernel' or 'counterfactual'.",
+        )
+    run = latest_model_run_payload(project_id)
+    op_kwargs: dict = {
+        "basis": body.basis,
+        "hdi_prob": float(body.hdi_prob),
+        "max_draws": int(body.max_draws),
+    }
+    return _start_planner_job(project_id, "payback_horizon", op_kwargs, "payback", run)
+
+
+@app.get(
+    "/projects/{project_id}/planner/payback/{job_id}",
+    dependencies=[_proj_read],
+)
+async def get_planner_payback(project_id: str, job_id: str):
+    """Poll a planner payback job: {status, result|null, error|null}."""
+    return _poll_planner_job(project_id, job_id)
+
+
 def _start_planner_job(
     project_id: str, op_name: str, op_kwargs: dict, result_key: str, run: dict | None
 ):

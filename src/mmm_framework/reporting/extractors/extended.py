@@ -131,6 +131,10 @@ class ExtendedMMMExtractor(DataExtractor, EstimandPPCMixin):
             # channel response surface (sample_channel_contributions + X/y).
             bundle = self._extract_cfo(bundle)
 
+            # Payback horizon (issue #224) — a refused family lands in the
+            # payload as a named refusal, which the sections render.
+            bundle = self._extract_payback(bundle)
+
             # Evidence tier + identifiability gate on every channel number (#102).
             bundle = self._extract_channel_evidence(bundle)
 

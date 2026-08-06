@@ -82,19 +82,20 @@ class ExperimentNetValue:
 def _decay_weights(
     horizon_weeks: int, half_life_weeks: float | None, discount_rate_annual: float
 ) -> np.ndarray:
-    """Per-week retention × financial discount weights over the horizon."""
-    w = np.arange(max(int(horizon_weeks), 1), dtype=float)
-    ret = (
-        np.power(0.5, w / max(float(half_life_weeks), _EPS))
-        if half_life_weeks
-        else np.ones_like(w)
+    """Per-week retention × financial discount weights over the horizon.
+
+    Delegates to :func:`mmm_framework.planning.discount.discount_weights` — this
+    used to be one of two disagreeing discount implementations (the other a
+    mid-horizon point factor in ``bayesian_clv.py``), and issue #224 made the
+    arithmetic shared so they cannot drift.
+    """
+    from .discount import discount_weights
+
+    return discount_weights(
+        horizon_weeks,
+        rate_annual=discount_rate_annual,
+        half_life_weeks=half_life_weeks,
     )
-    disc = (
-        np.power(1.0 + float(discount_rate_annual), -w / 52.0)
-        if discount_rate_annual
-        else np.ones_like(w)
-    )
-    return ret * disc
 
 
 def compute_experiment_net_value(

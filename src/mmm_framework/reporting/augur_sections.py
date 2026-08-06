@@ -1741,6 +1741,98 @@ class AugurCFOSection(AugurSection):
         return self._wrap(lede + table)
 
 
+class AugurPaybackSection(AugurSection):
+    """Payback horizon — when each channel's effect lands (issue #224).
+
+    The client-deck rendering of the response-timing payback: t50/t90 crossing
+    lags with intervals, plus the disclosures the number cannot travel without
+    (truncated tail mass, carryover-learning verdict, autocorrelation gate).
+    Refused families render the refusal by name. Data-gated on
+    ``bundle.payback``."""
+
+    section_id = "payback"
+    default_title = "When the effect lands — the payback horizon"
+    eyebrow = "Response timing"
+
+    @property
+    def is_enabled(self) -> bool:
+        return super().is_enabled and bool(getattr(self.data, "payback", None))
+
+    def render(self) -> str:
+        import html as _html
+
+        pb = getattr(self.data, "payback", None)
+        if not self.is_enabled or not pb:
+            return ""
+        channels = pb.get("channels") or {}
+        if not channels:
+            return ""
+        ci = int(float(pb.get("interval_mass", 0.9)) * 100)
+        noun = "confidence" if pb.get("interval_kind") == "confidence" else "credible"
+
+        def _lag(h):
+            if not h or h.get("mean") is None:
+                return "—"
+            lo, hi = h.get("lower"), h.get("upper")
+            span = (
+                f" <span class='muted'>[{lo:.1f}, {hi:.1f}]</span>"
+                if lo is not None and hi is not None
+                else ""
+            )
+            return f"{float(h['mean']):.1f} wk{span}"
+
+        body, refusals = [], []
+        for ch, pch in channels.items():
+            if pch.get("status") == "refused":
+                refusals.append(
+                    f"<li><strong>{_html.escape(str(ch))}</strong>: "
+                    f"{_html.escape(str(pch.get('reason', '')))}</li>"
+                )
+                continue
+            h = pch.get("horizons") or {}
+            tail = float(pch.get("truncated_tail_mass") or 0.0)
+            body.append(
+                f"<tr><td>{_html.escape(str(ch))}</td>"
+                f"<td>{_lag(h.get('t50'))}</td>"
+                f"<td>{_lag(h.get('t90'))}</td>"
+                f"<td>{tail:.0%}</td>"
+                f"<td>{_html.escape(str(pch.get('learning_verdict') or 'n/a'))}</td>"
+                f"<td>{_html.escape(str(pch.get('status', 'ok')))}</td></tr>"
+            )
+        lede = (
+            "<p class='lede'>How quickly each channel's effect arrives: the lag "
+            "at which half (t50) and most (t90) of the fitted carryover has "
+            f"landed, with {ci}% {noun} ranges from the posterior. Read the "
+            "status column before quoting a number — this horizon rests on the "
+            "model's least identified parameter, and a truncated kernel makes "
+            "it read shorter than the truth.</p>"
+        )
+        table = ""
+        if body:
+            table = f"""
+            <table class="data-table">
+              <thead><tr><th>Channel</th><th>t50</th><th>t90</th>
+                <th>Tail beyond window</th><th>Carryover learning</th>
+                <th>Status</th></tr></thead>
+              <tbody>{"".join(body)}</tbody>
+            </table>
+            """
+        refusal_html = (
+            "<h3 style='margin-top:1rem'>Not computable for</h3><ul>"
+            + "".join(refusals)
+            + "</ul>"
+            if refusals
+            else ""
+        )
+        caveats = [str(c) for c in (pb.get("caveats") or [])]
+        caveat_html = (
+            "<ul>" + "".join(f"<li>{_html.escape(c)}</li>" for c in caveats) + "</ul>"
+            if caveats
+            else ""
+        )
+        return self._wrap(lede + table + refusal_html + caveat_html)
+
+
 class AugurTriangulationSection(AugurSection):
     """Triangulation — MMM × experiment × platform (issues #104 / #119).
 
@@ -1940,6 +2032,7 @@ AUGUR_SECTIONS: list[tuple[str, type[AugurSection], str]] = [
     ("evidence", AugurEvidenceSection, "evidence_guide"),
     ("long-term", AugurLongTermSection, "long_term"),
     ("cfo", AugurCFOSection, "cfo"),
+    ("payback", AugurPaybackSection, "payback"),
     ("triangulation", AugurTriangulationSection, "triangulation"),
     ("tests", AugurTestsSection, "recommended_tests"),
     ("next", AugurNextStepsSection, "next_steps"),
@@ -1965,6 +2058,7 @@ __all__ = [
     "AugurEvidenceSection",
     "AugurLongTermSection",
     "AugurCFOSection",
+    "AugurPaybackSection",
     "AugurTriangulationSection",
     "AugurTestsSection",
     "AugurNextStepsSection",

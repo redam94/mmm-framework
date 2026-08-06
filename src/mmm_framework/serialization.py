@@ -756,6 +756,50 @@ class MMMSerializer:
             except Exception:  # noqa: BLE001
                 pass
 
+        # Payback provenance (issue #224): the carryover basis a horizon was
+        # derived on, per channel, so a reloaded model cannot silently re-derive
+        # a horizon on a different basis. Config-derived (family / l_max /
+        # normalize) so it needs no trace; tail mass is added only when a
+        # fitted trace makes it computable — omitted, not null, when unearned.
+        try:
+            from .model.base import _ADSTOCK_KIND
+
+            get_cfg = getattr(model, "_get_adstock_config", None)
+            if callable(get_cfg):
+                pb_channels: dict[str, dict[str, Any]] = {}
+                for ch in getattr(model, "channel_names", []) or []:
+                    try:
+                        cfg = get_cfg(ch)
+                        pb_channels[ch] = {
+                            "family": _ADSTOCK_KIND.get(cfg.type, "geometric"),
+                            "l_max": int(cfg.l_max),
+                            "normalize": bool(cfg.normalize),
+                        }
+                    except Exception:  # noqa: BLE001
+                        continue
+                if pb_channels:
+                    if getattr(model, "_trace", None) is not None:
+                        try:
+                            from .transforms.carryover import (
+                                posterior_carryover_kernels,
+                            )
+
+                            kerns = posterior_carryover_kernels(model, max_draws=50)
+                            for ch, K in kerns.items():
+                                if ch in pb_channels and K.status == "ok":
+                                    pb_channels[ch]["truncated_tail_mass"] = float(
+                                        K.truncated_tail_mass
+                                    )
+                        except Exception:  # noqa: BLE001
+                            pass
+                    metadata["payback"] = {
+                        "basis": "kernel",
+                        "channels": pb_channels,
+                    }
+                    metadata["payback_schema_version"] = "1.0"
+        except Exception:  # noqa: BLE001
+            pass
+
         return metadata
 
     @classmethod

@@ -82,7 +82,86 @@ frozen public contract breaks, and the contract itself is pinned by
 
 [pymc-sens]: https://www.pymc.io/projects/examples/en/latest/causal_inference/sensitivity_unmeasured_confounding.html
 
+
+- **Per-channel payback horizon: per-draw intervals, truncation disclosure, and a
+  prior-domination gate** ([#224]). "When does a dollar pay back" is the most CFO-legible number
+  the model can emit and rests on its least identified parameter — so nothing here ships without
+  its epistemics attached.
+
+  `planning/payback.py::channel_payback()` reports ONE named quantity: the per-draw interpolated
+  lag at which the fitted carryover kernel crosses 50% (`t50`) and 90% (`t90`) of its total —
+  built on `transforms/carryover.py`'s family-aware per-draw reader (#218) via a new
+  `carryover_crossing_lags(kernel, share)` generalization, so t50/t90 cannot drift apart the way
+  the four shipped "half-life" definitions did. Intervals are the ETI **of the per-draw
+  transform**, never the transform of a mean parameter (the crossing is convex in α: measured, the
+  two differ by ~0.4 lags at the extremes); no public function derives a horizon from
+  `mean(alpha)`.
+
+  Every result carries what the number cannot travel without:
+
+  - **The truncated tail mass.** `normalize=True` renormalizes the truncated kernel to sum 1,
+    redistributing the untruncated tail INSIDE the window — geometric α=0.8 at the default
+    `l_max=8` discards 13.4% of its mass and reads t90≈6.8 against an untruncated ≈10.3, under
+    the canonical lag-interval convention. Tails ≥10% promote the disclosure to a sentence.
+  - **A carryover-learning verdict.** `reporting/evidence.py` gains
+    `_CHANNEL_CARRYOVER_PREFIXES` + `carryover_learning()` — the extension point the issue names.
+    Deliberately NOT folded into the ROI evidence tier: the ROI tier answers "is the effect SIZE
+    evidence-backed?", and a slow-to-learn alpha does not bear on that; the payback surface gates
+    on exactly the parameters IT depends on. Two defensible default priors ship with 2x different
+    implied half-lives (Beta(1,3) vs Beta(2,2)), and a test pins that two fits differing only in
+    that prior produce a flagged verdict, not two equally confident horizons.
+  - **An autocorrelation gate, two tests deep.** The residual Ljung-Box alone is insufficient:
+    measured on `adstock_misspec` (NUTS, 156w) it reads p=0.16 while the posterior-predictive
+    lag-1 check is extreme at p=0.01. Both run; either fires the downgrade, with the DIRECTION
+    stated — a truncated kernel cannot express mass beyond `l_max`, so on such fits every horizon
+    is BIASED SHORT (measured: fitted t90 5.2–7.1 against planted 9.1–11.9, short on 4/4
+    channels).
+  - **Refusals by name.** Extension models (one hardcoded geometric family), `StructuralNestedMMM`
+    with AR(1) mediators (persistence lives in the state's ρ, on a stated ridge with α), and
+    dual-stock brand models (detected by their registered `brand_retention`/`long_term_fraction`
+    variables, not class name — `adstock_alpha_<ch>` there is only the FAST stock, so a horizon
+    read off it is dramatically too short while the model says the opposite).
+  - **Provenance.** Frequentist fits flip the interval noun to *confidence*; MAP/ADVI single-draw
+    fits report the interval as **collapsed/absent** rather than `[x, x]` (#249); the serializer's
+    `metadata.json` and `planning/history` run metrics (schema v4) record basis / family / l_max /
+    tail mass so a reloaded model cannot re-derive a horizon on a different basis.
+
+  `payback_breakeven()` is the separately-named **finance** sense — cumulative discounted dollar
+  return per dollar of spend reaching 1, per draw, with `prob_never` for draws that never repay.
+  It refuses on efficiency-measured channels (`MetricMeta.is_monetary` False, #221) and raises
+  `UnresolvedValueError` without a valuation — never a silent `value_per_kpi=1.0`.
+
+  `planning/discount.py` extracts the repo's two disagreeing discount implementations
+  (`experiment_value`'s per-week mean weight; `bayesian_clv`'s mid-horizon factor) into
+  `discount_weights()` / `mid_horizon_discount_factor()`, byte-compatible with both, default rate
+  **0.0** (measured: a 10%/yr rate moves repo-horizon numbers by 0.33%–2.4% — an assumed nonzero
+  rate would be a silent input to every payback).
+
+  Surfaces: report bundle field + classic/Augur sections + interactive card, agent op
+  `payback_horizon` + tool `get_payback_horizon` + session-export entry, REST
+  `POST/GET /projects/{id}/planner/payback[/{job_id}]`.
+
+  Answer-key fixes that make the criteria gradeable: `make_realistic` now exports `true_adstock`
+  (it bypassed `_finish` and had NO carryover truth), and `make_adstock_misspec` exports the
+  planted **Weibull** truth instead of inheriting the geometric `_ALPHA` table — its answer key
+  used to describe the model's family rather than the planted kernel.
+
+  Measured recovery: on `clean` (NUTS 4×800, seed 7) the 90% interval covers planted t50 on 4/4
+  channels (t50 truth/est — TV 1.38/1.42, Search 0.62/0.63, Social 0.83/1.04, Display 1.00/1.06);
+  on `realistic` 6/7 with the miss on the deliberately near-collinear Print. Tests:
+  `tests/test_planning_payback.py` (34).
+
 ### Fixed
+
+- **The residual-autocorrelation caveat never fired for core models** (found while wiring #224's
+  gate). `planning/forecast.py::_residual_autocorrelation` fell back to
+  `compute_component_decomposition().fitted_mean()` — a method that **does not exist** — and the
+  `AttributeError` was swallowed by the surrounding best-effort `except`, so for every core
+  `BayesianMMM` (which registers no `mu` Deterministic) the check returned all-`None`. Blast
+  radius: the forecast's "interval TOO NARROW" caveat and the plan-of-record
+  `GATE_RESIDUAL_AUTOCORRELATION` commit gate silently never fired for core models. The fitted
+  mean is now the sum of the decomposition's per-obs components (original scale, no heuristic
+  rescale).
 
 - **The decomposition residual is now disclosed, and a bridge says whether it closed honestly**
   ([#220]). Completes the issue: the absorption sites were fixed earlier, and this adds the shared
@@ -480,6 +559,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#222]: https://github.com/redam94/mmm-framework/issues/222
 [#237]: https://github.com/redam94/mmm-framework/issues/237
 [#249]: https://github.com/redam94/mmm-framework/issues/249
+[#224]: https://github.com/redam94/mmm-framework/issues/224
 [#273]: https://github.com/redam94/mmm-framework/issues/273
 [#274]: https://github.com/redam94/mmm-framework/issues/274
 [#275]: https://github.com/redam94/mmm-framework/issues/275

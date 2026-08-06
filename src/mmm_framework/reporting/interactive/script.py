@@ -1155,6 +1155,48 @@ INTERACTIVE_REPORT_JS = r"""
     panel.innerHTML = head + body;
   }
 
+  // ── payback horizon (issue #224) ────────────────────────────────────────
+  function renderPayback() {
+    var pb = IR.payback;
+    if (!pb || !pb.channels) return;
+    var panel = document.getElementById('paybackPanel');
+    if (!panel) return;
+    function lag(h) {
+      if (!h || h.mean == null) return '\u2014';
+      var span = (h.lower != null && h.upper != null)
+        ? ' <span class="muted">[' + h.lower.toFixed(1) + ', ' + h.upper.toFixed(1) + ']</span>'
+        : '';
+      return h.mean.toFixed(1) + ' wk' + span;
+    }
+    var rows = '', refusals = '';
+    Object.keys(pb.channels).forEach(function (ch) {
+      var c = pb.channels[ch];
+      if (c.status === 'refused') {
+        refusals += '<li><strong>' + esc(ch) + '</strong>: ' + esc(c.reason || '') + '</li>';
+        return;
+      }
+      var h = c.horizons || {};
+      var tail = ((c.truncated_tail_mass || 0) * 100).toFixed(0) + '%';
+      var muted = c.status === 'downgraded' ? ' class="muted"' : '';
+      rows += '<tr><td>' + esc(ch) + '</td><td' + muted + '>' + lag(h.t50) + '</td>' +
+        '<td' + muted + '>' + lag(h.t90) + '</td><td class="mono">' + tail + '</td>' +
+        '<td>' + esc(c.learning_verdict || 'n/a') + '</td><td>' + esc(c.status || 'ok') + '</td></tr>';
+    });
+    var html = '';
+    if (rows) {
+      html += '<table><thead><tr><th>Channel</th><th>t50</th><th>t90</th>' +
+        '<th>Tail beyond window</th><th>Carryover learning</th><th>Status</th></tr></thead><tbody>' +
+        rows + '</tbody></table>';
+    }
+    if (refusals) html += '<h4>Not computable for</h4><ul>' + refusals + '</ul>';
+    var caveats = pb.caveats || [];
+    if (caveats.length) {
+      html += '<ul class="muted" style="margin-top:.8rem">' +
+        caveats.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul>';
+    }
+    panel.innerHTML = html;
+  }
+
   // ── latent structure (loadings + trajectories) ─────────────────────────
   function renderLatent() {
     var lat = IR.latent;
@@ -1648,6 +1690,7 @@ INTERACTIVE_REPORT_JS = r"""
     renderTriangulation();
     renderPacing();
     renderLongTerm();
+    renderPayback();
     renderLatent();
     renderPpcStats();
     renderLooPit();

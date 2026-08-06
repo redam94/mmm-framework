@@ -403,6 +403,11 @@ def _map_no_args(args: dict) -> dict:
     return {}
 
 
+def _map_identity(args: dict) -> dict:
+    """Pass tool kwargs through unchanged (tool body does no transforms)."""
+    return dict(args or {})
+
+
 def _map_get_estimands(args: dict) -> dict | None:
     requested: list = list(args.get("estimands") or [])
     custom = args.get("custom_estimands")
@@ -501,6 +506,7 @@ def _map_save_model(args: dict) -> dict | None:
 # silently demotes (or misrenders) that step.
 _OP_TOOLS: dict[str, tuple[str, Callable[[dict], dict | None], str | None]] = {
     "get_roi_metrics": ("roi_metrics", _map_no_args, None),
+    "get_payback_horizon": ("payback_horizon", _map_identity, None),
     "validate_model": ("validate_model", _map_no_args, None),
     "get_estimands": ("compute_estimands", _map_get_estimands, None),
     "get_component_decomposition": ("component_decomposition", _map_no_args, None),

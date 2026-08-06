@@ -48,6 +48,7 @@ from .adstock import adstock_weights
 
 __all__ = [
     "CarryoverKernel",
+    "carryover_crossing_lags",
     "carryover_half_life",
     "posterior_carryover_kernels",
 ]
@@ -124,11 +125,59 @@ class CarryoverKernel:
         }
 
 
+def carryover_crossing_lags(kernel: np.ndarray, share: float) -> np.ndarray:
+    """Lag at which the cumulative kernel first reaches ``share`` of its total,
+    per draw.
+
+    The generalization behind :func:`carryover_half_life` (``share=0.5``) and a
+    payback ``t90`` (``share=0.9``): the interpolated lag where the cumulative
+    kernel share crosses the threshold. One implementation for every threshold,
+    so ``t50`` and ``t90`` cannot drift apart the way the four shipped
+    "half-life" definitions did (issue #218).
+
+    Linearly interpolated between lags, so the result is continuous in the
+    parameters rather than jumping by whole lags — and therefore usable per
+    draw: the interval of the transform is the ETI of these values, which is
+    NOT the transform of the mean parameter (the crossing is convex in a
+    geometric ``alpha``).
+
+    **Truncation-biased**: computed on a kernel cut at ``l_max``, it understates
+    the untruncated crossing. Read it beside ``truncated_tail_mass``.
+    """
+    if not 0.0 < float(share) < 1.0:
+        raise ValueError(f"share must be in (0, 1), got {share!r}")
+    share = float(share)
+    k = np.atleast_2d(np.asarray(kernel, dtype=float))
+    out = np.empty(k.shape[0])
+    for i, row in enumerate(k):
+        total = row.sum()
+        if not np.isfinite(total) or total <= 0:
+            out[i] = np.nan
+            continue
+        cum = np.cumsum(row) / total
+        # Lag k occupies the half-open interval [k, k+1), so cum[k] is the share
+        # landed by TIME k+1. One branch for every j, which matters: the shipped
+        # implementations special-cased j == 0 with a different origin, making
+        # the function DISCONTINUOUS at cum[0] == share and non-monotone in
+        # alpha (geometric 0.5 -> 1.00 but 0.7 -> 0.82, i.e. more carryover
+        # reported as a SHORTER half-life). This form is continuous and
+        # monotone.
+        j = int(np.searchsorted(cum, share))
+        if j >= len(cum):  # pragma: no cover - cum ends at 1.0
+            out[i] = float(len(cum))
+            continue
+        prev = cum[j - 1] if j > 0 else 0.0
+        span = cum[j] - prev
+        out[i] = j + ((share - prev) / span if span > 0 else 0.0)
+    return out
+
+
 def carryover_half_life(kernel: np.ndarray) -> np.ndarray:
     """Lag at which the cumulative kernel first reaches half its total, per draw.
 
-    Linearly interpolated between lags, so the result is continuous in the
-    parameters rather than jumping by whole lags.
+    ``carryover_crossing_lags(kernel, 0.5)``. Linearly interpolated between
+    lags, so the result is continuous in the parameters rather than jumping by
+    whole lags.
 
     This is a *cumulative-50%* definition. It is NOT the same quantity as
     ``log(0.5)/log(alpha)`` (a geometric decay constant), nor as "first lag whose
@@ -142,28 +191,7 @@ def carryover_half_life(kernel: np.ndarray) -> np.ndarray:
     **Truncation-biased**: computed on a kernel cut at ``l_max``, it understates
     the untruncated half-life. Read it beside ``truncated_tail_mass``.
     """
-    k = np.atleast_2d(np.asarray(kernel, dtype=float))
-    out = np.empty(k.shape[0])
-    for i, row in enumerate(k):
-        total = row.sum()
-        if not np.isfinite(total) or total <= 0:
-            out[i] = np.nan
-            continue
-        cum = np.cumsum(row) / total
-        # Lag k occupies the half-open interval [k, k+1), so cum[k] is the share
-        # landed by TIME k+1. One branch for every j, which matters: the shipped
-        # implementations special-cased j == 0 with a different origin, making
-        # the function DISCONTINUOUS at cum[0] == 0.5 and non-monotone in alpha
-        # (geometric 0.5 -> 1.00 but 0.7 -> 0.82, i.e. more carryover reported as
-        # a SHORTER half-life). This form is continuous and monotone.
-        j = int(np.searchsorted(cum, 0.5))
-        if j >= len(cum):  # pragma: no cover - cum ends at 1.0
-            out[i] = float(len(cum))
-            continue
-        prev = cum[j - 1] if j > 0 else 0.0
-        span = cum[j] - prev
-        out[i] = j + ((0.5 - prev) / span if span > 0 else 0.0)
-    return out
+    return carryover_crossing_lags(kernel, 0.5)
 
 
 def _tail_mass(family: str, l_max: int, params: dict[str, float]) -> float:

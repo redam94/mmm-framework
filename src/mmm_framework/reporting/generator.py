@@ -34,6 +34,7 @@ from .sections import (
     TriangulationSection,
     SpecCurveSection,
     CFOSection,
+    PaybackSection,
     CausalAssumptionsSection,
     MethodologySection,
     DiagnosticsSection,
@@ -101,6 +102,7 @@ class MMMReportGenerator:
         triangulation: dict | None = None,
         spec_curve: dict | None = None,
         cfo: dict | None = None,
+        payback: dict | None = None,
     ):
         self.config = config or ReportConfig()
         self._llm = llm
@@ -135,6 +137,10 @@ class MMMReportGenerator:
         # a cfo payload is attached (the extractor fills it best-effort for MMM).
         if cfo is not None:
             self.data.cfo = cfo
+        # Payback horizon (issue #224). Data-gated: the PaybackSection renders
+        # only when a payback payload is attached (extractor fills it for MMM).
+        if payback is not None:
+            self.data.payback = payback
 
         # Budget-allocation plan (a default reallocation, or a saved Planner plan).
         # When attached, expose it on the bundle and turn the allocation section ON
@@ -238,6 +244,7 @@ class MMMReportGenerator:
             ("triangulation", TriangulationSection, _mmm(self.config.triangulation)),
             ("spec_curve", SpecCurveSection, _mmm(self.config.spec_curve)),
             ("cfo", CFOSection, _mmm(self.config.cfo)),
+            ("payback", PaybackSection, _mmm(self.config.payback)),
             (
                 "causal_assumptions",
                 CausalAssumptionsSection,

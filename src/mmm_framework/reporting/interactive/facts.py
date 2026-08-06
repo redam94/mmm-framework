@@ -1537,6 +1537,17 @@ def interactive_report_facts(
     except Exception:  # noqa: BLE001 — report renders fine without it
         long_term = None
 
+    # Payback horizon (issue #224): per-draw t50/t90 kernel-crossing lags with
+    # intervals, truncation disclosure and the carryover-learning verdict.
+    # Best-effort; a refused family lands as named refusals in the payload.
+    payback = None
+    try:
+        from ...planning.payback import channel_payback
+
+        payback = channel_payback(model, max_draws=300).to_dict()
+    except Exception:  # noqa: BLE001 — report renders fine without it
+        payback = None
+
     assumptions = [r.to_dict() for r in model_assumptions(model)]
 
     # Triangulation panel (issue #104): MMM × experiment × platform. Use a
@@ -1641,6 +1652,7 @@ def interactive_report_facts(
         "triangulation": _jsafe(tri_facts) if tri_facts else None,
         "pacing": _jsafe(pacing) if pacing else None,
         "long_term": _jsafe(long_term) if long_term else None,
+        "payback": _jsafe(payback) if payback else None,
         "evidence": _jsafe(evidence),
         "yoy": yoy,
         "mediation": mediation,

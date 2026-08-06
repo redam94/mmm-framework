@@ -82,6 +82,7 @@ _PAYLOAD_KEYS = (
     "triangulation",
     "pacing",
     "long_term",
+    "payback",
     "evidence",
 )
 
@@ -205,6 +206,7 @@ class InteractiveReportGenerator:
             self._section_triangulation,
             self._section_pacing,
             self._section_long_term,
+            self._section_payback,
             self._section_pathways,
             self._section_latent,
             self._section_prior_posterior,
@@ -685,6 +687,26 @@ class InteractiveReportGenerator:
             "long-term",
             "Short-term vs long-term (brand)",
             "The brand horizon",
+            body,
+        )
+
+    def _section_payback(self) -> tuple[_NavEntry, str] | None:
+        pb = self.facts.get("payback")
+        if not pb or not pb.get("channels"):
+            return None
+        body = (
+            '<p class="lede">The lag at which half (t50) and most (t90) of each '
+            "channel's fitted carryover has landed, per posterior draw. A "
+            "response-timing statement resting on the model's least identified "
+            "parameter — the table carries the interval, the truncated-tail "
+            "disclosure and the carryover-learning verdict the number cannot "
+            "travel without.</p>"
+            '<div class="ir-payback" id="paybackPanel"></div>'
+        )
+        return _NavEntry("payback", "Payback"), self._wrap(
+            "payback",
+            "Response timing",
+            "When the effect lands",
             body,
         )
 

@@ -54,6 +54,7 @@ __all__ = [
     "ChannelEvidence",
     "DEFAULT_CONTRACTION_MIN",
     "DEFAULT_VIF_MAX",
+    "carryover_learning",
     "channel_evidence",
     "evidence_for_model",
     "collinearity_from_matrix",
@@ -126,6 +127,21 @@ DEFAULT_VIF_MAX = 5.0
 # whose base name (before any ``[geo]`` index) is ``<prefix><channel>`` is
 # attributed to that channel.
 _CHANNEL_PARAM_PREFIXES = ("beta_", "roi_", "beta_media_")
+
+# Parameter-name prefixes that carry a channel's CARRYOVER (issue #224). These
+# are deliberately NOT in _CHANNEL_PARAM_PREFIXES: the ROI evidence tier
+# answers "is the effect SIZE evidence-backed?", and folding a slow-to-learn
+# adstock alpha into that worst-case would downgrade a well-learned ROI for a
+# reason that does not bear on it. A payback horizon's credibility rests on
+# exactly these rows, so the payback surface reads them via
+# :func:`carryover_learning` instead — same attribution rule, different
+# parameter set, each number gated on the parameters IT depends on.
+_CHANNEL_CARRYOVER_PREFIXES = (
+    "adstock_alpha_",
+    "adstock_theta_",
+    "adstock_shape_",
+    "adstock_scale_",
+)
 
 # Learning verdicts that mean "the location moved a lot even if the width did
 # not" — these are NOT prior-dominated (the evidence dominated the location).
@@ -270,20 +286,17 @@ class ChannelEvidence:
 # =============================================================================
 
 
-def _channel_learning(
-    learning: "pd.DataFrame | None", channel: str
+def _worst_learning(
+    learning: "pd.DataFrame | None", channel: str, prefixes: tuple[str, ...]
 ) -> tuple[float | None, str | None]:
-    """Worst (least-learned) contraction + its verdict for a channel's parameters.
-
-    Matches learning-frame rows whose base parameter name (before any ``[geo]``
-    index) is ``<prefix><channel>`` for the channel-effect prefixes, and returns
-    the row with the SMALLEST contraction (the worst case dominates the tier).
-    """
+    """Worst (least-learned) contraction + verdict over ``<prefix><channel>``
+    rows. Shared by the effect-size and carryover attributions so the two
+    surfaces cannot disagree about what "attributed to this channel" means."""
     if learning is None or getattr(learning, "empty", True):
         return None, None
     if "parameter" not in learning.columns:
         return None, None
-    targets = {f"{p}{channel}" for p in _CHANNEL_PARAM_PREFIXES}
+    targets = {f"{p}{channel}" for p in prefixes}
     worst_c: float | None = None
     worst_verdict: str | None = None
     for _, row in learning.iterrows():
@@ -304,6 +317,36 @@ def _channel_learning(
             worst_c = c
             worst_verdict = verdict
     return worst_c, worst_verdict
+
+
+def _channel_learning(
+    learning: "pd.DataFrame | None", channel: str
+) -> tuple[float | None, str | None]:
+    """Worst (least-learned) contraction + its verdict for a channel's EFFECT
+    parameters (``beta_``/``roi_``/``beta_media_``).
+
+    Matches learning-frame rows whose base parameter name (before any ``[geo]``
+    index) is ``<prefix><channel>`` for the channel-effect prefixes, and returns
+    the row with the SMALLEST contraction (the worst case dominates the tier).
+    """
+    return _worst_learning(learning, channel, _CHANNEL_PARAM_PREFIXES)
+
+
+def carryover_learning(
+    learning: "pd.DataFrame | None", channel: str
+) -> tuple[float | None, str | None]:
+    """Worst-case contraction + verdict over a channel's CARRYOVER parameters
+    (``adstock_alpha_/theta_/shape_/scale_``) — the extension point issue #224
+    names.
+
+    The effect-size prefixes filter these rows out before the tier decision,
+    which is correct for an ROI chip and fatal for a payback horizon: a horizon
+    is a function of exactly these parameters, and rendering one whose alpha
+    never moved off its prior as a confident number is how "TV pays back in 3
+    weeks" gets read as a measurement when it is an assumption. Consumed by
+    :func:`mmm_framework.planning.payback.channel_payback`.
+    """
+    return _worst_learning(learning, channel, _CHANNEL_CARRYOVER_PREFIXES)
 
 
 def channel_evidence(

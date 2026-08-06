@@ -50,6 +50,22 @@ Design Anchor
    :undoc-members:
    :show-inheritance:
 
+Payback
+-------
+
+.. automodule:: mmm_framework.planning.payback
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Discount
+--------
+
+.. automodule:: mmm_framework.planning.discount
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Opportunity Cost
 ----------------
 

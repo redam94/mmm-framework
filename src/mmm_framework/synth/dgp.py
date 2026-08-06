@@ -254,7 +254,12 @@ def _counterfactual_truth(
     return pd.Series(out, name="true_contribution")
 
 
-def _adstock_truth(channels: list[str], *, l_max: int = 8) -> dict:
+def _adstock_truth(
+    channels: list[str],
+    *,
+    l_max: int = 8,
+    alphas: dict[str, float] | None = None,
+) -> dict:
     """Planted carryover truth, in the estimator's own units.
 
     ``_geom_adstock`` plants a kernel that is **truncated at l_max and
@@ -263,10 +268,16 @@ def _adstock_truth(channels: list[str], *, l_max: int = 8) -> dict:
     fail for the wrong reason. Export the kernel the DGP actually applied:
     ``cum_share[k]`` is the fraction of a channel's total effect realized by lag
     ``k``, which is exactly what a payback horizon reads.
+
+    ``alphas`` defaults to the four-channel :data:`_ALPHA` table; the
+    seven-channel realistic world passes its own (:data:`_R_ALPHA`) — it used to
+    export no carryover truth at all, which made "grade payback on realistic"
+    unrunnable (issue #224).
     """
+    table = _ALPHA if alphas is None else alphas
     out: dict[str, dict] = {}
     for c in channels:
-        alpha = _ALPHA.get(c)
+        alpha = table.get(c)
         if alpha is None:
             continue
         if alpha <= 0:
@@ -275,8 +286,42 @@ def _adstock_truth(channels: list[str], *, l_max: int = 8) -> dict:
             w = alpha ** np.arange(l_max, dtype=float)
             w = w / w.sum()
         out[c] = {
+            "family": "geometric",
             "alpha": float(alpha),
             "l_max": int(l_max if alpha > 0 else 1),
+            "normalize": True,
+            "cum_share": [float(v) for v in np.cumsum(w)],
+        }
+    return out
+
+
+def _weibull_adstock_truth(
+    channels: list[str],
+    shape: dict[str, float],
+    scale: dict[str, float],
+    l_max: int,
+) -> dict:
+    """The planted Weibull carryover truth, same shape as :func:`_adstock_truth`.
+
+    Exists because ``_finish``'s ``setdefault`` would otherwise stamp the
+    GEOMETRIC :data:`_ALPHA` table onto a world that actually applied a Weibull
+    kernel — ``make_adstock_misspec``'s answer key described the model's family
+    rather than the planted one, so the one world built to grade carryover
+    misspecification could not honestly grade it (issue #224).
+    """
+    out: dict[str, dict] = {}
+    for c in channels:
+        if c not in shape or c not in scale:
+            continue
+        k = np.arange(l_max, dtype=float)
+        t = (k + 1.0) / scale[c]
+        w = (shape[c] / scale[c]) * t ** (shape[c] - 1.0) * np.exp(-(t ** shape[c]))
+        w = w / w.sum()
+        out[c] = {
+            "family": "weibull",
+            "shape": float(shape[c]),
+            "scale": float(scale[c]),
+            "l_max": int(l_max),
             "normalize": True,
             "cum_share": [float(v) for v in np.cumsum(w)],
         }
@@ -625,7 +670,14 @@ def make_adstock_misspec(seed: int = 4, *, n_weeks: int | None = None) -> Scenar
         noise,
         controls,
         fn,
-        notes={"true_l_max": l_true},
+        notes={
+            "true_l_max": l_true,
+            # The kernel the world ACTUALLY applied. Without this explicit
+            # entry, _finish's setdefault stamps the geometric _ALPHA truth
+            # onto a Weibull world, and the one world built to grade carryover
+            # misspecification grades against the wrong answer key.
+            "true_adstock": _weibull_adstock_truth(CHANNELS, shape, scale, l_true),
+        },
     )
 
 
@@ -1461,6 +1513,13 @@ def make_realistic(seed: int = 42, *, n_weeks: int | None = None) -> Scenario:
             "weak_channels": _R_WEAK,
             "mediated_channels": _R_MEDIATED,
             "latent_demand": demand,
+            # Carryover answer key. This factory bypasses _finish, so it never
+            # inherited the automatic export — grading a payback horizon on
+            # `realistic` was impossible until this line (issue #224). Uses this
+            # world's own alpha table; the mediated channels' carryover is the
+            # same _geom_adstock on both the direct and mediated paths, so one
+            # kernel per channel is the true timing.
+            "true_adstock": _adstock_truth(_R_CHANNELS, alphas=_R_ALPHA),
         },
     )
 
