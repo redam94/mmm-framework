@@ -437,15 +437,29 @@ def _loo_summary(model: Any) -> dict[str, float] | None:
             with graph:
                 pm.compute_log_likelihood(trace)
         loo = az.loo(trace, pointwise=True)
+        # Field names via the compat layer. arviz 1.x renamed `elpd_loo`/`p_loo`
+        # to the generic `elpd`/`p`, and reading the old spelling raised inside
+        # the best-effort `except` below -- which turned LOO stacking into a
+        # silent no-op: every spec came back with an equal weight, which is
+        # exactly what the caller's documented fallback looks like.
+        from ..utils import arviz_compat as _az_compat
+
+        _elpd = _az_compat.elpd_scalar(loo, "elpd")
+        if _elpd is None:
+            raise AttributeError("ELPDData carries no recognizable elpd field")
+        _k = _az_compat.elpd_field(loo, "pareto_k")
+        _k_thresh = _az_compat.elpd_pareto_k_threshold(loo)
         n_bad = (
-            int((np.asarray(loo.pareto_k.values) > 0.7).sum())
-            if hasattr(loo, "pareto_k")
+            int((np.asarray(getattr(_k, "values", _k)) > _k_thresh).sum())
+            if _k is not None
             else 0
         )
+        _se = _az_compat.elpd_scalar(loo, "se")
+        _p = _az_compat.elpd_scalar(loo, "p")
         return {
-            "elpd_loo": float(loo.elpd_loo),
-            "se": float(loo.se),
-            "p_loo": float(loo.p_loo),
+            "elpd_loo": float(_elpd),
+            "se": float(_se) if _se is not None else float("nan"),
+            "p_loo": float(_p) if _p is not None else float("nan"),
             "n_bad_k": n_bad,
         }
     except Exception as e:  # noqa: BLE001 — LOO is best-effort

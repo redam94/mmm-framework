@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 from loguru import logger
 
+from ..utils import arviz_compat as _az_compat
 from .channel_diagnostics import ChannelDiagnostics
 from .config import ValidationConfig
 from .posterior_predictive import PPCValidator
@@ -193,9 +194,18 @@ class ModelValidator:
             try:
                 summary.model_comparison = self._run_model_comparison(config)
                 if config.verbose:
-                    logger.info(
-                        f"Model comparison: LOO ELPD = {summary.model_comparison.models[0].loo.elpd_loo:.2f}"
-                    )
+                    # Defensive on purpose. `_run_model_comparison` returns an
+                    # entry with `loo=None` when the criterion could not be
+                    # computed, and dereferencing it unguarded raised inside
+                    # this `try` — which discarded the whole comparison result
+                    # and reported "Model comparison failed" for what was only
+                    # a missing log line.
+                    _entry = (summary.model_comparison.models or [None])[0]
+                    _loo = getattr(_entry, "loo", None)
+                    if _loo is not None:
+                        logger.info(f"Model comparison: LOO ELPD = {_loo.elpd_loo:.2f}")
+                    else:
+                        logger.info("Model comparison: LOO ELPD unavailable")
             except Exception as e:
                 logger.warning(f"Model comparison failed: {e}")
                 summary.warnings.append(f"Model comparison failed: {str(e)}")
@@ -365,23 +375,48 @@ class ModelValidator:
         if method in ("loo", "both"):
             try:
                 loo_data = az.loo(trace, pointwise=config.model_comparison.pointwise)
+                # Field names go through the compat layer: arviz 1.x made
+                # ELPDData one container for every criterion, so `elpd_loo` /
+                # `p_loo` / `loo_i` became `elpd` / `p` / `elpd_i`. Read
+                # directly, the rename raises AttributeError inside this
+                # `except` and model comparison goes silently missing from
+                # every validation run instead of failing visibly.
+                _elpd = _az_compat.elpd_scalar(loo_data, "elpd")
+                _p = _az_compat.elpd_scalar(loo_data, "p")
+                _se = _az_compat.elpd_scalar(loo_data, "se")
+                if _elpd is None:
+                    raise AttributeError(
+                        "arviz returned an ELPDData carrying no recognizable "
+                        "elpd field; cannot report LOO."
+                    )
+                _k = _az_compat.elpd_field(loo_data, "pareto_k")
+                _k_values = (
+                    np.asarray(getattr(_k, "values", _k)) if _k is not None else None
+                )
+                # The k threshold is sample-size dependent in arviz 1.x
+                # (`good_k`), and at small draw counts the honest bar is below
+                # the historical 0.7 constant.
+                _k_thresh = _az_compat.elpd_pareto_k_threshold(
+                    loo_data, config.model_comparison.pareto_k_threshold
+                )
+                _pointwise = (
+                    _az_compat.elpd_field(loo_data, "pointwise")
+                    if config.model_comparison.pointwise
+                    else None
+                )
                 loo_results = LOOResults(
-                    elpd_loo=float(loo_data.elpd_loo),
-                    se_elpd_loo=float(loo_data.se),
-                    p_loo=float(loo_data.p_loo),
-                    pareto_k=(
-                        loo_data.pareto_k.values
-                        if hasattr(loo_data, "pareto_k")
-                        else None
-                    ),
+                    elpd_loo=float(_elpd),
+                    se_elpd_loo=float(_se) if _se is not None else float("nan"),
+                    p_loo=float(_p) if _p is not None else float("nan"),
+                    pareto_k=_k_values,
                     n_bad_k=(
-                        int((loo_data.pareto_k > 0.7).sum())
-                        if hasattr(loo_data, "pareto_k")
+                        int((_k_values > _k_thresh).sum())
+                        if _k_values is not None
                         else 0
                     ),
                     pointwise_elpd=(
-                        loo_data.loo_i.values
-                        if config.model_comparison.pointwise
+                        np.asarray(getattr(_pointwise, "values", _pointwise))
+                        if _pointwise is not None
                         else None
                     ),
                 )
@@ -393,20 +428,44 @@ class ModelValidator:
                 logger.warning(f"LOO-CV computation failed: {e}")
 
         if method in ("waic", "both"):
-            try:
-                waic_data = az.waic(trace, pointwise=config.model_comparison.pointwise)
-                waic_results = WAICResults(
-                    waic=float(waic_data.waic),
-                    se_waic=float(waic_data.se),
-                    p_waic=float(waic_data.p_waic),
-                    pointwise=(
-                        waic_data.waic_i.values
+            # arviz 1.x removed WAIC outright in favour of PSIS-LOO. There is
+            # nothing to shim, so say the metric is gone and name the
+            # replacement rather than logging a bare AttributeError that reads
+            # like a transient failure.
+            if not _az_compat.has_waic():
+                _msg = (
+                    "WAIC is not available in this arviz (>=1.0 removed it in "
+                    "favour of PSIS-LOO, which is strictly preferable for the "
+                    "same purpose). Use method='loo'."
+                )
+                logger.warning(_msg)
+                if method == "waic":
+                    raise NotImplementedError(_msg)
+            else:
+                try:
+                    waic_data = az.waic(
+                        trace, pointwise=config.model_comparison.pointwise
+                    )
+                    _w_elpd = _az_compat.elpd_scalar(waic_data, "elpd")
+                    _w_p = _az_compat.elpd_scalar(waic_data, "p")
+                    _w_se = _az_compat.elpd_scalar(waic_data, "se")
+                    _w_pw = (
+                        _az_compat.elpd_field(waic_data, "pointwise")
                         if config.model_comparison.pointwise
                         else None
-                    ),
-                )
-            except Exception as e:
-                logger.warning(f"WAIC computation failed: {e}")
+                    )
+                    waic_results = WAICResults(
+                        waic=float(_w_elpd),
+                        se_waic=float(_w_se) if _w_se is not None else float("nan"),
+                        p_waic=float(_w_p) if _w_p is not None else float("nan"),
+                        pointwise=(
+                            np.asarray(getattr(_w_pw, "values", _w_pw))
+                            if _w_pw is not None
+                            else None
+                        ),
+                    )
+                except Exception as e:
+                    logger.warning(f"WAIC computation failed: {e}")
 
         entry = ModelComparisonEntry(
             name=type(self.model).__name__,
