@@ -30,6 +30,7 @@ from .sections import (
     SaturationSection,
     SensitivitySection,
     PacingSection,
+    VarianceSection,
     LongTermSection,
     TriangulationSection,
     SpecCurveSection,
@@ -99,6 +100,7 @@ class MMMReportGenerator:
         llm: Any | None = None,
         allocation: dict | None = None,
         pacing: dict | None = None,
+        variance: dict | None = None,
         triangulation: dict | None = None,
         spec_curve: dict | None = None,
         cfo: dict | None = None,
@@ -124,6 +126,10 @@ class MMMReportGenerator:
         # PacingSection renders only when a pacing payload is attached.
         if pacing is not None:
             self.data.pacing = pacing
+        # Variance to plan (issue #227). Data-gated: the VarianceSection
+        # renders only when a VarianceBridge.to_dict() payload is attached.
+        if variance is not None:
+            self.data.variance = variance
         # Triangulation panel — MMM × experiment × platform (issue #104).
         # Data-gated: the TriangulationSection renders only when attached.
         if triangulation is not None:
@@ -240,6 +246,7 @@ class MMMReportGenerator:
             ("saturation", SaturationSection, _mmm(self.config.saturation)),
             ("sensitivity", SensitivitySection, _mmm(self.config.sensitivity)),
             ("pacing", PacingSection, _mmm(self.config.pacing)),
+            ("variance", VarianceSection, _mmm(self.config.variance)),
             ("long_term", LongTermSection, _mmm(self.config.long_term)),
             ("triangulation", TriangulationSection, _mmm(self.config.triangulation)),
             ("spec_curve", SpecCurveSection, _mmm(self.config.spec_curve)),

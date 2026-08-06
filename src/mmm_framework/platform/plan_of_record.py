@@ -85,8 +85,26 @@ class CommitRefusal:
     #: What the caller would have to change, as opposed to waive.
     remedy: str
 
-    def to_dict(self) -> dict[str, str]:
-        return {"gate": self.gate, "reason": self.reason, "remedy": self.remedy}
+    @property
+    def overridable(self) -> bool:
+        """Whether an explicit acknowledgement can waive this gate.
+
+        Only the named forecast-quality gates are waivable; ``forecast`` /
+        ``provenance`` / ``valuation`` refusals are structural — waiving them
+        would produce exactly the unreproducible or un-denominable commitment
+        the store exists to prevent. (The agent tool and the FE read this
+        field; it used to not exist, so any assess with a refusal crashed the
+        tool with AttributeError.)
+        """
+        return self.gate in ALL_GATES
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "gate": self.gate,
+            "reason": self.reason,
+            "remedy": self.remedy,
+            "overridable": self.overridable,
+        }
 
 
 @dataclass
@@ -494,9 +512,20 @@ def reproduce_committed_plan(
         panel = getattr(rebuilt, "panel", None)
         model = MMMSerializer.load(model_path, panel)
 
+        # The commit path stores these inside the FORECAST snapshot (the
+        # forecast_plan op emits plan_media/plan_controls/random_seed since
+        # #227); older payloads may carry them top-level, and the seed also
+        # rides provenance. Reading only payload-top-level was a live defect:
+        # every real commitment refused reproduction with "records no
+        # per-period spend plan" while the acceptance criterion read as met.
         plan = payload.get("plan_media") or snapshot.get("plan_media")
-        controls = payload.get("plan_controls")
-        seed = payload.get("random_seed", 42)
+        controls = payload.get("plan_controls") or snapshot.get("plan_controls")
+        seed = (
+            payload.get("random_seed")
+            or snapshot.get("random_seed")
+            or prov.get("random_seed")
+            or 42
+        )
         if not plan:
             return ReproductionResult(
                 reproduced=False,

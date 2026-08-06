@@ -1599,6 +1599,129 @@ class AugurPacingSection(AugurSection):
         """
 
 
+class AugurVarianceSection(AugurSection):
+    """Variance to plan — the augur client-deck view (issue #227).
+
+    The interval verdict leads: a realized total inside the committed band is
+    within the committed uncertainty, not a gap owed a story. Then the bridge
+    — per-channel delivery variance on the committed posterior, supplied
+    adjustments, and a LABELLED unexplained remainder — summing exactly to
+    actual − committed. Data-gated on ``bundle.variance``."""
+
+    section_id = "variance"
+    default_title = "Variance to plan"
+    eyebrow = "Plan vs realized"
+
+    _CHIP = {
+        "modelled": ("t-scale", "Modelled"),
+        "supplied": ("t-hold", "Supplied"),
+        "residual": ("t-hold", "Residual"),
+    }
+
+    @property
+    def is_enabled(self) -> bool:
+        return super().is_enabled and bool(getattr(self.data, "variance", None))
+
+    def render(self) -> str:
+        var = getattr(self.data, "variance", None)
+        if not self.is_enabled or not var:
+            return ""
+        rows = list(var.get("rows") or [])
+        if not rows:
+            return ""
+        return self._wrap(self._verdict(var) + self._bridge(var, rows))
+
+    def _verdict(self, var: dict) -> str:
+        actual = float(var.get("actual_kpi", 0.0))
+        committed = float(var.get("committed_kpi", 0.0))
+        gap = float(var.get("gap", actual - committed))
+        within = var.get("within_committed_interval")
+        mass = var.get("interval_mass")
+        pct = f"{float(mass):.0%}" if mass is not None else "committed"
+        band = ""
+        if var.get("committed_lower") is not None:
+            band = (
+                f" <span class='mono' style='opacity:.7'>{pct} band "
+                f"[{float(var['committed_lower']):,.0f}, "
+                f"{float(var['committed_upper']):,.0f}]</span>"
+            )
+        if within is True:
+            lede = (
+                f'<p class="lede"><strong>Within the committed interval.</strong> '
+                f"The realized total sits inside the {pct} band that was "
+                "committed to — this bridge explains composition, not a "
+                "surprise.</p>"
+            )
+        elif within is False:
+            lede = (
+                f'<p class="lede"><strong>Outside the committed interval.</strong> '
+                f"The miss exceeds the {pct} uncertainty that was committed "
+                "to.</p>"
+            )
+        else:
+            lede = (
+                '<p class="lede">The within-interval verdict is unavailable '
+                "for this commitment — unavailable, not passed.</p>"
+            )
+        n_periods = len(var.get("period_set") or [])
+        return (
+            f"{lede}"
+            f"<p>Realized <strong>{actual:,.0f}</strong> vs committed "
+            f"<strong>{committed:,.0f}</strong>{band} over {n_periods} "
+            f"periods — gap <strong>{gap:+,.0f}</strong>, and the bridge "
+            "below sums to it exactly.</p>"
+        )
+
+    def _bridge(self, var: dict, rows: list[dict]) -> str:
+        value_per_kpi = var.get("value_per_kpi")
+        show_dollars = value_per_kpi is not None and not var.get(
+            "dollar_headline_suppressed"
+        )
+        body = []
+        for r in rows:
+            prov = str(r.get("provenance", ""))
+            chip_cls, chip_lbl = self._CHIP.get(prov, ("t-hold", prov or "—"))
+            v = float(r.get("value", 0.0))
+            dollar_cell = (
+                f"<td class='mono'>{self._money(v * float(value_per_kpi))}</td>"
+                if show_dollars
+                else ""
+            )
+            body.append(
+                f"<tr><td>{self._ch(r.get('name', ''))}</td>"
+                f"<td class='mono'>{v:+,.0f}</td>"
+                f"{dollar_cell}"
+                f'<td><span class="tier-chip {chip_cls}">{chip_lbl}</span></td></tr>'
+            )
+        total = sum(float(r.get("value", 0.0)) for r in rows)
+        total_dollar = (
+            f"<td class='mono'><strong>{self._money(total * float(value_per_kpi))}"
+            "</strong></td>"
+            if show_dollars
+            else ""
+        )
+        body.append(
+            f"<tr><td><strong>Total (= gap)</strong></td>"
+            f"<td class='mono'><strong>{total:+,.0f}</strong></td>"
+            f"{total_dollar}<td>sums exactly</td></tr>"
+        )
+        dollar_head = "<th>Dollars</th>" if show_dollars else ""
+        notes = ""
+        caveats = [str(c) for c in (var.get("caveats") or [])]
+        refusals = [str(r) for r in (var.get("refusals") or [])]
+        if refusals or caveats:
+            items = "".join(f"<li>{self._ch(t)}</li>" for t in [*refusals, *caveats])
+            notes = f"<ul class='small'>{items}</ul>"
+        return f"""
+            <table class="data-table">
+              <thead><tr><th>Line</th><th>KPI units</th>{dollar_head}
+                <th>Provenance</th></tr></thead>
+              <tbody>{"".join(body)}</tbody>
+            </table>
+            {notes}
+        """
+
+
 class AugurLongTermSection(AugurSection):
     """Short-term vs long-term (brand) — the augur client-deck view (issues
     #106/#122). Leads with the ESTIMATED long-term (brand) share when the model
@@ -2025,6 +2148,7 @@ AUGUR_SECTIONS: list[tuple[str, type[AugurSection], str]] = [
     ("allocation", AugurAllocationSection, "allocation"),
     ("flighting", AugurFlightingSection, "flighting"),
     ("pacing", AugurPacingSection, "pacing"),
+    ("variance", AugurVarianceSection, "variance"),
     ("deepdives", AugurDeepDivesSection, "deep_dives"),
     ("carryover", AugurCarryoverSection, "carryover"),
     ("ppc-fit", AugurModelFitSection, "ppc_timeseries"),
@@ -2051,6 +2175,7 @@ __all__ = [
     "AugurAllocationSection",
     "AugurFlightingSection",
     "AugurPacingSection",
+    "AugurVarianceSection",
     "AugurDeepDivesSection",
     "AugurCarryoverSection",
     "AugurModelFitSection",

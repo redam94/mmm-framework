@@ -239,6 +239,57 @@ frozen public contract breaks, and the contract itself is pinned by
   REST: `GET/POST /projects/{id}/actuals` (upload mirrors the delivery ingest; `as_of` and
   `kpi_name` as query params). 15 tests in `tests/test_actuals_store.py`.
 
+- **Variance to plan: delivery-driven vs unexplained, and the bridge closes** ([#227] complete).
+
+  A plan was committed; a season happened; the CFO asks why the miss. Without a refit only two
+  buckets are identifiable, and the surface ships exactly those. **Delivery variance** re-runs
+  the committed forecast twice with the recorded seed — under the plan and under actual spend —
+  on the **committed posterior**: per-channel rows from the forecast's own decomposition, a
+  paired-draw interval on the total. **Unexplained** is realized KPI minus the forecast under
+  actual spend, LABELLED for what it mixes (baseline movement, competitor action, data error,
+  model error, noise) rather than attributed. The refit "effectiveness" split
+  (`g_new(S_actual) − g_plan(S_actual)`) is **refused with the reason stated** — that subtraction
+  mixes more data, a different window, spec changes and MC noise — and the `compare_runs` diff
+  (what actually changed) is attached in its place; the word "effectiveness" appears on no
+  surface, by test.
+
+  - **Engine** `planning/variance.py` — rows sum to actual − committed **to 1e-9 by
+    construction** (sub-tolerance reproduction drift is carried as its own row; a model that
+    does not reproduce the committed snapshot is refused outright — a delivery bucket on a
+    different posterior would be the refit comparison in disguise). The
+    **committed-interval verdict leads** every rendering, computed from the committed
+    window-total *draws* (per-period bounds cannot give it). Refusals: partial actuals coverage;
+    supplied lines on a non-dollar KPI; per-channel supplied restatement. `sum_equals`-pinned
+    frequentist fits suppress the independent-reconciliation framing; mixed efficiency-measured
+    portfolios suppress the blended dollar headline.
+  - **Provenance** `finance/lines.py` gains `SUPPLIED` — a human adjustment line (gross-to-net,
+    returns) with a **required source note** and no invented interval; supplied lines subtract
+    from the remainder, never from a channel.
+  - **The #225 criterion actually holds now.** The `forecast_plan` op emits
+    `plan_media`/`plan_controls`/`random_seed` inside the forecast snapshot and
+    `reproduce_committed_plan` reads them (with snapshot fallback) — previously every real
+    commitment refused reproduction with "records no per-period spend plan" while the criterion
+    read as met. An end-to-end roundtrip test now reproduces a commitment from provenance to
+    1e-9 and refuses on a mutated dataset. Also fixed: `CommitRefusal.overridable` (the commit
+    tool crashed on `AttributeError` before any refusal could render).
+  - **Pacing window fix.** `expected_outcome_delta` fed *elapsed* totals into *full-window*
+    response curves (landing on the steep left; `np.interp` clamps silently past the grid).
+    With `elapsed_fraction` it projects totals to the curve's axis and scales the delta back,
+    and the payload names its `window_basis`; `compute_pacing` reports the fraction.
+  - **Platform** `platform/variance.py` (lean-core) assembles inputs from the stores and
+    refuses at assembly time: no committed plan, no realized KPI, delivery gaps over the
+    committed window ("assuming plan-as-delivered would fabricate a zero delivery variance"),
+    a changed dataset. **REST**: `POST /projects/{id}/variance` (refusals are 409s at POST
+    time; the job loads the **committed** run, never the latest) + poll endpoint. **Agent**:
+    `get_variance_to_plan` tool + `variance_to_plan` model op. **Report**: `VarianceSection` +
+    `AugurVarianceSection`, verdict first (`MMMReportGenerator(..., variance=...)`).
+    **Frontend**: Performance → Variance panel (start/poll, provenance chips, refusals
+    verbatim).
+  - **Notebook** `nbs/demos/variance_to_plan.ipynb` — the whole loop on a world with a causal
+    answer key: the delivery rows graded against `response_fn` truth (TV planted at 1.3×,
+    Search at 0.7×; signs and interval coverage verified), every refusal demonstrated live.
+    38 tests in `tests/test_variance_bridge.py`.
+
 - **The plan of record is reachable: REST, agent tool, Planner commit action — and pacing now
   grades against what was promised** ([#225] remainder; the append-only store, gates and
   reproducibility landed in #267–#269).

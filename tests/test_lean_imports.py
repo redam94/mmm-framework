@@ -79,6 +79,10 @@ CORE_IMPORTS = [
     "mmm_framework.platform.history",
     "mmm_framework.platform.runs",
     "mmm_framework.platform.pacing",
+    # Realized-KPI actuals parsing/reconciliation (#227): numpy + stdlib.
+    "mmm_framework.platform.actuals",
+    # Variance-to-plan input assembly (#227): store reads + numpy, no web deps.
+    "mmm_framework.platform.variance",
     # The commitment gate is stdlib-only by design — the server and the agent
     # both import it, and neither should pull the reporting stack to get it.
     "mmm_framework.platform.plan_of_record",

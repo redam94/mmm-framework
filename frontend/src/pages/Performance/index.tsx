@@ -10,6 +10,7 @@ import { ModelHealthPanel } from './ModelHealthPanel';
 import { ResponseCurvesPanel } from './ResponseCurvesPanel';
 import { EstimandsPanel } from './EstimandsPanel';
 import { PacingPanel } from './PacingPanel';
+import { VarianceBridgePanel } from './VarianceBridgePanel';
 import { RobustnessPanel } from './RobustnessPanel';
 import { ScorecardPanel } from './ScorecardPanel';
 
@@ -18,6 +19,7 @@ type TabId =
   | 'estimands'
   | 'saturation'
   | 'pacing'
+  | 'variance'
   | 'robustness'
   | 'scorecard'
   | 'agreement'
@@ -29,6 +31,7 @@ const TABS = [
   { id: 'estimands', label: 'Estimands' },
   { id: 'saturation', label: 'Saturation & ROAS' },
   { id: 'pacing', label: 'Pacing' },
+  { id: 'variance', label: 'Variance' },
   { id: 'robustness', label: 'Robustness' },
   { id: 'scorecard', label: 'Scorecard' },
   { id: 'agreement', label: 'Agreement' },
@@ -40,6 +43,7 @@ function tabFromPath(pathname: string): TabId {
   if (pathname.endsWith('/estimands')) return 'estimands';
   if (pathname.endsWith('/saturation')) return 'saturation';
   if (pathname.endsWith('/pacing')) return 'pacing';
+  if (pathname.endsWith('/variance')) return 'variance';
   if (pathname.endsWith('/robustness')) return 'robustness';
   if (pathname.endsWith('/scorecard')) return 'scorecard';
   if (pathname.endsWith('/agreement')) return 'agreement';
@@ -91,6 +95,10 @@ export function PerformancePage() {
         // Pacing reads its own endpoint (auto-sources the plan; own empty states)
         // and is not gated behind run_metrics history.
         <PacingPanel projectId={currentProjectId} />
+      ) : active === 'variance' ? (
+        // Variance to plan (#227): committed forecast vs realized KPI — a job
+        // it starts + polls itself; refusals surface verbatim (own states).
+        <VarianceBridgePanel projectId={currentProjectId} />
       ) : active === 'robustness' ? (
         // Spec-curve runs its own (background) sweep + polls; own empty/loading.
         <RobustnessPanel projectId={currentProjectId} />

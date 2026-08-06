@@ -36,6 +36,7 @@ __all__ = [
     "MODELLED",
     "OBSERVED",
     "RESIDUAL",
+    "SUPPLIED",
     "BridgeLine",
     "LineProvenance",
     "absorbs_residual",
@@ -68,6 +69,12 @@ class LineProvenance(str, Enum):
     residual inside a bar labelled something else. Renderable, but only with the
     caveat attached."""
 
+    SUPPLIED = "supplied"
+    """A human-supplied adjustment (gross-to-net, returns, trade spend): a
+    point value with a REQUIRED source note and no interval fields — supplied
+    numbers have no sampling distribution to summarise, and rendering one with
+    a band would dress an assertion as an estimate (issue #227)."""
+
 
 #: Module-level aliases, mirroring ``diagnostics.provenance``'s BAYESIAN /
 #: FREQUENTIST, so call sites can compare against a plain string.
@@ -75,6 +82,7 @@ MODELLED = LineProvenance.MODELLED
 OBSERVED = LineProvenance.OBSERVED
 RESIDUAL = LineProvenance.RESIDUAL
 ABSORBING = LineProvenance.ABSORBING
+SUPPLIED = LineProvenance.SUPPLIED
 
 
 def provenance_of(value: Any) -> LineProvenance:
@@ -128,10 +136,29 @@ class BridgeLine:
     it only in provenance detail."""
     note: str = ""
     """Caveat to render with the line. Required reading for an ABSORBING line."""
+    source_note: str = ""
+    """Where a SUPPLIED number came from — required, non-blank, for SUPPLIED
+    lines. "Finance sent it over" is not a source; name the document, system
+    or person."""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "provenance", provenance_of(self.provenance))
         object.__setattr__(self, "value", float(self.value))
+        if self.provenance is SUPPLIED:
+            if not str(self.source_note).strip():
+                raise ValueError(
+                    f"BridgeLine {self.name!r}: a SUPPLIED line requires a "
+                    "non-blank source_note — an unattributed adjustment is "
+                    "exactly the unauditable plug this vocabulary exists to "
+                    "prevent."
+                )
+            if self.lower is not None or self.upper is not None:
+                raise ValueError(
+                    f"BridgeLine {self.name!r}: a SUPPLIED line carries no "
+                    "interval — a supplied number has no sampling "
+                    "distribution, and a band would dress an assertion as an "
+                    "estimate."
+                )
         if (self.lower is None) != (self.upper is None):
             raise ValueError(
                 f"BridgeLine {self.name!r}: an interval needs both bounds; got "
@@ -169,6 +196,8 @@ class BridgeLine:
             tail = "observed"
         elif self.provenance is RESIDUAL:
             tail = "residual, observed minus fitted"
+        elif self.provenance is SUPPLIED:
+            tail = f"supplied ({self.source_note})"
         else:
             tail = "leftover, so it also carries the model residual"
         out = f"{head} [{tail}]"
@@ -185,6 +214,7 @@ class BridgeLine:
             "interval_mass": self.interval_mass,
             "basis": self.basis,
             "note": self.note,
+            "source_note": self.source_note,
             "absorbs_residual": self.absorbs_residual,
         }
 

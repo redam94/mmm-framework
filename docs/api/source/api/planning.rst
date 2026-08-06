@@ -74,6 +74,14 @@ Discount
    :undoc-members:
    :show-inheritance:
 
+Variance to Plan
+----------------
+
+.. automodule:: mmm_framework.planning.variance
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Opportunity Cost
 ----------------
 

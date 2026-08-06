@@ -842,5 +842,13 @@
   {
     "method": "POST",
     "path": "/projects/{project_id}/actuals"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/variance"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/variance/{job_id}"
   }
 ]

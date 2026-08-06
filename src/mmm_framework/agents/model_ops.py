@@ -1656,6 +1656,41 @@ def _budget_v2_extras(
     return extras, notes
 
 
+def _plan_as_dict(mmm: Any, plan: Any) -> dict | None:
+    """Normalize a future-media plan to a JSON-able ``{channel: [per-period]}``.
+
+    The forecast accepts arrays / schedule dicts / bare mappings; the committed
+    snapshot stores ONE canonical shape so reproduction re-runs exactly what
+    ran, not a re-normalization of a re-normalization.
+    """
+    try:
+        from ..planning.forecast import _normalize_plan
+
+        arr, _n = _normalize_plan(plan, list(mmm.channel_names))
+        return {
+            str(ch): [float(x) for x in arr[:, i]]
+            for i, ch in enumerate(mmm.channel_names)
+        }
+    except Exception:  # noqa: BLE001 — snapshot extras must not fail the op
+        return None
+
+
+def _controls_as_dict(mmm: Any, controls: Any) -> dict | None:
+    """Same canonicalization for the future-controls assumption."""
+    if controls is None:
+        return None
+    try:
+        from ..planning.forecast import _normalize_plan
+
+        names = list(getattr(mmm, "control_names", []) or [])
+        if not names:
+            return None
+        arr, _n = _normalize_plan(controls, names)
+        return {str(c): [float(x) for x in arr[:, i]] for i, c in enumerate(names)}
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def forecast_plan(
     mmm: Any,
     results: Any = None,
@@ -1787,6 +1822,16 @@ def forecast_plan(
         # against draws, not against a summary.
         "draws_b64": fc.draws_b64,
         "n_draws": int(fc.n_draws),
+        # Reproduction inputs (#227). A committed plan must be regenerable
+        # from its own snapshot: the NORMALIZED per-period plan the forecast
+        # actually ran on (after any channel_budgets->flighting expansion),
+        # the controls assumption, and the seed. Without these the #225
+        # reproduce-from-provenance path had nothing to re-forecast and every
+        # real commitment refused reproduction.
+        "plan_media": _plan_as_dict(mmm, future_media),
+        "plan_controls": _controls_as_dict(mmm, future_controls),
+        "random_seed": 42,
+        "start_date": (str(cal.start.date()) if cal is not None else start_date),
         "calendar": (
             None
             if cal is None
@@ -1812,6 +1857,194 @@ def forecast_plan(
             ),
             title=f"KPI forecast ({len(fc.periods)} periods)",
             source="forecast_plan",
+            group="results",
+        )
+    ]
+    return out
+
+
+def variance_to_plan(
+    mmm: Any,
+    results: Any = None,
+    *,
+    committed_version: dict | None = None,
+    actual_media: dict | None = None,
+    actuals: list | None = None,
+    valuation: dict | None = None,
+    supplied: list | None = None,
+    refit_run_id: str | None = None,
+    run_diff: dict | None = None,
+) -> dict:
+    """Variance to plan (#227): delivery-driven vs unexplained, and it closes.
+
+    Two buckets on the COMMITTED posterior — what the spend divergence was
+    worth (paired counterfactual, per channel) and a labelled unexplained
+    remainder to the realized KPI. The refit split is refused with the reason
+    stated; ``run_diff`` (what actually changed between the runs) is attached
+    in its place. The rows sum to actual − committed exactly, and the verdict
+    against the committed interval LEADS the markdown: a miss inside the
+    committed band is within the committed uncertainty, not a story owed.
+    """
+    import pandas as pd
+
+    from mmm_framework.finance.lines import BridgeLine
+    from mmm_framework.planning.variance import (
+        variance_to_plan as _bridge,
+        supplied_line,
+    )
+
+    if getattr(mmm, "_trace", None) is None:
+        return _err("Load the committed model first — there is no posterior.")
+    if not committed_version:
+        return _err(
+            "No committed plan of record was passed. The bridge needs a "
+            "committed version to be a variance FROM."
+        )
+    payload = committed_version.get("payload") or committed_version
+    if not actual_media:
+        return _err("No actual per-period spend (delivery) was passed.")
+    if not actuals:
+        return _err("No realized-KPI actuals were passed.")
+
+    val = valuation or {}
+    kpi_is_dollar = val.get("value_per_kpi") is not None
+    try:
+        lines: list[BridgeLine] = [
+            supplied_line(
+                str(item.get("name")),
+                float(item.get("value")),
+                source_note=str(item.get("source_note") or ""),
+                kpi_kind_is_dollar=kpi_is_dollar,
+            )
+            for item in (supplied or [])
+        ]
+    except (ValueError, TypeError) as e:
+        return _err(str(e))
+
+    channel_meta: dict[str, bool] = {}
+    try:
+        from mmm_framework.reporting.helpers.measurement import (
+            resolve_channel_divisor,
+        )
+
+        for ch in mmm.channel_names:
+            channel_meta[str(ch)] = bool(
+                resolve_channel_divisor(mmm, str(ch)).meta.is_monetary
+            )
+    except Exception:  # noqa: BLE001 — meta is advisory; absence suppresses nothing
+        channel_meta = {}
+
+    diag = getattr(results, "diagnostics", None)
+    if diag is None and isinstance(results, dict):
+        diag = results.get("diagnostics")
+
+    try:
+        bridge = _bridge(
+            mmm,
+            payload,
+            actual_media,
+            list(actuals),
+            supplied=lines,
+            value_per_kpi=val.get("value_per_kpi"),
+            value_source=val.get("source"),
+            refit_run_id=refit_run_id,
+            channel_meta=channel_meta,
+            fit_diagnostics=diag if isinstance(diag, dict) else None,
+        )
+    except ValueError as e:
+        return _err(str(e))
+
+    facts = bridge.to_dict()
+    if run_diff:
+        facts["run_diff"] = run_diff
+
+    md = ["### Variance to plan — the bridge closes\n"]
+    # The interval verdict LEADS. Everything else is composition.
+    if bridge.within_committed_interval is True:
+        md.append(
+            f"**Within the committed interval.** Realized "
+            f"{bridge.actual_kpi:,.0f} vs committed {bridge.committed_kpi:,.0f} "
+            f"({int(round((bridge.interval_mass or 0.9) * 100))}% band "
+            f"{bridge.committed_lower:,.0f} – {bridge.committed_upper:,.0f}). "
+            "This bridge explains composition, not a surprise.\n"
+        )
+    elif bridge.within_committed_interval is False:
+        md.append(
+            f"**Outside the committed interval.** Realized "
+            f"{bridge.actual_kpi:,.0f} vs committed {bridge.committed_kpi:,.0f} "
+            f"({int(round((bridge.interval_mass or 0.9) * 100))}% band "
+            f"{bridge.committed_lower:,.0f} – {bridge.committed_upper:,.0f}): "
+            "the miss exceeds the uncertainty that was committed to.\n"
+        )
+    else:
+        md.append(
+            f"Realized {bridge.actual_kpi:,.0f} vs committed "
+            f"{bridge.committed_kpi:,.0f}; the within-interval verdict is "
+            "unavailable (see caveats).\n"
+        )
+    md.append(
+        f"Gap: **{bridge.gap:+,.0f}** KPI units over {len(bridge.period_set)} "
+        f"periods ({bridge.period_set[0]} → {bridge.period_set[-1]})."
+    )
+    if bridge.delivery_lower is not None:
+        md.append(
+            f"Delivery-driven: {bridge.delivery_total:+,.0f} "
+            f"[{bridge.delivery_lower:+,.0f}, {bridge.delivery_upper:+,.0f}] · "
+            f"Unexplained: {bridge.unexplained:+,.0f}."
+        )
+    md.append("")
+    show_dollars = (
+        bridge.value_per_kpi is not None and not bridge.dollar_headline_suppressed
+    )
+    md.append(
+        "| Line | KPI units |"
+        + (" Dollars |" if show_dollars else "")
+        + " Provenance |"
+    )
+    md.append("|---|---|" + ("---|" if show_dollars else "") + "---|")
+    for ln in bridge.rows:
+        cells = [ln.name, f"{ln.value:+,.0f}"]
+        if show_dollars:
+            cells.append(f"{ln.value * bridge.value_per_kpi:+,.0f}")
+        cells.append(ln.describe())
+        md.append("| " + " | ".join(cells) + " |")
+    md.append(
+        f"| **Total (= gap)** | **{sum(r.value for r in bridge.rows):+,.0f}** |"
+        + (" |" if show_dollars else "")
+        + " sums exactly |"
+    )
+    for r in bridge.refusals:
+        md.append(f"\n> ⛔ {r}")
+    if run_diff:
+        md.append(
+            "\nWhat changed between the committed run and the latest refit "
+            "(the statement that CAN be made):"
+        )
+        for ch_row in (run_diff.get("channels") or [])[:8]:
+            md.append(f"- {ch_row}")
+    for c in bridge.caveats:
+        md.append(f"- ⚠️ {c}")
+
+    out = _ok("\n".join(md), {"variance": facts})
+    out["tables"] = [
+        df_to_table_json(
+            pd.DataFrame(
+                [
+                    {
+                        "line": ln.name,
+                        "kpi_units": round(ln.value, 1),
+                        **(
+                            {"dollars": round(ln.value * bridge.value_per_kpi, 2)}
+                            if show_dollars
+                            else {}
+                        ),
+                        "provenance": ln.provenance.value,
+                    }
+                    for ln in bridge.rows
+                ]
+            ),
+            title="Variance to plan bridge",
+            source="variance_to_plan",
             group="results",
         )
     ]
@@ -4787,6 +5020,7 @@ OPS = {
     "budget_scenario": budget_scenario,
     "plan_budget": plan_budget,
     "forecast_plan": forecast_plan,
+    "variance_to_plan": variance_to_plan,
     "plan_scenario": plan_scenario,
     "marginal_analysis": marginal_analysis,
     "prior_predictive_check": prior_predictive_check,

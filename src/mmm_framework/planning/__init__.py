@@ -95,6 +95,7 @@ from .payback import (
     channel_payback,
     payback_breakeven,
 )
+from .variance import VarianceBridge, supplied_line, variance_to_plan
 from .design_anchor import (
     model_anchored_effect,
     powered_to_detect,
@@ -197,6 +198,9 @@ __all__ = [
     "PaybackResult",
     "channel_payback",
     "payback_breakeven",
+    "VarianceBridge",
+    "supplied_line",
+    "variance_to_plan",
     "model_anchored_effect",
     "powered_to_detect",
     "realized_sigma_exp_for_anchor",
