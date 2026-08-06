@@ -288,6 +288,8 @@ def _solve_allocation(
     mode: str = "fixed",
     value_per_kpi: float | None = None,
     x0: np.ndarray | None = None,
+    n_steps: int = 400,
+    diag: list[dict] | None = None,
 ) -> tuple[np.ndarray, float, np.ndarray]:
     """Constrained allocation on one response curve via SLSQP (convex: a sum of
     concave channel curves under linear constraints).
@@ -302,6 +304,23 @@ def _solve_allocation(
     price is the budget constraint's water level (the marginal KPI-value of the
     next dollar) and ``marginal_roas[c] = value_per_kpi · dKPI/dspend`` at the
     solution (the funding line: fund while it exceeds 1).
+
+    **Multi-start, and never worse than where it started** (issue #290). The
+    channel curves are piecewise linear, so the gradient
+    (:func:`_segment_marginal`) is piecewise *constant* and SLSQP's line search
+    can fail to find any improving step from the point it is handed. It then
+    reports ``success=True`` at ``nit=2`` with ``x`` unmoved. That was invisible
+    and consequential: the default warm start works out to the CURRENT
+    allocation (with ``lo=0`` and ``hi=2·base``, the proportional spread of the
+    current total *is* the current spend), so the failure mode returned "your
+    plan is already optimal, uplift 0" — measured against direct search, leaving
+    +372 (p10) and +461 (cvar5) on the table.
+
+    So every solve now runs from several starts, including the greedy water-fill
+    solution, and returns the best-scoring **feasible** candidate among the
+    starts and the solver's answers. A solver that cannot improve on its warm
+    start now returns the warm start knowingly rather than by accident, and one
+    that stalls no longer hides a better point that another start reached.
     """
     from scipy.optimize import minimize
 
@@ -376,37 +395,123 @@ def _solve_allocation(
     bnds = [
         (float(lo_spend[c]), float(max(hi_spend[c], lo_spend[c]))) for c in range(C)
     ]
-    if x0 is None:
+    default_x0 = None
+    if mode == "free":
+        default_x0 = np.clip(0.5 * (lo_spend + hi_spend), lo_spend, hi_spend)
+    else:
+        # feasible warm start: lower bounds + budget spread proportionally.
+        default_x0 = lo_spend.astype(float).copy()
+        extra = max(float(total_budget) - default_x0.sum(), 0.0)
+        room = np.maximum(hi_spend - lo_spend, 0.0)
+        if room.sum() > 0:
+            default_x0 = default_x0 + extra * room / room.sum()
+
+    def _repair(s: np.ndarray) -> np.ndarray:
+        """Clip to bounds and, under a fixed budget, restore the equality."""
+        out = np.clip(
+            np.asarray(s, dtype=float), lo_spend, np.maximum(hi_spend, lo_spend)
+        )
+        if mode != "free" and total_budget and out.sum() > 0:
+            # SLSQP may leave a small equality residual; renormalize to the
+            # budget within bounds (proportional to headroom above the floor).
+            room_r = np.maximum(out - lo_spend, 1e-12)
+            deficit = float(total_budget) - out.sum()
+            out = out + deficit * room_r / room_r.sum()
+            out = np.clip(out, lo_spend, np.maximum(hi_spend, lo_spend))
+        return out
+
+    def _score(s: np.ndarray) -> float:
+        """The quantity actually being maximized, so candidates are comparable."""
+        return -float(neg(s))
+
+    def _feasible(s: np.ndarray) -> bool:
+        """Bounds, the budget equality, and every group constraint.
+
+        Checked explicitly because a candidate reached by a different route (the
+        greedy water-fill in particular) knows nothing about ``groups``, and a
+        higher-scoring infeasible point must never win.
+        """
+        tol = max(abs(float(total_budget or 0.0)) * 1e-6, 1e-6)
+        if (s < lo_spend - tol).any() or (
+            s > np.maximum(hi_spend, lo_spend) + tol
+        ).any():
+            return False
+        if mode != "free" and total_budget is not None:
+            if abs(float(s.sum()) - float(total_budget)) > tol:
+                return False
+        for g in groups or []:
+            tot = float(np.asarray(s)[list(g["indices"])].sum())
+            if g.get("min_spend") is not None and tot < float(g["min_spend"]) - tol:
+                return False
+            if g.get("max_spend") is not None and tot > float(g["max_spend"]) + tol:
+                return False
+        return True
+
+    # Starting points. The caller's x0 (or the proportional spread) plus the
+    # greedy water-fill, which follows the curve's own marginals and so lands in
+    # a different basin from the proportional start. Under `free` the total is a
+    # decision, so greedy is seeded at several budget levels.
+    starts: list[np.ndarray] = []
+    for cand in (x0, default_x0):
+        if cand is not None:
+            starts.append(np.asarray(cand, dtype=float))
+    try:
         if mode == "free":
-            x0 = np.clip(0.5 * (lo_spend + hi_spend), lo_spend, hi_spend)
+            cap = float(np.sum(np.maximum(hi_spend, lo_spend)))
+            budgets = [f * cap for f in (0.25, 0.5, 0.75, 1.0) if f * cap > 0]
         else:
-            # feasible warm start: lower bounds + budget spread proportionally.
-            x0 = lo_spend.astype(float).copy()
-            extra = max(float(total_budget) - x0.sum(), 0.0)
-            room = np.maximum(hi_spend - lo_spend, 0.0)
-            if room.sum() > 0:
-                x0 = x0 + extra * room / room.sum()
-    res = minimize(
-        neg,
-        np.asarray(x0, dtype=float),
-        jac=neg_jac,
-        method="SLSQP",
-        bounds=bnds,
-        constraints=constraints,
-        # ftol is ABSOLUTE. Scaling the objective by value_per_kpi would then
-        # make convergence depend on the KPI's units: at value_per_kpi=1e-3 the
-        # per-iteration deltas fall under 1e-9 and SLSQP returns the warm start
-        # as "the optimal plan". Normalize the tolerance by the objective scale.
-        options={"maxiter": 200, "ftol": 1e-9 * max(abs(value_per_kpi or 1.0), 1e-12)},
-    )
-    alloc = np.clip(res.x, lo_spend, np.maximum(hi_spend, lo_spend))
-    if mode != "free" and total_budget and alloc.sum() > 0:
-        # SLSQP may leave a small equality residual; renormalize to the budget
-        # within bounds (proportional to headroom above the floor).
-        room = np.maximum(alloc - lo_spend, 1e-12)
-        deficit = float(total_budget) - alloc.sum()
-        alloc = alloc + deficit * room / room.sum()
-        alloc = np.clip(alloc, lo_spend, np.maximum(hi_spend, lo_spend))
+            budgets = [float(total_budget)] if total_budget else []
+        for b in budgets:
+            starts.append(
+                _greedy_allocate(curve, spend_grid, b, lo_spend, hi_spend, n_steps)
+            )
+    except Exception:  # noqa: BLE001 — a warm start is an optimization, not a contract
+        pass
+
+    # Every start is itself a candidate: the solver must never return something
+    # worse than a point it was handed.
+    candidates: list[np.ndarray] = []
+    n_failed = 0
+    for start in starts:
+        candidates.append(_repair(start))
+        res = minimize(
+            neg,
+            np.asarray(start, dtype=float),
+            jac=neg_jac,
+            method="SLSQP",
+            bounds=bnds,
+            constraints=constraints,
+            # ftol is ABSOLUTE. Scaling the objective by value_per_kpi would then
+            # make convergence depend on the KPI's units: at value_per_kpi=1e-3 the
+            # per-iteration deltas fall under 1e-9 and SLSQP returns the warm start
+            # as "the optimal plan". Normalize the tolerance by the objective scale.
+            options={
+                "maxiter": 200,
+                "ftol": 1e-9 * max(abs(value_per_kpi or 1.0), 1e-12),
+            },
+        )
+        if not res.success:
+            n_failed += 1
+        # A failed solve's iterate is still scored rather than discarded — it is
+        # sometimes the best point found — but it can only win on merit.
+        candidates.append(_repair(res.x))
+
+    feasible = [c for c in candidates if _feasible(c)]
+    pool = feasible or [_repair(starts[0])]
+    alloc = max(pool, key=_score)
+
+    if diag is not None:
+        diag.append(
+            {
+                "starts": len(starts),
+                "failed_solves": n_failed,
+                "feasible": len(feasible),
+                "improved_on_warm_start": bool(
+                    _score(alloc) > _score(_repair(starts[0])) + 1e-12
+                ),
+            }
+        )
+
     m = (value_per_kpi or 1.0) * marginals(alloc)
     funded = (alloc > lo_spend + 1e-9) & (alloc < hi_spend - 1e-9)
     shadow = float(np.median(m[funded])) if funded.any() else float(np.max(m))
@@ -593,6 +698,11 @@ def optimize_budget(
     obj_curve = objective_curves(curves, objective)  # (C, G)
     obj_label = objective_label(objective)
 
+    # Per-solve diagnostics from the constrained path (issue #290): how many
+    # SLSQP solves failed, and whether the answer beat the warm start. Collected
+    # across the point solve and every per-draw re-optimization.
+    solve_diag: list[dict] = []
+
     def _allocate(curve2d: np.ndarray, budget: float, x0=None) -> np.ndarray:
         if not advanced:
             return _greedy_allocate(
@@ -608,6 +718,8 @@ def optimize_budget(
             mode=mode,
             value_per_kpi=value_per_kpi,
             x0=x0,
+            n_steps=n_steps,
+            diag=solve_diag,
         )
         return alloc
 
@@ -707,6 +819,22 @@ def optimize_budget(
             "(their intervals are widened accordingly). Confirm with a test before "
             "committing large scale-ups."
         )
+
+    # Say when the constrained solver struggled. A failed SLSQP solve used to be
+    # accepted silently and its iterate returned as the plan (#290); it is now
+    # scored against the other candidates, but a run where many solves failed is
+    # still worth flagging rather than presenting as clean.
+    if solve_diag:
+        n_failed = sum(int(d["failed_solves"]) for d in solve_diag)
+        n_solves = sum(int(d["starts"]) for d in solve_diag)
+        if n_failed:
+            notes.append(
+                f"The constrained allocator's inner solver failed on {n_failed} of "
+                f"{n_solves} attempts; those runs fell back to the best feasible "
+                "candidate found from the other starting points. The allocation is "
+                "usable, but treat per-draw spreads (regret, uplift interval) as "
+                "slightly optimistic."
+            )
 
     expected_regret = float(np.mean(np.maximum(v_perfect - v_plan, 0.0)))
 

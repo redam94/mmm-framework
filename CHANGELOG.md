@@ -127,6 +127,47 @@ frozen public contract breaks, and the contract itself is pinned by
   delegates to `finance.closure.fitted_total` rather than keeping a second copy, so the rollup and
   the bridge cannot disagree about what "fitted" means.
 
+- **The constrained budget allocator returned its warm start — which is today's plan — and called it
+  optimal** ([#290]). `planning/budget.py::_solve_allocation`. Found while building
+  `nbs/demos/critique_to_decision.ipynb`; verified by direct search rather than by reading.
+
+  Two things combined. The default warm start **works out to the current allocation**: with
+  `lo_spend=0` and `hi_spend=2·base`, spreading the current total proportionally over the headroom
+  reproduces current spend exactly. And the channel curves are piecewise linear, so the gradient
+  (`_segment_marginal`) is piecewise *constant* and SLSQP's line search could fail to find any
+  improving step, exiting at `nit=2` with `success=True` and `x` unmoved. `res.success` was never
+  checked, so the untouched iterate was returned as the recommended plan.
+
+  The output of that failure is `optimal_allocation == current allocation` with
+  `expected_uplift ≈ 0` — "your plan is already optimal", the most trustworthy-looking thing a
+  planning tool can emit, and the one nobody questions. Measured on a real fit, a 60,000-sample
+  random search over the same feasible set beat it by **+399.7** (`p10`) and **+523.2** (`cvar5`),
+  with 452 and 662 samples respectively landing above what the solver returned.
+
+  Every solve now runs from **several starting points** — the caller's `x0`, the proportional
+  spread, and the greedy water-fill on the same objective curve (seeded at several budget levels
+  under `mode="free"`, where the total is itself a decision) — and returns the best-scoring
+  **feasible** candidate among the starts *and* the solver's answers. Two properties follow: a
+  solver can never return something worse than a point it was handed, and a stall no longer hides a
+  better point another start reached. On the reproduction the allocator now returns **11,582.6**
+  against the 11,160.7 it used to, which also beats the random search's 11,560.4. Feasibility is
+  checked explicitly (bounds, the budget equality, and every group constraint) because the greedy
+  candidate knows nothing about `groups` and a higher-scoring infeasible point must never win.
+
+  Failed inner solves are now counted and surfaced in `BudgetOptimizationResult.notes` instead of
+  being accepted silently; on the reproduction 4–5 of 201 per-draw solves genuinely fail.
+
+  **Blast radius**: every risk objective (`p10`, any `p<q>`, `cvar5`, any `cvar<a>`), `mode="free"`,
+  and the `groups` / `abs_bounds` / `min_channel_spend` constraints — i.e. everything that is not
+  (mean objective + fixed mode + no advanced constraints). The `objective="mean"` default path uses
+  `_greedy_allocate` and is untouched, and a test pins that it stayed untouched.
+
+  A note on the regression test, because it is the part that nearly went wrong: the first version
+  built its own synthetic concave curves and **passed against the unfixed code**. Smooth textbook
+  curves do not stall SLSQP; the specific segment slopes of a real fit do. The shipped test carries
+  the P10 objective curve from the reproducing fit verbatim, and 4 of its assertions fail on the
+  old code.
+
 - **A windowed `contribution_roi` silently returned the full-series value, and the estimand engine
   had no multiplicative guard** ([#278]). Two gaps in `estimands/evaluate.py`, both of which
   returned a plausible number rather than an error.
@@ -445,6 +486,7 @@ frozen public contract breaks, and the contract itself is pinned by
 [#276]: https://github.com/redam94/mmm-framework/issues/276
 [#277]: https://github.com/redam94/mmm-framework/issues/277
 [#278]: https://github.com/redam94/mmm-framework/issues/278
+[#290]: https://github.com/redam94/mmm-framework/issues/290
 
 ## [1.3.3] — 2026-07-27
 
