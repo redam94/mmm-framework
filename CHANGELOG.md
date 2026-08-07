@@ -46,6 +46,21 @@ frozen public contract breaks, and the contract itself is pinned by
   `garden_ref` spec path; all 38 existing goldens byte-identical).
   `tests/test_serializer_roundtrip.py`, ~25 s of MAP fits, fast tier.
 
+- **The import-layer gate** ([#279] PR 0.3). The module-level package graph has exactly
+  one cycle ({agents, platform}, closed by one import PR 10 removes); everything else
+  that looks like a cycle comes from 600+ function-local deferred imports, and this is
+  the ratchet that stops that number growing back. `tests/test_import_layers.py` walks
+  every import — **including function-local** (the habit being capped), excluding
+  `TYPE_CHECKING` bodies (they manufacture a phantom four-package cycle) — against an
+  inline `LAYERS` tier map (every entry carries a substantive reason; the #228
+  anti-rubber-stamp rule applies) with the rule `tier(dst) <= tier(src)`. Today's 12
+  upward edges / 30 occurrences are allowlisted per `(edge, file)` occurrence-count in
+  `tests/contracts/import_layer_allowlist.json` — **derived from the shipped script in
+  the same commit** (two earlier hand-counts disagreed 21-vs-12, which is exactly the
+  failure a non-regenerable baseline invites) — and the allowlist may only shrink: stale
+  and loose entries fail until tightened. A planted upward import fails the gate naming
+  the edge, the file, both tiers and the three legal remedies. 0.9 s.
+
 - **The feature-showcase notebook series** (`nbs/showcase/` 00–06). Seven chart-first
   notebooks covering every subpackage in `src/mmm_framework/` — the measurement loop
   end-to-end in miniature, data foundations, model anatomy (every transform family
