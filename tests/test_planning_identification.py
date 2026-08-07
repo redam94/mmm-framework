@@ -296,3 +296,54 @@ def test_cross_channel_vif():
     assert ident.cross_channel_vif(target, other_collinear)["r2"] > 0.8
     assert ident.cross_channel_vif(target, other_indep)["r2"] < 0.4
     assert ident.cross_channel_vif(target, None)["vif"] == 1.0
+
+
+# ── Temporal-contrast gate for alpha (#293) ───────────────────────────────────
+
+
+def test_constant_elevated_schedule_is_alpha_ineligible():
+    """The #293 regression: a constant multiplier (however elevated) never
+    changes level inside the window, so the carryover decay is expressed only
+    through the warm-in edge — an artifact of where the window starts. Before
+    the gate, eligible['alpha'] was unconditionally True and this design was
+    reported alpha-eligible."""
+    rng = np.random.default_rng(7)
+    res = _ident([1.3] * 12, _draws(rng))
+    assert res is not None
+    assert res["params"]["alpha"]["eligible"] is False
+    assert res["params"]["alpha"]["claimed"] is False
+    assert res["n_transitions"] == 0
+    # beta remains eligible: a level shift vs BAU is exactly what identifies it.
+    assert res["params"]["beta"]["eligible"] is True
+
+
+def test_single_step_schedule_is_alpha_eligible():
+    """One separated level change is the minimum that expresses a decay tail
+    inside the window; the gate is eligibility, not power."""
+    rng = np.random.default_rng(8)
+    res = _ident([1.0] * 6 + [1.5] * 6, _draws(rng))
+    assert res is not None
+    assert res["n_transitions"] == 1
+    assert res["params"]["alpha"]["eligible"] is True
+
+
+def test_sub_separation_wiggle_is_not_temporal_contrast():
+    """Level changes below _MIN_LEVEL_SEP are noise, not design: the near-flat
+    schedule must not count them as transitions."""
+    rng = np.random.default_rng(9)
+    res = _ident([1.0001, 0.9999] * 6, _draws(rng))
+    assert res is not None
+    assert res["n_transitions"] == 0
+    assert res["params"]["alpha"]["eligible"] is False
+
+
+def test_pulsed_schedule_stays_alpha_eligible_and_claims():
+    """The good-design path is unchanged by the gate: pulses carry many
+    separated transitions, alpha stays eligible and (with this operating
+    point) claimed."""
+    rng = np.random.default_rng(10)
+    res = _ident([1.0, 1.6] * 6, _draws(rng))
+    assert res is not None
+    assert res["n_transitions"] >= 2
+    assert res["params"]["alpha"]["eligible"] is True
+    assert res["params"]["alpha"]["claimed"] is True

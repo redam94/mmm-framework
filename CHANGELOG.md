@@ -14,7 +14,21 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **`eligible['alpha']` is now design-gated on temporal contrast** ([#293], split out of
+  [#224]). `planning/identification.py` marked the carryover decay eligible unconditionally —
+  the temporal-contrast requirement lived only in the module docstring — so a constant-spend
+  channel (zero level changes inside the window, alpha entirely prior-determined) was still
+  reported alpha-eligible, and the payback surface had to build its own posterior-side
+  prior-domination gate because the design-side one was missing. The gate counts separated
+  week-over-week level changes (mirroring how `lam` is gated on spend-level contrast) and
+  requires at least one — a step's decay tail is the minimum that expresses carryover inside
+  the window; pulse-count beyond that is a power question, not eligibility. The result carries
+  `n_transitions` + the threshold so readouts can say WHY alpha was gated. Regression: a
+  constant 1.3× schedule comes back alpha-ineligible (verified to fail on the unfixed code).
+
+[#293]: https://github.com/redam94/mmm-framework/issues/293
 
 ## [1.4.0] — 2026-08-06
 

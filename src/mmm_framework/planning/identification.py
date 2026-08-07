@@ -72,6 +72,13 @@ _MIN_CONTRACTION = 0.05
 # nothing and never reports a prior-driven, falsely-confident binding power.
 _MIN_CLAIM_CONTRACTION = 1e-3
 _MIN_LEVEL_SEP = 0.02  # mirrors design._MIN_LEVEL_SEP
+#: Separated week-over-week level changes required before a design may even
+#: ATTEMPT the carryover decay (#293). One transition is the minimum that
+#: expresses a decay inside the window (a step's tail); pulsed schedules
+#: (>=2 transitions) identify it better — see
+#: test_sharp_pulses_beat_one_long_block_on_alpha — but that is a power
+#: question, and this is an eligibility gate.
+_MIN_ALPHA_TRANSITIONS = 1
 
 
 def _robust_sd(x: np.ndarray) -> float:
@@ -489,12 +496,22 @@ def structural_identification(
     distinct = sorted({round(float(m), 4) for m in np.asarray(mults, float)})
     n_levels = len(distinct)
     sep_ok = n_levels >= 2 and min(np.diff(distinct)) >= _MIN_LEVEL_SEP
+    # Temporal contrast (#293): the carryover decay is only EXPRESSED when the
+    # schedule changes level inside the window — a constant multiplier, however
+    # elevated, exposes alpha only through the l_max warm-in edge, which is an
+    # artifact of where the window starts, not a design. Counted as separated
+    # week-over-week level changes, mirroring how lam is gated on spend-level
+    # contrast. (This gate was promised by the module docstring and enforced
+    # nowhere; the payback surface had to build its own posterior-side
+    # prior-domination gate because this design-side one was missing.)
+    steps = np.abs(np.diff(np.asarray(mults, float)))
+    n_transitions = int(np.count_nonzero(steps >= _MIN_LEVEL_SEP))
     # Structural eligibility — what a design of this SHAPE can even attempt:
     # alpha needs temporal contrast, the saturation curve needs >=3 separated,
     # in-support levels (a binary on/off is a secant, not the curve).
     eligible = {
         "beta": True,
-        "alpha": True,
+        "alpha": n_transitions >= _MIN_ALPHA_TRANSITIONS,
         "lam": n_levels >= 3 and sep_ok and bool(in_support),
     }
 
@@ -561,6 +578,10 @@ def structural_identification(
         "binding_contraction": binding_contraction,
         "power_target": float(power_target),
         "n_levels": n_levels,
+        # The design statistic behind eligible['alpha'] (#293), carried so a
+        # readout can say WHY alpha was gated, not just that it was.
+        "n_transitions": n_transitions,
+        "min_alpha_transitions": _MIN_ALPHA_TRANSITIONS,
         "in_support": bool(in_support),
         "lambda_min": info["lambda_min"],
         "condition": info["condition"],
