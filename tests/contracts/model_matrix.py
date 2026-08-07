@@ -469,6 +469,41 @@ def agent_spec_priors():
     return build_model(spec, str(AGENT_CSV))
 
 
+@_case("garden_subclass")
+def garden_subclass():
+    """A Model Garden ``CustomMMM`` subclass via the ``garden_ref`` spec path
+    (PR 0.2's serializer contract needs it: load() must reconstruct the SAME
+    subclass, never quietly demote a bespoke model to BayesianMMM). A garden
+    identity is a label, not a structural change — the graph fingerprints like
+    any other model built from the same spec."""
+    from mmm_framework.agents.fitting import build_model
+
+    sc = _national_scenario()
+    _ensure_agent_csv()
+    src = AGENT_CSV.parent / "garden_roundtrip.py"
+    spec = {
+        "kpi": "Sales",
+        "kpi_level": "national",
+        "media_channels": [
+            {
+                "name": c,
+                "adstock": {"type": "geometric"},
+                "saturation": {"type": "hill"},
+            }
+            for c in sc.channels
+        ],
+        "control_variables": [{"name": c} for c in sc.controls.columns],
+        "garden_ref": {
+            "name": "contract-roundtrip",
+            "version": 1,
+            "source_path": str(src),
+            "class_name": "ContractRoundTripMMM",
+            "contract_version": "1.0",
+        },
+    }
+    return build_model(spec, str(AGENT_CSV))
+
+
 def _ensure_agent_csv() -> None:
     """Materialize the deterministic agent MFF CSV (identical bytes each time:
     the scenario is seed-pinned and ``scenario_to_mff`` is pure)."""

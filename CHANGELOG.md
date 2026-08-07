@@ -33,6 +33,19 @@ frozen public contract breaks, and the contract itself is pinned by
 
 [#279]: https://github.com/redam94/mmm-framework/issues/279
 
+- **The serializer round-trip contract** ([#279] PR 0.2). `serialization.py` writes 15
+  instance attributes at 13 sites, and its coverage was mostly mocks (37 `Mock*`
+  occurrences against 2 real constructions) — any state that moves behind a collaborator
+  in the Phase 4 split would have broken `load()` silently. Now a REAL save → load →
+  `predict()` round-trip runs over the fingerprint matrix's national, geo, roi-mode,
+  garden-subclass and both extension cases: prediction equality at **rtol=0**,
+  `metadata.json` field-set equality against a checked-in snapshot (a field that stops
+  being persisted fails CI with its name; regen behind `MMM_REGEN_SERIALIZER_FIELDS=1`),
+  and the garden case must load back as the SAME subclass, never demoted to
+  `BayesianMMM`. The matrix gained the `garden_subclass` case (a `CustomMMM` via the
+  `garden_ref` spec path; all 38 existing goldens byte-identical).
+  `tests/test_serializer_roundtrip.py`, ~25 s of MAP fits, fast tier.
+
 - **The feature-showcase notebook series** (`nbs/showcase/` 00–06). Seven chart-first
   notebooks covering every subpackage in `src/mmm_framework/` — the measurement loop
   end-to-end in miniature, data foundations, model anatomy (every transform family
