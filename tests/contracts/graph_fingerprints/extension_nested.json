@@ -1,0 +1,402 @@
+{
+  "coords": {
+    "channel": [
+      "TV",
+      "Digital"
+    ],
+    "mediator": [
+      "Awareness"
+    ],
+    "obs": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "28",
+      "29",
+      "30",
+      "31",
+      "32",
+      "33",
+      "34",
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45",
+      "46",
+      "47",
+      "48",
+      "49",
+      "50",
+      "51"
+    ]
+  },
+  "data_vars": [
+    [
+      "X_media",
+      [
+        52,
+        2
+      ]
+    ],
+    [
+      "y",
+      [
+        52
+      ]
+    ]
+  ],
+  "deterministic_values": {
+    "Awareness_latent": [
+      97.347868786,
+      97.347868786
+    ],
+    "channel_contributions": [
+      488.656122567,
+      488.656122567
+    ],
+    "direct_effect_Digital": [
+      158.953374986,
+      158.953374986
+    ],
+    "direct_effect_TV": [
+      210.196024747,
+      210.196024747
+    ],
+    "effect_Awareness_on_y": [
+      122.682016709,
+      122.682016709
+    ],
+    "indirect_Digital_via_Awareness": [
+      1.309243211,
+      1.309243211
+    ],
+    "indirect_TV_via_Awareness": [
+      1.301169794,
+      1.301169794
+    ],
+    "mu": [
+      77779.193072236,
+      77779.193072236
+    ]
+  },
+  "deterministics": [
+    [
+      "Awareness_latent",
+      [
+        52
+      ]
+    ],
+    [
+      "channel_contributions",
+      [
+        52,
+        2
+      ]
+    ],
+    [
+      "direct_effect_Digital",
+      [
+        52
+      ]
+    ],
+    [
+      "direct_effect_TV",
+      [
+        52
+      ]
+    ],
+    [
+      "effect_Awareness_on_y",
+      [
+        52
+      ]
+    ],
+    [
+      "indirect_Digital_via_Awareness",
+      []
+    ],
+    [
+      "indirect_TV_via_Awareness",
+      []
+    ],
+    [
+      "mu",
+      [
+        52
+      ]
+    ]
+  ],
+  "dims": {
+    "Awareness_latent": [
+      "obs"
+    ],
+    "X_media": [
+      "obs",
+      "channel"
+    ],
+    "channel_contributions": [
+      "obs",
+      "channel"
+    ],
+    "direct_effect_Digital": [
+      "obs"
+    ],
+    "direct_effect_TV": [
+      "obs"
+    ],
+    "effect_Awareness_on_y": [
+      "obs"
+    ],
+    "mu": [
+      "obs"
+    ],
+    "y": [
+      "obs"
+    ],
+    "y_obs": [
+      "obs"
+    ]
+  },
+  "free_RVs": [
+    [
+      "alpha_Awareness",
+      "normal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "2.0"
+      ],
+      "NoneType"
+    ],
+    [
+      "alpha_Digital",
+      "beta",
+      [],
+      [
+        "nan",
+        "2.0",
+        "2.0"
+      ],
+      "LogOddsTransform"
+    ],
+    [
+      "alpha_TV",
+      "beta",
+      [],
+      [
+        "nan",
+        "2.0",
+        "2.0"
+      ],
+      "LogOddsTransform"
+    ],
+    [
+      "alpha_y",
+      "normal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "2.0"
+      ],
+      "NoneType"
+    ],
+    [
+      "beta_Digital_to_Awareness",
+      "halfnormal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "1.0"
+      ],
+      "LogTransform"
+    ],
+    [
+      "beta_TV_to_Awareness",
+      "halfnormal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "1.0"
+      ],
+      "LogTransform"
+    ],
+    [
+      "delta_direct_Digital",
+      "normal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "0.5"
+      ],
+      "NoneType"
+    ],
+    [
+      "delta_direct_TV",
+      "normal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "0.5"
+      ],
+      "NoneType"
+    ],
+    [
+      "gamma_Awareness",
+      "normal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "1.0"
+      ],
+      "NoneType"
+    ],
+    [
+      "lambda_Digital",
+      "gamma",
+      [],
+      [
+        "nan",
+        "3.0",
+        "TensorType"
+      ],
+      "LogTransform"
+    ],
+    [
+      "lambda_TV",
+      "gamma",
+      [],
+      [
+        "nan",
+        "3.0",
+        "TensorType"
+      ],
+      "LogTransform"
+    ],
+    [
+      "sigma_y",
+      "halfnormal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "0.5"
+      ],
+      "LogTransform"
+    ]
+  ],
+  "initial_point": {
+    "alpha_Awareness": [
+      [],
+      0.0
+    ],
+    "alpha_Digital_logodds__": [
+      [],
+      0.0
+    ],
+    "alpha_TV_logodds__": [
+      [],
+      0.0
+    ],
+    "alpha_y": [
+      [],
+      0.0
+    ],
+    "beta_Digital_to_Awareness_log__": [
+      [],
+      0.0
+    ],
+    "beta_TV_to_Awareness_log__": [
+      [],
+      0.0
+    ],
+    "delta_direct_Digital": [
+      [],
+      0.0
+    ],
+    "delta_direct_TV": [
+      [],
+      0.0
+    ],
+    "gamma_Awareness": [
+      [],
+      0.0
+    ],
+    "lambda_Digital_log__": [
+      [],
+      1.098612289
+    ],
+    "lambda_TV_log__": [
+      [],
+      1.098612289
+    ],
+    "sigma_y_log__": [
+      [],
+      -0.693147181
+    ]
+  },
+  "logp_terms": {
+    "alpha_Awareness": -1.612379185,
+    "alpha_Digital": -0.984061435,
+    "alpha_TV": -0.981188451,
+    "alpha_y": -1.612563981,
+    "beta_Digital_to_Awareness": -0.727284059,
+    "beta_TV_to_Awareness": -0.726834828,
+    "delta_direct_Digital": -0.232221365,
+    "delta_direct_TV": -0.237118803,
+    "gamma_Awareness": -0.919151096,
+    "lambda_Digital": -0.397367827,
+    "lambda_TV": -0.397311911,
+    "sigma_y": -0.730342601,
+    "y_obs": -110.294429443
+  },
+  "observed_RVs": [
+    [
+      "y_obs",
+      "normal",
+      [
+        52
+      ]
+    ]
+  ],
+  "potentials": [],
+  "total_logp": -119.852254985
+}

@@ -1,0 +1,622 @@
+{
+  "coords": {
+    "channel": [
+      "TV",
+      "Search",
+      "Social",
+      "Display"
+    ],
+    "control": [
+      "Price"
+    ],
+    "obs": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "28",
+      "29",
+      "30",
+      "31",
+      "32",
+      "33",
+      "34",
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45",
+      "46",
+      "47",
+      "48",
+      "49",
+      "50",
+      "51",
+      "52",
+      "53",
+      "54",
+      "55",
+      "56",
+      "57",
+      "58",
+      "59"
+    ],
+    "yearly_fourier": [
+      "yearly_0",
+      "yearly_1",
+      "yearly_2",
+      "yearly_3"
+    ]
+  },
+  "data_vars": [
+    [
+      "X_controls",
+      [
+        60,
+        1
+      ]
+    ],
+    [
+      "X_media_raw",
+      [
+        60,
+        4
+      ]
+    ],
+    [
+      "geo_idx",
+      [
+        60
+      ]
+    ],
+    [
+      "product_idx",
+      [
+        60
+      ]
+    ],
+    [
+      "time_idx",
+      [
+        60
+      ]
+    ]
+  ],
+  "deterministic_values": {
+    "beta_TV": [
+      1.638297309,
+      1.638297309
+    ],
+    "beta_tv_TV": [
+      98.297838525,
+      98.297838525
+    ],
+    "channel_contributions": [
+      107.305876528,
+      107.305876528
+    ],
+    "control_contributions": [
+      0.0,
+      5.11816999
+    ],
+    "controls_total": [
+      0.0,
+      5.11816999
+    ],
+    "geo_component": [
+      0.0,
+      0.0
+    ],
+    "intercept_component": [
+      3.958762887,
+      3.958762887
+    ],
+    "media_total": [
+      107.305876528,
+      107.305876528
+    ],
+    "product_component": [
+      0.0,
+      0.0
+    ],
+    "seasonality_by_period": [
+      1.225718126,
+      4.906785869
+    ],
+    "seasonality_component": [
+      1.225718126,
+      4.906785869
+    ],
+    "trend_component": [
+      0.402061856,
+      0.402061856
+    ],
+    "y_obs_scaled": [
+      27394.769034614,
+      27394.769034614
+    ]
+  },
+  "deterministics": [
+    [
+      "beta_TV",
+      []
+    ],
+    [
+      "beta_tv_TV",
+      [
+        60
+      ]
+    ],
+    [
+      "channel_contributions",
+      [
+        60,
+        4
+      ]
+    ],
+    [
+      "control_contributions",
+      [
+        60,
+        1
+      ]
+    ],
+    [
+      "controls_total",
+      [
+        60
+      ]
+    ],
+    [
+      "geo_component",
+      [
+        60
+      ]
+    ],
+    [
+      "intercept_component",
+      [
+        60
+      ]
+    ],
+    [
+      "media_total",
+      [
+        60
+      ]
+    ],
+    [
+      "product_component",
+      [
+        60
+      ]
+    ],
+    [
+      "seasonality_by_period",
+      [
+        60
+      ]
+    ],
+    [
+      "seasonality_component",
+      [
+        60
+      ]
+    ],
+    [
+      "trend_component",
+      [
+        60
+      ]
+    ],
+    [
+      "y_obs_scaled",
+      [
+        60
+      ]
+    ]
+  ],
+  "dims": {
+    "X_controls": [
+      "obs",
+      "control"
+    ],
+    "X_media_raw": [
+      "obs",
+      "channel"
+    ],
+    "channel_contributions": [
+      "obs",
+      "channel"
+    ],
+    "control_contributions": [
+      "obs",
+      "control"
+    ],
+    "controls_total": [
+      "obs"
+    ],
+    "geo_component": [
+      "obs"
+    ],
+    "intercept_component": [
+      "obs"
+    ],
+    "product_component": [
+      "obs"
+    ],
+    "season_yearly": [
+      "yearly_fourier"
+    ],
+    "y_obs": [
+      "obs"
+    ],
+    "y_obs_scaled": [
+      "obs"
+    ]
+  },
+  "free_RVs": [
+    [
+      "adstock_alpha_Display",
+      "beta",
+      [],
+      [
+        "nan",
+        "1.0",
+        "3.0"
+      ],
+      "LogOddsTransform"
+    ],
+    [
+      "adstock_alpha_Search",
+      "beta",
+      [],
+      [
+        "nan",
+        "1.0",
+        "3.0"
+      ],
+      "LogOddsTransform"
+    ],
+    [
+      "adstock_alpha_Social",
+      "beta",
+      [],
+      [
+        "nan",
+        "1.0",
+        "3.0"
+      ],
+      "LogOddsTransform"
+    ],
+    [
+      "adstock_alpha_TV",
+      "beta",
+      [],
+      [
+        "nan",
+        "1.0",
+        "3.0"
+      ],
+      "LogOddsTransform"
+    ],
+    [
+      "beta_Display",
+      "gamma",
+      [],
+      [
+        "nan",
+        "TensorType",
+        "TensorType"
+      ],
+      "LogTransform"
+    ],
+    [
+      "beta_Search",
+      "gamma",
+      [],
+      [
+        "nan",
+        "TensorType",
+        "TensorType"
+      ],
+      "LogTransform"
+    ],
+    [
+      "beta_Social",
+      "gamma",
+      [],
+      [
+        "nan",
+        "TensorType",
+        "TensorType"
+      ],
+      "LogTransform"
+    ],
+    [
+      "beta_TV_level",
+      "normal",
+      [],
+      [
+        "nan",
+        "0.405465108",
+        "0.5"
+      ],
+      "NoneType"
+    ],
+    [
+      "beta_TV_tvpsigma",
+      "halfnormal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "0.15"
+      ],
+      "LogTransform"
+    ],
+    [
+      "beta_TV_tvpz",
+      "normal",
+      [
+        60
+      ],
+      [
+        "[60.0]",
+        "TensorType",
+        "TensorType"
+      ],
+      "NoneType"
+    ],
+    [
+      "beta_controls",
+      "normal",
+      [
+        1
+      ],
+      [
+        "[1.0]",
+        "TensorType",
+        "[0.5]"
+      ],
+      "NoneType"
+    ],
+    [
+      "intercept",
+      "normal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "0.5"
+      ],
+      "NoneType"
+    ],
+    [
+      "sat_lam_Display",
+      "lognormal",
+      [],
+      [
+        "nan",
+        "0.32663426",
+        "0.4"
+      ],
+      "LogTransform"
+    ],
+    [
+      "sat_lam_Search",
+      "lognormal",
+      [],
+      [
+        "nan",
+        "0.32663426",
+        "0.4"
+      ],
+      "LogTransform"
+    ],
+    [
+      "sat_lam_Social",
+      "lognormal",
+      [],
+      [
+        "nan",
+        "0.32663426",
+        "0.4"
+      ],
+      "LogTransform"
+    ],
+    [
+      "sat_lam_TV",
+      "lognormal",
+      [],
+      [
+        "nan",
+        "0.32663426",
+        "0.4"
+      ],
+      "LogTransform"
+    ],
+    [
+      "season_yearly",
+      "normal",
+      [
+        4
+      ],
+      [
+        "[4.0]",
+        "TensorType",
+        "TensorType"
+      ],
+      "NoneType"
+    ],
+    [
+      "sigma",
+      "halfnormal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "0.5"
+      ],
+      "LogTransform"
+    ],
+    [
+      "trend_slope",
+      "normal",
+      [],
+      [
+        "nan",
+        "0.0",
+        "0.5"
+      ],
+      "NoneType"
+    ]
+  ],
+  "initial_point": {
+    "adstock_alpha_Display_logodds__": [
+      [],
+      -1.098612289
+    ],
+    "adstock_alpha_Search_logodds__": [
+      [],
+      -1.098612289
+    ],
+    "adstock_alpha_Social_logodds__": [
+      [],
+      -1.098612289
+    ],
+    "adstock_alpha_TV_logodds__": [
+      [],
+      -1.098612289
+    ],
+    "beta_Display_log__": [
+      [],
+      0.405465108
+    ],
+    "beta_Search_log__": [
+      [],
+      0.405465108
+    ],
+    "beta_Social_log__": [
+      [],
+      0.405465108
+    ],
+    "beta_TV_level": [
+      [],
+      0.405465108
+    ],
+    "beta_TV_tvpsigma_log__": [
+      [],
+      -1.897119985
+    ],
+    "beta_TV_tvpz": [
+      [
+        60
+      ],
+      0.0
+    ],
+    "beta_controls": [
+      [
+        1
+      ],
+      0.0
+    ],
+    "intercept": [
+      [],
+      0.0
+    ],
+    "sat_lam_Display_log__": [
+      [],
+      0.40663426
+    ],
+    "sat_lam_Search_log__": [
+      [],
+      0.40663426
+    ],
+    "sat_lam_Social_log__": [
+      [],
+      0.40663426
+    ],
+    "sat_lam_TV_log__": [
+      [],
+      0.40663426
+    ],
+    "season_yearly": [
+      [
+        4
+      ],
+      0.0
+    ],
+    "sigma_log__": [
+      [],
+      -0.693147181
+    ],
+    "trend_slope": [
+      [],
+      0.0
+    ]
+  },
+  "logp_terms": {
+    "adstock_alpha_Display": -1.150738242,
+    "adstock_alpha_Search": -1.150978435,
+    "adstock_alpha_Social": -1.153122396,
+    "adstock_alpha_TV": -1.153122396,
+    "beta_Display": -0.559389119,
+    "beta_Search": -0.560270237,
+    "beta_Social": -0.550321888,
+    "beta_TV_level": -0.232457309,
+    "beta_TV_tvpsigma": -0.726522826,
+    "beta_TV_tvpz": -55.394575357,
+    "beta_controls": -0.245791353,
+    "intercept": -0.234497908,
+    "sat_lam_Display": -0.075004587,
+    "sat_lam_Search": -0.066449613,
+    "sat_lam_Social": -0.072093146,
+    "sat_lam_TV": -0.034937232,
+    "season_yearly": 1.055112108,
+    "sigma": -0.729131412,
+    "trend_slope": -0.226150581,
+    "y_obs": -453.17136492
+  },
+  "observed_RVs": [
+    [
+      "y_obs",
+      "normal",
+      [
+        60
+      ]
+    ]
+  ],
+  "potentials": [],
+  "total_logp": -516.43180685
+}
