@@ -89,10 +89,23 @@ jobs:
         # If workers start dying unexplained (4 PyMC/PyTensor/JAX processes on
         # 16 GB is not free), that is an OOM: revert this token to `-n 2` rather
         # than chasing a flake.
+        # --ignore of the fingerprint contract: its 38 PyMC model builds inside
+        # long-lived xdist workers left the 16 GB runner memory-starved by the
+        # tail of the suite — three runs in a row died at 91-94% (a 20-minute
+        # stall inside the fork-heavy frequentist bootstrap tests, then "runner
+        # received a shutdown signal"). It runs in its OWN fresh process below,
+        # sequentially — same gate, bounded memory.
         run: >
           uv run pytest tests/ -m "not slow" -n logical
+          --ignore=tests/test_graph_fingerprint.py
           --cov=mmm_framework --cov-report=xml --cov-report=term-missing
           --cov-fail-under=60
+
+      - name: Graph-fingerprint contract (serial, fresh process)
+        # The src-refactor Phase 0 safety net (#279 PR 0.1). Serial on purpose:
+        # one model builds at a time, memory stays bounded, and the compiledir
+        # cache above makes the warm run cheap.
+        run: uv run pytest tests/test_graph_fingerprint.py -q
 
       - name: Upload coverage report
         if: always()
