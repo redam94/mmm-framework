@@ -1355,3 +1355,62 @@ class TestSubmitModelJob:
         result = submit_model_job(mock_panel)
 
         assert result is expected_job
+
+
+# =============================================================================
+# The saving-stage pickling regression (found by the showcase notebooks)
+# =============================================================================
+
+
+class TestWorkerSavePicklesRealModels:
+    """A numpyro-fitted BayesianMMM carries ``functools.partial`` objects that
+    stdlib pickle refuses ('functools.partial' object has no attribute
+    '__name__'), so EVERY async numpyro job failed at its saving stage while
+    the fit itself had succeeded. jobs.py now uses cloudpickle, matching the
+    serializer. This is the end-to-end pin: a real numpyro job must reach
+    COMPLETED, not die at stage='saving'."""
+
+    @pytest.mark.slow
+    def test_numpyro_job_completes_through_the_saving_stage(self, tmp_path):
+        from mmm_framework.jobs import JobStatus, get_job_manager
+        from mmm_framework.synth import dgp
+
+        panel = dgp.make_clean(seed=3, n_weeks=40).panel()
+        manager = get_job_manager(tmp_path / "jobs")
+        job = manager.submit_job(
+            panel,
+            JobConfig(
+                name="regression: numpyro save",
+                n_chains=1,
+                n_draws=60,
+                n_tune=60,
+                use_numpyro=True,
+                trend_type="linear",
+                yearly_order=2,
+                random_seed=1,
+            ),
+        )
+        deadline = time.time() + 600
+        while time.time() < deadline:
+            j = manager.get_job(job.id)
+            if not j.is_active:
+                break
+            time.sleep(2)
+        j = manager.get_job(job.id)
+        assert j.status == JobStatus.COMPLETED, (
+            f"job ended {j.status.value!r}; the pre-fix failure mode is a "
+            "'failed' status whose traceback names functools.partial at "
+            "pickle.dump in the saving stage"
+        )
+
+    def test_jobs_module_pickles_with_cloudpickle(self):
+        """The cheap invariant behind the slow test: jobs.py must serialize
+        with cloudpickle (which handles partials), not stdlib pickle."""
+        import functools
+
+        import mmm_framework.jobs as J
+
+        assert J.pickle.__name__ == "cloudpickle"
+        # The exact object class stdlib pickle chokes on inside a fitted model.
+        blob = J.pickle.dumps({"fn": functools.partial(int, "42", base=10)})
+        assert J.pickle.loads(blob)["fn"]() == 42

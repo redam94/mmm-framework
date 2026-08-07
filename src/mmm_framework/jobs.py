@@ -14,7 +14,13 @@ import json
 import logging
 import multiprocessing as mp
 import os
-import pickle
+
+# cloudpickle, not stdlib pickle: a numpyro-fitted BayesianMMM carries
+# functools.partial objects that stdlib pickle refuses ("'functools.partial'
+# object has no attribute '__name__'"), so every async numpyro job failed at
+# its saving stage. The serializer already standardized on cloudpickle; jobs
+# now match it. cloudpickle reads stdlib-pickle files, so old job dirs load.
+import cloudpickle as pickle
 import shutil
 import time
 import traceback

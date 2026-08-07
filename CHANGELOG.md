@@ -33,7 +33,25 @@ frozen public contract breaks, and the contract itself is pinned by
 
 [#279]: https://github.com/redam94/mmm-framework/issues/279
 
+- **The feature-showcase notebook series** (`nbs/showcase/` 00–06). Seven chart-first
+  notebooks covering every subpackage in `src/mmm_framework/` — the measurement loop
+  end-to-end in miniature, data foundations, model anatomy (every transform family
+  charted), the extension families, the trust toolchain (estimands, diagnostics,
+  validation, calibration on a deliberately confounded world), the v1.4 plan-and-commit
+  loop, and the operating surface (experiments, the geo bandit, reporting, platform
+  services). Baked with zero error outputs; a coverage sweep verified no package is
+  absent (cloud-edge modules — integrations, storage — appear as prose with real call
+  shapes rather than live network calls). Registered in `nbs/README.md`.
+
 ### Fixed
+
+- **Async numpyro jobs failed at their saving stage, every time** (found by the showcase
+  series' own demo). The fit succeeded, then `jobs.py`'s worker hit stdlib pickle's
+  `'functools.partial' object has no attribute '__name__'` on the fitted model and the job
+  died as `failed`. `jobs.py` now serializes with cloudpickle — already a core dependency
+  and what `MMMSerializer` standardized on; cloudpickle reads stdlib-pickle files, so
+  existing job directories still load. Pinned by a fast invariant that fails on the
+  unfixed code plus a slow end-to-end job-completion test (`tests/test_jobs.py`).
 
 - **`eligible['alpha']` is now design-gated on temporal contrast** ([#293], split out of
   [#224]). `planning/identification.py` marked the carryover decay eligible unconditionally —
