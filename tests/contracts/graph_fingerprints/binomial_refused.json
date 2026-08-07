@@ -1,0 +1,6 @@
+{
+  "refusal": {
+    "exception_type": "NotImplementedError",
+    "message": "the built-in additive model does not fit the 'binomial' likelihood directly: its component priors are calibrated for standardized-Normal y on an identity link. A model that needs a 'binomial' observation must define its own observation block \u2014 override `_build_model` (subclass `mmm_framework.garden.CustomMMM`) and write the likelihood there, reading `self.model_config.likelihood` and `self.model_params`. See technical-docs/custom-model-config.md."
+  }
+}

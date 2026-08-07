@@ -16,11 +16,13 @@ jobs:
   lint-and-test:
     name: Lint + fast tests
     runs-on: ubuntu-latest
-    # 45, not 30: the last 12 successful runs spanned 21m56s–29m05s, i.e. 55s of
-    # headroom against the old ceiling. That is a latent hard failure that would
-    # present as an infrastructure flake, so the ceiling moves before anything
-    # else does.
-    timeout-minutes: 45
+    # 60, not 45: the graph-fingerprint matrix (#279 PR 0.1) builds 38 PyMC
+    # models, and on a COLD compiledir that is clang time, not test time — the
+    # first post-matrix run blew the 45m ceiling that had 21m56s–29m05s of
+    # history. The compiledir cache below makes warm runs cheap again; 60 is
+    # the cold-cache (cache-miss) budget, moved deliberately per the rule that
+    # a too-tight ceiling presents as an infrastructure flake.
+    timeout-minutes: 60
     env:
       # coverage.py's PEP 669 core (needs coverage>=7.4 + Python>=3.12; we have
       # 7.13.1 on 3.12.13). Measured on the full fast suite, warm, -n logical:
@@ -45,6 +47,20 @@ jobs:
 
       - name: Set up Python 3.12
         run: uv python install 3.12
+
+      # The known cost profile of this suite is COMPILATION, not test count
+      # (cold PyTensor compiledir measured 4.2x warm). PyTensor validates its
+      # own module hashes, so restoring a stale cache is safe — it recompiles
+      # exactly what changed. Keyed on uv.lock so a pytensor/pymc bump starts
+      # a fresh lineage; restore-keys let same-lineage runs reuse most of it.
+      - name: Cache PyTensor compiledir
+        uses: actions/cache@v4
+        with:
+          path: ~/.pytensor
+          key: pytensor-${{ runner.os }}-py312-${{ hashFiles('uv.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            pytensor-${{ runner.os }}-py312-${{ hashFiles('uv.lock') }}
+            pytensor-${{ runner.os }}-py312-
 
       - name: Sync dependencies
         run: uv sync --group dev
@@ -73,10 +89,23 @@ jobs:
         # If workers start dying unexplained (4 PyMC/PyTensor/JAX processes on
         # 16 GB is not free), that is an OOM: revert this token to `-n 2` rather
         # than chasing a flake.
+        # --ignore of the fingerprint contract: its 38 PyMC model builds inside
+        # long-lived xdist workers left the 16 GB runner memory-starved by the
+        # tail of the suite — three runs in a row died at 91-94% (a 20-minute
+        # stall inside the fork-heavy frequentist bootstrap tests, then "runner
+        # received a shutdown signal"). It runs in its OWN fresh process below,
+        # sequentially — same gate, bounded memory.
         run: >
           uv run pytest tests/ -m "not slow" -n logical
+          --ignore=tests/test_graph_fingerprint.py
           --cov=mmm_framework --cov-report=xml --cov-report=term-missing
           --cov-fail-under=60
+
+      - name: Graph-fingerprint contract (serial, fresh process)
+        # The src-refactor Phase 0 safety net (#279 PR 0.1). Serial on purpose:
+        # one model builds at a time, memory stays bounded, and the compiledir
+        # cache above makes the warm run cheap.
+        run: uv run pytest tests/test_graph_fingerprint.py -q
 
       - name: Upload coverage report
         if: always()

@@ -14,6 +14,25 @@ frozen public contract breaks, and the contract itself is pinned by
 
 ## [Unreleased]
 
+### Added
+
+- **The graph-fingerprint safety net** ([#279] PR 0.1 — the entry gate for the src refactor;
+  spec `technical-docs/src-refactor.md`). Structure-only fingerprinting produces a false
+  negative — `michaelis_menten` and `tanh` saturation collide on a structural hash, and only
+  the numeric block (per-factor logp + Deterministic sums/abs-sums at a name-offset probe
+  point) separates them; the test proving that pair is part of the contract.
+  `tests/contracts/graph_fingerprint.py` (the engine, all four spec gotchas kept),
+  `tests/contracts/model_matrix.py` (38 importable case builders across every
+  trend/saturation/adstock family, geo/geo×product panels, both prior modes, levers, extended
+  models and the agent spec path — with `binomial_refused` pinning a refusal as its golden),
+  38 full-dict goldens (readable diffs; regen behind `MMM_REGEN_FINGERPRINTS=1`), and
+  `tests/contracts/invariants.md` — the numbered invariant table (39 rows, file:lines
+  re-verified). The matrix caught a real silent no-op on its first run: `control_selection`
+  fingerprinted identical to the default model because selection activates only with ≥2
+  selectable controls. 43 unmarked tests, ~44 s warm.
+
+[#279]: https://github.com/redam94/mmm-framework/issues/279
+
 ### Fixed
 
 - **`eligible['alpha']` is now design-gated on temporal contrast** ([#293], split out of
