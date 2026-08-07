@@ -46,6 +46,8 @@ Planning & Experiments
    planning
    continuous_learning
    ltv
+   finance
+   frequentist
 
 Data Quality & Synthetic Worlds
 -------------------------------

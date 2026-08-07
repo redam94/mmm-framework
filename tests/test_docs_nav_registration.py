@@ -208,3 +208,65 @@ def test_every_blog_post_has_an_audience_tier() -> None:
 def test_every_indexed_post_exists(page: str) -> None:
     """A card on blog.html pointing at a deleted/renamed post is a 404."""
     assert (DOCS_DIR / page).exists(), f"blog.html links to missing page {page}"
+
+
+# ---------------------------------------------------------------------------
+# NAV_GROUPS registration (#228) — a page in the nav must exist on disk and
+# carry an audience tier. Before this gate, a new page added to NAV_GROUPS
+# without a PAGE_TIERS entry rendered with no chip and nothing failed.
+# ---------------------------------------------------------------------------
+
+_NAV_HREF_RE = re.compile(r"href:\s*'([^']+\.html)'")
+
+
+def _nav_pages() -> list[str]:
+    """Every page referenced in NAV_GROUPS (brace-matched array literal)."""
+    source = COMPONENTS_JS.read_text(encoding="utf-8")
+    start = source.index("const NAV_GROUPS = [")
+    open_idx = source.index("[", start)
+    depth = 0
+    for i in range(open_idx, len(source)):
+        if source[i] == "[":
+            depth += 1
+        elif source[i] == "]":
+            depth -= 1
+            if depth == 0:
+                body = source[open_idx : i + 1]
+                return _NAV_HREF_RE.findall(body)
+    raise AssertionError(f"unterminated NAV_GROUPS array in {COMPONENTS_JS}")
+
+
+#: Pages allowed in the nav without a tier chip, each with the reason.
+_NO_TIER_OK = {
+    "index.html": "the landing page renders its own hero, not a doc chip",
+    "artifacts/index.html": (
+        "the baked-artifacts gallery lives in a subdirectory; PAGE_TIERS "
+        "keys are flat docs/*.html filenames and the chip renderer resolves "
+        "by basename"
+    ),
+}
+
+
+def test_nav_groups_parses() -> None:
+    """Parser guard: an empty parse must fail loudly, not pass vacuously."""
+    pages = _nav_pages()
+    assert len(pages) >= 30, f"NAV_GROUPS parse looks broken: {len(pages)} pages"
+
+
+def test_every_nav_page_exists_on_disk() -> None:
+    missing = sorted(p for p in set(_nav_pages()) if not (DOCS_DIR / p).exists())
+    assert (
+        not missing
+    ), "NAV_GROUPS links to pages that do not exist:\n  " + "\n  ".join(missing)
+
+
+def test_every_nav_page_has_an_audience_tier() -> None:
+    tiers = _page_tiers()
+    missing = sorted(
+        p for p in set(_nav_pages()) if p not in tiers and p not in _NO_TIER_OK
+    )
+    assert not missing, (
+        "pages in NAV_GROUPS missing from PAGE_TIERS in "
+        "docs/shared/components.js — they render with no audience chip:\n  "
+        + "\n  ".join(missing)
+    )

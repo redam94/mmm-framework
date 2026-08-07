@@ -504,14 +504,14 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-04",
+          "dateModified": "2026-08-06",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/workflow-budget-optimization.html#breadcrumb"
           },
           "@id": "https://redam94.github.io/mmm-framework/workflow-budget-optimization.html#webpage",
           "@type": "TechArticle",
           "headline": "Budget Optimization",
-          "datePublished": "2026-07-04",
+          "datePublished": "2026-08-06",
           "image": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
           "author": {
             "@type": "Person",
@@ -985,25 +985,54 @@ trimmed = <span class="function">optimize_budget</span>(
 <span class="function">print</span>(result.table)
 
 lo, hi = result.uplift_hdi
-<span class="function">print</span>(<span class="string">f"Expected uplift: ${result.expected_uplift:,.0f}"</span>)
-<span class="function">print</span>(<span class="string">f"  5-95% interval: ${lo:,.0f} to ${hi:,.0f}"</span>)
+<span class="comment"># Uplift is in KPI units; it reads in dollars only when a valuation</span>
+<span class="comment"># resolved (kpi_to_dollars — never a silent 1.0).</span>
+<span class="function">print</span>(<span class="string">f"Expected uplift: {result.expected_uplift:,.0f}"</span>)
+<span class="function">print</span>(<span class="string">f"  5-95% interval: {lo:,.0f} to {hi:,.0f}"</span>)
 <span class="function">print</span>(<span class="string">f"  P(uplift &gt; 0): {result.prob_positive_uplift:.0%} over {result.n_draws} draws"</span>)
 
 <span class="comment"># Output (Illustrative):</span>
-<span class="comment"># Expected uplift: $740,000</span>
-<span class="comment">#   5-95% interval: $210,000 to $1,290,000</span>
+<span class="comment"># Expected uplift: 740,000</span>
+<span class="comment">#   5-95% interval: 210,000 to 1,290,000</span>
 <span class="comment">#   P(uplift &gt; 0): 97% over 200 draws</span></div>
 
         <p>
             Read the uplift the same way you read everything else on this site: the interval, not
-            the point. A median uplift of $740K with a 5&ndash;95% interval of $210K&ndash;$1.29M and
+            the point. A median uplift of 740K with a 5&ndash;95% interval of 210K&ndash;1.29M and
             P(uplift &gt; 0) of 97% is a strong case for reallocating; the same median with an
-            interval straddling zero is not. And if a channel's
-            <strong>optimal_share_p5&ndash;p95</strong> range is wide, the posterior does not pin
-            down that channel's share&mdash;treat the recommendation as a direction, not a number.
-            Caps above the sampled curve range are clamped and reported in
+            interval straddling zero is not. One unit note: the uplift is denominated in
+            <strong>KPI units</strong> unless a valuation resolved&mdash;it only reads in dollars
+            when the project has declared what a KPI unit is worth (see the box below). And if a
+            channel's <strong>optimal_share_p5&ndash;p95</strong> range is wide, the posterior does
+            not pin down that channel's share&mdash;treat the recommendation as a direction, not a
+            number. Caps above the sampled curve range are clamped and reported in
             <strong>result.notes</strong> rather than silently extrapolated.
         </p>
+
+        <div class="warning-box">
+            <h4>Two Refusals You Will Meet, By Design</h4>
+            <p>
+                <strong>Fund-to-breakeven refuses without a valuation.</strong> The fixed-budget
+                reallocation above is scale-free and needs no dollar conversion. But
+                <strong>mode="free"</strong>&mdash;"fund every channel while a marginal dollar
+                returns more than a dollar"&mdash;needs to know what a KPI unit is
+                <em>worth</em>, and the optimizer raises <strong>UnresolvedValueError</strong>
+                rather than assuming one KPI unit equals one dollar. A silent 1.0 on a KPI
+                denominated in thousands recommends a budget roughly a thousand times too large,
+                and it would have rendered with credible intervals. Declare the valuation
+                (<strong>value_per_kpi</strong>, or the project's economics preference resolved by
+                <strong>kpi_to_dollars</strong>) and the mode unlocks.
+            </p>
+            <p>
+                <strong>Efficiency-measured channels refuse dollar curves.</strong> A channel
+                modeled on impressions or clicks with no cost basis has no dollar axis to optimize
+                on, and the curve builder refuses it by name instead of pretending impressions are
+                dollars. See <a href="finance-planning.html">Finance-Grade Planning</a> for the
+                full refusal index, and note the optimizer beyond this v1 greedy pass: the
+                constrained SLSQP solve, the efficiency frontier, and goal-seek all live in the
+                same <strong>mmm_framework.planning</strong> package.
+            </p>
+        </div>
 
         <div class="warning-box">
             <h4>Halo and Cross-Effects Are Out of Scope Here</h4>

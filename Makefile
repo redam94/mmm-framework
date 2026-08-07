@@ -1,5 +1,5 @@
 .PHONY: tests fast_tests slow_tests format format_check lint hooks run-api run-ui run-app \
-        kernel-lock kernel-image kernel-verify kernel-push
+        api-sync api-sync-check kernel-lock kernel-image kernel-verify kernel-push
 
 format:                          ## black, via the LOCKED dev dependency
 	uv run black src server/src tests examples
@@ -33,6 +33,12 @@ run-ui:
 run-app:
 	@echo "Starting both the FastAPI backend and React frontend..."
 	$(MAKE) -j2 run-api run-ui
+
+api-sync:                        ## regenerate rest_routes.json / openapi.json / REST docs (#228)
+	uv run python scripts/sync_api_surface.py
+
+api-sync-check:                  ## fail if the API-surface artifacts are stale (CI mirror)
+	uv run python scripts/sync_api_surface.py --check
 
 # ── Hardened agent kernel image (enables MMM_AGENT_HOSTED=1) ──────────────────
 # See deploy/kernel/README.md for the full ship runbook.

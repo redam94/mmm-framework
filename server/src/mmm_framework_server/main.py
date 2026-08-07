@@ -2592,7 +2592,10 @@ class PlanOfRecordCommitRequest(BaseModel):
 
 @app.post(
     "/projects/{project_id}/plan-of-record",
-    dependencies=[_rl_heavy],
+    # _proj_write was missing until #228's route-guard gate caught it: the
+    # committing endpoint carried only a rate limit, so any authenticated
+    # principal could commit a plan of record into another org's project.
+    dependencies=[_proj_write, _rl_heavy],
 )
 async def commit_plan_of_record_endpoint(
     project_id: str,

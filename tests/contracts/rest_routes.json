@@ -429,6 +429,14 @@
   },
   {
     "method": "GET",
+    "path": "/projects/{project_id}/actuals"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/actuals"
+  },
+  {
+    "method": "GET",
     "path": "/projects/{project_id}/branding"
   },
   {
@@ -616,6 +624,18 @@
     "path": "/projects/{project_id}/pacing/alert"
   },
   {
+    "method": "GET",
+    "path": "/projects/{project_id}/plan-of-record"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/plan-of-record"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/plan-of-record/history"
+  },
+  {
     "method": "POST",
     "path": "/projects/{project_id}/planner/forecast"
   },
@@ -625,19 +645,19 @@
   },
   {
     "method": "POST",
-    "path": "/projects/{project_id}/planner/payback"
-  },
-  {
-    "method": "GET",
-    "path": "/projects/{project_id}/planner/payback/{job_id}"
-  },
-  {
-    "method": "POST",
     "path": "/projects/{project_id}/planner/optimize"
   },
   {
     "method": "GET",
     "path": "/projects/{project_id}/planner/optimize/{job_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/planner/payback"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/planner/payback/{job_id}"
   },
   {
     "method": "POST",
@@ -694,6 +714,14 @@
   {
     "method": "GET",
     "path": "/projects/{project_id}/validations"
+  },
+  {
+    "method": "POST",
+    "path": "/projects/{project_id}/variance"
+  },
+  {
+    "method": "GET",
+    "path": "/projects/{project_id}/variance/{job_id}"
   },
   {
     "method": "GET",
@@ -822,33 +850,5 @@
   {
     "method": "GET",
     "path": "/workspace/{thread_id}/files"
-  },
-  {
-    "method": "POST",
-    "path": "/projects/{project_id}/plan-of-record"
-  },
-  {
-    "method": "GET",
-    "path": "/projects/{project_id}/plan-of-record"
-  },
-  {
-    "method": "GET",
-    "path": "/projects/{project_id}/plan-of-record/history"
-  },
-  {
-    "method": "GET",
-    "path": "/projects/{project_id}/actuals"
-  },
-  {
-    "method": "POST",
-    "path": "/projects/{project_id}/actuals"
-  },
-  {
-    "method": "POST",
-    "path": "/projects/{project_id}/variance"
-  },
-  {
-    "method": "GET",
-    "path": "/projects/{project_id}/variance/{job_id}"
   }
 ]

@@ -349,11 +349,16 @@ After adding/editing pages, from `docs/`:
   needing a manual `git checkout --` sweep) and a second run is a no-op. Commit the manifest.
   `--stamp YYYY-MM-DD` overrides the date for changed pages (default: today).
 
-The REST API reference (`docs/rest-api.html`) is GENERATED: after changing server endpoints,
-re-export `docs/shared/openapi.json` (`app.openapi()`, see the file header), bump `EXPECTED_OPS`
-in `docs/tools/build_rest_docs.py`, run it from `docs/`, AND regenerate
-`tests/contracts/rest_routes.json` (the v1 contract snapshot gate in
-`tests/test_api_contracts.py` — additions are minor-version events, removals/renames are major).
+The REST API reference (`docs/rest-api.html`) is GENERATED: after changing server endpoints run
+**`make api-sync`** (#228 — `scripts/sync_api_surface.py`). One command regenerates
+`tests/contracts/rest_routes.json` (canonical (path, method) order), `docs/shared/openapi.json`
+(info block overridden: version from `mmm_framework.__version__`, provenance description
+re-injected — a naive `app.openapi()` re-export downgrades both), `EXPECTED_OPS` in
+`docs/tools/build_rest_docs.py`, and `docs/rest-api.html` itself. It REFUSES while any
+`/projects/{project_id}` route lacks a `_proj_*` tenant guard (its first run caught
+`POST .../plan-of-record` shipping with only a rate limit), and `tests/test_api_surface_sync.py`
+mirrors `--check` in CI. Contract semantics unchanged: additions are minor-version events,
+removals/renames are major (`tests/test_api_contracts.py`).
 
 Dark mode is a `[data-theme="dark"]` token swap in `shared/styles.css` — keep page-local styles on
 `var(--color-*)` tokens, never hardcoded light colors.

@@ -55,6 +55,9 @@ make hooks         # install the pre-commit hook that runs both
 # Docs
 uv run --group docs sphinx-build -b html docs/api/source docs/api/build/html   # API reference
 cd docs && python3 tools/build_search_index.py && python3 tools/build_seo.py   # static site
+make api-sync      # after changing server endpoints: regenerates rest_routes.json,
+                   # openapi.json, EXPECTED_OPS + docs/rest-api.html; refuses on an
+                   # unguarded /projects/ route. CI mirror: tests/test_api_surface_sync.py
 
 # Run the app (agent API runs fits in-kernel — no Redis or external worker)
 uv run uvicorn mmm_framework_server.main:app --host 0.0.0.0 --port 8000 --reload
@@ -82,7 +85,9 @@ gates it — so it rots silently (1.1.0 and 1.2.0 both shipped while the site st
 4. Sweep other pages stating a version or pin: `getting-started.html`, `faq.html`,
    `evaluator.html`, `troubleshooting.html` (its `__version__` expectation), `about.html`
    (citation), `api-contracts.html`. Find them with
-   `grep -rn '==1\.[0-9]*\.[0-9]*\|version 1\.' docs/*.html`.
+   `grep -rn '==1\.[0-9]*\.[0-9]*\|version 1\.' docs/*.html`. Since #228 this is GATED:
+   `tests/test_docs_versions.py` fails on any stale pin or a changelog page announcing the
+   wrong version, so a skipped sweep no longer ships.
 5. From `docs/`: `build_search_index.py` then `build_seo.py`; commit `shared/seo-manifest.json`
    with the regenerated `shared/*.json`.
 6. Tag and push — `.github/workflows/release.yml` builds, publishes to PyPI (trusted publishing)
@@ -297,6 +302,7 @@ Experiments & planning
 - Model-anchored economics, opportunity cost, A/A·A/B sim — *Model-anchored experiment economics* · `technical-docs/experiment-economics.md`
 - Off-panel calibration — *Off-panel calibration*
 - Pareto-front experiment optimizer — *Experiment optimizer*
+- New-capability touch-points (spec registry → op → tool sets → export map → REST guards → FE → docs) — `technical-docs/integration-checklist.md`; gated by `tests/test_capability_reachability.py`
 - Variance to plan (two-bucket bridge, committed-interval verdict, SUPPLIED lines) — *Variance to plan*
 - Continuous sequential learning (model-free bandit) — *Continuous sequential learning* · `technical-docs/continuous-learning.md`
 

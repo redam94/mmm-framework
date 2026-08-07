@@ -136,7 +136,7 @@
             "@id": "https://redam94.github.io/mmm-framework/#website"
           },
           "primaryImageOfPage": "https://redam94.github.io/mmm-framework/assets/mmm-framework-social-preview.png",
-          "dateModified": "2026-07-27",
+          "dateModified": "2026-08-06",
           "breadcrumb": {
             "@id": "https://redam94.github.io/mmm-framework/changelog.html#breadcrumb"
           },
@@ -186,7 +186,7 @@
         <main class="main-content">
             <h1 id="status">Versioning &amp; Changelog</h1>
             <p class="lead">
-                The MMM Framework is at <strong>version 1.3.3</strong>, published on
+                The MMM Framework is at <strong>version 1.4.0</strong>, published on
                 <a href="https://pypi.org/project/mmm-framework/" target="_blank" rel="noopener">PyPI</a>
                 (<code>pip install mmm-framework</code>).
                 From 1.0.0 on, the project follows <a href="https://semver.org" target="_blank" rel="noopener">semantic
@@ -204,7 +204,7 @@
                     (see <a href="rest-api.html">REST API reference</a>). Modules marked
                     <em>Experimental</em> below may still change in minor releases &mdash; they are
                     flagged in the stability grid and in their docstrings. Pinning
-                    (<code>pip install mmm-framework==1.3.3</code>) remains good production hygiene.
+                    (<code>pip install mmm-framework==1.4.0</code>) remains good production hygiene.
                 </p>
             </div>
 
@@ -274,9 +274,45 @@
 
             <div class="release">
                 <div class="release-header">
+                    <span class="release-version">1.4.0</span>
+                    <span class="release-date">2026-08-06</span>
+                    <span class="release-tag">Current</span>
+                </div>
+                <p style="margin: 0.5rem 0 0.5rem 0;">
+                    <strong>Finance-grade planning.</strong> The measurement loop now closes at the CFO's desk:
+                    a KPI valuation that is never silently one dollar (<code>kpi_to_dollars</code> resolves a
+                    declared valuation with provenance, and fund-to-breakeven <em>refuses</em> without one), a
+                    forward forecast under a plan whose caveats lead the headline, an append-only hash-chained
+                    <strong>plan of record</strong> that reproduces from provenance to 1e-9, per-channel
+                    <strong>payback horizons</strong> with truncation and prior-domination disclosures,
+                    <strong>promo-depth optimization</strong> with per-arm cost bases (flag promos and price
+                    recommendations refuse), and a <strong>variance-to-plan bridge</strong> that sums to
+                    actual&nbsp;&minus;&nbsp;committed exactly and refuses the refit "effectiveness" split.
+                    Also: confounding-sensitivity tipping points on the decision scale, a realized-KPI actuals
+                    store, seven new technical-docs specs, a capability-reachability CI gate, and
+                    <code>make api-sync</code> (whose auth check caught a real unguarded route).
+                </p>
+                <p style="margin: 0.5rem 0 0.5rem 0;">
+                    <strong>Behaviour changes to read before upgrading:</strong> free-mode budget allocation
+                    raises <code>UnresolvedValueError</code> without a valuation; forecasts refuse when a
+                    model has controls and no future values were supplied (there is no defensible default,
+                    so code that silently assumed one now gets an explicit error); decomposition shares are
+                    computed against the signed total, not a sum of magnitudes (previously rendered "% of
+                    total" figures meant something else); the CFO one-pager's baseline is now the model's
+                    fitted non-marketing outcome with the residual named, reconciling as
+                    base&nbsp;+&nbsp;marketing&nbsp;+&nbsp;unexplained&nbsp;=&nbsp;observed; multiplicative
+                    models now refuse <code>sample_channel_contributions()</code> instead of returning
+                    log-scale numbers as contributions; and the report and slide deck resolve one shared
+                    break-even, changing tier recommendations for projects with a saved margin. Full detail in
+                    <a href="https://github.com/redam94/mmm-framework/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG.md</a>
+                    and on <a href="finance-planning.html">Finance-Grade Planning</a>.
+                </p>
+            </div>
+
+            <div class="release">
+                <div class="release-header">
                     <span class="release-version">1.3.3</span>
                     <span class="release-date">2026-07-27</span>
-                    <span class="release-tag">Current</span>
                 </div>
                 <p style="margin: 0.5rem 0 0.5rem 0;">
                     A security release. Generated HTML reports did not escape <code>&lt;/</code> in
