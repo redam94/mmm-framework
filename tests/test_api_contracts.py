@@ -331,3 +331,130 @@ def test_builtin_estimand_names_stay_registered():
         f"built-in estimands {missing} disappeared from the registry — specs "
         "and saved models reference them by name."
     )
+
+
+# ---------------------------------------------------------------------------
+# The private authoring surface (#279 PR 0.4)
+#
+# agents/garden_authoring.py promises a specific member list to the LLM as the
+# garden authoring API, and until this contract NO test asserted any of those
+# names existed. Phase 4's "the facade preserves the public surface, therefore
+# minor" is unverifiable without pinning the ~dozen PRIVATE members registered
+# garden models actually call.
+# ---------------------------------------------------------------------------
+
+#: (owner, name): "method" on BayesianMMM, or "module" in model.base. The
+#: signature snapshot lives in tests/contracts/authoring_surface.json.
+AUTHORING_SURFACE = {
+    ("method", "_build_coords"),
+    ("method", "_prepare_raw_media_for_model"),
+    ("method", "_build_channel_saturation"),
+    ("method", "_build_trend_component"),
+    ("method", "_build_control_betas"),
+    ("module", "_apply_saturation_pt"),
+    ("module", "_sample_from_prior_config"),
+}
+
+#: Instance attributes garden_authoring.py names as present after __init__.
+AUTHORING_ATTRS = [
+    "channel_names",
+    "y_mean",
+    "y_std",
+    "_media_raw_max",
+    "panel",
+    "model_config",
+    "has_geo",
+    "has_product",
+    "n_obs",
+    "n_channels",
+    "n_controls",
+    "time_idx",
+    "X_controls",
+    "n_periods",
+    "seasonality_features",
+]
+
+#: pm.Data node names predict()/sample_channel_contributions() swap on.
+AUTHORING_DATA_NODES = ["X_media_raw", "X_controls", "time_idx"]
+
+_AUTHORING_SNAPSHOT = CONTRACTS_DIR / "authoring_surface.json"
+
+
+def _authoring_signatures() -> dict[str, str]:
+    import inspect
+
+    import mmm_framework.model.base as MB
+    from mmm_framework.model.base import BayesianMMM
+
+    out = {}
+    for owner, name in sorted(AUTHORING_SURFACE):
+        obj = getattr(BayesianMMM if owner == "method" else MB, name, None)
+        assert obj is not None, (
+            f"authoring surface member {name!r} ({owner}) is GONE — "
+            "agents/garden_authoring.py promises it to every garden author; "
+            "restore it or update the doc AND this contract together"
+        )
+        out[f"{owner}:{name}"] = str(inspect.signature(obj))
+    return out
+
+
+def test_authoring_surface_signatures_match_snapshot():
+    """Existence + inspect.signature equality against the checked-in snapshot.
+
+    A signature change breaks every registered garden model that calls the
+    member — that is a contract event, not an internal refactor. Regenerate
+    deliberately with MMM_REGEN_AUTHORING_SURFACE=1 and review the diff.
+    """
+    import json
+    import os
+
+    observed = _authoring_signatures()
+    if os.environ.get("MMM_REGEN_AUTHORING_SURFACE") == "1" or (
+        not _AUTHORING_SNAPSHOT.exists()
+    ):
+        _AUTHORING_SNAPSHOT.write_text(json.dumps(observed, indent=2) + "\n")
+        if os.environ.get("MMM_REGEN_AUTHORING_SURFACE") == "1":
+            pytest.skip("snapshot regenerated; rerun without the env var")
+    snapshot = json.loads(_AUTHORING_SNAPSHOT.read_text())
+    assert observed == snapshot, (
+        "private authoring-surface signatures drifted from "
+        "tests/contracts/authoring_surface.json — every registered garden "
+        "model calling the changed member breaks. Deliberate? "
+        "MMM_REGEN_AUTHORING_SURFACE=1 and review."
+    )
+
+
+def test_authoring_surface_is_what_the_doc_promises():
+    """The doc and the pin may not drift apart: every pinned name appears in
+    agents/garden_authoring.py, and the doc says where the module-level
+    helpers live."""
+    root = Path(__file__).resolve().parents[1]
+    doc = (root / "src" / "mmm_framework" / "agents" / "garden_authoring.py").read_text(
+        encoding="utf-8"
+    )
+    missing = [n for _o, n in sorted(AUTHORING_SURFACE) if n not in doc]
+    assert not missing, (
+        f"pinned members {missing} no longer appear in garden_authoring.py — "
+        "the pin and the promise must move together"
+    )
+    for attr in AUTHORING_ATTRS[:8]:
+        assert attr in doc, f"promised attribute {attr!r} gone from the doc"
+
+
+def test_authoring_attrs_and_data_nodes_exist_on_a_real_model():
+    """The promised instance attributes exist after a real __init__, and the
+    pm.Data nodes carry the promised names on the built graph."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "contracts"))
+    import model_matrix as M
+
+    m = M.CASES["default_national"]()
+    missing = [a for a in AUTHORING_ATTRS if not hasattr(m, a)]
+    assert not missing, f"promised instance attributes missing: {missing}"
+    named = set(m.model.named_vars)
+    gone = [n for n in AUTHORING_DATA_NODES if n not in named]
+    assert not gone, (
+        f"promised pm.Data nodes missing from the graph: {gone} — "
+        "predict()/sample_channel_contributions() swap on these names"
+    )

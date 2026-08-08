@@ -61,6 +61,24 @@ frozen public contract breaks, and the contract itself is pinned by
   and loose entries fail until tightened. A planted upward import fails the gate naming
   the edge, the file, both tiers and the three legal remedies. 0.9 s.
 
+- **The private authoring-surface contract + the garden corpus** ([#279] PR 0.4, closing
+  Phase 0). `agents/garden_authoring.py` promises a specific member list to the LLM as the
+  garden authoring API, and no test asserted any of those names existed — Phase 4's "the
+  facade preserves the public surface, therefore minor" was unverifiable. Now:
+  `AUTHORING_SURFACE` in `tests/test_api_contracts.py` pins existence +
+  `inspect.signature` equality against a checked-in snapshot (regen behind
+  `MMM_REGEN_AUTHORING_SURFACE=1`), the promised instance attributes and `pm.Data` node
+  names are asserted on a real built model, and a doc↔pin lockstep check keeps the
+  promise and the contract moving together. The registry corpus problem — of 19
+  `garden_models` rows in the gitignored SQLite file, only **4** source paths still
+  resolved on disk (the spec measured 6 at v1.3.3; the rot continued while nothing gated
+  it) — is closed by checking the recoverable sources into
+  `tests/fixtures/garden_corpus/` and running `tests/test_garden_corpus.py` over them
+  plus all `examples/garden_models/*`: every private base member a corpus model actually
+  calls (35 call sites) must exist on the loaded class. One doc bug found en route:
+  `_sample_from_prior_config` was listed among base-class helpers without saying it is
+  module-level in `model.base`; the doc now says so.
+
 - **The feature-showcase notebook series** (`nbs/showcase/` 00–06). Seven chart-first
   notebooks covering every subpackage in `src/mmm_framework/` — the measurement loop
   end-to-end in miniature, data foundations, model anatomy (every transform family

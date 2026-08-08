@@ -37,6 +37,7 @@ node_modules/
 # the CI route-snapshot gate in tests/test_api_contracts.py)
 !docs/shared/openapi.json
 !tests/contracts/rest_routes.json
+!tests/contracts/authoring_surface.json
 !tests/contracts/import_layer_allowlist.json
 !tests/contracts/serializer_metadata_fields.json
 # Graph-fingerprint contract goldens + the deterministic agent-path MFF CSV

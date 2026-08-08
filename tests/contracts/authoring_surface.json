@@ -1,0 +1,9 @@
+{
+  "method:_build_channel_saturation": "(self, channel_name: 'str') -> 'tuple[SaturationType, dict[str, Any]]'",
+  "method:_build_control_betas": "(self, sigma: \"'pt.TensorVariable | None'\")",
+  "method:_build_coords": "(self) -> 'dict'",
+  "method:_build_trend_component": "(self, model: 'pm.Model', time_idx) -> 'pt.TensorVariable'",
+  "method:_prepare_raw_media_for_model": "(self, X_media_raw: 'np.ndarray | None' = None) -> 'np.ndarray'",
+  "module:_apply_saturation_pt": "(x: \"'pt.TensorVariable'\", kind: 'SaturationType', params: 'dict[str, Any]') -> \"'pt.TensorVariable'\"",
+  "module:_sample_from_prior_config": "(name: 'str', prior: 'PriorConfig | None', default: \"Callable[[], 'pt.TensorVariable']\") -> \"'pt.TensorVariable'\""
+}
