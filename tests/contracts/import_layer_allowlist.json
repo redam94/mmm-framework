@@ -1,0 +1,43 @@
+{
+  "calibration -> validation": {
+    "src/mmm_framework/calibration/experiment.py": 1
+  },
+  "continuous_learning -> agents": {
+    "src/mmm_framework/continuous_learning/service.py": 2
+  },
+  "estimands -> reporting": {
+    "src/mmm_framework/estimands/evaluate.py": 6
+  },
+  "frequentist -> validation": {
+    "src/mmm_framework/frequentist/search.py": 1
+  },
+  "garden -> agents": {
+    "src/mmm_framework/garden/compat.py": 3
+  },
+  "mmm_extensions -> serialization.py": {
+    "src/mmm_framework/mmm_extensions/models/base.py": 1
+  },
+  "model -> reporting": {
+    "src/mmm_framework/model/base.py": 1
+  },
+  "model -> serialization.py": {
+    "src/mmm_framework/model/base.py": 4
+  },
+  "platform -> agents": {
+    "src/mmm_framework/platform/backfill.py": 3,
+    "src/mmm_framework/platform/connection_sync.py": 1,
+    "src/mmm_framework/platform/observability.py": 1,
+    "src/mmm_framework/platform/plan_of_record.py": 1,
+    "src/mmm_framework/platform/runs.py": 1
+  },
+  "reporting -> agents": {
+    "src/mmm_framework/reporting/model_defense.py": 1,
+    "src/mmm_framework/reporting/triangulation.py": 1
+  },
+  "transforms -> model": {
+    "src/mmm_framework/transforms/carryover.py": 1
+  },
+  "validation -> agents": {
+    "src/mmm_framework/validation/spec_curve.py": 1
+  }
+}
