@@ -74,7 +74,7 @@ empty / degrade. All are in **standardized** KPI space except `y_obs_scaled`.
 - `self._build_channel_saturation(ch) -> (kind, params)` creates `sat_*_<ch>` RVs; pair with `_apply_saturation_pt(x, kind, params)` from `mmm_framework.model.base`.
 - `self._build_trend_component(model, time_idx)`          configured trend (linear/piecewise/spline/GP).
 - `self._build_control_betas(sigma)`                      `beta_controls` honoring causal roles / selection.
-- helpers/RV-samplers: `_sample_from_prior_config(name, prior, default)` (honors per-channel ROI priors).
+- helpers/RV-samplers: `_sample_from_prior_config(name, prior, default)` — module-level in `mmm_framework.model.base` (like `_apply_saturation_pt`), NOT a method; honors per-channel ROI priors.
 
 ## Required instance attributes (present after __init__; you inherit them)
 `channel_names`, `y_mean`, `y_std`, `_media_raw_max`, `panel`, `model_config`,
