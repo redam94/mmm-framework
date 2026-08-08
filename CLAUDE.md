@@ -245,7 +245,7 @@ model = MMMSerializer.load("models/national_mmm", panel)
 # Analysis
 from mmm_framework.analysis import MMMAnalyzer
 analyzer = MMMAnalyzer(model)
-marginals = analyzer.compute_marginal_contributions()   # list[MarginalAnalysisResult]
+marginals = analyzer.compute_marginal_contributions()   # pd.DataFrame
 roi = analyzer.compute_channel_roi()
 ```
 
